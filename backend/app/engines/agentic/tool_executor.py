@@ -32,9 +32,10 @@ import re
 import shlex
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
-from app.engines.agentic.tool_registry import TOOL_REGISTRY, get_tool
+from app.engines.agentic.device_properties import get_screen_size
+from app.engines.agentic.tool_registry import get_tool
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,12 @@ FORM_VALUES: Dict[str, str] = {
     "search":   "search_query",
 }
 
-# ─── Screen dimensions (overridable via environment) ──────────────────────────
+# ─── Screen dimensions ────────────────────────────────────────────────────────
+# Module-level defaults, kept for backwards compatibility with callers that
+# import SCREEN_WIDTH/SCREEN_HEIGHT directly. The AUTHORITATIVE values come from
+# device_properties.get_screen_size() at run time, via ToolExecutor.screen_size
+# — the same provider the planner's coordinate validator uses, so the two can
+# never disagree again.
 SCREEN_WIDTH:  int = int(os.getenv("SUDARSHAN_SCREEN_WIDTH",  "1080"))
 SCREEN_HEIGHT: int = int(os.getenv("SUDARSHAN_SCREEN_HEIGHT", "1920"))
 
@@ -109,6 +115,17 @@ class ToolExecutor:
         self.device_serial   = device_serial
         self.package_name    = package_name
         self.adb_path        = adb_path
+
+    @property
+    def screen_size(self) -> tuple[int, int]:
+        """
+        Authoritative (width, height) for this device.
+
+        Shares the cached device-properties provider with the planner's
+        coordinate validator, so an action the planner accepts is always one
+        this executor can actually perform.
+        """
+        return get_screen_size(adb_path=self.adb_path, device_serial=self.device_serial)
 
     # ── Dispatch ───────────────────────────────────────────────────────────────
 

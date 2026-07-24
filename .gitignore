@@ -107,3 +107,10 @@ out/
 backend_logs_output.txt
 get_logs.py
 frida-server-*/
+
+# Frida server binaries (106 MB - exceeds GitHub 100 MB limit)
+tools/
+frida-server-*
+
+# Per-sample forensic artifacts (generated at analysis time)
+backend/sudarshan_artifacts/

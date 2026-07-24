@@ -20,7 +20,11 @@ All components are normalized to 0–100 before applying weights.
 Final score is capped at 100.
 """
 
+import logging
+import math
 from typing import Any, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 # ─── Malware Family Severity Weights ─────────────────────────────────────────
 
@@ -363,6 +367,47 @@ _BFCI_WEIGHTS = {
 
 # ─── Dynamic Score ────────────────────────────────────────────────────────────
 
+def _coerce_score(value: Any, field: str, lo: float = 0.0, hi: float = 100.0) -> float:
+    """
+    Validate one externally-supplied score at the trust boundary.
+
+    The dynamic-analysis payload arrives as an untyped dict from the sandbox.
+    Isolation of the verdict must rest on validation, not on the convention that
+    the only current writer happens to behave. Anything non-numeric, NaN, inf or
+    out of range is rejected to 0.0 with a warning rather than being propagated
+    into a score.
+
+    Valid inputs are returned unchanged, so no existing verdict shifts.
+    """
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        if value is not None:
+            logger.warning(f"[RiskEngine] Non-numeric {field}={value!r} — treated as 0.0")
+        return 0.0
+
+    if not math.isfinite(score):
+        logger.warning(f"[RiskEngine] Non-finite {field}={value!r} — treated as 0.0")
+        return 0.0
+
+    if score < lo or score > hi:
+        logger.warning(f"[RiskEngine] {field}={score} outside [{lo}, {hi}] — clamped")
+        return max(lo, min(score, hi))
+    return score
+
+
+def _validated_components(raw: Any) -> Dict[str, float]:
+    """Return BFCI components with every value validated to [0, 100]."""
+    if not isinstance(raw, dict):
+        if raw:
+            logger.warning(f"[RiskEngine] bfci_components is {type(raw).__name__}, expected dict")
+        return {}
+    return {
+        str(key): _coerce_score(value, f"bfci_components[{key}]")
+        for key, value in raw.items()
+    }
+
+
 def _calculate_bfci_from_frida(dynamic: Dict) -> Tuple[float, List[str]]:
     """
     Compute BFCI using the exact weighted formula from the Sudarshan proposal.
@@ -370,12 +415,17 @@ def _calculate_bfci_from_frida(dynamic: Dict) -> Tuple[float, List[str]]:
 
     BFCI = (wa × A) + (ws × S) + (wo × O) + (wb × B) + (wn × N) + (wp × P)
     """
-    components = dynamic.get("bfci_components", {})
-    evidence: List[str] = dynamic.get("bfci_evidence", [])
+    # Validate at the boundary — see _coerce_score. The sandbox is the only
+    # current writer, but the verdict must not depend on that staying true.
+    components = _validated_components(dynamic.get("bfci_components", {}))
+    raw_evidence = dynamic.get("bfci_evidence", [])
+    evidence: List[str] = list(raw_evidence) if isinstance(raw_evidence, list) else []
 
-    # If frida_sandbox.py already computed bfci, trust it directly
-    if dynamic.get("bfci", 0) > 0 and components:
-        bfci = dynamic["bfci"]
+    reported_bfci = _coerce_score(dynamic.get("bfci", 0), "bfci")
+
+    # If frida_sandbox.py already computed bfci, trust the validated value
+    if reported_bfci > 0 and components:
+        bfci = reported_bfci
         if not evidence:
             for key, weight in _BFCI_WEIGHTS.items():
                 comp_score = components.get(key, 0.0)

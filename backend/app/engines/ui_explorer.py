@@ -20,6 +20,7 @@ from app.engines.event_bus import RuntimeEventBus
 logger = logging.getLogger(__name__)
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
 # Safe deterministic data for form filling
 FORM_VALUES = {
@@ -255,7 +256,7 @@ Return valid JSON matching this schema:
         try:
             response = await asyncio.to_thread(
                 self.client.models.generate_content,
-                model='gemini-1.5-flash',
+                model=GEMINI_MODEL,
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json"
@@ -338,7 +339,7 @@ Return valid JSON matching this schema:
                 
                 response = await asyncio.to_thread(
                     self.client.models.generate_content,
-                    model='gemini-1.5-flash',
+                    model=GEMINI_MODEL,
                     contents=[
                         types.Part.from_bytes(data=image_data, mime_type='image/png'),
                         prompt

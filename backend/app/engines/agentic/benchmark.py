@@ -80,6 +80,12 @@ class BenchmarkCollector:
 
         # ── Efficiency metrics ─────────────────────────────────────────────────
         self._llm_calls:         int              = 0
+        # Token accounting. Gemini reports usage per response; recording it is
+        # the only way a run's LLM cost can be reconstructed afterwards.
+        self._prompt_tokens:     int              = 0
+        self._output_tokens:     int              = 0
+        self._total_tokens:      int              = 0
+        self._llm_models_used:   Set[str]         = set()
         self._actions_taken:     int              = 0
         self._screenshots_taken: int              = 0
         self._fallback_activations: int           = 0
@@ -109,9 +115,27 @@ class BenchmarkCollector:
             if hook:
                 self._frida_hooks.add(hook)
 
-    def record_llm_call(self) -> None:
+    def record_llm_call(
+        self,
+        prompt_tokens: int = 0,
+        output_tokens: int = 0,
+        total_tokens:  int = 0,
+        model:         str = "",
+    ) -> None:
+        """
+        Record ONE LLM API call.
+
+        Called from the planner at the actual request site, not from the agent
+        loop: a schema-validation retry issues a second request, and counting in
+        the loop attributed both to a single call.
+        """
         with self._lock:
             self._llm_calls += 1
+            self._prompt_tokens += max(0, int(prompt_tokens or 0))
+            self._output_tokens += max(0, int(output_tokens or 0))
+            self._total_tokens  += max(0, int(total_tokens or 0))
+            if model:
+                self._llm_models_used.add(model)
 
     def record_screenshot(self) -> None:
         with self._lock:
@@ -148,6 +172,12 @@ class BenchmarkCollector:
                 "redundant_actions":       self._redundant_actions,
 
                 # Frida
+                # Additive LLM cost fields — never rename or remove existing keys.
+                "llm_prompt_tokens":        self._prompt_tokens,
+                "llm_output_tokens":        self._output_tokens,
+                "llm_total_tokens":         self._total_tokens,
+                "llm_models_used":          sorted(self._llm_models_used),
+
                 "frida_events_by_category": dict(self._frida_events),
                 "frida_unique_hook_types":  len(self._frida_hooks),
                 "bfci_categories_triggered": bfci_categories_triggered,

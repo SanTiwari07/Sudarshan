@@ -32,10 +32,12 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from collections import defaultdict, deque
+from collections import OrderedDict, defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Deque, Dict, List, Optional, Set, Tuple
+
+from app.engines.agentic.sanitizer import sanitize, sanitize_all
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +54,28 @@ MAX_TOTAL_HISTORY: int = 100
 
 # Maximum Frida events kept per goal (older ones dropped, counts kept).
 MAX_FRIDA_EVENTS_PER_GOAL: int = 20
+
+# ── Hard capacity limits ──────────────────────────────────────────────────────
+# The analysed application controls how many distinct screens, URLs and failures
+# it can generate, so every one of these collections is attacker-influenced and
+# MUST be bounded. Oldest entries are evicted first; counters are preserved so
+# metrics stay accurate even after eviction.
+
+# Distinct screens retained. Beyond this the least-recently-seen is evicted.
+MAX_VISITED_SCREENS: int = 500
+
+# Per-screen action tuples retained (only the most recent matter for loop
+# detection, which compares the last MAX_ACTIONS_PER_SCREEN entries).
+MAX_ACTIONS_TRACKED_PER_SCREEN: int = 20
+
+# Screens for which per-screen action counts are retained.
+MAX_SCREENS_WITH_ACTION_COUNTS: int = 500
+
+# Distinct network indicators retained.
+MAX_NETWORK_EVENTS: int = 1000
+
+# Failed action records retained.
+MAX_FAILED_ACTIONS: int = 200
 
 
 # ─── Data structures ──────────────────────────────────────────────────────────
@@ -96,13 +120,19 @@ class AgentMemory:
 
     def __init__(self) -> None:
         # ── Screen tracking ────────────────────────────────────────────────────
-        self.visited_screens: Dict[str, ScreenRecord] = {}
+        # OrderedDict so the least-recently-seen screen can be evicted once
+        # MAX_VISITED_SCREENS is reached.
+        self.visited_screens: "OrderedDict[str, ScreenRecord]" = OrderedDict()
         self.current_activity: str = "unknown"
         self.current_screen_hash: str = ""
 
+        # Distinct screens ever seen, including those evicted above. Kept so
+        # coverage metrics remain truthful after eviction.
+        self._total_screens_seen: int = 0
+
         # ── Action history ─────────────────────────────────────────────────────
-        # Per-screen: screen_hash → list of (tool, target) tuples
-        self._screen_action_counts: Dict[str, List[Tuple[str, str]]] = defaultdict(list)
+        # Per-screen: screen_hash → bounded deque of (tool, target) tuples
+        self._screen_action_counts: "OrderedDict[str, Deque[Tuple[str, str]]]" = OrderedDict()
         # Full chronological history (bounded)
         self._action_history: Deque[ActionRecord] = deque(maxlen=MAX_TOTAL_HISTORY)
 
@@ -116,7 +146,10 @@ class AgentMemory:
         self._frida_event_counts: Dict[str, int] = defaultdict(int)
 
         # ── Network events ─────────────────────────────────────────────────────
+        # List preserves order for reporting; the parallel set makes the
+        # duplicate check O(1) instead of an O(n) scan per event.
         self.network_events: List[str] = []   # URLs/domains seen
+        self._network_seen: Set[str] = set()
 
         # ── Reasoning history ─────────────────────────────────────────────────
         self._reasoning_history: Deque[str] = deque(maxlen=MAX_REASONING_HISTORY)
@@ -143,9 +176,36 @@ class AgentMemory:
                 activity_name=activity_name,
                 first_seen=_utcnow(),
             )
+            self._total_screens_seen += 1
+            self._evict_oldest(self.visited_screens, MAX_VISITED_SCREENS, "visited_screens")
             logger.debug(f"[Memory] New screen: {screen_hash[:8]} ({activity_name})")
             return True
+
+        # Re-visiting refreshes recency so an actively-used screen is not evicted.
+        self.visited_screens.move_to_end(screen_hash)
         return False
+
+    @staticmethod
+    def _trim_list(store: List[Any], limit: int) -> None:
+        """Drop oldest entries so `store` stays strictly under `limit`."""
+        overflow = len(store) - limit + 1
+        if overflow > 0:
+            del store[:overflow]
+
+    @staticmethod
+    def _evict_oldest(store: "OrderedDict", limit: int, label: str) -> None:
+        """
+        Trim an OrderedDict to `limit`, dropping least-recently-inserted first.
+
+        The analysed app decides how many unique screens exist, so these stores
+        are attacker-influenced and must never grow without bound.
+        """
+        evicted = 0
+        while len(store) > limit:
+            store.popitem(last=False)
+            evicted += 1
+        if evicted:
+            logger.debug(f"[Memory] Evicted {evicted} oldest entries from {label}")
 
     def is_visited(self, screen_hash: str) -> bool:
         return screen_hash in self.visited_screens
@@ -182,12 +242,23 @@ class AgentMemory:
             credential_key=credential_key,  # key name only, never the value
         )
         self._action_history.append(record)
+
+        if screen_hash not in self._screen_action_counts:
+            self._screen_action_counts[screen_hash] = deque(
+                maxlen=MAX_ACTIONS_TRACKED_PER_SCREEN
+            )
+            self._evict_oldest(
+                self._screen_action_counts,
+                MAX_SCREENS_WITH_ACTION_COUNTS,
+                "_screen_action_counts",
+            )
         self._screen_action_counts[screen_hash].append((tool, target))
 
         if screen_hash in self.visited_screens:
             self.visited_screens[screen_hash].action_count += 1
 
         if not success and error:
+            self._trim_list(self.failed_actions, MAX_FAILED_ACTIONS)
             self.failed_actions.append({
                 "iteration": self.iteration,
                 "tool": tool,
@@ -226,8 +297,13 @@ class AgentMemory:
             # Extract network URLs for the C2 goal
             category = event.get("category", "")
             url = event.get("data", {}).get("url", "")
-            if category == "network" and url and url not in self.network_events:
+            if category == "network" and url and url not in self._network_seen:
+                self._network_seen.add(url)
                 self.network_events.append(url)
+                if len(self.network_events) > MAX_NETWORK_EVENTS:
+                    # Drop the oldest indicator and forget it, so the set and
+                    # the list can never disagree about what is retained.
+                    self._network_seen.discard(self.network_events.pop(0))
 
     def get_frida_summary(self) -> Dict[str, int]:
         """Return {goal_name: total_event_count} for prompt injection."""
@@ -257,17 +333,17 @@ class AgentMemory:
         lines = [
             "=== AGENT MEMORY ===",
             f"Current iteration: {self.iteration}",
-            f"Current activity: {self.current_activity}",
+            f"Current activity: {sanitize(self.current_activity)}",
             f"Unique screens visited: {len(self.visited_screens)}",
             "",
             "--- Permissions ---",
-            f"  Granted: {', '.join(sorted(self.permissions_granted)) or 'none'}",
-            f"  Denied:  {', '.join(sorted(self.permissions_denied)) or 'none'}",
+            f"  Granted: {', '.join(sanitize_all(sorted(self.permissions_granted))) or 'none'}",
+            f"  Denied:  {', '.join(sanitize_all(sorted(self.permissions_denied))) or 'none'}",
             "",
             "--- Frida Evidence Summary (by goal) ---",
         ]
         for goal_name, count in self._frida_event_counts.items():
-            lines.append(f"  {goal_name}: {count} event(s)")
+            lines.append(f"  {sanitize(goal_name, max_length=80)}: {count} event(s)")
         if not self._frida_event_counts:
             lines.append("  (none yet)")
 
@@ -280,8 +356,12 @@ class AgentMemory:
         for r in recent:
             status = "✓" if r.success else "✗"
             cred_note = f" [cred_key={r.credential_key}]" if r.credential_key else ""
+            # r.target is a UI label from the app; r.reasoning is model output.
+            # Both re-enter the next prompt, so both are sanitized.
             lines.append(
-                f"  [{status}] {r.tool}({r.target}){cred_note} — {r.reasoning[:60]}"
+                f"  [{status}] {sanitize(r.tool, max_length=32)}"
+                f"({sanitize(r.target, max_length=80)}){cred_note} — "
+                f"{sanitize(r.reasoning, max_length=60)}"
             )
         if not recent:
             lines.append("  (none on this screen)")
@@ -289,14 +369,18 @@ class AgentMemory:
         lines.append("")
         lines.append("--- Failed Actions (all screens) ---")
         for fa in self.failed_actions[-5:]:
-            lines.append(f"  iter={fa['iteration']}: {fa['tool']}({fa['target']}) → {fa['error'][:60]}")
+            lines.append(
+                f"  iter={fa['iteration']}: {sanitize(fa['tool'], max_length=32)}"
+                f"({sanitize(fa['target'], max_length=80)}) → "
+                f"{sanitize(fa['error'], max_length=60)}"
+            )
         if not self.failed_actions:
             lines.append("  (none)")
 
         lines.append("")
         lines.append("--- Previous Reasoning ---")
         for r in self.get_recent_reasoning():
-            lines.append(f"  {r[:100]}")
+            lines.append(f"  {sanitize(r, max_length=100)}")
 
         return "\n".join(lines)
 

@@ -65,7 +65,7 @@ from app.engines.agentic.agent_memory import AgentMemory
 from app.engines.agentic.audit_log import AuditLog
 from app.engines.agentic.benchmark import BenchmarkCollector
 from app.engines.agentic.goal_tracker import GoalStatus, GoalTracker
-from app.engines.agentic.perception import PerceptionPipeline
+from app.engines.agentic.perception import PerceptionPipeline, package_of
 from app.engines.agentic.planner import AgentPlanner
 from app.engines.agentic.tool_executor import ToolExecutor
 from app.engines.event_bus import RuntimeEventBus
@@ -133,6 +133,8 @@ class AgenticExplorer:
             device_serial=device_serial,
             package_name=package_name,
             action_budget=ACTION_BUDGET,
+            benchmark=self.benchmark,
+            adb_path=adb_path,
         )
 
         # ── State ─────────────────────────────────────────────────────────────
@@ -259,6 +261,15 @@ class AgenticExplorer:
                 self.memory.register_screen(obs.screen_hash, obs.activity)
                 self.benchmark.record_screen(obs.screen_hash)
 
+                # Stage 1 is confirmed by observed foreground state, not by a
+                # Frida hook (hooks cannot fire before the app is running) and
+                # not by the LLM. Without this the whole dependency graph stays
+                # blocked on stage 1 forever.
+                self.goals.update_from_foreground(
+                    foreground_package=package_of(obs.activity),
+                    target_package=self.package_name,
+                )
+
                 # Update coverage metrics (UIExplorer compatibility)
                 self.coverage_metrics["screens"] = len(self.memory.visited_screens)
                 self.coverage_metrics["buttons_found"] = max(
@@ -278,9 +289,17 @@ class AgenticExplorer:
                         goal_name=self.goals.next_priority_goal().name
                         if self.goals.next_priority_goal() else "general"
                     )
-                    for cat in {e.get("category","") for e in frida_events_this_cycle}:
-                        hook = frida_events_this_cycle[0].get("data", {}).get("hook", "")
-                        self.benchmark.record_frida_event(cat, hook)
+                    # Count EVERY event against its OWN hook. This previously
+                    # iterated the set of categories, so a category was counted
+                    # once per cycle regardless of how many events arrived, and
+                    # the first event's hook was attributed to every category —
+                    # corrupting both the per-category counts and
+                    # frida_unique_hook_types.
+                    for event in frida_events_this_cycle:
+                        self.benchmark.record_frida_event(
+                            event.get("category", ""),
+                            event.get("data", {}).get("hook", ""),
+                        )
                     frida_silence_streak = 0
                 else:
                     frida_silence_streak += 1
@@ -327,8 +346,9 @@ class AgenticExplorer:
                 if action.get("_source") == "fallback":
                     self.benchmark.record_fallback_activation()
 
-                if action.get("_source") == "ai":
-                    self.benchmark.record_llm_call()
+                # NOTE: LLM calls are counted inside AgentPlanner, at the actual
+                # request site — a schema retry issues a second API call that is
+                # invisible from here.
 
                 # ── In hybrid mode: add jitter to reduce ADB socket contention ──
                 if self.mode == "hybrid":
@@ -339,6 +359,11 @@ class AgenticExplorer:
                 result = await self.executor.execute(action)
                 last_action_failed = not result.success
                 actions_taken += 1
+
+                # A cached choice that failed must not be replayed on this
+                # screen — drop it so the next visit re-plans from scratch.
+                if last_action_failed:
+                    self.planner.invalidate_cache_for_screen(obs.screen_hash)
 
                 # Record in memory
                 tool   = action.get("tool", "")

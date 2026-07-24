@@ -1,0 +1,44 @@
+{
+  "benign_static_only": {
+    "ai_confidence_multiplier": 1.0,
+    "banking_impact": 20.0,
+    "base_score": 5.0,
+    "confidence": 71.7,
+    "correlation": 0.0,
+    "dynamic": 0.0,
+    "final_risk_score": 5.0,
+    "formula_used": "static_only_frs",
+    "recommended_action": "MONITOR \u2014 Low risk. Approved for deployment under standard monitoring. Re-scan on next version update.",
+    "risk_band": "Safe",
+    "severity": "Safe",
+    "stei": 0.0
+  },
+  "trojan_static_only": {
+    "ai_confidence_multiplier": 1.2,
+    "banking_impact": 66.0,
+    "base_score": 67.0,
+    "confidence": 85.3,
+    "correlation": 55.0,
+    "dynamic": 0.0,
+    "final_risk_score": 80.4,
+    "formula_used": "static_only_frs",
+    "recommended_action": "BLOCK & INVESTIGATE \u2014 Do not deploy. Submit to dynamic sandbox. Notify SOC lead. Consider customer advisory.",
+    "risk_band": "High Risk",
+    "severity": "High Risk",
+    "stei": 73.5
+  },
+  "trojan_with_recorded_dynamic": {
+    "ai_confidence_multiplier": 1.2,
+    "banking_impact": 66.0,
+    "base_score": 64.01,
+    "confidence": 97.0,
+    "correlation": 55.0,
+    "dynamic": 61.25,
+    "final_risk_score": 76.81,
+    "formula_used": "full_frs",
+    "recommended_action": "BLOCK & INVESTIGATE \u2014 Do not deploy. Submit to dynamic sandbox. Notify SOC lead. Consider customer advisory.",
+    "risk_band": "High Risk",
+    "severity": "High Risk",
+    "stei": 73.5
+  }
+}

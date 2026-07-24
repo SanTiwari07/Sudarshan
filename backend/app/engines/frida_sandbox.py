@@ -28,9 +28,11 @@ BFCI Formula (from Sudarshan proposal):
 """
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
+import re
 import subprocess
 import threading
 import time
@@ -110,6 +112,11 @@ _ADB_CANDIDATES = [
 
 # Default analysis duration in seconds
 ANALYSIS_DURATION_SECONDS = int(os.getenv("FRIDA_ANALYSIS_DURATION", "30"))
+
+# Time allowed for the explorer to finish AFTER being asked to stop. Must
+# comfortably exceed one in-flight LLM round trip, otherwise artifacts are
+# flushed while the agent loop is still mid-iteration.
+EXPLORER_JOIN_GRACE_SECONDS: float = 20.0
 
 # ── Docker / TCP ADB support ───────────────────────────────────────────────────
 # When running in Docker, the Android emulator is on the HOST machine.
@@ -349,13 +356,71 @@ def calculate_bfci(collected_events: Dict[str, List[Dict]]) -> Tuple[float, Dict
 
 # ─── Frida Session Manager ────────────────────────────────────────────────────
 
+# ─── Per-sample artifact directories ──────────────────────────────────────────
+
+# Forensic artifacts used to be written to the process working directory, so
+# every scan overwrote the previous one and no per-sample record survived. They
+# now go under a per-sample subdirectory of the APK's own folder.
+ARTIFACT_ROOT_DIRNAME: str = "sudarshan_artifacts"
+
+_UNSAFE_NAME_CHARS = re.compile(r"[^A-Za-z0-9._-]")
+
+
+def artifact_dir_for(apk_path: str) -> Path:
+    """
+    Return the forensic artifact directory for one APK, creating it if needed.
+
+    The directory name combines the sanitised file stem (human-readable in an
+    investigation) with a short digest of the resolved path (so two samples
+    that share a stem but live in different folders never collide).
+
+    Re-analysing the SAME sample intentionally reuses its directory; analysing a
+    DIFFERENT sample never touches it.
+    """
+    # Resolve FIRST, then derive the parent. Taking the parent of an unresolved
+    # path lets a traversal component ("../evil.apk") place artifacts outside
+    # the sample's real folder. After resolution the parent is always the
+    # directory the file actually lives in.
+    raw = Path(apk_path)
+    try:
+        resolved_path = raw.resolve()
+    except OSError:
+        resolved_path = raw.absolute()
+
+    stem = _UNSAFE_NAME_CHARS.sub("_", resolved_path.stem)[:64] or "sample"
+    digest = hashlib.sha256(
+        str(resolved_path).encode("utf-8", errors="ignore")
+    ).hexdigest()[:8]
+
+    target = resolved_path.parent / ARTIFACT_ROOT_DIRNAME / f"{stem}_{digest}"
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        logger.error(
+            f"[Frida] Cannot create artifact dir {target} ({type(exc).__name__}: {exc}) "
+            f"— falling back to the APK's own folder"
+        )
+        return resolved_path.parent
+    return target
+
+
 class FridaSession:
     """Manages a Frida instrumentation session against a target app."""
 
-    def __init__(self, device_serial: str, package_name: str, main_activity: Optional[str] = None):
+    def __init__(
+        self,
+        device_serial: str,
+        package_name: str,
+        main_activity: Optional[str] = None,
+        artifact_dir: Optional[Path] = None,
+    ):
         self.device_serial = device_serial
         self.package_name = package_name
         self.main_activity = main_activity
+        # Where per-sample forensic artifacts are written. Defaults to the
+        # process CWD only when a caller supplies nothing, which keeps the
+        # constructor usable in tests without touching the filesystem.
+        self.artifact_dir: Path = Path(artifact_dir) if artifact_dir else Path(".")
         self.event_bus = RuntimeEventBus()
         self.collected_events: Dict[str, List[Dict]] = {
             "accessibility": [], "sms": [], "overlay": [],
@@ -364,6 +429,14 @@ class FridaSession:
             "anti_analysis": [],  # NEW: sandbox evasion events
         }
         self.hook_errors: List[str] = []
+        # Which explorer actually ran ("agentic" | "ui_explorer" | "none"), and
+        # why it failed if it did. Surfaced in the result so a reviewer can tell
+        # AI exploration from a rollback without reading the logs.
+        self.explorer_used: str = "none"
+        self.explorer_error: Optional[str] = None
+        # Set by stop() to cut an in-flight analysis short instead of sleeping
+        # out the full window.
+        self._stop_event = threading.Event()
         self._session = None
         self._script = None
         self.reports = {}
@@ -583,30 +656,98 @@ class FridaSession:
                         event_bus=self.event_bus,
                         mode=EXPLORER_MODE,
                     )
+                    self.explorer_used = "agentic"
                     logger.info("[Frida] AgenticExplorer selected.")
-                except ImportError:
-                    # Graceful fallback — AgenticExplorer not yet available
+                except Exception as exc:
+                    # Rollback covers ANY construction failure, not just
+                    # ImportError: a missing dependency, a bad device serial or
+                    # a constructor raising must all degrade to the legacy
+                    # explorer rather than abandoning exploration entirely.
+                    logger.error(
+                        f"[Frida] AgenticExplorer unavailable "
+                        f"({type(exc).__name__}: {exc}) — attempting rollback",
+                        exc_info=True,
+                    )
                     if UIExplorer is not None:
-                        explorer = UIExplorer(
-                            self.device_serial, _find_adb(),
-                            event_bus=self.event_bus, mode=EXPLORER_MODE
-                        )
-                        logger.warning("[Frida] AgenticExplorer import failed — falling back to UIExplorer.")
+                        try:
+                            explorer = UIExplorer(
+                                self.device_serial, _find_adb(),
+                                event_bus=self.event_bus, mode=EXPLORER_MODE
+                            )
+                            self.explorer_used = "ui_explorer"
+                            logger.warning("[Frida] Rolled back to UIExplorer.")
+                        except Exception as ui_exc:
+                            explorer = None
+                            self.explorer_used = "none"
+                            logger.error(
+                                f"[Frida] UIExplorer rollback also failed "
+                                f"({type(ui_exc).__name__}: {ui_exc})",
+                                exc_info=True,
+                            )
                     else:
                         explorer = None
-                        logger.warning("[Frida] Both AgenticExplorer and UIExplorer unavailable.")
+                        self.explorer_used = "none"
+                        logger.error("[Frida] Both AgenticExplorer and UIExplorer unavailable.")
 
                 if explorer is not None:
                     def _run_explorer():
+                        """
+                        Explorer thread body.
+
+                        This previously had NO exception handling: any error
+                        inside the agent loop killed the thread silently, the
+                        analysis still slept out its full window, and the run
+                        reported success with zero exploration performed. A
+                        failure here must be recorded, never swallowed.
+                        """
                         loop = asyncio.new_event_loop()
                         asyncio.set_event_loop(loop)
-                        loop.run_until_complete(explorer.start(duration_seconds))
-                        loop.close()
+                        try:
+                            loop.run_until_complete(explorer.start(duration_seconds))
+                        except Exception as exc:
+                            self.explorer_error = f"{type(exc).__name__}: {exc}"
+                            logger.error(
+                                f"[Frida] Explorer thread crashed: {self.explorer_error}",
+                                exc_info=True,
+                            )
+                            # Nothing further can be explored — release the main
+                            # wait immediately instead of idling for the rest of
+                            # the window.
+                            self._stop_event.set()
+                        finally:
+                            try:
+                                loop.close()
+                            except Exception as close_exc:
+                                logger.warning(
+                                    f"[Frida] Explorer event loop close failed: "
+                                    f"{type(close_exc).__name__}: {close_exc}"
+                                )
 
                     explorer_thread = threading.Thread(target=_run_explorer, daemon=True)
                     explorer_thread.start()
 
-            time.sleep(duration_seconds)
+            # NOTE: run() is synchronous and is dispatched via
+            # loop.run_in_executor(), so waiting here occupies a worker thread,
+            # not the event loop. What it must NOT be is uninterruptible: use a
+            # stop Event so stop() can cut the analysis short, and join the
+            # explorer so we return as soon as exploration genuinely finishes.
+            self._stop_event.wait(timeout=duration_seconds)
+
+            if explorer_thread is not None and explorer_thread.is_alive():
+                # Ask the explorer to wind down BEFORE waiting on it. Without
+                # this the thread runs to its own deadline while we block, and
+                # artifacts get flushed mid-iteration — the goal summary and
+                # benchmark counters are written before the explorer computes
+                # them, reporting goals_completed=0 for a run that did progress.
+                if explorer is not None and hasattr(explorer, "stop"):
+                    explorer.stop()
+                explorer_thread.join(timeout=EXPLORER_JOIN_GRACE_SECONDS)
+                if explorer_thread.is_alive():
+                    logger.warning(
+                        f"[Frida] Explorer did not finish within "
+                        f"{EXPLORER_JOIN_GRACE_SECONDS}s of being asked to stop "
+                        f"— artifacts may be incomplete"
+                    )
             return True
 
         except Exception as e:
@@ -625,11 +766,13 @@ class FridaSession:
                     # Flush agentic-only artifacts (audit_log.json, benchmark.json)
                     # UIExplorer does not have flush_artifacts() — guarded by hasattr.
                     if hasattr(explorer, 'flush_artifacts'):
-                        from pathlib import Path as _Path
-                        _apk_dir = _Path(getattr(self, '_apk_dir', '.'))
-                        explorer.flush_artifacts(_apk_dir)
-                except Exception:
-                    pass
+                        explorer.flush_artifacts(self.artifact_dir)
+                except Exception as exc:
+                    logger.error(
+                        f"[Frida] Failed to flush explorer artifacts to "
+                        f"{self.artifact_dir}: {type(exc).__name__}: {exc}",
+                        exc_info=True,
+                    )
 
             if getattr(self, '_script', None):
                 try:
@@ -730,9 +873,17 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
     logger.info(f"[Frida] APK installed: {package_name}")
 
     # ── Step 4: Run Frida session ──────────────────────────────────────────────
-    session = FridaSession(device_serial, package_name, main_activity=main_activity)
+    # Per-sample artifact directory: previously every scan wrote audit_log.json
+    # and benchmark.json into the process CWD, so each run destroyed the last
+    # one's forensic record.
+    apk_dir = artifact_dir_for(apk_path)
+    logger.info(f"[Frida] Artifacts for this sample: {apk_dir}")
 
-    apk_dir = Path(apk_path).parent
+    session = FridaSession(
+        device_serial, package_name,
+        main_activity=main_activity,
+        artifact_dir=apk_dir,
+    )
     
     # ── Wave 2: Initialize Intelligence Collectors ─────────────────────────────
     if ScreenshotManager is not None:
@@ -812,6 +963,13 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
         "package_name": package_name,
         "device": device_serial,
 
+        # Exploration provenance — additive fields so a reviewer can tell which
+        # explorer produced this evidence, and whether it crashed part-way.
+        # Deliberately NOT consumed by risk_engine: provenance never scores.
+        "explorer_used":  session.explorer_used,
+        "explorer_error": session.explorer_error,
+        "artifact_dir":   str(apk_dir),
+
         # BFCI result (new fields for the updated risk_engine)
         "bfci": bfci,
         "bfci_components": components,
@@ -844,7 +1002,7 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
     # ── Step 7: Write UI Explorer Reports to disk ────────────────────────────
     # Do not break the API contract of returning base_result. 
     # Just write the new reports into the same directory as the APK.
-    apk_dir = Path(apk_path).parent
+    apk_dir = artifact_dir_for(apk_path)
     
     if session.reports:
         try:

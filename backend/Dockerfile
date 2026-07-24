@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
         unzip \
         aapt \
+        tesseract-ocr \
     && rm -rf /var/lib/apt/lists/* \
     && curl -sSL \
         "https://dl.google.com/android/repository/platform-tools-latest-linux.zip" \

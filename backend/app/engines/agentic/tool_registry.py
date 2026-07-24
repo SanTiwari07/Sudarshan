@@ -89,9 +89,14 @@ class ToolDef:
         return f"{self.name}({param_str}) — {self.description}"
 
 
-# ─── Screen Dimension Constants (Nexus 5X / Pixel 3 default emulator size) ───
-# Validation uses these as upper bounds for coordinate checking.
-# Overridable via SUDARSHAN_SCREEN_WIDTH / SUDARSHAN_SCREEN_HEIGHT env vars.
+# ─── Screen Dimension Constants ───────────────────────────────────────────────
+# Declarative DEFAULTS only — used for the per-parameter min/max metadata below
+# and as documentation of a typical emulator.
+#
+# They are NOT the validation bounds: the planner validates coordinates against
+# the real device via device_properties.get_screen_size(). Treating these as
+# authoritative is what previously rejected the bottom 480px of a 1080x2400
+# screen. Do not reintroduce that coupling.
 
 DEFAULT_SCREEN_WIDTH:  int = 1080
 DEFAULT_SCREEN_HEIGHT: int = 1920

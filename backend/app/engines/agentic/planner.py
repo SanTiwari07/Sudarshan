@@ -25,9 +25,12 @@ LLM Budget Management:
   - Maximum ONE LLM call per agent iteration.
   - Vision (screenshot) is requested from the Observation, not the planner.
   - Planner receives the screenshot path but vision analysis is always secondary.
-  - Response is cached by (screen_hash, goal_name) — if the same screen+goal
-    pair recurs, the cached action is reused without an LLM call.
-  - Cache is invalidated if the previous action on that screen failed.
+  - Response is cached by (package, planner_version, screen_hash, goal_name) —
+    if the same screen+goal pair recurs within the SAME analysis, the cached
+    action is reused without an LLM call. The cache is per-planner-instance and
+    LRU-bounded, so it can neither bleed between samples nor grow unbounded.
+  - Cache is invalidated for a screen when an action on it fails, via
+    `invalidate_cache_for_screen()` called from the agent loop.
 
 FallbackPlanner:
   Fully deterministic. Operates purely on the Observation.ui_nodes list.
@@ -57,16 +60,15 @@ from __future__ import annotations
 import json
 import logging
 import os
-import re
-import time
+import threading
+from collections import OrderedDict
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.engines.agentic.agent_memory import AgentMemory
 from app.engines.agentic.goal_tracker import FraudGoal, GoalTracker
 from app.engines.agentic.perception import Observation
+from app.engines.agentic.device_properties import get_screen_size
 from app.engines.agentic.tool_registry import (
-    DEFAULT_SCREEN_HEIGHT,
-    DEFAULT_SCREEN_WIDTH,
     TOOL_REGISTRY,
     is_registered,
 )
@@ -75,14 +77,23 @@ logger = logging.getLogger(__name__)
 
 # ─── LLM Configuration ────────────────────────────────────────────────────────
 
-GEMINI_MODEL: str = os.getenv("SUDARSHAN_AGENT_MODEL", "gemini-1.5-flash")
+# SUDARSHAN_AGENT_MODEL is the legacy name, still honoured if GEMINI_MODEL is unset.
+GEMINI_MODEL: str = os.getenv("GEMINI_MODEL") or os.getenv("SUDARSHAN_AGENT_MODEL", "gemini-2.5-flash")
 MAX_OUTPUT_TOKENS: int = 512    # Agent actions are compact JSON — no need for large output
 
 # ─── Cache and budget ─────────────────────────────────────────────────────────
 
-# Cache key: (screen_hash, goal_name) → action dict
-# Invalidated when the last action on that screen failed.
-_ACTION_CACHE: Dict[Tuple[str, str], Dict] = {}
+# Bump when the prompt, tool catalogue or validation rules change: cached
+# actions produced by an older planner are not valid for a newer one.
+PLANNER_VERSION: str = "2"
+
+# Hard ceiling on cached actions per planner instance. A malicious app can mint
+# unlimited unique screens, so this MUST be bounded.
+ACTION_CACHE_MAX_ENTRIES: int = 256
+
+# Parameters carrying screen coordinates. Validated against the REAL device
+# resolution in Step 5, never against the registry's declarative defaults.
+_COORDINATE_PARAMS = frozenset({"x", "y", "x1", "y1", "x2", "y2"})
 
 # ─── FallbackPlanner keyword map ─────────────────────────────────────────────
 # Maps (lowercase keyword substring) → (tool, target_type, priority_score)
@@ -163,11 +174,29 @@ class AgentPlanner:
         device_serial:  str,
         package_name:   str,
         action_budget:  int = 25,
+        benchmark:      Optional[Any] = None,
+        adb_path:       str = "adb",
     ) -> None:
         self.device_serial  = device_serial
+        self.adb_path       = adb_path
         self.package_name   = package_name
         self.action_budget  = action_budget
         self._fallback      = FallbackPlanner()
+        # Optional BenchmarkCollector. Metrics are recorded HERE rather than in
+        # the agent loop because only this class knows how many API requests an
+        # iteration actually made (a schema retry makes two).
+        self._benchmark     = benchmark
+
+        # Per-instance LRU action cache.
+        #
+        # This was previously a module-level dict shared by every analysis in
+        # the process, keyed on (screen_hash, goal_name) only. Because
+        # screen_hash does not include the package, one APK could be served an
+        # action cached while analysing a DIFFERENT APK — with no LLM call and
+        # no trace in the audit log. Scoping it to the instance and putting the
+        # package in the key removes that cross-sample path entirely.
+        self._action_cache: "OrderedDict[Tuple[str, str, str, str], Dict[str, Any]]" = OrderedDict()
+        self._cache_lock = threading.Lock()
 
         self._client = None
         if api_key:
@@ -179,6 +208,59 @@ class AgentPlanner:
                 logger.warning(f"[Planner] Gemini init failed: {e} — FallbackPlanner active")
         else:
             logger.warning("[Planner] No GEMINI_API_KEY — FallbackPlanner active")
+
+    # ── Action cache ───────────────────────────────────────────────────────────
+
+    def _cache_key(self, screen_hash: str, goal_name: str) -> Tuple[str, str, str, str]:
+        """
+        Build a fully-qualified cache key.
+
+        The package and planner version are part of the key so that a cached
+        action can never be reused across samples or across a planner change.
+        """
+        return (self.package_name, PLANNER_VERSION, screen_hash, goal_name)
+
+    def _cache_get(self, key: Tuple[str, str, str, str]) -> Optional[Dict[str, Any]]:
+        """
+        Return a COPY of the cached action, or None.
+
+        Copying is not an optimisation detail — handing out the stored dict
+        lets any caller mutate the cache in place and poison later iterations.
+        """
+        with self._cache_lock:
+            if key not in self._action_cache:
+                return None
+            self._action_cache.move_to_end(key)      # LRU: mark recently used
+            return dict(self._action_cache[key])
+
+    def _cache_put(self, key: Tuple[str, str, str, str], action: Dict[str, Any]) -> None:
+        with self._cache_lock:
+            self._action_cache[key] = dict(action)
+            self._action_cache.move_to_end(key)
+            while len(self._action_cache) > ACTION_CACHE_MAX_ENTRIES:
+                evicted, _ = self._action_cache.popitem(last=False)
+                logger.debug(f"[Planner] Action cache evicted LRU entry {evicted}")
+
+    def invalidate_cache_for_screen(self, screen_hash: str) -> int:
+        """
+        Drop every cached action for one screen, across all goals.
+
+        Called when an action on that screen failed: the cached choice led
+        somewhere unproductive and must not be replayed.
+        Returns the number of entries removed.
+        """
+        with self._cache_lock:
+            doomed = [k for k in self._action_cache if k[2] == screen_hash]
+            for k in doomed:
+                del self._action_cache[k]
+        return len(doomed)
+
+    @property
+    def cache_size(self) -> int:
+        with self._cache_lock:
+            return len(self._action_cache)
+
+    # ── Decision ───────────────────────────────────────────────────────────────
 
     async def decide(
         self,
@@ -197,16 +279,16 @@ class AgentPlanner:
           5. FallbackPlanner returns action or signals stop.
         """
         next_goal = goals.next_priority_goal()
-        cache_key = (obs.screen_hash, next_goal.name if next_goal else "none")
+        cache_key = self._cache_key(obs.screen_hash, next_goal.name if next_goal else "none")
 
         # ── 1. Cache check ─────────────────────────────────────────────────────
-        if cache_key in _ACTION_CACHE:
-            cached = _ACTION_CACHE[cache_key]
+        cached = self._cache_get(cache_key)
+        if cached is not None:
             tool   = cached.get("tool", "")
             target = cached.get("text") or str(cached.get("x", ""))
             if not memory.is_action_loop(tool, target):
                 logger.debug(f"[Planner] Cache hit for {cache_key}")
-                cached["_source"] = "cache"
+                cached["_source"] = "cache"   # already a copy — see _cache_get
                 return cached
 
         # ── 2. LLM call ────────────────────────────────────────────────────────
@@ -214,7 +296,7 @@ class AgentPlanner:
             try:
                 action, validation_error = await self._call_llm(obs, memory, goals, next_goal)
                 if action:
-                    _ACTION_CACHE[cache_key] = action
+                    self._cache_put(cache_key, action)
                     return action
 
                 # Only retry if it was a schema validation failure (not a hard API/auth/404 error)
@@ -225,7 +307,7 @@ class AgentPlanner:
                         previous_error=validation_error
                     )
                     if action:
-                        _ACTION_CACHE[cache_key] = action
+                        self._cache_put(cache_key, action)
                         return action
                 else:
                     logger.warning(f"[Planner] LLM API error: {validation_error}")
@@ -272,10 +354,44 @@ class AgentPlanner:
                 ),
             )
             raw_text = response.text.strip() if response.text else ""
+            self._record_usage(response)
         except Exception as e:
             return None, f"LLM API error: {type(e).__name__}: {e}"
 
         return self._validate_action(raw_text, obs)
+
+    def _screen_bounds(self) -> Tuple[int, int]:
+        """
+        Return (width, height) for coordinate validation, from the single
+        device-properties provider. Cached there, so this is cheap to call.
+        """
+        return get_screen_size(adb_path=self.adb_path, device_serial=self.device_serial)
+
+    def _record_usage(self, response: Any) -> None:
+        """
+        Record one LLM request and its token usage against the benchmark.
+
+        Token counts were previously discarded entirely — `response.usage_metadata`
+        was never read — so a run's LLM cost could not be reconstructed.
+
+        Never allowed to disturb the decision path: metrics accounting must not
+        turn a usable LLM response into a failure.
+        """
+        if self._benchmark is None:
+            return
+        usage = getattr(response, "usage_metadata", None)
+        try:
+            self._benchmark.record_llm_call(
+                prompt_tokens=getattr(usage, "prompt_token_count", 0) or 0,
+                output_tokens=getattr(usage, "candidates_token_count", 0) or 0,
+                total_tokens=getattr(usage, "total_token_count", 0) or 0,
+                model=GEMINI_MODEL,
+            )
+        except Exception as exc:
+            logger.warning(
+                f"[Planner] Failed to record LLM usage "
+                f"({type(exc).__name__}: {exc}) — metrics only, decision unaffected"
+            )
 
     # ── Prompt construction ────────────────────────────────────────────────────
 
@@ -434,8 +550,16 @@ STRATEGY:
             if req_param not in action:
                 return None, f"Step4_MissingParam: tool '{tool_name}' requires '{req_param}'"
 
-        # Step 4b: Numeric range validation
+        # Step 4b: Numeric range validation.
+        #
+        # Coordinate parameters are deliberately EXCLUDED here: the registry's
+        # min/max are declarative defaults describing a typical emulator, not
+        # this device. Enforcing them rejected y=2000 on a 1080x2400 screen
+        # before Step 5 could check it against the real resolution. Coordinates
+        # are validated once, authoritatively, in Step 5.
         for param_def in tool_def.params:
+            if param_def.name in _COORDINATE_PARAMS:
+                continue
             if param_def.name in action:
                 val = action[param_def.name]
                 if param_def.type in ("int", "float") and isinstance(val, (int, float)):
@@ -450,14 +574,20 @@ STRATEGY:
                             f"> max {param_def.max_val}"
                         )
 
-        # Step 5: Coordinate bounds
+        # Step 5: Coordinate bounds.
+        #
+        # Bounds come from the REAL device, not from a hardcoded constant.
+        # Validating a 1080x2400 phone against a hardcoded 1080x1920 rejected
+        # every action in the bottom 480px as out-of-bounds, wasting an LLM
+        # retry and then falling back — on 20% of the screen.
+        screen_width, screen_height = self._screen_bounds()
         for coord, limit, name in [
-            ("x",  DEFAULT_SCREEN_WIDTH,  "screen width"),
-            ("x1", DEFAULT_SCREEN_WIDTH,  "screen width"),
-            ("x2", DEFAULT_SCREEN_WIDTH,  "screen width"),
-            ("y",  DEFAULT_SCREEN_HEIGHT, "screen height"),
-            ("y1", DEFAULT_SCREEN_HEIGHT, "screen height"),
-            ("y2", DEFAULT_SCREEN_HEIGHT, "screen height"),
+            ("x",  screen_width,  "screen width"),
+            ("x1", screen_width,  "screen width"),
+            ("x2", screen_width,  "screen width"),
+            ("y",  screen_height, "screen height"),
+            ("y1", screen_height, "screen height"),
+            ("y2", screen_height, "screen height"),
         ]:
             if coord in action:
                 val = int(action[coord])

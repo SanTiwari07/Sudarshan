@@ -10,8 +10,10 @@ Design rules:
     important incomplete goal.
   - Goals can be SKIPPED when Frida evidence proves they are not applicable
     (e.g., no SMS hooks fired after Stage 3 — accessibility — is complete).
-  - Goal status is updated ONLY by observing Frida events (deterministic) or
-    by the agent marking completion via `mark_completed()`.
+  - Goal status is updated ONLY from observed device state — Frida events
+    (`update_from_frida_events`) or the foreground window
+    (`update_from_foreground`). The LLM cannot mark a goal complete; it can
+    only choose actions and wait for the device to report the result.
   - This module NEVER makes malware verdicts — it only tracks exploration progress.
 
 Usage::
@@ -31,6 +33,19 @@ from enum import Enum
 from typing import Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
+
+# ─── Tunables ─────────────────────────────────────────────────────────────────
+
+# Stage 1 is confirmed by observing the target package in the foreground for
+# this many CONSECUTIVE observations. >1 rejects transient samples such as a
+# splash screen or a launcher hand-off frame.
+LAUNCH_CONFIRMATIONS_REQUIRED: int = 2
+
+# How many times a FAILED goal may be retried before it is given up on.
+MAX_GOAL_RETRIES: int = 1
+
+# Name of the stage-1 goal, referenced by the foreground completion path.
+LAUNCH_GOAL_NAME: str = "Launch Application"
 
 
 # ─── Goal Status ──────────────────────────────────────────────────────────────
@@ -72,6 +87,7 @@ class FraudGoal:
     evidence_collected: List[Dict]        = field(default_factory=list)
     status:           GoalStatus          = GoalStatus.PENDING
     attempts:         int                 = 0
+    retries_used:     int                 = 0
 
     def is_unblocked(self, completed_stages: Set[int]) -> bool:
         """Return True if all dependency stages are done (completed or skipped)."""
@@ -367,6 +383,9 @@ class GoalTracker:
         self._goals: List[FraudGoal] = _build_default_goals()
         # Map stage → goal for fast lookup
         self._by_stage: Dict[int, FraudGoal] = {g.stage: g for g in self._goals}
+        # Consecutive observations of the target package in the foreground.
+        # Reset whenever the reading is unavailable or shows another package.
+        self._launch_confirmations: int = 0
 
     # ── Public read API ────────────────────────────────────────────────────────
 
@@ -412,6 +431,26 @@ class GoalTracker:
         ]
         if pending:
             return pending[0]
+
+        # FAILED goals get exactly one retry before being given up on. Without
+        # this branch a transient failure permanently removed a goal from the
+        # graph, which is what the docstring above always promised but the code
+        # did not previously do.
+        retryable = [
+            g for g in self._goals
+            if g.status == GoalStatus.FAILED
+            and g.is_unblocked(completed)
+            and g.retries_used < MAX_GOAL_RETRIES
+        ]
+        if retryable:
+            goal = retryable[0]
+            goal.retries_used += 1
+            goal.status = GoalStatus.IN_PROGRESS
+            logger.info(
+                f"[GoalTracker] '{goal.name}' → IN_PROGRESS "
+                f"(retry {goal.retries_used}/{MAX_GOAL_RETRIES})"
+            )
+            return goal
 
         return None
 
@@ -489,12 +528,58 @@ class GoalTracker:
             goal.status = GoalStatus.IN_PROGRESS
             logger.debug(f"[GoalTracker] '{goal_name}' → IN_PROGRESS (agent action)")
 
-    def mark_completed(self, goal_name: str) -> None:
-        """Called when the agent explicitly confirms a goal is done."""
-        goal = self.get_goal_by_name(goal_name)
-        if goal:
+    def update_from_foreground(
+        self,
+        foreground_package: str,
+        target_package:     str,
+    ) -> List[str]:
+        """
+        Deterministic completion path for Stage 1 ("Launch Application").
+
+        Stage 1 cannot be confirmed by a Frida hook — it is the precondition for
+        hooks firing at all — so it is confirmed by observing that the target
+        package owns the foreground window for LAUNCH_CONFIRMATIONS_REQUIRED
+        consecutive observations. Requiring consecutive readings prevents a
+        single transient sample (splash screen, launcher hand-off) from
+        completing the goal.
+
+        This is observed device state, not LLM output: the agent cannot assert
+        the app launched, it can only act until the device reports that it did.
+
+        Returns list of goal names whose status changed.
+        """
+        changed: List[str] = []
+        goal = self.get_goal_by_name(LAUNCH_GOAL_NAME)
+        if goal is None or goal.status in (GoalStatus.COMPLETED, GoalStatus.SKIPPED):
+            return changed
+
+        # An unreadable foreground or unknown target is not evidence of failure
+        # OR success — it breaks the streak rather than counting toward it.
+        if not foreground_package or not target_package:
+            self._launch_confirmations = 0
+            return changed
+
+        if foreground_package != target_package:
+            self._launch_confirmations = 0
+            return changed
+
+        self._launch_confirmations += 1
+        if self._launch_confirmations >= LAUNCH_CONFIRMATIONS_REQUIRED:
             goal.status = GoalStatus.COMPLETED
-            logger.info(f"[GoalTracker] '{goal_name}' → COMPLETED (agent confirmed)")
+            goal.evidence_collected.append({
+                "category": "foreground",
+                "data": {
+                    "hook": "foreground_package_confirmed",
+                    "package": foreground_package,
+                    "consecutive_observations": self._launch_confirmations,
+                },
+            })
+            changed.append(goal.name)
+            logger.info(
+                f"[GoalTracker] '{goal.name}' → COMPLETED "
+                f"(foreground package confirmed {self._launch_confirmations}x)"
+            )
+        return changed
 
     def mark_failed(self, goal_name: str) -> None:
         """Called when the agent exhausts retries on a goal."""

@@ -36,6 +36,8 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set
 
+from app.engines.agentic.sanitizer import sanitize, sanitize_block
+
 logger = logging.getLogger(__name__)
 
 # ─── Perception thresholds (all named — unit-testable) ────────────────────────
@@ -125,12 +127,14 @@ class Observation:
         """
         if not self.ui_nodes:
             return "(no actionable UI elements)"
-        lines = [f"Activity: {self.activity}", "UI Elements:"]
+        lines = [f"Activity: {sanitize(self.activity)}", "UI Elements:"]
         for n in self.ui_nodes[:max_nodes]:
+            # Every one of these is chosen by the analysed app and is therefore
+            # hostile input — a label may attempt to close the untrusted fence.
             label = n.text or n.desc or n.resource_id or f"[{n.class_name}]"
             kind  = "INPUT" if n.is_input else ("SCROLL" if n.is_scrollable else "BTN")
             lines.append(
-                f"  [{n.node_id}] {kind} '{label}' @({n.center_x},{n.center_y})"
+                f"  [{n.node_id}] {kind} '{sanitize(label)}' @({n.center_x},{n.center_y})"
             )
         if len(self.ui_nodes) > max_nodes:
             lines.append(f"  ... ({len(self.ui_nodes) - max_nodes} more elements)")
@@ -143,7 +147,7 @@ class Observation:
         """
         lines = [
             "=== CURRENT OBSERVATION ===",
-            f"Activity: {self.activity}",
+            f"Activity: {sanitize(self.activity)}",
             f"Screen hash: {self.screen_hash}",
             f"Frida events since last action: {len(self.frida_events)}",
             "",
@@ -152,21 +156,83 @@ class Observation:
         if self.logcat:
             lines.append("")
             lines.append("--- Recent Logcat (last 10 lines) ---")
-            for line in self.logcat.splitlines()[-10:]:
+            # Logcat is written by the app under analysis — fully attacker
+            # controlled, and historically injected verbatim.
+            for line in sanitize_block(self.logcat, max_lines=10).splitlines():
                 lines.append(f"  {line}")
         if self.screenshot_taken:
             lines.append("")
-            lines.append(f"Screenshot taken (reason: {self.vision_reason}): {self.screenshot_path}")
+            lines.append(
+                f"Screenshot taken (reason: {sanitize(self.vision_reason)}): "
+                f"{sanitize(self.screenshot_path)}"
+            )
         if self.frida_events:
             lines.append("")
             lines.append("--- Frida Events (this cycle) ---")
             for e in self.frida_events[:5]:
-                cat  = e.get("category", "?")
-                hook = e.get("data", {}).get("hook", "?")
+                # Hook names embed app-supplied class and method names.
+                cat  = sanitize(e.get("category", "?"), max_length=64)
+                hook = sanitize(e.get("data", {}).get("hook", "?"), max_length=128)
                 lines.append(f"  [{cat}] {hook}")
             if len(self.frida_events) > 5:
                 lines.append(f"  ... ({len(self.frida_events) - 5} more)")
         return "\n".join(lines)
+
+
+# ─── Foreground activity parsing ──────────────────────────────────────────────
+
+# An Android component is "<package>/<activity>". The activity half may be a
+# bare suffix (".MainActivity") or fully qualified ("com.pkg.MainActivity").
+_COMPONENT_RE = r'[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*/[A-Za-z0-9_.$]+'
+
+# Real dumpsys emits, for example:
+#   mResumedActivity: ActivityRecord{a1b2c3 u0 com.pkg/.MainActivity t42}
+#   topResumedActivity=ActivityRecord{a1b2c3 u0 com.pkg/.MainActivity t42}
+# The component is preceded by the user id ("u0") and followed by the task id.
+# Anchoring on the component shape — rather than on whitespace before "}" —
+# is what keeps the trailing " t42}" from being captured instead.
+_ACTIVITY_PATTERNS = (
+    # Android <= 12 prints "mResumedActivity:"; Android 13+ prints "ResumedActivity:".
+    # \b keeps this from matching inside "topResumedActivity", handled separately.
+    re.compile(r'topResumedActivity[=:]\s*ActivityRecord\{[^}]*?\bu\d+\s+(' + _COMPONENT_RE + r')'),
+    re.compile(r'\bm?ResumedActivity[=:]\s*ActivityRecord\{[^}]*?\bu\d+\s+(' + _COMPONENT_RE + r')'),
+    re.compile(r'mCurrentFocus=Window\{[^}]*?\s(' + _COMPONENT_RE + r')'),
+    re.compile(r'mFocusedActivity[=:]\s*ActivityRecord\{[^}]*?\bu\d+\s+(' + _COMPONENT_RE + r')'),
+    # Last resort: any ActivityRecord component (multi-display / foldable dumps
+    # place the resumed record under a per-display section).
+    re.compile(r'ActivityRecord\{[^}]*?\bu\d+\s+(' + _COMPONENT_RE + r')'),
+)
+
+
+def parse_foreground_activity(dumpsys_output: str) -> str:
+    """
+    Extract the fully-qualified foreground component from `dumpsys activity
+    activities` output.
+
+    Returns "<package>/<activity>", or "unknown" when no component is present.
+
+    Pure function — no device access — so it is unit-testable against captured
+    dumpsys text from portrait, landscape, split-screen and foldable devices.
+    """
+    if not dumpsys_output:
+        return "unknown"
+    for pattern in _ACTIVITY_PATTERNS:
+        match = pattern.search(dumpsys_output)
+        if match:
+            return match.group(1)
+    return "unknown"
+
+
+def package_of(activity: str) -> str:
+    """
+    Return the package half of a "<package>/<activity>" component string.
+
+    Returns "" when the input is not a well-formed component, so callers can
+    distinguish "no reliable foreground reading" from a real package name.
+    """
+    if not activity or "/" not in activity:
+        return ""
+    return activity.split("/", 1)[0]
 
 
 # ─── Perception Pipeline ──────────────────────────────────────────────────────
@@ -367,16 +433,12 @@ class PerceptionPipeline:
             )
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=6)
             output = stdout.decode("utf-8", errors="ignore")
-            # mResumedActivity line
-            m = re.search(r'mResumedActivity.*?ActivityRecord\{[^}]+\s+([\w./$]+)\}', output)
-            if m:
-                return m.group(1)
-            # Fallback: topResumedActivity
-            m2 = re.search(r'topResumedActivity=([\w./$]+)', output)
-            if m2:
-                return m2.group(1)
+            return parse_foreground_activity(output)
         except Exception as e:
-            logger.debug(f"[Perception] Activity fetch error: {e}")
+            logger.warning(
+                f"[Perception] Activity fetch failed ({type(e).__name__}: {e}) "
+                f"— returning 'unknown'"
+            )
         return "unknown"
 
     def _is_webview_activity(self, activity: str) -> bool:
@@ -439,7 +501,12 @@ class PerceptionPipeline:
             relevant = [l for l in lines if pkg_short in l]
             return "\n".join(relevant[-LOGCAT_LINES:] if relevant else lines[-LOGCAT_LINES:])
         except Exception as e:
-            logger.debug(f"[Perception] Logcat error: {e}")
+            # Handled failure that degrades an observation → WARNING, per the
+            # project logging policy. DEBUG hid real capture failures.
+            logger.warning(
+                f"[Perception] Logcat capture failed "
+                f"({type(e).__name__}: {e}) — observation continues without it"
+            )
             return ""
 
     # ── Level 5: Screenshot ───────────────────────────────────────────────────

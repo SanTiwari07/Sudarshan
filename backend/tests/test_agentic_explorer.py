@@ -105,6 +105,25 @@ class TestGoalTracker(unittest.TestCase):
         self.GoalStatus = GoalStatus
         self.tracker = GoalTracker()
 
+    def _complete_launch_and_permissions(self, package="com.target.app"):
+        """
+        Advance the graph past stages 1 and 2 using only deterministic paths.
+
+        Stage 1 completes from observed foreground state; stage 2 completes from
+        a real permission Frida hook. No LLM/agent assertion is involved, which
+        is exactly the property the production code must preserve.
+        """
+        from app.engines.agentic.goal_tracker import LAUNCH_CONFIRMATIONS_REQUIRED
+        for _ in range(LAUNCH_CONFIRMATIONS_REQUIRED):
+            self.tracker.update_from_foreground(package, package)
+        perms = self.tracker.get_goal_by_name("Grant Runtime Permissions")
+        for hook in perms.frida_hooks:
+            self.tracker.update_from_frida_events(
+                [{"category": "permission", "data": {"hook": hook}}]
+            )
+            if perms.status == self.GoalStatus.COMPLETED:
+                break
+
     def test_fifteen_goals_loaded(self):
         self.assertEqual(len(self.tracker.goals), 15)
 
@@ -134,9 +153,9 @@ class TestGoalTracker(unittest.TestCase):
 
     def test_frida_event_triggers_goal_in_progress(self):
         """Frida event matching a goal's category should move it IN_PROGRESS."""
-        # Complete stage 1 manually so accessibility (stage 3) becomes reachable
-        self.tracker.mark_completed("Launch Application")
-        self.tracker.mark_completed("Grant Runtime Permissions")
+        # Drive stage 1 to COMPLETED through the deterministic foreground path,
+        # then stage 2, so accessibility (stage 3) becomes reachable.
+        self._complete_launch_and_permissions()
 
         events = [{"category": "accessibility", "data": {"hook": "SomeHook"}}]
         changed = self.tracker.update_from_frida_events(events)
@@ -145,8 +164,7 @@ class TestGoalTracker(unittest.TestCase):
 
     def test_specific_hook_completes_goal(self):
         """A Frida hook matching a goal's frida_hooks list should COMPLETE it."""
-        self.tracker.mark_completed("Launch Application")
-        self.tracker.mark_completed("Grant Runtime Permissions")
+        self._complete_launch_and_permissions()
 
         events = [{"category": "accessibility",
                    "data": {"hook": "AccessibilityService.onAccessibilityEvent"}}]
@@ -211,12 +229,18 @@ class TestAgentMemory(unittest.TestCase):
     def test_loop_detection_after_max_actions(self):
         """is_action_loop() must return True after MAX_ACTIONS_PER_SCREEN same actions."""
         for _ in range(self.MAX_ACTIONS_PER_SCREEN):
-            self.memory._screen_action_counts["testscreen001"].append(("tap", "btn_login"))
+            self.memory.record_action(
+                tool="tap", target="btn_login", goal_name="g",
+                reasoning="r", success=True,
+            )
         self.assertTrue(self.memory.is_action_loop("tap", "btn_login"))
 
     def test_no_loop_below_threshold(self):
         for _ in range(self.MAX_ACTIONS_PER_SCREEN - 1):
-            self.memory._screen_action_counts["testscreen001"].append(("tap", "btn_login"))
+            self.memory.record_action(
+                tool="tap", target="btn_login", goal_name="g",
+                reasoning="r", success=True,
+            )
         self.assertFalse(self.memory.is_action_loop("tap", "btn_login"))
 
     def test_prompt_context_does_not_contain_credential_values(self):

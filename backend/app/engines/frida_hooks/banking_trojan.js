@@ -142,7 +142,8 @@ try {
     return text;
   };
 
-  AccessibilityNodeInfo.performAction.implementation = function (action) {
+  // Disambiguate: performAction has overloads (int) and (int, Bundle).
+  AccessibilityNodeInfo.performAction.overload('int').implementation = function (action) {
     emit('accessibility', {
       hook:        'AccessibilityNodeInfo.performAction',
       severity:    'CRITICAL',
@@ -182,7 +183,11 @@ try {
 try {
   var SmsManager = Java.use('android.telephony.SmsManager');
 
-  SmsManager.sendTextMessage.implementation = function (destinationAddress, scAddress, text, sentIntent, deliveryIntent) {
+  // Disambiguate: sendTextMessage has several overloads; hook the classic 5-arg form.
+  SmsManager.sendTextMessage.overload(
+    'java.lang.String', 'java.lang.String', 'java.lang.String',
+    'android.app.PendingIntent', 'android.app.PendingIntent'
+  ).implementation = function (destinationAddress, scAddress, text, sentIntent, deliveryIntent) {
     emit('sms', {
       hook:        'SmsManager.sendTextMessage',
       severity:    'CRITICAL',
@@ -253,6 +258,11 @@ try {
 // ═══════════════════════════════════════════════════════════════════════════════
 // [B] BANKING APP INTERACTION HOOKS
 // ═══════════════════════════════════════════════════════════════════════════════
+
+// Preference keys worth reporting when read. Deliberately narrow: an app reads
+// SharedPreferences constantly, and emitting every read would drown the
+// evidence store and inflate the Frida event count meaninglessly.
+var CREDENTIAL_KEY_PATTERN = /(pass|pwd|pin|otp|token|secret|credential|session|auth|login|user|account|card|cvv|mpin)/i;
 
 var BANKING_PACKAGES = [
   'com.boi.mobile', 'com.sbi.lotusintouch', 'com.snapwork.hdfc',
@@ -353,7 +363,8 @@ try {
     return result;
   };
 
-  DevicePolicyManager.lockNow.implementation = function () {
+  // Disambiguate: lockNow has overloads () and (int).
+  DevicePolicyManager.lockNow.overload().implementation = function () {
     emit('persistence', {
       hook:        'DevicePolicyManager.lockNow',
       severity:    'CRITICAL',
@@ -547,6 +558,69 @@ try {
   };
 } catch (e) {
   send({ type: 'hook_error', hook: 'KeyStore.getInstance', error: e.message });
+}
+
+// Credential storage read.
+//
+// Stage 5 ("Login Flow") in the goal graph declares this hook as its
+// completion signal. It was never emitted, so stage 5 could never complete and
+// — because it is not skippable and gates stages 6, 7, 8 and 10 — the entire
+// downstream graph (SMS, banking, C2, dynamic loading) was unreachable.
+//
+// SECURITY: the KEY is reported, never the VALUE. Reading a stored credential
+// is the signal; the credential itself must never leave the device.
+try {
+  var SharedPreferencesImpl = Java.use('android.app.SharedPreferencesImpl');
+
+  SharedPreferencesImpl.getString.implementation = function (key, defValue) {
+    var value  = this.getString(key, defValue);
+    var keyStr = key ? key.toString() : '';
+
+    if (CREDENTIAL_KEY_PATTERN.test(keyStr)) {
+      emit('banking', {
+        hook:        'SharedPreferences.getString',
+        severity:    'HIGH',
+        pref_key:    keyStr,
+        value_length: value ? value.length : 0,   // length only — never the value
+        args:        [keyStr, '[redacted]'],
+        description: 'App read a credential-like value from SharedPreferences',
+      });
+    }
+    return value;
+  };
+} catch (e) {
+  send({ type: 'hook_error', hook: 'SharedPreferences.getString', error: e.message });
+}
+
+// Cryptographic operation.
+//
+// Second completion signal for stage 5. Banking trojans encrypt harvested
+// credentials before exfiltration, so doFinal on the login path is strong
+// evidence of a credential-handling flow.
+//
+// SECURITY: only the algorithm and byte counts are reported — never plaintext
+// or ciphertext.
+try {
+  var Cipher = Java.use('javax.crypto.Cipher');
+
+  Cipher.doFinal.overload('[B').implementation = function (input) {
+    var output = this.doFinal(input);
+    var algo   = '';
+    try { algo = this.getAlgorithm(); } catch (inner) { algo = 'unknown'; }
+
+    emit('banking', {
+      hook:        'Cipher.doFinal',
+      severity:    'HIGH',
+      algorithm:   algo ? algo.toString() : 'unknown',
+      input_bytes:  input  ? input.length  : 0,
+      output_bytes: output ? output.length : 0,
+      args:        [algo ? algo.toString() : 'unknown', '[redacted]'],
+      description: 'App performed a crypto operation (credential encryption before exfiltration)',
+    });
+    return output;
+  };
+} catch (e) {
+  send({ type: 'hook_error', hook: 'Cipher.doFinal', error: e.message });
 }
 
 // ─── Heartbeat ────────────────────────────────────────────────────────────────

@@ -7,8 +7,17 @@ httpx
 pytest
 aiofiles
 stix2
-frida
-frida-tools
+# PINNED. Two hard constraints collide here:
+#   * Frida 17 REMOVED the built-in `Java` global (the Android bridge became an
+#     external module), so classic `Java.perform` scripts must be bundled with
+#     frida-java-bridge via frida-compile.
+#   * Frida 16 CANNOT LINK on a 16 KB page-size device (this project's
+#     google_apis_ps16k AVD): "empty/missing DT_HASH/DT_GNU_HASH".
+# 16 KB support landed in 17.x, so 17 is mandatory here and the hook script is
+# bundled at build time (see frida_hooks/). The frida-server pushed to the
+# device MUST match this version exactly.
+frida==17.16.4
+frida-tools==14.10.4
 # Persistence layer
 aiosqlite
 databases

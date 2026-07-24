@@ -88,7 +88,14 @@ logger = logging.getLogger(__name__)
 # ─── Configuration ─────────────────────────────────────────────────────────────
 
 # Path to the Frida JS hooks script
-_HOOKS_SCRIPT = Path(__file__).parent / "frida_hooks" / "banking_trojan.js"
+# Frida 17 removed the built-in `Java` global, so the classic Java.perform
+# script must be bundled with frida-java-bridge. Prefer the compiled bundle;
+# fall back to the raw source only if it is missing (frida <= 16 environments).
+# Rebuild with:  npx frida-compile agent.js -o banking_trojan.bundle.js
+_HOOKS_DIR = Path(__file__).parent / "frida_hooks"
+_HOOKS_BUNDLE = _HOOKS_DIR / "banking_trojan.bundle.js"
+_HOOKS_SOURCE = _HOOKS_DIR / "banking_trojan.js"
+_HOOKS_SCRIPT = _HOOKS_BUNDLE if _HOOKS_BUNDLE.exists() else _HOOKS_SOURCE
 
 # UI Exploration Mode
 #   "ai"     : AI + Deterministic UI Explorer only
@@ -117,6 +124,13 @@ ANALYSIS_DURATION_SECONDS = int(os.getenv("FRIDA_ANALYSIS_DURATION", "30"))
 # comfortably exceed one in-flight LLM round trip, otherwise artifacts are
 # flushed while the agent loop is still mid-iteration.
 EXPLORER_JOIN_GRACE_SECONDS: float = 20.0
+
+# Attach retry policy. Attaching resolves a PID first, so it now succeeds on the
+# first attempt once the app is up; these only absorb app start-up latency.
+# Previously this was 15 attempts x 2s = 30s of guaranteed waste on every run,
+# because attaching by package name can never succeed on Android.
+ATTACH_MAX_ATTEMPTS: int = 10
+ATTACH_RETRY_DELAY_SECONDS: float = 1.5
 
 # ── Docker / TCP ADB support ───────────────────────────────────────────────────
 # When running in Docker, the Android emulator is on the HOST machine.
@@ -499,6 +513,37 @@ class FridaSession:
         elif message.get("type") == "error":
             logger.error(f"[Frida] Script error: {message.get('description')}")
 
+    def _resolve_pid(self) -> Optional[int]:
+        """
+        Return the running PID of the target package, or None.
+
+        Uses `pidof`, which maps a package name to its process id directly.
+        This exists because frida's own process list reports Android apps by
+        their display label ("InsecureBankv2"), not their package name
+        ("com.android.insecurebankv2"), so attaching by name fails on a process
+        that is demonstrably running.
+
+        Falls back to scanning `ps -A` on devices whose toybox lacks `pidof`.
+        """
+        ok, out = _adb("-s", self.device_serial, "shell", "pidof", self.package_name, timeout=10)
+        if ok and out.strip():
+            # A multi-process app returns several pids; the first is the main one.
+            for token in out.split():
+                if token.isdigit():
+                    return int(token)
+
+        ok, out = _adb("-s", self.device_serial, "shell", "ps", "-A", timeout=15)
+        if ok:
+            for line in out.splitlines():
+                # Process name is the final column; match it exactly so that
+                # ":remote" sub-processes do not shadow the main process.
+                parts = line.split()
+                if parts and parts[-1] == self.package_name:
+                    for token in parts:
+                        if token.isdigit():
+                            return int(token)
+        return None
+
     def run(self, duration_seconds: int = ANALYSIS_DURATION_SECONDS) -> bool:
         """
         Attach Frida to the target app and collect events for `duration_seconds`.
@@ -575,17 +620,42 @@ class FridaSession:
             time.sleep(3)
 
             self._session = None
-            for attempt in range(15):
+            for attempt in range(ATTACH_MAX_ATTEMPTS):
+                # Resolve the PID from the device and attach by PID.
+                #
+                # frida's enumerate_processes() reports a running Android app by
+                # its APPLICATION LABEL (e.g. "InsecureBankv2"), not by its
+                # package name, so device.attach("com.android.insecurebankv2")
+                # raises ProcessNotFoundError even while the process is running.
+                # `pidof` is the authoritative mapping from package to PID.
+                pid = self._resolve_pid()
                 try:
+                    if pid:
+                        self._session = device.attach(pid)
+                        logger.info(
+                            f"[Frida] Attached to {self.package_name} "
+                            f"(pid={pid}, attempt {attempt+1})"
+                        )
+                        break
+                    # No PID yet — the app may still be starting. Fall back to
+                    # attaching by name in case a future frida reports it that way.
                     self._session = device.attach(self.package_name)
-                    logger.info(f"[Frida] Attached to {self.package_name} (attempt {attempt+1})")
+                    logger.info(
+                        f"[Frida] Attached to {self.package_name} by name (attempt {attempt+1})"
+                    )
                     break
                 except frida.ProcessNotFoundError:
-                    logger.warning(f"[Frida] Process not found yet (attempt {attempt+1}), waiting...")
-                    time.sleep(2)
+                    logger.warning(
+                        f"[Frida] {self.package_name} not running yet "
+                        f"(attempt {attempt+1}/{ATTACH_MAX_ATTEMPTS}), waiting..."
+                    )
+                    time.sleep(ATTACH_RETRY_DELAY_SECONDS)
                 except Exception as e:
-                    logger.warning(f"[Frida] Attach attempt {attempt+1} failed: {e}")
-                    time.sleep(2)
+                    logger.warning(
+                        f"[Frida] Attach attempt {attempt+1} failed: "
+                        f"{type(e).__name__}: {e}"
+                    )
+                    time.sleep(ATTACH_RETRY_DELAY_SECONDS)
 
             # ── Strategy 2: fallback to spawn() for older API levels ───────────────
             if not self._session:

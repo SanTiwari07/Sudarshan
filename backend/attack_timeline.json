@@ -2,50 +2,34 @@
     {
         "timestamp": "00:00",
         "source": "System",
-        "action": "Analysis Started",
-        "details": "Explorer Mode: ai"
+        "action": "AgenticExplorer Started",
+        "details": "Mode=ai, ActionBudget=25"
     },
     {
-        "timestamp": "00:02",
+        "timestamp": "00:05",
         "source": "AI",
         "action": "tap",
-        "target": "node_4",
-        "details": "Deterministic chose tap on node node_4 (Deterministic match for 'login')"
+        "target": "894",
+        "goal": "Launch Application",
+        "details": "Tapping 'OK' to dismiss a potential splash screen or dialog.",
+        "success": true
     },
     {
-        "timestamp": "00:06",
-        "source": "AI",
-        "action": "swipe",
-        "details": "Swiping to unblock UI"
+        "timestamp": "00:18",
+        "source": "FALLBACK",
+        "action": "click_text",
+        "target": "Login",
+        "goal": "Launch Application",
+        "details": "Fallback deterministic match for 'Login' (score=75)",
+        "success": true
     },
     {
-        "timestamp": "00:11",
+        "timestamp": "00:23",
         "source": "AI",
-        "action": "swipe",
-        "details": "Swiping to unblock UI"
-    },
-    {
-        "timestamp": "00:15",
-        "source": "AI",
-        "action": "swipe",
-        "details": "Swiping to unblock UI"
-    },
-    {
-        "timestamp": "00:20",
-        "source": "AI",
-        "action": "swipe",
-        "details": "Swiping to unblock UI"
-    },
-    {
-        "timestamp": "00:24",
-        "source": "AI",
-        "action": "swipe",
-        "details": "Swiping to unblock UI"
-    },
-    {
-        "timestamp": "00:28",
-        "source": "AI",
-        "action": "swipe",
-        "details": "Swiping to unblock UI"
+        "action": "tap",
+        "target": "540",
+        "goal": "Launch Application",
+        "details": "Tapping 'Submit' to proceed past initial configuration screen.",
+        "success": true
     }
 ]

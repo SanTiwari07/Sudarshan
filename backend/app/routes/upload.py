@@ -178,9 +178,14 @@ async def _run_analysis_pipeline(
     if frida_status["ready"]:
         logger.info("Frida sandbox ready — running dynamic behavioral analysis")
         try:
-            from app.engines.multi_stage_engine import MultiStageEngine
-            engine = MultiStageEngine(apk_path=temp_path, package_name=package_name)
-            dynamic_result = await engine.run_all_stages()
+            use_multistage = os.getenv("SUDARSHAN_MULTISTAGE", "false").lower() == "true"
+            if use_multistage:
+                from app.engines.multi_stage_engine import MultiStageEngine
+                engine = MultiStageEngine(apk_path=temp_path, package_name=package_name)
+                dynamic_result = await engine.run_all_stages()
+            else:
+                from app.engines.frida_sandbox import run_frida_analysis
+                dynamic_result = await run_frida_analysis(temp_path, package_name=package_name)
             if dynamic_result.get("available"):
                 logger.info(f"Frida BFCI={dynamic_result.get('bfci', 0):.1f}")
             else:

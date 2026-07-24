@@ -572,17 +572,39 @@ class FridaSession:
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
                 )
 
-            if EXPLORER_MODE in ["ai", "hybrid"] and UIExplorer is not None:
-                explorer = UIExplorer(self.device_serial, _find_adb(), event_bus=self.event_bus, mode=EXPLORER_MODE)
-                
-                def _run_explorer():
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    loop.run_until_complete(explorer.start(duration_seconds))
-                    loop.close()
-                    
-                explorer_thread = threading.Thread(target=_run_explorer, daemon=True)
-                explorer_thread.start()
+            if EXPLORER_MODE in ["ai", "hybrid"]:
+                # ── Agentic Explorer (primary) — falls back to UIExplorer on import error ──
+                try:
+                    from app.engines.agentic_explorer import AgenticExplorer
+                    explorer = AgenticExplorer(
+                        device_serial=self.device_serial,
+                        adb_path=_find_adb(),
+                        package_name=self.package_name,
+                        event_bus=self.event_bus,
+                        mode=EXPLORER_MODE,
+                    )
+                    logger.info("[Frida] AgenticExplorer selected.")
+                except ImportError:
+                    # Graceful fallback — AgenticExplorer not yet available
+                    if UIExplorer is not None:
+                        explorer = UIExplorer(
+                            self.device_serial, _find_adb(),
+                            event_bus=self.event_bus, mode=EXPLORER_MODE
+                        )
+                        logger.warning("[Frida] AgenticExplorer import failed — falling back to UIExplorer.")
+                    else:
+                        explorer = None
+                        logger.warning("[Frida] Both AgenticExplorer and UIExplorer unavailable.")
+
+                if explorer is not None:
+                    def _run_explorer():
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        loop.run_until_complete(explorer.start(duration_seconds))
+                        loop.close()
+
+                    explorer_thread = threading.Thread(target=_run_explorer, daemon=True)
+                    explorer_thread.start()
 
             time.sleep(duration_seconds)
             return True
@@ -600,6 +622,12 @@ class FridaSession:
                 try:
                     explorer.stop()
                     self.reports = explorer.get_reports()
+                    # Flush agentic-only artifacts (audit_log.json, benchmark.json)
+                    # UIExplorer does not have flush_artifacts() — guarded by hasattr.
+                    if hasattr(explorer, 'flush_artifacts'):
+                        from pathlib import Path as _Path
+                        _apk_dir = _Path(getattr(self, '_apk_dir', '.'))
+                        explorer.flush_artifacts(_apk_dir)
                 except Exception:
                     pass
 

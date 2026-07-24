@@ -22,9 +22,9 @@ Write-Host "      ✔ ADB server started" -ForegroundColor Green
 Write-Host "[2/5] Enabling ADB over TCP (port 5555)..." -ForegroundColor Yellow
 $tcpResult = adb tcpip 5555 2>&1
 if ($tcpResult -match "error|failed") {
-    Write-Host "      ⚠  No USB device found (skip if emulator is already in TCP mode)" -ForegroundColor DarkYellow
+    Write-Host "      !  No USB device found (skip if emulator is already in TCP mode)" -ForegroundColor DarkYellow
 } else {
-    Write-Host "      ✔ ADB TCP mode enabled" -ForegroundColor Green
+    Write-Host "      OK ADB TCP mode enabled" -ForegroundColor Green
 }
 Start-Sleep -Seconds 1
 
@@ -48,9 +48,9 @@ Start-Sleep -Seconds 2
 # Verify
 $fridaCheck = adb shell "ps -A" 2>&1 | Select-String "frida-server"
 if ($fridaCheck) {
-    Write-Host "      ✔ frida-server is RUNNING" -ForegroundColor Green
+    Write-Host "      OK frida-server is RUNNING" -ForegroundColor Green
 } else {
-    Write-Host "      ✗ frida-server did NOT start — dynamic analysis will be skipped" -ForegroundColor Red
+    Write-Host "      X frida-server did NOT start - dynamic analysis will be skipped" -ForegroundColor Red
     Write-Host "        Make sure the binary exists at /data/local/tmp/frida-server on the emulator." -ForegroundColor DarkYellow
 }
 

@@ -1,0 +1,22 @@
+{
+  "benchmark_version": "1.0",
+  "generated_at": "2026-07-24T16:53:13.812142+00:00",
+  "explorer_mode": "ai",
+  "package_name": "ai.agribid.esurvey_farmer",
+  "total_elapsed_seconds": 30.0,
+  "unique_screens_visited": 3,
+  "ui_elements_interacted": 6,
+  "redundant_actions": 0,
+  "frida_events_by_category": {},
+  "frida_unique_hook_types": 0,
+  "bfci_categories_triggered": [],
+  "bfci_category_count": 0,
+  "actions_taken": 6,
+  "llm_calls_made": 0,
+  "screenshots_taken": 0,
+  "fallback_activations": 7,
+  "goals_completed": 0,
+  "goals_skipped": 0,
+  "goals_failed": 0,
+  "corpus_benchmark_scope": "per_run_only__corpus_comparison_is_separate_phase"
+}

@@ -11,6 +11,8 @@ services:
       - OLLAMA_HOST=http://host.docker.internal:11434
       - MOBSF_HOST=http://mobsf:8000
       - MOBSF_API_KEY=mobsf_api_key_secret_here
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - SUDARSHAN_EXPLORER_MODE=${SUDARSHAN_EXPLORER_MODE:-ai}
       - PYTHONDONTWRITEBYTECODE=1           # Never write .pyc cache — always use fresh source
       - PYTHONUNBUFFERED=1                  # Real-time log output
 

@@ -67,7 +67,7 @@ move the score. See §9.
 ## 3. Repository Layout
 
 ```
-SudarshanBOI/
+Sudarshan/
 ├── start.ps1                       One-command bootstrapper (ADB → frida-server → docker compose)
 ├── docker-compose.yml              backend:8000, frontend:5173, mobsf:8001
 ├── backend/

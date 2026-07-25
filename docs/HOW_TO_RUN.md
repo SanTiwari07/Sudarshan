@@ -1,200 +1,211 @@
-# How to Run Sudarshan
+# How to Run Sudarshan — Installation & Operations Manual
 
-This guide will walk you through the complete setup of the Sudarshan cybersecurity platform, from installing dependencies to running the services and performing health checks. Even if you have zero prior knowledge, following these steps will get the project running locally on Windows, Mac, or Linux.
+## Purpose
 
----
-
-## 1. Prerequisites
-
-Ensure you have the following software installed on your machine:
-
-### Core Dependencies
-1. **Python 3.10+**: Required for the backend services. [Download Python](https://www.python.org/downloads/)
-2. **Node.js 18+ (and npm)**: Required for the frontend React application. [Download Node.js](https://nodejs.org/)
-3. **Docker Desktop**: Required to run MobSF and containerized components. [Download Docker](https://www.docker.com/products/docker-desktop/)
-
-### Mobile Security Dependencies
-4. **Android Studio (with Android Emulator)**: Required for dynamic analysis. [Download Android Studio](https://developer.android.com/studio)
-   - Setup an Android Virtual Device (AVD).
-5. **ADB (Android Debug Bridge)**: Included with Android SDK. Ensure `adb` is in your system's PATH.
-6. **Frida**: Required for hooking and dynamic analysis.
-7. **Ollama**: Required for running Local LLM models for AI-driven risk scoring. [Download Ollama](https://ollama.com/download)
+This document provides step-by-step installation, deployment, and operational procedures for running the **SUDARSHAN** platform across local development environments, Docker container clusters, and Android Virtual Device (AVD) testbeds.
 
 ---
 
-## 2. Environment Setup
+## Responsibilities
 
-### Clone the Repository
-If you haven't already:
-```bash
-git clone https://github.com/your-org/sudarshan.git
-cd sudarshan
+This guide is responsible for:
+1. **Prerequisites Verification**: Specifying exact runtime dependencies (Python 3.10+, Node.js 18+, Docker Desktop, Android Studio, Frida 17, Ollama).
+2. **Local & Docker Deployment**: Providing instructions for running Sudarshan via Docker Compose, PowerShell bootstrapper (`start.ps1`), or standalone terminal execution.
+3. **Frida Sandbox Configuration**: Guiding the deployment of `frida-server 17.16.4` on the Android emulator and exposing ADB over TCP port 5555.
+4. **Health Verification**: Providing health check endpoints and verification protocols for all microservices.
+
+---
+
+## High-Level Overview
+
+Sudarshan can be launched using three deployment modes depending on environmental requirements:
+
+```text
+[ Sudarshan Deployment Modes ]
+       │
+       ├─► Mode 1: One-Click Bootstrapper (Windows PowerShell: .\start.ps1)
+       ├─► Mode 2: Docker Compose Cluster (docker-compose up --build)
+       └─► Mode 3: Standalone Local Process Execution (FastAPI + Vite)
 ```
 
-### Environment Variables
-We provide an example environment file. Copy it to `.env` in the root folder:
-```bash
-# On Linux / Mac
-cp .env.example .env
+---
 
-# On Windows
-copy .env.example .env
+## Architecture
+
+Deployment architecture showing service container ports and ADB TCP bridge:
+
+```mermaid
+graph TD
+    subgraph Host Workstation / Operating System
+        PS[PowerShell Bootstrapper / start.ps1]
+        AVD[Android Studio Pixel 6 AVD<br/>frida-server 17.16.4]
+        ADB[ADB TCP Bridge / Port 5555]
+        OLLAMA[Local Ollama Service / Port 11434]
+    end
+
+    subgraph Docker Compose Cluster
+        FE[Frontend Container<br/>Port 5173]
+        BE[FastAPI Backend Container<br/>Port 8000]
+        MS[MobSF Container<br/>Port 8001]
+    end
+
+    PS --> FE
+    PS --> BE
+    PS --> MS
+
+    FE -->|HTTP REST| BE
+    BE -->|HTTP REST| MS
+    BE -->|ADB TCP| ADB
+    ADB --> AVD
+    BE -->|HTTP REST| OLLAMA
 ```
-Open `.env` and fill in any required API keys (e.g., `MOBSF_API_KEY`). Ensure your `VITE_API_URL` points to `http://localhost:8000`.
 
 ---
 
-## 3. Backend Setup
+## Components & Deployment Requirements
 
-The backend handles AI processing, REST APIs, and analysis pipelines.
+System prerequisites and service allocation:
 
-1. **Navigate to the backend folder**:
-   ```bash
-   cd backend
-   ```
-2. **Create a Python Virtual Environment**:
-   ```bash
-   # On Windows
-   python -m venv venv
-   .\venv\Scripts\activate
-
-   # On Mac / Linux
-   python3 -m venv venv
-   source venv/bin/activate
-   ```
-3. **Install Dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. **Run the Backend Server**:
-   ```bash
-   uvicorn main:app --reload --host 0.0.0.0 --port 8000
-   ```
-   *The backend should now be running at `http://localhost:8000`.*
+| Service / Dependency | Version | Default Port | Launch Command |
+| :--- | :--- | :--- | :--- |
+| **FastAPI Backend** | Python 3.10+ | `8000` | `uvicorn app.main:app --reload --port 8000` |
+| **React Dashboard** | Node 18+ / Vite | `5173` | `npm run dev` |
+| **MobSF Engine** | Docker Image | `8001` | `docker run -d -p 8001:8000 opensecurity/mobile-security-framework-mobsf` |
+| **Android AVD** | Android 13+ | `5555` | Android Studio AVD Manager |
+| **Frida Server** | `17.16.4` | `27042` | `adb shell /data/local/tmp/frida-server &` |
+| **Ollama LLM** | `qwen3:8b` | `11434` | `ollama run qwen3:8b` |
 
 ---
 
-## 4. Frontend Setup
+## Workflow
 
-The frontend provides the interactive dashboard and reports.
+Step-by-step deployment procedure:
 
-1. **Open a new terminal and navigate to the frontend folder**:
-   ```bash
-   cd frontend
-   ```
-2. **Install Node Modules**:
-   ```bash
-   npm install
-   ```
-3. **Run the Development Server**:
-   ```bash
-   npm run dev
-   ```
-   *The frontend should now be running at `http://localhost:5173`.*
-
----
-
-## 5. Third-Party Integrations Setup
-
-### 5.1 MobSF (Mobile Security Framework)
-MobSF is run via Docker for static analysis.
-1. Open Docker Desktop.
-2. In the root directory of the project, start MobSF via Docker Compose:
-   ```bash
-   docker-compose up mobsf -d
-   ```
-3. MobSF will be available at `http://localhost:8001`.
-
-### 5.2 Ollama (Local AI)
-Ollama powers the intelligence engine.
-1. Ensure Ollama is running in the background.
-2. Pull the required model (e.g., Llama 3 or Mistral):
-   ```bash
-   ollama run llama3
-   ```
-3. Ensure the Ollama API is exposed at `http://localhost:11434`.
-
-### 5.3 Frida & Android Emulator (Dynamic Analysis)
-To perform dynamic analysis, an Android emulator must be running and the Frida Server must be active.
-
-**Step 1: Setup Emulator**
-1. Open Android Studio -> Virtual Device Manager.
-2. Create an **API 29, Android 10, x86_64** emulator. *(Do not use the 32-bit x86 image!)*
-3. Start the emulator.
-
-**Step 2: Install Frida Server**
-1. Download the `frida-server-17.15.3-android-x86_64.xz` file from [Frida Releases](https://github.com/frida/frida/releases) and extract the binary file.
-2. Open PowerShell and push it to the emulator's temp folder:
-   ```powershell
-   # Change this path to where you extracted the file/folder!
-   adb push C:\path\to\frida-server-17.15.3-android-x86_64 /data/local/tmp/
-   
-   # Make the folder and its contents executable
-   adb shell chmod -R 777 /data/local/tmp/frida-server-17.15.3-android-x86_64
-   ```
-
-**Step 3: Start Frida & Expose to Docker**
-Run these commands every time you restart the emulator to get it ready for Sudarshan:
+### Option A: One-Click Bootstrapper (Windows PowerShell)
 ```powershell
-# 1. Ensure ADB is running as root
-adb root
+.\start.ps1
+```
+This script automatically checks Python/Node installations, creates virtual environments, installs requirements, builds frontend assets, and launches the services.
 
-# 2. Start Frida Server in the background (no output means success)
-adb shell "cd /data/local/tmp/frida-server-17.15.3-android-x86_64 && ./frida* &"
+### Option B: Docker Compose Deployment
+```bash
+# 1. Copy Environment Configuration
+copy .env.example .env
 
-# 3. Expose ADB to TCP so the Docker container can reach it
-adb tcpip 5555
+# 2. Build and Launch Containers
+docker-compose up --build
 ```
 
-*Note: The `docker-compose.yml` file shares your Windows `~/.android` ADB keys with Docker, so the backend container is automatically authorized to connect. You won't see any "Allow USB Debugging" popups!*
+### Option C: Manual Standalone Execution
+
+#### 1. Backend Setup
+```bash
+cd backend
+python -m venv venv
+
+# Windows
+.\venv\Scripts\activate
+# Linux / Mac
+source venv/bin/activate
+
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```
+
+#### 2. Frontend Setup
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+#### 3. Frida AVD Emulator Setup
+```bash
+# 1. Start your Pixel 6 AVD in Android Studio
+# 2. Expose ADB over TCP
+adb tcpip 5555
+
+# 3. Push and Start frida-server 17.16.4
+adb push frida-server-17.16.4-android-x86_64 /data/local/tmp/frida-server
+adb shell "chmod 755 /data/local/tmp/frida-server"
+adb shell "/data/local/tmp/frida-server &"
+```
 
 ---
 
-## 6. Running with Docker (Recommended)
+## Data Flow
 
-If you prefer to run the entire stack (Backend, Frontend, and MobSF) in isolated containers without setting up Node and Python locally, use Docker Compose.
+Health verification flow across deployed services:
 
-1. Ensure Docker Desktop is running.
-2. Build and start all services:
-   ```bash
-   docker-compose up --build
-   ```
-3. **Access the services**:
-   - Frontend Dashboard: `http://localhost:5173`
-   - Backend API Docs (Swagger): `http://localhost:8000/docs`
-   - MobSF Dashboard: `http://localhost:8001`
+$$\text{Deployment Launch } (\texttt{docker-compose up} \text{ / } \texttt{.\textbackslash start.ps1})$$
+$$\Downarrow$$
+$$\text{Liveness Probes: } \texttt{GET http://localhost:8000/health} \longrightarrow \text{HTTP 200 OK}$$
+$$\Downarrow$$
+$$\text{Sandbox Probe: } \texttt{GET http://localhost:8000/api/v1/sandbox/status} \longrightarrow \text{\{"ready": true\}}$$
+$$\Downarrow$$
+$$\text{Analyst Login: } \texttt{http://localhost:5173/login} \longrightarrow \text{Default: admin / sudarshan\_admin\_2024}$$
 
 ---
 
-## 7. Verification and Health Checks
+## Integration
 
-To verify that the platform is running correctly, perform these health checks:
-
-- **Backend API**: Navigate to `http://localhost:8000/health`. You should receive a JSON response: `{"status": "ok"}`.
-- **Frontend App**: Navigate to `http://localhost:5173`. You should see the Sudarshan Dashboard.
-- **MobSF Integration**: Ensure `http://localhost:8001` loads the MobSF UI.
-- **Ollama**: Run `curl http://localhost:11434/api/tags` and verify it returns a list of models.
+Service endpoints post-launch:
+- **Analyst Dashboard**: `http://localhost:5173`
+- **FastAPI OpenAPI Swagger Docs**: `http://localhost:8000/docs`
+- **MobSF Static Console**: `http://localhost:8001`
+- **Ollama API**: `http://localhost:11434`
 
 ---
 
-## 8. Common Errors & Troubleshooting
+## Folder Structure
 
-### Port Conflicts
-- **Error**: `listen EADDRINUSE: address already in use :::8000`
-- **Solution**: Another service is using port 8000. Identify the process (`netstat -ano | findstr :8000` on Windows or `lsof -i :8000` on Mac/Linux) and terminate it, or change the backend port.
+Relevant execution scripts:
 
-### Docker Issues
-- **Error**: `Cannot connect to the Docker daemon`
-- **Solution**: Ensure Docker Desktop is open and fully initialized.
+```text
+Sudarshan BOI/
+├── start.ps1               <- Windows PowerShell Bootstrapper
+├── docker-compose.yml      <- Multi-Container Deployment Specification
+├── backend/
+│   ├── app/main.py         <- FastAPI Entrypoint
+│   └── requirements.txt    <- Python Dependencies
+└── frontend/
+    ├── src/App.tsx         <- React Dashboard Root
+    └── package.json        <- Frontend Node Dependencies
+```
 
-### ADB & Frida Issues
-- **Error**: `device offline` or `frida-server not found`
-- **Solution**: Ensure the emulator is completely booted before running `adb tcpip 5555`. You may need to manually install `frida-server` on the emulator that matches your host's frida version.
+---
 
-### GPU / CPU Mode (Ollama)
-- **Issue**: Ollama inference is extremely slow.
-- **Solution**: If you have a dedicated GPU, ensure Ollama is utilizing it (check Task Manager/Activity Monitor). If running on CPU only, expect slower responses.
+## Configuration
 
-### Windows vs Linux/Mac Execution
-- On Windows, always use `.\venv\Scripts\activate`. On Unix systems, use `source venv/bin/activate`.
-- If `host.docker.internal` fails on Linux, verify `extra_hosts` in `docker-compose.yml`.
+Environment variables declared in `.env`:
+
+```env
+PORT=8000
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=sudarshan_admin_2024
+JWT_SECRET=sudarshan_jwt_secret_key_change_in_production_2024
+
+MOBSF_HOST=http://mobsf:8000
+MOBSF_API_KEY=mobsf_api_key_secret_here
+
+ADB_HOST=host.docker.internal
+ADB_PORT=5555
+FRIDA_ANALYSIS_DURATION=30
+
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL=gemini-2.5-flash
+OLLAMA_HOST=http://localhost:11434
+```
+
+---
+
+## Error Handling
+
+1. **ADB Connection Failure**: If the backend container cannot connect to ADB on `host.docker.internal:5555`, verify that `adb tcpip 5555` was executed on the host machine.
+2. **Frida Version Mismatch**: Ensure the `frida-server` binary on the AVD matches the backend Python package version (`17.16.4`).
+
+---
+
+## Current Implementation Status
+
+Deployment options are fully functional and tested under Windows PowerShell and Docker Compose.

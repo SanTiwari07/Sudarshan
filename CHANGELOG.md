@@ -2,6 +2,31 @@
 
 All notable changes to this project are documented in this file.
 
+## [RC-2] — 2026-07-25
+
+### Key Updates & Infrastructure Alignment
+
+#### GitHub Repository Rename
+- Updated remote repository configuration to [https://github.com/SanTiwari07/Sudarshan.git](https://github.com/SanTiwari07/Sudarshan.git).
+
+#### Frida Attach by PID Fix
+- **File:** `backend/app/engines/frida_sandbox.py`
+- **Problem:** Dynamic analysis attempted to attach to applications by package name (`com.android.insecurebankv2`). On Android, Frida reports running processes by their display label (`InsecureBankv2`), causing attach-by-name to fail across retries.
+- **Fix:** Resolved PID via `adb shell pidof`, enabling immediate attach on attempt 1.
+
+#### Frida 17 Java Bridge Bundling
+- **File:** `backend/app/engines/frida_hooks/banking_trojan.bundle.js`
+- **Fix:** Bundled `frida-java-bridge` via `frida-compile` into `banking_trojan.bundle.js` to ensure compatibility with Frida 17.16.4 on 16 KB page-size Android 13+ AVDs (`google_apis_ps16k`).
+
+#### Gemini Model Upgrade
+- Upgraded default model configuration from retired `gemini-1.5-flash` to `gemini-2.5-flash`.
+
+#### Windows Sandbox Cwd Support
+- Added `powershell.cmd` wrapper to support sandbox `run_command` Cwd execution under Windows PowerShell.
+
+#### Comprehensive Test Suite
+- Expanded test coverage to 285 passing tests spanning risk engines, prompt injection defenses, goal DAG progression, and determinism replay baselines.
+
 ---
 
 ## [RC-1] — 2026-07-19

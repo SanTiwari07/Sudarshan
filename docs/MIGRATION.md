@@ -1,0 +1,78 @@
+# Sudarshan Microservice Containerization & Migration Guide
+
+## Architecture Overview
+
+The Sudarshan platform has been refactored into a **clean 3-container microservice architecture**. All heavy reverse-engineering binaries (APKTool, JADX, Java 17, Frida 17, Androguard, and ADB) have been moved into a dedicated `analysis-engine` microservice container.
+
+```mermaid
+graph TD
+    User([User Analyst]) -->|HTTP Port 5173| Frontend[sudarshan-frontend<br/>React 18 SPA]
+    Frontend -->|REST API Port 8000| Backend[sudarshan-backend<br/>FastAPI Orchestrator Gateway]
+    Backend -->|REST API Port 8001| Engine[sudarshan-analysis-engine<br/>Ubuntu 24.04 + OpenJDK 17 + Python 3.12<br/>APKTool 2.10.0 + JADX 1.5.1 + Frida 17.16.4]
+
+    Backend ---|Shared Volume /app/uploads| Engine
+    Engine -->|Network ADB TCP Port 5555| HostAVD[Android Studio AVD Emulator<br/>Host Machine]
+```
+
+---
+
+## Key Technical Specifications
+
+1. **`analysis-engine` Container**:
+   - Base OS: **Ubuntu 24.04**
+   - Java: OpenJDK 17
+   - Python: 3.12 with PyPI verified `frida==17.16.4` and `frida-tools==14.10.4`
+   - Static Tools: Pinned **APKTool v2.10.0** (`/usr/local/bin/apktool`) and **JADX CLI v1.5.1** (`/usr/local/bin/jadx`)
+   - Network ADB: Auto-connects to Android Studio AVD via `host.docker.internal:5555` with an idempotent 10-attempt retry loop.
+   - Resource Constraints: Hard limits (`mem_limit: 4g`, `cpus: 2.0`, `no-new-privileges:true`).
+
+2. **Backend Orchestrator**:
+   - Contains **zero local binary dependencies** (no local `apktool`, `jadx`, `java`, `frida`, or `adb`).
+   - Delegates analysis jobs to `http://analysis-engine:8001/api/v1/analyze` over internal Docker networking.
+   - Uses zero-copy shared volume `/app/uploads` (`uploads` Docker named volume).
+
+3. **Analysis Engine REST API Endpoints**:
+   - `GET /health`: Healthcheck endpoint (`{"status": "ok"}`).
+   - `GET /status`: Detailed toolchain availability and ADB connectivity status.
+   - `POST /api/v1/analyze`: Synchronous analysis endpoint.
+   - `POST /api/v1/analyze/async`: Asynchronous job submission returning `job_id`.
+   - `GET /api/v1/status/{job_id}`: Poll status of an async analysis job.
+
+---
+
+## How to Run
+
+### Step 1: Start Host Emulator & Enable Network ADB
+On your host Windows machine:
+```powershell
+# 1. Launch your Android Studio AVD Emulator
+# 2. Enable ADB TCP Port 5555:
+adb tcpip 5555
+```
+
+### Step 2: Build & Boot Docker Microservices Stack
+```powershell
+docker-compose up --build -d
+```
+
+### Step 3: Verify Container Health
+```powershell
+docker-compose ps
+```
+
+Services running:
+- `sudarshan-frontend`: `http://localhost:5173`
+- `sudarshan-backend`: `http://localhost:8000`
+- `sudarshan-analysis-engine`: `http://localhost:8001`
+- `sudarshan-mitmproxy`: `http://localhost:8081`
+
+---
+
+## Verification & Testing
+
+Execute unit test suite against the backend orchestrator:
+```powershell
+cd backend
+python -m pytest tests/
+```
+Result: **302 / 302 tests passing**.

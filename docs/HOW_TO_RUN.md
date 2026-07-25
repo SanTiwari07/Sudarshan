@@ -27,15 +27,15 @@ Ensure the following tools are installed on your host system:
 
 | Dependency | Minimum Version | Installation Check | Purpose |
 | :--- | :--- | :--- | :--- |
-| **Python** | 3.10+ | `python --version` | FastAPI backend runtime & risk engine. |
-| **Node.js** | 18.x+ | `node --version` | React SPA frontend build runtime. |
-| **Docker & Compose** | 24.0+ | `docker compose version` | Containerized MobSF & mitmproxy services. |
-| **Android Studio AVD** | Android 13 (API 33) | `adb devices` | Isolated AVD dynamic execution sandbox. |
-| **ADB** | 1.0.41+ | `adb version` | Android Debug Bridge for emulator control. |
-| **Frida Tools** | 17.16.4 | `frida --version` | Runtime instrumentation and hook injection. |
-| **APKTool** | 2.9.x+ | `apktool v` | Resource decompilation CLI tool. |
-| **JADX** | 1.5.x+ | `jadx --version` | DEX-to-Java source decompilation CLI tool. |
-| **Ollama** | 0.1.30+ | `ollama --version` | Local air-gapped LLM inference provider. |
+| **Docker & Compose** | 24.0+ | `docker compose version` | Containerized stack orchestration (`frontend`, `backend`, `analysis-engine`, `mitmproxy`). |
+| **Android Studio AVD** | Android 13 (API 33) | `adb devices` | Isolated AVD dynamic execution sandbox on host. |
+| **ADB** | 1.0.41+ | `adb version` | Android Debug Bridge for TCP emulator connection (`adb tcpip 5555`). |
+| **Python** *(Dev Optional)* | 3.10+ | `python --version` | Local development and unit testing (`pytest tests/`). |
+| **Node.js** *(Dev Optional)* | 18.x+ | `node --version` | Local frontend UI development. |
+| **Ollama** *(Optional)* | 0.1.30+ | `ollama --version` | Local air-gapped LLM inference provider. |
+
+> [!NOTE]
+> **Host Dependency Elimination**: APKTool, JADX CLI, Java 17, Frida 17, Androguard, and ADB worker processes are **100% containerized** inside the `sudarshan-analysis-engine` microservice container. Zero binary installations are required on your host machine.
 
 ---
 

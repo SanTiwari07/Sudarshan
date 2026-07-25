@@ -1,0 +1,33 @@
+#!/bin/bash
+set -e
+
+echo "[Analysis Engine] Initializing container runtime..."
+
+# Verify Java, APKTool, and JADX availability
+echo "[Analysis Engine] Verifying toolchain..."
+java -version 2>&1 | head -n 1
+apktool --version 2>&1 | head -n 1
+jadx --version 2>&1 | head -n 1
+
+# Idempotent ADB connection retry loop
+ADB_HOST="${ADB_HOST:-host.docker.internal}"
+ADB_PORT="${ADB_PORT:-5555}"
+
+echo "[Analysis Engine] Starting background ADB daemon..."
+adb start-server || true
+
+echo "[Analysis Engine] Attempting ADB connection to ${ADB_HOST}:${ADB_PORT}..."
+(
+    for i in {1..10}; do
+        if adb connect "${ADB_HOST}:${ADB_PORT}" | grep -E "connected|already"; then
+            echo "[Analysis Engine] ADB connection established to ${ADB_HOST}:${ADB_PORT}"
+            break
+        fi
+        echo "[Analysis Engine] ADB target ${ADB_HOST}:${ADB_PORT} not ready (attempt $i/10). Retrying in 3s..."
+        sleep 3
+    done
+) &
+
+# Launch FastAPI Uvicorn Server on 0.0.0.0:8001
+echo "[Analysis Engine] Launching FastAPI worker pool on port 8001..."
+exec uvicorn app.main:app --host 0.0.0.0 --port 8001 --workers 2

@@ -1,56 +1,10 @@
-
 services:
-  backend:
-    build: 
-      context: ./backend
-      dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
-    environment:
-      - OLLAMA_HOST=http://host.docker.internal:11434
-      - MOBSF_HOST=http://mobsf:8000
-      - MOBSF_API_KEY=mobsf_api_key_secret_here
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
-      - SUDARSHAN_EXPLORER_MODE=${SUDARSHAN_EXPLORER_MODE:-ai}
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-
-      # ── Frida Dynamic Analysis ──────────────────────────────────────────────
-      # The Android emulator runs on the HOST machine (Android Studio AVD).
-      # The backend container reaches it via host.docker.internal over ADB TCP.
-      #
-      # Setup steps (one-time, on the host):
-      #   1. Start your AVD emulator in Android Studio
-      #   2. Run: adb tcpip 5555
-      #   3. Run: adb connect host.docker.internal:5555   (inside the container)
-      #      (or set ADB_HOST below and frida_sandbox.py handles it automatically)
-      #
-      - ADB_HOST=host.docker.internal
-      - ADB_PORT=5555
-      - FRIDA_ANALYSIS_DURATION=30
-
-      # ── mitmproxy Network Capture ───────────────────────────────────────────
-      # HAR file written by the mitmproxy sidecar (see 'mitmproxy' service).
-      # network_capture.py reads this after dynamic analysis to enrich network
-      # evidence with full decrypted HTTPS request/response pairs.
-      - MITMPROXY_HAR_PATH=/mitmproxy_har/dump.har
-      - MITMPROXY_HOST=http://mitmproxy:8081
-
-    volumes:
-      - ./backend:/app
-      - ~/.android:/root/.android:ro
-      - mitmproxy_har:/mitmproxy_har:ro
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      - mobsf
-      - mitmproxy
-
+  # ── 1. Frontend Analyst Dashboard (React 18 SPA) ───────────────────────────
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    container_name: sudarshan-frontend
     ports:
       - "5173:5173"
     environment:
@@ -60,27 +14,72 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
+    restart: unless-stopped
 
-  mobsf:
-    image: opensecurity/mobile-security-framework-mobsf:latest
+  # ── 2. Backend Gateway Orchestrator (FastAPI & Case Store) ─────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sudarshan-backend
     ports:
-      - "8001:8000"
+      - "8000:8000"
     environment:
-      - MOBSF_API_KEY=mobsf_api_key_secret_here
+      - OLLAMA_HOST=http://host.docker.internal:11434
+      - ANALYSIS_ENGINE_URL=http://analysis-engine:8001
+      - UPLOADS_DIR=/app/uploads
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-sudarshan_jwt_secret_key_2026}
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./backend:/app
+      - uploads:/app/uploads
+    depends_on:
+      analysis-engine:
+        condition: service_healthy
+    restart: unless-stopped
 
-  # ── mitmproxy Transparent HTTPS Proxy ───────────────────────────────────────
-  # Intercepts HTTPS traffic from the Android emulator for network evidence.
-  #
-  # Android emulator proxy configuration (one-time setup):
-  #   1. In AVD settings: set HTTP proxy to host.docker.internal:8080
-  #   2. Install mitmproxy CA cert on the AVD:
-  #      adb push ~/.mitmproxy/mitmproxy-ca-cert.pem /sdcard/
-  #      Then install via Settings > Security > Install Certificate
-  #
-  # The HAR dump is written to the shared volume and read by network_capture.py
-  # after each Frida analysis run via the MITMPROXY_HAR_PATH env var.
+  # ── 3. Analysis Engine Container (Ubuntu 24.04 + Java 17 + Python 3.12) ────
+  analysis-engine:
+    build:
+      context: ./analysis-engine
+      dockerfile: Dockerfile
+    container_name: sudarshan-analysis-engine
+    ports:
+      - "8001:8001"
+    environment:
+      - ADB_HOST=host.docker.internal
+      - ADB_PORT=5555
+      - FRIDA_ANALYSIS_DURATION=30
+      - ANALYSIS_TIMEOUT_SECONDS=300
+      - UPLOADS_DIR=/app/uploads
+      - MITMPROXY_HAR_PATH=/mitmproxy_har/dump.har
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - uploads:/app/uploads
+      - ~/.android:/root/.android:ro
+      - mitmproxy_har:/mitmproxy_har:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    mem_limit: 4g
+    cpus: 2.0
+    security_opt:
+      - "no-new-privileges:true"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8001/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  # ── 4. mitmproxy Transparent HTTPS Proxy Sidecar ───────────────────────────
   mitmproxy:
     image: mitmproxy/mitmproxy:latest
+    container_name: sudarshan-mitmproxy
     ports:
       - "8080:8080"    # Proxy port — point AVD to this
       - "8081:8081"    # mitmproxy web UI (http://localhost:8081)
@@ -96,4 +95,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  mitmproxy_har:    # Shared volume: mitmproxy writes HAR, backend reads it
+  uploads:         # Shared volume for zero-copy file sharing between backend & engine
+  mitmproxy_har:   # Shared volume: mitmproxy writes HAR, engine reads it

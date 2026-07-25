@@ -13,19 +13,20 @@ All documentation herein is strictly derived from and cross-verified against the
 | [**01 — Introduction**](01_INTRODUCTION.md) | Problem Statement & Scope | Threat model, operational challenges in mobile banking fraud, target audience. |
 | [**02 — System Overview**](02_SYSTEM_OVERVIEW.md) | Platform Architecture & Data Flow | End-to-end processing pipeline, microservices layout, container network topology. |
 | [**ARCHITECTURE.md**](ARCHITECTURE.md) | System Design & Technical Spec | In-depth technical specification of backend, frontend, engines, database, and APIs. |
-| [**03 — Static Threat Intelligence**](architecture/03_STATIC_THREAT_INTELLIGENCE.md) | Static Analysis & Decompilation | MobSF, Androguard, APKTool, JADX, `manifest.py` Investigation Manifest, STEI formula. |
-| [**04 — Dynamic Analysis Engine**](architecture/04_DYNAMIC_ANALYSIS_ENGINE.md) | Dynamic Sandbox & Agentic Explorer | Frida 17 PID attach, ART deoptimization, mitmproxy HAR, Agentic Explorer 15-stage DAG. |
+| [**MIGRATION.md**](MIGRATION.md) | Microservice Migration Guide | Architectural specification of `analysis-engine` microservice container, REST APIs, and zero-copy shared volume. |
+| [**03 — Static Threat Intelligence**](architecture/03_STATIC_THREAT_INTELLIGENCE.md) | Static Analysis & Decompilation | Containerized static engine, MobSF, Androguard, APKTool 2.10.0, JADX 1.5.1, `manifest.py` Investigation Manifest, STEI formula. |
+| [**04 — Dynamic Analysis Engine**](architecture/04_DYNAMIC_ANALYSIS_ENGINE.md) | Dynamic Sandbox & Agentic Explorer | Containerized Frida 17 PID attach, ART deoptimization, Network ADB (`host.docker.internal:5555`), mitmproxy HAR, Agentic Explorer 15-stage DAG. |
 | [**05 — AI Investigation Engine**](architecture/05_AI_INVESTIGATION_ENGINE.md) | AI Core, RAG & Prompt Safety | Gemini 2.5 Flash, Ollama, vector RAG index (`gemini_rag.py`), prompt sanitizer. |
 | [**06 — Evidence Processing**](architecture/06_EVIDENCE_PROCESSING.md) | Event Bus & Workflow Engine | `EventBus`, `EvidenceStore`, `WorkflowReconstructor` causal chain engine. |
 | [**07 — Fraud Intelligence Engine**](architecture/07_FRAUD_INTELLIGENCE_ENGINE.md) | Threat Correlation & Attribution | VirusTotal, AlienVault OTX, AbuseIPDB lookup, deterministic family classifier. |
 | [**08 — Deterministic Risk Engine**](architecture/08_DETERMINISTIC_RISK_ENGINE.md) | Risk Scoring & Math Formulas | 5-axis STEI, logarithmic volume-aware BFCI v2, 4-axis FRS formula, static fallback. |
 | [**09 — AI Report Generation**](architecture/09_AI_REPORT_GENERATION.md) | Security Reporting & Export | Executive Fraud Cards, Jinja2 HTML exporter, STIX 2.1 JSON exporter, CSV IOC feed. |
 | [**10 — Analyst Dashboard**](dashboard/10_DASHBOARD.md) | Analyst UI & Visual Workflows | React 18 SPA, Executive View, Technical SOC View, `WorkflowDiagram.tsx` timeline. |
-| [**11 — Evaluation Strategy**](evaluation/11_EVALUATION.md) | Verification & Testing | 299 automated unit/integration tests (`pytest tests/`), determinism baselines. |
+| [**11 — Evaluation Strategy**](evaluation/11_EVALUATION.md) | Verification & Testing | 302 automated unit/integration tests (`pytest tests/`), determinism baselines. |
 | [**HOW_TO_RUN.md**](HOW_TO_RUN.md) | Installation & Operations | Prerequisites, Docker Compose setup, single-command `start.ps1`, environment variables. |
-| [**DAE_CURRENT_STATE.md**](DAE_CURRENT_STATE.md) | Technical Resolution Audit | Resolution state of ART JIT deopt, PID attach, BFCI v2, manifest, and HAR merger. |
+| [**DAE_CURRENT_STATE.md**](DAE_CURRENT_STATE.md) | Technical Resolution Audit | Resolution state of containerization, ART JIT deopt, PID attach, BFCI v2, manifest, and HAR merger. |
 | [**CONTRIBUTING.md**](CONTRIBUTING.md) | Developer Guidelines | Code standards, PEP-8/ESLint style, pytest testing workflows, pull request process. |
-| [**CHANGELOG.md**](CHANGELOG.md) | Release Notes & Version History | Version history (`v2.2.0-STABLE`), release highlights, and commit traceability. |
+| [**CHANGELOG.md**](CHANGELOG.md) | Release Notes & Version History | Version history (`v2.3.0-STABLE`), release highlights, and commit traceability. |
 | [**DOCUMENTATION_AUDIT_REPORT.md**](DOCUMENTATION_AUDIT_REPORT.md) | Master Audit Report | Summary of audit changes, updated files, new files, and link verification results. |
 
 ---
@@ -39,25 +40,26 @@ graph TD
     end
 
     subgraph Core Gateway & Storage
-        API["FastAPI Gateway / REST API<br/>(Port 8000 / main.py)"]
+        API["FastAPI Orchestrator Gateway<br/>(Port 8000 / main.py)"]
         AUTH["JWT Auth & RBAC"]
-        QUEUE["Async Worker Pool<br/>(analysis_queue.py)"]
         DB[(SQLite Case Store<br/>sudarshan.db)]
+        VOL[("Shared Volume /app/uploads")]
     end
 
-    subgraph Static Intelligence Engine
+    subgraph Containerized Analysis Engine Microservice
+        ENGINE["Analysis Engine REST API<br/>(Port 8001 / main.py)"]
         MANIFEST["Investigation Manifest<br/>(manifest.py -> manifest.json)"]
-        MOBSF["MobSF Container<br/>(Port 8001)"]
         ANDRO["Androguard Engine<br/>(apk_analyzer.py)"]
-        APKT["APKTool Engine<br/>(apktool_engine.py)"]
-        JADX["JADX Source Scanner<br/>(jadx_engine.py)"]
+        APKT["APKTool v2.10.0 Engine<br/>(apktool_engine.py)"]
+        JADX["JADX v1.5.1 Source Scanner<br/>(jadx_engine.py)"]
+        FRIDA["Frida 17 Sandbox Controller<br/>(frida_sandbox.py)"]
     end
 
-    subgraph Dynamic Analysis Engine
-        FRIDA["Frida Sandbox Controller<br/>(frida_sandbox.py)"]
-        ADB["ADB TCP Bridge<br/>(Port 5555)"]
+    subgraph External Devices & Network Sidecars
+        ADB["ADB TCP Bridge<br/>(host.docker.internal:5555)"]
         AVD["Android 13 AVD<br/>(frida-server 17.16.4)"]
         MITM["mitmproxy Sidecar<br/>(Port 8080 / HAR Dump Parser)"]
+    endAR Dump Parser)"]
         AGENT["Agentic UI Explorer<br/>(agentic_explorer.py / 15-Stage DAG)"]
     end
 

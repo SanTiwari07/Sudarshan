@@ -71,7 +71,7 @@ def test_manifest_serialization_and_deserialization():
 
 
 def test_apktool_and_jadx_fallback():
-    # Test graceful fallback when tools are absent
+    # Test graceful fallback when tools are explicitly set to a non-existent binary
     apktool = ApktoolEngine(apktool_path="non_existent_apktool_binary_12345")
     assert apktool.is_available() is False
     res_apk = apktool.analyze("dummy.apk")
@@ -81,6 +81,15 @@ def test_apktool_and_jadx_fallback():
     assert jadx.is_available() is False
     res_jadx = jadx.analyze("dummy.apk")
     assert res_jadx.available is False
+
+
+def test_workspace_local_tools_detection():
+    # Test automatic detection of workspace local tools/ binaries
+    apktool = ApktoolEngine()
+    assert apktool.is_available() is True
+
+    jadx = JadxEngine()
+    assert jadx.is_available() is True
 
 
 def test_network_capture_mitmproxy_har_ingest():

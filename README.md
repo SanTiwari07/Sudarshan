@@ -7,8 +7,8 @@
   <p>
     <b>80M+</b> Customers Protected &nbsp;&nbsp;|&nbsp;&nbsp; 
     <b>47</b> Banking Apps Monitored &nbsp;&nbsp;|&nbsp;&nbsp; 
-    <b>299 / 299</b> Passing Tests (100%) &nbsp;&nbsp;|&nbsp;&nbsp;
-    <b>25 / 25</b> Architecture Flowchart Nodes (100% Operational)
+    <b>302 / 302</b> Passing Tests (100%) &nbsp;&nbsp;|&nbsp;&nbsp;
+    <b>Containerized Microservice Architecture</b>
   </p>
 </div>
 

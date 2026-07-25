@@ -2,11 +2,11 @@
 
 ```yaml
 Document Title:      Sudarshan Platform Architectural Specification
-Version:             2.2.0-STABLE
+Version:             2.3.0-STABLE
 Last Revision:       2026-07-25
 Repository Scope:    SanTiwari07/Sudarshan (d:/Projects/Sudarshan BOI)
 Target Audience:     Enterprise Security Engineers, SOC Analysts, System Architects
-Verification Status: 299 / 299 Unit & Integration Tests Passing (100%)
+Verification Status: 302 / 302 Unit & Integration Tests Passing (100%)
 ```
 
 ---
@@ -46,7 +46,7 @@ Sudarshan adheres to four foundational engineering principles:
 
 ## 3. High-Level Architecture
 
-The platform follows a decoupled microservices architecture comprising a React SPA frontend, FastAPI gateway, MobSF container, mitmproxy sidecar, Android Virtual Device sandbox, and LLM inference engine.
+The platform follows a decoupled 3-container microservice architecture comprising a React SPA frontend, FastAPI gateway orchestrator, dedicated containerized analysis engine microservice (`analysis-engine`), mitmproxy sidecar, Android Virtual Device sandbox, and LLM inference engine.
 
 ```mermaid
 graph TD
@@ -54,27 +54,27 @@ graph TD
         UI["React 18 SPA<br/>(TechnicalView.tsx / App.tsx)"]
     end
 
-    subgraph API & Gateway Layer
-        GATEWAY["FastAPI Gateway<br/>(app/main.py)"]
+    subgraph API Gateway & Storage
+        GATEWAY["FastAPI Orchestrator Gateway<br/>(backend/app/main.py)"]
         AUTH["JWT Auth & RBAC<br/>(app/auth/auth.py)"]
-        QUEUE["Async Job Queue<br/>(workers/analysis_queue.py)"]
         DB[(SQLite Case Store<br/>sudarshan.db)]
+        VOL[("Shared Volume /app/uploads")]
     end
 
-    subgraph Static Intelligence Engine
+    subgraph Containerized Analysis Engine Microservice (Port 8001)
+        ENGINE_API["Analysis Engine REST API<br/>(analysis-engine/app/main.py)"]
         MANIFEST["Investigation Manifest<br/>(app/models/manifest.py)"]
-        MOBSF["MobSF Service<br/>(Port 8001)"]
         ANDRO["Androguard Analyzer<br/>(analyzers/apk_analyzer.py)"]
-        APKT["APKTool Engine<br/>(engines/apktool_engine.py)"]
-        JADX["JADX Engine<br/>(engines/jadx_engine.py)"]
+        APKT["APKTool v2.10.0 Engine<br/>(engines/apktool_engine.py)"]
+        JADX["JADX v1.5.1 Engine<br/>(engines/jadx_engine.py)"]
+        FRIDA["Frida Sandbox Controller<br/>(engines/frida_sandbox.py)"]
+        EXPLORER["Agentic UI Explorer<br/>(engines/agentic_explorer.py)"]
     end
 
-    subgraph Dynamic Sandbox Engine
-        FRIDA["Frida Controller<br/>(engines/frida_sandbox.py)"]
-        ADB["ADB TCP Bridge<br/>(Port 5555)"]
+    subgraph External Devices & Network Sidecars
+        ADB["ADB TCP Bridge<br/>(host.docker.internal:5555)"]
         AVD["Android 13 AVD<br/>(frida-server 17.16.4)"]
         PROXY["mitmproxy Sidecar<br/>(Port 8080 / HAR Parser)"]
-        EXPLORER["Agentic UI Explorer<br/>(engines/agentic_explorer.py)"]
     end
 
     subgraph Fraud Intelligence & Risk Core
@@ -89,16 +89,17 @@ graph TD
 
     UI -->|HTTPS REST| GATEWAY
     GATEWAY --> AUTH
-    GATEWAY --> QUEUE
-    QUEUE --> DB
+    GATEWAY --> DB
+    GATEWAY --- VOL
+    GATEWAY -->|HTTP REST / Shared Volume| ENGINE_API
+    ENGINE_API --- VOL
 
-    QUEUE --> MANIFEST
-    MANIFEST --> MOBSF
+    ENGINE_API --> MANIFEST
     MANIFEST --> ANDRO
     MANIFEST --> APKT
     MANIFEST --> JADX
 
-    QUEUE --> FRIDA
+    ENGINE_API --> FRIDA
     FRIDA --> ADB
     ADB --> AVD
     FRIDA --> PROXY

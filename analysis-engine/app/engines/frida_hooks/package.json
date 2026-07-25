@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "frida-java-bridge": "^7.0.13"
+  }
+}

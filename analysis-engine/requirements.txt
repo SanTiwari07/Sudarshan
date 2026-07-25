@@ -1,0 +1,9 @@
+fastapi>=0.109.0
+uvicorn>=0.27.0
+pydantic>=2.6.0
+python-multipart>=0.0.6
+httpx>=0.26.0
+androguard>=4.1.1
+frida==17.16.4
+frida-tools==14.10.4
+requests>=2.31.0

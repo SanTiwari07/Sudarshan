@@ -17,6 +17,7 @@ import logging
 import os
 import tempfile
 import asyncio
+import httpx
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -132,6 +133,25 @@ def _build_fraud_workflow(raw: Optional[Dict]) -> Optional[FraudWorkflow]:
         return None
 
 
+ANALYSIS_ENGINE_URL: str = os.getenv("ANALYSIS_ENGINE_URL", "http://analysis-engine:8001")
+
+
+async def _call_analysis_engine(temp_path: str, sha256_hash: str) -> Optional[Dict[str, Any]]:
+    """Call containerized analysis-engine microservice via REST over Docker network."""
+    url = f"{ANALYSIS_ENGINE_URL}/api/v1/analyze"
+    try:
+        async with httpx.AsyncClient(timeout=310.0) as client:
+            resp = await client.post(url, json={"file_path": temp_path, "sha256": sha256_hash})
+            if resp.status_code == 200:
+                logger.info(f"[Orchestrator] Analysis engine microservice returned 200 OK for {sha256_hash}")
+                return resp.json()
+            else:
+                logger.warning(f"[Orchestrator] Analysis engine returned status {resp.status_code}: {resp.text}")
+    except Exception as e:
+        logger.info(f"[Orchestrator] Containerized analysis engine unavailable ({e}); executing fallback pipeline locally.")
+    return None
+
+
 # ─── Core Analysis Logic (shared by sync + async) ────────────────────────────
 
 async def _run_analysis_pipeline(
@@ -141,8 +161,13 @@ async def _run_analysis_pipeline(
 ) -> Dict[str, Any]:
     """
     Full analysis pipeline. Returns a dict that can be serialised as AnalysisResponse.
-    Called both from the sync endpoint and from the async worker.
+    Delegates to analysis-engine microservice if available.
     """
+    # 1. Attempt containerized microservice execution first
+    engine_result = await _call_analysis_engine(temp_path, sha256_hash)
+    if engine_result:
+        return engine_result
+
     analysis_mode = "androguard"
     mobsf_report: Optional[Dict] = None
     package_name = "Unknown"

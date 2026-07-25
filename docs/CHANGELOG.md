@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0-STABLE] — 2026-07-25
+### Added
+- **Containerized Analysis Engine Microservice** (`analysis-engine/`): Created dedicated Ubuntu 24.04 microservice container housing Java 17, Python 3.12, pinned APKTool v2.10.0 (`/usr/local/bin/apktool`), pinned JADX CLI v1.5.1 (`/usr/local/bin/jadx`), PyPI verified Frida 17.16.4, Androguard, and ADB.
+- **Analysis Engine REST API** (`analysis-engine/app/main.py`): Exposes REST endpoints on port `8001` (`POST /api/v1/analyze`, `POST /api/v1/analyze/async`, `GET /api/v1/status/{job_id}`, `GET /health`, `GET /status`).
+- **Network ADB Connection & Retry Loop** (`entrypoint.sh`): Implemented idempotent 10-attempt connection retry loop to Android Studio AVD via `host.docker.internal:5555` with lazy runtime reconnect logic in `frida_sandbox.py`.
+- **Zero-Copy Shared Volume Architecture**: Mounted `uploads` Docker volume shared between `backend` and `analysis-engine` containers for instant, zero-network-copy file access.
+- **Container Hardening & Resource Bounds**: Applied `mem_limit: 4g`, `cpus: 2.0`, `no-new-privileges:true`, healthcheck endpoints, and configurable 300-second execution hard timeout.
+- **Backend Orchestrator Gateway Refactor** (`backend/app/routes/upload.py`): Completely eliminated local host binary subprocess calls (`apktool`, `jadx`, `java`, `frida`, `adb`) from the backend container; refactored backend to act strictly as a thin gateway orchestrator querying `http://analysis-engine:8001`.
+- **Orchestrator Client Test Suite** (`backend/tests/test_analysis_client.py`): Added unit test suite validating gateway client integration and offline fallback handling. Reached **302 / 302 passing unit tests (100% pass rate)**.
+
 ## [2.2.0-STABLE] — 2026-07-25
 ### Added
 - **Formal `InvestigationManifest` Pydantic Model** (`backend/app/models/manifest.py`): Serializes static findings to `manifest.json` before sandbox launch; derives dynamic hook profiles and goal priorities.

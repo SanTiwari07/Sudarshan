@@ -2,13 +2,14 @@
 
 ```yaml
 Module Title:        Static Threat Intelligence & Decompilation Engine
-Version:             2.2.0-STABLE
-Primary Files:       backend/app/models/manifest.py
-                     backend/app/engines/apktool_engine.py
-                     backend/app/engines/jadx_engine.py
-                     backend/app/analyzers/apk_analyzer.py
-                     backend/app/services/mobsf_client.py
-Test Suite:          tests/test_remaining_features.py, tests/test_boundaries.py
+Version:             2.3.0-STABLE
+Primary Files:       analysis-engine/app/main.py
+                     analysis-engine/app/models/manifest.py
+                     analysis-engine/app/engines/apktool_engine.py
+                     analysis-engine/app/engines/jadx_engine.py
+                     analysis-engine/app/analyzers/apk_analyzer.py
+                     backend/app/routes/upload.py
+Test Suite:          tests/test_analysis_client.py, tests/test_remaining_features.py
 ```
 
 ---

@@ -46,7 +46,7 @@ SECTION_NAMES = [
     "receivers", "components", "static_findings", "dynamic_findings",
     "runtime_events", "timeline", "network", "files", "apis",
     "mitre", "malware_family", "threat_intelligence", "risk_engine",
-    "recommendations", "verdict",
+    "recommendations", "verdict", "fraud_workflow",
 ]
 
 # Intent → relevant sections mapping
@@ -70,7 +70,10 @@ INTENT_SECTION_MAP: Dict[str, List[str]] = {
     "report":            ["verdict", "risk_engine", "static_findings", "dynamic_findings", "threat_intelligence", "mitre", "recommendations"],
     "compare":           ["malware_family", "threat_intelligence", "mitre", "static_findings"],
     "executive":         ["verdict", "risk_engine", "recommendations", "threat_intelligence"],
-    "default":           ["verdict", "risk_engine", "static_findings", "dynamic_findings", "threat_intelligence"],
+    "workflow":          ["fraud_workflow", "dynamic_findings", "runtime_events", "timeline"],
+    "chain":             ["fraud_workflow", "dynamic_findings", "runtime_events"],
+    "sequence":          ["fraud_workflow", "dynamic_findings", "runtime_events"],
+    "default":           ["verdict", "risk_engine", "fraud_workflow", "static_findings", "dynamic_findings", "threat_intelligence"],
 }
 
 
@@ -266,6 +269,30 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
     else:
         idx["timeline"] = ["Dynamic analysis was not performed for this APK."]
         idx["runtime_events"] = ["Dynamic analysis was not performed for this APK."]
+
+    # ── Fraud Workflow ────────────────────────────────────────────────────────
+    workflow = report.get("fraud_workflow") or (dyn.get("fraud_workflow") if dyn_available and isinstance(dyn, dict) else None)
+    idx["fraud_workflow"] = []
+    if workflow and isinstance(workflow, dict) and workflow.get("stages"):
+        seq_label = workflow.get("sequence_label", "NONE")
+        chain_conf = workflow.get("chain_confidence", 0.0)
+        stages = workflow.get("stages", [])
+        idx["fraud_workflow"].append(
+            f"Fraud Sequence Detected: {workflow.get('fraud_sequence_detected', False)}"
+        )
+        idx["fraud_workflow"].append(
+            f"Sequence Label: {seq_label} (Chain Confidence: {chain_conf:.0%})"
+        )
+        idx["fraud_workflow"].append(f"Workflow Stage Count: {len(stages)}")
+        for i, stg in enumerate(stages, 1):
+            if isinstance(stg, dict):
+                conf = stg.get('confidence', 0.0)
+                idx["fraud_workflow"].append(
+                    f"  Stage {i}: {stg.get('label', '')} [{stg.get('technique_id', '')}] "
+                    f"— {stg.get('description', '')} (confidence={conf:.0%})"
+                )
+    else:
+        idx["fraud_workflow"] = ["No fraud workflow was reconstructed from dynamic evidence."]
 
     # ── Network ───────────────────────────────────────────────────────────────
     idx["network"] = []

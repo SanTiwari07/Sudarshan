@@ -40,6 +40,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.engines.event_bus import RuntimeEventBus
+from app.engines.bfci_scorer import calculate_bfci_v2, BFCI_WEIGHTS
 
 try:
     from app.engines.evidence_store import EvidenceStore
@@ -70,10 +71,16 @@ try:
     from app.engines.anti_analysis_detector import AntiAnalysisDetector
     from app.engines.yara_scanner import YARAScanner
 except ImportError:
-    NetworkCapture = None
-    AntiAnalysisDetector = None
-    YARAScanner = None
+    NetworkCapture = None  # type: ignore[assignment]
+    AntiAnalysisDetector = None  # type: ignore[assignment]
+    YARAScanner = None  # type: ignore[assignment]
     logger.warning("[Frida] Wave 4 intelligence modules not found.")
+
+try:
+    from app.engines.workflow_reconstructor import WorkflowReconstructor
+except ImportError:
+    WorkflowReconstructor = None  # type: ignore[assignment]
+    logger.warning("[Frida] workflow_reconstructor not found. Fraud workflow reconstruction disabled.")
 
 try:
     from app.engines.analysis_history import AnalysisHistory
@@ -139,16 +146,9 @@ ATTACH_RETRY_DELAY_SECONDS: float = 1.5
 ADB_HOST = os.getenv("ADB_HOST", "")   # e.g. host.docker.internal
 ADB_PORT = os.getenv("ADB_PORT", "5555")
 
-# ─── BFCI Weights (from proposal) ─────────────────────────────────────────────
-
-BFCI_WEIGHTS = {
-    "accessibility": 0.35,   # wa — heaviest: present in 87% of banking trojans
-    "sms":           0.25,   # ws — OTP theft
-    "overlay":       0.20,   # wo — phishing screens
-    "banking":       0.10,   # wb — confirms target is a banking app
-    "network":       0.05,   # wn — C2 communication
-    "persistence":   0.05,   # wp — device admin / lockdown
-}
+# BFCI_WEIGHTS is now imported from bfci_scorer — kept as a re-export for
+# callers that import it directly from this module (backwards compatibility).
+# Do not redefine it here.
 
 # ─── ADB Helpers ──────────────────────────────────────────────────────────────
 
@@ -262,7 +262,19 @@ def _extract_apk_info(apk_path: str) -> Tuple[Optional[str], Optional[str]]:
     # ── Strategy 1: aapt / aapt2 ──────────────────────────────────────────────
     for tool in ["aapt2", "aapt"]:
         aapt = shutil.which(tool)
+        if not aapt:
+            user = os.environ.get("USERNAME", os.environ.get("USER", "user"))
+            candidates = [
+                rf"C:\Users\{user}\AppData\Local\Android\Sdk\build-tools\34.0.0\{tool}.exe",
+                rf"C:\Users\{user}\AppData\Local\Android\Sdk\build-tools\36.0.0\{tool}.exe",
+                rf"C:\Users\{user}\AppData\Local\Android\Sdk\build-tools\36.1.0\{tool}.exe",
+            ]
+            for c in candidates:
+                if os.path.exists(c):
+                    aapt = c
+                    break
         if aapt:
+
             try:
                 result = subprocess.run(
                     [aapt, "dump", "badging", apk_path],
@@ -312,60 +324,18 @@ def _launch_app(device: str, package_name: str) -> bool:
 
 # ─── BFCI Score Calculation ────────────────────────────────────────────────────
 
-def _score_component(events: List[Dict], max_events: int = 5) -> float:
+def calculate_bfci(
+    collected_events: Dict[str, List[Dict]],
+) -> Tuple[float, Dict[str, float], List[str]]:
     """
-    Convert an event list to a 0–100 component score.
-    More unique hook types = higher score, capped at max_events.
+    Backwards-compatible wrapper around bfci_scorer.calculate_bfci_v2.
+
+    Returns (bfci_score, component_scores, evidence_list) — same signature
+    as v1 so all call sites are unaffected. detected_sequences is embedded
+    in the evidence_list for v1 callers; use calculate_bfci_v2 directly for
+    the full 4-tuple return.
     """
-    if not events:
-        return 0.0
-    unique_hooks = len(set(e["data"].get("hook", "") for e in events))
-    score = min(unique_hooks / max_events, 1.0) * 100.0
-    return round(score, 2)
-
-
-def calculate_bfci(collected_events: Dict[str, List[Dict]]) -> Tuple[float, Dict[str, float], List[str]]:
-    """
-    Compute the Behavioral Fraud Confidence Index (BFCI).
-
-    BFCI = (wa × A) + (ws × S) + (wo × O) + (wb × B) + (wn × N) + (wp × P)
-
-    Returns:
-        (bfci_score, component_scores, evidence_list)
-    """
-    components = {
-        "accessibility": _score_component(collected_events.get("accessibility", []), max_events=3),
-        "sms":           _score_component(collected_events.get("sms", []),           max_events=2),
-        "overlay":       _score_component(collected_events.get("overlay", []),        max_events=2),
-        "banking":       _score_component(collected_events.get("banking", []),        max_events=3),
-        "network":       _score_component(collected_events.get("network", []),        max_events=10),
-        "persistence":   _score_component(collected_events.get("persistence", []),    max_events=2),
-    }
-
-    bfci = sum(BFCI_WEIGHTS[k] * v for k, v in components.items())
-    bfci = round(min(bfci, 100.0), 2)
-
-    # Build evidence strings
-    evidence: List[str] = []
-    weight_labels = {
-        "accessibility": ("A", "Accessibility abuse"),
-        "sms":           ("S", "SMS/OTP interception"),
-        "overlay":       ("O", "Overlay window attack"),
-        "banking":       ("B", "Banking app targeting"),
-        "network":       ("N", "C2 network communication"),
-        "persistence":   ("P", "Persistence mechanism"),
-    }
-    for key, (symbol, label) in weight_labels.items():
-        score = components[key]
-        weight = BFCI_WEIGHTS[key]
-        if score > 0:
-            contribution = round(weight * score, 2)
-            event_count = len(collected_events.get(key, []))
-            evidence.append(
-                f"[{symbol}] {label}: {event_count} runtime event(s) detected "
-                f"— component score {score:.0f} × weight {weight} = +{contribution:.1f} to BFCI"
-            )
-
+    bfci, components, evidence, sequences = calculate_bfci_v2(collected_events)
     return bfci, components, evidence
 
 # ─── Frida Session Manager ────────────────────────────────────────────────────
@@ -442,6 +412,8 @@ class FridaSession:
             "dangerous_apis": [], "files_accessed": [],
             "anti_analysis": [],  # NEW: sandbox evasion events
         }
+        self.canary_received: bool = False
+        self.total_hook_events_received: int = 0
         self.hook_errors: List[str] = []
         # Which explorer actually ran ("agentic" | "ui_explorer" | "none"), and
         # why it failed if it did. Surfaced in the result so a reviewer can tell
@@ -492,6 +464,7 @@ class FridaSession:
             msg_type = payload.get("type")
 
             if msg_type == "event":
+                self.total_hook_events_received += 1
                 event = payload.get("payload", {})
                 category = event.get("category")
                 if category in self.collected_events:
@@ -502,6 +475,10 @@ class FridaSession:
                 # Publish to Event Bus (EvidenceStore + UIExplorer subscribe here)
                 self.event_bus.publish(event)
 
+            elif msg_type == "canary":
+                self.canary_received = True
+                logger.info(f"[Frida Canary] Script load canary received: {payload.get('msg')}")
+
             elif msg_type == "hook_error":
                 err = f"Hook failed: {payload.get('hook')} — {payload.get('error')}"
                 self.hook_errors.append(err)
@@ -509,6 +486,10 @@ class FridaSession:
 
             elif msg_type == "ready":
                 logger.info(f"[Frida] {payload.get('message')}")
+
+            elif msg_type == "diag":
+                logger.info(f"[Frida DIAG] {payload}")
+
 
         elif message.get("type") == "error":
             logger.error(f"[Frida] Script error: {message.get('description')}")
@@ -657,7 +638,7 @@ class FridaSession:
                     )
                     time.sleep(ATTACH_RETRY_DELAY_SECONDS)
 
-            # ── Strategy 2: fallback to spawn() for older API levels ───────────────
+            is_spawned = False
             if not self._session:
                 logger.info("[Frida] monkey-attach failed, falling back to device.spawn()")
                 pid = None
@@ -680,11 +661,18 @@ class FridaSession:
                         time.sleep(2)
                 if not self._session:
                     raise Exception("Failed to attach to spawned process")
+                is_spawned = True
+
+            self._script = self._session.create_script(script_source)
+            self._script.on("message", self._on_message)
+            self._script.load()
+
+            if is_spawned:
+                logger.info(f"[Frida] Resuming spawned process {pid} AFTER script load...")
                 device.resume(pid)
-                
+
                 import shlex
                 safe_pkg = shlex.quote(self.package_name)
-                # In Android 15, spawned apps are forced into the background due to BAL.
                 # Force the UI to the foreground.
                 logger.info(f"[Frida] Pushing spawned app to foreground...")
                 if self.main_activity:
@@ -694,9 +682,6 @@ class FridaSession:
                     _adb("-s", self.device_serial, "shell", f"monkey -p {safe_pkg} -c android.intent.category.LAUNCHER 1")
                 time.sleep(2)
 
-            self._script = self._session.create_script(script_source)
-            self._script.on("message", self._on_message)
-            self._script.load()
 
             logger.info(f"[Frida] Monitoring {self.package_name} for {duration_seconds}s...")
             
@@ -877,6 +862,7 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
     base_result: Dict[str, Any] = {
         "available": False,
         "engine": "frida",
+        "dynamic_status": "INSTRUMENTATION_FAILED",
         "bfci": 0.0,
         "bfci_components": {},
         "bfci_weights": BFCI_WEIGHTS,
@@ -890,6 +876,7 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
         "hook_errors": [],
         "duration_seconds": ANALYSIS_DURATION_SECONDS,
     }
+
 
     # ── Step 1: Find emulator ──────────────────────────────────────────────────
     emulators = []
@@ -1001,8 +988,15 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
         base_result["error"] = "Frida attach failed. Ensure frida-server is running on emulator."
         return base_result
 
-    # ── Step 5: Compute BFCI ───────────────────────────────────────────────────
+    # ── Step 5: Compute BFCI & Instrumentation Status ───────────────────────
     bfci, components, evidence = calculate_bfci(session.collected_events)
+
+    if not session.canary_received:
+        dynamic_status = "INSTRUMENTATION_FAILED"
+    elif session.total_hook_events_received == 0:
+        dynamic_status = "NO_BEHAVIOR_OBSERVED"
+    else:
+        dynamic_status = "EVENTS_CAPTURED"
 
     # ── Step 6: Build structured result ───────────────────────────────────────
     # Flatten API calls for risk_engine.py compatibility
@@ -1030,8 +1024,11 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
         **base_result,
         "available": True,
         "engine": "frida",
+        "dynamic_status": dynamic_status,
+        "canary_received": session.canary_received,
         "package_name": package_name,
         "device": device_serial,
+
 
         # Exploration provenance — additive fields so a reviewer can tell which
         # explorer produced this evidence, and whether it crashed part-way.
@@ -1096,6 +1093,44 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
             result["anti_analysis_events"] = session.collected_events.get("anti_analysis", [])
         except Exception as e:
             logger.error(f"[Frida] Failed to write evidence.json: {e}")
+
+    # ── Fraud Workflow Reconstruction ─────────────────────────────────────────
+    # Build causal chain evidence from raw collected_events. This runs after
+    # the evidence store flush so workflow records are available for the report.
+    if WorkflowReconstructor is not None and session.total_hook_events_received > 0:
+        try:
+            # Flatten all hooked events into a record list the reconstructor understands
+            workflow_records = []
+            for cat, evts in session.collected_events.items():
+                for ev in evts:
+                    data = ev.get("data", {})
+                    workflow_records.append({
+                        "id":           f"{cat}_{ev.get('timestamp', 0)}",
+                        "category":     cat,
+                        "hook":         data.get("hook", ""),
+                        "timestamp_ms": ev.get("timestamp", 0),
+                        "severity":     ev.get("severity", data.get("severity", "MED")),
+                        "description":  data.get("description", ""),
+                    })
+
+            reconstructor = WorkflowReconstructor()
+            workflow = reconstructor.reconstruct(workflow_records)
+            workflow_dict = workflow.to_dict()
+            result["fraud_workflow"] = workflow_dict
+
+            # Write to artifact dir
+            try:
+                with open(apk_dir / "workflow.json", "w", encoding="utf-8") as f:
+                    json.dump(workflow_dict, f, indent=4)
+                logger.info(
+                    f"[Frida] Fraud workflow: {workflow.sequence_label} "
+                    f"({len(workflow.stages)} stages, confidence={workflow.chain_confidence:.0%})"
+                )
+            except Exception as e:
+                logger.error(f"[Frida] Failed to write workflow.json: {e}")
+        except Exception as e:
+            logger.error(f"[Frida] Workflow reconstruction failed: {e}")
+            result["fraud_workflow"] = {"fraud_sequence_detected": False, "sequence_label": "RECONSTRUCTION_ERROR", "stages": []}
             
     # ── Wave 2: Flush Intelligence ─────────────────────────────────────────────
     if hasattr(session, "ioc_collector") and session.ioc_collector is not None:

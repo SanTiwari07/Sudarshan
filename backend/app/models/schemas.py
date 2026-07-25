@@ -116,6 +116,30 @@ class DynamicAnalysisResult(BaseModel):
     yara_matches: List[str] = Field(default_factory=list)
 
 
+# ─── Fraud Workflow Reconstruction ───────────────────────────────────────────────────────────────────
+
+class WorkflowStage(BaseModel):
+    """A single causal stage in the reconstructed fraud workflow chain."""
+    label: str
+    technique_id: str            # MITRE ATT&CK for Mobile technique ID
+    description: str
+    start_ms: int = 0            # Frida timestamp (ms since epoch)
+    end_ms: int = 0
+    evidence_ids: List[str] = Field(default_factory=list)
+    hook_names: List[str] = Field(default_factory=list)
+    confidence: float = 0.0      # 0.0–1.0
+
+
+class FraudWorkflow(BaseModel):
+    """Reconstructed fraud workflow from WorkflowReconstructor causal chain engine."""
+    stages: List[WorkflowStage] = Field(default_factory=list)
+    fraud_sequence_detected: bool = False
+    sequence_label: str = "NONE"   # e.g. FULL_ACCOUNT_TAKEOVER, OTP_THEFT_CHAIN
+    chain_confidence: float = 0.0
+    total_events_analyzed: int = 0
+    stage_count: int = 0
+
+
 # ─── Extended AI Response ─────────────────────────────────────────────────────
 
 class IntelligenceReport(BaseModel):
@@ -207,6 +231,9 @@ class AnalysisResponse(BaseModel):
 
     # Intelligence Report (from RAG + Ollama)
     intelligence_report: Optional[IntelligenceReport] = None
+
+    # Fraud Workflow Reconstruction (from WorkflowReconstructor)
+    fraud_workflow: Optional[FraudWorkflow] = None
 
     # Legacy view compatibility (kept for existing frontend)
     executive_view: FraudCardExecutiveView

@@ -80,6 +80,12 @@ ACTION_BUDGET: int = int(os.getenv("SUDARSHAN_AGENT_ACTION_BUDGET", "25"))
 # Frida-silence threshold: stop if no new events for this many consecutive actions.
 FRIDA_SILENCE_THRESHOLD: int = int(os.getenv("SUDARSHAN_AGENT_SILENCE_THRESHOLD", "5"))
 
+# Maximum actions the agent may take on a single goal before marking it failed.
+# Prevents the agent from looping forever on goals that cannot be reached
+# (e.g. Stage 5 Login Flow when the app has no conventional login screen).
+# This activates mark_failed → retry branch in next_priority_goal().
+MAX_ATTEMPTS_PER_GOAL: int = int(os.getenv("SUDARSHAN_MAX_ATTEMPTS_PER_GOAL", "8"))
+
 # In hybrid mode: random jitter range (seconds) added before each ADB action
 # to reduce contention with concurrent Monkey process on the shared ADB socket.
 HYBRID_JITTER_MIN: float = 0.1
@@ -330,6 +336,22 @@ class AgenticExplorer:
                     self.goals.mark_in_progress(next_goal.name)
                     self.goals.record_attempt(next_goal.name)
 
+                    # If this goal has accumulated too many attempts without
+                    # completing, mark it FAILED so the retry branch can take
+                    # over, or downstream goals can unblock via skip_if_missing.
+                    if next_goal.attempts >= MAX_ATTEMPTS_PER_GOAL:
+                        logger.warning(
+                            f"[AgenticExplorer] Goal '{next_goal.name}' exhausted "
+                            f"{next_goal.attempts} attempts — marking FAILED"
+                        )
+                        self.goals.mark_failed(next_goal.name)
+                        self.audit_log.record_system_event(
+                            "goal_max_attempts",
+                            f"{next_goal.name}: {next_goal.attempts}/{MAX_ATTEMPTS_PER_GOAL}"
+                        )
+                        # Re-evaluate next goal after state change
+                        next_goal = self.goals.next_priority_goal()
+
                 action = await self.planner.decide(obs, self.memory, self.goals)
 
                 # SC6: Planner signals stop (FallbackPlanner exhausted)
@@ -455,8 +477,13 @@ class AgenticExplorer:
         except asyncio.CancelledError:
             logger.info("[AgenticExplorer] Task cancelled")
         except Exception as e:
-            logger.error(f"[AgenticExplorer] Fatal loop error: {type(e).__name__}: {e}")
-            self.audit_log.record_system_event("fatal_error", str(e))
+            # Record unexpected crashes into explorer_error so they appear in
+            # the result dict rather than being silently swallowed.
+            err_msg = f"{type(e).__name__}: {e}"
+            logger.error(f"[AgenticExplorer] Fatal loop error: {err_msg}")
+            self.audit_log.record_system_event("fatal_error", err_msg)
+            # Attach to the explorer so frida_sandbox.py can surface it.
+            self.explorer_error = err_msg  # type: ignore[attr-defined]
         finally:
             await self._finalize(actions_taken)
 

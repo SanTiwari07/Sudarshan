@@ -1,22 +1,28 @@
 📦
-460430 /agent.js
+495921 /backend/app/engines/frida_hooks/banking_trojan.js
 ✄
 var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __esm = (fn, res) => function __init() {
+  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+};
 var __export = (target, all) => {
   for (var name in all)
     __defProp(target, name, { get: all[name], enumerable: true });
 };
+var __copyProps = (to, from2, except, desc) => {
+  if (from2 && typeof from2 === "object" || typeof from2 === "function") {
+    for (let key of __getOwnPropNames(from2))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from2[key], enumerable: !(desc = __getOwnPropDesc(from2, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
 // frida-shim:node_modules/@frida/base64-js/index.js
-var lookup = [];
-var revLookup = [];
-var code = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-for (let i = 0, len = code.length; i < len; ++i) {
-  lookup[i] = code[i];
-  revLookup[code.charCodeAt(i)] = i;
-}
-revLookup["-".charCodeAt(0)] = 62;
-revLookup["_".charCodeAt(0)] = 63;
 function getLens(b64) {
   const len = b64.length;
   if (len % 4 > 0) {
@@ -87,6 +93,21 @@ function fromByteArray(uint8) {
   }
   return parts.join("");
 }
+var lookup, revLookup, code;
+var init_base64_js = __esm({
+  "frida-shim:node_modules/@frida/base64-js/index.js"() {
+    init_node_globals();
+    lookup = [];
+    revLookup = [];
+    code = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    for (let i = 0, len = code.length; i < len; ++i) {
+      lookup[i] = code[i];
+      revLookup[code.charCodeAt(i)] = i;
+    }
+    revLookup["-".charCodeAt(0)] = 62;
+    revLookup["_".charCodeAt(0)] = 63;
+  }
+});
 
 // frida-shim:node_modules/@frida/ieee754/index.js
 function read(buffer, offset, isLE, mLen, nBytes) {
@@ -180,27 +201,13 @@ function write(buffer, value, offset, isLE, mLen, nBytes) {
   }
   buffer[offset + i - d] |= s * 128;
 }
+var init_ieee754 = __esm({
+  "frida-shim:node_modules/@frida/ieee754/index.js"() {
+    init_node_globals();
+  }
+});
 
 // frida-shim:node_modules/@frida/buffer/index.js
-var config = {
-  INSPECT_MAX_BYTES: 50
-};
-var K_MAX_LENGTH = 2147483647;
-Buffer2.TYPED_ARRAY_SUPPORT = true;
-Object.defineProperty(Buffer2.prototype, "parent", {
-  enumerable: true,
-  get: function() {
-    if (!Buffer2.isBuffer(this)) return void 0;
-    return this.buffer;
-  }
-});
-Object.defineProperty(Buffer2.prototype, "offset", {
-  enumerable: true,
-  get: function() {
-    if (!Buffer2.isBuffer(this)) return void 0;
-    return this.byteOffset;
-  }
-});
 function createBuffer(length) {
   if (length > K_MAX_LENGTH) {
     throw new RangeError('The value "' + length + '" is invalid for option "size"');
@@ -220,7 +227,6 @@ function Buffer2(arg, encodingOrOffset, length) {
   }
   return from(arg, encodingOrOffset, length);
 }
-Buffer2.poolSize = 8192;
 function from(value, encodingOrOffset, length) {
   if (typeof value === "string") {
     return fromString(value, encodingOrOffset);
@@ -257,11 +263,6 @@ function from(value, encodingOrOffset, length) {
     "The first argument must be one of type string, Buffer, ArrayBuffer, Array, or Array-like Object. Received type " + typeof value
   );
 }
-Buffer2.from = function(value, encodingOrOffset, length) {
-  return from(value, encodingOrOffset, length);
-};
-Object.setPrototypeOf(Buffer2.prototype, Uint8Array.prototype);
-Object.setPrototypeOf(Buffer2, Uint8Array);
 function assertSize(size) {
   if (typeof size !== "number") {
     throw new TypeError('"size" argument must be of type number');
@@ -279,19 +280,10 @@ function alloc(size, fill2, encoding) {
   }
   return createBuffer(size);
 }
-Buffer2.alloc = function(size, fill2, encoding) {
-  return alloc(size, fill2, encoding);
-};
 function allocUnsafe(size) {
   assertSize(size);
   return createBuffer(size < 0 ? 0 : checked(size) | 0);
 }
-Buffer2.allocUnsafe = function(size) {
-  return allocUnsafe(size);
-};
-Buffer2.allocUnsafeSlow = function(size) {
-  return allocUnsafe(size);
-};
 function fromString(string, encoding) {
   if (typeof encoding !== "string" || encoding === "") {
     encoding = "utf8";
@@ -366,89 +358,6 @@ function checked(length) {
   }
   return length | 0;
 }
-Buffer2.isBuffer = function isBuffer(b) {
-  return b != null && b._isBuffer === true && b !== Buffer2.prototype;
-};
-Buffer2.compare = function compare(a, b) {
-  if (a instanceof Uint8Array) a = Buffer2.from(a, a.offset, a.byteLength);
-  if (b instanceof Uint8Array) b = Buffer2.from(b, b.offset, b.byteLength);
-  if (!Buffer2.isBuffer(a) || !Buffer2.isBuffer(b)) {
-    throw new TypeError(
-      'The "buf1", "buf2" arguments must be one of type Buffer or Uint8Array'
-    );
-  }
-  if (a === b) return 0;
-  let x = a.length;
-  let y = b.length;
-  for (let i = 0, len = Math.min(x, y); i < len; ++i) {
-    if (a[i] !== b[i]) {
-      x = a[i];
-      y = b[i];
-      break;
-    }
-  }
-  if (x < y) return -1;
-  if (y < x) return 1;
-  return 0;
-};
-Buffer2.isEncoding = function isEncoding(encoding) {
-  switch (String(encoding).toLowerCase()) {
-    case "hex":
-    case "utf8":
-    case "utf-8":
-    case "ascii":
-    case "latin1":
-    case "binary":
-    case "base64":
-    case "ucs2":
-    case "ucs-2":
-    case "utf16le":
-    case "utf-16le":
-      return true;
-    default:
-      return false;
-  }
-};
-Buffer2.concat = function concat(list, length) {
-  if (!Array.isArray(list)) {
-    throw new TypeError('"list" argument must be an Array of Buffers');
-  }
-  if (list.length === 0) {
-    return Buffer2.alloc(0);
-  }
-  let i;
-  if (length === void 0) {
-    length = 0;
-    for (i = 0; i < list.length; ++i) {
-      length += list[i].length;
-    }
-  }
-  const buffer = Buffer2.allocUnsafe(length);
-  let pos = 0;
-  for (i = 0; i < list.length; ++i) {
-    let buf = list[i];
-    if (buf instanceof Uint8Array) {
-      if (pos + buf.length > buffer.length) {
-        if (!Buffer2.isBuffer(buf)) {
-          buf = Buffer2.from(buf.buffer, buf.byteOffset, buf.byteLength);
-        }
-        buf.copy(buffer, pos);
-      } else {
-        Uint8Array.prototype.set.call(
-          buffer,
-          buf,
-          pos
-        );
-      }
-    } else if (!Buffer2.isBuffer(buf)) {
-      throw new TypeError('"list" argument must be an Array of Buffers');
-    } else {
-      buf.copy(buffer, pos);
-    }
-    pos += buf.length;
-  }
-  return buffer;
-};
 function byteLength(string, encoding) {
   if (Buffer2.isBuffer(string)) {
     return string.length;
@@ -492,7 +401,6 @@ function byteLength(string, encoding) {
     }
   }
 }
-Buffer2.byteLength = byteLength;
 function slowToString(encoding, start, end) {
   let loweredCase = false;
   if (start === void 0 || start < 0) {
@@ -539,120 +447,11 @@ function slowToString(encoding, start, end) {
     }
   }
 }
-Buffer2.prototype._isBuffer = true;
 function swap(b, n, m) {
   const i = b[n];
   b[n] = b[m];
   b[m] = i;
 }
-Buffer2.prototype.swap16 = function swap16() {
-  const len = this.length;
-  if (len % 2 !== 0) {
-    throw new RangeError("Buffer size must be a multiple of 16-bits");
-  }
-  for (let i = 0; i < len; i += 2) {
-    swap(this, i, i + 1);
-  }
-  return this;
-};
-Buffer2.prototype.swap32 = function swap32() {
-  const len = this.length;
-  if (len % 4 !== 0) {
-    throw new RangeError("Buffer size must be a multiple of 32-bits");
-  }
-  for (let i = 0; i < len; i += 4) {
-    swap(this, i, i + 3);
-    swap(this, i + 1, i + 2);
-  }
-  return this;
-};
-Buffer2.prototype.swap64 = function swap64() {
-  const len = this.length;
-  if (len % 8 !== 0) {
-    throw new RangeError("Buffer size must be a multiple of 64-bits");
-  }
-  for (let i = 0; i < len; i += 8) {
-    swap(this, i, i + 7);
-    swap(this, i + 1, i + 6);
-    swap(this, i + 2, i + 5);
-    swap(this, i + 3, i + 4);
-  }
-  return this;
-};
-Buffer2.prototype.toString = function toString() {
-  const length = this.length;
-  if (length === 0) return "";
-  if (arguments.length === 0) return utf8Slice(this, 0, length);
-  return slowToString.apply(this, arguments);
-};
-Buffer2.prototype.toLocaleString = Buffer2.prototype.toString;
-Buffer2.prototype.equals = function equals(b) {
-  if (!Buffer2.isBuffer(b)) throw new TypeError("Argument must be a Buffer");
-  if (this === b) return true;
-  return Buffer2.compare(this, b) === 0;
-};
-Buffer2.prototype.inspect = function inspect() {
-  let str = "";
-  const max = config.INSPECT_MAX_BYTES;
-  str = this.toString("hex", 0, max).replace(/(.{2})/g, "$1 ").trim();
-  if (this.length > max) str += " ... ";
-  return "<Buffer " + str + ">";
-};
-Buffer2.prototype[Symbol.for("nodejs.util.inspect.custom")] = Buffer2.prototype.inspect;
-Buffer2.prototype.compare = function compare2(target, start, end, thisStart, thisEnd) {
-  if (target instanceof Uint8Array) {
-    target = Buffer2.from(target, target.offset, target.byteLength);
-  }
-  if (!Buffer2.isBuffer(target)) {
-    throw new TypeError(
-      'The "target" argument must be one of type Buffer or Uint8Array. Received type ' + typeof target
-    );
-  }
-  if (start === void 0) {
-    start = 0;
-  }
-  if (end === void 0) {
-    end = target ? target.length : 0;
-  }
-  if (thisStart === void 0) {
-    thisStart = 0;
-  }
-  if (thisEnd === void 0) {
-    thisEnd = this.length;
-  }
-  if (start < 0 || end > target.length || thisStart < 0 || thisEnd > this.length) {
-    throw new RangeError("out of range index");
-  }
-  if (thisStart >= thisEnd && start >= end) {
-    return 0;
-  }
-  if (thisStart >= thisEnd) {
-    return -1;
-  }
-  if (start >= end) {
-    return 1;
-  }
-  start >>>= 0;
-  end >>>= 0;
-  thisStart >>>= 0;
-  thisEnd >>>= 0;
-  if (this === target) return 0;
-  let x = thisEnd - thisStart;
-  let y = end - start;
-  const len = Math.min(x, y);
-  const thisCopy = this.slice(thisStart, thisEnd);
-  const targetCopy = target.slice(start, end);
-  for (let i = 0; i < len; ++i) {
-    if (thisCopy[i] !== targetCopy[i]) {
-      x = thisCopy[i];
-      y = targetCopy[i];
-      break;
-    }
-  }
-  if (x < y) return -1;
-  if (y < x) return 1;
-  return 0;
-};
 function bidirectionalIndexOf(buffer, val, byteOffset, encoding, dir) {
   if (buffer.length === 0) return -1;
   if (typeof byteOffset === "string") {
@@ -746,15 +545,6 @@ function arrayIndexOf(arr, val, byteOffset, encoding, dir) {
   }
   return -1;
 }
-Buffer2.prototype.includes = function includes(val, byteOffset, encoding) {
-  return this.indexOf(val, byteOffset, encoding) !== -1;
-};
-Buffer2.prototype.indexOf = function indexOf(val, byteOffset, encoding) {
-  return bidirectionalIndexOf(this, val, byteOffset, encoding, true);
-};
-Buffer2.prototype.lastIndexOf = function lastIndexOf(val, byteOffset, encoding) {
-  return bidirectionalIndexOf(this, val, byteOffset, encoding, false);
-};
 function hexWrite(buf, string, offset, length) {
   offset = Number(offset) || 0;
   const remaining = buf.length - offset;
@@ -790,67 +580,6 @@ function base64Write(buf, string, offset, length) {
 function ucs2Write(buf, string, offset, length) {
   return blitBuffer(utf16leToBytes(string, buf.length - offset), buf, offset, length);
 }
-Buffer2.prototype.write = function write2(string, offset, length, encoding) {
-  if (offset === void 0) {
-    encoding = "utf8";
-    length = this.length;
-    offset = 0;
-  } else if (length === void 0 && typeof offset === "string") {
-    encoding = offset;
-    length = this.length;
-    offset = 0;
-  } else if (isFinite(offset)) {
-    offset = offset >>> 0;
-    if (isFinite(length)) {
-      length = length >>> 0;
-      if (encoding === void 0) encoding = "utf8";
-    } else {
-      encoding = length;
-      length = void 0;
-    }
-  } else {
-    throw new Error(
-      "Buffer.write(string, encoding, offset[, length]) is no longer supported"
-    );
-  }
-  const remaining = this.length - offset;
-  if (length === void 0 || length > remaining) length = remaining;
-  if (string.length > 0 && (length < 0 || offset < 0) || offset > this.length) {
-    throw new RangeError("Attempt to write outside buffer bounds");
-  }
-  if (!encoding) encoding = "utf8";
-  let loweredCase = false;
-  for (; ; ) {
-    switch (encoding) {
-      case "hex":
-        return hexWrite(this, string, offset, length);
-      case "utf8":
-      case "utf-8":
-        return utf8Write(this, string, offset, length);
-      case "ascii":
-      case "latin1":
-      case "binary":
-        return asciiWrite(this, string, offset, length);
-      case "base64":
-        return base64Write(this, string, offset, length);
-      case "ucs2":
-      case "ucs-2":
-      case "utf16le":
-      case "utf-16le":
-        return ucs2Write(this, string, offset, length);
-      default:
-        if (loweredCase) throw new TypeError("Unknown encoding: " + encoding);
-        encoding = ("" + encoding).toLowerCase();
-        loweredCase = true;
-    }
-  }
-};
-Buffer2.prototype.toJSON = function toJSON() {
-  return {
-    type: "Buffer",
-    data: Array.prototype.slice.call(this._arr || this, 0)
-  };
-};
 function base64Slice(buf, start, end) {
   if (start === 0 && end === buf.length) {
     return fromByteArray(buf);
@@ -918,7 +647,6 @@ function utf8Slice(buf, start, end) {
   }
   return decodeCodePointsArray(res);
 }
-var MAX_ARGUMENTS_LENGTH = 4096;
 function decodeCodePointsArray(codePoints) {
   const len = codePoints.length;
   if (len <= MAX_ARGUMENTS_LENGTH) {
@@ -968,284 +696,15 @@ function utf16leSlice(buf, start, end) {
   }
   return res;
 }
-Buffer2.prototype.slice = function slice(start, end) {
-  const len = this.length;
-  start = ~~start;
-  end = end === void 0 ? len : ~~end;
-  if (start < 0) {
-    start += len;
-    if (start < 0) start = 0;
-  } else if (start > len) {
-    start = len;
-  }
-  if (end < 0) {
-    end += len;
-    if (end < 0) end = 0;
-  } else if (end > len) {
-    end = len;
-  }
-  if (end < start) end = start;
-  const newBuf = this.subarray(start, end);
-  Object.setPrototypeOf(newBuf, Buffer2.prototype);
-  return newBuf;
-};
 function checkOffset(offset, ext, length) {
   if (offset % 1 !== 0 || offset < 0) throw new RangeError("offset is not uint");
   if (offset + ext > length) throw new RangeError("Trying to access beyond buffer length");
 }
-Buffer2.prototype.readUintLE = Buffer2.prototype.readUIntLE = function readUIntLE(offset, byteLength2, noAssert) {
-  offset = offset >>> 0;
-  byteLength2 = byteLength2 >>> 0;
-  if (!noAssert) checkOffset(offset, byteLength2, this.length);
-  let val = this[offset];
-  let mul = 1;
-  let i = 0;
-  while (++i < byteLength2 && (mul *= 256)) {
-    val += this[offset + i] * mul;
-  }
-  return val;
-};
-Buffer2.prototype.readUintBE = Buffer2.prototype.readUIntBE = function readUIntBE(offset, byteLength2, noAssert) {
-  offset = offset >>> 0;
-  byteLength2 = byteLength2 >>> 0;
-  if (!noAssert) {
-    checkOffset(offset, byteLength2, this.length);
-  }
-  let val = this[offset + --byteLength2];
-  let mul = 1;
-  while (byteLength2 > 0 && (mul *= 256)) {
-    val += this[offset + --byteLength2] * mul;
-  }
-  return val;
-};
-Buffer2.prototype.readUint8 = Buffer2.prototype.readUInt8 = function readUInt8(offset, noAssert) {
-  offset = offset >>> 0;
-  if (!noAssert) checkOffset(offset, 1, this.length);
-  return this[offset];
-};
-Buffer2.prototype.readUint16LE = Buffer2.prototype.readUInt16LE = function readUInt16LE(offset, noAssert) {
-  offset = offset >>> 0;
-  if (!noAssert) checkOffset(offset, 2, this.length);
-  return this[offset] | this[offset + 1] << 8;
-};
-Buffer2.prototype.readUint16BE = Buffer2.prototype.readUInt16BE = function readUInt16BE(offset, noAssert) {
-  offset = offset >>> 0;
-  if (!noAssert) checkOffset(offset, 2, this.length);
-  return this[offset] << 8 | this[offset + 1];
-};
-Buffer2.prototype.readUint32LE = Buffer2.prototype.readUInt32LE = function readUInt32LE(offset, noAssert) {
-  offset = offset >>> 0;
-  if (!noAssert) checkOffset(offset, 4, this.length);
-  return (this[offset] | this[offset + 1] << 8 | this[offset + 2] << 16) + this[offset + 3] * 16777216;
-};
-Buffer2.prototype.readUint32BE = Buffer2.prototype.readUInt32BE = function readUInt32BE(offset, noAssert) {
-  offset = offset >>> 0;
-  if (!noAssert) checkOffset(offset, 4, this.length);
-  return this[offset] * 16777216 + (this[offset + 1] << 16 | this[offset + 2] << 8 | this[offset + 3]);
-};
-Buffer2.prototype.readBigUInt64LE = function readBigUInt64LE(offset) {
-  offset = offset >>> 0;
-  validateNumber(offset, "offset");
-  const first = this[offset];
-  const last = this[offset + 7];
-  if (first === void 0 || last === void 0) {
-    boundsError(offset, this.length - 8);
-  }
-  const lo = first + this[++offset] * 2 ** 8 + this[++offset] * 2 ** 16 + this[++offset] * 2 ** 24;
-  const hi = this[++offset] + this[++offset] * 2 ** 8 + this[++offset] * 2 ** 16 + last * 2 ** 24;
-  return BigInt(lo) + (BigInt(hi) << BigInt(32));
-};
-Buffer2.prototype.readBigUInt64BE = function readBigUInt64BE(offset) {
-  offset = offset >>> 0;
-  validateNumber(offset, "offset");
-  const first = this[offset];
-  const last = this[offset + 7];
-  if (first === void 0 || last === void 0) {
-    boundsError(offset, this.length - 8);
-  }
-  const hi = first * 2 ** 24 + this[++offset] * 2 ** 16 + this[++offset] * 2 ** 8 + this[++offset];
-  const lo = this[++offset] * 2 ** 24 + this[++offset] * 2 ** 16 + this[++offset] * 2 ** 8 + last;
-  return (BigInt(hi) << BigInt(32)) + BigInt(lo);
-};
-Buffer2.prototype.readIntLE = function readIntLE(offset, byteLength2, noAssert) {
-  offset = offset >>> 0;
-  byteLength2 = byteLength2 >>> 0;
-  if (!noAssert) checkOffset(offset, byteLength2, this.length);
-  let val = this[offset];
-  let mul = 1;
-  let i = 0;
-  while (++i < byteLength2 && (mul *= 256)) {
-    val += this[offset + i] * mul;
-  }
-  mul *= 128;
-  if (val >= mul) val -= Math.pow(2, 8 * byteLength2);
-  return val;
-};
-Buffer2.prototype.readIntBE = function readIntBE(offset, byteLength2, noAssert) {
-  offset = offset >>> 0;
-  byteLength2 = byteLength2 >>> 0;
-  if (!noAssert) checkOffset(offset, byteLength2, this.length);
-  let i = byteLength2;
-  let mul = 1;
-  let val = this[offset + --i];
-  while (i > 0 && (mul *= 256)) {
-    val += this[offset + --i] * mul;
-  }
-  mul *= 128;
-  if (val >= mul) val -= Math.pow(2, 8 * byteLength2);
-  return val;
-};
-Buffer2.prototype.readInt8 = function readInt8(offset, noAssert) {
-  offset = offset >>> 0;
-  if (!noAssert) checkOffset(offset, 1, this.length);
-  if (!(this[offset] & 128)) return this[offset];
-  return (255 - this[offset] + 1) * -1;
-};
-Buffer2.prototype.readInt16LE = function readInt16LE(offset, noAssert) {
-  offset = offset >>> 0;
-  if (!noAssert) checkOffset(offset, 2, this.length);
-  const val = this[offset] | this[offset + 1] << 8;
-  return val & 32768 ? val | 4294901760 : val;
-};
-Buffer2.prototype.readInt16BE = function readInt16BE(offset, noAssert) {
-  offset = offset >>> 0;
-  if (!noAssert) checkOffset(offset, 2, this.length);
-  const val = this[offset + 1] | this[offset] << 8;
-  return val & 32768 ? val | 4294901760 : val;
-};
-Buffer2.prototype.readInt32LE = function readInt32LE(offset, noAssert) {
-  offset = offset >>> 0;
-  if (!noAssert) checkOffset(offset, 4, this.length);
-  return this[offset] | this[offset + 1] << 8 | this[offset + 2] << 16 | this[offset + 3] << 24;
-};
-Buffer2.prototype.readInt32BE = function readInt32BE(offset, noAssert) {
-  offset = offset >>> 0;
-  if (!noAssert) checkOffset(offset, 4, this.length);
-  return this[offset] << 24 | this[offset + 1] << 16 | this[offset + 2] << 8 | this[offset + 3];
-};
-Buffer2.prototype.readBigInt64LE = function readBigInt64LE(offset) {
-  offset = offset >>> 0;
-  validateNumber(offset, "offset");
-  const first = this[offset];
-  const last = this[offset + 7];
-  if (first === void 0 || last === void 0) {
-    boundsError(offset, this.length - 8);
-  }
-  const val = this[offset + 4] + this[offset + 5] * 2 ** 8 + this[offset + 6] * 2 ** 16 + (last << 24);
-  return (BigInt(val) << BigInt(32)) + BigInt(first + this[++offset] * 2 ** 8 + this[++offset] * 2 ** 16 + this[++offset] * 2 ** 24);
-};
-Buffer2.prototype.readBigInt64BE = function readBigInt64BE(offset) {
-  offset = offset >>> 0;
-  validateNumber(offset, "offset");
-  const first = this[offset];
-  const last = this[offset + 7];
-  if (first === void 0 || last === void 0) {
-    boundsError(offset, this.length - 8);
-  }
-  const val = (first << 24) + // Overflow
-  this[++offset] * 2 ** 16 + this[++offset] * 2 ** 8 + this[++offset];
-  return (BigInt(val) << BigInt(32)) + BigInt(this[++offset] * 2 ** 24 + this[++offset] * 2 ** 16 + this[++offset] * 2 ** 8 + last);
-};
-Buffer2.prototype.readFloatLE = function readFloatLE(offset, noAssert) {
-  offset = offset >>> 0;
-  if (!noAssert) checkOffset(offset, 4, this.length);
-  return read(this, offset, true, 23, 4);
-};
-Buffer2.prototype.readFloatBE = function readFloatBE(offset, noAssert) {
-  offset = offset >>> 0;
-  if (!noAssert) checkOffset(offset, 4, this.length);
-  return read(this, offset, false, 23, 4);
-};
-Buffer2.prototype.readDoubleLE = function readDoubleLE(offset, noAssert) {
-  offset = offset >>> 0;
-  if (!noAssert) checkOffset(offset, 8, this.length);
-  return read(this, offset, true, 52, 8);
-};
-Buffer2.prototype.readDoubleBE = function readDoubleBE(offset, noAssert) {
-  offset = offset >>> 0;
-  if (!noAssert) checkOffset(offset, 8, this.length);
-  return read(this, offset, false, 52, 8);
-};
 function checkInt(buf, value, offset, ext, max, min) {
   if (!Buffer2.isBuffer(buf)) throw new TypeError('"buffer" argument must be a Buffer instance');
   if (value > max || value < min) throw new RangeError('"value" argument is out of bounds');
   if (offset + ext > buf.length) throw new RangeError("Index out of range");
 }
-Buffer2.prototype.writeUintLE = Buffer2.prototype.writeUIntLE = function writeUIntLE(value, offset, byteLength2, noAssert) {
-  value = +value;
-  offset = offset >>> 0;
-  byteLength2 = byteLength2 >>> 0;
-  if (!noAssert) {
-    const maxBytes = Math.pow(2, 8 * byteLength2) - 1;
-    checkInt(this, value, offset, byteLength2, maxBytes, 0);
-  }
-  let mul = 1;
-  let i = 0;
-  this[offset] = value & 255;
-  while (++i < byteLength2 && (mul *= 256)) {
-    this[offset + i] = value / mul & 255;
-  }
-  return offset + byteLength2;
-};
-Buffer2.prototype.writeUintBE = Buffer2.prototype.writeUIntBE = function writeUIntBE(value, offset, byteLength2, noAssert) {
-  value = +value;
-  offset = offset >>> 0;
-  byteLength2 = byteLength2 >>> 0;
-  if (!noAssert) {
-    const maxBytes = Math.pow(2, 8 * byteLength2) - 1;
-    checkInt(this, value, offset, byteLength2, maxBytes, 0);
-  }
-  let i = byteLength2 - 1;
-  let mul = 1;
-  this[offset + i] = value & 255;
-  while (--i >= 0 && (mul *= 256)) {
-    this[offset + i] = value / mul & 255;
-  }
-  return offset + byteLength2;
-};
-Buffer2.prototype.writeUint8 = Buffer2.prototype.writeUInt8 = function writeUInt8(value, offset, noAssert) {
-  value = +value;
-  offset = offset >>> 0;
-  if (!noAssert) checkInt(this, value, offset, 1, 255, 0);
-  this[offset] = value & 255;
-  return offset + 1;
-};
-Buffer2.prototype.writeUint16LE = Buffer2.prototype.writeUInt16LE = function writeUInt16LE(value, offset, noAssert) {
-  value = +value;
-  offset = offset >>> 0;
-  if (!noAssert) checkInt(this, value, offset, 2, 65535, 0);
-  this[offset] = value & 255;
-  this[offset + 1] = value >>> 8;
-  return offset + 2;
-};
-Buffer2.prototype.writeUint16BE = Buffer2.prototype.writeUInt16BE = function writeUInt16BE(value, offset, noAssert) {
-  value = +value;
-  offset = offset >>> 0;
-  if (!noAssert) checkInt(this, value, offset, 2, 65535, 0);
-  this[offset] = value >>> 8;
-  this[offset + 1] = value & 255;
-  return offset + 2;
-};
-Buffer2.prototype.writeUint32LE = Buffer2.prototype.writeUInt32LE = function writeUInt32LE(value, offset, noAssert) {
-  value = +value;
-  offset = offset >>> 0;
-  if (!noAssert) checkInt(this, value, offset, 4, 4294967295, 0);
-  this[offset + 3] = value >>> 24;
-  this[offset + 2] = value >>> 16;
-  this[offset + 1] = value >>> 8;
-  this[offset] = value & 255;
-  return offset + 4;
-};
-Buffer2.prototype.writeUint32BE = Buffer2.prototype.writeUInt32BE = function writeUInt32BE(value, offset, noAssert) {
-  value = +value;
-  offset = offset >>> 0;
-  if (!noAssert) checkInt(this, value, offset, 4, 4294967295, 0);
-  this[offset] = value >>> 24;
-  this[offset + 1] = value >>> 16;
-  this[offset + 2] = value >>> 8;
-  this[offset + 3] = value & 255;
-  return offset + 4;
-};
 function wrtBigUInt64LE(buf, value, offset, min, max) {
   checkIntBI(value, min, max, buf, offset, 7);
   let lo = Number(value & BigInt(4294967295));
@@ -1286,101 +745,6 @@ function wrtBigUInt64BE(buf, value, offset, min, max) {
   buf[offset] = hi;
   return offset + 8;
 }
-Buffer2.prototype.writeBigUInt64LE = function writeBigUInt64LE(value, offset = 0) {
-  return wrtBigUInt64LE(this, value, offset, BigInt(0), BigInt("0xffffffffffffffff"));
-};
-Buffer2.prototype.writeBigUInt64BE = function writeBigUInt64BE(value, offset = 0) {
-  return wrtBigUInt64BE(this, value, offset, BigInt(0), BigInt("0xffffffffffffffff"));
-};
-Buffer2.prototype.writeIntLE = function writeIntLE(value, offset, byteLength2, noAssert) {
-  value = +value;
-  offset = offset >>> 0;
-  if (!noAssert) {
-    const limit = Math.pow(2, 8 * byteLength2 - 1);
-    checkInt(this, value, offset, byteLength2, limit - 1, -limit);
-  }
-  let i = 0;
-  let mul = 1;
-  let sub = 0;
-  this[offset] = value & 255;
-  while (++i < byteLength2 && (mul *= 256)) {
-    if (value < 0 && sub === 0 && this[offset + i - 1] !== 0) {
-      sub = 1;
-    }
-    this[offset + i] = (value / mul >> 0) - sub & 255;
-  }
-  return offset + byteLength2;
-};
-Buffer2.prototype.writeIntBE = function writeIntBE(value, offset, byteLength2, noAssert) {
-  value = +value;
-  offset = offset >>> 0;
-  if (!noAssert) {
-    const limit = Math.pow(2, 8 * byteLength2 - 1);
-    checkInt(this, value, offset, byteLength2, limit - 1, -limit);
-  }
-  let i = byteLength2 - 1;
-  let mul = 1;
-  let sub = 0;
-  this[offset + i] = value & 255;
-  while (--i >= 0 && (mul *= 256)) {
-    if (value < 0 && sub === 0 && this[offset + i + 1] !== 0) {
-      sub = 1;
-    }
-    this[offset + i] = (value / mul >> 0) - sub & 255;
-  }
-  return offset + byteLength2;
-};
-Buffer2.prototype.writeInt8 = function writeInt8(value, offset, noAssert) {
-  value = +value;
-  offset = offset >>> 0;
-  if (!noAssert) checkInt(this, value, offset, 1, 127, -128);
-  if (value < 0) value = 255 + value + 1;
-  this[offset] = value & 255;
-  return offset + 1;
-};
-Buffer2.prototype.writeInt16LE = function writeInt16LE(value, offset, noAssert) {
-  value = +value;
-  offset = offset >>> 0;
-  if (!noAssert) checkInt(this, value, offset, 2, 32767, -32768);
-  this[offset] = value & 255;
-  this[offset + 1] = value >>> 8;
-  return offset + 2;
-};
-Buffer2.prototype.writeInt16BE = function writeInt16BE(value, offset, noAssert) {
-  value = +value;
-  offset = offset >>> 0;
-  if (!noAssert) checkInt(this, value, offset, 2, 32767, -32768);
-  this[offset] = value >>> 8;
-  this[offset + 1] = value & 255;
-  return offset + 2;
-};
-Buffer2.prototype.writeInt32LE = function writeInt32LE(value, offset, noAssert) {
-  value = +value;
-  offset = offset >>> 0;
-  if (!noAssert) checkInt(this, value, offset, 4, 2147483647, -2147483648);
-  this[offset] = value & 255;
-  this[offset + 1] = value >>> 8;
-  this[offset + 2] = value >>> 16;
-  this[offset + 3] = value >>> 24;
-  return offset + 4;
-};
-Buffer2.prototype.writeInt32BE = function writeInt32BE(value, offset, noAssert) {
-  value = +value;
-  offset = offset >>> 0;
-  if (!noAssert) checkInt(this, value, offset, 4, 2147483647, -2147483648);
-  if (value < 0) value = 4294967295 + value + 1;
-  this[offset] = value >>> 24;
-  this[offset + 1] = value >>> 16;
-  this[offset + 2] = value >>> 8;
-  this[offset + 3] = value & 255;
-  return offset + 4;
-};
-Buffer2.prototype.writeBigInt64LE = function writeBigInt64LE(value, offset = 0) {
-  return wrtBigUInt64LE(this, value, offset, -BigInt("0x8000000000000000"), BigInt("0x7fffffffffffffff"));
-};
-Buffer2.prototype.writeBigInt64BE = function writeBigInt64BE(value, offset = 0) {
-  return wrtBigUInt64BE(this, value, offset, -BigInt("0x8000000000000000"), BigInt("0x7fffffffffffffff"));
-};
 function checkIEEE754(buf, value, offset, ext, max, min) {
   if (offset + ext > buf.length) throw new RangeError("Index out of range");
   if (offset < 0) throw new RangeError("Index out of range");
@@ -1394,12 +758,6 @@ function writeFloat(buf, value, offset, littleEndian, noAssert) {
   write(buf, value, offset, littleEndian, 23, 4);
   return offset + 4;
 }
-Buffer2.prototype.writeFloatLE = function writeFloatLE(value, offset, noAssert) {
-  return writeFloat(this, value, offset, true, noAssert);
-};
-Buffer2.prototype.writeFloatBE = function writeFloatBE(value, offset, noAssert) {
-  return writeFloat(this, value, offset, false, noAssert);
-};
 function writeDouble(buf, value, offset, littleEndian, noAssert) {
   value = +value;
   offset = offset >>> 0;
@@ -1409,96 +767,6 @@ function writeDouble(buf, value, offset, littleEndian, noAssert) {
   write(buf, value, offset, littleEndian, 52, 8);
   return offset + 8;
 }
-Buffer2.prototype.writeDoubleLE = function writeDoubleLE(value, offset, noAssert) {
-  return writeDouble(this, value, offset, true, noAssert);
-};
-Buffer2.prototype.writeDoubleBE = function writeDoubleBE(value, offset, noAssert) {
-  return writeDouble(this, value, offset, false, noAssert);
-};
-Buffer2.prototype.copy = function copy(target, targetStart, start, end) {
-  if (!Buffer2.isBuffer(target)) throw new TypeError("argument should be a Buffer");
-  if (!start) start = 0;
-  if (!end && end !== 0) end = this.length;
-  if (targetStart >= target.length) targetStart = target.length;
-  if (!targetStart) targetStart = 0;
-  if (end > 0 && end < start) end = start;
-  if (end === start) return 0;
-  if (target.length === 0 || this.length === 0) return 0;
-  if (targetStart < 0) {
-    throw new RangeError("targetStart out of bounds");
-  }
-  if (start < 0 || start >= this.length) throw new RangeError("Index out of range");
-  if (end < 0) throw new RangeError("sourceEnd out of bounds");
-  if (end > this.length) end = this.length;
-  if (target.length - targetStart < end - start) {
-    end = target.length - targetStart + start;
-  }
-  const len = end - start;
-  if (this === target) {
-    this.copyWithin(targetStart, start, end);
-  } else {
-    Uint8Array.prototype.set.call(
-      target,
-      this.subarray(start, end),
-      targetStart
-    );
-  }
-  return len;
-};
-Buffer2.prototype.fill = function fill(val, start, end, encoding) {
-  if (typeof val === "string") {
-    if (typeof start === "string") {
-      encoding = start;
-      start = 0;
-      end = this.length;
-    } else if (typeof end === "string") {
-      encoding = end;
-      end = this.length;
-    }
-    if (encoding !== void 0 && typeof encoding !== "string") {
-      throw new TypeError("encoding must be a string");
-    }
-    if (typeof encoding === "string" && !Buffer2.isEncoding(encoding)) {
-      throw new TypeError("Unknown encoding: " + encoding);
-    }
-    if (val.length === 1) {
-      const code3 = val.charCodeAt(0);
-      if (encoding === "utf8" && code3 < 128 || encoding === "latin1") {
-        val = code3;
-      }
-    }
-  } else if (typeof val === "number") {
-    val = val & 255;
-  } else if (typeof val === "boolean") {
-    val = Number(val);
-  }
-  if (start < 0 || this.length < start || this.length < end) {
-    throw new RangeError("Out of range index");
-  }
-  if (end <= start) {
-    return this;
-  }
-  start = start >>> 0;
-  end = end === void 0 ? this.length : end >>> 0;
-  if (!val) val = 0;
-  let i;
-  if (typeof val === "number") {
-    for (i = start; i < end; ++i) {
-      this[i] = val;
-    }
-  } else {
-    const bytes = Buffer2.isBuffer(val) ? val : Buffer2.from(val, encoding);
-    const len = bytes.length;
-    if (len === 0) {
-      throw new TypeError('The value "' + val + '" is invalid for argument "value"');
-    }
-    for (i = 0; i < end - start; ++i) {
-      this[i + start] = bytes[i % len];
-    }
-  }
-  return this;
-};
-var errors = {};
 function E(sym, getMessage, Base) {
   errors[sym] = class NodeError extends Base {
     constructor() {
@@ -1528,42 +796,6 @@ function E(sym, getMessage, Base) {
     }
   };
 }
-E(
-  "ERR_BUFFER_OUT_OF_BOUNDS",
-  function(name) {
-    if (name) {
-      return `${name} is outside of buffer bounds`;
-    }
-    return "Attempt to access memory outside buffer bounds";
-  },
-  RangeError
-);
-E(
-  "ERR_INVALID_ARG_TYPE",
-  function(name, actual) {
-    return `The "${name}" argument must be of type number. Received type ${typeof actual}`;
-  },
-  TypeError
-);
-E(
-  "ERR_OUT_OF_RANGE",
-  function(str, range, input) {
-    let msg = `The value of "${str}" is out of range.`;
-    let received = input;
-    if (Number.isInteger(input) && Math.abs(input) > 2 ** 32) {
-      received = addNumericalSeparator(String(input));
-    } else if (typeof input === "bigint") {
-      received = String(input);
-      if (input > BigInt(2) ** BigInt(32) || input < -(BigInt(2) ** BigInt(32))) {
-        received = addNumericalSeparator(received);
-      }
-      received += "n";
-    }
-    msg += ` It must be ${range}. Received ${received}`;
-    return msg;
-  },
-  RangeError
-);
 function addNumericalSeparator(val) {
   let res = "";
   let i = val.length;
@@ -1615,7 +847,6 @@ function boundsError(value, length, type) {
     value
   );
 }
-var INVALID_BASE64_RE = /[^+/0-9A-Za-z-_]/g;
 function base64clean(str) {
   str = str.split("=")[0];
   str = str.trim().replace(INVALID_BASE64_RE, "");
@@ -1716,106 +947,905 @@ function blitBuffer(src, dst, offset, length) {
   }
   return i;
 }
-var hexSliceLookupTable = function() {
-  const alphabet = "0123456789abcdef";
-  const table = new Array(256);
-  for (let i = 0; i < 16; ++i) {
-    const i16 = i * 16;
-    for (let j = 0; j < 16; ++j) {
-      table[i16 + j] = alphabet[i] + alphabet[j];
-    }
-  }
-  return table;
-}();
-
-// node_modules/frida-java-bridge/lib/android.js
-var android_exports = {};
-__export(android_exports, {
-  ArtMethod: () => ArtMethod,
-  ArtStackVisitor: () => ArtStackVisitor,
-  DVM_JNI_ENV_OFFSET_SELF: () => DVM_JNI_ENV_OFFSET_SELF,
-  HandleVector: () => HandleVector,
-  VariableSizedHandleScope: () => VariableSizedHandleScope,
-  backtrace: () => backtrace,
-  deoptimizeBootImage: () => deoptimizeBootImage,
-  deoptimizeEverything: () => deoptimizeEverything,
-  deoptimizeMethod: () => deoptimizeMethod,
-  ensureClassInitialized: () => ensureClassInitialized,
-  getAndroidApiLevel: () => getAndroidApiLevel,
-  getAndroidVersion: () => getAndroidVersion,
-  getApi: () => getApi,
-  getArtApexVersion: () => getArtApexVersion,
-  getArtClassSpec: () => getArtClassSpec,
-  getArtFieldSpec: () => getArtFieldSpec,
-  getArtMethodSpec: () => getArtMethodSpec,
-  getArtThreadFromEnv: () => getArtThreadFromEnv,
-  getArtThreadSpec: () => getArtThreadSpec,
-  makeArtClassLoaderVisitor: () => makeArtClassLoaderVisitor,
-  makeArtClassVisitor: () => makeArtClassVisitor,
-  makeMethodMangler: () => makeMethodMangler,
-  makeObjectVisitorPredicate: () => makeObjectVisitorPredicate,
-  revertGlobalPatches: () => revertGlobalPatches,
-  translateMethod: () => translateMethod,
-  withAllArtThreadsSuspended: () => withAllArtThreadsSuspended,
-  withRunnableArtThread: () => withRunnableArtThread
-});
-
-// node_modules/frida-java-bridge/lib/alloc.js
-var {
-  pageSize,
-  pointerSize
-} = Process;
-var CodeAllocator = class {
-  constructor(sliceSize) {
-    this.sliceSize = sliceSize;
-    this.slicesPerPage = pageSize / sliceSize;
-    this.pages = [];
-    this.free = [];
-  }
-  allocateSlice(spec, alignment) {
-    const anyLocation = spec.near === void 0;
-    const anyAlignment = alignment === 1;
-    if (anyLocation && anyAlignment) {
-      const slice2 = this.free.pop();
-      if (slice2 !== void 0) {
-        return slice2;
+var config, K_MAX_LENGTH, MAX_ARGUMENTS_LENGTH, errors, INVALID_BASE64_RE, hexSliceLookupTable;
+var init_buffer = __esm({
+  "frida-shim:node_modules/@frida/buffer/index.js"() {
+    init_node_globals();
+    init_base64_js();
+    init_ieee754();
+    config = {
+      INSPECT_MAX_BYTES: 50
+    };
+    K_MAX_LENGTH = 2147483647;
+    Buffer2.TYPED_ARRAY_SUPPORT = true;
+    Object.defineProperty(Buffer2.prototype, "parent", {
+      enumerable: true,
+      get: function() {
+        if (!Buffer2.isBuffer(this)) return void 0;
+        return this.buffer;
       }
-    } else if (alignment < pageSize) {
-      const { free } = this;
-      const n = free.length;
-      const alignMask = anyAlignment ? null : ptr(alignment - 1);
-      for (let i = 0; i !== n; i++) {
-        const slice2 = free[i];
-        const satisfiesLocation = anyLocation || this._isSliceNear(slice2, spec);
-        const satisfiesAlignment = anyAlignment || slice2.and(alignMask).isNull();
-        if (satisfiesLocation && satisfiesAlignment) {
-          return free.splice(i, 1)[0];
+    });
+    Object.defineProperty(Buffer2.prototype, "offset", {
+      enumerable: true,
+      get: function() {
+        if (!Buffer2.isBuffer(this)) return void 0;
+        return this.byteOffset;
+      }
+    });
+    Buffer2.poolSize = 8192;
+    Buffer2.from = function(value, encodingOrOffset, length) {
+      return from(value, encodingOrOffset, length);
+    };
+    Object.setPrototypeOf(Buffer2.prototype, Uint8Array.prototype);
+    Object.setPrototypeOf(Buffer2, Uint8Array);
+    Buffer2.alloc = function(size, fill2, encoding) {
+      return alloc(size, fill2, encoding);
+    };
+    Buffer2.allocUnsafe = function(size) {
+      return allocUnsafe(size);
+    };
+    Buffer2.allocUnsafeSlow = function(size) {
+      return allocUnsafe(size);
+    };
+    Buffer2.isBuffer = function isBuffer(b) {
+      return b != null && b._isBuffer === true && b !== Buffer2.prototype;
+    };
+    Buffer2.compare = function compare(a, b) {
+      if (a instanceof Uint8Array) a = Buffer2.from(a, a.offset, a.byteLength);
+      if (b instanceof Uint8Array) b = Buffer2.from(b, b.offset, b.byteLength);
+      if (!Buffer2.isBuffer(a) || !Buffer2.isBuffer(b)) {
+        throw new TypeError(
+          'The "buf1", "buf2" arguments must be one of type Buffer or Uint8Array'
+        );
+      }
+      if (a === b) return 0;
+      let x = a.length;
+      let y = b.length;
+      for (let i = 0, len = Math.min(x, y); i < len; ++i) {
+        if (a[i] !== b[i]) {
+          x = a[i];
+          y = b[i];
+          break;
         }
       }
-    }
-    return this._allocatePage(spec);
+      if (x < y) return -1;
+      if (y < x) return 1;
+      return 0;
+    };
+    Buffer2.isEncoding = function isEncoding(encoding) {
+      switch (String(encoding).toLowerCase()) {
+        case "hex":
+        case "utf8":
+        case "utf-8":
+        case "ascii":
+        case "latin1":
+        case "binary":
+        case "base64":
+        case "ucs2":
+        case "ucs-2":
+        case "utf16le":
+        case "utf-16le":
+          return true;
+        default:
+          return false;
+      }
+    };
+    Buffer2.concat = function concat(list, length) {
+      if (!Array.isArray(list)) {
+        throw new TypeError('"list" argument must be an Array of Buffers');
+      }
+      if (list.length === 0) {
+        return Buffer2.alloc(0);
+      }
+      let i;
+      if (length === void 0) {
+        length = 0;
+        for (i = 0; i < list.length; ++i) {
+          length += list[i].length;
+        }
+      }
+      const buffer = Buffer2.allocUnsafe(length);
+      let pos = 0;
+      for (i = 0; i < list.length; ++i) {
+        let buf = list[i];
+        if (buf instanceof Uint8Array) {
+          if (pos + buf.length > buffer.length) {
+            if (!Buffer2.isBuffer(buf)) {
+              buf = Buffer2.from(buf.buffer, buf.byteOffset, buf.byteLength);
+            }
+            buf.copy(buffer, pos);
+          } else {
+            Uint8Array.prototype.set.call(
+              buffer,
+              buf,
+              pos
+            );
+          }
+        } else if (!Buffer2.isBuffer(buf)) {
+          throw new TypeError('"list" argument must be an Array of Buffers');
+        } else {
+          buf.copy(buffer, pos);
+        }
+        pos += buf.length;
+      }
+      return buffer;
+    };
+    Buffer2.byteLength = byteLength;
+    Buffer2.prototype._isBuffer = true;
+    Buffer2.prototype.swap16 = function swap16() {
+      const len = this.length;
+      if (len % 2 !== 0) {
+        throw new RangeError("Buffer size must be a multiple of 16-bits");
+      }
+      for (let i = 0; i < len; i += 2) {
+        swap(this, i, i + 1);
+      }
+      return this;
+    };
+    Buffer2.prototype.swap32 = function swap32() {
+      const len = this.length;
+      if (len % 4 !== 0) {
+        throw new RangeError("Buffer size must be a multiple of 32-bits");
+      }
+      for (let i = 0; i < len; i += 4) {
+        swap(this, i, i + 3);
+        swap(this, i + 1, i + 2);
+      }
+      return this;
+    };
+    Buffer2.prototype.swap64 = function swap64() {
+      const len = this.length;
+      if (len % 8 !== 0) {
+        throw new RangeError("Buffer size must be a multiple of 64-bits");
+      }
+      for (let i = 0; i < len; i += 8) {
+        swap(this, i, i + 7);
+        swap(this, i + 1, i + 6);
+        swap(this, i + 2, i + 5);
+        swap(this, i + 3, i + 4);
+      }
+      return this;
+    };
+    Buffer2.prototype.toString = function toString() {
+      const length = this.length;
+      if (length === 0) return "";
+      if (arguments.length === 0) return utf8Slice(this, 0, length);
+      return slowToString.apply(this, arguments);
+    };
+    Buffer2.prototype.toLocaleString = Buffer2.prototype.toString;
+    Buffer2.prototype.equals = function equals(b) {
+      if (!Buffer2.isBuffer(b)) throw new TypeError("Argument must be a Buffer");
+      if (this === b) return true;
+      return Buffer2.compare(this, b) === 0;
+    };
+    Buffer2.prototype.inspect = function inspect() {
+      let str = "";
+      const max = config.INSPECT_MAX_BYTES;
+      str = this.toString("hex", 0, max).replace(/(.{2})/g, "$1 ").trim();
+      if (this.length > max) str += " ... ";
+      return "<Buffer " + str + ">";
+    };
+    Buffer2.prototype[Symbol.for("nodejs.util.inspect.custom")] = Buffer2.prototype.inspect;
+    Buffer2.prototype.compare = function compare2(target, start, end, thisStart, thisEnd) {
+      if (target instanceof Uint8Array) {
+        target = Buffer2.from(target, target.offset, target.byteLength);
+      }
+      if (!Buffer2.isBuffer(target)) {
+        throw new TypeError(
+          'The "target" argument must be one of type Buffer or Uint8Array. Received type ' + typeof target
+        );
+      }
+      if (start === void 0) {
+        start = 0;
+      }
+      if (end === void 0) {
+        end = target ? target.length : 0;
+      }
+      if (thisStart === void 0) {
+        thisStart = 0;
+      }
+      if (thisEnd === void 0) {
+        thisEnd = this.length;
+      }
+      if (start < 0 || end > target.length || thisStart < 0 || thisEnd > this.length) {
+        throw new RangeError("out of range index");
+      }
+      if (thisStart >= thisEnd && start >= end) {
+        return 0;
+      }
+      if (thisStart >= thisEnd) {
+        return -1;
+      }
+      if (start >= end) {
+        return 1;
+      }
+      start >>>= 0;
+      end >>>= 0;
+      thisStart >>>= 0;
+      thisEnd >>>= 0;
+      if (this === target) return 0;
+      let x = thisEnd - thisStart;
+      let y = end - start;
+      const len = Math.min(x, y);
+      const thisCopy = this.slice(thisStart, thisEnd);
+      const targetCopy = target.slice(start, end);
+      for (let i = 0; i < len; ++i) {
+        if (thisCopy[i] !== targetCopy[i]) {
+          x = thisCopy[i];
+          y = targetCopy[i];
+          break;
+        }
+      }
+      if (x < y) return -1;
+      if (y < x) return 1;
+      return 0;
+    };
+    Buffer2.prototype.includes = function includes(val, byteOffset, encoding) {
+      return this.indexOf(val, byteOffset, encoding) !== -1;
+    };
+    Buffer2.prototype.indexOf = function indexOf(val, byteOffset, encoding) {
+      return bidirectionalIndexOf(this, val, byteOffset, encoding, true);
+    };
+    Buffer2.prototype.lastIndexOf = function lastIndexOf(val, byteOffset, encoding) {
+      return bidirectionalIndexOf(this, val, byteOffset, encoding, false);
+    };
+    Buffer2.prototype.write = function write2(string, offset, length, encoding) {
+      if (offset === void 0) {
+        encoding = "utf8";
+        length = this.length;
+        offset = 0;
+      } else if (length === void 0 && typeof offset === "string") {
+        encoding = offset;
+        length = this.length;
+        offset = 0;
+      } else if (isFinite(offset)) {
+        offset = offset >>> 0;
+        if (isFinite(length)) {
+          length = length >>> 0;
+          if (encoding === void 0) encoding = "utf8";
+        } else {
+          encoding = length;
+          length = void 0;
+        }
+      } else {
+        throw new Error(
+          "Buffer.write(string, encoding, offset[, length]) is no longer supported"
+        );
+      }
+      const remaining = this.length - offset;
+      if (length === void 0 || length > remaining) length = remaining;
+      if (string.length > 0 && (length < 0 || offset < 0) || offset > this.length) {
+        throw new RangeError("Attempt to write outside buffer bounds");
+      }
+      if (!encoding) encoding = "utf8";
+      let loweredCase = false;
+      for (; ; ) {
+        switch (encoding) {
+          case "hex":
+            return hexWrite(this, string, offset, length);
+          case "utf8":
+          case "utf-8":
+            return utf8Write(this, string, offset, length);
+          case "ascii":
+          case "latin1":
+          case "binary":
+            return asciiWrite(this, string, offset, length);
+          case "base64":
+            return base64Write(this, string, offset, length);
+          case "ucs2":
+          case "ucs-2":
+          case "utf16le":
+          case "utf-16le":
+            return ucs2Write(this, string, offset, length);
+          default:
+            if (loweredCase) throw new TypeError("Unknown encoding: " + encoding);
+            encoding = ("" + encoding).toLowerCase();
+            loweredCase = true;
+        }
+      }
+    };
+    Buffer2.prototype.toJSON = function toJSON() {
+      return {
+        type: "Buffer",
+        data: Array.prototype.slice.call(this._arr || this, 0)
+      };
+    };
+    MAX_ARGUMENTS_LENGTH = 4096;
+    Buffer2.prototype.slice = function slice(start, end) {
+      const len = this.length;
+      start = ~~start;
+      end = end === void 0 ? len : ~~end;
+      if (start < 0) {
+        start += len;
+        if (start < 0) start = 0;
+      } else if (start > len) {
+        start = len;
+      }
+      if (end < 0) {
+        end += len;
+        if (end < 0) end = 0;
+      } else if (end > len) {
+        end = len;
+      }
+      if (end < start) end = start;
+      const newBuf = this.subarray(start, end);
+      Object.setPrototypeOf(newBuf, Buffer2.prototype);
+      return newBuf;
+    };
+    Buffer2.prototype.readUintLE = Buffer2.prototype.readUIntLE = function readUIntLE(offset, byteLength2, noAssert) {
+      offset = offset >>> 0;
+      byteLength2 = byteLength2 >>> 0;
+      if (!noAssert) checkOffset(offset, byteLength2, this.length);
+      let val = this[offset];
+      let mul = 1;
+      let i = 0;
+      while (++i < byteLength2 && (mul *= 256)) {
+        val += this[offset + i] * mul;
+      }
+      return val;
+    };
+    Buffer2.prototype.readUintBE = Buffer2.prototype.readUIntBE = function readUIntBE(offset, byteLength2, noAssert) {
+      offset = offset >>> 0;
+      byteLength2 = byteLength2 >>> 0;
+      if (!noAssert) {
+        checkOffset(offset, byteLength2, this.length);
+      }
+      let val = this[offset + --byteLength2];
+      let mul = 1;
+      while (byteLength2 > 0 && (mul *= 256)) {
+        val += this[offset + --byteLength2] * mul;
+      }
+      return val;
+    };
+    Buffer2.prototype.readUint8 = Buffer2.prototype.readUInt8 = function readUInt8(offset, noAssert) {
+      offset = offset >>> 0;
+      if (!noAssert) checkOffset(offset, 1, this.length);
+      return this[offset];
+    };
+    Buffer2.prototype.readUint16LE = Buffer2.prototype.readUInt16LE = function readUInt16LE(offset, noAssert) {
+      offset = offset >>> 0;
+      if (!noAssert) checkOffset(offset, 2, this.length);
+      return this[offset] | this[offset + 1] << 8;
+    };
+    Buffer2.prototype.readUint16BE = Buffer2.prototype.readUInt16BE = function readUInt16BE(offset, noAssert) {
+      offset = offset >>> 0;
+      if (!noAssert) checkOffset(offset, 2, this.length);
+      return this[offset] << 8 | this[offset + 1];
+    };
+    Buffer2.prototype.readUint32LE = Buffer2.prototype.readUInt32LE = function readUInt32LE(offset, noAssert) {
+      offset = offset >>> 0;
+      if (!noAssert) checkOffset(offset, 4, this.length);
+      return (this[offset] | this[offset + 1] << 8 | this[offset + 2] << 16) + this[offset + 3] * 16777216;
+    };
+    Buffer2.prototype.readUint32BE = Buffer2.prototype.readUInt32BE = function readUInt32BE(offset, noAssert) {
+      offset = offset >>> 0;
+      if (!noAssert) checkOffset(offset, 4, this.length);
+      return this[offset] * 16777216 + (this[offset + 1] << 16 | this[offset + 2] << 8 | this[offset + 3]);
+    };
+    Buffer2.prototype.readBigUInt64LE = function readBigUInt64LE(offset) {
+      offset = offset >>> 0;
+      validateNumber(offset, "offset");
+      const first = this[offset];
+      const last = this[offset + 7];
+      if (first === void 0 || last === void 0) {
+        boundsError(offset, this.length - 8);
+      }
+      const lo = first + this[++offset] * 2 ** 8 + this[++offset] * 2 ** 16 + this[++offset] * 2 ** 24;
+      const hi = this[++offset] + this[++offset] * 2 ** 8 + this[++offset] * 2 ** 16 + last * 2 ** 24;
+      return BigInt(lo) + (BigInt(hi) << BigInt(32));
+    };
+    Buffer2.prototype.readBigUInt64BE = function readBigUInt64BE(offset) {
+      offset = offset >>> 0;
+      validateNumber(offset, "offset");
+      const first = this[offset];
+      const last = this[offset + 7];
+      if (first === void 0 || last === void 0) {
+        boundsError(offset, this.length - 8);
+      }
+      const hi = first * 2 ** 24 + this[++offset] * 2 ** 16 + this[++offset] * 2 ** 8 + this[++offset];
+      const lo = this[++offset] * 2 ** 24 + this[++offset] * 2 ** 16 + this[++offset] * 2 ** 8 + last;
+      return (BigInt(hi) << BigInt(32)) + BigInt(lo);
+    };
+    Buffer2.prototype.readIntLE = function readIntLE(offset, byteLength2, noAssert) {
+      offset = offset >>> 0;
+      byteLength2 = byteLength2 >>> 0;
+      if (!noAssert) checkOffset(offset, byteLength2, this.length);
+      let val = this[offset];
+      let mul = 1;
+      let i = 0;
+      while (++i < byteLength2 && (mul *= 256)) {
+        val += this[offset + i] * mul;
+      }
+      mul *= 128;
+      if (val >= mul) val -= Math.pow(2, 8 * byteLength2);
+      return val;
+    };
+    Buffer2.prototype.readIntBE = function readIntBE(offset, byteLength2, noAssert) {
+      offset = offset >>> 0;
+      byteLength2 = byteLength2 >>> 0;
+      if (!noAssert) checkOffset(offset, byteLength2, this.length);
+      let i = byteLength2;
+      let mul = 1;
+      let val = this[offset + --i];
+      while (i > 0 && (mul *= 256)) {
+        val += this[offset + --i] * mul;
+      }
+      mul *= 128;
+      if (val >= mul) val -= Math.pow(2, 8 * byteLength2);
+      return val;
+    };
+    Buffer2.prototype.readInt8 = function readInt8(offset, noAssert) {
+      offset = offset >>> 0;
+      if (!noAssert) checkOffset(offset, 1, this.length);
+      if (!(this[offset] & 128)) return this[offset];
+      return (255 - this[offset] + 1) * -1;
+    };
+    Buffer2.prototype.readInt16LE = function readInt16LE(offset, noAssert) {
+      offset = offset >>> 0;
+      if (!noAssert) checkOffset(offset, 2, this.length);
+      const val = this[offset] | this[offset + 1] << 8;
+      return val & 32768 ? val | 4294901760 : val;
+    };
+    Buffer2.prototype.readInt16BE = function readInt16BE(offset, noAssert) {
+      offset = offset >>> 0;
+      if (!noAssert) checkOffset(offset, 2, this.length);
+      const val = this[offset + 1] | this[offset] << 8;
+      return val & 32768 ? val | 4294901760 : val;
+    };
+    Buffer2.prototype.readInt32LE = function readInt32LE(offset, noAssert) {
+      offset = offset >>> 0;
+      if (!noAssert) checkOffset(offset, 4, this.length);
+      return this[offset] | this[offset + 1] << 8 | this[offset + 2] << 16 | this[offset + 3] << 24;
+    };
+    Buffer2.prototype.readInt32BE = function readInt32BE(offset, noAssert) {
+      offset = offset >>> 0;
+      if (!noAssert) checkOffset(offset, 4, this.length);
+      return this[offset] << 24 | this[offset + 1] << 16 | this[offset + 2] << 8 | this[offset + 3];
+    };
+    Buffer2.prototype.readBigInt64LE = function readBigInt64LE(offset) {
+      offset = offset >>> 0;
+      validateNumber(offset, "offset");
+      const first = this[offset];
+      const last = this[offset + 7];
+      if (first === void 0 || last === void 0) {
+        boundsError(offset, this.length - 8);
+      }
+      const val = this[offset + 4] + this[offset + 5] * 2 ** 8 + this[offset + 6] * 2 ** 16 + (last << 24);
+      return (BigInt(val) << BigInt(32)) + BigInt(first + this[++offset] * 2 ** 8 + this[++offset] * 2 ** 16 + this[++offset] * 2 ** 24);
+    };
+    Buffer2.prototype.readBigInt64BE = function readBigInt64BE(offset) {
+      offset = offset >>> 0;
+      validateNumber(offset, "offset");
+      const first = this[offset];
+      const last = this[offset + 7];
+      if (first === void 0 || last === void 0) {
+        boundsError(offset, this.length - 8);
+      }
+      const val = (first << 24) + // Overflow
+      this[++offset] * 2 ** 16 + this[++offset] * 2 ** 8 + this[++offset];
+      return (BigInt(val) << BigInt(32)) + BigInt(this[++offset] * 2 ** 24 + this[++offset] * 2 ** 16 + this[++offset] * 2 ** 8 + last);
+    };
+    Buffer2.prototype.readFloatLE = function readFloatLE(offset, noAssert) {
+      offset = offset >>> 0;
+      if (!noAssert) checkOffset(offset, 4, this.length);
+      return read(this, offset, true, 23, 4);
+    };
+    Buffer2.prototype.readFloatBE = function readFloatBE(offset, noAssert) {
+      offset = offset >>> 0;
+      if (!noAssert) checkOffset(offset, 4, this.length);
+      return read(this, offset, false, 23, 4);
+    };
+    Buffer2.prototype.readDoubleLE = function readDoubleLE(offset, noAssert) {
+      offset = offset >>> 0;
+      if (!noAssert) checkOffset(offset, 8, this.length);
+      return read(this, offset, true, 52, 8);
+    };
+    Buffer2.prototype.readDoubleBE = function readDoubleBE(offset, noAssert) {
+      offset = offset >>> 0;
+      if (!noAssert) checkOffset(offset, 8, this.length);
+      return read(this, offset, false, 52, 8);
+    };
+    Buffer2.prototype.writeUintLE = Buffer2.prototype.writeUIntLE = function writeUIntLE(value, offset, byteLength2, noAssert) {
+      value = +value;
+      offset = offset >>> 0;
+      byteLength2 = byteLength2 >>> 0;
+      if (!noAssert) {
+        const maxBytes = Math.pow(2, 8 * byteLength2) - 1;
+        checkInt(this, value, offset, byteLength2, maxBytes, 0);
+      }
+      let mul = 1;
+      let i = 0;
+      this[offset] = value & 255;
+      while (++i < byteLength2 && (mul *= 256)) {
+        this[offset + i] = value / mul & 255;
+      }
+      return offset + byteLength2;
+    };
+    Buffer2.prototype.writeUintBE = Buffer2.prototype.writeUIntBE = function writeUIntBE(value, offset, byteLength2, noAssert) {
+      value = +value;
+      offset = offset >>> 0;
+      byteLength2 = byteLength2 >>> 0;
+      if (!noAssert) {
+        const maxBytes = Math.pow(2, 8 * byteLength2) - 1;
+        checkInt(this, value, offset, byteLength2, maxBytes, 0);
+      }
+      let i = byteLength2 - 1;
+      let mul = 1;
+      this[offset + i] = value & 255;
+      while (--i >= 0 && (mul *= 256)) {
+        this[offset + i] = value / mul & 255;
+      }
+      return offset + byteLength2;
+    };
+    Buffer2.prototype.writeUint8 = Buffer2.prototype.writeUInt8 = function writeUInt8(value, offset, noAssert) {
+      value = +value;
+      offset = offset >>> 0;
+      if (!noAssert) checkInt(this, value, offset, 1, 255, 0);
+      this[offset] = value & 255;
+      return offset + 1;
+    };
+    Buffer2.prototype.writeUint16LE = Buffer2.prototype.writeUInt16LE = function writeUInt16LE(value, offset, noAssert) {
+      value = +value;
+      offset = offset >>> 0;
+      if (!noAssert) checkInt(this, value, offset, 2, 65535, 0);
+      this[offset] = value & 255;
+      this[offset + 1] = value >>> 8;
+      return offset + 2;
+    };
+    Buffer2.prototype.writeUint16BE = Buffer2.prototype.writeUInt16BE = function writeUInt16BE(value, offset, noAssert) {
+      value = +value;
+      offset = offset >>> 0;
+      if (!noAssert) checkInt(this, value, offset, 2, 65535, 0);
+      this[offset] = value >>> 8;
+      this[offset + 1] = value & 255;
+      return offset + 2;
+    };
+    Buffer2.prototype.writeUint32LE = Buffer2.prototype.writeUInt32LE = function writeUInt32LE(value, offset, noAssert) {
+      value = +value;
+      offset = offset >>> 0;
+      if (!noAssert) checkInt(this, value, offset, 4, 4294967295, 0);
+      this[offset + 3] = value >>> 24;
+      this[offset + 2] = value >>> 16;
+      this[offset + 1] = value >>> 8;
+      this[offset] = value & 255;
+      return offset + 4;
+    };
+    Buffer2.prototype.writeUint32BE = Buffer2.prototype.writeUInt32BE = function writeUInt32BE(value, offset, noAssert) {
+      value = +value;
+      offset = offset >>> 0;
+      if (!noAssert) checkInt(this, value, offset, 4, 4294967295, 0);
+      this[offset] = value >>> 24;
+      this[offset + 1] = value >>> 16;
+      this[offset + 2] = value >>> 8;
+      this[offset + 3] = value & 255;
+      return offset + 4;
+    };
+    Buffer2.prototype.writeBigUInt64LE = function writeBigUInt64LE(value, offset = 0) {
+      return wrtBigUInt64LE(this, value, offset, BigInt(0), BigInt("0xffffffffffffffff"));
+    };
+    Buffer2.prototype.writeBigUInt64BE = function writeBigUInt64BE(value, offset = 0) {
+      return wrtBigUInt64BE(this, value, offset, BigInt(0), BigInt("0xffffffffffffffff"));
+    };
+    Buffer2.prototype.writeIntLE = function writeIntLE(value, offset, byteLength2, noAssert) {
+      value = +value;
+      offset = offset >>> 0;
+      if (!noAssert) {
+        const limit = Math.pow(2, 8 * byteLength2 - 1);
+        checkInt(this, value, offset, byteLength2, limit - 1, -limit);
+      }
+      let i = 0;
+      let mul = 1;
+      let sub = 0;
+      this[offset] = value & 255;
+      while (++i < byteLength2 && (mul *= 256)) {
+        if (value < 0 && sub === 0 && this[offset + i - 1] !== 0) {
+          sub = 1;
+        }
+        this[offset + i] = (value / mul >> 0) - sub & 255;
+      }
+      return offset + byteLength2;
+    };
+    Buffer2.prototype.writeIntBE = function writeIntBE(value, offset, byteLength2, noAssert) {
+      value = +value;
+      offset = offset >>> 0;
+      if (!noAssert) {
+        const limit = Math.pow(2, 8 * byteLength2 - 1);
+        checkInt(this, value, offset, byteLength2, limit - 1, -limit);
+      }
+      let i = byteLength2 - 1;
+      let mul = 1;
+      let sub = 0;
+      this[offset + i] = value & 255;
+      while (--i >= 0 && (mul *= 256)) {
+        if (value < 0 && sub === 0 && this[offset + i + 1] !== 0) {
+          sub = 1;
+        }
+        this[offset + i] = (value / mul >> 0) - sub & 255;
+      }
+      return offset + byteLength2;
+    };
+    Buffer2.prototype.writeInt8 = function writeInt8(value, offset, noAssert) {
+      value = +value;
+      offset = offset >>> 0;
+      if (!noAssert) checkInt(this, value, offset, 1, 127, -128);
+      if (value < 0) value = 255 + value + 1;
+      this[offset] = value & 255;
+      return offset + 1;
+    };
+    Buffer2.prototype.writeInt16LE = function writeInt16LE(value, offset, noAssert) {
+      value = +value;
+      offset = offset >>> 0;
+      if (!noAssert) checkInt(this, value, offset, 2, 32767, -32768);
+      this[offset] = value & 255;
+      this[offset + 1] = value >>> 8;
+      return offset + 2;
+    };
+    Buffer2.prototype.writeInt16BE = function writeInt16BE(value, offset, noAssert) {
+      value = +value;
+      offset = offset >>> 0;
+      if (!noAssert) checkInt(this, value, offset, 2, 32767, -32768);
+      this[offset] = value >>> 8;
+      this[offset + 1] = value & 255;
+      return offset + 2;
+    };
+    Buffer2.prototype.writeInt32LE = function writeInt32LE(value, offset, noAssert) {
+      value = +value;
+      offset = offset >>> 0;
+      if (!noAssert) checkInt(this, value, offset, 4, 2147483647, -2147483648);
+      this[offset] = value & 255;
+      this[offset + 1] = value >>> 8;
+      this[offset + 2] = value >>> 16;
+      this[offset + 3] = value >>> 24;
+      return offset + 4;
+    };
+    Buffer2.prototype.writeInt32BE = function writeInt32BE(value, offset, noAssert) {
+      value = +value;
+      offset = offset >>> 0;
+      if (!noAssert) checkInt(this, value, offset, 4, 2147483647, -2147483648);
+      if (value < 0) value = 4294967295 + value + 1;
+      this[offset] = value >>> 24;
+      this[offset + 1] = value >>> 16;
+      this[offset + 2] = value >>> 8;
+      this[offset + 3] = value & 255;
+      return offset + 4;
+    };
+    Buffer2.prototype.writeBigInt64LE = function writeBigInt64LE(value, offset = 0) {
+      return wrtBigUInt64LE(this, value, offset, -BigInt("0x8000000000000000"), BigInt("0x7fffffffffffffff"));
+    };
+    Buffer2.prototype.writeBigInt64BE = function writeBigInt64BE(value, offset = 0) {
+      return wrtBigUInt64BE(this, value, offset, -BigInt("0x8000000000000000"), BigInt("0x7fffffffffffffff"));
+    };
+    Buffer2.prototype.writeFloatLE = function writeFloatLE(value, offset, noAssert) {
+      return writeFloat(this, value, offset, true, noAssert);
+    };
+    Buffer2.prototype.writeFloatBE = function writeFloatBE(value, offset, noAssert) {
+      return writeFloat(this, value, offset, false, noAssert);
+    };
+    Buffer2.prototype.writeDoubleLE = function writeDoubleLE(value, offset, noAssert) {
+      return writeDouble(this, value, offset, true, noAssert);
+    };
+    Buffer2.prototype.writeDoubleBE = function writeDoubleBE(value, offset, noAssert) {
+      return writeDouble(this, value, offset, false, noAssert);
+    };
+    Buffer2.prototype.copy = function copy(target, targetStart, start, end) {
+      if (!Buffer2.isBuffer(target)) throw new TypeError("argument should be a Buffer");
+      if (!start) start = 0;
+      if (!end && end !== 0) end = this.length;
+      if (targetStart >= target.length) targetStart = target.length;
+      if (!targetStart) targetStart = 0;
+      if (end > 0 && end < start) end = start;
+      if (end === start) return 0;
+      if (target.length === 0 || this.length === 0) return 0;
+      if (targetStart < 0) {
+        throw new RangeError("targetStart out of bounds");
+      }
+      if (start < 0 || start >= this.length) throw new RangeError("Index out of range");
+      if (end < 0) throw new RangeError("sourceEnd out of bounds");
+      if (end > this.length) end = this.length;
+      if (target.length - targetStart < end - start) {
+        end = target.length - targetStart + start;
+      }
+      const len = end - start;
+      if (this === target) {
+        this.copyWithin(targetStart, start, end);
+      } else {
+        Uint8Array.prototype.set.call(
+          target,
+          this.subarray(start, end),
+          targetStart
+        );
+      }
+      return len;
+    };
+    Buffer2.prototype.fill = function fill(val, start, end, encoding) {
+      if (typeof val === "string") {
+        if (typeof start === "string") {
+          encoding = start;
+          start = 0;
+          end = this.length;
+        } else if (typeof end === "string") {
+          encoding = end;
+          end = this.length;
+        }
+        if (encoding !== void 0 && typeof encoding !== "string") {
+          throw new TypeError("encoding must be a string");
+        }
+        if (typeof encoding === "string" && !Buffer2.isEncoding(encoding)) {
+          throw new TypeError("Unknown encoding: " + encoding);
+        }
+        if (val.length === 1) {
+          const code3 = val.charCodeAt(0);
+          if (encoding === "utf8" && code3 < 128 || encoding === "latin1") {
+            val = code3;
+          }
+        }
+      } else if (typeof val === "number") {
+        val = val & 255;
+      } else if (typeof val === "boolean") {
+        val = Number(val);
+      }
+      if (start < 0 || this.length < start || this.length < end) {
+        throw new RangeError("Out of range index");
+      }
+      if (end <= start) {
+        return this;
+      }
+      start = start >>> 0;
+      end = end === void 0 ? this.length : end >>> 0;
+      if (!val) val = 0;
+      let i;
+      if (typeof val === "number") {
+        for (i = start; i < end; ++i) {
+          this[i] = val;
+        }
+      } else {
+        const bytes = Buffer2.isBuffer(val) ? val : Buffer2.from(val, encoding);
+        const len = bytes.length;
+        if (len === 0) {
+          throw new TypeError('The value "' + val + '" is invalid for argument "value"');
+        }
+        for (i = 0; i < end - start; ++i) {
+          this[i + start] = bytes[i % len];
+        }
+      }
+      return this;
+    };
+    errors = {};
+    E(
+      "ERR_BUFFER_OUT_OF_BOUNDS",
+      function(name) {
+        if (name) {
+          return `${name} is outside of buffer bounds`;
+        }
+        return "Attempt to access memory outside buffer bounds";
+      },
+      RangeError
+    );
+    E(
+      "ERR_INVALID_ARG_TYPE",
+      function(name, actual) {
+        return `The "${name}" argument must be of type number. Received type ${typeof actual}`;
+      },
+      TypeError
+    );
+    E(
+      "ERR_OUT_OF_RANGE",
+      function(str, range, input) {
+        let msg = `The value of "${str}" is out of range.`;
+        let received = input;
+        if (Number.isInteger(input) && Math.abs(input) > 2 ** 32) {
+          received = addNumericalSeparator(String(input));
+        } else if (typeof input === "bigint") {
+          received = String(input);
+          if (input > BigInt(2) ** BigInt(32) || input < -(BigInt(2) ** BigInt(32))) {
+            received = addNumericalSeparator(received);
+          }
+          received += "n";
+        }
+        msg += ` It must be ${range}. Received ${received}`;
+        return msg;
+      },
+      RangeError
+    );
+    INVALID_BASE64_RE = /[^+/0-9A-Za-z-_]/g;
+    hexSliceLookupTable = function() {
+      const alphabet = "0123456789abcdef";
+      const table = new Array(256);
+      for (let i = 0; i < 16; ++i) {
+        const i16 = i * 16;
+        for (let j = 0; j < 16; ++j) {
+          table[i16 + j] = alphabet[i] + alphabet[j];
+        }
+      }
+      return table;
+    }();
   }
-  _allocatePage(spec) {
-    const page = Memory.alloc(pageSize, spec);
-    const { sliceSize, slicesPerPage } = this;
-    for (let i = 1; i !== slicesPerPage; i++) {
-      const slice2 = page.add(i * sliceSize);
-      this.free.push(slice2);
-    }
-    this.pages.push(page);
-    return page;
+});
+
+// frida-shim:node_modules/@frida/process/index.js
+function nextTick(callback, ...args) {
+  Script.nextTick(callback, ...args);
+}
+function noop() {
+}
+function binding(name) {
+  throw new Error("process.binding is not supported");
+}
+function cwd() {
+  return Process.platform === "windows" ? "C:\\" : "/";
+}
+function chdir(dir) {
+  throw new Error("process.chdir is not supported");
+}
+function umask() {
+  return 0;
+}
+function detectPlatform() {
+  const platform2 = Process.platform;
+  return platform2 === "windows" ? "win32" : platform2;
+}
+var title, browser, platform, pid, env, argv, version, versions, on, addListener, once, off, removeListener, removeAllListeners, emit, prependListener, prependOnceListener, listeners, process_default;
+var init_process = __esm({
+  "frida-shim:node_modules/@frida/process/index.js"() {
+    init_node_globals();
+    title = "Frida";
+    browser = false;
+    platform = detectPlatform();
+    pid = Process.id;
+    env = {
+      FRIDA_COMPILE: "1"
+    };
+    argv = [];
+    version = Frida.version;
+    versions = {};
+    on = noop;
+    addListener = noop;
+    once = noop;
+    off = noop;
+    removeListener = noop;
+    removeAllListeners = noop;
+    emit = noop;
+    prependListener = noop;
+    prependOnceListener = noop;
+    listeners = function(name) {
+      return [];
+    };
+    process_default = {
+      nextTick,
+      title,
+      browser,
+      platform,
+      pid,
+      env,
+      argv,
+      version,
+      versions,
+      on,
+      addListener,
+      once,
+      off,
+      removeListener,
+      removeAllListeners,
+      emit,
+      prependListener,
+      prependOnceListener,
+      listeners,
+      binding,
+      cwd,
+      chdir,
+      umask
+    };
   }
-  _isSliceNear(slice2, spec) {
-    const sliceEnd = slice2.add(this.sliceSize);
-    const { near, maxDistance } = spec;
-    const startDistance = abs(near.sub(slice2));
-    const endDistance = abs(near.sub(sliceEnd));
-    return startDistance.compare(maxDistance) <= 0 && endDistance.compare(maxDistance) <= 0;
+});
+
+// frida-builtins:/node-globals.js
+var init_node_globals = __esm({
+  "frida-builtins:/node-globals.js"() {
+    init_process();
   }
-  freeSlice(slice2) {
-    this.free.push(slice2);
-  }
-};
+});
+
+// backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/alloc.js
 function abs(nptr) {
   const shmt = pointerSize === 4 ? 31 : 63;
   const mask = ptr(1).shl(shmt).not();
@@ -1824,50 +1854,88 @@ function abs(nptr) {
 function makeAllocator(sliceSize) {
   return new CodeAllocator(sliceSize);
 }
+var pageSize, pointerSize, CodeAllocator;
+var init_alloc = __esm({
+  "backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/alloc.js"() {
+    init_node_globals();
+    ({
+      pageSize,
+      pointerSize
+    } = Process);
+    CodeAllocator = class {
+      constructor(sliceSize) {
+        this.sliceSize = sliceSize;
+        this.slicesPerPage = pageSize / sliceSize;
+        this.pages = [];
+        this.free = [];
+      }
+      allocateSlice(spec, alignment) {
+        const anyLocation = spec.near === void 0;
+        const anyAlignment = alignment === 1;
+        if (anyLocation && anyAlignment) {
+          const slice2 = this.free.pop();
+          if (slice2 !== void 0) {
+            return slice2;
+          }
+        } else if (alignment < pageSize) {
+          const { free } = this;
+          const n = free.length;
+          const alignMask = anyAlignment ? null : ptr(alignment - 1);
+          for (let i = 0; i !== n; i++) {
+            const slice2 = free[i];
+            const satisfiesLocation = anyLocation || this._isSliceNear(slice2, spec);
+            const satisfiesAlignment = anyAlignment || slice2.and(alignMask).isNull();
+            if (satisfiesLocation && satisfiesAlignment) {
+              return free.splice(i, 1)[0];
+            }
+          }
+        }
+        return this._allocatePage(spec);
+      }
+      _allocatePage(spec) {
+        const page = Memory.alloc(pageSize, spec);
+        const { sliceSize, slicesPerPage } = this;
+        for (let i = 1; i !== slicesPerPage; i++) {
+          const slice2 = page.add(i * sliceSize);
+          this.free.push(slice2);
+        }
+        this.pages.push(page);
+        return page;
+      }
+      _isSliceNear(slice2, spec) {
+        const sliceEnd = slice2.add(this.sliceSize);
+        const { near, maxDistance } = spec;
+        const startDistance = abs(near.sub(slice2));
+        const endDistance = abs(near.sub(sliceEnd));
+        return startDistance.compare(maxDistance) <= 0 && endDistance.compare(maxDistance) <= 0;
+      }
+      freeSlice(slice2) {
+        this.free.push(slice2);
+      }
+    };
+  }
+});
 
-// node_modules/frida-java-bridge/lib/result.js
-var JNI_OK = 0;
+// backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/result.js
 function checkJniResult(name, result) {
   if (result !== JNI_OK) {
     throw new Error(name + " failed: " + result);
   }
 }
+var JNI_OK;
+var init_result = __esm({
+  "backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/result.js"() {
+    init_node_globals();
+    JNI_OK = 0;
+  }
+});
 
-// node_modules/frida-java-bridge/lib/jvmti.js
-var jvmtiVersion = {
-  v1_0: 805371904,
-  v1_2: 805372416
-};
-var jvmtiCapabilities = {
-  canTagObjects: 1
-};
-var { pointerSize: pointerSize2 } = Process;
-var nativeFunctionOptions = {
-  exceptions: "propagate"
-};
+// backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/jvmti.js
 function EnvJvmti(handle, vm3) {
   this.handle = handle;
   this.vm = vm3;
   this.vtable = handle.readPointer();
 }
-EnvJvmti.prototype.deallocate = proxy(47, "int32", ["pointer", "pointer"], function(impl, mem) {
-  return impl(this.handle, mem);
-});
-EnvJvmti.prototype.getLoadedClasses = proxy(78, "int32", ["pointer", "pointer", "pointer"], function(impl, classCountPtr, classesPtr) {
-  const result = impl(this.handle, classCountPtr, classesPtr);
-  checkJniResult("EnvJvmti::getLoadedClasses", result);
-});
-EnvJvmti.prototype.iterateOverInstancesOfClass = proxy(112, "int32", ["pointer", "pointer", "int", "pointer", "pointer"], function(impl, klass, objectFilter, heapObjectCallback, userData) {
-  const result = impl(this.handle, klass, objectFilter, heapObjectCallback, userData);
-  checkJniResult("EnvJvmti::iterateOverInstancesOfClass", result);
-});
-EnvJvmti.prototype.getObjectsWithTags = proxy(114, "int32", ["pointer", "int", "pointer", "pointer", "pointer", "pointer"], function(impl, tagCount, tags, countPtr, objectResultPtr, tagResultPtr) {
-  const result = impl(this.handle, tagCount, tags, countPtr, objectResultPtr, tagResultPtr);
-  checkJniResult("EnvJvmti::getObjectsWithTags", result);
-});
-EnvJvmti.prototype.addCapabilities = proxy(142, "int32", ["pointer", "pointer"], function(impl, capabilitiesPtr) {
-  return impl(this.handle, capabilitiesPtr);
-});
 function proxy(offset, retType, argTypes, wrapper) {
   let impl = null;
   return function() {
@@ -1879,8 +1947,44 @@ function proxy(offset, retType, argTypes, wrapper) {
     return wrapper.apply(this, args);
   };
 }
+var jvmtiVersion, jvmtiCapabilities, pointerSize2, nativeFunctionOptions;
+var init_jvmti = __esm({
+  "backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/jvmti.js"() {
+    init_node_globals();
+    init_result();
+    jvmtiVersion = {
+      v1_0: 805371904,
+      v1_2: 805372416
+    };
+    jvmtiCapabilities = {
+      canTagObjects: 1
+    };
+    ({ pointerSize: pointerSize2 } = Process);
+    nativeFunctionOptions = {
+      exceptions: "propagate"
+    };
+    EnvJvmti.prototype.deallocate = proxy(47, "int32", ["pointer", "pointer"], function(impl, mem) {
+      return impl(this.handle, mem);
+    });
+    EnvJvmti.prototype.getLoadedClasses = proxy(78, "int32", ["pointer", "pointer", "pointer"], function(impl, classCountPtr, classesPtr) {
+      const result = impl(this.handle, classCountPtr, classesPtr);
+      checkJniResult("EnvJvmti::getLoadedClasses", result);
+    });
+    EnvJvmti.prototype.iterateOverInstancesOfClass = proxy(112, "int32", ["pointer", "pointer", "int", "pointer", "pointer"], function(impl, klass, objectFilter, heapObjectCallback, userData) {
+      const result = impl(this.handle, klass, objectFilter, heapObjectCallback, userData);
+      checkJniResult("EnvJvmti::iterateOverInstancesOfClass", result);
+    });
+    EnvJvmti.prototype.getObjectsWithTags = proxy(114, "int32", ["pointer", "int", "pointer", "pointer", "pointer", "pointer"], function(impl, tagCount, tags, countPtr, objectResultPtr, tagResultPtr) {
+      const result = impl(this.handle, tagCount, tags, countPtr, objectResultPtr, tagResultPtr);
+      checkJniResult("EnvJvmti::getObjectsWithTags", result);
+    });
+    EnvJvmti.prototype.addCapabilities = proxy(142, "int32", ["pointer", "pointer"], function(impl, capabilitiesPtr) {
+      return impl(this.handle, capabilitiesPtr);
+    });
+  }
+});
 
-// node_modules/frida-java-bridge/lib/machine-code.js
+// backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/machine-code.js
 function parseInstructionsAt(address, tryParse, { limit }) {
   let cursor = address;
   let prevInsn = null;
@@ -1895,8 +1999,13 @@ function parseInstructionsAt(address, tryParse, { limit }) {
   }
   return null;
 }
+var init_machine_code = __esm({
+  "backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/machine-code.js"() {
+    init_node_globals();
+  }
+});
 
-// node_modules/frida-java-bridge/lib/memoize.js
+// backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/memoize.js
 function memoize(compute) {
   let value = null;
   let computed = false;
@@ -1908,170 +2017,17 @@ function memoize(compute) {
     return value;
   };
 }
+var init_memoize = __esm({
+  "backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/memoize.js"() {
+    init_node_globals();
+  }
+});
 
-// node_modules/frida-java-bridge/lib/env.js
+// backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/env.js
 function Env(handle, vm3) {
   this.handle = handle;
   this.vm = vm3;
 }
-var pointerSize3 = Process.pointerSize;
-var JNI_ABORT = 2;
-var CALL_CONSTRUCTOR_METHOD_OFFSET = 28;
-var CALL_OBJECT_METHOD_OFFSET = 34;
-var CALL_BOOLEAN_METHOD_OFFSET = 37;
-var CALL_BYTE_METHOD_OFFSET = 40;
-var CALL_CHAR_METHOD_OFFSET = 43;
-var CALL_SHORT_METHOD_OFFSET = 46;
-var CALL_INT_METHOD_OFFSET = 49;
-var CALL_LONG_METHOD_OFFSET = 52;
-var CALL_FLOAT_METHOD_OFFSET = 55;
-var CALL_DOUBLE_METHOD_OFFSET = 58;
-var CALL_VOID_METHOD_OFFSET = 61;
-var CALL_NONVIRTUAL_OBJECT_METHOD_OFFSET = 64;
-var CALL_NONVIRTUAL_BOOLEAN_METHOD_OFFSET = 67;
-var CALL_NONVIRTUAL_BYTE_METHOD_OFFSET = 70;
-var CALL_NONVIRTUAL_CHAR_METHOD_OFFSET = 73;
-var CALL_NONVIRTUAL_SHORT_METHOD_OFFSET = 76;
-var CALL_NONVIRTUAL_INT_METHOD_OFFSET = 79;
-var CALL_NONVIRTUAL_LONG_METHOD_OFFSET = 82;
-var CALL_NONVIRTUAL_FLOAT_METHOD_OFFSET = 85;
-var CALL_NONVIRTUAL_DOUBLE_METHOD_OFFSET = 88;
-var CALL_NONVIRTUAL_VOID_METHOD_OFFSET = 91;
-var CALL_STATIC_OBJECT_METHOD_OFFSET = 114;
-var CALL_STATIC_BOOLEAN_METHOD_OFFSET = 117;
-var CALL_STATIC_BYTE_METHOD_OFFSET = 120;
-var CALL_STATIC_CHAR_METHOD_OFFSET = 123;
-var CALL_STATIC_SHORT_METHOD_OFFSET = 126;
-var CALL_STATIC_INT_METHOD_OFFSET = 129;
-var CALL_STATIC_LONG_METHOD_OFFSET = 132;
-var CALL_STATIC_FLOAT_METHOD_OFFSET = 135;
-var CALL_STATIC_DOUBLE_METHOD_OFFSET = 138;
-var CALL_STATIC_VOID_METHOD_OFFSET = 141;
-var GET_OBJECT_FIELD_OFFSET = 95;
-var GET_BOOLEAN_FIELD_OFFSET = 96;
-var GET_BYTE_FIELD_OFFSET = 97;
-var GET_CHAR_FIELD_OFFSET = 98;
-var GET_SHORT_FIELD_OFFSET = 99;
-var GET_INT_FIELD_OFFSET = 100;
-var GET_LONG_FIELD_OFFSET = 101;
-var GET_FLOAT_FIELD_OFFSET = 102;
-var GET_DOUBLE_FIELD_OFFSET = 103;
-var SET_OBJECT_FIELD_OFFSET = 104;
-var SET_BOOLEAN_FIELD_OFFSET = 105;
-var SET_BYTE_FIELD_OFFSET = 106;
-var SET_CHAR_FIELD_OFFSET = 107;
-var SET_SHORT_FIELD_OFFSET = 108;
-var SET_INT_FIELD_OFFSET = 109;
-var SET_LONG_FIELD_OFFSET = 110;
-var SET_FLOAT_FIELD_OFFSET = 111;
-var SET_DOUBLE_FIELD_OFFSET = 112;
-var GET_STATIC_OBJECT_FIELD_OFFSET = 145;
-var GET_STATIC_BOOLEAN_FIELD_OFFSET = 146;
-var GET_STATIC_BYTE_FIELD_OFFSET = 147;
-var GET_STATIC_CHAR_FIELD_OFFSET = 148;
-var GET_STATIC_SHORT_FIELD_OFFSET = 149;
-var GET_STATIC_INT_FIELD_OFFSET = 150;
-var GET_STATIC_LONG_FIELD_OFFSET = 151;
-var GET_STATIC_FLOAT_FIELD_OFFSET = 152;
-var GET_STATIC_DOUBLE_FIELD_OFFSET = 153;
-var SET_STATIC_OBJECT_FIELD_OFFSET = 154;
-var SET_STATIC_BOOLEAN_FIELD_OFFSET = 155;
-var SET_STATIC_BYTE_FIELD_OFFSET = 156;
-var SET_STATIC_CHAR_FIELD_OFFSET = 157;
-var SET_STATIC_SHORT_FIELD_OFFSET = 158;
-var SET_STATIC_INT_FIELD_OFFSET = 159;
-var SET_STATIC_LONG_FIELD_OFFSET = 160;
-var SET_STATIC_FLOAT_FIELD_OFFSET = 161;
-var SET_STATIC_DOUBLE_FIELD_OFFSET = 162;
-var callMethodOffset = {
-  pointer: CALL_OBJECT_METHOD_OFFSET,
-  uint8: CALL_BOOLEAN_METHOD_OFFSET,
-  int8: CALL_BYTE_METHOD_OFFSET,
-  uint16: CALL_CHAR_METHOD_OFFSET,
-  int16: CALL_SHORT_METHOD_OFFSET,
-  int32: CALL_INT_METHOD_OFFSET,
-  int64: CALL_LONG_METHOD_OFFSET,
-  float: CALL_FLOAT_METHOD_OFFSET,
-  double: CALL_DOUBLE_METHOD_OFFSET,
-  void: CALL_VOID_METHOD_OFFSET
-};
-var callNonvirtualMethodOffset = {
-  pointer: CALL_NONVIRTUAL_OBJECT_METHOD_OFFSET,
-  uint8: CALL_NONVIRTUAL_BOOLEAN_METHOD_OFFSET,
-  int8: CALL_NONVIRTUAL_BYTE_METHOD_OFFSET,
-  uint16: CALL_NONVIRTUAL_CHAR_METHOD_OFFSET,
-  int16: CALL_NONVIRTUAL_SHORT_METHOD_OFFSET,
-  int32: CALL_NONVIRTUAL_INT_METHOD_OFFSET,
-  int64: CALL_NONVIRTUAL_LONG_METHOD_OFFSET,
-  float: CALL_NONVIRTUAL_FLOAT_METHOD_OFFSET,
-  double: CALL_NONVIRTUAL_DOUBLE_METHOD_OFFSET,
-  void: CALL_NONVIRTUAL_VOID_METHOD_OFFSET
-};
-var callStaticMethodOffset = {
-  pointer: CALL_STATIC_OBJECT_METHOD_OFFSET,
-  uint8: CALL_STATIC_BOOLEAN_METHOD_OFFSET,
-  int8: CALL_STATIC_BYTE_METHOD_OFFSET,
-  uint16: CALL_STATIC_CHAR_METHOD_OFFSET,
-  int16: CALL_STATIC_SHORT_METHOD_OFFSET,
-  int32: CALL_STATIC_INT_METHOD_OFFSET,
-  int64: CALL_STATIC_LONG_METHOD_OFFSET,
-  float: CALL_STATIC_FLOAT_METHOD_OFFSET,
-  double: CALL_STATIC_DOUBLE_METHOD_OFFSET,
-  void: CALL_STATIC_VOID_METHOD_OFFSET
-};
-var getFieldOffset = {
-  pointer: GET_OBJECT_FIELD_OFFSET,
-  uint8: GET_BOOLEAN_FIELD_OFFSET,
-  int8: GET_BYTE_FIELD_OFFSET,
-  uint16: GET_CHAR_FIELD_OFFSET,
-  int16: GET_SHORT_FIELD_OFFSET,
-  int32: GET_INT_FIELD_OFFSET,
-  int64: GET_LONG_FIELD_OFFSET,
-  float: GET_FLOAT_FIELD_OFFSET,
-  double: GET_DOUBLE_FIELD_OFFSET
-};
-var setFieldOffset = {
-  pointer: SET_OBJECT_FIELD_OFFSET,
-  uint8: SET_BOOLEAN_FIELD_OFFSET,
-  int8: SET_BYTE_FIELD_OFFSET,
-  uint16: SET_CHAR_FIELD_OFFSET,
-  int16: SET_SHORT_FIELD_OFFSET,
-  int32: SET_INT_FIELD_OFFSET,
-  int64: SET_LONG_FIELD_OFFSET,
-  float: SET_FLOAT_FIELD_OFFSET,
-  double: SET_DOUBLE_FIELD_OFFSET
-};
-var getStaticFieldOffset = {
-  pointer: GET_STATIC_OBJECT_FIELD_OFFSET,
-  uint8: GET_STATIC_BOOLEAN_FIELD_OFFSET,
-  int8: GET_STATIC_BYTE_FIELD_OFFSET,
-  uint16: GET_STATIC_CHAR_FIELD_OFFSET,
-  int16: GET_STATIC_SHORT_FIELD_OFFSET,
-  int32: GET_STATIC_INT_FIELD_OFFSET,
-  int64: GET_STATIC_LONG_FIELD_OFFSET,
-  float: GET_STATIC_FLOAT_FIELD_OFFSET,
-  double: GET_STATIC_DOUBLE_FIELD_OFFSET
-};
-var setStaticFieldOffset = {
-  pointer: SET_STATIC_OBJECT_FIELD_OFFSET,
-  uint8: SET_STATIC_BOOLEAN_FIELD_OFFSET,
-  int8: SET_STATIC_BYTE_FIELD_OFFSET,
-  uint16: SET_STATIC_CHAR_FIELD_OFFSET,
-  int16: SET_STATIC_SHORT_FIELD_OFFSET,
-  int32: SET_STATIC_INT_FIELD_OFFSET,
-  int64: SET_STATIC_LONG_FIELD_OFFSET,
-  float: SET_STATIC_FLOAT_FIELD_OFFSET,
-  double: SET_STATIC_DOUBLE_FIELD_OFFSET
-};
-var nativeFunctionOptions2 = {
-  exceptions: "propagate"
-};
-var cachedVtable = null;
-var globalRefs = [];
-Env.dispose = function(env) {
-  globalRefs.forEach(env.deleteGlobalRef, env);
-  globalRefs = [];
-};
 function register(globalRef) {
   globalRefs.push(globalRef);
   return globalRef;
@@ -2093,261 +2049,13 @@ function proxy2(offset, retType, argTypes, wrapper) {
     return wrapper.apply(this, args);
   };
 }
-Env.prototype.getVersion = proxy2(4, "int32", ["pointer"], function(impl) {
-  return impl(this.handle);
-});
-Env.prototype.findClass = proxy2(6, "pointer", ["pointer", "pointer"], function(impl, name) {
-  const result = impl(this.handle, Memory.allocUtf8String(name));
-  this.throwIfExceptionPending();
-  return result;
-});
-Env.prototype.throwIfExceptionPending = function() {
-  const throwable = this.exceptionOccurred();
-  if (throwable.isNull()) {
-    return;
-  }
-  this.exceptionClear();
-  const handle = this.newGlobalRef(throwable);
-  this.deleteLocalRef(throwable);
-  const description = this.vaMethod("pointer", [])(this.handle, handle, this.javaLangObject().toString);
-  const descriptionStr = this.stringFromJni(description);
-  this.deleteLocalRef(description);
-  const error = new Error(descriptionStr);
-  error.$h = handle;
-  Script.bindWeak(error, makeErrorHandleDestructor(this.vm, handle));
-  throw error;
-};
 function makeErrorHandleDestructor(vm3, handle) {
   return function() {
-    vm3.perform((env) => {
-      env.deleteGlobalRef(handle);
+    vm3.perform((env2) => {
+      env2.deleteGlobalRef(handle);
     });
   };
 }
-Env.prototype.fromReflectedMethod = proxy2(7, "pointer", ["pointer", "pointer"], function(impl, method) {
-  return impl(this.handle, method);
-});
-Env.prototype.fromReflectedField = proxy2(8, "pointer", ["pointer", "pointer"], function(impl, method) {
-  return impl(this.handle, method);
-});
-Env.prototype.toReflectedMethod = proxy2(9, "pointer", ["pointer", "pointer", "pointer", "uint8"], function(impl, klass, methodId, isStatic) {
-  return impl(this.handle, klass, methodId, isStatic);
-});
-Env.prototype.getSuperclass = proxy2(10, "pointer", ["pointer", "pointer"], function(impl, klass) {
-  return impl(this.handle, klass);
-});
-Env.prototype.isAssignableFrom = proxy2(11, "uint8", ["pointer", "pointer", "pointer"], function(impl, klass1, klass2) {
-  return !!impl(this.handle, klass1, klass2);
-});
-Env.prototype.toReflectedField = proxy2(12, "pointer", ["pointer", "pointer", "pointer", "uint8"], function(impl, klass, fieldId, isStatic) {
-  return impl(this.handle, klass, fieldId, isStatic);
-});
-Env.prototype.throw = proxy2(13, "int32", ["pointer", "pointer"], function(impl, obj) {
-  return impl(this.handle, obj);
-});
-Env.prototype.exceptionOccurred = proxy2(15, "pointer", ["pointer"], function(impl) {
-  return impl(this.handle);
-});
-Env.prototype.exceptionDescribe = proxy2(16, "void", ["pointer"], function(impl) {
-  impl(this.handle);
-});
-Env.prototype.exceptionClear = proxy2(17, "void", ["pointer"], function(impl) {
-  impl(this.handle);
-});
-Env.prototype.pushLocalFrame = proxy2(19, "int32", ["pointer", "int32"], function(impl, capacity) {
-  return impl(this.handle, capacity);
-});
-Env.prototype.popLocalFrame = proxy2(20, "pointer", ["pointer", "pointer"], function(impl, result) {
-  return impl(this.handle, result);
-});
-Env.prototype.newGlobalRef = proxy2(21, "pointer", ["pointer", "pointer"], function(impl, obj) {
-  return impl(this.handle, obj);
-});
-Env.prototype.deleteGlobalRef = proxy2(22, "void", ["pointer", "pointer"], function(impl, globalRef) {
-  impl(this.handle, globalRef);
-});
-Env.prototype.deleteLocalRef = proxy2(23, "void", ["pointer", "pointer"], function(impl, localRef) {
-  impl(this.handle, localRef);
-});
-Env.prototype.isSameObject = proxy2(24, "uint8", ["pointer", "pointer", "pointer"], function(impl, ref1, ref2) {
-  return !!impl(this.handle, ref1, ref2);
-});
-Env.prototype.newLocalRef = proxy2(25, "pointer", ["pointer", "pointer"], function(impl, obj) {
-  return impl(this.handle, obj);
-});
-Env.prototype.allocObject = proxy2(27, "pointer", ["pointer", "pointer"], function(impl, clazz) {
-  return impl(this.handle, clazz);
-});
-Env.prototype.getObjectClass = proxy2(31, "pointer", ["pointer", "pointer"], function(impl, obj) {
-  return impl(this.handle, obj);
-});
-Env.prototype.isInstanceOf = proxy2(32, "uint8", ["pointer", "pointer", "pointer"], function(impl, obj, klass) {
-  return !!impl(this.handle, obj, klass);
-});
-Env.prototype.getMethodId = proxy2(33, "pointer", ["pointer", "pointer", "pointer", "pointer"], function(impl, klass, name, sig) {
-  return impl(this.handle, klass, Memory.allocUtf8String(name), Memory.allocUtf8String(sig));
-});
-Env.prototype.getFieldId = proxy2(94, "pointer", ["pointer", "pointer", "pointer", "pointer"], function(impl, klass, name, sig) {
-  return impl(this.handle, klass, Memory.allocUtf8String(name), Memory.allocUtf8String(sig));
-});
-Env.prototype.getIntField = proxy2(100, "int32", ["pointer", "pointer", "pointer"], function(impl, obj, fieldId) {
-  return impl(this.handle, obj, fieldId);
-});
-Env.prototype.getStaticMethodId = proxy2(113, "pointer", ["pointer", "pointer", "pointer", "pointer"], function(impl, klass, name, sig) {
-  return impl(this.handle, klass, Memory.allocUtf8String(name), Memory.allocUtf8String(sig));
-});
-Env.prototype.getStaticFieldId = proxy2(144, "pointer", ["pointer", "pointer", "pointer", "pointer"], function(impl, klass, name, sig) {
-  return impl(this.handle, klass, Memory.allocUtf8String(name), Memory.allocUtf8String(sig));
-});
-Env.prototype.getStaticIntField = proxy2(150, "int32", ["pointer", "pointer", "pointer"], function(impl, obj, fieldId) {
-  return impl(this.handle, obj, fieldId);
-});
-Env.prototype.getStringLength = proxy2(164, "int32", ["pointer", "pointer"], function(impl, str) {
-  return impl(this.handle, str);
-});
-Env.prototype.getStringChars = proxy2(165, "pointer", ["pointer", "pointer", "pointer"], function(impl, str) {
-  return impl(this.handle, str, NULL);
-});
-Env.prototype.releaseStringChars = proxy2(166, "void", ["pointer", "pointer", "pointer"], function(impl, str, utf) {
-  impl(this.handle, str, utf);
-});
-Env.prototype.newStringUtf = proxy2(167, "pointer", ["pointer", "pointer"], function(impl, str) {
-  const utf = Memory.allocUtf8String(str);
-  return impl(this.handle, utf);
-});
-Env.prototype.getStringUtfChars = proxy2(169, "pointer", ["pointer", "pointer", "pointer"], function(impl, str) {
-  return impl(this.handle, str, NULL);
-});
-Env.prototype.releaseStringUtfChars = proxy2(170, "void", ["pointer", "pointer", "pointer"], function(impl, str, utf) {
-  impl(this.handle, str, utf);
-});
-Env.prototype.getArrayLength = proxy2(171, "int32", ["pointer", "pointer"], function(impl, array) {
-  return impl(this.handle, array);
-});
-Env.prototype.newObjectArray = proxy2(172, "pointer", ["pointer", "int32", "pointer", "pointer"], function(impl, length, elementClass, initialElement) {
-  return impl(this.handle, length, elementClass, initialElement);
-});
-Env.prototype.getObjectArrayElement = proxy2(173, "pointer", ["pointer", "pointer", "int32"], function(impl, array, index) {
-  return impl(this.handle, array, index);
-});
-Env.prototype.setObjectArrayElement = proxy2(174, "void", ["pointer", "pointer", "int32", "pointer"], function(impl, array, index, value) {
-  impl(this.handle, array, index, value);
-});
-Env.prototype.newBooleanArray = proxy2(175, "pointer", ["pointer", "int32"], function(impl, length) {
-  return impl(this.handle, length);
-});
-Env.prototype.newByteArray = proxy2(176, "pointer", ["pointer", "int32"], function(impl, length) {
-  return impl(this.handle, length);
-});
-Env.prototype.newCharArray = proxy2(177, "pointer", ["pointer", "int32"], function(impl, length) {
-  return impl(this.handle, length);
-});
-Env.prototype.newShortArray = proxy2(178, "pointer", ["pointer", "int32"], function(impl, length) {
-  return impl(this.handle, length);
-});
-Env.prototype.newIntArray = proxy2(179, "pointer", ["pointer", "int32"], function(impl, length) {
-  return impl(this.handle, length);
-});
-Env.prototype.newLongArray = proxy2(180, "pointer", ["pointer", "int32"], function(impl, length) {
-  return impl(this.handle, length);
-});
-Env.prototype.newFloatArray = proxy2(181, "pointer", ["pointer", "int32"], function(impl, length) {
-  return impl(this.handle, length);
-});
-Env.prototype.newDoubleArray = proxy2(182, "pointer", ["pointer", "int32"], function(impl, length) {
-  return impl(this.handle, length);
-});
-Env.prototype.getBooleanArrayElements = proxy2(183, "pointer", ["pointer", "pointer", "pointer"], function(impl, array) {
-  return impl(this.handle, array, NULL);
-});
-Env.prototype.getByteArrayElements = proxy2(184, "pointer", ["pointer", "pointer", "pointer"], function(impl, array) {
-  return impl(this.handle, array, NULL);
-});
-Env.prototype.getCharArrayElements = proxy2(185, "pointer", ["pointer", "pointer", "pointer"], function(impl, array) {
-  return impl(this.handle, array, NULL);
-});
-Env.prototype.getShortArrayElements = proxy2(186, "pointer", ["pointer", "pointer", "pointer"], function(impl, array) {
-  return impl(this.handle, array, NULL);
-});
-Env.prototype.getIntArrayElements = proxy2(187, "pointer", ["pointer", "pointer", "pointer"], function(impl, array) {
-  return impl(this.handle, array, NULL);
-});
-Env.prototype.getLongArrayElements = proxy2(188, "pointer", ["pointer", "pointer", "pointer"], function(impl, array) {
-  return impl(this.handle, array, NULL);
-});
-Env.prototype.getFloatArrayElements = proxy2(189, "pointer", ["pointer", "pointer", "pointer"], function(impl, array) {
-  return impl(this.handle, array, NULL);
-});
-Env.prototype.getDoubleArrayElements = proxy2(190, "pointer", ["pointer", "pointer", "pointer"], function(impl, array) {
-  return impl(this.handle, array, NULL);
-});
-Env.prototype.releaseBooleanArrayElements = proxy2(191, "pointer", ["pointer", "pointer", "pointer", "int32"], function(impl, array, cArray) {
-  impl(this.handle, array, cArray, JNI_ABORT);
-});
-Env.prototype.releaseByteArrayElements = proxy2(192, "pointer", ["pointer", "pointer", "pointer", "int32"], function(impl, array, cArray) {
-  impl(this.handle, array, cArray, JNI_ABORT);
-});
-Env.prototype.releaseCharArrayElements = proxy2(193, "pointer", ["pointer", "pointer", "pointer", "int32"], function(impl, array, cArray) {
-  impl(this.handle, array, cArray, JNI_ABORT);
-});
-Env.prototype.releaseShortArrayElements = proxy2(194, "pointer", ["pointer", "pointer", "pointer", "int32"], function(impl, array, cArray) {
-  impl(this.handle, array, cArray, JNI_ABORT);
-});
-Env.prototype.releaseIntArrayElements = proxy2(195, "pointer", ["pointer", "pointer", "pointer", "int32"], function(impl, array, cArray) {
-  impl(this.handle, array, cArray, JNI_ABORT);
-});
-Env.prototype.releaseLongArrayElements = proxy2(196, "pointer", ["pointer", "pointer", "pointer", "int32"], function(impl, array, cArray) {
-  impl(this.handle, array, cArray, JNI_ABORT);
-});
-Env.prototype.releaseFloatArrayElements = proxy2(197, "pointer", ["pointer", "pointer", "pointer", "int32"], function(impl, array, cArray) {
-  impl(this.handle, array, cArray, JNI_ABORT);
-});
-Env.prototype.releaseDoubleArrayElements = proxy2(198, "pointer", ["pointer", "pointer", "pointer", "int32"], function(impl, array, cArray) {
-  impl(this.handle, array, cArray, JNI_ABORT);
-});
-Env.prototype.getByteArrayRegion = proxy2(200, "void", ["pointer", "pointer", "int", "int", "pointer"], function(impl, array, start, length, cArray) {
-  impl(this.handle, array, start, length, cArray);
-});
-Env.prototype.setBooleanArrayRegion = proxy2(207, "void", ["pointer", "pointer", "int32", "int32", "pointer"], function(impl, array, start, length, cArray) {
-  impl(this.handle, array, start, length, cArray);
-});
-Env.prototype.setByteArrayRegion = proxy2(208, "void", ["pointer", "pointer", "int32", "int32", "pointer"], function(impl, array, start, length, cArray) {
-  impl(this.handle, array, start, length, cArray);
-});
-Env.prototype.setCharArrayRegion = proxy2(209, "void", ["pointer", "pointer", "int32", "int32", "pointer"], function(impl, array, start, length, cArray) {
-  impl(this.handle, array, start, length, cArray);
-});
-Env.prototype.setShortArrayRegion = proxy2(210, "void", ["pointer", "pointer", "int32", "int32", "pointer"], function(impl, array, start, length, cArray) {
-  impl(this.handle, array, start, length, cArray);
-});
-Env.prototype.setIntArrayRegion = proxy2(211, "void", ["pointer", "pointer", "int32", "int32", "pointer"], function(impl, array, start, length, cArray) {
-  impl(this.handle, array, start, length, cArray);
-});
-Env.prototype.setLongArrayRegion = proxy2(212, "void", ["pointer", "pointer", "int32", "int32", "pointer"], function(impl, array, start, length, cArray) {
-  impl(this.handle, array, start, length, cArray);
-});
-Env.prototype.setFloatArrayRegion = proxy2(213, "void", ["pointer", "pointer", "int32", "int32", "pointer"], function(impl, array, start, length, cArray) {
-  impl(this.handle, array, start, length, cArray);
-});
-Env.prototype.setDoubleArrayRegion = proxy2(214, "void", ["pointer", "pointer", "int32", "int32", "pointer"], function(impl, array, start, length, cArray) {
-  impl(this.handle, array, start, length, cArray);
-});
-Env.prototype.registerNatives = proxy2(215, "int32", ["pointer", "pointer", "pointer", "int32"], function(impl, klass, methods, numMethods) {
-  return impl(this.handle, klass, methods, numMethods);
-});
-Env.prototype.monitorEnter = proxy2(217, "int32", ["pointer", "pointer"], function(impl, obj) {
-  return impl(this.handle, obj);
-});
-Env.prototype.monitorExit = proxy2(218, "int32", ["pointer", "pointer"], function(impl, obj) {
-  return impl(this.handle, obj);
-});
-Env.prototype.getDirectBufferAddress = proxy2(230, "pointer", ["pointer", "pointer"], function(impl, obj) {
-  return impl(this.handle, obj);
-});
-Env.prototype.getObjectRefType = proxy2(232, "int32", ["pointer", "pointer"], function(impl, ref) {
-  return impl(this.handle, ref);
-});
-var cachedMethods = /* @__PURE__ */ new Map();
 function plainMethod(offset, retType, argTypes, options) {
   return getOrMakeMethod(this, "p", makePlainMethod, offset, retType, argTypes, options);
 }
@@ -2357,374 +2065,781 @@ function vaMethod(offset, retType, argTypes, options) {
 function nonvirtualVaMethod(offset, retType, argTypes, options) {
   return getOrMakeMethod(this, "n", makeNonvirtualVaMethod, offset, retType, argTypes, options);
 }
-function getOrMakeMethod(env, flavor, construct, offset, retType, argTypes, options) {
+function getOrMakeMethod(env2, flavor, construct, offset, retType, argTypes, options) {
   if (options !== void 0) {
-    return construct(env, offset, retType, argTypes, options);
+    return construct(env2, offset, retType, argTypes, options);
   }
   const key = [offset, flavor, retType].concat(argTypes).join("|");
   let m = cachedMethods.get(key);
   if (m === void 0) {
-    m = construct(env, offset, retType, argTypes, nativeFunctionOptions2);
+    m = construct(env2, offset, retType, argTypes, nativeFunctionOptions2);
     cachedMethods.set(key, m);
   }
   return m;
 }
-function makePlainMethod(env, offset, retType, argTypes, options) {
+function makePlainMethod(env2, offset, retType, argTypes, options) {
   return new NativeFunction(
-    vtable(env).add(offset * pointerSize3).readPointer(),
+    vtable(env2).add(offset * pointerSize3).readPointer(),
     retType,
     ["pointer", "pointer", "pointer"].concat(argTypes),
     options
   );
 }
-function makeVaMethod(env, offset, retType, argTypes, options) {
+function makeVaMethod(env2, offset, retType, argTypes, options) {
   return new NativeFunction(
-    vtable(env).add(offset * pointerSize3).readPointer(),
+    vtable(env2).add(offset * pointerSize3).readPointer(),
     retType,
     ["pointer", "pointer", "pointer", "..."].concat(argTypes),
     options
   );
 }
-function makeNonvirtualVaMethod(env, offset, retType, argTypes, options) {
+function makeNonvirtualVaMethod(env2, offset, retType, argTypes, options) {
   return new NativeFunction(
-    vtable(env).add(offset * pointerSize3).readPointer(),
+    vtable(env2).add(offset * pointerSize3).readPointer(),
     retType,
     ["pointer", "pointer", "pointer", "pointer", "..."].concat(argTypes),
     options
   );
 }
-Env.prototype.constructor = function(argTypes, options) {
-  return vaMethod.call(this, CALL_CONSTRUCTOR_METHOD_OFFSET, "pointer", argTypes, options);
-};
-Env.prototype.vaMethod = function(retType, argTypes, options) {
-  const offset = callMethodOffset[retType];
-  if (offset === void 0) {
-    throw new Error("Unsupported type: " + retType);
+var pointerSize3, JNI_ABORT, CALL_CONSTRUCTOR_METHOD_OFFSET, CALL_OBJECT_METHOD_OFFSET, CALL_BOOLEAN_METHOD_OFFSET, CALL_BYTE_METHOD_OFFSET, CALL_CHAR_METHOD_OFFSET, CALL_SHORT_METHOD_OFFSET, CALL_INT_METHOD_OFFSET, CALL_LONG_METHOD_OFFSET, CALL_FLOAT_METHOD_OFFSET, CALL_DOUBLE_METHOD_OFFSET, CALL_VOID_METHOD_OFFSET, CALL_NONVIRTUAL_OBJECT_METHOD_OFFSET, CALL_NONVIRTUAL_BOOLEAN_METHOD_OFFSET, CALL_NONVIRTUAL_BYTE_METHOD_OFFSET, CALL_NONVIRTUAL_CHAR_METHOD_OFFSET, CALL_NONVIRTUAL_SHORT_METHOD_OFFSET, CALL_NONVIRTUAL_INT_METHOD_OFFSET, CALL_NONVIRTUAL_LONG_METHOD_OFFSET, CALL_NONVIRTUAL_FLOAT_METHOD_OFFSET, CALL_NONVIRTUAL_DOUBLE_METHOD_OFFSET, CALL_NONVIRTUAL_VOID_METHOD_OFFSET, CALL_STATIC_OBJECT_METHOD_OFFSET, CALL_STATIC_BOOLEAN_METHOD_OFFSET, CALL_STATIC_BYTE_METHOD_OFFSET, CALL_STATIC_CHAR_METHOD_OFFSET, CALL_STATIC_SHORT_METHOD_OFFSET, CALL_STATIC_INT_METHOD_OFFSET, CALL_STATIC_LONG_METHOD_OFFSET, CALL_STATIC_FLOAT_METHOD_OFFSET, CALL_STATIC_DOUBLE_METHOD_OFFSET, CALL_STATIC_VOID_METHOD_OFFSET, GET_OBJECT_FIELD_OFFSET, GET_BOOLEAN_FIELD_OFFSET, GET_BYTE_FIELD_OFFSET, GET_CHAR_FIELD_OFFSET, GET_SHORT_FIELD_OFFSET, GET_INT_FIELD_OFFSET, GET_LONG_FIELD_OFFSET, GET_FLOAT_FIELD_OFFSET, GET_DOUBLE_FIELD_OFFSET, SET_OBJECT_FIELD_OFFSET, SET_BOOLEAN_FIELD_OFFSET, SET_BYTE_FIELD_OFFSET, SET_CHAR_FIELD_OFFSET, SET_SHORT_FIELD_OFFSET, SET_INT_FIELD_OFFSET, SET_LONG_FIELD_OFFSET, SET_FLOAT_FIELD_OFFSET, SET_DOUBLE_FIELD_OFFSET, GET_STATIC_OBJECT_FIELD_OFFSET, GET_STATIC_BOOLEAN_FIELD_OFFSET, GET_STATIC_BYTE_FIELD_OFFSET, GET_STATIC_CHAR_FIELD_OFFSET, GET_STATIC_SHORT_FIELD_OFFSET, GET_STATIC_INT_FIELD_OFFSET, GET_STATIC_LONG_FIELD_OFFSET, GET_STATIC_FLOAT_FIELD_OFFSET, GET_STATIC_DOUBLE_FIELD_OFFSET, SET_STATIC_OBJECT_FIELD_OFFSET, SET_STATIC_BOOLEAN_FIELD_OFFSET, SET_STATIC_BYTE_FIELD_OFFSET, SET_STATIC_CHAR_FIELD_OFFSET, SET_STATIC_SHORT_FIELD_OFFSET, SET_STATIC_INT_FIELD_OFFSET, SET_STATIC_LONG_FIELD_OFFSET, SET_STATIC_FLOAT_FIELD_OFFSET, SET_STATIC_DOUBLE_FIELD_OFFSET, callMethodOffset, callNonvirtualMethodOffset, callStaticMethodOffset, getFieldOffset, setFieldOffset, getStaticFieldOffset, setStaticFieldOffset, nativeFunctionOptions2, cachedVtable, globalRefs, cachedMethods, javaLangClass, javaLangObject, javaLangReflectConstructor, javaLangReflectMethod, javaLangReflectField, javaLangReflectTypeVariable, javaLangReflectWildcardType, javaLangReflectGenericArrayType, javaLangReflectParameterizedType, javaLangString;
+var init_env = __esm({
+  "backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/env.js"() {
+    init_node_globals();
+    pointerSize3 = Process.pointerSize;
+    JNI_ABORT = 2;
+    CALL_CONSTRUCTOR_METHOD_OFFSET = 28;
+    CALL_OBJECT_METHOD_OFFSET = 34;
+    CALL_BOOLEAN_METHOD_OFFSET = 37;
+    CALL_BYTE_METHOD_OFFSET = 40;
+    CALL_CHAR_METHOD_OFFSET = 43;
+    CALL_SHORT_METHOD_OFFSET = 46;
+    CALL_INT_METHOD_OFFSET = 49;
+    CALL_LONG_METHOD_OFFSET = 52;
+    CALL_FLOAT_METHOD_OFFSET = 55;
+    CALL_DOUBLE_METHOD_OFFSET = 58;
+    CALL_VOID_METHOD_OFFSET = 61;
+    CALL_NONVIRTUAL_OBJECT_METHOD_OFFSET = 64;
+    CALL_NONVIRTUAL_BOOLEAN_METHOD_OFFSET = 67;
+    CALL_NONVIRTUAL_BYTE_METHOD_OFFSET = 70;
+    CALL_NONVIRTUAL_CHAR_METHOD_OFFSET = 73;
+    CALL_NONVIRTUAL_SHORT_METHOD_OFFSET = 76;
+    CALL_NONVIRTUAL_INT_METHOD_OFFSET = 79;
+    CALL_NONVIRTUAL_LONG_METHOD_OFFSET = 82;
+    CALL_NONVIRTUAL_FLOAT_METHOD_OFFSET = 85;
+    CALL_NONVIRTUAL_DOUBLE_METHOD_OFFSET = 88;
+    CALL_NONVIRTUAL_VOID_METHOD_OFFSET = 91;
+    CALL_STATIC_OBJECT_METHOD_OFFSET = 114;
+    CALL_STATIC_BOOLEAN_METHOD_OFFSET = 117;
+    CALL_STATIC_BYTE_METHOD_OFFSET = 120;
+    CALL_STATIC_CHAR_METHOD_OFFSET = 123;
+    CALL_STATIC_SHORT_METHOD_OFFSET = 126;
+    CALL_STATIC_INT_METHOD_OFFSET = 129;
+    CALL_STATIC_LONG_METHOD_OFFSET = 132;
+    CALL_STATIC_FLOAT_METHOD_OFFSET = 135;
+    CALL_STATIC_DOUBLE_METHOD_OFFSET = 138;
+    CALL_STATIC_VOID_METHOD_OFFSET = 141;
+    GET_OBJECT_FIELD_OFFSET = 95;
+    GET_BOOLEAN_FIELD_OFFSET = 96;
+    GET_BYTE_FIELD_OFFSET = 97;
+    GET_CHAR_FIELD_OFFSET = 98;
+    GET_SHORT_FIELD_OFFSET = 99;
+    GET_INT_FIELD_OFFSET = 100;
+    GET_LONG_FIELD_OFFSET = 101;
+    GET_FLOAT_FIELD_OFFSET = 102;
+    GET_DOUBLE_FIELD_OFFSET = 103;
+    SET_OBJECT_FIELD_OFFSET = 104;
+    SET_BOOLEAN_FIELD_OFFSET = 105;
+    SET_BYTE_FIELD_OFFSET = 106;
+    SET_CHAR_FIELD_OFFSET = 107;
+    SET_SHORT_FIELD_OFFSET = 108;
+    SET_INT_FIELD_OFFSET = 109;
+    SET_LONG_FIELD_OFFSET = 110;
+    SET_FLOAT_FIELD_OFFSET = 111;
+    SET_DOUBLE_FIELD_OFFSET = 112;
+    GET_STATIC_OBJECT_FIELD_OFFSET = 145;
+    GET_STATIC_BOOLEAN_FIELD_OFFSET = 146;
+    GET_STATIC_BYTE_FIELD_OFFSET = 147;
+    GET_STATIC_CHAR_FIELD_OFFSET = 148;
+    GET_STATIC_SHORT_FIELD_OFFSET = 149;
+    GET_STATIC_INT_FIELD_OFFSET = 150;
+    GET_STATIC_LONG_FIELD_OFFSET = 151;
+    GET_STATIC_FLOAT_FIELD_OFFSET = 152;
+    GET_STATIC_DOUBLE_FIELD_OFFSET = 153;
+    SET_STATIC_OBJECT_FIELD_OFFSET = 154;
+    SET_STATIC_BOOLEAN_FIELD_OFFSET = 155;
+    SET_STATIC_BYTE_FIELD_OFFSET = 156;
+    SET_STATIC_CHAR_FIELD_OFFSET = 157;
+    SET_STATIC_SHORT_FIELD_OFFSET = 158;
+    SET_STATIC_INT_FIELD_OFFSET = 159;
+    SET_STATIC_LONG_FIELD_OFFSET = 160;
+    SET_STATIC_FLOAT_FIELD_OFFSET = 161;
+    SET_STATIC_DOUBLE_FIELD_OFFSET = 162;
+    callMethodOffset = {
+      pointer: CALL_OBJECT_METHOD_OFFSET,
+      uint8: CALL_BOOLEAN_METHOD_OFFSET,
+      int8: CALL_BYTE_METHOD_OFFSET,
+      uint16: CALL_CHAR_METHOD_OFFSET,
+      int16: CALL_SHORT_METHOD_OFFSET,
+      int32: CALL_INT_METHOD_OFFSET,
+      int64: CALL_LONG_METHOD_OFFSET,
+      float: CALL_FLOAT_METHOD_OFFSET,
+      double: CALL_DOUBLE_METHOD_OFFSET,
+      void: CALL_VOID_METHOD_OFFSET
+    };
+    callNonvirtualMethodOffset = {
+      pointer: CALL_NONVIRTUAL_OBJECT_METHOD_OFFSET,
+      uint8: CALL_NONVIRTUAL_BOOLEAN_METHOD_OFFSET,
+      int8: CALL_NONVIRTUAL_BYTE_METHOD_OFFSET,
+      uint16: CALL_NONVIRTUAL_CHAR_METHOD_OFFSET,
+      int16: CALL_NONVIRTUAL_SHORT_METHOD_OFFSET,
+      int32: CALL_NONVIRTUAL_INT_METHOD_OFFSET,
+      int64: CALL_NONVIRTUAL_LONG_METHOD_OFFSET,
+      float: CALL_NONVIRTUAL_FLOAT_METHOD_OFFSET,
+      double: CALL_NONVIRTUAL_DOUBLE_METHOD_OFFSET,
+      void: CALL_NONVIRTUAL_VOID_METHOD_OFFSET
+    };
+    callStaticMethodOffset = {
+      pointer: CALL_STATIC_OBJECT_METHOD_OFFSET,
+      uint8: CALL_STATIC_BOOLEAN_METHOD_OFFSET,
+      int8: CALL_STATIC_BYTE_METHOD_OFFSET,
+      uint16: CALL_STATIC_CHAR_METHOD_OFFSET,
+      int16: CALL_STATIC_SHORT_METHOD_OFFSET,
+      int32: CALL_STATIC_INT_METHOD_OFFSET,
+      int64: CALL_STATIC_LONG_METHOD_OFFSET,
+      float: CALL_STATIC_FLOAT_METHOD_OFFSET,
+      double: CALL_STATIC_DOUBLE_METHOD_OFFSET,
+      void: CALL_STATIC_VOID_METHOD_OFFSET
+    };
+    getFieldOffset = {
+      pointer: GET_OBJECT_FIELD_OFFSET,
+      uint8: GET_BOOLEAN_FIELD_OFFSET,
+      int8: GET_BYTE_FIELD_OFFSET,
+      uint16: GET_CHAR_FIELD_OFFSET,
+      int16: GET_SHORT_FIELD_OFFSET,
+      int32: GET_INT_FIELD_OFFSET,
+      int64: GET_LONG_FIELD_OFFSET,
+      float: GET_FLOAT_FIELD_OFFSET,
+      double: GET_DOUBLE_FIELD_OFFSET
+    };
+    setFieldOffset = {
+      pointer: SET_OBJECT_FIELD_OFFSET,
+      uint8: SET_BOOLEAN_FIELD_OFFSET,
+      int8: SET_BYTE_FIELD_OFFSET,
+      uint16: SET_CHAR_FIELD_OFFSET,
+      int16: SET_SHORT_FIELD_OFFSET,
+      int32: SET_INT_FIELD_OFFSET,
+      int64: SET_LONG_FIELD_OFFSET,
+      float: SET_FLOAT_FIELD_OFFSET,
+      double: SET_DOUBLE_FIELD_OFFSET
+    };
+    getStaticFieldOffset = {
+      pointer: GET_STATIC_OBJECT_FIELD_OFFSET,
+      uint8: GET_STATIC_BOOLEAN_FIELD_OFFSET,
+      int8: GET_STATIC_BYTE_FIELD_OFFSET,
+      uint16: GET_STATIC_CHAR_FIELD_OFFSET,
+      int16: GET_STATIC_SHORT_FIELD_OFFSET,
+      int32: GET_STATIC_INT_FIELD_OFFSET,
+      int64: GET_STATIC_LONG_FIELD_OFFSET,
+      float: GET_STATIC_FLOAT_FIELD_OFFSET,
+      double: GET_STATIC_DOUBLE_FIELD_OFFSET
+    };
+    setStaticFieldOffset = {
+      pointer: SET_STATIC_OBJECT_FIELD_OFFSET,
+      uint8: SET_STATIC_BOOLEAN_FIELD_OFFSET,
+      int8: SET_STATIC_BYTE_FIELD_OFFSET,
+      uint16: SET_STATIC_CHAR_FIELD_OFFSET,
+      int16: SET_STATIC_SHORT_FIELD_OFFSET,
+      int32: SET_STATIC_INT_FIELD_OFFSET,
+      int64: SET_STATIC_LONG_FIELD_OFFSET,
+      float: SET_STATIC_FLOAT_FIELD_OFFSET,
+      double: SET_STATIC_DOUBLE_FIELD_OFFSET
+    };
+    nativeFunctionOptions2 = {
+      exceptions: "propagate"
+    };
+    cachedVtable = null;
+    globalRefs = [];
+    Env.dispose = function(env2) {
+      globalRefs.forEach(env2.deleteGlobalRef, env2);
+      globalRefs = [];
+    };
+    Env.prototype.getVersion = proxy2(4, "int32", ["pointer"], function(impl) {
+      return impl(this.handle);
+    });
+    Env.prototype.findClass = proxy2(6, "pointer", ["pointer", "pointer"], function(impl, name) {
+      const result = impl(this.handle, Memory.allocUtf8String(name));
+      this.throwIfExceptionPending();
+      return result;
+    });
+    Env.prototype.throwIfExceptionPending = function() {
+      const throwable = this.exceptionOccurred();
+      if (throwable.isNull()) {
+        return;
+      }
+      this.exceptionClear();
+      const handle = this.newGlobalRef(throwable);
+      this.deleteLocalRef(throwable);
+      const description = this.vaMethod("pointer", [])(this.handle, handle, this.javaLangObject().toString);
+      const descriptionStr = this.stringFromJni(description);
+      this.deleteLocalRef(description);
+      const error = new Error(descriptionStr);
+      error.$h = handle;
+      Script.bindWeak(error, makeErrorHandleDestructor(this.vm, handle));
+      throw error;
+    };
+    Env.prototype.fromReflectedMethod = proxy2(7, "pointer", ["pointer", "pointer"], function(impl, method) {
+      return impl(this.handle, method);
+    });
+    Env.prototype.fromReflectedField = proxy2(8, "pointer", ["pointer", "pointer"], function(impl, method) {
+      return impl(this.handle, method);
+    });
+    Env.prototype.toReflectedMethod = proxy2(9, "pointer", ["pointer", "pointer", "pointer", "uint8"], function(impl, klass, methodId, isStatic) {
+      return impl(this.handle, klass, methodId, isStatic);
+    });
+    Env.prototype.getSuperclass = proxy2(10, "pointer", ["pointer", "pointer"], function(impl, klass) {
+      return impl(this.handle, klass);
+    });
+    Env.prototype.isAssignableFrom = proxy2(11, "uint8", ["pointer", "pointer", "pointer"], function(impl, klass1, klass2) {
+      return !!impl(this.handle, klass1, klass2);
+    });
+    Env.prototype.toReflectedField = proxy2(12, "pointer", ["pointer", "pointer", "pointer", "uint8"], function(impl, klass, fieldId, isStatic) {
+      return impl(this.handle, klass, fieldId, isStatic);
+    });
+    Env.prototype.throw = proxy2(13, "int32", ["pointer", "pointer"], function(impl, obj) {
+      return impl(this.handle, obj);
+    });
+    Env.prototype.exceptionOccurred = proxy2(15, "pointer", ["pointer"], function(impl) {
+      return impl(this.handle);
+    });
+    Env.prototype.exceptionDescribe = proxy2(16, "void", ["pointer"], function(impl) {
+      impl(this.handle);
+    });
+    Env.prototype.exceptionClear = proxy2(17, "void", ["pointer"], function(impl) {
+      impl(this.handle);
+    });
+    Env.prototype.pushLocalFrame = proxy2(19, "int32", ["pointer", "int32"], function(impl, capacity) {
+      return impl(this.handle, capacity);
+    });
+    Env.prototype.popLocalFrame = proxy2(20, "pointer", ["pointer", "pointer"], function(impl, result) {
+      return impl(this.handle, result);
+    });
+    Env.prototype.newGlobalRef = proxy2(21, "pointer", ["pointer", "pointer"], function(impl, obj) {
+      return impl(this.handle, obj);
+    });
+    Env.prototype.deleteGlobalRef = proxy2(22, "void", ["pointer", "pointer"], function(impl, globalRef) {
+      impl(this.handle, globalRef);
+    });
+    Env.prototype.deleteLocalRef = proxy2(23, "void", ["pointer", "pointer"], function(impl, localRef) {
+      impl(this.handle, localRef);
+    });
+    Env.prototype.isSameObject = proxy2(24, "uint8", ["pointer", "pointer", "pointer"], function(impl, ref1, ref2) {
+      return !!impl(this.handle, ref1, ref2);
+    });
+    Env.prototype.newLocalRef = proxy2(25, "pointer", ["pointer", "pointer"], function(impl, obj) {
+      return impl(this.handle, obj);
+    });
+    Env.prototype.allocObject = proxy2(27, "pointer", ["pointer", "pointer"], function(impl, clazz) {
+      return impl(this.handle, clazz);
+    });
+    Env.prototype.getObjectClass = proxy2(31, "pointer", ["pointer", "pointer"], function(impl, obj) {
+      return impl(this.handle, obj);
+    });
+    Env.prototype.isInstanceOf = proxy2(32, "uint8", ["pointer", "pointer", "pointer"], function(impl, obj, klass) {
+      return !!impl(this.handle, obj, klass);
+    });
+    Env.prototype.getMethodId = proxy2(33, "pointer", ["pointer", "pointer", "pointer", "pointer"], function(impl, klass, name, sig) {
+      return impl(this.handle, klass, Memory.allocUtf8String(name), Memory.allocUtf8String(sig));
+    });
+    Env.prototype.getFieldId = proxy2(94, "pointer", ["pointer", "pointer", "pointer", "pointer"], function(impl, klass, name, sig) {
+      return impl(this.handle, klass, Memory.allocUtf8String(name), Memory.allocUtf8String(sig));
+    });
+    Env.prototype.getIntField = proxy2(100, "int32", ["pointer", "pointer", "pointer"], function(impl, obj, fieldId) {
+      return impl(this.handle, obj, fieldId);
+    });
+    Env.prototype.getStaticMethodId = proxy2(113, "pointer", ["pointer", "pointer", "pointer", "pointer"], function(impl, klass, name, sig) {
+      return impl(this.handle, klass, Memory.allocUtf8String(name), Memory.allocUtf8String(sig));
+    });
+    Env.prototype.getStaticFieldId = proxy2(144, "pointer", ["pointer", "pointer", "pointer", "pointer"], function(impl, klass, name, sig) {
+      return impl(this.handle, klass, Memory.allocUtf8String(name), Memory.allocUtf8String(sig));
+    });
+    Env.prototype.getStaticIntField = proxy2(150, "int32", ["pointer", "pointer", "pointer"], function(impl, obj, fieldId) {
+      return impl(this.handle, obj, fieldId);
+    });
+    Env.prototype.getStringLength = proxy2(164, "int32", ["pointer", "pointer"], function(impl, str) {
+      return impl(this.handle, str);
+    });
+    Env.prototype.getStringChars = proxy2(165, "pointer", ["pointer", "pointer", "pointer"], function(impl, str) {
+      return impl(this.handle, str, NULL);
+    });
+    Env.prototype.releaseStringChars = proxy2(166, "void", ["pointer", "pointer", "pointer"], function(impl, str, utf) {
+      impl(this.handle, str, utf);
+    });
+    Env.prototype.newStringUtf = proxy2(167, "pointer", ["pointer", "pointer"], function(impl, str) {
+      const utf = Memory.allocUtf8String(str);
+      return impl(this.handle, utf);
+    });
+    Env.prototype.getStringUtfChars = proxy2(169, "pointer", ["pointer", "pointer", "pointer"], function(impl, str) {
+      return impl(this.handle, str, NULL);
+    });
+    Env.prototype.releaseStringUtfChars = proxy2(170, "void", ["pointer", "pointer", "pointer"], function(impl, str, utf) {
+      impl(this.handle, str, utf);
+    });
+    Env.prototype.getArrayLength = proxy2(171, "int32", ["pointer", "pointer"], function(impl, array) {
+      return impl(this.handle, array);
+    });
+    Env.prototype.newObjectArray = proxy2(172, "pointer", ["pointer", "int32", "pointer", "pointer"], function(impl, length, elementClass, initialElement) {
+      return impl(this.handle, length, elementClass, initialElement);
+    });
+    Env.prototype.getObjectArrayElement = proxy2(173, "pointer", ["pointer", "pointer", "int32"], function(impl, array, index) {
+      return impl(this.handle, array, index);
+    });
+    Env.prototype.setObjectArrayElement = proxy2(174, "void", ["pointer", "pointer", "int32", "pointer"], function(impl, array, index, value) {
+      impl(this.handle, array, index, value);
+    });
+    Env.prototype.newBooleanArray = proxy2(175, "pointer", ["pointer", "int32"], function(impl, length) {
+      return impl(this.handle, length);
+    });
+    Env.prototype.newByteArray = proxy2(176, "pointer", ["pointer", "int32"], function(impl, length) {
+      return impl(this.handle, length);
+    });
+    Env.prototype.newCharArray = proxy2(177, "pointer", ["pointer", "int32"], function(impl, length) {
+      return impl(this.handle, length);
+    });
+    Env.prototype.newShortArray = proxy2(178, "pointer", ["pointer", "int32"], function(impl, length) {
+      return impl(this.handle, length);
+    });
+    Env.prototype.newIntArray = proxy2(179, "pointer", ["pointer", "int32"], function(impl, length) {
+      return impl(this.handle, length);
+    });
+    Env.prototype.newLongArray = proxy2(180, "pointer", ["pointer", "int32"], function(impl, length) {
+      return impl(this.handle, length);
+    });
+    Env.prototype.newFloatArray = proxy2(181, "pointer", ["pointer", "int32"], function(impl, length) {
+      return impl(this.handle, length);
+    });
+    Env.prototype.newDoubleArray = proxy2(182, "pointer", ["pointer", "int32"], function(impl, length) {
+      return impl(this.handle, length);
+    });
+    Env.prototype.getBooleanArrayElements = proxy2(183, "pointer", ["pointer", "pointer", "pointer"], function(impl, array) {
+      return impl(this.handle, array, NULL);
+    });
+    Env.prototype.getByteArrayElements = proxy2(184, "pointer", ["pointer", "pointer", "pointer"], function(impl, array) {
+      return impl(this.handle, array, NULL);
+    });
+    Env.prototype.getCharArrayElements = proxy2(185, "pointer", ["pointer", "pointer", "pointer"], function(impl, array) {
+      return impl(this.handle, array, NULL);
+    });
+    Env.prototype.getShortArrayElements = proxy2(186, "pointer", ["pointer", "pointer", "pointer"], function(impl, array) {
+      return impl(this.handle, array, NULL);
+    });
+    Env.prototype.getIntArrayElements = proxy2(187, "pointer", ["pointer", "pointer", "pointer"], function(impl, array) {
+      return impl(this.handle, array, NULL);
+    });
+    Env.prototype.getLongArrayElements = proxy2(188, "pointer", ["pointer", "pointer", "pointer"], function(impl, array) {
+      return impl(this.handle, array, NULL);
+    });
+    Env.prototype.getFloatArrayElements = proxy2(189, "pointer", ["pointer", "pointer", "pointer"], function(impl, array) {
+      return impl(this.handle, array, NULL);
+    });
+    Env.prototype.getDoubleArrayElements = proxy2(190, "pointer", ["pointer", "pointer", "pointer"], function(impl, array) {
+      return impl(this.handle, array, NULL);
+    });
+    Env.prototype.releaseBooleanArrayElements = proxy2(191, "pointer", ["pointer", "pointer", "pointer", "int32"], function(impl, array, cArray) {
+      impl(this.handle, array, cArray, JNI_ABORT);
+    });
+    Env.prototype.releaseByteArrayElements = proxy2(192, "pointer", ["pointer", "pointer", "pointer", "int32"], function(impl, array, cArray) {
+      impl(this.handle, array, cArray, JNI_ABORT);
+    });
+    Env.prototype.releaseCharArrayElements = proxy2(193, "pointer", ["pointer", "pointer", "pointer", "int32"], function(impl, array, cArray) {
+      impl(this.handle, array, cArray, JNI_ABORT);
+    });
+    Env.prototype.releaseShortArrayElements = proxy2(194, "pointer", ["pointer", "pointer", "pointer", "int32"], function(impl, array, cArray) {
+      impl(this.handle, array, cArray, JNI_ABORT);
+    });
+    Env.prototype.releaseIntArrayElements = proxy2(195, "pointer", ["pointer", "pointer", "pointer", "int32"], function(impl, array, cArray) {
+      impl(this.handle, array, cArray, JNI_ABORT);
+    });
+    Env.prototype.releaseLongArrayElements = proxy2(196, "pointer", ["pointer", "pointer", "pointer", "int32"], function(impl, array, cArray) {
+      impl(this.handle, array, cArray, JNI_ABORT);
+    });
+    Env.prototype.releaseFloatArrayElements = proxy2(197, "pointer", ["pointer", "pointer", "pointer", "int32"], function(impl, array, cArray) {
+      impl(this.handle, array, cArray, JNI_ABORT);
+    });
+    Env.prototype.releaseDoubleArrayElements = proxy2(198, "pointer", ["pointer", "pointer", "pointer", "int32"], function(impl, array, cArray) {
+      impl(this.handle, array, cArray, JNI_ABORT);
+    });
+    Env.prototype.getByteArrayRegion = proxy2(200, "void", ["pointer", "pointer", "int", "int", "pointer"], function(impl, array, start, length, cArray) {
+      impl(this.handle, array, start, length, cArray);
+    });
+    Env.prototype.setBooleanArrayRegion = proxy2(207, "void", ["pointer", "pointer", "int32", "int32", "pointer"], function(impl, array, start, length, cArray) {
+      impl(this.handle, array, start, length, cArray);
+    });
+    Env.prototype.setByteArrayRegion = proxy2(208, "void", ["pointer", "pointer", "int32", "int32", "pointer"], function(impl, array, start, length, cArray) {
+      impl(this.handle, array, start, length, cArray);
+    });
+    Env.prototype.setCharArrayRegion = proxy2(209, "void", ["pointer", "pointer", "int32", "int32", "pointer"], function(impl, array, start, length, cArray) {
+      impl(this.handle, array, start, length, cArray);
+    });
+    Env.prototype.setShortArrayRegion = proxy2(210, "void", ["pointer", "pointer", "int32", "int32", "pointer"], function(impl, array, start, length, cArray) {
+      impl(this.handle, array, start, length, cArray);
+    });
+    Env.prototype.setIntArrayRegion = proxy2(211, "void", ["pointer", "pointer", "int32", "int32", "pointer"], function(impl, array, start, length, cArray) {
+      impl(this.handle, array, start, length, cArray);
+    });
+    Env.prototype.setLongArrayRegion = proxy2(212, "void", ["pointer", "pointer", "int32", "int32", "pointer"], function(impl, array, start, length, cArray) {
+      impl(this.handle, array, start, length, cArray);
+    });
+    Env.prototype.setFloatArrayRegion = proxy2(213, "void", ["pointer", "pointer", "int32", "int32", "pointer"], function(impl, array, start, length, cArray) {
+      impl(this.handle, array, start, length, cArray);
+    });
+    Env.prototype.setDoubleArrayRegion = proxy2(214, "void", ["pointer", "pointer", "int32", "int32", "pointer"], function(impl, array, start, length, cArray) {
+      impl(this.handle, array, start, length, cArray);
+    });
+    Env.prototype.registerNatives = proxy2(215, "int32", ["pointer", "pointer", "pointer", "int32"], function(impl, klass, methods, numMethods) {
+      return impl(this.handle, klass, methods, numMethods);
+    });
+    Env.prototype.monitorEnter = proxy2(217, "int32", ["pointer", "pointer"], function(impl, obj) {
+      return impl(this.handle, obj);
+    });
+    Env.prototype.monitorExit = proxy2(218, "int32", ["pointer", "pointer"], function(impl, obj) {
+      return impl(this.handle, obj);
+    });
+    Env.prototype.getDirectBufferAddress = proxy2(230, "pointer", ["pointer", "pointer"], function(impl, obj) {
+      return impl(this.handle, obj);
+    });
+    Env.prototype.getObjectRefType = proxy2(232, "int32", ["pointer", "pointer"], function(impl, ref) {
+      return impl(this.handle, ref);
+    });
+    cachedMethods = /* @__PURE__ */ new Map();
+    Env.prototype.constructor = function(argTypes, options) {
+      return vaMethod.call(this, CALL_CONSTRUCTOR_METHOD_OFFSET, "pointer", argTypes, options);
+    };
+    Env.prototype.vaMethod = function(retType, argTypes, options) {
+      const offset = callMethodOffset[retType];
+      if (offset === void 0) {
+        throw new Error("Unsupported type: " + retType);
+      }
+      return vaMethod.call(this, offset, retType, argTypes, options);
+    };
+    Env.prototype.nonvirtualVaMethod = function(retType, argTypes, options) {
+      const offset = callNonvirtualMethodOffset[retType];
+      if (offset === void 0) {
+        throw new Error("Unsupported type: " + retType);
+      }
+      return nonvirtualVaMethod.call(this, offset, retType, argTypes, options);
+    };
+    Env.prototype.staticVaMethod = function(retType, argTypes, options) {
+      const offset = callStaticMethodOffset[retType];
+      if (offset === void 0) {
+        throw new Error("Unsupported type: " + retType);
+      }
+      return vaMethod.call(this, offset, retType, argTypes, options);
+    };
+    Env.prototype.getField = function(fieldType) {
+      const offset = getFieldOffset[fieldType];
+      if (offset === void 0) {
+        throw new Error("Unsupported type: " + fieldType);
+      }
+      return plainMethod.call(this, offset, fieldType, []);
+    };
+    Env.prototype.getStaticField = function(fieldType) {
+      const offset = getStaticFieldOffset[fieldType];
+      if (offset === void 0) {
+        throw new Error("Unsupported type: " + fieldType);
+      }
+      return plainMethod.call(this, offset, fieldType, []);
+    };
+    Env.prototype.setField = function(fieldType) {
+      const offset = setFieldOffset[fieldType];
+      if (offset === void 0) {
+        throw new Error("Unsupported type: " + fieldType);
+      }
+      return plainMethod.call(this, offset, "void", [fieldType]);
+    };
+    Env.prototype.setStaticField = function(fieldType) {
+      const offset = setStaticFieldOffset[fieldType];
+      if (offset === void 0) {
+        throw new Error("Unsupported type: " + fieldType);
+      }
+      return plainMethod.call(this, offset, "void", [fieldType]);
+    };
+    javaLangClass = null;
+    Env.prototype.javaLangClass = function() {
+      if (javaLangClass === null) {
+        const handle = this.findClass("java/lang/Class");
+        try {
+          const get = this.getMethodId.bind(this, handle);
+          javaLangClass = {
+            handle: register(this.newGlobalRef(handle)),
+            getName: get("getName", "()Ljava/lang/String;"),
+            getSimpleName: get("getSimpleName", "()Ljava/lang/String;"),
+            getGenericSuperclass: get("getGenericSuperclass", "()Ljava/lang/reflect/Type;"),
+            getDeclaredConstructors: get("getDeclaredConstructors", "()[Ljava/lang/reflect/Constructor;"),
+            getDeclaredMethods: get("getDeclaredMethods", "()[Ljava/lang/reflect/Method;"),
+            getDeclaredFields: get("getDeclaredFields", "()[Ljava/lang/reflect/Field;"),
+            isArray: get("isArray", "()Z"),
+            isPrimitive: get("isPrimitive", "()Z"),
+            isInterface: get("isInterface", "()Z"),
+            getComponentType: get("getComponentType", "()Ljava/lang/Class;")
+          };
+        } finally {
+          this.deleteLocalRef(handle);
+        }
+      }
+      return javaLangClass;
+    };
+    javaLangObject = null;
+    Env.prototype.javaLangObject = function() {
+      if (javaLangObject === null) {
+        const handle = this.findClass("java/lang/Object");
+        try {
+          const get = this.getMethodId.bind(this, handle);
+          javaLangObject = {
+            handle: register(this.newGlobalRef(handle)),
+            toString: get("toString", "()Ljava/lang/String;"),
+            getClass: get("getClass", "()Ljava/lang/Class;")
+          };
+        } finally {
+          this.deleteLocalRef(handle);
+        }
+      }
+      return javaLangObject;
+    };
+    javaLangReflectConstructor = null;
+    Env.prototype.javaLangReflectConstructor = function() {
+      if (javaLangReflectConstructor === null) {
+        const handle = this.findClass("java/lang/reflect/Constructor");
+        try {
+          javaLangReflectConstructor = {
+            getGenericParameterTypes: this.getMethodId(handle, "getGenericParameterTypes", "()[Ljava/lang/reflect/Type;")
+          };
+        } finally {
+          this.deleteLocalRef(handle);
+        }
+      }
+      return javaLangReflectConstructor;
+    };
+    javaLangReflectMethod = null;
+    Env.prototype.javaLangReflectMethod = function() {
+      if (javaLangReflectMethod === null) {
+        const handle = this.findClass("java/lang/reflect/Method");
+        try {
+          const get = this.getMethodId.bind(this, handle);
+          javaLangReflectMethod = {
+            getName: get("getName", "()Ljava/lang/String;"),
+            getGenericParameterTypes: get("getGenericParameterTypes", "()[Ljava/lang/reflect/Type;"),
+            getParameterTypes: get("getParameterTypes", "()[Ljava/lang/Class;"),
+            getGenericReturnType: get("getGenericReturnType", "()Ljava/lang/reflect/Type;"),
+            getGenericExceptionTypes: get("getGenericExceptionTypes", "()[Ljava/lang/reflect/Type;"),
+            getModifiers: get("getModifiers", "()I"),
+            isVarArgs: get("isVarArgs", "()Z")
+          };
+        } finally {
+          this.deleteLocalRef(handle);
+        }
+      }
+      return javaLangReflectMethod;
+    };
+    javaLangReflectField = null;
+    Env.prototype.javaLangReflectField = function() {
+      if (javaLangReflectField === null) {
+        const handle = this.findClass("java/lang/reflect/Field");
+        try {
+          const get = this.getMethodId.bind(this, handle);
+          javaLangReflectField = {
+            getName: get("getName", "()Ljava/lang/String;"),
+            getType: get("getType", "()Ljava/lang/Class;"),
+            getGenericType: get("getGenericType", "()Ljava/lang/reflect/Type;"),
+            getModifiers: get("getModifiers", "()I"),
+            toString: get("toString", "()Ljava/lang/String;")
+          };
+        } finally {
+          this.deleteLocalRef(handle);
+        }
+      }
+      return javaLangReflectField;
+    };
+    javaLangReflectTypeVariable = null;
+    Env.prototype.javaLangReflectTypeVariable = function() {
+      if (javaLangReflectTypeVariable === null) {
+        const handle = this.findClass("java/lang/reflect/TypeVariable");
+        try {
+          const get = this.getMethodId.bind(this, handle);
+          javaLangReflectTypeVariable = {
+            handle: register(this.newGlobalRef(handle)),
+            getName: get("getName", "()Ljava/lang/String;"),
+            getBounds: get("getBounds", "()[Ljava/lang/reflect/Type;"),
+            getGenericDeclaration: get("getGenericDeclaration", "()Ljava/lang/reflect/GenericDeclaration;")
+          };
+        } finally {
+          this.deleteLocalRef(handle);
+        }
+      }
+      return javaLangReflectTypeVariable;
+    };
+    javaLangReflectWildcardType = null;
+    Env.prototype.javaLangReflectWildcardType = function() {
+      if (javaLangReflectWildcardType === null) {
+        const handle = this.findClass("java/lang/reflect/WildcardType");
+        try {
+          const get = this.getMethodId.bind(this, handle);
+          javaLangReflectWildcardType = {
+            handle: register(this.newGlobalRef(handle)),
+            getLowerBounds: get("getLowerBounds", "()[Ljava/lang/reflect/Type;"),
+            getUpperBounds: get("getUpperBounds", "()[Ljava/lang/reflect/Type;")
+          };
+        } finally {
+          this.deleteLocalRef(handle);
+        }
+      }
+      return javaLangReflectWildcardType;
+    };
+    javaLangReflectGenericArrayType = null;
+    Env.prototype.javaLangReflectGenericArrayType = function() {
+      if (javaLangReflectGenericArrayType === null) {
+        const handle = this.findClass("java/lang/reflect/GenericArrayType");
+        try {
+          javaLangReflectGenericArrayType = {
+            handle: register(this.newGlobalRef(handle)),
+            getGenericComponentType: this.getMethodId(handle, "getGenericComponentType", "()Ljava/lang/reflect/Type;")
+          };
+        } finally {
+          this.deleteLocalRef(handle);
+        }
+      }
+      return javaLangReflectGenericArrayType;
+    };
+    javaLangReflectParameterizedType = null;
+    Env.prototype.javaLangReflectParameterizedType = function() {
+      if (javaLangReflectParameterizedType === null) {
+        const handle = this.findClass("java/lang/reflect/ParameterizedType");
+        try {
+          const get = this.getMethodId.bind(this, handle);
+          javaLangReflectParameterizedType = {
+            handle: register(this.newGlobalRef(handle)),
+            getActualTypeArguments: get("getActualTypeArguments", "()[Ljava/lang/reflect/Type;"),
+            getRawType: get("getRawType", "()Ljava/lang/reflect/Type;"),
+            getOwnerType: get("getOwnerType", "()Ljava/lang/reflect/Type;")
+          };
+        } finally {
+          this.deleteLocalRef(handle);
+        }
+      }
+      return javaLangReflectParameterizedType;
+    };
+    javaLangString = null;
+    Env.prototype.javaLangString = function() {
+      if (javaLangString === null) {
+        const handle = this.findClass("java/lang/String");
+        try {
+          javaLangString = {
+            handle: register(this.newGlobalRef(handle))
+          };
+        } finally {
+          this.deleteLocalRef(handle);
+        }
+      }
+      return javaLangString;
+    };
+    Env.prototype.getClassName = function(classHandle) {
+      const name = this.vaMethod("pointer", [])(this.handle, classHandle, this.javaLangClass().getName);
+      try {
+        return this.stringFromJni(name);
+      } finally {
+        this.deleteLocalRef(name);
+      }
+    };
+    Env.prototype.getObjectClassName = function(objHandle) {
+      const jklass = this.getObjectClass(objHandle);
+      try {
+        return this.getClassName(jklass);
+      } finally {
+        this.deleteLocalRef(jklass);
+      }
+    };
+    Env.prototype.getActualTypeArgument = function(type) {
+      const actualTypeArguments = this.vaMethod("pointer", [])(this.handle, type, this.javaLangReflectParameterizedType().getActualTypeArguments);
+      this.throwIfExceptionPending();
+      if (!actualTypeArguments.isNull()) {
+        try {
+          return this.getTypeNameFromFirstTypeElement(actualTypeArguments);
+        } finally {
+          this.deleteLocalRef(actualTypeArguments);
+        }
+      }
+    };
+    Env.prototype.getTypeNameFromFirstTypeElement = function(typeArray) {
+      const length = this.getArrayLength(typeArray);
+      if (length > 0) {
+        const typeArgument0 = this.getObjectArrayElement(typeArray, 0);
+        try {
+          return this.getTypeName(typeArgument0);
+        } finally {
+          this.deleteLocalRef(typeArgument0);
+        }
+      } else {
+        return "java.lang.Object";
+      }
+    };
+    Env.prototype.getTypeName = function(type, getGenericsInformation) {
+      const invokeObjectMethodNoArgs = this.vaMethod("pointer", []);
+      if (this.isInstanceOf(type, this.javaLangClass().handle)) {
+        return this.getClassName(type);
+      } else if (this.isInstanceOf(type, this.javaLangReflectGenericArrayType().handle)) {
+        return this.getArrayTypeName(type);
+      } else if (this.isInstanceOf(type, this.javaLangReflectParameterizedType().handle)) {
+        const rawType = invokeObjectMethodNoArgs(this.handle, type, this.javaLangReflectParameterizedType().getRawType);
+        this.throwIfExceptionPending();
+        let result;
+        try {
+          result = this.getTypeName(rawType);
+        } finally {
+          this.deleteLocalRef(rawType);
+        }
+        if (getGenericsInformation) {
+          result += "<" + this.getActualTypeArgument(type) + ">";
+        }
+        return result;
+      } else if (this.isInstanceOf(type, this.javaLangReflectTypeVariable().handle)) {
+        return "java.lang.Object";
+      } else if (this.isInstanceOf(type, this.javaLangReflectWildcardType().handle)) {
+        return "java.lang.Object";
+      } else {
+        return "java.lang.Object";
+      }
+    };
+    Env.prototype.getArrayTypeName = function(type) {
+      const invokeObjectMethodNoArgs = this.vaMethod("pointer", []);
+      if (this.isInstanceOf(type, this.javaLangClass().handle)) {
+        return this.getClassName(type);
+      } else if (this.isInstanceOf(type, this.javaLangReflectGenericArrayType().handle)) {
+        const componentType = invokeObjectMethodNoArgs(this.handle, type, this.javaLangReflectGenericArrayType().getGenericComponentType);
+        this.throwIfExceptionPending();
+        try {
+          return "[L" + this.getTypeName(componentType) + ";";
+        } finally {
+          this.deleteLocalRef(componentType);
+        }
+      } else {
+        return "[Ljava.lang.Object;";
+      }
+    };
+    Env.prototype.stringFromJni = function(str) {
+      const utf = this.getStringChars(str);
+      if (utf.isNull()) {
+        throw new Error("Unable to access string");
+      }
+      try {
+        const length = this.getStringLength(str);
+        return utf.readUtf16String(length);
+      } finally {
+        this.releaseStringChars(str, utf);
+      }
+    };
   }
-  return vaMethod.call(this, offset, retType, argTypes, options);
-};
-Env.prototype.nonvirtualVaMethod = function(retType, argTypes, options) {
-  const offset = callNonvirtualMethodOffset[retType];
-  if (offset === void 0) {
-    throw new Error("Unsupported type: " + retType);
-  }
-  return nonvirtualVaMethod.call(this, offset, retType, argTypes, options);
-};
-Env.prototype.staticVaMethod = function(retType, argTypes, options) {
-  const offset = callStaticMethodOffset[retType];
-  if (offset === void 0) {
-    throw new Error("Unsupported type: " + retType);
-  }
-  return vaMethod.call(this, offset, retType, argTypes, options);
-};
-Env.prototype.getField = function(fieldType) {
-  const offset = getFieldOffset[fieldType];
-  if (offset === void 0) {
-    throw new Error("Unsupported type: " + fieldType);
-  }
-  return plainMethod.call(this, offset, fieldType, []);
-};
-Env.prototype.getStaticField = function(fieldType) {
-  const offset = getStaticFieldOffset[fieldType];
-  if (offset === void 0) {
-    throw new Error("Unsupported type: " + fieldType);
-  }
-  return plainMethod.call(this, offset, fieldType, []);
-};
-Env.prototype.setField = function(fieldType) {
-  const offset = setFieldOffset[fieldType];
-  if (offset === void 0) {
-    throw new Error("Unsupported type: " + fieldType);
-  }
-  return plainMethod.call(this, offset, "void", [fieldType]);
-};
-Env.prototype.setStaticField = function(fieldType) {
-  const offset = setStaticFieldOffset[fieldType];
-  if (offset === void 0) {
-    throw new Error("Unsupported type: " + fieldType);
-  }
-  return plainMethod.call(this, offset, "void", [fieldType]);
-};
-var javaLangClass = null;
-Env.prototype.javaLangClass = function() {
-  if (javaLangClass === null) {
-    const handle = this.findClass("java/lang/Class");
-    try {
-      const get = this.getMethodId.bind(this, handle);
-      javaLangClass = {
-        handle: register(this.newGlobalRef(handle)),
-        getName: get("getName", "()Ljava/lang/String;"),
-        getSimpleName: get("getSimpleName", "()Ljava/lang/String;"),
-        getGenericSuperclass: get("getGenericSuperclass", "()Ljava/lang/reflect/Type;"),
-        getDeclaredConstructors: get("getDeclaredConstructors", "()[Ljava/lang/reflect/Constructor;"),
-        getDeclaredMethods: get("getDeclaredMethods", "()[Ljava/lang/reflect/Method;"),
-        getDeclaredFields: get("getDeclaredFields", "()[Ljava/lang/reflect/Field;"),
-        isArray: get("isArray", "()Z"),
-        isPrimitive: get("isPrimitive", "()Z"),
-        isInterface: get("isInterface", "()Z"),
-        getComponentType: get("getComponentType", "()Ljava/lang/Class;")
-      };
-    } finally {
-      this.deleteLocalRef(handle);
-    }
-  }
-  return javaLangClass;
-};
-var javaLangObject = null;
-Env.prototype.javaLangObject = function() {
-  if (javaLangObject === null) {
-    const handle = this.findClass("java/lang/Object");
-    try {
-      const get = this.getMethodId.bind(this, handle);
-      javaLangObject = {
-        handle: register(this.newGlobalRef(handle)),
-        toString: get("toString", "()Ljava/lang/String;"),
-        getClass: get("getClass", "()Ljava/lang/Class;")
-      };
-    } finally {
-      this.deleteLocalRef(handle);
-    }
-  }
-  return javaLangObject;
-};
-var javaLangReflectConstructor = null;
-Env.prototype.javaLangReflectConstructor = function() {
-  if (javaLangReflectConstructor === null) {
-    const handle = this.findClass("java/lang/reflect/Constructor");
-    try {
-      javaLangReflectConstructor = {
-        getGenericParameterTypes: this.getMethodId(handle, "getGenericParameterTypes", "()[Ljava/lang/reflect/Type;")
-      };
-    } finally {
-      this.deleteLocalRef(handle);
-    }
-  }
-  return javaLangReflectConstructor;
-};
-var javaLangReflectMethod = null;
-Env.prototype.javaLangReflectMethod = function() {
-  if (javaLangReflectMethod === null) {
-    const handle = this.findClass("java/lang/reflect/Method");
-    try {
-      const get = this.getMethodId.bind(this, handle);
-      javaLangReflectMethod = {
-        getName: get("getName", "()Ljava/lang/String;"),
-        getGenericParameterTypes: get("getGenericParameterTypes", "()[Ljava/lang/reflect/Type;"),
-        getParameterTypes: get("getParameterTypes", "()[Ljava/lang/Class;"),
-        getGenericReturnType: get("getGenericReturnType", "()Ljava/lang/reflect/Type;"),
-        getGenericExceptionTypes: get("getGenericExceptionTypes", "()[Ljava/lang/reflect/Type;"),
-        getModifiers: get("getModifiers", "()I"),
-        isVarArgs: get("isVarArgs", "()Z")
-      };
-    } finally {
-      this.deleteLocalRef(handle);
-    }
-  }
-  return javaLangReflectMethod;
-};
-var javaLangReflectField = null;
-Env.prototype.javaLangReflectField = function() {
-  if (javaLangReflectField === null) {
-    const handle = this.findClass("java/lang/reflect/Field");
-    try {
-      const get = this.getMethodId.bind(this, handle);
-      javaLangReflectField = {
-        getName: get("getName", "()Ljava/lang/String;"),
-        getType: get("getType", "()Ljava/lang/Class;"),
-        getGenericType: get("getGenericType", "()Ljava/lang/reflect/Type;"),
-        getModifiers: get("getModifiers", "()I"),
-        toString: get("toString", "()Ljava/lang/String;")
-      };
-    } finally {
-      this.deleteLocalRef(handle);
-    }
-  }
-  return javaLangReflectField;
-};
-var javaLangReflectTypeVariable = null;
-Env.prototype.javaLangReflectTypeVariable = function() {
-  if (javaLangReflectTypeVariable === null) {
-    const handle = this.findClass("java/lang/reflect/TypeVariable");
-    try {
-      const get = this.getMethodId.bind(this, handle);
-      javaLangReflectTypeVariable = {
-        handle: register(this.newGlobalRef(handle)),
-        getName: get("getName", "()Ljava/lang/String;"),
-        getBounds: get("getBounds", "()[Ljava/lang/reflect/Type;"),
-        getGenericDeclaration: get("getGenericDeclaration", "()Ljava/lang/reflect/GenericDeclaration;")
-      };
-    } finally {
-      this.deleteLocalRef(handle);
-    }
-  }
-  return javaLangReflectTypeVariable;
-};
-var javaLangReflectWildcardType = null;
-Env.prototype.javaLangReflectWildcardType = function() {
-  if (javaLangReflectWildcardType === null) {
-    const handle = this.findClass("java/lang/reflect/WildcardType");
-    try {
-      const get = this.getMethodId.bind(this, handle);
-      javaLangReflectWildcardType = {
-        handle: register(this.newGlobalRef(handle)),
-        getLowerBounds: get("getLowerBounds", "()[Ljava/lang/reflect/Type;"),
-        getUpperBounds: get("getUpperBounds", "()[Ljava/lang/reflect/Type;")
-      };
-    } finally {
-      this.deleteLocalRef(handle);
-    }
-  }
-  return javaLangReflectWildcardType;
-};
-var javaLangReflectGenericArrayType = null;
-Env.prototype.javaLangReflectGenericArrayType = function() {
-  if (javaLangReflectGenericArrayType === null) {
-    const handle = this.findClass("java/lang/reflect/GenericArrayType");
-    try {
-      javaLangReflectGenericArrayType = {
-        handle: register(this.newGlobalRef(handle)),
-        getGenericComponentType: this.getMethodId(handle, "getGenericComponentType", "()Ljava/lang/reflect/Type;")
-      };
-    } finally {
-      this.deleteLocalRef(handle);
-    }
-  }
-  return javaLangReflectGenericArrayType;
-};
-var javaLangReflectParameterizedType = null;
-Env.prototype.javaLangReflectParameterizedType = function() {
-  if (javaLangReflectParameterizedType === null) {
-    const handle = this.findClass("java/lang/reflect/ParameterizedType");
-    try {
-      const get = this.getMethodId.bind(this, handle);
-      javaLangReflectParameterizedType = {
-        handle: register(this.newGlobalRef(handle)),
-        getActualTypeArguments: get("getActualTypeArguments", "()[Ljava/lang/reflect/Type;"),
-        getRawType: get("getRawType", "()Ljava/lang/reflect/Type;"),
-        getOwnerType: get("getOwnerType", "()Ljava/lang/reflect/Type;")
-      };
-    } finally {
-      this.deleteLocalRef(handle);
-    }
-  }
-  return javaLangReflectParameterizedType;
-};
-var javaLangString = null;
-Env.prototype.javaLangString = function() {
-  if (javaLangString === null) {
-    const handle = this.findClass("java/lang/String");
-    try {
-      javaLangString = {
-        handle: register(this.newGlobalRef(handle))
-      };
-    } finally {
-      this.deleteLocalRef(handle);
-    }
-  }
-  return javaLangString;
-};
-Env.prototype.getClassName = function(classHandle) {
-  const name = this.vaMethod("pointer", [])(this.handle, classHandle, this.javaLangClass().getName);
-  try {
-    return this.stringFromJni(name);
-  } finally {
-    this.deleteLocalRef(name);
-  }
-};
-Env.prototype.getObjectClassName = function(objHandle) {
-  const jklass = this.getObjectClass(objHandle);
-  try {
-    return this.getClassName(jklass);
-  } finally {
-    this.deleteLocalRef(jklass);
-  }
-};
-Env.prototype.getActualTypeArgument = function(type) {
-  const actualTypeArguments = this.vaMethod("pointer", [])(this.handle, type, this.javaLangReflectParameterizedType().getActualTypeArguments);
-  this.throwIfExceptionPending();
-  if (!actualTypeArguments.isNull()) {
-    try {
-      return this.getTypeNameFromFirstTypeElement(actualTypeArguments);
-    } finally {
-      this.deleteLocalRef(actualTypeArguments);
-    }
-  }
-};
-Env.prototype.getTypeNameFromFirstTypeElement = function(typeArray) {
-  const length = this.getArrayLength(typeArray);
-  if (length > 0) {
-    const typeArgument0 = this.getObjectArrayElement(typeArray, 0);
-    try {
-      return this.getTypeName(typeArgument0);
-    } finally {
-      this.deleteLocalRef(typeArgument0);
-    }
-  } else {
-    return "java.lang.Object";
-  }
-};
-Env.prototype.getTypeName = function(type, getGenericsInformation) {
-  const invokeObjectMethodNoArgs = this.vaMethod("pointer", []);
-  if (this.isInstanceOf(type, this.javaLangClass().handle)) {
-    return this.getClassName(type);
-  } else if (this.isInstanceOf(type, this.javaLangReflectGenericArrayType().handle)) {
-    return this.getArrayTypeName(type);
-  } else if (this.isInstanceOf(type, this.javaLangReflectParameterizedType().handle)) {
-    const rawType = invokeObjectMethodNoArgs(this.handle, type, this.javaLangReflectParameterizedType().getRawType);
-    this.throwIfExceptionPending();
-    let result;
-    try {
-      result = this.getTypeName(rawType);
-    } finally {
-      this.deleteLocalRef(rawType);
-    }
-    if (getGenericsInformation) {
-      result += "<" + this.getActualTypeArgument(type) + ">";
-    }
-    return result;
-  } else if (this.isInstanceOf(type, this.javaLangReflectTypeVariable().handle)) {
-    return "java.lang.Object";
-  } else if (this.isInstanceOf(type, this.javaLangReflectWildcardType().handle)) {
-    return "java.lang.Object";
-  } else {
-    return "java.lang.Object";
-  }
-};
-Env.prototype.getArrayTypeName = function(type) {
-  const invokeObjectMethodNoArgs = this.vaMethod("pointer", []);
-  if (this.isInstanceOf(type, this.javaLangClass().handle)) {
-    return this.getClassName(type);
-  } else if (this.isInstanceOf(type, this.javaLangReflectGenericArrayType().handle)) {
-    const componentType = invokeObjectMethodNoArgs(this.handle, type, this.javaLangReflectGenericArrayType().getGenericComponentType);
-    this.throwIfExceptionPending();
-    try {
-      return "[L" + this.getTypeName(componentType) + ";";
-    } finally {
-      this.deleteLocalRef(componentType);
-    }
-  } else {
-    return "[Ljava.lang.Object;";
-  }
-};
-Env.prototype.stringFromJni = function(str) {
-  const utf = this.getStringChars(str);
-  if (utf.isNull()) {
-    throw new Error("Unable to access string");
-  }
-  try {
-    const length = this.getStringLength(str);
-    return utf.readUtf16String(length);
-  } finally {
-    this.releaseStringChars(str, utf);
-  }
-};
+});
 
-// node_modules/frida-java-bridge/lib/vm.js
-var JNI_VERSION_1_6 = 65542;
-var pointerSize4 = Process.pointerSize;
-var jsThreadID = Process.getCurrentThreadId();
-var attachedThreads = /* @__PURE__ */ new Map();
-var activeEnvs = /* @__PURE__ */ new Map();
+// backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/vm.js
 function VM(api2) {
   const handle = api2.vm;
   let attachCurrentThread = null;
@@ -2746,15 +2861,15 @@ function VM(api2) {
     if (cachedEnv !== null) {
       return fn(cachedEnv);
     }
-    let env = this._tryGetEnv();
-    const alreadyAttached = env !== null;
+    let env2 = this._tryGetEnv();
+    const alreadyAttached = env2 !== null;
     if (!alreadyAttached) {
-      env = this.attachCurrentThread();
+      env2 = this.attachCurrentThread();
       attachedThreads.set(threadId, true);
     }
-    this.link(threadId, env);
+    this.link(threadId, env2);
     try {
-      return fn(env);
+      return fn(env2);
     } finally {
       const isJsThread = threadId === jsThreadID;
       if (!isJsThread) {
@@ -2810,9 +2925,9 @@ function VM(api2) {
     }
     return new Env(h, this);
   };
-  this.tryGetEnvHandle = function(version) {
+  this.tryGetEnvHandle = function(version2) {
     const envBuf = Memory.alloc(pointerSize4);
-    const result = getEnv(handle, envBuf, version);
+    const result = getEnv(handle, envBuf, version2);
     if (result !== JNI_OK) {
       return null;
     }
@@ -2820,15 +2935,15 @@ function VM(api2) {
   };
   this.makeHandleDestructor = function(handle2) {
     return () => {
-      this.perform((env) => {
-        env.deleteGlobalRef(handle2);
+      this.perform((env2) => {
+        env2.deleteGlobalRef(handle2);
       });
     };
   };
-  this.link = function(tid, env) {
+  this.link = function(tid, env2) {
     const entry = activeEnvs.get(tid);
     if (entry === void 0) {
-      activeEnvs.set(tid, [env, 1]);
+      activeEnvs.set(tid, [env2, 1]);
     } else {
       entry[1]++;
     }
@@ -2850,100 +2965,57 @@ function VM(api2) {
   }
   initialize2.call(this);
 }
-VM.dispose = function(vm3) {
-  if (attachedThreads.get(jsThreadID) === true) {
-    attachedThreads.delete(jsThreadID);
-    vm3.detachCurrentThread();
+var JNI_VERSION_1_6, pointerSize4, jsThreadID, attachedThreads, activeEnvs;
+var init_vm = __esm({
+  "backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/vm.js"() {
+    init_node_globals();
+    init_env();
+    init_result();
+    JNI_VERSION_1_6 = 65542;
+    pointerSize4 = Process.pointerSize;
+    jsThreadID = Process.getCurrentThreadId();
+    attachedThreads = /* @__PURE__ */ new Map();
+    activeEnvs = /* @__PURE__ */ new Map();
+    VM.dispose = function(vm3) {
+      if (attachedThreads.get(jsThreadID) === true) {
+        attachedThreads.delete(jsThreadID);
+        vm3.detachCurrentThread();
+      }
+    };
   }
-};
+});
 
-// node_modules/frida-java-bridge/lib/android.js
-var jsizeSize = 4;
-var pointerSize5 = Process.pointerSize;
-var {
-  readU32,
-  readPointer,
-  writeU32,
-  writePointer
-} = NativePointer.prototype;
-var kAccPublic = 1;
-var kAccStatic = 8;
-var kAccFinal = 16;
-var kAccNative = 256;
-var kAccFastNative = 524288;
-var kAccCriticalNative = 2097152;
-var kAccFastInterpreterToInterpreterInvoke = 1073741824;
-var kAccSkipAccessChecks = 524288;
-var kAccSingleImplementation = 134217728;
-var kAccNterpEntryPointFastPathFlag = 1048576;
-var kAccNterpInvokeFastPathFlag = 2097152;
-var kAccPublicApi = 268435456;
-var kAccXposedHookedMethod = 268435456;
-var kPointer = 0;
-var kFullDeoptimization = 3;
-var kSelectiveDeoptimization = 5;
-var THUMB_BIT_REMOVAL_MASK = ptr(1).not();
-var X86_JMP_MAX_DISTANCE = 2147467263;
-var ARM64_ADRP_MAX_DISTANCE = 4294963200;
-var ENV_VTABLE_OFFSET_EXCEPTION_CLEAR = 17 * pointerSize5;
-var ENV_VTABLE_OFFSET_FATAL_ERROR = 18 * pointerSize5;
-var DVM_JNI_ENV_OFFSET_SELF = 12;
-var DVM_CLASS_OBJECT_OFFSET_VTABLE_COUNT = 112;
-var DVM_CLASS_OBJECT_OFFSET_VTABLE = 116;
-var DVM_OBJECT_OFFSET_CLAZZ = 0;
-var DVM_METHOD_SIZE = 56;
-var DVM_METHOD_OFFSET_ACCESS_FLAGS = 4;
-var DVM_METHOD_OFFSET_METHOD_INDEX = 8;
-var DVM_METHOD_OFFSET_REGISTERS_SIZE = 10;
-var DVM_METHOD_OFFSET_OUTS_SIZE = 12;
-var DVM_METHOD_OFFSET_INS_SIZE = 14;
-var DVM_METHOD_OFFSET_SHORTY = 28;
-var DVM_METHOD_OFFSET_JNI_ARG_INFO = 36;
-var DALVIK_JNI_RETURN_VOID = 0;
-var DALVIK_JNI_RETURN_FLOAT = 1;
-var DALVIK_JNI_RETURN_DOUBLE = 2;
-var DALVIK_JNI_RETURN_S8 = 3;
-var DALVIK_JNI_RETURN_S4 = 4;
-var DALVIK_JNI_RETURN_S2 = 5;
-var DALVIK_JNI_RETURN_U2 = 6;
-var DALVIK_JNI_RETURN_S1 = 7;
-var DALVIK_JNI_NO_ARG_INFO = 2147483648;
-var DALVIK_JNI_RETURN_SHIFT = 28;
-var STD_STRING_SIZE = 3 * pointerSize5;
-var STD_VECTOR_SIZE = 3 * pointerSize5;
-var AF_UNIX = 1;
-var SOCK_STREAM = 1;
-var getArtRuntimeSpec = memoize(_getArtRuntimeSpec);
-var getArtInstrumentationSpec = memoize(_getArtInstrumentationSpec);
-var getArtMethodSpec = memoize(_getArtMethodSpec);
-var getArtThreadSpec = memoize(_getArtThreadSpec);
-var getArtManagedStackSpec = memoize(_getArtManagedStackSpec);
-var getArtThreadStateTransitionImpl = memoize(_getArtThreadStateTransitionImpl);
-var getAndroidVersion = memoize(_getAndroidVersion);
-var getAndroidCodename = memoize(_getAndroidCodename);
-var getAndroidApiLevel = memoize(_getAndroidApiLevel);
-var getArtApexVersion = memoize(_getArtApexVersion);
-var getArtQuickFrameInfoGetterThunk = memoize(_getArtQuickFrameInfoGetterThunk);
-var makeCxxMethodWrapperReturningPointerByValue = Process.arch === "ia32" ? makeCxxMethodWrapperReturningPointerByValueInFirstArg : makeCxxMethodWrapperReturningPointerByValueGeneric;
-var nativeFunctionOptions3 = {
-  exceptions: "propagate"
-};
-var artThreadStateTransitions = {};
-var cachedApi = null;
-var cachedArtClassLinkerSpec = null;
-var MethodMangler = null;
-var artController = null;
-var inlineHooks = [];
-var patchedClasses = /* @__PURE__ */ new Map();
-var artQuickInterceptors = [];
-var thunkPage = null;
-var thunkOffset = 0;
-var taughtArtAboutReplacementMethods = false;
-var taughtArtAboutMethodInstrumentation = false;
-var backtraceModule = null;
-var jdwpSessions = [];
-var socketpair = null;
-var trampolineAllocator = null;
+// backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/android.js
+var android_exports = {};
+__export(android_exports, {
+  ArtMethod: () => ArtMethod,
+  ArtStackVisitor: () => ArtStackVisitor,
+  DVM_JNI_ENV_OFFSET_SELF: () => DVM_JNI_ENV_OFFSET_SELF,
+  HandleVector: () => HandleVector,
+  VariableSizedHandleScope: () => VariableSizedHandleScope,
+  backtrace: () => backtrace,
+  deoptimizeBootImage: () => deoptimizeBootImage,
+  deoptimizeEverything: () => deoptimizeEverything,
+  deoptimizeMethod: () => deoptimizeMethod,
+  ensureClassInitialized: () => ensureClassInitialized,
+  getAndroidApiLevel: () => getAndroidApiLevel,
+  getAndroidVersion: () => getAndroidVersion,
+  getApi: () => getApi,
+  getArtApexVersion: () => getArtApexVersion,
+  getArtClassSpec: () => getArtClassSpec,
+  getArtFieldSpec: () => getArtFieldSpec,
+  getArtMethodSpec: () => getArtMethodSpec,
+  getArtThreadFromEnv: () => getArtThreadFromEnv,
+  getArtThreadSpec: () => getArtThreadSpec,
+  makeArtClassLoaderVisitor: () => makeArtClassLoaderVisitor,
+  makeArtClassVisitor: () => makeArtClassVisitor,
+  makeMethodMangler: () => makeMethodMangler,
+  makeObjectVisitorPredicate: () => makeObjectVisitorPredicate,
+  revertGlobalPatches: () => revertGlobalPatches,
+  translateMethod: () => translateMethod,
+  withAllArtThreadsSuspended: () => withAllArtThreadsSuspended,
+  withRunnableArtThread: () => withRunnableArtThread
+});
 function getApi() {
   if (cachedApi === null) {
     cachedApi = _getApi();
@@ -3304,7 +3376,7 @@ function _getApi() {
   return temporaryApi;
 }
 function tryGetEnvJvmti(vm3, runtime2) {
-  let env = null;
+  let env2 = null;
   vm3.perform(() => {
     const ensurePluginLoadedAddr = getApi().find("_ZN3art7Runtime18EnsurePluginLoadedEPKcPNSt3__112basic_stringIcNS3_11char_traitsIcEENS3_9allocatorIcEEEE");
     if (ensurePluginLoadedAddr === null) {
@@ -3325,22 +3397,22 @@ function tryGetEnvJvmti(vm3, runtime2) {
     if (handle === null) {
       return;
     }
-    env = new EnvJvmti(handle, vm3);
+    env2 = new EnvJvmti(handle, vm3);
     const capaBuf = Memory.alloc(8);
     capaBuf.writeU64(jvmtiCapabilities.canTagObjects);
-    const result = env.addCapabilities(capaBuf);
+    const result = env2.addCapabilities(capaBuf);
     if (result !== JNI_OK) {
-      env = null;
+      env2 = null;
     }
   });
-  return env;
+  return env2;
 }
-function ensureClassInitialized(env, classRef) {
+function ensureClassInitialized(env2, classRef) {
   const api2 = getApi();
   if (api2.flavor !== "art") {
     return;
   }
-  env.getClassName(classRef);
+  env2.getClassName(classRef);
 }
 function getArtVMSpec(api2) {
   return {
@@ -3418,12 +3490,6 @@ function _getArtRuntimeSpec(api2) {
   spec.offset.jniIdsIndirection = tryDetectJniIdsIndirectionOffset(api2);
   return spec;
 }
-var instrumentationOffsetParsers = {
-  ia32: parsex86InstrumentationOffset,
-  x64: parsex86InstrumentationOffset,
-  arm: parseArmInstrumentationOffset,
-  arm64: parseArm64InstrumentationOffset
-};
 function tryDetectInstrumentationOffset(api2) {
   const impl = api2["art::Runtime::DeoptimizeBootImage"];
   if (impl === void 0) {
@@ -3476,12 +3542,6 @@ function parseArm64InstrumentationOffset(insn) {
   }
   return offset;
 }
-var instrumentationPointerParser = {
-  ia32: parsex86InstrumentationPointer,
-  x64: parsex86InstrumentationPointer,
-  arm: parseArmInstrumentationPointer,
-  arm64: parseArm64InstrumentationPointer
-};
 function tryDetectInstrumentationPointer(api2) {
   const impl = api2["art::Runtime::DeoptimizeBootImage"];
   if (impl === void 0) {
@@ -3533,12 +3593,6 @@ function parseArm64InstrumentationPointer(insn) {
   }
   return offset;
 }
-var jniIdsIndirectionOffsetParsers = {
-  ia32: parsex86JniIdsIndirectionOffset,
-  x64: parsex86JniIdsIndirectionOffset,
-  arm: parseArmJniIdsIndirectionOffset,
-  arm64: parseArm64JniIdsIndirectionOffset
-};
 function tryDetectJniIdsIndirectionOffset(api2) {
   const impl = api2.find("_ZN3art7Runtime12SetJniIdTypeENS_9JniIdTypeE");
   if (impl === null) {
@@ -3666,7 +3720,7 @@ function tryGetArtClassLinkerSpec(runtime2, runtimeSpec) {
 function getArtClassSpec(vm3) {
   const MAX_OFFSET = 256;
   let spec = null;
-  vm3.perform((env) => {
+  vm3.perform((env2) => {
     const fieldSpec = getArtFieldSpec(vm3);
     const methodSpec = getArtMethodSpec(vm3);
     const fInfo = {
@@ -3712,15 +3766,15 @@ function getArtClassSpec(vm3) {
       }
       return false;
     };
-    const clazz = env.findClass("java/lang/Thread");
-    const clazzRef = env.newGlobalRef(clazz);
+    const clazz = env2.findClass("java/lang/Thread");
+    const clazzRef = env2.newGlobalRef(clazz);
     try {
       let object;
-      withRunnableArtThread(vm3, env, (thread) => {
+      withRunnableArtThread(vm3, env2, (thread) => {
         object = getApi()["art::JavaVMExt::DecodeGlobal"](vm3, thread, clazzRef);
       });
-      const fieldInstance = unwrapFieldId(env.getFieldId(clazzRef, "name", "Ljava/lang/String;"));
-      const fieldStatic = unwrapFieldId(env.getStaticFieldId(clazzRef, "MAX_PRIORITY", "I"));
+      const fieldInstance = unwrapFieldId(env2.getFieldId(clazzRef, "name", "Ljava/lang/String;"));
+      const fieldStatic = unwrapFieldId(env2.getStaticFieldId(clazzRef, "MAX_PRIORITY", "I"));
       let offsetStatic = -1;
       let offsetInstance = -1;
       for (let offset = 0; offset !== MAX_OFFSET; offset += 4) {
@@ -3737,7 +3791,7 @@ function getArtClassSpec(vm3) {
       const sfieldOffset = offsetInstance !== offsetStatic ? offsetStatic : 0;
       const ifieldOffset = offsetInstance;
       let offsetMethods = -1;
-      const methodInstance = unwrapMethodId(env.getMethodId(clazzRef, "getName", "()Ljava/lang/String;"));
+      const methodInstance = unwrapMethodId(env2.getMethodId(clazzRef, "getName", "()Ljava/lang/String;"));
       for (let offset = 0; offset !== MAX_OFFSET; offset += 4) {
         if (offsetMethods === -1 && hasEntry(object, offset, methodInstance, mInfo)) {
           offsetMethods = offset;
@@ -3767,8 +3821,8 @@ function getArtClassSpec(vm3) {
         }
       };
     } finally {
-      env.deleteLocalRef(clazz);
-      env.deleteGlobalRef(clazzRef);
+      env2.deleteLocalRef(clazz);
+      env2.deleteGlobalRef(clazzRef);
     }
   });
   return spec;
@@ -3776,10 +3830,10 @@ function getArtClassSpec(vm3) {
 function _getArtMethodSpec(vm3) {
   const api2 = getApi();
   let spec;
-  vm3.perform((env) => {
-    const process = env.findClass("android/os/Process");
-    const getElapsedCpuTime = unwrapMethodId(env.getStaticMethodId(process, "getElapsedCpuTime", "()J"));
-    env.deleteLocalRef(process);
+  vm3.perform((env2) => {
+    const process = env2.findClass("android/os/Process");
+    const getElapsedCpuTime = unwrapMethodId(env2.getStaticMethodId(process, "getElapsedCpuTime", "()J"));
+    env2.deleteLocalRef(process);
     const runtimeModule = Process.getModuleByName("libandroid_runtime.so");
     const runtimeStart = runtimeModule.base;
     const runtimeEnd = runtimeStart.add(runtimeModule.size);
@@ -3849,9 +3903,9 @@ function getArtFieldSpec(vm3) {
 function _getArtThreadSpec(vm3) {
   const apiLevel = getAndroidApiLevel();
   let spec;
-  vm3.perform((env) => {
-    const threadHandle = getArtThreadFromEnv(env);
-    const envHandle = env.handle;
+  vm3.perform((env2) => {
+    const threadHandle = getArtThreadFromEnv(env2);
+    const envHandle = env2.handle;
     let isExceptionReportedOffset = null;
     let exceptionOffset = null;
     let throwLocationOffset = null;
@@ -3919,16 +3973,10 @@ function _getArtManagedStackSpec() {
     };
   }
 }
-var artQuickTrampolineParsers = {
-  ia32: parseArtQuickTrampolineX86,
-  x64: parseArtQuickTrampolineX86,
-  arm: parseArtQuickTrampolineArm,
-  arm64: parseArtQuickTrampolineArm64
-};
 function getArtQuickEntrypointFromTrampoline(trampoline, vm3) {
   let address;
-  vm3.perform((env) => {
-    const thread = getArtThreadFromEnv(env);
+  vm3.perform((env2) => {
+    const thread = getArtThreadFromEnv(env2);
     const tryParse = artQuickTrampolineParsers[Process.arch];
     const insn = Instruction.parse(trampoline);
     const offset = tryParse(insn);
@@ -3958,8 +4006,8 @@ function parseArtQuickTrampolineArm64(insn) {
   }
   return null;
 }
-function getArtThreadFromEnv(env) {
-  return env.handle.add(pointerSize5).readPointer();
+function getArtThreadFromEnv(env2) {
+  return env2.handle.add(pointerSize5).readPointer();
 }
 function _getAndroidVersion() {
   return getAndroidSystemProperty("ro.build.version.release");
@@ -3997,8 +4045,6 @@ function _getArtApexVersion() {
 function computeArtApexVersionFromApiLevel() {
   return getAndroidApiLevel() * 1e7;
 }
-var systemPropertyGet = null;
-var PROP_VALUE_MAX = 92;
 function getAndroidSystemProperty(name) {
   if (systemPropertyGet === null) {
     systemPropertyGet = new NativeFunction(
@@ -4012,19 +4058,19 @@ function getAndroidSystemProperty(name) {
   systemPropertyGet(Memory.allocUtf8String(name), buf);
   return buf.readUtf8String();
 }
-function withRunnableArtThread(vm3, env, fn) {
-  const perform = getArtThreadStateTransitionImpl(vm3, env);
-  const id = getArtThreadFromEnv(env).toString();
+function withRunnableArtThread(vm3, env2, fn) {
+  const perform = getArtThreadStateTransitionImpl(vm3, env2);
+  const id = getArtThreadFromEnv(env2).toString();
   artThreadStateTransitions[id] = fn;
-  perform(env.handle);
+  perform(env2.handle);
   if (artThreadStateTransitions[id] !== void 0) {
     delete artThreadStateTransitions[id];
     throw new Error("Unable to perform state transition; please file a bug");
   }
 }
-function _getArtThreadStateTransitionImpl(vm3, env) {
+function _getArtThreadStateTransitionImpl(vm3, env2) {
   const callback = new NativeCallback(onThreadStateTransitionComplete, "void", ["pointer"]);
-  return makeArtThreadStateTransitionImpl(vm3, env, callback);
+  return makeArtThreadStateTransitionImpl(vm3, env2, callback);
 }
 function onThreadStateTransitionComplete(thread) {
   const id = thread.toString();
@@ -4043,19 +4089,6 @@ function withAllArtThreadsSuspended(fn) {
     api2["art::ThreadList::ResumeAll"](threadList);
   }
 }
-var ArtClassVisitor = class {
-  constructor(visit) {
-    const visitor = Memory.alloc(4 * pointerSize5);
-    const vtable2 = visitor.add(pointerSize5);
-    visitor.writePointer(vtable2);
-    const onVisit = new NativeCallback((self, klass) => {
-      return visit(klass) === true ? 1 : 0;
-    }, "bool", ["pointer", "pointer"]);
-    vtable2.add(2 * pointerSize5).writePointer(onVisit);
-    this.handle = visitor;
-    this._onVisit = onVisit;
-  }
-};
 function makeArtClassVisitor(visit) {
   const api2 = getApi();
   if (api2["art::ClassLinker::VisitClasses"] instanceof NativeFunction) {
@@ -4065,105 +4098,9 @@ function makeArtClassVisitor(visit) {
     return visit(klass) === true ? 1 : 0;
   }, "bool", ["pointer", "pointer"]);
 }
-var ArtClassLoaderVisitor = class {
-  constructor(visit) {
-    const visitor = Memory.alloc(4 * pointerSize5);
-    const vtable2 = visitor.add(pointerSize5);
-    visitor.writePointer(vtable2);
-    const onVisit = new NativeCallback((self, klass) => {
-      visit(klass);
-    }, "void", ["pointer", "pointer"]);
-    vtable2.add(2 * pointerSize5).writePointer(onVisit);
-    this.handle = visitor;
-    this._onVisit = onVisit;
-  }
-};
 function makeArtClassLoaderVisitor(visit) {
   return new ArtClassLoaderVisitor(visit);
 }
-var WalkKind = {
-  "include-inlined-frames": 0,
-  "skip-inlined-frames": 1
-};
-var ArtStackVisitor = class {
-  constructor(thread, context, walkKind, numFrames = 0, checkSuspended = true) {
-    const api2 = getApi();
-    const baseSize = 512;
-    const vtableSize = 3 * pointerSize5;
-    const visitor = Memory.alloc(baseSize + vtableSize);
-    api2["art::StackVisitor::StackVisitor"](
-      visitor,
-      thread,
-      context,
-      WalkKind[walkKind],
-      numFrames,
-      checkSuspended ? 1 : 0
-    );
-    const vtable2 = visitor.add(baseSize);
-    visitor.writePointer(vtable2);
-    const onVisitFrame = new NativeCallback(this._visitFrame.bind(this), "bool", ["pointer"]);
-    vtable2.add(2 * pointerSize5).writePointer(onVisitFrame);
-    this.handle = visitor;
-    this._onVisitFrame = onVisitFrame;
-    const curShadowFrame = visitor.add(pointerSize5 === 4 ? 12 : 24);
-    this._curShadowFrame = curShadowFrame;
-    this._curQuickFrame = curShadowFrame.add(pointerSize5);
-    this._curQuickFramePc = curShadowFrame.add(2 * pointerSize5);
-    this._curOatQuickMethodHeader = curShadowFrame.add(3 * pointerSize5);
-    this._getMethodImpl = api2["art::StackVisitor::GetMethod"];
-    this._descLocImpl = api2["art::StackVisitor::DescribeLocation"];
-    this._getCQFIImpl = api2["art::StackVisitor::GetCurrentQuickFrameInfo"];
-  }
-  walkStack(includeTransitions = false) {
-    getApi()["art::StackVisitor::WalkStack"](this.handle, includeTransitions ? 1 : 0);
-  }
-  _visitFrame() {
-    return this.visitFrame() ? 1 : 0;
-  }
-  visitFrame() {
-    throw new Error("Subclass must implement visitFrame");
-  }
-  getMethod() {
-    const methodHandle = this._getMethodImpl(this.handle);
-    if (methodHandle.isNull()) {
-      return null;
-    }
-    return new ArtMethod(methodHandle);
-  }
-  getCurrentQuickFramePc() {
-    return this._curQuickFramePc.readPointer();
-  }
-  getCurrentQuickFrame() {
-    return this._curQuickFrame.readPointer();
-  }
-  getCurrentShadowFrame() {
-    return this._curShadowFrame.readPointer();
-  }
-  describeLocation() {
-    const result = new StdString();
-    this._descLocImpl(result, this.handle);
-    return result.disposeToString();
-  }
-  getCurrentOatQuickMethodHeader() {
-    return this._curOatQuickMethodHeader.readPointer();
-  }
-  getCurrentQuickFrameInfo() {
-    return this._getCQFIImpl(this.handle);
-  }
-};
-var ArtMethod = class {
-  constructor(handle) {
-    this.handle = handle;
-  }
-  prettyMethod(withSignature = true) {
-    const result = new StdString();
-    getApi()["art::ArtMethod::PrettyMethod"](result, this.handle, withSignature ? 1 : 0);
-    return result.disposeToString();
-  }
-  toString() {
-    return `ArtMethod(handle=${this.handle})`;
-  }
-};
 function makeArtQuickFrameInfoGetter(impl) {
   return function(self) {
     const result = Memory.alloc(12);
@@ -4218,18 +4155,6 @@ function _getArtQuickFrameInfoGetterThunk(impl) {
   }
   return new NativeFunction(thunk, "void", ["pointer", "pointer"], nativeFunctionOptions3);
 }
-var thunkRelocators = {
-  ia32: globalThis.X86Relocator,
-  x64: globalThis.X86Relocator,
-  arm: globalThis.ThumbRelocator,
-  arm64: globalThis.Arm64Relocator
-};
-var thunkWriters = {
-  ia32: globalThis.X86Writer,
-  x64: globalThis.X86Writer,
-  arm: globalThis.ThumbWriter,
-  arm64: globalThis.Arm64Writer
-};
 function makeThunk(size, write3) {
   if (thunkPage === null) {
     thunkPage = Memory.alloc(Process.pageSize);
@@ -4641,135 +4566,6 @@ function ensureArtKnowsHowToHandleReplacementMethods(vm3) {
     Interceptor.attach(runFlip, artController.hooks.Gc.runFlip);
   }
 }
-var artGetOatQuickMethodHeaderInlinedCopyHandler = {
-  arm: {
-    signatures: [
-      {
-        pattern: [
-          "b0 68",
-          // ldr r0, [r6, #8]
-          "01 30",
-          // adds r0, #1
-          "0c d0",
-          // beq #0x16fcd4
-          "1b 98",
-          // ldr r0, [sp, #0x6c]
-          ":",
-          "c0 ff",
-          "c0 ff",
-          "00 ff",
-          "00 2f"
-        ],
-        validateMatch: validateGetOatQuickMethodHeaderInlinedMatchArm
-      },
-      {
-        pattern: [
-          "d8 f8 08 00",
-          // ldr r0, [r8, #8]
-          "01 30",
-          // adds r0, #1
-          "0c d0",
-          // beq #0x16fcd4
-          "1b 98",
-          // ldr r0, [sp, #0x6c]
-          ":",
-          "f0 ff ff 0f",
-          "ff ff",
-          "00 ff",
-          "00 2f"
-        ],
-        validateMatch: validateGetOatQuickMethodHeaderInlinedMatchArm
-      },
-      {
-        pattern: [
-          "b0 68",
-          // ldr r0, [r6, #8]
-          "01 30",
-          // adds r0, #1
-          "40 f0 c3 80",
-          // bne #0x203bf0
-          "00 25",
-          // movs r5, #0
-          ":",
-          "c0 ff",
-          "c0 ff",
-          "c0 fb 00 d0",
-          "ff f8"
-        ],
-        validateMatch: validateGetOatQuickMethodHeaderInlinedMatchArm
-      }
-    ],
-    instrument: instrumentGetOatQuickMethodHeaderInlinedCopyArm
-  },
-  arm64: {
-    signatures: [
-      {
-        pattern: [
-          /* e8 */
-          "0a 40 b9",
-          // ldr w8, [x23, #0x8]
-          "1f 05 00 31",
-          // cmn w8, #0x1
-          "40 01 00 54",
-          // b.eq 0x2e4204
-          "88 39 00 f0",
-          // adrp x8, 0xa17000
-          ":",
-          /* 00 */
-          "fc ff ff",
-          "1f fc ff ff",
-          "1f 00 00 ff",
-          "00 00 00 9f"
-        ],
-        offset: 1,
-        validateMatch: validateGetOatQuickMethodHeaderInlinedMatchArm64
-      },
-      {
-        pattern: [
-          /* e8 */
-          "0a 40 b9",
-          // ldr w8, [x?, #0x8]
-          "1f 05 00 31",
-          // cmn w8, #0x1
-          "40 01 00 54",
-          // b.eq <target>
-          "00 0e 40 f9",
-          // ldr x?, [x?, #0x18]
-          ":",
-          /* 00 */
-          "fc ff ff",
-          "1f fc ff ff",
-          "1f 00 00 ff",
-          "00 fc ff ff"
-        ],
-        offset: 1,
-        validateMatch: validateGetOatQuickMethodHeaderInlinedMatchArm64
-      },
-      {
-        pattern: [
-          /* e8 */
-          "0a 40 b9",
-          // ldr w8, [x23, #0x8]
-          "1f 05 00 31",
-          // cmn w8, #0x1
-          "01 34 00 54",
-          // b.ne 0x3d8e50
-          "e0 03 1f aa",
-          // mov x0, xzr
-          ":",
-          /* 00 */
-          "fc ff ff",
-          "1f fc ff ff",
-          "1f 00 00 ff",
-          "e0 ff ff ff"
-        ],
-        offset: 1,
-        validateMatch: validateGetOatQuickMethodHeaderInlinedMatchArm64
-      }
-    ],
-    instrument: instrumentGetOatQuickMethodHeaderInlinedCopyArm64
-  }
-};
 function validateGetOatQuickMethodHeaderInlinedMatchArm({ address, size }) {
   const ldr = Instruction.parse(address.or(1));
   const [ldrDst, ldrSrc] = ldr.operands;
@@ -4882,19 +4678,6 @@ function maybeInstrumentGetOatQuickMethodHeaderInlineCopies() {
 function returnEmptyObject() {
   return {};
 }
-var InlineHook = class {
-  constructor(address, size, trampoline) {
-    this.address = address;
-    this.size = size;
-    this.originalCode = address.readByteArray(size);
-    this.trampoline = trampoline;
-  }
-  revert() {
-    Memory.patchCode(this.address, this.size, (code3) => {
-      code3.writeByteArray(this.originalCode);
-    });
-  }
-};
 function instrumentGetOatQuickMethodHeaderInlinedCopyArm({ address, size, validationResult }) {
   const { methodReg, target } = validationResult;
   const trampoline = Memory.alloc(Process.pageSize);
@@ -5023,13 +4806,13 @@ function translateMethod(methodId) {
 }
 function backtrace(vm3, options = {}) {
   const { limit = 16 } = options;
-  const env = vm3.getEnv();
+  const env2 = vm3.getEnv();
   if (backtraceModule === null) {
-    backtraceModule = makeBacktraceModule(vm3, env);
+    backtraceModule = makeBacktraceModule(vm3, env2);
   }
-  return backtraceModule.backtrace(env, limit);
+  return backtraceModule.backtrace(env2, limit);
 }
-function makeBacktraceModule(vm3, env) {
+function makeBacktraceModule(vm3, env2) {
   const api2 = getApi();
   const performImpl = Memory.alloc(Process.pointerSize);
   const cm2 = new CModule(`
@@ -5493,11 +5276,11 @@ std_string_get_data (StdString * str)
   const fastOptions = { exceptions: "propagate", scheduling: "exclusive" };
   const _getId = new NativeFunction(cm2._get_id, "pointer", ["pointer"], fastOptions);
   const _getFrames = new NativeFunction(cm2._get_frames, "pointer", ["pointer"], fastOptions);
-  const performThreadStateTransition = makeArtThreadStateTransitionImpl(vm3, env, cm2._on_thread_state_transition_complete);
+  const performThreadStateTransition = makeArtThreadStateTransitionImpl(vm3, env2, cm2._on_thread_state_transition_complete);
   cm2._performData = performThreadStateTransition;
   performImpl.writePointer(performThreadStateTransition);
-  cm2.backtrace = (env2, limit) => {
-    const handle = _create(env2, limit);
+  cm2.backtrace = (env3, limit) => {
+    const handle = _create(env3, limit);
     const bt = new Backtrace(handle);
     Script.bindWeak(bt, destroy.bind(null, handle));
     return bt;
@@ -5513,17 +5296,6 @@ std_string_get_data (StdString * str)
   };
   return cm2;
 }
-var Backtrace = class {
-  constructor(handle) {
-    this.handle = handle;
-  }
-  get id() {
-    return backtraceModule.getId(this.handle);
-  }
-  get frames() {
-    return backtraceModule.getFrames(this.handle);
-  }
-};
 function revertGlobalPatches() {
   patchedClasses.forEach((entry) => {
     entry.vtablePtr.writePointer(entry.vtable);
@@ -5558,12 +5330,6 @@ function unwrapGenericId(genericId, apiMethod) {
   }
   return genericId;
 }
-var artQuickCodeReplacementTrampolineWriters = {
-  ia32: writeArtQuickCodeReplacementTrampolineIA32,
-  x64: writeArtQuickCodeReplacementTrampolineX64,
-  arm: writeArtQuickCodeReplacementTrampolineArm,
-  arm64: writeArtQuickCodeReplacementTrampolineArm64
-};
 function writeArtQuickCodeReplacementTrampolineIA32(trampoline, target, redirectSize, constraints, vm3) {
   const threadOffsets = getArtThreadSpec(vm3).offset;
   const artMethodOffsets = getArtMethodSpec(vm3).offset;
@@ -5754,12 +5520,6 @@ function writeArtQuickCodeReplacementTrampolineArm64(trampoline, target, redirec
   });
   return offset;
 }
-var artQuickCodePrologueWriters = {
-  ia32: writeArtQuickCodePrologueX86,
-  x64: writeArtQuickCodePrologueX86,
-  arm: writeArtQuickCodePrologueArm,
-  arm64: writeArtQuickCodePrologueArm64
-};
 function writeArtQuickCodePrologueX86(target, trampoline, redirectSize) {
   Memory.patchCode(target, 16, (code3) => {
     const writer = new X86Writer(code3, { pc: target });
@@ -5787,178 +5547,11 @@ function writeArtQuickCodePrologueArm64(target, trampoline, redirectSize) {
     writer.flush();
   });
 }
-var artQuickCodeHookRedirectSize = {
-  ia32: 5,
-  x64: 16,
-  arm: 8,
-  arm64: 16
-};
-var ArtQuickCodeInterceptor = class {
-  constructor(quickCode) {
-    this.quickCode = quickCode;
-    this.quickCodeAddress = Process.arch === "arm" ? quickCode.and(THUMB_BIT_REMOVAL_MASK) : quickCode;
-    this.redirectSize = 0;
-    this.trampoline = null;
-    this.overwrittenPrologue = null;
-    this.overwrittenPrologueLength = 0;
-  }
-  _canRelocateCode(relocationSize, constraints) {
-    const Writer = thunkWriters[Process.arch];
-    const Relocator = thunkRelocators[Process.arch];
-    const { quickCodeAddress } = this;
-    const writer = new Writer(quickCodeAddress);
-    const relocator = new Relocator(quickCodeAddress, writer);
-    let offset;
-    if (Process.arch === "arm64") {
-      let availableScratchRegs = /* @__PURE__ */ new Set(["x16", "x17"]);
-      do {
-        const nextOffset = relocator.readOne();
-        const nextScratchRegs = new Set(availableScratchRegs);
-        const { read: read2, written } = relocator.input.regsAccessed;
-        for (const regs of [read2, written]) {
-          for (const reg of regs) {
-            let name;
-            if (reg.startsWith("w")) {
-              name = "x" + reg.substring(1);
-            } else {
-              name = reg;
-            }
-            nextScratchRegs.delete(name);
-          }
-        }
-        if (nextScratchRegs.size === 0) {
-          break;
-        }
-        offset = nextOffset;
-        availableScratchRegs = nextScratchRegs;
-      } while (offset < relocationSize && !relocator.eoi);
-      constraints.availableScratchRegs = availableScratchRegs;
-    } else {
-      do {
-        offset = relocator.readOne();
-      } while (offset < relocationSize && !relocator.eoi);
-    }
-    return offset >= relocationSize;
-  }
-  _allocateTrampoline() {
-    if (trampolineAllocator === null) {
-      const trampolineSize = pointerSize5 === 4 ? 128 : 256;
-      trampolineAllocator = makeAllocator(trampolineSize);
-    }
-    const maxRedirectSize = artQuickCodeHookRedirectSize[Process.arch];
-    let redirectSize, spec;
-    let alignment = 1;
-    const constraints = {};
-    if (pointerSize5 === 4 || this._canRelocateCode(maxRedirectSize, constraints)) {
-      redirectSize = maxRedirectSize;
-      spec = {};
-    } else {
-      let maxDistance;
-      if (Process.arch === "x64") {
-        redirectSize = 5;
-        maxDistance = X86_JMP_MAX_DISTANCE;
-      } else if (Process.arch === "arm64") {
-        redirectSize = 8;
-        maxDistance = ARM64_ADRP_MAX_DISTANCE;
-        alignment = 4096;
-      }
-      spec = { near: this.quickCodeAddress, maxDistance };
-    }
-    this.redirectSize = redirectSize;
-    this.trampoline = trampolineAllocator.allocateSlice(spec, alignment);
-    return constraints;
-  }
-  _destroyTrampoline() {
-    trampolineAllocator.freeSlice(this.trampoline);
-  }
-  activate(vm3) {
-    const constraints = this._allocateTrampoline();
-    const { trampoline, quickCode, redirectSize } = this;
-    const writeTrampoline = artQuickCodeReplacementTrampolineWriters[Process.arch];
-    const prologueLength = writeTrampoline(trampoline, quickCode, redirectSize, constraints, vm3);
-    this.overwrittenPrologueLength = prologueLength;
-    this.overwrittenPrologue = Memory.dup(this.quickCodeAddress, prologueLength);
-    const writePrologue = artQuickCodePrologueWriters[Process.arch];
-    writePrologue(quickCode, trampoline, redirectSize);
-  }
-  deactivate() {
-    const { quickCodeAddress, overwrittenPrologueLength: prologueLength } = this;
-    const Writer = thunkWriters[Process.arch];
-    Memory.patchCode(quickCodeAddress, prologueLength, (code3) => {
-      const writer = new Writer(code3, { pc: quickCodeAddress });
-      const { overwrittenPrologue } = this;
-      writer.putBytes(overwrittenPrologue.readByteArray(prologueLength));
-      writer.flush();
-    });
-    this._destroyTrampoline();
-  }
-};
 function isArtQuickEntrypoint(address) {
   const api2 = getApi();
   const { module: m, artClassLinker } = api2;
   return address.equals(artClassLinker.quickGenericJniTrampoline) || address.equals(artClassLinker.quickToInterpreterBridgeTrampoline) || address.equals(artClassLinker.quickResolutionTrampoline) || address.equals(artClassLinker.quickImtConflictTrampoline) || address.compare(m.base) >= 0 && address.compare(m.base.add(m.size)) < 0;
 }
-var ArtMethodMangler = class {
-  constructor(opaqueMethodId) {
-    const methodId = unwrapMethodId(opaqueMethodId);
-    this.methodId = methodId;
-    this.originalMethod = null;
-    this.hookedMethodId = methodId;
-    this.replacementMethodId = null;
-    this.interceptor = null;
-  }
-  replace(impl, isInstanceMethod, argTypes, vm3, api2) {
-    const { kAccCompileDontBother, artNterpEntryPoint } = api2;
-    this.originalMethod = fetchArtMethod(this.methodId, vm3);
-    const originalFlags = this.originalMethod.accessFlags;
-    if ((originalFlags & kAccXposedHookedMethod) !== 0 && xposedIsSupported()) {
-      const hookInfo = this.originalMethod.jniCode;
-      this.hookedMethodId = hookInfo.add(2 * pointerSize5).readPointer();
-      this.originalMethod = fetchArtMethod(this.hookedMethodId, vm3);
-    }
-    const { hookedMethodId } = this;
-    const replacementMethodId = cloneArtMethod(hookedMethodId, vm3);
-    this.replacementMethodId = replacementMethodId;
-    patchArtMethod(replacementMethodId, {
-      jniCode: impl,
-      accessFlags: (originalFlags & ~(kAccCriticalNative | kAccFastNative | kAccNterpEntryPointFastPathFlag) | kAccNative | kAccCompileDontBother) >>> 0,
-      quickCode: api2.artClassLinker.quickGenericJniTrampoline,
-      interpreterCode: api2.artInterpreterToCompiledCodeBridge
-    }, vm3);
-    let hookedMethodRemovedFlags = kAccFastInterpreterToInterpreterInvoke | kAccSingleImplementation | kAccNterpEntryPointFastPathFlag;
-    if ((originalFlags & kAccNative) === 0) {
-      hookedMethodRemovedFlags |= kAccSkipAccessChecks;
-    }
-    patchArtMethod(hookedMethodId, {
-      accessFlags: (originalFlags & ~hookedMethodRemovedFlags | kAccCompileDontBother) >>> 0
-    }, vm3);
-    const quickCode = this.originalMethod.quickCode;
-    if (artNterpEntryPoint !== null && quickCode.equals(artNterpEntryPoint)) {
-      patchArtMethod(hookedMethodId, {
-        quickCode: api2.artQuickToInterpreterBridge
-      }, vm3);
-    }
-    if (!isArtQuickEntrypoint(quickCode)) {
-      const interceptor = new ArtQuickCodeInterceptor(quickCode);
-      interceptor.activate(vm3);
-      this.interceptor = interceptor;
-    }
-    artController.replacedMethods.set(hookedMethodId, replacementMethodId);
-    notifyArtMethodHooked(hookedMethodId, vm3);
-  }
-  revert(vm3) {
-    const { hookedMethodId, interceptor } = this;
-    patchArtMethod(hookedMethodId, this.originalMethod, vm3);
-    artController.replacedMethods.delete(hookedMethodId);
-    if (interceptor !== null) {
-      interceptor.deactivate();
-      this.interceptor = null;
-    }
-  }
-  resolveTarget(wrapper, isInstanceMethod, env, api2) {
-    return this.hookedMethodId;
-  }
-};
 function xposedIsSupported() {
   return getAndroidApiLevel() < 28;
 }
@@ -5989,84 +5582,6 @@ function patchArtMethod(methodId, patches, vm3) {
     write3.call(address, patches[name]);
   });
 }
-var DalvikMethodMangler = class {
-  constructor(methodId) {
-    this.methodId = methodId;
-    this.originalMethod = null;
-  }
-  replace(impl, isInstanceMethod, argTypes, vm3, api2) {
-    const { methodId } = this;
-    this.originalMethod = Memory.dup(methodId, DVM_METHOD_SIZE);
-    let argsSize = argTypes.reduce((acc, t) => acc + t.size, 0);
-    if (isInstanceMethod) {
-      argsSize++;
-    }
-    const accessFlags = (methodId.add(DVM_METHOD_OFFSET_ACCESS_FLAGS).readU32() | kAccNative) >>> 0;
-    const registersSize = argsSize;
-    const outsSize = 0;
-    const insSize = argsSize;
-    methodId.add(DVM_METHOD_OFFSET_ACCESS_FLAGS).writeU32(accessFlags);
-    methodId.add(DVM_METHOD_OFFSET_REGISTERS_SIZE).writeU16(registersSize);
-    methodId.add(DVM_METHOD_OFFSET_OUTS_SIZE).writeU16(outsSize);
-    methodId.add(DVM_METHOD_OFFSET_INS_SIZE).writeU16(insSize);
-    methodId.add(DVM_METHOD_OFFSET_JNI_ARG_INFO).writeU32(computeDalvikJniArgInfo(methodId));
-    api2.dvmUseJNIBridge(methodId, impl);
-  }
-  revert(vm3) {
-    Memory.copy(this.methodId, this.originalMethod, DVM_METHOD_SIZE);
-  }
-  resolveTarget(wrapper, isInstanceMethod, env, api2) {
-    const thread = env.handle.add(DVM_JNI_ENV_OFFSET_SELF).readPointer();
-    let objectPtr;
-    if (isInstanceMethod) {
-      objectPtr = api2.dvmDecodeIndirectRef(thread, wrapper.$h);
-    } else {
-      const h = wrapper.$borrowClassHandle(env);
-      objectPtr = api2.dvmDecodeIndirectRef(thread, h.value);
-      h.unref(env);
-    }
-    let classObject;
-    if (isInstanceMethod) {
-      classObject = objectPtr.add(DVM_OBJECT_OFFSET_CLAZZ).readPointer();
-    } else {
-      classObject = objectPtr;
-    }
-    const classKey = classObject.toString(16);
-    let entry = patchedClasses.get(classKey);
-    if (entry === void 0) {
-      const vtablePtr = classObject.add(DVM_CLASS_OBJECT_OFFSET_VTABLE);
-      const vtableCountPtr = classObject.add(DVM_CLASS_OBJECT_OFFSET_VTABLE_COUNT);
-      const vtable2 = vtablePtr.readPointer();
-      const vtableCount = vtableCountPtr.readS32();
-      const vtableSize = vtableCount * pointerSize5;
-      const shadowVtable = Memory.alloc(2 * vtableSize);
-      Memory.copy(shadowVtable, vtable2, vtableSize);
-      vtablePtr.writePointer(shadowVtable);
-      entry = {
-        classObject,
-        vtablePtr,
-        vtableCountPtr,
-        vtable: vtable2,
-        vtableCount,
-        shadowVtable,
-        shadowVtableCount: vtableCount,
-        targetMethods: /* @__PURE__ */ new Map()
-      };
-      patchedClasses.set(classKey, entry);
-    }
-    const methodKey = this.methodId.toString(16);
-    let targetMethod = entry.targetMethods.get(methodKey);
-    if (targetMethod === void 0) {
-      targetMethod = Memory.dup(this.originalMethod, DVM_METHOD_SIZE);
-      const methodIndex = entry.shadowVtableCount++;
-      entry.shadowVtable.add(methodIndex * pointerSize5).writePointer(targetMethod);
-      targetMethod.add(DVM_METHOD_OFFSET_METHOD_INDEX).writeU16(methodIndex);
-      entry.vtableCountPtr.writeS32(entry.shadowVtableCount);
-      entry.targetMethods.set(methodKey, targetMethod);
-    }
-    return targetMethod;
-  }
-};
 function computeDalvikJniArgInfo(methodId) {
   if (Process.arch !== "ia32") {
     return DALVIK_JNI_NO_ARG_INFO;
@@ -6118,27 +5633,27 @@ function cloneArtMethod(method, vm3) {
   }
   return Memory.dup(method, getArtMethodSpec(vm3).size);
 }
-function deoptimizeMethod(vm3, env, method) {
-  requestDeoptimization(vm3, env, kSelectiveDeoptimization, method);
+function deoptimizeMethod(vm3, env2, method) {
+  requestDeoptimization(vm3, env2, kSelectiveDeoptimization, method);
 }
-function deoptimizeEverything(vm3, env) {
-  requestDeoptimization(vm3, env, kFullDeoptimization);
+function deoptimizeEverything(vm3, env2) {
+  requestDeoptimization(vm3, env2, kFullDeoptimization);
 }
-function deoptimizeBootImage(vm3, env) {
+function deoptimizeBootImage(vm3, env2) {
   const api2 = getApi();
   if (getAndroidApiLevel() < 26) {
     throw new Error("This API is only available on Android >= 8.0");
   }
-  withRunnableArtThread(vm3, env, (thread) => {
+  withRunnableArtThread(vm3, env2, (thread) => {
     api2["art::Runtime::DeoptimizeBootImage"](api2.artRuntime);
   });
 }
-function requestDeoptimization(vm3, env, kind, method) {
+function requestDeoptimization(vm3, env2, kind, method) {
   const api2 = getApi();
   if (getAndroidApiLevel() < 24) {
     throw new Error("This API is only available on Android >= 7.0");
   }
-  withRunnableArtThread(vm3, env, (thread) => {
+  withRunnableArtThread(vm3, env2, (thread) => {
     if (getAndroidApiLevel() < 30) {
       if (!api2.isJdwpStarted()) {
         const session = startJdwp(api2);
@@ -6185,40 +5700,6 @@ function requestDeoptimization(vm3, env, kind, method) {
     }
   });
 }
-var JdwpSession = class {
-  constructor() {
-    const libart = Process.getModuleByName("libart.so");
-    const acceptImpl = libart.getExportByName("_ZN3art4JDWP12JdwpAdbState6AcceptEv");
-    const receiveClientFdImpl = libart.getExportByName("_ZN3art4JDWP12JdwpAdbState15ReceiveClientFdEv");
-    const controlPair = makeSocketPair();
-    const clientPair = makeSocketPair();
-    this._controlFd = controlPair[0];
-    this._clientFd = clientPair[0];
-    let acceptListener = null;
-    acceptListener = Interceptor.attach(acceptImpl, function(args) {
-      const state = args[0];
-      const controlSockPtr = Memory.scanSync(state.add(8252), 256, "00 ff ff ff ff 00")[0].address.add(1);
-      controlSockPtr.writeS32(controlPair[1]);
-      acceptListener.detach();
-    });
-    Interceptor.replace(receiveClientFdImpl, new NativeCallback(function(state) {
-      Interceptor.revert(receiveClientFdImpl);
-      return clientPair[1];
-    }, "int", ["pointer"]));
-    Interceptor.flush();
-    this._handshakeRequest = this._performHandshake();
-  }
-  async _performHandshake() {
-    const input = new UnixInputStream(this._clientFd, { autoClose: false });
-    const output = new UnixOutputStream(this._clientFd, { autoClose: false });
-    const handshakePacket = [74, 68, 87, 80, 45, 72, 97, 110, 100, 115, 104, 97, 107, 101];
-    try {
-      await output.writeAll(handshakePacket);
-      await input.readAll(handshakePacket.length);
-    } catch (e) {
-    }
-  }
-};
 function startJdwp(api2) {
   const session = new JdwpSession();
   api2["art::Dbg::SetJdwpAllowed"](1);
@@ -6287,15 +5768,9 @@ function makeDecodeGlobalFallback(api2) {
     return decode(thread, ref);
   };
 }
-var threadStateTransitionRecompilers = {
-  ia32: recompileExceptionClearForX86,
-  x64: recompileExceptionClearForX86,
-  arm: recompileExceptionClearForArm,
-  arm64: recompileExceptionClearForArm64
-};
-function makeArtThreadStateTransitionImpl(vm3, env, callback) {
+function makeArtThreadStateTransitionImpl(vm3, env2, callback) {
   const api2 = getApi();
-  const envVtable = env.handle.readPointer();
+  const envVtable = env2.handle.readPointer();
   let exceptionClearImpl;
   const innerExceptionClearImpl = api2.find("_ZN3art3JNIILb1EE14ExceptionClearEP7_JNIEnv");
   if (innerExceptionClearImpl !== null) {
@@ -6981,298 +6456,6 @@ function makeCxxMethodWrapperReturningStdStringByValue(impl, argTypes) {
     }
   }
 }
-var StdString = class {
-  constructor() {
-    this.handle = Memory.alloc(STD_STRING_SIZE);
-  }
-  dispose() {
-    const [data, isTiny] = this._getData();
-    if (!isTiny) {
-      getApi().$delete(data);
-    }
-  }
-  disposeToString() {
-    const result = this.toString();
-    this.dispose();
-    return result;
-  }
-  toString() {
-    const [data] = this._getData();
-    return data.readUtf8String();
-  }
-  _getData() {
-    const str = this.handle;
-    const isTiny = (str.readU8() & 1) === 0;
-    const data = isTiny ? str.add(1) : str.add(2 * pointerSize5).readPointer();
-    return [data, isTiny];
-  }
-};
-var StdVector = class {
-  $delete() {
-    this.dispose();
-    getApi().$delete(this);
-  }
-  constructor(storage, elementSize) {
-    this.handle = storage;
-    this._begin = storage;
-    this._end = storage.add(pointerSize5);
-    this._storage = storage.add(2 * pointerSize5);
-    this._elementSize = elementSize;
-  }
-  init() {
-    this.begin = NULL;
-    this.end = NULL;
-    this.storage = NULL;
-  }
-  dispose() {
-    getApi().$delete(this.begin);
-  }
-  get begin() {
-    return this._begin.readPointer();
-  }
-  set begin(value) {
-    this._begin.writePointer(value);
-  }
-  get end() {
-    return this._end.readPointer();
-  }
-  set end(value) {
-    this._end.writePointer(value);
-  }
-  get storage() {
-    return this._storage.readPointer();
-  }
-  set storage(value) {
-    this._storage.writePointer(value);
-  }
-  get size() {
-    return this.end.sub(this.begin).toInt32() / this._elementSize;
-  }
-};
-var HandleVector = class _HandleVector extends StdVector {
-  static $new() {
-    const vector = new _HandleVector(getApi().$new(STD_VECTOR_SIZE));
-    vector.init();
-    return vector;
-  }
-  constructor(storage) {
-    super(storage, pointerSize5);
-  }
-  get handles() {
-    const result = [];
-    let cur = this.begin;
-    const end = this.end;
-    while (!cur.equals(end)) {
-      result.push(cur.readPointer());
-      cur = cur.add(pointerSize5);
-    }
-    return result;
-  }
-};
-var BHS_OFFSET_LINK = 0;
-var BHS_OFFSET_NUM_REFS = pointerSize5;
-var BHS_SIZE = BHS_OFFSET_NUM_REFS + 4;
-var kNumReferencesVariableSized = -1;
-var BaseHandleScope = class _BaseHandleScope {
-  $delete() {
-    this.dispose();
-    getApi().$delete(this);
-  }
-  constructor(storage) {
-    this.handle = storage;
-    this._link = storage.add(BHS_OFFSET_LINK);
-    this._numberOfReferences = storage.add(BHS_OFFSET_NUM_REFS);
-  }
-  init(link, numberOfReferences) {
-    this.link = link;
-    this.numberOfReferences = numberOfReferences;
-  }
-  dispose() {
-  }
-  get link() {
-    return new _BaseHandleScope(this._link.readPointer());
-  }
-  set link(value) {
-    this._link.writePointer(value);
-  }
-  get numberOfReferences() {
-    return this._numberOfReferences.readS32();
-  }
-  set numberOfReferences(value) {
-    this._numberOfReferences.writeS32(value);
-  }
-};
-var VSHS_OFFSET_SELF = alignPointerOffset(BHS_SIZE);
-var VSHS_OFFSET_CURRENT_SCOPE = VSHS_OFFSET_SELF + pointerSize5;
-var VSHS_SIZE = VSHS_OFFSET_CURRENT_SCOPE + pointerSize5;
-var VariableSizedHandleScope = class _VariableSizedHandleScope extends BaseHandleScope {
-  static $new(thread, vm3) {
-    const scope = new _VariableSizedHandleScope(getApi().$new(VSHS_SIZE));
-    scope.init(thread, vm3);
-    return scope;
-  }
-  constructor(storage) {
-    super(storage);
-    this._self = storage.add(VSHS_OFFSET_SELF);
-    this._currentScope = storage.add(VSHS_OFFSET_CURRENT_SCOPE);
-    const kLocalScopeSize = 64;
-    const kSizeOfReferencesPerScope = kLocalScopeSize - pointerSize5 - 4 - 4;
-    const kNumReferencesPerScope = kSizeOfReferencesPerScope / 4;
-    this._scopeLayout = FixedSizeHandleScope.layoutForCapacity(kNumReferencesPerScope);
-    this._topHandleScopePtr = null;
-  }
-  init(thread, vm3) {
-    const topHandleScopePtr = thread.add(getArtThreadSpec(vm3).offset.topHandleScope);
-    this._topHandleScopePtr = topHandleScopePtr;
-    super.init(topHandleScopePtr.readPointer(), kNumReferencesVariableSized);
-    this.self = thread;
-    this.currentScope = FixedSizeHandleScope.$new(this._scopeLayout);
-    topHandleScopePtr.writePointer(this);
-  }
-  dispose() {
-    this._topHandleScopePtr.writePointer(this.link);
-    let scope;
-    while ((scope = this.currentScope) !== null) {
-      const next = scope.link;
-      scope.$delete();
-      this.currentScope = next;
-    }
-  }
-  get self() {
-    return this._self.readPointer();
-  }
-  set self(value) {
-    this._self.writePointer(value);
-  }
-  get currentScope() {
-    const storage = this._currentScope.readPointer();
-    if (storage.isNull()) {
-      return null;
-    }
-    return new FixedSizeHandleScope(storage, this._scopeLayout);
-  }
-  set currentScope(value) {
-    this._currentScope.writePointer(value);
-  }
-  newHandle(object) {
-    return this.currentScope.newHandle(object);
-  }
-};
-var FixedSizeHandleScope = class _FixedSizeHandleScope extends BaseHandleScope {
-  static $new(layout) {
-    const scope = new _FixedSizeHandleScope(getApi().$new(layout.size), layout);
-    scope.init();
-    return scope;
-  }
-  constructor(storage, layout) {
-    super(storage);
-    const { offset } = layout;
-    this._refsStorage = storage.add(offset.refsStorage);
-    this._pos = storage.add(offset.pos);
-    this._layout = layout;
-  }
-  init() {
-    super.init(NULL, this._layout.numberOfReferences);
-    this.pos = 0;
-  }
-  get pos() {
-    return this._pos.readU32();
-  }
-  set pos(value) {
-    this._pos.writeU32(value);
-  }
-  newHandle(object) {
-    const pos = this.pos;
-    const handle = this._refsStorage.add(pos * 4);
-    handle.writeS32(object.toInt32());
-    this.pos = pos + 1;
-    return handle;
-  }
-  static layoutForCapacity(numRefs) {
-    const refsStorage = BHS_SIZE;
-    const pos = refsStorage + numRefs * 4;
-    return {
-      size: pos + 4,
-      numberOfReferences: numRefs,
-      offset: {
-        refsStorage,
-        pos
-      }
-    };
-  }
-};
-var objectVisitorPredicateFactories = {
-  arm: function(needle, onMatch) {
-    const size = Process.pageSize;
-    const predicate = Memory.alloc(size);
-    Memory.protect(predicate, size, "rwx");
-    const onMatchCallback = new NativeCallback(onMatch, "void", ["pointer"]);
-    predicate._onMatchCallback = onMatchCallback;
-    const instructions = [
-      26625,
-      // ldr r1, [r0]
-      18947,
-      // ldr r2, =needle
-      17041,
-      // cmp r1, r2
-      53505,
-      // bne mismatch
-      19202,
-      // ldr r3, =onMatch
-      18200,
-      // bx r3
-      18288,
-      // bx lr
-      48896
-      // nop
-    ];
-    const needleOffset = instructions.length * 2;
-    const onMatchOffset = needleOffset + 4;
-    const codeSize = onMatchOffset + 4;
-    Memory.patchCode(predicate, codeSize, function(address) {
-      instructions.forEach((instruction, index) => {
-        address.add(index * 2).writeU16(instruction);
-      });
-      address.add(needleOffset).writeS32(needle);
-      address.add(onMatchOffset).writePointer(onMatchCallback);
-    });
-    return predicate.or(1);
-  },
-  arm64: function(needle, onMatch) {
-    const size = Process.pageSize;
-    const predicate = Memory.alloc(size);
-    Memory.protect(predicate, size, "rwx");
-    const onMatchCallback = new NativeCallback(onMatch, "void", ["pointer"]);
-    predicate._onMatchCallback = onMatchCallback;
-    const instructions = [
-      3107979265,
-      // ldr w1, [x0]
-      402653378,
-      // ldr w2, =needle
-      1795293247,
-      // cmp w1, w2
-      1409286241,
-      // b.ne mismatch
-      1476395139,
-      // ldr x3, =onMatch
-      3592355936,
-      // br x3
-      3596551104
-      // ret
-    ];
-    const needleOffset = instructions.length * 4;
-    const onMatchOffset = needleOffset + 4;
-    const codeSize = onMatchOffset + 8;
-    Memory.patchCode(predicate, codeSize, function(address) {
-      instructions.forEach((instruction, index) => {
-        address.add(index * 4).writeU32(instruction);
-      });
-      address.add(needleOffset).writeS32(needle);
-      address.add(onMatchOffset).writePointer(onMatchCallback);
-    });
-    return predicate;
-  }
-};
 function makeObjectVisitorPredicate(needle, onMatch) {
   const factory = objectVisitorPredicateFactories[Process.arch] || makeGenericObjectVisitorPredicate;
   return factory(needle, onMatch);
@@ -7292,26 +6475,995 @@ function alignPointerOffset(offset) {
   }
   return offset;
 }
+var jsizeSize, pointerSize5, readU32, readPointer, writeU32, writePointer, kAccPublic, kAccStatic, kAccFinal, kAccNative, kAccFastNative, kAccCriticalNative, kAccFastInterpreterToInterpreterInvoke, kAccSkipAccessChecks, kAccSingleImplementation, kAccNterpEntryPointFastPathFlag, kAccNterpInvokeFastPathFlag, kAccPublicApi, kAccXposedHookedMethod, kPointer, kFullDeoptimization, kSelectiveDeoptimization, THUMB_BIT_REMOVAL_MASK, X86_JMP_MAX_DISTANCE, ARM64_ADRP_MAX_DISTANCE, ENV_VTABLE_OFFSET_EXCEPTION_CLEAR, ENV_VTABLE_OFFSET_FATAL_ERROR, DVM_JNI_ENV_OFFSET_SELF, DVM_CLASS_OBJECT_OFFSET_VTABLE_COUNT, DVM_CLASS_OBJECT_OFFSET_VTABLE, DVM_OBJECT_OFFSET_CLAZZ, DVM_METHOD_SIZE, DVM_METHOD_OFFSET_ACCESS_FLAGS, DVM_METHOD_OFFSET_METHOD_INDEX, DVM_METHOD_OFFSET_REGISTERS_SIZE, DVM_METHOD_OFFSET_OUTS_SIZE, DVM_METHOD_OFFSET_INS_SIZE, DVM_METHOD_OFFSET_SHORTY, DVM_METHOD_OFFSET_JNI_ARG_INFO, DALVIK_JNI_RETURN_VOID, DALVIK_JNI_RETURN_FLOAT, DALVIK_JNI_RETURN_DOUBLE, DALVIK_JNI_RETURN_S8, DALVIK_JNI_RETURN_S4, DALVIK_JNI_RETURN_S2, DALVIK_JNI_RETURN_U2, DALVIK_JNI_RETURN_S1, DALVIK_JNI_NO_ARG_INFO, DALVIK_JNI_RETURN_SHIFT, STD_STRING_SIZE, STD_VECTOR_SIZE, AF_UNIX, SOCK_STREAM, getArtRuntimeSpec, getArtInstrumentationSpec, getArtMethodSpec, getArtThreadSpec, getArtManagedStackSpec, getArtThreadStateTransitionImpl, getAndroidVersion, getAndroidCodename, getAndroidApiLevel, getArtApexVersion, getArtQuickFrameInfoGetterThunk, makeCxxMethodWrapperReturningPointerByValue, nativeFunctionOptions3, artThreadStateTransitions, cachedApi, cachedArtClassLinkerSpec, MethodMangler, artController, inlineHooks, patchedClasses, artQuickInterceptors, thunkPage, thunkOffset, taughtArtAboutReplacementMethods, taughtArtAboutMethodInstrumentation, backtraceModule, jdwpSessions, socketpair, trampolineAllocator, instrumentationOffsetParsers, instrumentationPointerParser, jniIdsIndirectionOffsetParsers, artQuickTrampolineParsers, systemPropertyGet, PROP_VALUE_MAX, ArtClassVisitor, ArtClassLoaderVisitor, WalkKind, ArtStackVisitor, ArtMethod, thunkRelocators, thunkWriters, artGetOatQuickMethodHeaderInlinedCopyHandler, InlineHook, Backtrace, artQuickCodeReplacementTrampolineWriters, artQuickCodePrologueWriters, artQuickCodeHookRedirectSize, ArtQuickCodeInterceptor, ArtMethodMangler, DalvikMethodMangler, JdwpSession, threadStateTransitionRecompilers, StdString, StdVector, HandleVector, BHS_OFFSET_LINK, BHS_OFFSET_NUM_REFS, BHS_SIZE, kNumReferencesVariableSized, BaseHandleScope, VSHS_OFFSET_SELF, VSHS_OFFSET_CURRENT_SCOPE, VSHS_SIZE, VariableSizedHandleScope, FixedSizeHandleScope, objectVisitorPredicateFactories;
+var init_android = __esm({
+  "backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/android.js"() {
+    init_node_globals();
+    init_alloc();
+    init_jvmti();
+    init_machine_code();
+    init_memoize();
+    init_result();
+    init_vm();
+    jsizeSize = 4;
+    pointerSize5 = Process.pointerSize;
+    ({
+      readU32,
+      readPointer,
+      writeU32,
+      writePointer
+    } = NativePointer.prototype);
+    kAccPublic = 1;
+    kAccStatic = 8;
+    kAccFinal = 16;
+    kAccNative = 256;
+    kAccFastNative = 524288;
+    kAccCriticalNative = 2097152;
+    kAccFastInterpreterToInterpreterInvoke = 1073741824;
+    kAccSkipAccessChecks = 524288;
+    kAccSingleImplementation = 134217728;
+    kAccNterpEntryPointFastPathFlag = 1048576;
+    kAccNterpInvokeFastPathFlag = 2097152;
+    kAccPublicApi = 268435456;
+    kAccXposedHookedMethod = 268435456;
+    kPointer = 0;
+    kFullDeoptimization = 3;
+    kSelectiveDeoptimization = 5;
+    THUMB_BIT_REMOVAL_MASK = ptr(1).not();
+    X86_JMP_MAX_DISTANCE = 2147467263;
+    ARM64_ADRP_MAX_DISTANCE = 4294963200;
+    ENV_VTABLE_OFFSET_EXCEPTION_CLEAR = 17 * pointerSize5;
+    ENV_VTABLE_OFFSET_FATAL_ERROR = 18 * pointerSize5;
+    DVM_JNI_ENV_OFFSET_SELF = 12;
+    DVM_CLASS_OBJECT_OFFSET_VTABLE_COUNT = 112;
+    DVM_CLASS_OBJECT_OFFSET_VTABLE = 116;
+    DVM_OBJECT_OFFSET_CLAZZ = 0;
+    DVM_METHOD_SIZE = 56;
+    DVM_METHOD_OFFSET_ACCESS_FLAGS = 4;
+    DVM_METHOD_OFFSET_METHOD_INDEX = 8;
+    DVM_METHOD_OFFSET_REGISTERS_SIZE = 10;
+    DVM_METHOD_OFFSET_OUTS_SIZE = 12;
+    DVM_METHOD_OFFSET_INS_SIZE = 14;
+    DVM_METHOD_OFFSET_SHORTY = 28;
+    DVM_METHOD_OFFSET_JNI_ARG_INFO = 36;
+    DALVIK_JNI_RETURN_VOID = 0;
+    DALVIK_JNI_RETURN_FLOAT = 1;
+    DALVIK_JNI_RETURN_DOUBLE = 2;
+    DALVIK_JNI_RETURN_S8 = 3;
+    DALVIK_JNI_RETURN_S4 = 4;
+    DALVIK_JNI_RETURN_S2 = 5;
+    DALVIK_JNI_RETURN_U2 = 6;
+    DALVIK_JNI_RETURN_S1 = 7;
+    DALVIK_JNI_NO_ARG_INFO = 2147483648;
+    DALVIK_JNI_RETURN_SHIFT = 28;
+    STD_STRING_SIZE = 3 * pointerSize5;
+    STD_VECTOR_SIZE = 3 * pointerSize5;
+    AF_UNIX = 1;
+    SOCK_STREAM = 1;
+    getArtRuntimeSpec = memoize(_getArtRuntimeSpec);
+    getArtInstrumentationSpec = memoize(_getArtInstrumentationSpec);
+    getArtMethodSpec = memoize(_getArtMethodSpec);
+    getArtThreadSpec = memoize(_getArtThreadSpec);
+    getArtManagedStackSpec = memoize(_getArtManagedStackSpec);
+    getArtThreadStateTransitionImpl = memoize(_getArtThreadStateTransitionImpl);
+    getAndroidVersion = memoize(_getAndroidVersion);
+    getAndroidCodename = memoize(_getAndroidCodename);
+    getAndroidApiLevel = memoize(_getAndroidApiLevel);
+    getArtApexVersion = memoize(_getArtApexVersion);
+    getArtQuickFrameInfoGetterThunk = memoize(_getArtQuickFrameInfoGetterThunk);
+    makeCxxMethodWrapperReturningPointerByValue = Process.arch === "ia32" ? makeCxxMethodWrapperReturningPointerByValueInFirstArg : makeCxxMethodWrapperReturningPointerByValueGeneric;
+    nativeFunctionOptions3 = {
+      exceptions: "propagate"
+    };
+    artThreadStateTransitions = {};
+    cachedApi = null;
+    cachedArtClassLinkerSpec = null;
+    MethodMangler = null;
+    artController = null;
+    inlineHooks = [];
+    patchedClasses = /* @__PURE__ */ new Map();
+    artQuickInterceptors = [];
+    thunkPage = null;
+    thunkOffset = 0;
+    taughtArtAboutReplacementMethods = false;
+    taughtArtAboutMethodInstrumentation = false;
+    backtraceModule = null;
+    jdwpSessions = [];
+    socketpair = null;
+    trampolineAllocator = null;
+    instrumentationOffsetParsers = {
+      ia32: parsex86InstrumentationOffset,
+      x64: parsex86InstrumentationOffset,
+      arm: parseArmInstrumentationOffset,
+      arm64: parseArm64InstrumentationOffset
+    };
+    instrumentationPointerParser = {
+      ia32: parsex86InstrumentationPointer,
+      x64: parsex86InstrumentationPointer,
+      arm: parseArmInstrumentationPointer,
+      arm64: parseArm64InstrumentationPointer
+    };
+    jniIdsIndirectionOffsetParsers = {
+      ia32: parsex86JniIdsIndirectionOffset,
+      x64: parsex86JniIdsIndirectionOffset,
+      arm: parseArmJniIdsIndirectionOffset,
+      arm64: parseArm64JniIdsIndirectionOffset
+    };
+    artQuickTrampolineParsers = {
+      ia32: parseArtQuickTrampolineX86,
+      x64: parseArtQuickTrampolineX86,
+      arm: parseArtQuickTrampolineArm,
+      arm64: parseArtQuickTrampolineArm64
+    };
+    systemPropertyGet = null;
+    PROP_VALUE_MAX = 92;
+    ArtClassVisitor = class {
+      constructor(visit) {
+        const visitor = Memory.alloc(4 * pointerSize5);
+        const vtable2 = visitor.add(pointerSize5);
+        visitor.writePointer(vtable2);
+        const onVisit = new NativeCallback((self, klass) => {
+          return visit(klass) === true ? 1 : 0;
+        }, "bool", ["pointer", "pointer"]);
+        vtable2.add(2 * pointerSize5).writePointer(onVisit);
+        this.handle = visitor;
+        this._onVisit = onVisit;
+      }
+    };
+    ArtClassLoaderVisitor = class {
+      constructor(visit) {
+        const visitor = Memory.alloc(4 * pointerSize5);
+        const vtable2 = visitor.add(pointerSize5);
+        visitor.writePointer(vtable2);
+        const onVisit = new NativeCallback((self, klass) => {
+          visit(klass);
+        }, "void", ["pointer", "pointer"]);
+        vtable2.add(2 * pointerSize5).writePointer(onVisit);
+        this.handle = visitor;
+        this._onVisit = onVisit;
+      }
+    };
+    WalkKind = {
+      "include-inlined-frames": 0,
+      "skip-inlined-frames": 1
+    };
+    ArtStackVisitor = class {
+      constructor(thread, context, walkKind, numFrames = 0, checkSuspended = true) {
+        const api2 = getApi();
+        const baseSize = 512;
+        const vtableSize = 3 * pointerSize5;
+        const visitor = Memory.alloc(baseSize + vtableSize);
+        api2["art::StackVisitor::StackVisitor"](
+          visitor,
+          thread,
+          context,
+          WalkKind[walkKind],
+          numFrames,
+          checkSuspended ? 1 : 0
+        );
+        const vtable2 = visitor.add(baseSize);
+        visitor.writePointer(vtable2);
+        const onVisitFrame = new NativeCallback(this._visitFrame.bind(this), "bool", ["pointer"]);
+        vtable2.add(2 * pointerSize5).writePointer(onVisitFrame);
+        this.handle = visitor;
+        this._onVisitFrame = onVisitFrame;
+        const curShadowFrame = visitor.add(pointerSize5 === 4 ? 12 : 24);
+        this._curShadowFrame = curShadowFrame;
+        this._curQuickFrame = curShadowFrame.add(pointerSize5);
+        this._curQuickFramePc = curShadowFrame.add(2 * pointerSize5);
+        this._curOatQuickMethodHeader = curShadowFrame.add(3 * pointerSize5);
+        this._getMethodImpl = api2["art::StackVisitor::GetMethod"];
+        this._descLocImpl = api2["art::StackVisitor::DescribeLocation"];
+        this._getCQFIImpl = api2["art::StackVisitor::GetCurrentQuickFrameInfo"];
+      }
+      walkStack(includeTransitions = false) {
+        getApi()["art::StackVisitor::WalkStack"](this.handle, includeTransitions ? 1 : 0);
+      }
+      _visitFrame() {
+        return this.visitFrame() ? 1 : 0;
+      }
+      visitFrame() {
+        throw new Error("Subclass must implement visitFrame");
+      }
+      getMethod() {
+        const methodHandle = this._getMethodImpl(this.handle);
+        if (methodHandle.isNull()) {
+          return null;
+        }
+        return new ArtMethod(methodHandle);
+      }
+      getCurrentQuickFramePc() {
+        return this._curQuickFramePc.readPointer();
+      }
+      getCurrentQuickFrame() {
+        return this._curQuickFrame.readPointer();
+      }
+      getCurrentShadowFrame() {
+        return this._curShadowFrame.readPointer();
+      }
+      describeLocation() {
+        const result = new StdString();
+        this._descLocImpl(result, this.handle);
+        return result.disposeToString();
+      }
+      getCurrentOatQuickMethodHeader() {
+        return this._curOatQuickMethodHeader.readPointer();
+      }
+      getCurrentQuickFrameInfo() {
+        return this._getCQFIImpl(this.handle);
+      }
+    };
+    ArtMethod = class {
+      constructor(handle) {
+        this.handle = handle;
+      }
+      prettyMethod(withSignature = true) {
+        const result = new StdString();
+        getApi()["art::ArtMethod::PrettyMethod"](result, this.handle, withSignature ? 1 : 0);
+        return result.disposeToString();
+      }
+      toString() {
+        return `ArtMethod(handle=${this.handle})`;
+      }
+    };
+    thunkRelocators = {
+      ia32: globalThis.X86Relocator,
+      x64: globalThis.X86Relocator,
+      arm: globalThis.ThumbRelocator,
+      arm64: globalThis.Arm64Relocator
+    };
+    thunkWriters = {
+      ia32: globalThis.X86Writer,
+      x64: globalThis.X86Writer,
+      arm: globalThis.ThumbWriter,
+      arm64: globalThis.Arm64Writer
+    };
+    artGetOatQuickMethodHeaderInlinedCopyHandler = {
+      arm: {
+        signatures: [
+          {
+            pattern: [
+              "b0 68",
+              // ldr r0, [r6, #8]
+              "01 30",
+              // adds r0, #1
+              "0c d0",
+              // beq #0x16fcd4
+              "1b 98",
+              // ldr r0, [sp, #0x6c]
+              ":",
+              "c0 ff",
+              "c0 ff",
+              "00 ff",
+              "00 2f"
+            ],
+            validateMatch: validateGetOatQuickMethodHeaderInlinedMatchArm
+          },
+          {
+            pattern: [
+              "d8 f8 08 00",
+              // ldr r0, [r8, #8]
+              "01 30",
+              // adds r0, #1
+              "0c d0",
+              // beq #0x16fcd4
+              "1b 98",
+              // ldr r0, [sp, #0x6c]
+              ":",
+              "f0 ff ff 0f",
+              "ff ff",
+              "00 ff",
+              "00 2f"
+            ],
+            validateMatch: validateGetOatQuickMethodHeaderInlinedMatchArm
+          },
+          {
+            pattern: [
+              "b0 68",
+              // ldr r0, [r6, #8]
+              "01 30",
+              // adds r0, #1
+              "40 f0 c3 80",
+              // bne #0x203bf0
+              "00 25",
+              // movs r5, #0
+              ":",
+              "c0 ff",
+              "c0 ff",
+              "c0 fb 00 d0",
+              "ff f8"
+            ],
+            validateMatch: validateGetOatQuickMethodHeaderInlinedMatchArm
+          }
+        ],
+        instrument: instrumentGetOatQuickMethodHeaderInlinedCopyArm
+      },
+      arm64: {
+        signatures: [
+          {
+            pattern: [
+              /* e8 */
+              "0a 40 b9",
+              // ldr w8, [x23, #0x8]
+              "1f 05 00 31",
+              // cmn w8, #0x1
+              "40 01 00 54",
+              // b.eq 0x2e4204
+              "88 39 00 f0",
+              // adrp x8, 0xa17000
+              ":",
+              /* 00 */
+              "fc ff ff",
+              "1f fc ff ff",
+              "1f 00 00 ff",
+              "00 00 00 9f"
+            ],
+            offset: 1,
+            validateMatch: validateGetOatQuickMethodHeaderInlinedMatchArm64
+          },
+          {
+            pattern: [
+              /* e8 */
+              "0a 40 b9",
+              // ldr w8, [x?, #0x8]
+              "1f 05 00 31",
+              // cmn w8, #0x1
+              "40 01 00 54",
+              // b.eq <target>
+              "00 0e 40 f9",
+              // ldr x?, [x?, #0x18]
+              ":",
+              /* 00 */
+              "fc ff ff",
+              "1f fc ff ff",
+              "1f 00 00 ff",
+              "00 fc ff ff"
+            ],
+            offset: 1,
+            validateMatch: validateGetOatQuickMethodHeaderInlinedMatchArm64
+          },
+          {
+            pattern: [
+              /* e8 */
+              "0a 40 b9",
+              // ldr w8, [x23, #0x8]
+              "1f 05 00 31",
+              // cmn w8, #0x1
+              "01 34 00 54",
+              // b.ne 0x3d8e50
+              "e0 03 1f aa",
+              // mov x0, xzr
+              ":",
+              /* 00 */
+              "fc ff ff",
+              "1f fc ff ff",
+              "1f 00 00 ff",
+              "e0 ff ff ff"
+            ],
+            offset: 1,
+            validateMatch: validateGetOatQuickMethodHeaderInlinedMatchArm64
+          }
+        ],
+        instrument: instrumentGetOatQuickMethodHeaderInlinedCopyArm64
+      }
+    };
+    InlineHook = class {
+      constructor(address, size, trampoline) {
+        this.address = address;
+        this.size = size;
+        this.originalCode = address.readByteArray(size);
+        this.trampoline = trampoline;
+      }
+      revert() {
+        Memory.patchCode(this.address, this.size, (code3) => {
+          code3.writeByteArray(this.originalCode);
+        });
+      }
+    };
+    Backtrace = class {
+      constructor(handle) {
+        this.handle = handle;
+      }
+      get id() {
+        return backtraceModule.getId(this.handle);
+      }
+      get frames() {
+        return backtraceModule.getFrames(this.handle);
+      }
+    };
+    artQuickCodeReplacementTrampolineWriters = {
+      ia32: writeArtQuickCodeReplacementTrampolineIA32,
+      x64: writeArtQuickCodeReplacementTrampolineX64,
+      arm: writeArtQuickCodeReplacementTrampolineArm,
+      arm64: writeArtQuickCodeReplacementTrampolineArm64
+    };
+    artQuickCodePrologueWriters = {
+      ia32: writeArtQuickCodePrologueX86,
+      x64: writeArtQuickCodePrologueX86,
+      arm: writeArtQuickCodePrologueArm,
+      arm64: writeArtQuickCodePrologueArm64
+    };
+    artQuickCodeHookRedirectSize = {
+      ia32: 5,
+      x64: 16,
+      arm: 8,
+      arm64: 16
+    };
+    ArtQuickCodeInterceptor = class {
+      constructor(quickCode) {
+        this.quickCode = quickCode;
+        this.quickCodeAddress = Process.arch === "arm" ? quickCode.and(THUMB_BIT_REMOVAL_MASK) : quickCode;
+        this.redirectSize = 0;
+        this.trampoline = null;
+        this.overwrittenPrologue = null;
+        this.overwrittenPrologueLength = 0;
+      }
+      _canRelocateCode(relocationSize, constraints) {
+        const Writer = thunkWriters[Process.arch];
+        const Relocator = thunkRelocators[Process.arch];
+        const { quickCodeAddress } = this;
+        const writer = new Writer(quickCodeAddress);
+        const relocator = new Relocator(quickCodeAddress, writer);
+        let offset;
+        if (Process.arch === "arm64") {
+          let availableScratchRegs = /* @__PURE__ */ new Set(["x16", "x17"]);
+          do {
+            const nextOffset = relocator.readOne();
+            const nextScratchRegs = new Set(availableScratchRegs);
+            const { read: read2, written } = relocator.input.regsAccessed;
+            for (const regs of [read2, written]) {
+              for (const reg of regs) {
+                let name;
+                if (reg.startsWith("w")) {
+                  name = "x" + reg.substring(1);
+                } else {
+                  name = reg;
+                }
+                nextScratchRegs.delete(name);
+              }
+            }
+            if (nextScratchRegs.size === 0) {
+              break;
+            }
+            offset = nextOffset;
+            availableScratchRegs = nextScratchRegs;
+          } while (offset < relocationSize && !relocator.eoi);
+          constraints.availableScratchRegs = availableScratchRegs;
+        } else {
+          do {
+            offset = relocator.readOne();
+          } while (offset < relocationSize && !relocator.eoi);
+        }
+        return offset >= relocationSize;
+      }
+      _allocateTrampoline() {
+        if (trampolineAllocator === null) {
+          const trampolineSize = pointerSize5 === 4 ? 128 : 256;
+          trampolineAllocator = makeAllocator(trampolineSize);
+        }
+        const maxRedirectSize = artQuickCodeHookRedirectSize[Process.arch];
+        let redirectSize, spec;
+        let alignment = 1;
+        const constraints = {};
+        if (pointerSize5 === 4 || this._canRelocateCode(maxRedirectSize, constraints)) {
+          redirectSize = maxRedirectSize;
+          spec = {};
+        } else {
+          let maxDistance;
+          if (Process.arch === "x64") {
+            redirectSize = 5;
+            maxDistance = X86_JMP_MAX_DISTANCE;
+          } else if (Process.arch === "arm64") {
+            redirectSize = 8;
+            maxDistance = ARM64_ADRP_MAX_DISTANCE;
+            alignment = 4096;
+          }
+          spec = { near: this.quickCodeAddress, maxDistance };
+        }
+        this.redirectSize = redirectSize;
+        this.trampoline = trampolineAllocator.allocateSlice(spec, alignment);
+        return constraints;
+      }
+      _destroyTrampoline() {
+        trampolineAllocator.freeSlice(this.trampoline);
+      }
+      activate(vm3) {
+        const constraints = this._allocateTrampoline();
+        const { trampoline, quickCode, redirectSize } = this;
+        const writeTrampoline = artQuickCodeReplacementTrampolineWriters[Process.arch];
+        const prologueLength = writeTrampoline(trampoline, quickCode, redirectSize, constraints, vm3);
+        this.overwrittenPrologueLength = prologueLength;
+        this.overwrittenPrologue = Memory.dup(this.quickCodeAddress, prologueLength);
+        const writePrologue = artQuickCodePrologueWriters[Process.arch];
+        writePrologue(quickCode, trampoline, redirectSize);
+      }
+      deactivate() {
+        const { quickCodeAddress, overwrittenPrologueLength: prologueLength } = this;
+        const Writer = thunkWriters[Process.arch];
+        Memory.patchCode(quickCodeAddress, prologueLength, (code3) => {
+          const writer = new Writer(code3, { pc: quickCodeAddress });
+          const { overwrittenPrologue } = this;
+          writer.putBytes(overwrittenPrologue.readByteArray(prologueLength));
+          writer.flush();
+        });
+        this._destroyTrampoline();
+      }
+    };
+    ArtMethodMangler = class {
+      constructor(opaqueMethodId) {
+        const methodId = unwrapMethodId(opaqueMethodId);
+        this.methodId = methodId;
+        this.originalMethod = null;
+        this.hookedMethodId = methodId;
+        this.replacementMethodId = null;
+        this.interceptor = null;
+      }
+      replace(impl, isInstanceMethod, argTypes, vm3, api2) {
+        const { kAccCompileDontBother, artNterpEntryPoint } = api2;
+        this.originalMethod = fetchArtMethod(this.methodId, vm3);
+        const originalFlags = this.originalMethod.accessFlags;
+        if ((originalFlags & kAccXposedHookedMethod) !== 0 && xposedIsSupported()) {
+          const hookInfo = this.originalMethod.jniCode;
+          this.hookedMethodId = hookInfo.add(2 * pointerSize5).readPointer();
+          this.originalMethod = fetchArtMethod(this.hookedMethodId, vm3);
+        }
+        const { hookedMethodId } = this;
+        const replacementMethodId = cloneArtMethod(hookedMethodId, vm3);
+        this.replacementMethodId = replacementMethodId;
+        patchArtMethod(replacementMethodId, {
+          jniCode: impl,
+          accessFlags: (originalFlags & ~(kAccCriticalNative | kAccFastNative | kAccNterpEntryPointFastPathFlag) | kAccNative | kAccCompileDontBother) >>> 0,
+          quickCode: api2.artClassLinker.quickGenericJniTrampoline,
+          interpreterCode: api2.artInterpreterToCompiledCodeBridge
+        }, vm3);
+        let hookedMethodRemovedFlags = kAccFastInterpreterToInterpreterInvoke | kAccSingleImplementation | kAccNterpEntryPointFastPathFlag;
+        if ((originalFlags & kAccNative) === 0) {
+          hookedMethodRemovedFlags |= kAccSkipAccessChecks;
+        }
+        patchArtMethod(hookedMethodId, {
+          accessFlags: (originalFlags & ~hookedMethodRemovedFlags | kAccCompileDontBother) >>> 0
+        }, vm3);
+        const quickCode = this.originalMethod.quickCode;
+        if (artNterpEntryPoint !== null && quickCode.equals(artNterpEntryPoint)) {
+          patchArtMethod(hookedMethodId, {
+            quickCode: api2.artQuickToInterpreterBridge
+          }, vm3);
+        }
+        if (!isArtQuickEntrypoint(quickCode)) {
+          const interceptor = new ArtQuickCodeInterceptor(quickCode);
+          interceptor.activate(vm3);
+          this.interceptor = interceptor;
+        }
+        artController.replacedMethods.set(hookedMethodId, replacementMethodId);
+        notifyArtMethodHooked(hookedMethodId, vm3);
+      }
+      revert(vm3) {
+        const { hookedMethodId, interceptor } = this;
+        patchArtMethod(hookedMethodId, this.originalMethod, vm3);
+        artController.replacedMethods.delete(hookedMethodId);
+        if (interceptor !== null) {
+          interceptor.deactivate();
+          this.interceptor = null;
+        }
+      }
+      resolveTarget(wrapper, isInstanceMethod, env2, api2) {
+        return this.hookedMethodId;
+      }
+    };
+    DalvikMethodMangler = class {
+      constructor(methodId) {
+        this.methodId = methodId;
+        this.originalMethod = null;
+      }
+      replace(impl, isInstanceMethod, argTypes, vm3, api2) {
+        const { methodId } = this;
+        this.originalMethod = Memory.dup(methodId, DVM_METHOD_SIZE);
+        let argsSize = argTypes.reduce((acc, t) => acc + t.size, 0);
+        if (isInstanceMethod) {
+          argsSize++;
+        }
+        const accessFlags = (methodId.add(DVM_METHOD_OFFSET_ACCESS_FLAGS).readU32() | kAccNative) >>> 0;
+        const registersSize = argsSize;
+        const outsSize = 0;
+        const insSize = argsSize;
+        methodId.add(DVM_METHOD_OFFSET_ACCESS_FLAGS).writeU32(accessFlags);
+        methodId.add(DVM_METHOD_OFFSET_REGISTERS_SIZE).writeU16(registersSize);
+        methodId.add(DVM_METHOD_OFFSET_OUTS_SIZE).writeU16(outsSize);
+        methodId.add(DVM_METHOD_OFFSET_INS_SIZE).writeU16(insSize);
+        methodId.add(DVM_METHOD_OFFSET_JNI_ARG_INFO).writeU32(computeDalvikJniArgInfo(methodId));
+        api2.dvmUseJNIBridge(methodId, impl);
+      }
+      revert(vm3) {
+        Memory.copy(this.methodId, this.originalMethod, DVM_METHOD_SIZE);
+      }
+      resolveTarget(wrapper, isInstanceMethod, env2, api2) {
+        const thread = env2.handle.add(DVM_JNI_ENV_OFFSET_SELF).readPointer();
+        let objectPtr;
+        if (isInstanceMethod) {
+          objectPtr = api2.dvmDecodeIndirectRef(thread, wrapper.$h);
+        } else {
+          const h = wrapper.$borrowClassHandle(env2);
+          objectPtr = api2.dvmDecodeIndirectRef(thread, h.value);
+          h.unref(env2);
+        }
+        let classObject;
+        if (isInstanceMethod) {
+          classObject = objectPtr.add(DVM_OBJECT_OFFSET_CLAZZ).readPointer();
+        } else {
+          classObject = objectPtr;
+        }
+        const classKey = classObject.toString(16);
+        let entry = patchedClasses.get(classKey);
+        if (entry === void 0) {
+          const vtablePtr = classObject.add(DVM_CLASS_OBJECT_OFFSET_VTABLE);
+          const vtableCountPtr = classObject.add(DVM_CLASS_OBJECT_OFFSET_VTABLE_COUNT);
+          const vtable2 = vtablePtr.readPointer();
+          const vtableCount = vtableCountPtr.readS32();
+          const vtableSize = vtableCount * pointerSize5;
+          const shadowVtable = Memory.alloc(2 * vtableSize);
+          Memory.copy(shadowVtable, vtable2, vtableSize);
+          vtablePtr.writePointer(shadowVtable);
+          entry = {
+            classObject,
+            vtablePtr,
+            vtableCountPtr,
+            vtable: vtable2,
+            vtableCount,
+            shadowVtable,
+            shadowVtableCount: vtableCount,
+            targetMethods: /* @__PURE__ */ new Map()
+          };
+          patchedClasses.set(classKey, entry);
+        }
+        const methodKey = this.methodId.toString(16);
+        let targetMethod = entry.targetMethods.get(methodKey);
+        if (targetMethod === void 0) {
+          targetMethod = Memory.dup(this.originalMethod, DVM_METHOD_SIZE);
+          const methodIndex = entry.shadowVtableCount++;
+          entry.shadowVtable.add(methodIndex * pointerSize5).writePointer(targetMethod);
+          targetMethod.add(DVM_METHOD_OFFSET_METHOD_INDEX).writeU16(methodIndex);
+          entry.vtableCountPtr.writeS32(entry.shadowVtableCount);
+          entry.targetMethods.set(methodKey, targetMethod);
+        }
+        return targetMethod;
+      }
+    };
+    JdwpSession = class {
+      constructor() {
+        const libart = Process.getModuleByName("libart.so");
+        const acceptImpl = libart.getExportByName("_ZN3art4JDWP12JdwpAdbState6AcceptEv");
+        const receiveClientFdImpl = libart.getExportByName("_ZN3art4JDWP12JdwpAdbState15ReceiveClientFdEv");
+        const controlPair = makeSocketPair();
+        const clientPair = makeSocketPair();
+        this._controlFd = controlPair[0];
+        this._clientFd = clientPair[0];
+        let acceptListener = null;
+        acceptListener = Interceptor.attach(acceptImpl, function(args) {
+          const state = args[0];
+          const controlSockPtr = Memory.scanSync(state.add(8252), 256, "00 ff ff ff ff 00")[0].address.add(1);
+          controlSockPtr.writeS32(controlPair[1]);
+          acceptListener.detach();
+        });
+        Interceptor.replace(receiveClientFdImpl, new NativeCallback(function(state) {
+          Interceptor.revert(receiveClientFdImpl);
+          return clientPair[1];
+        }, "int", ["pointer"]));
+        Interceptor.flush();
+        this._handshakeRequest = this._performHandshake();
+      }
+      async _performHandshake() {
+        const input = new UnixInputStream(this._clientFd, { autoClose: false });
+        const output = new UnixOutputStream(this._clientFd, { autoClose: false });
+        const handshakePacket = [74, 68, 87, 80, 45, 72, 97, 110, 100, 115, 104, 97, 107, 101];
+        try {
+          await output.writeAll(handshakePacket);
+          await input.readAll(handshakePacket.length);
+        } catch (e) {
+        }
+      }
+    };
+    threadStateTransitionRecompilers = {
+      ia32: recompileExceptionClearForX86,
+      x64: recompileExceptionClearForX86,
+      arm: recompileExceptionClearForArm,
+      arm64: recompileExceptionClearForArm64
+    };
+    StdString = class {
+      constructor() {
+        this.handle = Memory.alloc(STD_STRING_SIZE);
+      }
+      dispose() {
+        const [data, isTiny] = this._getData();
+        if (!isTiny) {
+          getApi().$delete(data);
+        }
+      }
+      disposeToString() {
+        const result = this.toString();
+        this.dispose();
+        return result;
+      }
+      toString() {
+        const [data] = this._getData();
+        return data.readUtf8String();
+      }
+      _getData() {
+        const str = this.handle;
+        const isTiny = (str.readU8() & 1) === 0;
+        const data = isTiny ? str.add(1) : str.add(2 * pointerSize5).readPointer();
+        return [data, isTiny];
+      }
+    };
+    StdVector = class {
+      $delete() {
+        this.dispose();
+        getApi().$delete(this);
+      }
+      constructor(storage, elementSize) {
+        this.handle = storage;
+        this._begin = storage;
+        this._end = storage.add(pointerSize5);
+        this._storage = storage.add(2 * pointerSize5);
+        this._elementSize = elementSize;
+      }
+      init() {
+        this.begin = NULL;
+        this.end = NULL;
+        this.storage = NULL;
+      }
+      dispose() {
+        getApi().$delete(this.begin);
+      }
+      get begin() {
+        return this._begin.readPointer();
+      }
+      set begin(value) {
+        this._begin.writePointer(value);
+      }
+      get end() {
+        return this._end.readPointer();
+      }
+      set end(value) {
+        this._end.writePointer(value);
+      }
+      get storage() {
+        return this._storage.readPointer();
+      }
+      set storage(value) {
+        this._storage.writePointer(value);
+      }
+      get size() {
+        return this.end.sub(this.begin).toInt32() / this._elementSize;
+      }
+    };
+    HandleVector = class _HandleVector extends StdVector {
+      static $new() {
+        const vector = new _HandleVector(getApi().$new(STD_VECTOR_SIZE));
+        vector.init();
+        return vector;
+      }
+      constructor(storage) {
+        super(storage, pointerSize5);
+      }
+      get handles() {
+        const result = [];
+        let cur = this.begin;
+        const end = this.end;
+        while (!cur.equals(end)) {
+          result.push(cur.readPointer());
+          cur = cur.add(pointerSize5);
+        }
+        return result;
+      }
+    };
+    BHS_OFFSET_LINK = 0;
+    BHS_OFFSET_NUM_REFS = pointerSize5;
+    BHS_SIZE = BHS_OFFSET_NUM_REFS + 4;
+    kNumReferencesVariableSized = -1;
+    BaseHandleScope = class _BaseHandleScope {
+      $delete() {
+        this.dispose();
+        getApi().$delete(this);
+      }
+      constructor(storage) {
+        this.handle = storage;
+        this._link = storage.add(BHS_OFFSET_LINK);
+        this._numberOfReferences = storage.add(BHS_OFFSET_NUM_REFS);
+      }
+      init(link, numberOfReferences) {
+        this.link = link;
+        this.numberOfReferences = numberOfReferences;
+      }
+      dispose() {
+      }
+      get link() {
+        return new _BaseHandleScope(this._link.readPointer());
+      }
+      set link(value) {
+        this._link.writePointer(value);
+      }
+      get numberOfReferences() {
+        return this._numberOfReferences.readS32();
+      }
+      set numberOfReferences(value) {
+        this._numberOfReferences.writeS32(value);
+      }
+    };
+    VSHS_OFFSET_SELF = alignPointerOffset(BHS_SIZE);
+    VSHS_OFFSET_CURRENT_SCOPE = VSHS_OFFSET_SELF + pointerSize5;
+    VSHS_SIZE = VSHS_OFFSET_CURRENT_SCOPE + pointerSize5;
+    VariableSizedHandleScope = class _VariableSizedHandleScope extends BaseHandleScope {
+      static $new(thread, vm3) {
+        const scope = new _VariableSizedHandleScope(getApi().$new(VSHS_SIZE));
+        scope.init(thread, vm3);
+        return scope;
+      }
+      constructor(storage) {
+        super(storage);
+        this._self = storage.add(VSHS_OFFSET_SELF);
+        this._currentScope = storage.add(VSHS_OFFSET_CURRENT_SCOPE);
+        const kLocalScopeSize = 64;
+        const kSizeOfReferencesPerScope = kLocalScopeSize - pointerSize5 - 4 - 4;
+        const kNumReferencesPerScope = kSizeOfReferencesPerScope / 4;
+        this._scopeLayout = FixedSizeHandleScope.layoutForCapacity(kNumReferencesPerScope);
+        this._topHandleScopePtr = null;
+      }
+      init(thread, vm3) {
+        const topHandleScopePtr = thread.add(getArtThreadSpec(vm3).offset.topHandleScope);
+        this._topHandleScopePtr = topHandleScopePtr;
+        super.init(topHandleScopePtr.readPointer(), kNumReferencesVariableSized);
+        this.self = thread;
+        this.currentScope = FixedSizeHandleScope.$new(this._scopeLayout);
+        topHandleScopePtr.writePointer(this);
+      }
+      dispose() {
+        this._topHandleScopePtr.writePointer(this.link);
+        let scope;
+        while ((scope = this.currentScope) !== null) {
+          const next = scope.link;
+          scope.$delete();
+          this.currentScope = next;
+        }
+      }
+      get self() {
+        return this._self.readPointer();
+      }
+      set self(value) {
+        this._self.writePointer(value);
+      }
+      get currentScope() {
+        const storage = this._currentScope.readPointer();
+        if (storage.isNull()) {
+          return null;
+        }
+        return new FixedSizeHandleScope(storage, this._scopeLayout);
+      }
+      set currentScope(value) {
+        this._currentScope.writePointer(value);
+      }
+      newHandle(object) {
+        return this.currentScope.newHandle(object);
+      }
+    };
+    FixedSizeHandleScope = class _FixedSizeHandleScope extends BaseHandleScope {
+      static $new(layout) {
+        const scope = new _FixedSizeHandleScope(getApi().$new(layout.size), layout);
+        scope.init();
+        return scope;
+      }
+      constructor(storage, layout) {
+        super(storage);
+        const { offset } = layout;
+        this._refsStorage = storage.add(offset.refsStorage);
+        this._pos = storage.add(offset.pos);
+        this._layout = layout;
+      }
+      init() {
+        super.init(NULL, this._layout.numberOfReferences);
+        this.pos = 0;
+      }
+      get pos() {
+        return this._pos.readU32();
+      }
+      set pos(value) {
+        this._pos.writeU32(value);
+      }
+      newHandle(object) {
+        const pos = this.pos;
+        const handle = this._refsStorage.add(pos * 4);
+        handle.writeS32(object.toInt32());
+        this.pos = pos + 1;
+        return handle;
+      }
+      static layoutForCapacity(numRefs) {
+        const refsStorage = BHS_SIZE;
+        const pos = refsStorage + numRefs * 4;
+        return {
+          size: pos + 4,
+          numberOfReferences: numRefs,
+          offset: {
+            refsStorage,
+            pos
+          }
+        };
+      }
+    };
+    objectVisitorPredicateFactories = {
+      arm: function(needle, onMatch) {
+        const size = Process.pageSize;
+        const predicate = Memory.alloc(size);
+        Memory.protect(predicate, size, "rwx");
+        const onMatchCallback = new NativeCallback(onMatch, "void", ["pointer"]);
+        predicate._onMatchCallback = onMatchCallback;
+        const instructions = [
+          26625,
+          // ldr r1, [r0]
+          18947,
+          // ldr r2, =needle
+          17041,
+          // cmp r1, r2
+          53505,
+          // bne mismatch
+          19202,
+          // ldr r3, =onMatch
+          18200,
+          // bx r3
+          18288,
+          // bx lr
+          48896
+          // nop
+        ];
+        const needleOffset = instructions.length * 2;
+        const onMatchOffset = needleOffset + 4;
+        const codeSize = onMatchOffset + 4;
+        Memory.patchCode(predicate, codeSize, function(address) {
+          instructions.forEach((instruction, index) => {
+            address.add(index * 2).writeU16(instruction);
+          });
+          address.add(needleOffset).writeS32(needle);
+          address.add(onMatchOffset).writePointer(onMatchCallback);
+        });
+        return predicate.or(1);
+      },
+      arm64: function(needle, onMatch) {
+        const size = Process.pageSize;
+        const predicate = Memory.alloc(size);
+        Memory.protect(predicate, size, "rwx");
+        const onMatchCallback = new NativeCallback(onMatch, "void", ["pointer"]);
+        predicate._onMatchCallback = onMatchCallback;
+        const instructions = [
+          3107979265,
+          // ldr w1, [x0]
+          402653378,
+          // ldr w2, =needle
+          1795293247,
+          // cmp w1, w2
+          1409286241,
+          // b.ne mismatch
+          1476395139,
+          // ldr x3, =onMatch
+          3592355936,
+          // br x3
+          3596551104
+          // ret
+        ];
+        const needleOffset = instructions.length * 4;
+        const onMatchOffset = needleOffset + 4;
+        const codeSize = onMatchOffset + 8;
+        Memory.patchCode(predicate, codeSize, function(address) {
+          instructions.forEach((instruction, index) => {
+            address.add(index * 4).writeU32(instruction);
+          });
+          address.add(needleOffset).writeS32(needle);
+          address.add(onMatchOffset).writePointer(onMatchCallback);
+        });
+        return predicate;
+      }
+    };
+  }
+});
 
-// node_modules/frida-java-bridge/lib/jvm.js
-var jsizeSize2 = 4;
-var { pointerSize: pointerSize6 } = Process;
-var JVM_ACC_NATIVE = 256;
-var JVM_ACC_IS_OLD = 65536;
-var JVM_ACC_IS_OBSOLETE = 131072;
-var JVM_ACC_NOT_C2_COMPILABLE = 33554432;
-var JVM_ACC_NOT_C1_COMPILABLE = 67108864;
-var JVM_ACC_NOT_C2_OSR_COMPILABLE = 134217728;
-var nativeFunctionOptions4 = {
-  exceptions: "propagate"
-};
-var getJvmMethodSpec = memoize(_getJvmMethodSpec);
-var getJvmInstanceKlassSpec = memoize(_getJvmInstanceKlassSpec);
-var getJvmThreadSpec = memoize(_getJvmThreadSpec);
-var cachedApi2 = null;
-var manglersScheduled = false;
-var replaceManglers = /* @__PURE__ */ new Map();
-var revertManglers = /* @__PURE__ */ new Map();
+// backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/jvm.js
 function getApi2() {
   if (cachedApi2 === null) {
     cachedApi2 = _getApi2();
@@ -7595,29 +7747,26 @@ function _getApi2() {
 }
 function getEnvJvmti(api2) {
   const vm3 = new VM(api2);
-  let env;
+  let env2;
   vm3.perform(() => {
     const handle = vm3.tryGetEnvHandle(jvmtiVersion.v1_0);
     if (handle === null) {
       throw new Error("JVMTI not available");
     }
-    env = new EnvJvmti(handle, vm3);
+    env2 = new EnvJvmti(handle, vm3);
     const capaBuf = Memory.alloc(8);
     capaBuf.writeU64(jvmtiCapabilities.canTagObjects);
-    const result = env.addCapabilities(capaBuf);
+    const result = env2.addCapabilities(capaBuf);
     checkJniResult("getEnvJvmti::AddCapabilities", result);
   });
-  return env;
+  return env2;
 }
-var threadOffsetParsers = {
-  x64: parseX64ThreadOffset
-};
 function makeThreadFromJniHelper(api2) {
   let offset = null;
   const tryParse = threadOffsetParsers[Process.arch];
   if (tryParse !== void 0) {
     const vm3 = new VM(api2);
-    const findClassImpl = vm3.perform((env) => env.handle.readPointer().add(6 * pointerSize6).readPointer());
+    const findClassImpl = vm3.perform((env2) => env2.handle.readPointer().add(6 * pointerSize6).readPointer());
     offset = parseInstructionsAt(findClassImpl, tryParse, { limit: 11 });
   }
   if (offset === null) {
@@ -7625,8 +7774,8 @@ function makeThreadFromJniHelper(api2) {
       throw new Error("Unable to make thread_from_jni_environment() helper for the current architecture");
     };
   }
-  return (env) => {
-    return env.add(offset);
+  return (env2) => {
+    return env2.add(offset);
   };
 }
 function parseX64ThreadOffset(insn) {
@@ -7639,54 +7788,8 @@ function parseX64ThreadOffset(insn) {
   }
   return disp;
 }
-function ensureClassInitialized2(env, classRef) {
+function ensureClassInitialized2(env2, classRef) {
 }
-var JvmMethodMangler = class {
-  constructor(methodId) {
-    this.methodId = methodId;
-    this.method = methodId.readPointer();
-    this.originalMethod = null;
-    this.newMethod = null;
-    this.resolved = null;
-    this.impl = null;
-    this.key = methodId.toString(16);
-  }
-  replace(impl, isInstanceMethod, argTypes, vm3, api2) {
-    const { key } = this;
-    const mangler = revertManglers.get(key);
-    if (mangler !== void 0) {
-      revertManglers.delete(key);
-      this.method = mangler.method;
-      this.originalMethod = mangler.originalMethod;
-      this.newMethod = mangler.newMethod;
-      this.resolved = mangler.resolved;
-    }
-    this.impl = impl;
-    replaceManglers.set(key, this);
-    ensureManglersScheduled(vm3);
-  }
-  revert(vm3) {
-    const { key } = this;
-    replaceManglers.delete(key);
-    revertManglers.set(key, this);
-    ensureManglersScheduled(vm3);
-  }
-  resolveTarget(wrapper, isInstanceMethod, env, api2) {
-    const { resolved, originalMethod, methodId } = this;
-    if (resolved !== null) {
-      return resolved;
-    }
-    if (originalMethod === null) {
-      return methodId;
-    }
-    const vip = originalMethod.oldMethod.vtableIndexPtr;
-    vip.writeS32(-2);
-    const jmethodID = Memory.alloc(pointerSize6);
-    jmethodID.writePointer(this.method);
-    this.resolved = jmethodID;
-    return jmethodID;
-  }
-};
 function ensureManglersScheduled(vm3) {
   if (!manglersScheduled) {
     manglersScheduled = true;
@@ -7699,9 +7802,9 @@ function doManglers(vm3) {
   replaceManglers.clear();
   revertManglers.clear();
   manglersScheduled = false;
-  vm3.perform((env) => {
+  vm3.perform((env2) => {
     const api2 = getApi2();
-    const thread = api2["JavaThread::thread_from_jni_environment"](env.handle);
+    const thread = api2["JavaThread::thread_from_jni_environment"](env2.handle);
     let force = false;
     withJvmThread(() => {
       localReplaceManglers.forEach((mangler) => {
@@ -7726,11 +7829,11 @@ function doManglers(vm3) {
       });
     });
     if (force) {
-      forceSweep(env.handle);
+      forceSweep(env2.handle);
     }
   });
 }
-function forceSweep(env) {
+function forceSweep(env2) {
   const {
     fractions,
     shouldSweep,
@@ -7750,7 +7853,7 @@ function forceSweep(env) {
     const endTrav = trav + 2;
     while (endTrav > trav) {
       fractions.writeS32(1);
-      sleep(env, NULL, 50);
+      sleep(env2, NULL, 50);
       if (!inProgress()) {
         withJvmThread(() => {
           Thread.sleep(0.05);
@@ -7986,11 +8089,11 @@ function revertJvmMethod(method) {
 }
 function _getJvmMethodSpec() {
   const api2 = getApi2();
-  const { version } = api2;
+  const { version: version2 } = api2;
   let adapterHandlerLocation;
-  if (version >= 17) {
+  if (version2 >= 17) {
     adapterHandlerLocation = "method:early";
-  } else if (version >= 9 && version <= 16) {
+  } else if (version2 >= 9 && version2 <= 16) {
     adapterHandlerLocation = "const-method";
   } else {
     adapterHandlerLocation = "method:late";
@@ -8047,9 +8150,6 @@ function _getJvmMethodSpec() {
     }
   };
 }
-var vtableOffsetParsers = {
-  x64: parseX64VTableOffset
-};
 function _getJvmInstanceKlassSpec() {
   const { version: jvmVersion, createNewDefaultVtableIndices } = getApi2();
   const tryParse = vtableOffsetParsers[Process.arch];
@@ -8090,18 +8190,236 @@ function parseX64VTableOffset(insn) {
   const defaultVtableIndicesOffset = disp;
   return defaultVtableIndicesOffset + 16;
 }
+var jsizeSize2, pointerSize6, JVM_ACC_NATIVE, JVM_ACC_IS_OLD, JVM_ACC_IS_OBSOLETE, JVM_ACC_NOT_C2_COMPILABLE, JVM_ACC_NOT_C1_COMPILABLE, JVM_ACC_NOT_C2_OSR_COMPILABLE, nativeFunctionOptions4, getJvmMethodSpec, getJvmInstanceKlassSpec, getJvmThreadSpec, cachedApi2, manglersScheduled, replaceManglers, revertManglers, threadOffsetParsers, JvmMethodMangler, vtableOffsetParsers;
+var init_jvm = __esm({
+  "backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/jvm.js"() {
+    init_node_globals();
+    init_jvmti();
+    init_machine_code();
+    init_memoize();
+    init_result();
+    init_vm();
+    jsizeSize2 = 4;
+    ({ pointerSize: pointerSize6 } = Process);
+    JVM_ACC_NATIVE = 256;
+    JVM_ACC_IS_OLD = 65536;
+    JVM_ACC_IS_OBSOLETE = 131072;
+    JVM_ACC_NOT_C2_COMPILABLE = 33554432;
+    JVM_ACC_NOT_C1_COMPILABLE = 67108864;
+    JVM_ACC_NOT_C2_OSR_COMPILABLE = 134217728;
+    nativeFunctionOptions4 = {
+      exceptions: "propagate"
+    };
+    getJvmMethodSpec = memoize(_getJvmMethodSpec);
+    getJvmInstanceKlassSpec = memoize(_getJvmInstanceKlassSpec);
+    getJvmThreadSpec = memoize(_getJvmThreadSpec);
+    cachedApi2 = null;
+    manglersScheduled = false;
+    replaceManglers = /* @__PURE__ */ new Map();
+    revertManglers = /* @__PURE__ */ new Map();
+    threadOffsetParsers = {
+      x64: parseX64ThreadOffset
+    };
+    JvmMethodMangler = class {
+      constructor(methodId) {
+        this.methodId = methodId;
+        this.method = methodId.readPointer();
+        this.originalMethod = null;
+        this.newMethod = null;
+        this.resolved = null;
+        this.impl = null;
+        this.key = methodId.toString(16);
+      }
+      replace(impl, isInstanceMethod, argTypes, vm3, api2) {
+        const { key } = this;
+        const mangler = revertManglers.get(key);
+        if (mangler !== void 0) {
+          revertManglers.delete(key);
+          this.method = mangler.method;
+          this.originalMethod = mangler.originalMethod;
+          this.newMethod = mangler.newMethod;
+          this.resolved = mangler.resolved;
+        }
+        this.impl = impl;
+        replaceManglers.set(key, this);
+        ensureManglersScheduled(vm3);
+      }
+      revert(vm3) {
+        const { key } = this;
+        replaceManglers.delete(key);
+        revertManglers.set(key, this);
+        ensureManglersScheduled(vm3);
+      }
+      resolveTarget(wrapper, isInstanceMethod, env2, api2) {
+        const { resolved, originalMethod, methodId } = this;
+        if (resolved !== null) {
+          return resolved;
+        }
+        if (originalMethod === null) {
+          return methodId;
+        }
+        const vip = originalMethod.oldMethod.vtableIndexPtr;
+        vip.writeS32(-2);
+        const jmethodID = Memory.alloc(pointerSize6);
+        jmethodID.writePointer(this.method);
+        this.resolved = jmethodID;
+        return jmethodID;
+      }
+    };
+    vtableOffsetParsers = {
+      x64: parseX64VTableOffset
+    };
+  }
+});
 
-// node_modules/frida-java-bridge/lib/api.js
-var getApi3 = getApi;
-try {
-  getAndroidVersion();
-} catch (e) {
-  getApi3 = getApi2;
+// backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/api.js
+var getApi3, api_default;
+var init_api = __esm({
+  "backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/api.js"() {
+    init_node_globals();
+    init_android();
+    init_jvm();
+    getApi3 = getApi;
+    try {
+      getAndroidVersion();
+    } catch (e) {
+      getApi3 = getApi2;
+    }
+    api_default = getApi3;
+  }
+});
+
+// backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/class-model.js
+function ensureInitialized(env2) {
+  if (cm === null) {
+    cm = compileModule(env2);
+    unwrap = makeHandleUnwrapper(cm, env2.vm);
+  }
 }
-var api_default = getApi3;
-
-// node_modules/frida-java-bridge/lib/class-model.js
-var code2 = `#include <json-glib/json-glib.h>
+function compileModule(env2) {
+  const api2 = api_default();
+  const { jvmti = null } = api2;
+  const { pointerSize: pointerSize9 } = Process;
+  const lockSize = 8;
+  const modelsSize = pointerSize9;
+  const javaApiSize = 7 * pointerSize9;
+  const artApiSize = 10 * 4 + 5 * pointerSize9;
+  const dataSize = lockSize + modelsSize + javaApiSize + artApiSize;
+  const data = Memory.alloc(dataSize);
+  const lock = data;
+  const models = lock.add(lockSize);
+  const javaApi = models.add(modelsSize);
+  const { getDeclaredMethods, getDeclaredFields } = env2.javaLangClass();
+  const method = env2.javaLangReflectMethod();
+  const field = env2.javaLangReflectField();
+  let j = javaApi;
+  [
+    jvmti !== null ? jvmti : NULL,
+    getDeclaredMethods,
+    getDeclaredFields,
+    method.getName,
+    method.getModifiers,
+    field.getName,
+    field.getModifiers
+  ].forEach((value) => {
+    j = j.writePointer(value).add(pointerSize9);
+  });
+  const artApi = javaApi.add(javaApiSize);
+  const { vm: vm3 } = env2;
+  if (api2.flavor === "art") {
+    let artClassOffsets;
+    if (jvmti !== null) {
+      artClassOffsets = [0, 0, 0, 0];
+    } else {
+      const c = getArtClassSpec(vm3).offset;
+      artClassOffsets = [c.ifields, c.methods, c.sfields, c.copiedMethodsOffset];
+    }
+    const m = getArtMethodSpec(vm3);
+    const f = getArtFieldSpec(vm3);
+    let s = artApi;
+    [
+      1,
+      ...artClassOffsets,
+      m.size,
+      m.offset.accessFlags,
+      f.size,
+      f.offset.accessFlags,
+      4294967295
+    ].forEach((value) => {
+      s = s.writeUInt(value).add(4);
+    });
+    [
+      api2.artClassLinker.address,
+      api2["art::ClassLinker::VisitClasses"],
+      api2["art::mirror::Class::GetDescriptor"],
+      api2["art::ArtMethod::PrettyMethod"],
+      Process.getModuleByName("libc.so").getExportByName("free")
+    ].forEach((value, i) => {
+      if (value === void 0) {
+        value = NULL;
+      }
+      s = s.writePointer(value).add(pointerSize9);
+    });
+  }
+  const cm2 = new CModule(code2, {
+    lock,
+    models,
+    java_api: javaApi,
+    art_api: artApi
+  });
+  const reentrantOptions = { exceptions: "propagate" };
+  const fastOptions = { exceptions: "propagate", scheduling: "exclusive" };
+  return {
+    handle: cm2,
+    new: new NativeFunction(cm2.model_new, "pointer", ["pointer", "pointer", "pointer"], reentrantOptions),
+    has: new NativeFunction(cm2.model_has, "bool", ["pointer", "pointer"], fastOptions),
+    find: new NativeFunction(cm2.model_find, "pointer", ["pointer", "pointer"], fastOptions),
+    list: new NativeFunction(cm2.model_list, "pointer", ["pointer"], fastOptions),
+    enumerateMethodsArt: new NativeFunction(
+      cm2.enumerate_methods_art,
+      "pointer",
+      ["pointer", "pointer", "bool", "bool", "bool"],
+      reentrantOptions
+    ),
+    enumerateMethodsJvm: new NativeFunction(cm2.enumerate_methods_jvm, "pointer", [
+      "pointer",
+      "pointer",
+      "bool",
+      "bool",
+      "bool",
+      "pointer"
+    ], reentrantOptions),
+    dealloc: new NativeFunction(cm2.dealloc, "void", ["pointer"], fastOptions)
+  };
+}
+function makeHandleUnwrapper(cm2, vm3) {
+  const api2 = api_default();
+  if (api2.flavor !== "art") {
+    return nullUnwrap;
+  }
+  const decodeGlobal = api2["art::JavaVMExt::DecodeGlobal"];
+  return function(handle, env2, fn) {
+    let result;
+    withRunnableArtThread(vm3, env2, (thread) => {
+      const object = decodeGlobal(vm3, thread, handle);
+      result = fn(object);
+    });
+    return result;
+  };
+}
+function nullUnwrap(handle, env2, fn) {
+  return fn(NULL);
+}
+function boolToNative(val) {
+  return val ? 1 : 0;
+}
+var code2, methodQueryPattern, cm, unwrap, Model;
+var init_class_model = __esm({
+  "backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/class-model.js"() {
+    init_node_globals();
+    init_android();
+    init_api();
+    code2 = `#include <json-glib/json-glib.h>
 #include <string.h>
 
 #define kAccStatic 0x0008
@@ -9317,601 +9635,149 @@ std_string_c_str (StdString * self)
   return self->s.data;
 }
 `;
-var methodQueryPattern = /(.+)!([^/]+)\/?([isu]+)?/;
-var cm = null;
-var unwrap = null;
-var Model = class _Model {
-  static build(handle, env) {
-    ensureInitialized(env);
-    return unwrap(handle, env, (object) => {
-      return new _Model(cm.new(handle, object, env));
-    });
-  }
-  static enumerateMethods(query, api2, env) {
-    ensureInitialized(env);
-    const params = query.match(methodQueryPattern);
-    if (params === null) {
-      throw new Error("Invalid query; format is: class!method -- see documentation of Java.enumerateMethods(query) for details");
-    }
-    const classQuery = Memory.allocUtf8String(params[1]);
-    const methodQuery = Memory.allocUtf8String(params[2]);
-    let includeSignature = false;
-    let ignoreCase = false;
-    let skipSystemClasses = false;
-    const modifiers = params[3];
-    if (modifiers !== void 0) {
-      includeSignature = modifiers.indexOf("s") !== -1;
-      ignoreCase = modifiers.indexOf("i") !== -1;
-      skipSystemClasses = modifiers.indexOf("u") !== -1;
-    }
-    let result;
-    if (api2.jvmti !== null) {
-      const json = cm.enumerateMethodsJvm(
-        classQuery,
-        methodQuery,
-        boolToNative(includeSignature),
-        boolToNative(ignoreCase),
-        boolToNative(skipSystemClasses),
-        env
-      );
-      try {
-        result = JSON.parse(json.readUtf8String()).map((group) => {
-          const loaderRef = ptr(group.loader);
-          group.loader = !loaderRef.isNull() ? loaderRef : null;
-          return group;
+    methodQueryPattern = /(.+)!([^/]+)\/?([isu]+)?/;
+    cm = null;
+    unwrap = null;
+    Model = class _Model {
+      static build(handle, env2) {
+        ensureInitialized(env2);
+        return unwrap(handle, env2, (object) => {
+          return new _Model(cm.new(handle, object, env2));
         });
-      } finally {
-        cm.dealloc(json);
       }
-    } else {
-      withRunnableArtThread(env.vm, env, (thread) => {
-        const json = cm.enumerateMethodsArt(
-          classQuery,
-          methodQuery,
-          boolToNative(includeSignature),
-          boolToNative(ignoreCase),
-          boolToNative(skipSystemClasses)
-        );
-        try {
-          const addGlobalReference = api2["art::JavaVMExt::AddGlobalRef"];
-          const { vm: vmHandle } = api2;
-          result = JSON.parse(json.readUtf8String()).map((group) => {
-            const loaderObj = group.loader;
-            group.loader = loaderObj !== 0 ? addGlobalReference(vmHandle, thread, ptr(loaderObj)) : null;
-            return group;
-          });
-        } finally {
-          cm.dealloc(json);
+      static enumerateMethods(query, api2, env2) {
+        ensureInitialized(env2);
+        const params = query.match(methodQueryPattern);
+        if (params === null) {
+          throw new Error("Invalid query; format is: class!method -- see documentation of Java.enumerateMethods(query) for details");
         }
-      });
-    }
-    return result;
-  }
-  constructor(handle) {
-    this.handle = handle;
-  }
-  has(member) {
-    return cm.has(this.handle, Memory.allocUtf8String(member)) !== 0;
-  }
-  find(member) {
-    return cm.find(this.handle, Memory.allocUtf8String(member)).readUtf8String();
-  }
-  list() {
-    const str = cm.list(this.handle);
-    try {
-      return JSON.parse(str.readUtf8String());
-    } finally {
-      cm.dealloc(str);
-    }
-  }
-};
-function ensureInitialized(env) {
-  if (cm === null) {
-    cm = compileModule(env);
-    unwrap = makeHandleUnwrapper(cm, env.vm);
-  }
-}
-function compileModule(env) {
-  const api2 = api_default();
-  const { jvmti = null } = api2;
-  const { pointerSize: pointerSize9 } = Process;
-  const lockSize = 8;
-  const modelsSize = pointerSize9;
-  const javaApiSize = 7 * pointerSize9;
-  const artApiSize = 10 * 4 + 5 * pointerSize9;
-  const dataSize = lockSize + modelsSize + javaApiSize + artApiSize;
-  const data = Memory.alloc(dataSize);
-  const lock = data;
-  const models = lock.add(lockSize);
-  const javaApi = models.add(modelsSize);
-  const { getDeclaredMethods, getDeclaredFields } = env.javaLangClass();
-  const method = env.javaLangReflectMethod();
-  const field = env.javaLangReflectField();
-  let j = javaApi;
-  [
-    jvmti !== null ? jvmti : NULL,
-    getDeclaredMethods,
-    getDeclaredFields,
-    method.getName,
-    method.getModifiers,
-    field.getName,
-    field.getModifiers
-  ].forEach((value) => {
-    j = j.writePointer(value).add(pointerSize9);
-  });
-  const artApi = javaApi.add(javaApiSize);
-  const { vm: vm3 } = env;
-  if (api2.flavor === "art") {
-    let artClassOffsets;
-    if (jvmti !== null) {
-      artClassOffsets = [0, 0, 0, 0];
-    } else {
-      const c = getArtClassSpec(vm3).offset;
-      artClassOffsets = [c.ifields, c.methods, c.sfields, c.copiedMethodsOffset];
-    }
-    const m = getArtMethodSpec(vm3);
-    const f = getArtFieldSpec(vm3);
-    let s = artApi;
-    [
-      1,
-      ...artClassOffsets,
-      m.size,
-      m.offset.accessFlags,
-      f.size,
-      f.offset.accessFlags,
-      4294967295
-    ].forEach((value) => {
-      s = s.writeUInt(value).add(4);
-    });
-    [
-      api2.artClassLinker.address,
-      api2["art::ClassLinker::VisitClasses"],
-      api2["art::mirror::Class::GetDescriptor"],
-      api2["art::ArtMethod::PrettyMethod"],
-      Process.getModuleByName("libc.so").getExportByName("free")
-    ].forEach((value, i) => {
-      if (value === void 0) {
-        value = NULL;
+        const classQuery = Memory.allocUtf8String(params[1]);
+        const methodQuery = Memory.allocUtf8String(params[2]);
+        let includeSignature = false;
+        let ignoreCase = false;
+        let skipSystemClasses = false;
+        const modifiers = params[3];
+        if (modifiers !== void 0) {
+          includeSignature = modifiers.indexOf("s") !== -1;
+          ignoreCase = modifiers.indexOf("i") !== -1;
+          skipSystemClasses = modifiers.indexOf("u") !== -1;
+        }
+        let result;
+        if (api2.jvmti !== null) {
+          const json = cm.enumerateMethodsJvm(
+            classQuery,
+            methodQuery,
+            boolToNative(includeSignature),
+            boolToNative(ignoreCase),
+            boolToNative(skipSystemClasses),
+            env2
+          );
+          try {
+            result = JSON.parse(json.readUtf8String()).map((group) => {
+              const loaderRef = ptr(group.loader);
+              group.loader = !loaderRef.isNull() ? loaderRef : null;
+              return group;
+            });
+          } finally {
+            cm.dealloc(json);
+          }
+        } else {
+          withRunnableArtThread(env2.vm, env2, (thread) => {
+            const json = cm.enumerateMethodsArt(
+              classQuery,
+              methodQuery,
+              boolToNative(includeSignature),
+              boolToNative(ignoreCase),
+              boolToNative(skipSystemClasses)
+            );
+            try {
+              const addGlobalReference = api2["art::JavaVMExt::AddGlobalRef"];
+              const { vm: vmHandle } = api2;
+              result = JSON.parse(json.readUtf8String()).map((group) => {
+                const loaderObj = group.loader;
+                group.loader = loaderObj !== 0 ? addGlobalReference(vmHandle, thread, ptr(loaderObj)) : null;
+                return group;
+              });
+            } finally {
+              cm.dealloc(json);
+            }
+          });
+        }
+        return result;
       }
-      s = s.writePointer(value).add(pointerSize9);
-    });
+      constructor(handle) {
+        this.handle = handle;
+      }
+      has(member) {
+        return cm.has(this.handle, Memory.allocUtf8String(member)) !== 0;
+      }
+      find(member) {
+        return cm.find(this.handle, Memory.allocUtf8String(member)).readUtf8String();
+      }
+      list() {
+        const str = cm.list(this.handle);
+        try {
+          return JSON.parse(str.readUtf8String());
+        } finally {
+          cm.dealloc(str);
+        }
+      }
+    };
   }
-  const cm2 = new CModule(code2, {
-    lock,
-    models,
-    java_api: javaApi,
-    art_api: artApi
-  });
-  const reentrantOptions = { exceptions: "propagate" };
-  const fastOptions = { exceptions: "propagate", scheduling: "exclusive" };
-  return {
-    handle: cm2,
-    new: new NativeFunction(cm2.model_new, "pointer", ["pointer", "pointer", "pointer"], reentrantOptions),
-    has: new NativeFunction(cm2.model_has, "bool", ["pointer", "pointer"], fastOptions),
-    find: new NativeFunction(cm2.model_find, "pointer", ["pointer", "pointer"], fastOptions),
-    list: new NativeFunction(cm2.model_list, "pointer", ["pointer"], fastOptions),
-    enumerateMethodsArt: new NativeFunction(
-      cm2.enumerate_methods_art,
-      "pointer",
-      ["pointer", "pointer", "bool", "bool", "bool"],
-      reentrantOptions
-    ),
-    enumerateMethodsJvm: new NativeFunction(cm2.enumerate_methods_jvm, "pointer", [
-      "pointer",
-      "pointer",
-      "bool",
-      "bool",
-      "bool",
-      "pointer"
-    ], reentrantOptions),
-    dealloc: new NativeFunction(cm2.dealloc, "void", ["pointer"], fastOptions)
-  };
-}
-function makeHandleUnwrapper(cm2, vm3) {
-  const api2 = api_default();
-  if (api2.flavor !== "art") {
-    return nullUnwrap;
-  }
-  const decodeGlobal = api2["art::JavaVMExt::DecodeGlobal"];
-  return function(handle, env, fn) {
-    let result;
-    withRunnableArtThread(vm3, env, (thread) => {
-      const object = decodeGlobal(vm3, thread, handle);
-      result = fn(object);
-    });
-    return result;
-  };
-}
-function nullUnwrap(handle, env, fn) {
-  return fn(NULL);
-}
-function boolToNative(val) {
-  return val ? 1 : 0;
-}
+});
 
-// node_modules/frida-java-bridge/lib/lru.js
-var LRU = class {
-  constructor(capacity, destroy) {
-    this.items = /* @__PURE__ */ new Map();
-    this.capacity = capacity;
-    this.destroy = destroy;
+// backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/lru.js
+var LRU;
+var init_lru = __esm({
+  "backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/lru.js"() {
+    init_node_globals();
+    LRU = class {
+      constructor(capacity, destroy) {
+        this.items = /* @__PURE__ */ new Map();
+        this.capacity = capacity;
+        this.destroy = destroy;
+      }
+      dispose(env2) {
+        const { items, destroy } = this;
+        items.forEach((val) => {
+          destroy(val, env2);
+        });
+        items.clear();
+      }
+      get(key) {
+        const { items } = this;
+        const item = items.get(key);
+        if (item !== void 0) {
+          items.delete(key);
+          items.set(key, item);
+        }
+        return item;
+      }
+      set(key, val, env2) {
+        const { items } = this;
+        const existingVal = items.get(key);
+        if (existingVal !== void 0) {
+          items.delete(key);
+          this.destroy(existingVal, env2);
+        } else if (items.size === this.capacity) {
+          const oldestKey = items.keys().next().value;
+          const oldestVal = items.get(oldestKey);
+          items.delete(oldestKey);
+          this.destroy(oldestVal, env2);
+        }
+        items.set(key, val);
+      }
+    };
   }
-  dispose(env) {
-    const { items, destroy } = this;
-    items.forEach((val) => {
-      destroy(val, env);
-    });
-    items.clear();
-  }
-  get(key) {
-    const { items } = this;
-    const item = items.get(key);
-    if (item !== void 0) {
-      items.delete(key);
-      items.set(key, item);
-    }
-    return item;
-  }
-  set(key, val, env) {
-    const { items } = this;
-    const existingVal = items.get(key);
-    if (existingVal !== void 0) {
-      items.delete(key);
-      this.destroy(existingVal, env);
-    } else if (items.size === this.capacity) {
-      const oldestKey = items.keys().next().value;
-      const oldestVal = items.get(oldestKey);
-      items.delete(oldestKey);
-      this.destroy(oldestVal, env);
-    }
-    items.set(key, val);
-  }
-};
+});
 
-// node_modules/frida-java-bridge/lib/mkdex.js
-var kAccPublic2 = 1;
-var kAccNative2 = 256;
-var kAccConstructor = 65536;
-var kEndianTag = 305419896;
-var kClassDefSize = 32;
-var kProtoIdSize = 12;
-var kFieldIdSize = 8;
-var kMethodIdSize = 8;
-var kTypeIdSize = 4;
-var kStringIdSize = 4;
-var kMapItemSize = 12;
-var TYPE_HEADER_ITEM = 0;
-var TYPE_STRING_ID_ITEM = 1;
-var TYPE_TYPE_ID_ITEM = 2;
-var TYPE_PROTO_ID_ITEM = 3;
-var TYPE_FIELD_ID_ITEM = 4;
-var TYPE_METHOD_ID_ITEM = 5;
-var TYPE_CLASS_DEF_ITEM = 6;
-var TYPE_MAP_LIST = 4096;
-var TYPE_TYPE_LIST = 4097;
-var TYPE_ANNOTATION_SET_ITEM = 4099;
-var TYPE_CLASS_DATA_ITEM = 8192;
-var TYPE_CODE_ITEM = 8193;
-var TYPE_STRING_DATA_ITEM = 8194;
-var TYPE_DEBUG_INFO_ITEM = 8195;
-var TYPE_ANNOTATION_ITEM = 8196;
-var TYPE_ANNOTATIONS_DIRECTORY_ITEM = 8198;
-var VALUE_TYPE = 24;
-var VALUE_ARRAY = 28;
-var VISIBILITY_SYSTEM = 2;
-var kDefaultConstructorSize = 24;
-var kDefaultConstructorDebugInfo = Buffer2.from([3, 0, 7, 14, 0]);
-var kDalvikAnnotationTypeThrows = "Ldalvik/annotation/Throws;";
-var kNullTerminator = Buffer2.from([0]);
+// backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/mkdex.js
 function mkdex(spec) {
   const builder = new DexBuilder();
   const fullSpec = Object.assign({}, spec);
   builder.addClass(fullSpec);
   return builder.build();
 }
-var DexBuilder = class {
-  constructor() {
-    this.classes = [];
-  }
-  addClass(spec) {
-    this.classes.push(spec);
-  }
-  build() {
-    const model = computeModel(this.classes);
-    const {
-      classes,
-      interfaces,
-      fields,
-      methods,
-      protos,
-      parameters,
-      annotationDirectories,
-      annotationSets,
-      throwsAnnotations,
-      types,
-      strings
-    } = model;
-    let offset = 0;
-    const headerOffset = 0;
-    const checksumOffset = 8;
-    const signatureOffset = 12;
-    const signatureSize = 20;
-    const headerSize = 112;
-    offset += headerSize;
-    const stringIdsOffset = offset;
-    const stringIdsSize = strings.length * kStringIdSize;
-    offset += stringIdsSize;
-    const typeIdsOffset = offset;
-    const typeIdsSize = types.length * kTypeIdSize;
-    offset += typeIdsSize;
-    const protoIdsOffset = offset;
-    const protoIdsSize = protos.length * kProtoIdSize;
-    offset += protoIdsSize;
-    const fieldIdsOffset = offset;
-    const fieldIdsSize = fields.length * kFieldIdSize;
-    offset += fieldIdsSize;
-    const methodIdsOffset = offset;
-    const methodIdsSize = methods.length * kMethodIdSize;
-    offset += methodIdsSize;
-    const classDefsOffset = offset;
-    const classDefsSize = classes.length * kClassDefSize;
-    offset += classDefsSize;
-    const dataOffset = offset;
-    const annotationSetOffsets = annotationSets.map((set) => {
-      const setOffset = offset;
-      set.offset = setOffset;
-      offset += 4 + set.items.length * 4;
-      return setOffset;
-    });
-    const javaCodeItems = classes.reduce((result, klass) => {
-      const constructorMethods = klass.classData.constructorMethods;
-      constructorMethods.forEach((method) => {
-        const [, accessFlags, superConstructor] = method;
-        if ((accessFlags & kAccNative2) === 0 && superConstructor >= 0) {
-          method.push(offset);
-          result.push({ offset, superConstructor });
-          offset += kDefaultConstructorSize;
-        }
-      });
-      return result;
-    }, []);
-    annotationDirectories.forEach((dir) => {
-      dir.offset = offset;
-      offset += 16 + dir.methods.length * 8;
-    });
-    const interfaceOffsets = interfaces.map((iface) => {
-      offset = align(offset, 4);
-      const ifaceOffset = offset;
-      iface.offset = ifaceOffset;
-      offset += 4 + 2 * iface.types.length;
-      return ifaceOffset;
-    });
-    const parameterOffsets = parameters.map((param) => {
-      offset = align(offset, 4);
-      const paramOffset = offset;
-      param.offset = paramOffset;
-      offset += 4 + 2 * param.types.length;
-      return paramOffset;
-    });
-    const stringChunks = [];
-    const stringOffsets = strings.map((str) => {
-      const strOffset = offset;
-      const header = Buffer2.from(createUleb128(str.length));
-      const data = Buffer2.from(str, "utf8");
-      const chunk = Buffer2.concat([header, data, kNullTerminator]);
-      stringChunks.push(chunk);
-      offset += chunk.length;
-      return strOffset;
-    });
-    const debugInfoOffsets = javaCodeItems.map((codeItem) => {
-      const debugOffset = offset;
-      offset += kDefaultConstructorDebugInfo.length;
-      return debugOffset;
-    });
-    const throwsAnnotationBlobs = throwsAnnotations.map((annotation) => {
-      const blob = makeThrowsAnnotation(annotation);
-      annotation.offset = offset;
-      offset += blob.length;
-      return blob;
-    });
-    const classDataBlobs = classes.map((klass, index) => {
-      klass.classData.offset = offset;
-      const blob = makeClassData(klass);
-      offset += blob.length;
-      return blob;
-    });
-    const linkSize = 0;
-    const linkOffset = 0;
-    offset = align(offset, 4);
-    const mapOffset = offset;
-    const typeListLength = interfaces.length + parameters.length;
-    const mapNumItems = 4 + (fields.length > 0 ? 1 : 0) + 2 + annotationSets.length + javaCodeItems.length + annotationDirectories.length + (typeListLength > 0 ? 1 : 0) + 1 + debugInfoOffsets.length + throwsAnnotations.length + classes.length + 1;
-    const mapSize = 4 + mapNumItems * kMapItemSize;
-    offset += mapSize;
-    const dataSize = offset - dataOffset;
-    const fileSize = offset;
-    const dex = Buffer2.alloc(fileSize);
-    dex.write("dex\n035");
-    dex.writeUInt32LE(fileSize, 32);
-    dex.writeUInt32LE(headerSize, 36);
-    dex.writeUInt32LE(kEndianTag, 40);
-    dex.writeUInt32LE(linkSize, 44);
-    dex.writeUInt32LE(linkOffset, 48);
-    dex.writeUInt32LE(mapOffset, 52);
-    dex.writeUInt32LE(strings.length, 56);
-    dex.writeUInt32LE(stringIdsOffset, 60);
-    dex.writeUInt32LE(types.length, 64);
-    dex.writeUInt32LE(typeIdsOffset, 68);
-    dex.writeUInt32LE(protos.length, 72);
-    dex.writeUInt32LE(protoIdsOffset, 76);
-    dex.writeUInt32LE(fields.length, 80);
-    dex.writeUInt32LE(fields.length > 0 ? fieldIdsOffset : 0, 84);
-    dex.writeUInt32LE(methods.length, 88);
-    dex.writeUInt32LE(methodIdsOffset, 92);
-    dex.writeUInt32LE(classes.length, 96);
-    dex.writeUInt32LE(classDefsOffset, 100);
-    dex.writeUInt32LE(dataSize, 104);
-    dex.writeUInt32LE(dataOffset, 108);
-    stringOffsets.forEach((offset2, index) => {
-      dex.writeUInt32LE(offset2, stringIdsOffset + index * kStringIdSize);
-    });
-    types.forEach((id, index) => {
-      dex.writeUInt32LE(id, typeIdsOffset + index * kTypeIdSize);
-    });
-    protos.forEach((proto, index) => {
-      const [shortyIndex, returnTypeIndex, params] = proto;
-      const protoOffset = protoIdsOffset + index * kProtoIdSize;
-      dex.writeUInt32LE(shortyIndex, protoOffset);
-      dex.writeUInt32LE(returnTypeIndex, protoOffset + 4);
-      dex.writeUInt32LE(params !== null ? params.offset : 0, protoOffset + 8);
-    });
-    fields.forEach((field, index) => {
-      const [classIndex, typeIndex, nameIndex] = field;
-      const fieldOffset = fieldIdsOffset + index * kFieldIdSize;
-      dex.writeUInt16LE(classIndex, fieldOffset);
-      dex.writeUInt16LE(typeIndex, fieldOffset + 2);
-      dex.writeUInt32LE(nameIndex, fieldOffset + 4);
-    });
-    methods.forEach((method, index) => {
-      const [classIndex, protoIndex, nameIndex] = method;
-      const methodOffset = methodIdsOffset + index * kMethodIdSize;
-      dex.writeUInt16LE(classIndex, methodOffset);
-      dex.writeUInt16LE(protoIndex, methodOffset + 2);
-      dex.writeUInt32LE(nameIndex, methodOffset + 4);
-    });
-    classes.forEach((klass, index) => {
-      const { interfaces: interfaces2, annotationsDirectory } = klass;
-      const interfacesOffset = interfaces2 !== null ? interfaces2.offset : 0;
-      const annotationsOffset = annotationsDirectory !== null ? annotationsDirectory.offset : 0;
-      const staticValuesOffset = 0;
-      const classOffset = classDefsOffset + index * kClassDefSize;
-      dex.writeUInt32LE(klass.index, classOffset);
-      dex.writeUInt32LE(klass.accessFlags, classOffset + 4);
-      dex.writeUInt32LE(klass.superClassIndex, classOffset + 8);
-      dex.writeUInt32LE(interfacesOffset, classOffset + 12);
-      dex.writeUInt32LE(klass.sourceFileIndex, classOffset + 16);
-      dex.writeUInt32LE(annotationsOffset, classOffset + 20);
-      dex.writeUInt32LE(klass.classData.offset, classOffset + 24);
-      dex.writeUInt32LE(staticValuesOffset, classOffset + 28);
-    });
-    annotationSets.forEach((set, index) => {
-      const { items } = set;
-      const setOffset = annotationSetOffsets[index];
-      dex.writeUInt32LE(items.length, setOffset);
-      items.forEach((item, index2) => {
-        dex.writeUInt32LE(item.offset, setOffset + 4 + index2 * 4);
-      });
-    });
-    javaCodeItems.forEach((codeItem, index) => {
-      const { offset: offset2, superConstructor } = codeItem;
-      const registersSize = 1;
-      const insSize = 1;
-      const outsSize = 1;
-      const triesSize = 0;
-      const insnsSize = 4;
-      dex.writeUInt16LE(registersSize, offset2);
-      dex.writeUInt16LE(insSize, offset2 + 2);
-      dex.writeUInt16LE(outsSize, offset2 + 4);
-      dex.writeUInt16LE(triesSize, offset2 + 6);
-      dex.writeUInt32LE(debugInfoOffsets[index], offset2 + 8);
-      dex.writeUInt32LE(insnsSize, offset2 + 12);
-      dex.writeUInt16LE(4208, offset2 + 16);
-      dex.writeUInt16LE(superConstructor, offset2 + 18);
-      dex.writeUInt16LE(0, offset2 + 20);
-      dex.writeUInt16LE(14, offset2 + 22);
-    });
-    annotationDirectories.forEach((dir) => {
-      const dirOffset = dir.offset;
-      const classAnnotationsOffset = 0;
-      const fieldsSize = 0;
-      const annotatedMethodsSize = dir.methods.length;
-      const annotatedParametersSize = 0;
-      dex.writeUInt32LE(classAnnotationsOffset, dirOffset);
-      dex.writeUInt32LE(fieldsSize, dirOffset + 4);
-      dex.writeUInt32LE(annotatedMethodsSize, dirOffset + 8);
-      dex.writeUInt32LE(annotatedParametersSize, dirOffset + 12);
-      dir.methods.forEach((method, index) => {
-        const entryOffset = dirOffset + 16 + index * 8;
-        const [methodIndex, annotationSet] = method;
-        dex.writeUInt32LE(methodIndex, entryOffset);
-        dex.writeUInt32LE(annotationSet.offset, entryOffset + 4);
-      });
-    });
-    interfaces.forEach((iface, index) => {
-      const ifaceOffset = interfaceOffsets[index];
-      dex.writeUInt32LE(iface.types.length, ifaceOffset);
-      iface.types.forEach((type, typeIndex) => {
-        dex.writeUInt16LE(type, ifaceOffset + 4 + typeIndex * 2);
-      });
-    });
-    parameters.forEach((param, index) => {
-      const paramOffset = parameterOffsets[index];
-      dex.writeUInt32LE(param.types.length, paramOffset);
-      param.types.forEach((type, typeIndex) => {
-        dex.writeUInt16LE(type, paramOffset + 4 + typeIndex * 2);
-      });
-    });
-    stringChunks.forEach((chunk, index) => {
-      chunk.copy(dex, stringOffsets[index]);
-    });
-    debugInfoOffsets.forEach((debugInfoOffset) => {
-      kDefaultConstructorDebugInfo.copy(dex, debugInfoOffset);
-    });
-    throwsAnnotationBlobs.forEach((annotationBlob, index) => {
-      annotationBlob.copy(dex, throwsAnnotations[index].offset);
-    });
-    classDataBlobs.forEach((classDataBlob, index) => {
-      classDataBlob.copy(dex, classes[index].classData.offset);
-    });
-    dex.writeUInt32LE(mapNumItems, mapOffset);
-    const mapItems = [
-      [TYPE_HEADER_ITEM, 1, headerOffset],
-      [TYPE_STRING_ID_ITEM, strings.length, stringIdsOffset],
-      [TYPE_TYPE_ID_ITEM, types.length, typeIdsOffset],
-      [TYPE_PROTO_ID_ITEM, protos.length, protoIdsOffset]
-    ];
-    if (fields.length > 0) {
-      mapItems.push([TYPE_FIELD_ID_ITEM, fields.length, fieldIdsOffset]);
-    }
-    mapItems.push([TYPE_METHOD_ID_ITEM, methods.length, methodIdsOffset]);
-    mapItems.push([TYPE_CLASS_DEF_ITEM, classes.length, classDefsOffset]);
-    annotationSets.forEach((set, index) => {
-      mapItems.push([TYPE_ANNOTATION_SET_ITEM, set.items.length, annotationSetOffsets[index]]);
-    });
-    javaCodeItems.forEach((codeItem) => {
-      mapItems.push([TYPE_CODE_ITEM, 1, codeItem.offset]);
-    });
-    annotationDirectories.forEach((dir) => {
-      mapItems.push([TYPE_ANNOTATIONS_DIRECTORY_ITEM, 1, dir.offset]);
-    });
-    if (typeListLength > 0) {
-      mapItems.push([TYPE_TYPE_LIST, typeListLength, interfaceOffsets.concat(parameterOffsets)[0]]);
-    }
-    mapItems.push([TYPE_STRING_DATA_ITEM, strings.length, stringOffsets[0]]);
-    debugInfoOffsets.forEach((debugInfoOffset) => {
-      mapItems.push([TYPE_DEBUG_INFO_ITEM, 1, debugInfoOffset]);
-    });
-    throwsAnnotations.forEach((annotation) => {
-      mapItems.push([TYPE_ANNOTATION_ITEM, 1, annotation.offset]);
-    });
-    classes.forEach((klass) => {
-      mapItems.push([TYPE_CLASS_DATA_ITEM, 1, klass.classData.offset]);
-    });
-    mapItems.push([TYPE_MAP_LIST, 1, mapOffset]);
-    mapItems.forEach((item, index) => {
-      const [type, size, offset2] = item;
-      const itemOffset = mapOffset + 4 + index * kMapItemSize;
-      dex.writeUInt16LE(type, itemOffset);
-      dex.writeUInt32LE(size, itemOffset + 4);
-      dex.writeUInt32LE(offset2, itemOffset + 8);
-    });
-    const hash = new Checksum("sha1");
-    hash.update(dex.slice(signatureOffset + signatureSize));
-    Buffer2.from(hash.getDigest()).copy(dex, signatureOffset);
-    dex.writeUInt32LE(adler32(dex, signatureOffset), checksumOffset);
-    return dex;
-  }
-};
 function makeClassData(klass) {
   const { instanceFields, constructorMethods, virtualMethods } = klass.classData;
   const staticFieldsSize = 0;
@@ -10301,12 +10167,353 @@ function adler32(buffer, offset) {
   }
   return (b << 16 | a) >>> 0;
 }
-var mkdex_default = mkdex;
+var kAccPublic2, kAccNative2, kAccConstructor, kEndianTag, kClassDefSize, kProtoIdSize, kFieldIdSize, kMethodIdSize, kTypeIdSize, kStringIdSize, kMapItemSize, TYPE_HEADER_ITEM, TYPE_STRING_ID_ITEM, TYPE_TYPE_ID_ITEM, TYPE_PROTO_ID_ITEM, TYPE_FIELD_ID_ITEM, TYPE_METHOD_ID_ITEM, TYPE_CLASS_DEF_ITEM, TYPE_MAP_LIST, TYPE_TYPE_LIST, TYPE_ANNOTATION_SET_ITEM, TYPE_CLASS_DATA_ITEM, TYPE_CODE_ITEM, TYPE_STRING_DATA_ITEM, TYPE_DEBUG_INFO_ITEM, TYPE_ANNOTATION_ITEM, TYPE_ANNOTATIONS_DIRECTORY_ITEM, VALUE_TYPE, VALUE_ARRAY, VISIBILITY_SYSTEM, kDefaultConstructorSize, kDefaultConstructorDebugInfo, kDalvikAnnotationTypeThrows, kNullTerminator, DexBuilder, mkdex_default;
+var init_mkdex = __esm({
+  "backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/mkdex.js"() {
+    init_node_globals();
+    init_buffer();
+    kAccPublic2 = 1;
+    kAccNative2 = 256;
+    kAccConstructor = 65536;
+    kEndianTag = 305419896;
+    kClassDefSize = 32;
+    kProtoIdSize = 12;
+    kFieldIdSize = 8;
+    kMethodIdSize = 8;
+    kTypeIdSize = 4;
+    kStringIdSize = 4;
+    kMapItemSize = 12;
+    TYPE_HEADER_ITEM = 0;
+    TYPE_STRING_ID_ITEM = 1;
+    TYPE_TYPE_ID_ITEM = 2;
+    TYPE_PROTO_ID_ITEM = 3;
+    TYPE_FIELD_ID_ITEM = 4;
+    TYPE_METHOD_ID_ITEM = 5;
+    TYPE_CLASS_DEF_ITEM = 6;
+    TYPE_MAP_LIST = 4096;
+    TYPE_TYPE_LIST = 4097;
+    TYPE_ANNOTATION_SET_ITEM = 4099;
+    TYPE_CLASS_DATA_ITEM = 8192;
+    TYPE_CODE_ITEM = 8193;
+    TYPE_STRING_DATA_ITEM = 8194;
+    TYPE_DEBUG_INFO_ITEM = 8195;
+    TYPE_ANNOTATION_ITEM = 8196;
+    TYPE_ANNOTATIONS_DIRECTORY_ITEM = 8198;
+    VALUE_TYPE = 24;
+    VALUE_ARRAY = 28;
+    VISIBILITY_SYSTEM = 2;
+    kDefaultConstructorSize = 24;
+    kDefaultConstructorDebugInfo = Buffer2.from([3, 0, 7, 14, 0]);
+    kDalvikAnnotationTypeThrows = "Ldalvik/annotation/Throws;";
+    kNullTerminator = Buffer2.from([0]);
+    DexBuilder = class {
+      constructor() {
+        this.classes = [];
+      }
+      addClass(spec) {
+        this.classes.push(spec);
+      }
+      build() {
+        const model = computeModel(this.classes);
+        const {
+          classes,
+          interfaces,
+          fields,
+          methods,
+          protos,
+          parameters,
+          annotationDirectories,
+          annotationSets,
+          throwsAnnotations,
+          types,
+          strings
+        } = model;
+        let offset = 0;
+        const headerOffset = 0;
+        const checksumOffset = 8;
+        const signatureOffset = 12;
+        const signatureSize = 20;
+        const headerSize = 112;
+        offset += headerSize;
+        const stringIdsOffset = offset;
+        const stringIdsSize = strings.length * kStringIdSize;
+        offset += stringIdsSize;
+        const typeIdsOffset = offset;
+        const typeIdsSize = types.length * kTypeIdSize;
+        offset += typeIdsSize;
+        const protoIdsOffset = offset;
+        const protoIdsSize = protos.length * kProtoIdSize;
+        offset += protoIdsSize;
+        const fieldIdsOffset = offset;
+        const fieldIdsSize = fields.length * kFieldIdSize;
+        offset += fieldIdsSize;
+        const methodIdsOffset = offset;
+        const methodIdsSize = methods.length * kMethodIdSize;
+        offset += methodIdsSize;
+        const classDefsOffset = offset;
+        const classDefsSize = classes.length * kClassDefSize;
+        offset += classDefsSize;
+        const dataOffset = offset;
+        const annotationSetOffsets = annotationSets.map((set) => {
+          const setOffset = offset;
+          set.offset = setOffset;
+          offset += 4 + set.items.length * 4;
+          return setOffset;
+        });
+        const javaCodeItems = classes.reduce((result, klass) => {
+          const constructorMethods = klass.classData.constructorMethods;
+          constructorMethods.forEach((method) => {
+            const [, accessFlags, superConstructor] = method;
+            if ((accessFlags & kAccNative2) === 0 && superConstructor >= 0) {
+              method.push(offset);
+              result.push({ offset, superConstructor });
+              offset += kDefaultConstructorSize;
+            }
+          });
+          return result;
+        }, []);
+        annotationDirectories.forEach((dir) => {
+          dir.offset = offset;
+          offset += 16 + dir.methods.length * 8;
+        });
+        const interfaceOffsets = interfaces.map((iface) => {
+          offset = align(offset, 4);
+          const ifaceOffset = offset;
+          iface.offset = ifaceOffset;
+          offset += 4 + 2 * iface.types.length;
+          return ifaceOffset;
+        });
+        const parameterOffsets = parameters.map((param) => {
+          offset = align(offset, 4);
+          const paramOffset = offset;
+          param.offset = paramOffset;
+          offset += 4 + 2 * param.types.length;
+          return paramOffset;
+        });
+        const stringChunks = [];
+        const stringOffsets = strings.map((str) => {
+          const strOffset = offset;
+          const header = Buffer2.from(createUleb128(str.length));
+          const data = Buffer2.from(str, "utf8");
+          const chunk = Buffer2.concat([header, data, kNullTerminator]);
+          stringChunks.push(chunk);
+          offset += chunk.length;
+          return strOffset;
+        });
+        const debugInfoOffsets = javaCodeItems.map((codeItem) => {
+          const debugOffset = offset;
+          offset += kDefaultConstructorDebugInfo.length;
+          return debugOffset;
+        });
+        const throwsAnnotationBlobs = throwsAnnotations.map((annotation) => {
+          const blob = makeThrowsAnnotation(annotation);
+          annotation.offset = offset;
+          offset += blob.length;
+          return blob;
+        });
+        const classDataBlobs = classes.map((klass, index) => {
+          klass.classData.offset = offset;
+          const blob = makeClassData(klass);
+          offset += blob.length;
+          return blob;
+        });
+        const linkSize = 0;
+        const linkOffset = 0;
+        offset = align(offset, 4);
+        const mapOffset = offset;
+        const typeListLength = interfaces.length + parameters.length;
+        const mapNumItems = 4 + (fields.length > 0 ? 1 : 0) + 2 + annotationSets.length + javaCodeItems.length + annotationDirectories.length + (typeListLength > 0 ? 1 : 0) + 1 + debugInfoOffsets.length + throwsAnnotations.length + classes.length + 1;
+        const mapSize = 4 + mapNumItems * kMapItemSize;
+        offset += mapSize;
+        const dataSize = offset - dataOffset;
+        const fileSize = offset;
+        const dex = Buffer2.alloc(fileSize);
+        dex.write("dex\n035");
+        dex.writeUInt32LE(fileSize, 32);
+        dex.writeUInt32LE(headerSize, 36);
+        dex.writeUInt32LE(kEndianTag, 40);
+        dex.writeUInt32LE(linkSize, 44);
+        dex.writeUInt32LE(linkOffset, 48);
+        dex.writeUInt32LE(mapOffset, 52);
+        dex.writeUInt32LE(strings.length, 56);
+        dex.writeUInt32LE(stringIdsOffset, 60);
+        dex.writeUInt32LE(types.length, 64);
+        dex.writeUInt32LE(typeIdsOffset, 68);
+        dex.writeUInt32LE(protos.length, 72);
+        dex.writeUInt32LE(protoIdsOffset, 76);
+        dex.writeUInt32LE(fields.length, 80);
+        dex.writeUInt32LE(fields.length > 0 ? fieldIdsOffset : 0, 84);
+        dex.writeUInt32LE(methods.length, 88);
+        dex.writeUInt32LE(methodIdsOffset, 92);
+        dex.writeUInt32LE(classes.length, 96);
+        dex.writeUInt32LE(classDefsOffset, 100);
+        dex.writeUInt32LE(dataSize, 104);
+        dex.writeUInt32LE(dataOffset, 108);
+        stringOffsets.forEach((offset2, index) => {
+          dex.writeUInt32LE(offset2, stringIdsOffset + index * kStringIdSize);
+        });
+        types.forEach((id, index) => {
+          dex.writeUInt32LE(id, typeIdsOffset + index * kTypeIdSize);
+        });
+        protos.forEach((proto, index) => {
+          const [shortyIndex, returnTypeIndex, params] = proto;
+          const protoOffset = protoIdsOffset + index * kProtoIdSize;
+          dex.writeUInt32LE(shortyIndex, protoOffset);
+          dex.writeUInt32LE(returnTypeIndex, protoOffset + 4);
+          dex.writeUInt32LE(params !== null ? params.offset : 0, protoOffset + 8);
+        });
+        fields.forEach((field, index) => {
+          const [classIndex, typeIndex, nameIndex] = field;
+          const fieldOffset = fieldIdsOffset + index * kFieldIdSize;
+          dex.writeUInt16LE(classIndex, fieldOffset);
+          dex.writeUInt16LE(typeIndex, fieldOffset + 2);
+          dex.writeUInt32LE(nameIndex, fieldOffset + 4);
+        });
+        methods.forEach((method, index) => {
+          const [classIndex, protoIndex, nameIndex] = method;
+          const methodOffset = methodIdsOffset + index * kMethodIdSize;
+          dex.writeUInt16LE(classIndex, methodOffset);
+          dex.writeUInt16LE(protoIndex, methodOffset + 2);
+          dex.writeUInt32LE(nameIndex, methodOffset + 4);
+        });
+        classes.forEach((klass, index) => {
+          const { interfaces: interfaces2, annotationsDirectory } = klass;
+          const interfacesOffset = interfaces2 !== null ? interfaces2.offset : 0;
+          const annotationsOffset = annotationsDirectory !== null ? annotationsDirectory.offset : 0;
+          const staticValuesOffset = 0;
+          const classOffset = classDefsOffset + index * kClassDefSize;
+          dex.writeUInt32LE(klass.index, classOffset);
+          dex.writeUInt32LE(klass.accessFlags, classOffset + 4);
+          dex.writeUInt32LE(klass.superClassIndex, classOffset + 8);
+          dex.writeUInt32LE(interfacesOffset, classOffset + 12);
+          dex.writeUInt32LE(klass.sourceFileIndex, classOffset + 16);
+          dex.writeUInt32LE(annotationsOffset, classOffset + 20);
+          dex.writeUInt32LE(klass.classData.offset, classOffset + 24);
+          dex.writeUInt32LE(staticValuesOffset, classOffset + 28);
+        });
+        annotationSets.forEach((set, index) => {
+          const { items } = set;
+          const setOffset = annotationSetOffsets[index];
+          dex.writeUInt32LE(items.length, setOffset);
+          items.forEach((item, index2) => {
+            dex.writeUInt32LE(item.offset, setOffset + 4 + index2 * 4);
+          });
+        });
+        javaCodeItems.forEach((codeItem, index) => {
+          const { offset: offset2, superConstructor } = codeItem;
+          const registersSize = 1;
+          const insSize = 1;
+          const outsSize = 1;
+          const triesSize = 0;
+          const insnsSize = 4;
+          dex.writeUInt16LE(registersSize, offset2);
+          dex.writeUInt16LE(insSize, offset2 + 2);
+          dex.writeUInt16LE(outsSize, offset2 + 4);
+          dex.writeUInt16LE(triesSize, offset2 + 6);
+          dex.writeUInt32LE(debugInfoOffsets[index], offset2 + 8);
+          dex.writeUInt32LE(insnsSize, offset2 + 12);
+          dex.writeUInt16LE(4208, offset2 + 16);
+          dex.writeUInt16LE(superConstructor, offset2 + 18);
+          dex.writeUInt16LE(0, offset2 + 20);
+          dex.writeUInt16LE(14, offset2 + 22);
+        });
+        annotationDirectories.forEach((dir) => {
+          const dirOffset = dir.offset;
+          const classAnnotationsOffset = 0;
+          const fieldsSize = 0;
+          const annotatedMethodsSize = dir.methods.length;
+          const annotatedParametersSize = 0;
+          dex.writeUInt32LE(classAnnotationsOffset, dirOffset);
+          dex.writeUInt32LE(fieldsSize, dirOffset + 4);
+          dex.writeUInt32LE(annotatedMethodsSize, dirOffset + 8);
+          dex.writeUInt32LE(annotatedParametersSize, dirOffset + 12);
+          dir.methods.forEach((method, index) => {
+            const entryOffset = dirOffset + 16 + index * 8;
+            const [methodIndex, annotationSet] = method;
+            dex.writeUInt32LE(methodIndex, entryOffset);
+            dex.writeUInt32LE(annotationSet.offset, entryOffset + 4);
+          });
+        });
+        interfaces.forEach((iface, index) => {
+          const ifaceOffset = interfaceOffsets[index];
+          dex.writeUInt32LE(iface.types.length, ifaceOffset);
+          iface.types.forEach((type, typeIndex) => {
+            dex.writeUInt16LE(type, ifaceOffset + 4 + typeIndex * 2);
+          });
+        });
+        parameters.forEach((param, index) => {
+          const paramOffset = parameterOffsets[index];
+          dex.writeUInt32LE(param.types.length, paramOffset);
+          param.types.forEach((type, typeIndex) => {
+            dex.writeUInt16LE(type, paramOffset + 4 + typeIndex * 2);
+          });
+        });
+        stringChunks.forEach((chunk, index) => {
+          chunk.copy(dex, stringOffsets[index]);
+        });
+        debugInfoOffsets.forEach((debugInfoOffset) => {
+          kDefaultConstructorDebugInfo.copy(dex, debugInfoOffset);
+        });
+        throwsAnnotationBlobs.forEach((annotationBlob, index) => {
+          annotationBlob.copy(dex, throwsAnnotations[index].offset);
+        });
+        classDataBlobs.forEach((classDataBlob, index) => {
+          classDataBlob.copy(dex, classes[index].classData.offset);
+        });
+        dex.writeUInt32LE(mapNumItems, mapOffset);
+        const mapItems = [
+          [TYPE_HEADER_ITEM, 1, headerOffset],
+          [TYPE_STRING_ID_ITEM, strings.length, stringIdsOffset],
+          [TYPE_TYPE_ID_ITEM, types.length, typeIdsOffset],
+          [TYPE_PROTO_ID_ITEM, protos.length, protoIdsOffset]
+        ];
+        if (fields.length > 0) {
+          mapItems.push([TYPE_FIELD_ID_ITEM, fields.length, fieldIdsOffset]);
+        }
+        mapItems.push([TYPE_METHOD_ID_ITEM, methods.length, methodIdsOffset]);
+        mapItems.push([TYPE_CLASS_DEF_ITEM, classes.length, classDefsOffset]);
+        annotationSets.forEach((set, index) => {
+          mapItems.push([TYPE_ANNOTATION_SET_ITEM, set.items.length, annotationSetOffsets[index]]);
+        });
+        javaCodeItems.forEach((codeItem) => {
+          mapItems.push([TYPE_CODE_ITEM, 1, codeItem.offset]);
+        });
+        annotationDirectories.forEach((dir) => {
+          mapItems.push([TYPE_ANNOTATIONS_DIRECTORY_ITEM, 1, dir.offset]);
+        });
+        if (typeListLength > 0) {
+          mapItems.push([TYPE_TYPE_LIST, typeListLength, interfaceOffsets.concat(parameterOffsets)[0]]);
+        }
+        mapItems.push([TYPE_STRING_DATA_ITEM, strings.length, stringOffsets[0]]);
+        debugInfoOffsets.forEach((debugInfoOffset) => {
+          mapItems.push([TYPE_DEBUG_INFO_ITEM, 1, debugInfoOffset]);
+        });
+        throwsAnnotations.forEach((annotation) => {
+          mapItems.push([TYPE_ANNOTATION_ITEM, 1, annotation.offset]);
+        });
+        classes.forEach((klass) => {
+          mapItems.push([TYPE_CLASS_DATA_ITEM, 1, klass.classData.offset]);
+        });
+        mapItems.push([TYPE_MAP_LIST, 1, mapOffset]);
+        mapItems.forEach((item, index) => {
+          const [type, size, offset2] = item;
+          const itemOffset = mapOffset + 4 + index * kMapItemSize;
+          dex.writeUInt16LE(type, itemOffset);
+          dex.writeUInt32LE(size, itemOffset + 4);
+          dex.writeUInt32LE(offset2, itemOffset + 8);
+        });
+        const hash = new Checksum("sha1");
+        hash.update(dex.slice(signatureOffset + signatureSize));
+        Buffer2.from(hash.getDigest()).copy(dex, signatureOffset);
+        dex.writeUInt32LE(adler32(dex, signatureOffset), checksumOffset);
+        return dex;
+      }
+    };
+    mkdex_default = mkdex;
+  }
+});
 
-// node_modules/frida-java-bridge/lib/types.js
-var JNILocalRefType = 1;
-var vm = null;
-var primitiveArrayHandler = null;
+// backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/types.js
 function initialize(_vm) {
   vm = _vm;
 }
@@ -10324,208 +10531,6 @@ function getType(typeName, unbox, factory) {
   }
   return Object.assign({ className: typeName }, type);
 }
-var primitiveTypes = {
-  boolean: {
-    name: "Z",
-    type: "uint8",
-    size: 1,
-    byteSize: 1,
-    defaultValue: false,
-    isCompatible(v) {
-      return typeof v === "boolean";
-    },
-    fromJni(v) {
-      return !!v;
-    },
-    toJni(v) {
-      return v ? 1 : 0;
-    },
-    read(address) {
-      return address.readU8();
-    },
-    write(address, value) {
-      address.writeU8(value);
-    },
-    toString() {
-      return this.name;
-    }
-  },
-  byte: {
-    name: "B",
-    type: "int8",
-    size: 1,
-    byteSize: 1,
-    defaultValue: 0,
-    isCompatible(v) {
-      return Number.isInteger(v) && v >= -128 && v <= 127;
-    },
-    fromJni: identity,
-    toJni: identity,
-    read(address) {
-      return address.readS8();
-    },
-    write(address, value) {
-      address.writeS8(value);
-    },
-    toString() {
-      return this.name;
-    }
-  },
-  char: {
-    name: "C",
-    type: "uint16",
-    size: 1,
-    byteSize: 2,
-    defaultValue: 0,
-    isCompatible(v) {
-      if (typeof v !== "string" || v.length !== 1) {
-        return false;
-      }
-      const code3 = v.charCodeAt(0);
-      return code3 >= 0 && code3 <= 65535;
-    },
-    fromJni(c) {
-      return String.fromCharCode(c);
-    },
-    toJni(s) {
-      return s.charCodeAt(0);
-    },
-    read(address) {
-      return address.readU16();
-    },
-    write(address, value) {
-      address.writeU16(value);
-    },
-    toString() {
-      return this.name;
-    }
-  },
-  short: {
-    name: "S",
-    type: "int16",
-    size: 1,
-    byteSize: 2,
-    defaultValue: 0,
-    isCompatible(v) {
-      return Number.isInteger(v) && v >= -32768 && v <= 32767;
-    },
-    fromJni: identity,
-    toJni: identity,
-    read(address) {
-      return address.readS16();
-    },
-    write(address, value) {
-      address.writeS16(value);
-    },
-    toString() {
-      return this.name;
-    }
-  },
-  int: {
-    name: "I",
-    type: "int32",
-    size: 1,
-    byteSize: 4,
-    defaultValue: 0,
-    isCompatible(v) {
-      return Number.isInteger(v) && v >= -2147483648 && v <= 2147483647;
-    },
-    fromJni: identity,
-    toJni: identity,
-    read(address) {
-      return address.readS32();
-    },
-    write(address, value) {
-      address.writeS32(value);
-    },
-    toString() {
-      return this.name;
-    }
-  },
-  long: {
-    name: "J",
-    type: "int64",
-    size: 2,
-    byteSize: 8,
-    defaultValue: 0,
-    isCompatible(v) {
-      return typeof v === "number" || v instanceof Int64;
-    },
-    fromJni: identity,
-    toJni: identity,
-    read(address) {
-      return address.readS64();
-    },
-    write(address, value) {
-      address.writeS64(value);
-    },
-    toString() {
-      return this.name;
-    }
-  },
-  float: {
-    name: "F",
-    type: "float",
-    size: 1,
-    byteSize: 4,
-    defaultValue: 0,
-    isCompatible(v) {
-      return typeof v === "number";
-    },
-    fromJni: identity,
-    toJni: identity,
-    read(address) {
-      return address.readFloat();
-    },
-    write(address, value) {
-      address.writeFloat(value);
-    },
-    toString() {
-      return this.name;
-    }
-  },
-  double: {
-    name: "D",
-    type: "double",
-    size: 2,
-    byteSize: 8,
-    defaultValue: 0,
-    isCompatible(v) {
-      return typeof v === "number";
-    },
-    fromJni: identity,
-    toJni: identity,
-    read(address) {
-      return address.readDouble();
-    },
-    write(address, value) {
-      address.writeDouble(value);
-    },
-    toString() {
-      return this.name;
-    }
-  },
-  void: {
-    name: "V",
-    type: "void",
-    size: 0,
-    byteSize: 0,
-    defaultValue: void 0,
-    isCompatible(v) {
-      return v === void 0;
-    },
-    fromJni() {
-      return void 0;
-    },
-    toJni() {
-      return NULL;
-    },
-    toString() {
-      return this.name;
-    }
-  }
-};
-var primitiveTypesNames = new Set(Object.values(primitiveTypes).map((t) => t.name));
 function getPrimitiveType(name) {
   const result = primitiveTypes[name];
   return result !== void 0 ? result : null;
@@ -10563,18 +10568,18 @@ function getJavaLangObjectType(factory) {
       }
       return typeof v === "string";
     },
-    fromJni(h, env, owned) {
+    fromJni(h, env2, owned) {
       if (h.isNull()) {
         return null;
       }
       return factory.cast(h, factory.use("java.lang.Object"), owned);
     },
-    toJni(o, env) {
+    toJni(o, env2) {
       if (o === null) {
         return NULL;
       }
       if (typeof o === "string") {
-        return env.newStringUtf(o);
+        return env2.newStringUtf(o);
       }
       return o.$h;
     }
@@ -10622,21 +10627,21 @@ function getAnyObjectType(typeName, unbox, factory) {
       }
       return typeof v === "string" && typeIsDefaultString();
     },
-    fromJni(h, env, owned) {
+    fromJni(h, env2, owned) {
       if (h.isNull()) {
         return null;
       }
       if (typeIsDefaultString() && unbox) {
-        return env.stringFromJni(h);
+        return env2.stringFromJni(h);
       }
       return factory.cast(h, factory.use(typeName), owned);
     },
-    toJni(o, env) {
+    toJni(o, env2) {
       if (o === null) {
         return NULL;
       }
       if (typeof o === "string") {
-        return env.newStringUtf(o);
+        return env2.newStringUtf(o);
       }
       return o.$h;
     },
@@ -10645,19 +10650,6 @@ function getAnyObjectType(typeName, unbox, factory) {
     }
   };
 }
-var primitiveArrayTypes = [
-  ["Z", "boolean"],
-  ["B", "byte"],
-  ["C", "char"],
-  ["D", "double"],
-  ["F", "float"],
-  ["I", "int"],
-  ["J", "long"],
-  ["S", "short"]
-].reduce((result, [shorty, name]) => {
-  result["[" + shorty] = makePrimitiveArrayType("[" + shorty, name);
-  return result;
-}, {});
 function makePrimitiveArrayType(shorty, name) {
   const envProto = Env.prototype;
   const nameTitled = toTitleCase(name);
@@ -10676,11 +10668,11 @@ function makePrimitiveArrayType(shorty, name) {
     isCompatible(v) {
       return isCompatiblePrimitiveArray(v, name);
     },
-    fromJni(h, env, owned) {
-      return fromJniPrimitiveArray(h, spec, env, owned);
+    fromJni(h, env2, owned) {
+      return fromJniPrimitiveArray(h, spec, env2, owned);
     },
-    toJni(arr, env) {
-      return toJniPrimitiveArray(arr, spec, env);
+    toJni(arr, env2) {
+      return toJniPrimitiveArray(arr, spec, env2);
     }
   };
 }
@@ -10727,18 +10719,18 @@ function getArrayType(typeName, unbox, factory) {
         return elementType.isCompatible(element);
       });
     },
-    fromJni(arr, env, owned) {
+    fromJni(arr, env2, owned) {
       if (arr.isNull()) {
         return null;
       }
       const result = [];
-      const n = env.getArrayLength(arr);
+      const n = env2.getArrayLength(arr);
       for (let i = 0; i !== n; i++) {
-        const element = env.getObjectArrayElement(arr, i);
+        const element = env2.getObjectArrayElement(arr, i);
         try {
-          result.push(elementType.fromJni(element, env));
+          result.push(elementType.fromJni(element, env2));
         } finally {
-          env.deleteLocalRef(element);
+          env2.deleteLocalRef(element);
         }
       }
       try {
@@ -10750,7 +10742,7 @@ function getArrayType(typeName, unbox, factory) {
       result.$dispose = disposeObjectArray;
       return result;
     },
-    toJni(elements, env) {
+    toJni(elements, env2) {
       if (elements === null) {
         return NULL;
       }
@@ -10763,24 +10755,24 @@ function getArrayType(typeName, unbox, factory) {
       }
       const n = elements.length;
       const klassObj = factory.use(elementTypeName);
-      const classHandle = klassObj.$borrowClassHandle(env);
+      const classHandle = klassObj.$borrowClassHandle(env2);
       try {
-        const result = env.newObjectArray(n, classHandle.value, NULL);
-        env.throwIfExceptionPending();
+        const result = env2.newObjectArray(n, classHandle.value, NULL);
+        env2.throwIfExceptionPending();
         for (let i = 0; i !== n; i++) {
-          const handle = elementType.toJni(elements[i], env);
+          const handle = elementType.toJni(elements[i], env2);
           try {
-            env.setObjectArrayElement(result, i, handle);
+            env2.setObjectArrayElement(result, i, handle);
           } finally {
-            if (elementType.type === "pointer" && env.getObjectRefType(handle) === JNILocalRefType) {
-              env.deleteLocalRef(handle);
+            if (elementType.type === "pointer" && env2.getObjectRefType(handle) === JNILocalRefType) {
+              env2.deleteLocalRef(handle);
             }
           }
-          env.throwIfExceptionPending();
+          env2.throwIfExceptionPending();
         }
         return result;
       } finally {
-        classHandle.unref(env);
+        classHandle.unref(env2);
       }
     }
   };
@@ -10800,15 +10792,15 @@ function disposeObjectArray() {
   }
   this.$w.$dispose();
 }
-function fromJniPrimitiveArray(arr, spec, env, owned) {
+function fromJniPrimitiveArray(arr, spec, env2, owned) {
   if (arr.isNull()) {
     return null;
   }
   const type = getPrimitiveType(spec.typeName);
-  const length = env.getArrayLength(arr);
-  return new PrimitiveArray(arr, spec, type, length, env, owned);
+  const length = env2.getArrayLength(arr);
+  return new PrimitiveArray(arr, spec, type, length, env2, owned);
 }
-function toJniPrimitiveArray(arr, spec, env) {
+function toJniPrimitiveArray(arr, spec, env2) {
   if (arr === null) {
     return NULL;
   }
@@ -10818,7 +10810,7 @@ function toJniPrimitiveArray(arr, spec, env) {
   }
   const length = arr.length;
   const type = getPrimitiveType(spec.typeName);
-  const result = spec.newArray.call(env, length);
+  const result = spec.newArray.call(env2, length);
   if (result.isNull()) {
     throw new Error("Unable to construct array");
   }
@@ -10830,8 +10822,8 @@ function toJniPrimitiveArray(arr, spec, env) {
     for (let index = 0; index !== length; index++) {
       writeElement(elements.add(index * elementSize), unparseElementValue(arr[index]));
     }
-    spec.setRegion.call(env, result, 0, length, elements);
-    env.throwIfExceptionPending();
+    spec.setRegion.call(env2, result, 0, length, elements);
+    env2.throwIfExceptionPending();
   }
   return result;
 }
@@ -10849,11 +10841,11 @@ function isCompatiblePrimitiveArray(value, typeName) {
   const elementType = getPrimitiveType(typeName);
   return Array.prototype.every.call(value, (element) => elementType.isCompatible(element));
 }
-function PrimitiveArray(handle, spec, type, length, env, owned = true) {
+function PrimitiveArray(handle, spec, type, length, env2, owned = true) {
   if (owned) {
-    const h = env.newGlobalRef(handle);
+    const h = env2.newGlobalRef(handle);
     this.$h = h;
-    this.$r = Script.bindWeak(this, env.vm.makeHandleDestructor(h));
+    this.$r = Script.bindWeak(this, env2.vm.makeHandleDestructor(h));
   } else {
     this.$h = handle;
     this.$r = null;
@@ -10863,131 +10855,6 @@ function PrimitiveArray(handle, spec, type, length, env, owned = true) {
   this.length = length;
   return new Proxy(this, primitiveArrayHandler);
 }
-primitiveArrayHandler = {
-  has(target, property) {
-    if (property in target) {
-      return true;
-    }
-    return target.tryParseIndex(property) !== null;
-  },
-  get(target, property, receiver) {
-    const index = target.tryParseIndex(property);
-    if (index === null) {
-      return target[property];
-    }
-    return target.readElement(index);
-  },
-  set(target, property, value, receiver) {
-    const index = target.tryParseIndex(property);
-    if (index === null) {
-      target[property] = value;
-      return true;
-    }
-    target.writeElement(index, value);
-    return true;
-  },
-  ownKeys(target) {
-    const keys = [];
-    const { length } = target;
-    for (let i = 0; i !== length; i++) {
-      const key = i.toString();
-      keys.push(key);
-    }
-    keys.push("length");
-    return keys;
-  },
-  getOwnPropertyDescriptor(target, property) {
-    const index = target.tryParseIndex(property);
-    if (index !== null) {
-      return {
-        writable: true,
-        configurable: true,
-        enumerable: true
-      };
-    }
-    return Object.getOwnPropertyDescriptor(target, property);
-  }
-};
-Object.defineProperties(PrimitiveArray.prototype, {
-  $dispose: {
-    enumerable: true,
-    value() {
-      const ref = this.$r;
-      if (ref !== null) {
-        this.$r = null;
-        Script.unbindWeak(ref);
-      }
-    }
-  },
-  $clone: {
-    value(env) {
-      return new PrimitiveArray(this.$h, this.$s, this.$t, this.length, env);
-    }
-  },
-  tryParseIndex: {
-    value(rawIndex) {
-      if (typeof rawIndex === "symbol") {
-        return null;
-      }
-      const index = parseInt(rawIndex);
-      if (isNaN(index) || index < 0 || index >= this.length) {
-        return null;
-      }
-      return index;
-    }
-  },
-  readElement: {
-    value(index) {
-      return this.withElements((elements) => {
-        const type = this.$t;
-        return type.fromJni(type.read(elements.add(index * type.byteSize)));
-      });
-    }
-  },
-  writeElement: {
-    value(index, value) {
-      const { $h: handle, $s: spec, $t: type } = this;
-      const env = vm.getEnv();
-      const element = Memory.alloc(type.byteSize);
-      type.write(element, type.toJni(value));
-      spec.setRegion.call(env, handle, index, 1, element);
-    }
-  },
-  withElements: {
-    value(perform) {
-      const { $h: handle, $s: spec } = this;
-      const env = vm.getEnv();
-      const elements = spec.getElements.call(env, handle);
-      if (elements.isNull()) {
-        throw new Error("Unable to get array elements");
-      }
-      try {
-        return perform(elements);
-      } finally {
-        spec.releaseElements.call(env, handle, elements);
-      }
-    }
-  },
-  toJSON: {
-    value() {
-      const { length, $t: type } = this;
-      const { byteSize: elementSize, fromJni, read: read2 } = type;
-      return this.withElements((elements) => {
-        const values = [];
-        for (let i = 0; i !== length; i++) {
-          const value = fromJni(read2(elements.add(i * elementSize)));
-          values.push(value);
-        }
-        return values;
-      });
-    }
-  },
-  toString: {
-    value() {
-      return this.toJSON().toString();
-    }
-  }
-});
 function makeJniObjectTypeName(typeName) {
   return "L" + typeName.replace(/\./g, "/") + ";";
 }
@@ -10997,681 +10864,367 @@ function toTitleCase(str) {
 function identity(value) {
   return value;
 }
-
-// node_modules/frida-java-bridge/lib/class-factory.js
-var jsizeSize3 = 4;
-var {
-  ensureClassInitialized: ensureClassInitialized3,
-  makeMethodMangler: makeMethodMangler3
-} = android_exports;
-var kAccStatic2 = 8;
-var CONSTRUCTOR_METHOD = 1;
-var STATIC_METHOD = 2;
-var INSTANCE_METHOD = 3;
-var STATIC_FIELD = 1;
-var INSTANCE_FIELD = 2;
-var STRATEGY_VIRTUAL = 1;
-var STRATEGY_DIRECT = 2;
-var PENDING_USE = Symbol("PENDING_USE");
-var DEFAULT_CACHE_DIR = "/data/local/tmp";
-var {
-  getCurrentThreadId,
-  pointerSize: pointerSize7
-} = Process;
-var factoryCache = {
-  state: "empty",
-  factories: [],
-  loaders: null,
-  Integer: null
-};
-var vm2 = null;
-var api = null;
-var isArtVm = null;
-var wrapperHandler = null;
-var dispatcherPrototype = null;
-var methodPrototype = null;
-var valueOfPrototype = null;
-var cachedLoaderInvoke = null;
-var cachedLoaderMethod = null;
-var ignoredThreads = /* @__PURE__ */ new Map();
-var ClassFactory = class _ClassFactory {
-  static _initialize(_vm, _api) {
-    vm2 = _vm;
-    api = _api;
-    isArtVm = _api.flavor === "art";
-    if (_api.flavor === "jvm") {
-      ensureClassInitialized3 = ensureClassInitialized2;
-      makeMethodMangler3 = makeMethodMangler2;
-    }
-  }
-  static _disposeAll(env) {
-    factoryCache.factories.forEach((factory) => {
-      factory._dispose(env);
-    });
-  }
-  static get(classLoader) {
-    const cache = getFactoryCache();
-    const defaultFactory = cache.factories[0];
-    if (classLoader === null) {
-      return defaultFactory;
-    }
-    const indexObj = cache.loaders.get(classLoader);
-    if (indexObj !== null) {
-      const index = defaultFactory.cast(indexObj, cache.Integer);
-      return cache.factories[index.intValue()];
-    }
-    const factory = new _ClassFactory();
-    factory.loader = classLoader;
-    factory.cacheDir = defaultFactory.cacheDir;
-    addFactoryToCache(factory, classLoader);
-    return factory;
-  }
-  constructor() {
-    this.cacheDir = DEFAULT_CACHE_DIR;
-    this.codeCacheDir = DEFAULT_CACHE_DIR + "/dalvik-cache";
-    this.tempFileNaming = {
-      prefix: "frida",
-      suffix: ""
+var JNILocalRefType, vm, primitiveArrayHandler, primitiveTypes, primitiveTypesNames, primitiveArrayTypes;
+var init_types = __esm({
+  "backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/types.js"() {
+    init_node_globals();
+    init_env();
+    JNILocalRefType = 1;
+    vm = null;
+    primitiveArrayHandler = null;
+    primitiveTypes = {
+      boolean: {
+        name: "Z",
+        type: "uint8",
+        size: 1,
+        byteSize: 1,
+        defaultValue: false,
+        isCompatible(v) {
+          return typeof v === "boolean";
+        },
+        fromJni(v) {
+          return !!v;
+        },
+        toJni(v) {
+          return v ? 1 : 0;
+        },
+        read(address) {
+          return address.readU8();
+        },
+        write(address, value) {
+          address.writeU8(value);
+        },
+        toString() {
+          return this.name;
+        }
+      },
+      byte: {
+        name: "B",
+        type: "int8",
+        size: 1,
+        byteSize: 1,
+        defaultValue: 0,
+        isCompatible(v) {
+          return Number.isInteger(v) && v >= -128 && v <= 127;
+        },
+        fromJni: identity,
+        toJni: identity,
+        read(address) {
+          return address.readS8();
+        },
+        write(address, value) {
+          address.writeS8(value);
+        },
+        toString() {
+          return this.name;
+        }
+      },
+      char: {
+        name: "C",
+        type: "uint16",
+        size: 1,
+        byteSize: 2,
+        defaultValue: 0,
+        isCompatible(v) {
+          if (typeof v !== "string" || v.length !== 1) {
+            return false;
+          }
+          const code3 = v.charCodeAt(0);
+          return code3 >= 0 && code3 <= 65535;
+        },
+        fromJni(c) {
+          return String.fromCharCode(c);
+        },
+        toJni(s) {
+          return s.charCodeAt(0);
+        },
+        read(address) {
+          return address.readU16();
+        },
+        write(address, value) {
+          address.writeU16(value);
+        },
+        toString() {
+          return this.name;
+        }
+      },
+      short: {
+        name: "S",
+        type: "int16",
+        size: 1,
+        byteSize: 2,
+        defaultValue: 0,
+        isCompatible(v) {
+          return Number.isInteger(v) && v >= -32768 && v <= 32767;
+        },
+        fromJni: identity,
+        toJni: identity,
+        read(address) {
+          return address.readS16();
+        },
+        write(address, value) {
+          address.writeS16(value);
+        },
+        toString() {
+          return this.name;
+        }
+      },
+      int: {
+        name: "I",
+        type: "int32",
+        size: 1,
+        byteSize: 4,
+        defaultValue: 0,
+        isCompatible(v) {
+          return Number.isInteger(v) && v >= -2147483648 && v <= 2147483647;
+        },
+        fromJni: identity,
+        toJni: identity,
+        read(address) {
+          return address.readS32();
+        },
+        write(address, value) {
+          address.writeS32(value);
+        },
+        toString() {
+          return this.name;
+        }
+      },
+      long: {
+        name: "J",
+        type: "int64",
+        size: 2,
+        byteSize: 8,
+        defaultValue: 0,
+        isCompatible(v) {
+          return typeof v === "number" || v instanceof Int64;
+        },
+        fromJni: identity,
+        toJni: identity,
+        read(address) {
+          return address.readS64();
+        },
+        write(address, value) {
+          address.writeS64(value);
+        },
+        toString() {
+          return this.name;
+        }
+      },
+      float: {
+        name: "F",
+        type: "float",
+        size: 1,
+        byteSize: 4,
+        defaultValue: 0,
+        isCompatible(v) {
+          return typeof v === "number";
+        },
+        fromJni: identity,
+        toJni: identity,
+        read(address) {
+          return address.readFloat();
+        },
+        write(address, value) {
+          address.writeFloat(value);
+        },
+        toString() {
+          return this.name;
+        }
+      },
+      double: {
+        name: "D",
+        type: "double",
+        size: 2,
+        byteSize: 8,
+        defaultValue: 0,
+        isCompatible(v) {
+          return typeof v === "number";
+        },
+        fromJni: identity,
+        toJni: identity,
+        read(address) {
+          return address.readDouble();
+        },
+        write(address, value) {
+          address.writeDouble(value);
+        },
+        toString() {
+          return this.name;
+        }
+      },
+      void: {
+        name: "V",
+        type: "void",
+        size: 0,
+        byteSize: 0,
+        defaultValue: void 0,
+        isCompatible(v) {
+          return v === void 0;
+        },
+        fromJni() {
+          return void 0;
+        },
+        toJni() {
+          return NULL;
+        },
+        toString() {
+          return this.name;
+        }
+      }
     };
-    this._classes = {};
-    this._classHandles = new LRU(10, releaseClassHandle);
-    this._patchedMethods = /* @__PURE__ */ new Set();
-    this._loader = null;
-    this._types = [{}, {}];
-    factoryCache.factories.push(this);
-  }
-  _dispose(env) {
-    Array.from(this._patchedMethods).forEach((method) => {
-      method.implementation = null;
-    });
-    this._patchedMethods.clear();
-    revertGlobalPatches();
-    this._classHandles.dispose(env);
-    this._classes = {};
-  }
-  get loader() {
-    return this._loader;
-  }
-  set loader(value) {
-    const isInitial = this._loader === null && value !== null;
-    this._loader = value;
-    if (isInitial && factoryCache.state === "ready" && this === factoryCache.factories[0]) {
-      addFactoryToCache(this, value);
-    }
-  }
-  use(className, options = {}) {
-    const allowCached = options.cache !== "skip";
-    let C = allowCached ? this._getUsedClass(className) : void 0;
-    if (C === void 0) {
-      try {
-        const env = vm2.getEnv();
-        const { _loader: loader } = this;
-        const getClassHandle = loader !== null ? makeLoaderClassHandleGetter(className, loader, env) : makeBasicClassHandleGetter(className);
-        C = this._make(className, getClassHandle, env);
-      } finally {
-        if (allowCached) {
-          this._setUsedClass(className, C);
+    primitiveTypesNames = new Set(Object.values(primitiveTypes).map((t) => t.name));
+    primitiveArrayTypes = [
+      ["Z", "boolean"],
+      ["B", "byte"],
+      ["C", "char"],
+      ["D", "double"],
+      ["F", "float"],
+      ["I", "int"],
+      ["J", "long"],
+      ["S", "short"]
+    ].reduce((result, [shorty, name]) => {
+      result["[" + shorty] = makePrimitiveArrayType("[" + shorty, name);
+      return result;
+    }, {});
+    primitiveArrayHandler = {
+      has(target, property) {
+        if (property in target) {
+          return true;
         }
+        return target.tryParseIndex(property) !== null;
+      },
+      get(target, property, receiver) {
+        const index = target.tryParseIndex(property);
+        if (index === null) {
+          return target[property];
+        }
+        return target.readElement(index);
+      },
+      set(target, property, value, receiver) {
+        const index = target.tryParseIndex(property);
+        if (index === null) {
+          target[property] = value;
+          return true;
+        }
+        target.writeElement(index, value);
+        return true;
+      },
+      ownKeys(target) {
+        const keys = [];
+        const { length } = target;
+        for (let i = 0; i !== length; i++) {
+          const key = i.toString();
+          keys.push(key);
+        }
+        keys.push("length");
+        return keys;
+      },
+      getOwnPropertyDescriptor(target, property) {
+        const index = target.tryParseIndex(property);
+        if (index !== null) {
+          return {
+            writable: true,
+            configurable: true,
+            enumerable: true
+          };
+        }
+        return Object.getOwnPropertyDescriptor(target, property);
       }
-    }
-    return C;
-  }
-  _getUsedClass(className) {
-    let c;
-    while ((c = this._classes[className]) === PENDING_USE) {
-      Thread.sleep(0.05);
-    }
-    if (c === void 0) {
-      this._classes[className] = PENDING_USE;
-    }
-    return c;
-  }
-  _setUsedClass(className, c) {
-    if (c !== void 0) {
-      this._classes[className] = c;
-    } else {
-      delete this._classes[className];
-    }
-  }
-  _make(name, getClassHandle, env) {
-    const C = makeClassWrapperConstructor();
-    const proto = Object.create(Wrapper.prototype, {
-      [Symbol.for("n")]: {
-        value: name
-      },
-      $n: {
-        get() {
-          return this[Symbol.for("n")];
+    };
+    Object.defineProperties(PrimitiveArray.prototype, {
+      $dispose: {
+        enumerable: true,
+        value() {
+          const ref = this.$r;
+          if (ref !== null) {
+            this.$r = null;
+            Script.unbindWeak(ref);
+          }
         }
       },
-      [Symbol.for("C")]: {
-        value: C
-      },
-      $C: {
-        get() {
-          return this[Symbol.for("C")];
+      $clone: {
+        value(env2) {
+          return new PrimitiveArray(this.$h, this.$s, this.$t, this.length, env2);
         }
       },
-      [Symbol.for("w")]: {
-        value: null,
-        writable: true
-      },
-      $w: {
-        get() {
-          return this[Symbol.for("w")];
-        },
-        set(val) {
-          this[Symbol.for("w")] = val;
+      tryParseIndex: {
+        value(rawIndex) {
+          if (typeof rawIndex === "symbol") {
+            return null;
+          }
+          const index = parseInt(rawIndex);
+          if (isNaN(index) || index < 0 || index >= this.length) {
+            return null;
+          }
+          return index;
         }
       },
-      [Symbol.for("_s")]: {
-        writable: true
-      },
-      $_s: {
-        get() {
-          return this[Symbol.for("_s")];
-        },
-        set(val) {
-          this[Symbol.for("_s")] = val;
-        }
-      },
-      [Symbol.for("c")]: {
-        value: [null]
-      },
-      $c: {
-        get() {
-          return this[Symbol.for("c")];
-        }
-      },
-      [Symbol.for("m")]: {
-        value: /* @__PURE__ */ new Map()
-      },
-      $m: {
-        get() {
-          return this[Symbol.for("m")];
-        }
-      },
-      [Symbol.for("l")]: {
-        value: null,
-        writable: true
-      },
-      $l: {
-        get() {
-          return this[Symbol.for("l")];
-        },
-        set(val) {
-          this[Symbol.for("l")] = val;
-        }
-      },
-      [Symbol.for("gch")]: {
-        value: getClassHandle
-      },
-      $gch: {
-        get() {
-          return this[Symbol.for("gch")];
-        }
-      },
-      [Symbol.for("f")]: {
-        value: this
-      },
-      $f: {
-        get() {
-          return this[Symbol.for("f")];
-        }
-      }
-    });
-    C.prototype = proto;
-    const classWrapper = new C(null);
-    proto[Symbol.for("w")] = classWrapper;
-    proto.$w = classWrapper;
-    const h = classWrapper.$borrowClassHandle(env);
-    try {
-      const classHandle = h.value;
-      ensureClassInitialized3(env, classHandle);
-      proto.$l = Model.build(classHandle, env);
-    } finally {
-      h.unref(env);
-    }
-    return classWrapper;
-  }
-  retain(obj) {
-    const env = vm2.getEnv();
-    return obj.$clone(env);
-  }
-  cast(obj, klass, owned) {
-    const env = vm2.getEnv();
-    let handle = obj.$h;
-    if (handle === void 0) {
-      handle = obj;
-    }
-    const h = klass.$borrowClassHandle(env);
-    try {
-      const isValidCast = env.isInstanceOf(handle, h.value);
-      if (!isValidCast) {
-        throw new Error(`Cast from '${env.getObjectClassName(handle)}' to '${klass.$n}' isn't possible`);
-      }
-    } finally {
-      h.unref(env);
-    }
-    const C = klass.$C;
-    return new C(handle, STRATEGY_VIRTUAL, env, owned);
-  }
-  wrap(handle, klass, env) {
-    const C = klass.$C;
-    const wrapper = new C(handle, STRATEGY_VIRTUAL, env, false);
-    wrapper.$r = Script.bindWeak(wrapper, vm2.makeHandleDestructor(handle));
-    return wrapper;
-  }
-  array(type, elements) {
-    const env = vm2.getEnv();
-    const primitiveType = getPrimitiveType(type);
-    if (primitiveType !== null) {
-      type = primitiveType.name;
-    }
-    const arrayType = getArrayType("[" + type, false, this);
-    const rawArray = arrayType.toJni(elements, env);
-    return arrayType.fromJni(rawArray, env, true);
-  }
-  registerClass(spec) {
-    const env = vm2.getEnv();
-    const tempHandles = [];
-    try {
-      const Class = this.use("java.lang.Class");
-      const Method = env.javaLangReflectMethod();
-      const invokeObjectMethodNoArgs = env.vaMethod("pointer", []);
-      const className = spec.name;
-      const interfaces = spec.implements || [];
-      const superClass = spec.superClass || this.use("java.lang.Object");
-      const dexFields = [];
-      const dexMethods = [];
-      const dexSpec = {
-        name: makeJniObjectTypeName(className),
-        sourceFileName: makeSourceFileName(className),
-        superClass: makeJniObjectTypeName(superClass.$n),
-        interfaces: interfaces.map((iface) => makeJniObjectTypeName(iface.$n)),
-        fields: dexFields,
-        methods: dexMethods
-      };
-      const allInterfaces = interfaces.slice();
-      interfaces.forEach((iface) => {
-        Array.prototype.slice.call(iface.class.getInterfaces()).forEach((baseIface) => {
-          const baseIfaceName = this.cast(baseIface, Class).getCanonicalName();
-          allInterfaces.push(this.use(baseIfaceName));
-        });
-      });
-      const fields = spec.fields || {};
-      Object.getOwnPropertyNames(fields).forEach((name) => {
-        const fieldType = this._getType(fields[name]);
-        dexFields.push([name, fieldType.name]);
-      });
-      const baseMethods = {};
-      const pendingOverloads = {};
-      allInterfaces.forEach((iface) => {
-        const h = iface.$borrowClassHandle(env);
-        tempHandles.push(h);
-        const ifaceHandle = h.value;
-        iface.$ownMembers.filter((name) => {
-          return iface[name].overloads !== void 0;
-        }).forEach((name) => {
-          const method = iface[name];
-          const overloads = method.overloads;
-          const overloadIds = overloads.map((overload) => makeOverloadId(name, overload.returnType, overload.argumentTypes));
-          baseMethods[name] = [method, overloadIds, ifaceHandle];
-          overloads.forEach((overload, index) => {
-            const id = overloadIds[index];
-            pendingOverloads[id] = [overload, ifaceHandle];
+      readElement: {
+        value(index) {
+          return this.withElements((elements) => {
+            const type = this.$t;
+            return type.fromJni(type.read(elements.add(index * type.byteSize)));
           });
-        });
-      });
-      const methods = spec.methods || {};
-      const methodNames = Object.keys(methods);
-      const methodEntries = methodNames.reduce((result, name) => {
-        const entry = methods[name];
-        const rawName = name === "$init" ? "<init>" : name;
-        if (entry instanceof Array) {
-          result.push(...entry.map((e) => [rawName, e]));
-        } else {
-          result.push([rawName, entry]);
         }
-        return result;
-      }, []);
-      const implMethods = [];
-      methodEntries.forEach(([name, methodValue]) => {
-        let type = INSTANCE_METHOD;
-        let returnType;
-        let argumentTypes;
-        let thrownTypeNames = [];
-        let impl;
-        if (typeof methodValue === "function") {
-          const m = baseMethods[name];
-          if (m !== void 0 && Array.isArray(m)) {
-            const [baseMethod, overloadIds, parentTypeHandle] = m;
-            if (overloadIds.length > 1) {
-              throw new Error(`More than one overload matching '${name}': signature must be specified`);
+      },
+      writeElement: {
+        value(index, value) {
+          const { $h: handle, $s: spec, $t: type } = this;
+          const env2 = vm.getEnv();
+          const element = Memory.alloc(type.byteSize);
+          type.write(element, type.toJni(value));
+          spec.setRegion.call(env2, handle, index, 1, element);
+        }
+      },
+      withElements: {
+        value(perform) {
+          const { $h: handle, $s: spec } = this;
+          const env2 = vm.getEnv();
+          const elements = spec.getElements.call(env2, handle);
+          if (elements.isNull()) {
+            throw new Error("Unable to get array elements");
+          }
+          try {
+            return perform(elements);
+          } finally {
+            spec.releaseElements.call(env2, handle, elements);
+          }
+        }
+      },
+      toJSON: {
+        value() {
+          const { length, $t: type } = this;
+          const { byteSize: elementSize, fromJni, read: read2 } = type;
+          return this.withElements((elements) => {
+            const values = [];
+            for (let i = 0; i !== length; i++) {
+              const value = fromJni(read2(elements.add(i * elementSize)));
+              values.push(value);
             }
-            delete pendingOverloads[overloadIds[0]];
-            const overload = baseMethod.overloads[0];
-            type = overload.type;
-            returnType = overload.returnType;
-            argumentTypes = overload.argumentTypes;
-            impl = methodValue;
-            const reflectedMethod = env.toReflectedMethod(parentTypeHandle, overload.handle, 0);
-            const thrownTypes = invokeObjectMethodNoArgs(env.handle, reflectedMethod, Method.getGenericExceptionTypes);
-            thrownTypeNames = readTypeNames(env, thrownTypes).map(makeJniObjectTypeName);
-            env.deleteLocalRef(thrownTypes);
-            env.deleteLocalRef(reflectedMethod);
-          } else {
-            returnType = this._getType("void");
-            argumentTypes = [];
-            impl = methodValue;
-          }
-        } else {
-          if (methodValue.isStatic) {
-            type = STATIC_METHOD;
-          }
-          returnType = this._getType(methodValue.returnType || "void");
-          argumentTypes = (methodValue.argumentTypes || []).map((name2) => this._getType(name2));
-          impl = methodValue.implementation;
-          if (typeof impl !== "function") {
-            throw new Error("Expected a function implementation for method: " + name);
-          }
-          const id = makeOverloadId(name, returnType, argumentTypes);
-          const pendingOverload = pendingOverloads[id];
-          if (pendingOverload !== void 0) {
-            const [overload, parentTypeHandle] = pendingOverload;
-            delete pendingOverloads[id];
-            type = overload.type;
-            returnType = overload.returnType;
-            argumentTypes = overload.argumentTypes;
-            const reflectedMethod = env.toReflectedMethod(parentTypeHandle, overload.handle, 0);
-            const thrownTypes = invokeObjectMethodNoArgs(env.handle, reflectedMethod, Method.getGenericExceptionTypes);
-            thrownTypeNames = readTypeNames(env, thrownTypes).map(makeJniObjectTypeName);
-            env.deleteLocalRef(thrownTypes);
-            env.deleteLocalRef(reflectedMethod);
-          }
-        }
-        const returnTypeName = returnType.name;
-        const argumentTypeNames = argumentTypes.map((t) => t.name);
-        const signature = "(" + argumentTypeNames.join("") + ")" + returnTypeName;
-        dexMethods.push([name, returnTypeName, argumentTypeNames, thrownTypeNames, type === STATIC_METHOD ? kAccStatic2 : 0]);
-        implMethods.push([name, signature, type, returnType, argumentTypes, impl]);
-      });
-      const unimplementedMethodIds = Object.keys(pendingOverloads);
-      if (unimplementedMethodIds.length > 0) {
-        throw new Error("Missing implementation for: " + unimplementedMethodIds.join(", "));
-      }
-      const dex = DexFile.fromBuffer(mkdex_default(dexSpec), this);
-      try {
-        dex.load();
-      } finally {
-        dex.file.delete();
-      }
-      const classWrapper = this.use(spec.name);
-      const numMethods = methodEntries.length;
-      if (numMethods > 0) {
-        const methodElementSize = 3 * pointerSize7;
-        const methodElements = Memory.alloc(numMethods * methodElementSize);
-        const nativeMethods = [];
-        const temporaryHandles = [];
-        implMethods.forEach(([name, signature, type, returnType, argumentTypes, impl], index) => {
-          const rawName = Memory.allocUtf8String(name);
-          const rawSignature = Memory.allocUtf8String(signature);
-          const rawImpl = implement(name, classWrapper, type, returnType, argumentTypes, impl);
-          methodElements.add(index * methodElementSize).writePointer(rawName);
-          methodElements.add(index * methodElementSize + pointerSize7).writePointer(rawSignature);
-          methodElements.add(index * methodElementSize + 2 * pointerSize7).writePointer(rawImpl);
-          temporaryHandles.push(rawName, rawSignature);
-          nativeMethods.push(rawImpl);
-        });
-        const h = classWrapper.$borrowClassHandle(env);
-        tempHandles.push(h);
-        const classHandle = h.value;
-        env.registerNatives(classHandle, methodElements, numMethods);
-        env.throwIfExceptionPending();
-        classWrapper.$nativeMethods = nativeMethods;
-      }
-      return classWrapper;
-    } finally {
-      tempHandles.forEach((h) => {
-        h.unref(env);
-      });
-    }
-  }
-  choose(specifier, callbacks) {
-    const env = vm2.getEnv();
-    const { flavor } = api;
-    if (flavor === "jvm") {
-      this._chooseObjectsJvm(specifier, env, callbacks);
-    } else if (flavor === "art") {
-      const legacyApiMissing = api["art::gc::Heap::VisitObjects"] === void 0;
-      if (legacyApiMissing) {
-        const preA12ApiMissing = api["art::gc::Heap::GetInstances"] === void 0;
-        if (preA12ApiMissing) {
-          return this._chooseObjectsJvm(specifier, env, callbacks);
-        }
-      }
-      withRunnableArtThread(vm2, env, (thread) => {
-        if (legacyApiMissing) {
-          this._chooseObjectsArtPreA12(specifier, env, thread, callbacks);
-        } else {
-          this._chooseObjectsArtLegacy(specifier, env, thread, callbacks);
-        }
-      });
-    } else {
-      this._chooseObjectsDalvik(specifier, env, callbacks);
-    }
-  }
-  _chooseObjectsJvm(className, env, callbacks) {
-    const classWrapper = this.use(className);
-    const { jvmti } = api;
-    const JVMTI_ITERATION_CONTINUE = 1;
-    const JVMTI_HEAP_OBJECT_EITHER = 3;
-    const h = classWrapper.$borrowClassHandle(env);
-    const tag = int64(h.value.toString());
-    try {
-      const heapObjectCallback = new NativeCallback((classTag, size, tagPtr2, userData) => {
-        tagPtr2.writeS64(tag);
-        return JVMTI_ITERATION_CONTINUE;
-      }, "int", ["int64", "int64", "pointer", "pointer"]);
-      jvmti.iterateOverInstancesOfClass(h.value, JVMTI_HEAP_OBJECT_EITHER, heapObjectCallback, h.value);
-      const tagPtr = Memory.alloc(8);
-      tagPtr.writeS64(tag);
-      const countPtr = Memory.alloc(jsizeSize3);
-      const objectsPtr = Memory.alloc(pointerSize7);
-      jvmti.getObjectsWithTags(1, tagPtr, countPtr, objectsPtr, NULL);
-      const count = countPtr.readS32();
-      const objects = objectsPtr.readPointer();
-      const handles = [];
-      for (let i = 0; i !== count; i++) {
-        handles.push(objects.add(i * pointerSize7).readPointer());
-      }
-      jvmti.deallocate(objects);
-      try {
-        for (const handle of handles) {
-          const instance = this.cast(handle, classWrapper);
-          const result = callbacks.onMatch(instance);
-          if (result === "stop") {
-            break;
-          }
-        }
-        callbacks.onComplete();
-      } finally {
-        handles.forEach((handle) => {
-          env.deleteLocalRef(handle);
-        });
-      }
-    } finally {
-      h.unref(env);
-    }
-  }
-  _chooseObjectsArtPreA12(className, env, thread, callbacks) {
-    const classWrapper = this.use(className);
-    const scope = VariableSizedHandleScope.$new(thread, vm2);
-    let needle;
-    const h = classWrapper.$borrowClassHandle(env);
-    try {
-      const object = api["art::JavaVMExt::DecodeGlobal"](api.vm, thread, h.value);
-      needle = scope.newHandle(object);
-    } finally {
-      h.unref(env);
-    }
-    const maxCount = 0;
-    const instances = HandleVector.$new();
-    api["art::gc::Heap::GetInstances"](api.artHeap, scope, needle, maxCount, instances);
-    const instanceHandles = instances.handles.map((handle) => env.newGlobalRef(handle));
-    instances.$delete();
-    scope.$delete();
-    try {
-      for (const handle of instanceHandles) {
-        const instance = this.cast(handle, classWrapper);
-        const result = callbacks.onMatch(instance);
-        if (result === "stop") {
-          break;
-        }
-      }
-      callbacks.onComplete();
-    } finally {
-      instanceHandles.forEach((handle) => {
-        env.deleteGlobalRef(handle);
-      });
-    }
-  }
-  _chooseObjectsArtLegacy(className, env, thread, callbacks) {
-    const classWrapper = this.use(className);
-    const instanceHandles = [];
-    const addGlobalReference = api["art::JavaVMExt::AddGlobalRef"];
-    const vmHandle = api.vm;
-    let needle;
-    const h = classWrapper.$borrowClassHandle(env);
-    try {
-      needle = api["art::JavaVMExt::DecodeGlobal"](vmHandle, thread, h.value).toInt32();
-    } finally {
-      h.unref(env);
-    }
-    const collectMatchingInstanceHandles = makeObjectVisitorPredicate(needle, (object) => {
-      instanceHandles.push(addGlobalReference(vmHandle, thread, object));
-    });
-    api["art::gc::Heap::VisitObjects"](api.artHeap, collectMatchingInstanceHandles, NULL);
-    try {
-      for (const handle of instanceHandles) {
-        const instance = this.cast(handle, classWrapper);
-        const result = callbacks.onMatch(instance);
-        if (result === "stop") {
-          break;
-        }
-      }
-    } finally {
-      instanceHandles.forEach((handle) => {
-        env.deleteGlobalRef(handle);
-      });
-    }
-    callbacks.onComplete();
-  }
-  _chooseObjectsDalvik(className, callerEnv, callbacks) {
-    const classWrapper = this.use(className);
-    if (api.addLocalReference === null) {
-      const libdvm = Process.getModuleByName("libdvm.so");
-      let pattern;
-      switch (Process.arch) {
-        case "arm":
-          pattern = "2d e9 f0 41 05 46 15 4e 0c 46 7e 44 11 b3 43 68";
-          break;
-        case "ia32":
-          pattern = "8d 64 24 d4 89 5c 24 1c 89 74 24 20 e8 ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? 85 d2";
-          break;
-      }
-      Memory.scan(libdvm.base, libdvm.size, pattern, {
-        onMatch: (address, size) => {
-          let wrapper;
-          if (Process.arch === "arm") {
-            address = address.or(1);
-            wrapper = new NativeFunction(address, "pointer", ["pointer", "pointer"]);
-          } else {
-            const thunk = Memory.alloc(Process.pageSize);
-            Memory.patchCode(thunk, 16, (code3) => {
-              const cw = new X86Writer(code3, { pc: thunk });
-              cw.putMovRegRegOffsetPtr("eax", "esp", 4);
-              cw.putMovRegRegOffsetPtr("edx", "esp", 8);
-              cw.putJmpAddress(address);
-              cw.flush();
-            });
-            wrapper = new NativeFunction(thunk, "pointer", ["pointer", "pointer"]);
-            wrapper._thunk = thunk;
-          }
-          api.addLocalReference = wrapper;
-          vm2.perform((env) => {
-            enumerateInstances(this, env);
+            return values;
           });
-          return "stop";
-        },
-        onError(reason) {
-        },
-        onComplete() {
-          if (api.addLocalReference === null) {
-            callbacks.onComplete();
-          }
         }
-      });
-    } else {
-      enumerateInstances(this, callerEnv);
-    }
-    function enumerateInstances(factory, env) {
-      const { DVM_JNI_ENV_OFFSET_SELF: DVM_JNI_ENV_OFFSET_SELF2 } = android_exports;
-      const thread = env.handle.add(DVM_JNI_ENV_OFFSET_SELF2).readPointer();
-      let ptrClassObject;
-      const h = classWrapper.$borrowClassHandle(env);
-      try {
-        ptrClassObject = api.dvmDecodeIndirectRef(thread, h.value);
-      } finally {
-        h.unref(env);
+      },
+      toString: {
+        value() {
+          return this.toJSON().toString();
+        }
       }
-      const pattern = ptrClassObject.toMatchPattern();
-      const heapSourceBase = api.dvmHeapSourceGetBase();
-      const heapSourceLimit = api.dvmHeapSourceGetLimit();
-      const size = heapSourceLimit.sub(heapSourceBase).toInt32();
-      Memory.scan(heapSourceBase, size, pattern, {
-        onMatch: (address, size2) => {
-          if (api.dvmIsValidObject(address)) {
-            vm2.perform((env2) => {
-              const thread2 = env2.handle.add(DVM_JNI_ENV_OFFSET_SELF2).readPointer();
-              let instance;
-              const localReference = api.addLocalReference(thread2, address);
-              try {
-                instance = factory.cast(localReference, classWrapper);
-              } finally {
-                env2.deleteLocalRef(localReference);
-              }
-              const result = callbacks.onMatch(instance);
-              if (result === "stop") {
-                return "stop";
-              }
-            });
-          }
-        },
-        onError(reason) {
-        },
-        onComplete() {
-          callbacks.onComplete();
-        }
-      });
-    }
+    });
   }
-  openClassFile(filePath) {
-    return new DexFile(filePath, null, this);
-  }
-  _getType(typeName, unbox = true) {
-    return getType(typeName, unbox, this);
-  }
-};
+});
+
+// backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/class-factory.js
 function makeClassWrapperConstructor() {
-  return function(handle, strategy, env, owned) {
-    return Wrapper.call(this, handle, strategy, env, owned);
+  return function(handle, strategy, env2, owned) {
+    return Wrapper.call(this, handle, strategy, env2, owned);
   };
 }
-function Wrapper(handle, strategy, env, owned = true) {
+function Wrapper(handle, strategy, env2, owned = true) {
   if (handle !== null) {
     if (owned) {
-      const h = env.newGlobalRef(handle);
+      const h = env2.newGlobalRef(handle);
       this.$h = h;
       this.$r = Script.bindWeak(this, vm2.makeHandleDestructor(h));
     } else {
@@ -11685,421 +11238,21 @@ function Wrapper(handle, strategy, env, owned = true) {
   this.$t = strategy;
   return new Proxy(this, wrapperHandler);
 }
-wrapperHandler = {
-  has(target, property) {
-    if (property in target) {
-      return true;
-    }
-    return target.$has(property);
-  },
-  get(target, property, receiver) {
-    if (typeof property !== "string" || property.startsWith("$") || property === "class") {
-      return target[property];
-    }
-    const unwrap2 = target.$find(property);
-    if (unwrap2 !== null) {
-      return unwrap2(receiver);
-    }
-    return target[property];
-  },
-  set(target, property, value, receiver) {
-    target[property] = value;
-    return true;
-  },
-  ownKeys(target) {
-    return target.$list();
-  },
-  getOwnPropertyDescriptor(target, property) {
-    if (Object.prototype.hasOwnProperty.call(target, property)) {
-      return Object.getOwnPropertyDescriptor(target, property);
-    }
-    return {
-      writable: false,
-      configurable: true,
-      enumerable: true
-    };
-  }
-};
-Object.defineProperties(Wrapper.prototype, {
-  [Symbol.for("new")]: {
-    enumerable: false,
-    get() {
-      return this.$getCtor("allocAndInit");
-    }
-  },
-  $new: {
-    enumerable: true,
-    get() {
-      return this[Symbol.for("new")];
-    }
-  },
-  [Symbol.for("alloc")]: {
-    enumerable: false,
-    value() {
-      const env = vm2.getEnv();
-      const h = this.$borrowClassHandle(env);
-      try {
-        const obj = env.allocObject(h.value);
-        const factory = this.$f;
-        return factory.cast(obj, this);
-      } finally {
-        h.unref(env);
-      }
-    }
-  },
-  $alloc: {
-    enumerable: true,
-    get() {
-      return this[Symbol.for("alloc")];
-    }
-  },
-  [Symbol.for("init")]: {
-    enumerable: false,
-    get() {
-      return this.$getCtor("initOnly");
-    }
-  },
-  $init: {
-    enumerable: true,
-    get() {
-      return this[Symbol.for("init")];
-    }
-  },
-  [Symbol.for("dispose")]: {
-    enumerable: false,
-    value() {
-      const ref = this.$r;
-      if (ref !== null) {
-        this.$r = null;
-        Script.unbindWeak(ref);
-      }
-      if (this.$h !== null) {
-        this.$h = void 0;
-      }
-    }
-  },
-  $dispose: {
-    enumerable: true,
-    get() {
-      return this[Symbol.for("dispose")];
-    }
-  },
-  [Symbol.for("clone")]: {
-    enumerable: false,
-    value(env) {
-      const C = this.$C;
-      return new C(this.$h, this.$t, env);
-    }
-  },
-  $clone: {
-    value(env) {
-      return this[Symbol.for("clone")](env);
-    }
-  },
-  [Symbol.for("class")]: {
-    enumerable: false,
-    get() {
-      const env = vm2.getEnv();
-      const h = this.$borrowClassHandle(env);
-      try {
-        const factory = this.$f;
-        return factory.cast(h.value, factory.use("java.lang.Class"));
-      } finally {
-        h.unref(env);
-      }
-    }
-  },
-  class: {
-    enumerable: true,
-    get() {
-      return this[Symbol.for("class")];
-    }
-  },
-  [Symbol.for("className")]: {
-    enumerable: false,
-    get() {
-      const handle = this.$h;
-      if (handle === null) {
-        return this.$n;
-      }
-      return vm2.getEnv().getObjectClassName(handle);
-    }
-  },
-  $className: {
-    enumerable: true,
-    get() {
-      return this[Symbol.for("className")];
-    }
-  },
-  [Symbol.for("ownMembers")]: {
-    enumerable: false,
-    get() {
-      const model = this.$l;
-      return model.list();
-    }
-  },
-  $ownMembers: {
-    enumerable: true,
-    get() {
-      return this[Symbol.for("ownMembers")];
-    }
-  },
-  [Symbol.for("super")]: {
-    enumerable: false,
-    get() {
-      const env = vm2.getEnv();
-      const C = this.$s.$C;
-      return new C(this.$h, STRATEGY_DIRECT, env);
-    }
-  },
-  $super: {
-    enumerable: true,
-    get() {
-      return this[Symbol.for("super")];
-    }
-  },
-  [Symbol.for("s")]: {
-    enumerable: false,
-    get() {
-      const proto = Object.getPrototypeOf(this);
-      let superWrapper = proto.$_s;
-      if (superWrapper === void 0) {
-        const env = vm2.getEnv();
-        const h = this.$borrowClassHandle(env);
-        try {
-          const superHandle = env.getSuperclass(h.value);
-          if (!superHandle.isNull()) {
-            try {
-              const superClassName = env.getClassName(superHandle);
-              const factory = proto.$f;
-              superWrapper = factory._getUsedClass(superClassName);
-              if (superWrapper === void 0) {
-                try {
-                  const getSuperClassHandle = makeSuperHandleGetter(this);
-                  superWrapper = factory._make(superClassName, getSuperClassHandle, env);
-                } finally {
-                  factory._setUsedClass(superClassName, superWrapper);
-                }
-              }
-            } finally {
-              env.deleteLocalRef(superHandle);
-            }
-          } else {
-            superWrapper = null;
-          }
-        } finally {
-          h.unref(env);
-        }
-        proto.$_s = superWrapper;
-      }
-      return superWrapper;
-    }
-  },
-  $s: {
-    get() {
-      return this[Symbol.for("s")];
-    }
-  },
-  [Symbol.for("isSameObject")]: {
-    enumerable: false,
-    value(obj) {
-      const env = vm2.getEnv();
-      return env.isSameObject(obj.$h, this.$h);
-    }
-  },
-  $isSameObject: {
-    value(obj) {
-      return this[Symbol.for("isSameObject")](obj);
-    }
-  },
-  [Symbol.for("getCtor")]: {
-    enumerable: false,
-    value(type) {
-      const slot = this.$c;
-      let ctor = slot[0];
-      if (ctor === null) {
-        const env = vm2.getEnv();
-        const h = this.$borrowClassHandle(env);
-        try {
-          ctor = makeConstructor(h.value, this.$w, env);
-          slot[0] = ctor;
-        } finally {
-          h.unref(env);
-        }
-      }
-      return ctor[type];
-    }
-  },
-  $getCtor: {
-    value(type) {
-      return this[Symbol.for("getCtor")](type);
-    }
-  },
-  [Symbol.for("borrowClassHandle")]: {
-    enumerable: false,
-    value(env) {
-      const className = this.$n;
-      const classHandles = this.$f._classHandles;
-      let handle = classHandles.get(className);
-      if (handle === void 0) {
-        handle = new ClassHandle(this.$gch(env), env);
-        classHandles.set(className, handle, env);
-      }
-      return handle.ref();
-    }
-  },
-  $borrowClassHandle: {
-    value(env) {
-      return this[Symbol.for("borrowClassHandle")](env);
-    }
-  },
-  [Symbol.for("copyClassHandle")]: {
-    enumerable: false,
-    value(env) {
-      const h = this.$borrowClassHandle(env);
-      try {
-        return env.newLocalRef(h.value);
-      } finally {
-        h.unref(env);
-      }
-    }
-  },
-  $copyClassHandle: {
-    value(env) {
-      return this[Symbol.for("copyClassHandle")](env);
-    }
-  },
-  [Symbol.for("getHandle")]: {
-    enumerable: false,
-    value(env) {
-      const handle = this.$h;
-      const isDisposed = handle === void 0;
-      if (isDisposed) {
-        throw new Error("Wrapper is disposed; perhaps it was borrowed from a hook instead of calling Java.retain() to make a long-lived wrapper?");
-      }
-      return handle;
-    }
-  },
-  $getHandle: {
-    value(env) {
-      return this[Symbol.for("getHandle")](env);
-    }
-  },
-  [Symbol.for("list")]: {
-    enumerable: false,
-    value() {
-      const superWrapper = this.$s;
-      const superMembers = superWrapper !== null ? superWrapper.$list() : [];
-      const model = this.$l;
-      return Array.from(new Set(superMembers.concat(model.list())));
-    }
-  },
-  $list: {
-    get() {
-      return this[Symbol.for("list")];
-    }
-  },
-  [Symbol.for("has")]: {
-    enumerable: false,
-    value(member) {
-      const members = this.$m;
-      if (members.has(member)) {
-        return true;
-      }
-      const model = this.$l;
-      if (model.has(member)) {
-        return true;
-      }
-      const superWrapper = this.$s;
-      if (superWrapper !== null && superWrapper.$has(member)) {
-        return true;
-      }
-      return false;
-    }
-  },
-  $has: {
-    value(member) {
-      return this[Symbol.for("has")](member);
-    }
-  },
-  [Symbol.for("find")]: {
-    enumerable: false,
-    value(member) {
-      const members = this.$m;
-      let value = members.get(member);
-      if (value !== void 0) {
-        return value;
-      }
-      const model = this.$l;
-      const spec = model.find(member);
-      if (spec !== null) {
-        const env = vm2.getEnv();
-        const h = this.$borrowClassHandle(env);
-        try {
-          value = makeMember(member, spec, h.value, this.$w, env);
-        } finally {
-          h.unref(env);
-        }
-        members.set(member, value);
-        return value;
-      }
-      const superWrapper = this.$s;
-      if (superWrapper !== null) {
-        return superWrapper.$find(member);
-      }
-      return null;
-    }
-  },
-  $find: {
-    value(member) {
-      return this[Symbol.for("find")](member);
-    }
-  },
-  [Symbol.for("toJSON")]: {
-    enumerable: false,
-    value() {
-      const wrapperName = this.$n;
-      const handle = this.$h;
-      if (handle === null) {
-        return `<class: ${wrapperName}>`;
-      }
-      const actualName = this.$className;
-      if (wrapperName === actualName) {
-        return `<instance: ${wrapperName}>`;
-      }
-      return `<instance: ${wrapperName}, $className: ${actualName}>`;
-    }
-  },
-  toJSON: {
-    get() {
-      return this[Symbol.for("toJSON")];
-    }
-  }
-});
-function ClassHandle(value, env) {
-  this.value = env.newGlobalRef(value);
-  env.deleteLocalRef(value);
+function ClassHandle(value, env2) {
+  this.value = env2.newGlobalRef(value);
+  env2.deleteLocalRef(value);
   this.refs = 1;
 }
-ClassHandle.prototype.ref = function() {
-  this.refs++;
-  return this;
-};
-ClassHandle.prototype.unref = function(env) {
-  if (--this.refs === 0) {
-    env.deleteGlobalRef(this.value);
-  }
-};
-function releaseClassHandle(handle, env) {
-  handle.unref(env);
+function releaseClassHandle(handle, env2) {
+  handle.unref(env2);
 }
 function makeBasicClassHandleGetter(className) {
   const canonicalClassName = className.replace(/\./g, "/");
-  return function(env) {
+  return function(env2) {
     const tid = getCurrentThreadId();
     ignore(tid);
     try {
-      return env.findClass(canonicalClassName);
+      return env2.findClass(canonicalClassName);
     } finally {
       unignore(tid);
     }
@@ -12111,75 +11264,75 @@ function makeLoaderClassHandleGetter(className, usedLoader, callerEnv) {
     cachedLoaderMethod = usedLoader.loadClass.overload("java.lang.String").handle;
   }
   callerEnv = null;
-  return function(env) {
-    const classNameValue = env.newStringUtf(className);
+  return function(env2) {
+    const classNameValue = env2.newStringUtf(className);
     const tid = getCurrentThreadId();
     ignore(tid);
     try {
-      const result = cachedLoaderInvoke(env.handle, usedLoader.$h, cachedLoaderMethod, classNameValue);
-      env.throwIfExceptionPending();
+      const result = cachedLoaderInvoke(env2.handle, usedLoader.$h, cachedLoaderMethod, classNameValue);
+      env2.throwIfExceptionPending();
       return result;
     } finally {
       unignore(tid);
-      env.deleteLocalRef(classNameValue);
+      env2.deleteLocalRef(classNameValue);
     }
   };
 }
 function makeSuperHandleGetter(classWrapper) {
-  return function(env) {
-    const h = classWrapper.$borrowClassHandle(env);
+  return function(env2) {
+    const h = classWrapper.$borrowClassHandle(env2);
     try {
-      return env.getSuperclass(h.value);
+      return env2.getSuperclass(h.value);
     } finally {
-      h.unref(env);
+      h.unref(env2);
     }
   };
 }
-function makeConstructor(classHandle, classWrapper, env) {
+function makeConstructor(classHandle, classWrapper, env2) {
   const { $n: className, $f: factory } = classWrapper;
   const methodName = basename(className);
-  const Class = env.javaLangClass();
-  const Constructor = env.javaLangReflectConstructor();
-  const invokeObjectMethodNoArgs = env.vaMethod("pointer", []);
-  const invokeUInt8MethodNoArgs = env.vaMethod("uint8", []);
+  const Class = env2.javaLangClass();
+  const Constructor = env2.javaLangReflectConstructor();
+  const invokeObjectMethodNoArgs = env2.vaMethod("pointer", []);
+  const invokeUInt8MethodNoArgs = env2.vaMethod("uint8", []);
   const jsCtorMethods = [];
   const jsInitMethods = [];
   const jsRetType = factory._getType(className, false);
   const jsVoidType = factory._getType("void", false);
-  const constructors = invokeObjectMethodNoArgs(env.handle, classHandle, Class.getDeclaredConstructors);
+  const constructors = invokeObjectMethodNoArgs(env2.handle, classHandle, Class.getDeclaredConstructors);
   try {
-    const n = env.getArrayLength(constructors);
+    const n = env2.getArrayLength(constructors);
     if (n !== 0) {
       for (let i = 0; i !== n; i++) {
         let methodId, types;
-        const constructor = env.getObjectArrayElement(constructors, i);
+        const constructor = env2.getObjectArrayElement(constructors, i);
         try {
-          methodId = env.fromReflectedMethod(constructor);
-          types = invokeObjectMethodNoArgs(env.handle, constructor, Constructor.getGenericParameterTypes);
+          methodId = env2.fromReflectedMethod(constructor);
+          types = invokeObjectMethodNoArgs(env2.handle, constructor, Constructor.getGenericParameterTypes);
         } finally {
-          env.deleteLocalRef(constructor);
+          env2.deleteLocalRef(constructor);
         }
         let jsArgTypes;
         try {
-          jsArgTypes = readTypeNames(env, types).map((name) => factory._getType(name));
+          jsArgTypes = readTypeNames(env2, types).map((name) => factory._getType(name));
         } finally {
-          env.deleteLocalRef(types);
+          env2.deleteLocalRef(types);
         }
-        jsCtorMethods.push(makeMethod(methodName, classWrapper, CONSTRUCTOR_METHOD, methodId, jsRetType, jsArgTypes, env));
-        jsInitMethods.push(makeMethod(methodName, classWrapper, INSTANCE_METHOD, methodId, jsVoidType, jsArgTypes, env));
+        jsCtorMethods.push(makeMethod(methodName, classWrapper, CONSTRUCTOR_METHOD, methodId, jsRetType, jsArgTypes, env2));
+        jsInitMethods.push(makeMethod(methodName, classWrapper, INSTANCE_METHOD, methodId, jsVoidType, jsArgTypes, env2));
       }
     } else {
-      const isInterface = invokeUInt8MethodNoArgs(env.handle, classHandle, Class.isInterface);
+      const isInterface = invokeUInt8MethodNoArgs(env2.handle, classHandle, Class.isInterface);
       if (isInterface) {
         throw new Error("cannot instantiate an interface");
       }
-      const defaultClass = env.javaLangObject();
-      const defaultConstructor = env.getMethodId(defaultClass, "<init>", "()V");
-      jsCtorMethods.push(makeMethod(methodName, classWrapper, CONSTRUCTOR_METHOD, defaultConstructor, jsRetType, [], env));
-      jsInitMethods.push(makeMethod(methodName, classWrapper, INSTANCE_METHOD, defaultConstructor, jsVoidType, [], env));
+      const defaultClass = env2.javaLangObject();
+      const defaultConstructor = env2.getMethodId(defaultClass, "<init>", "()V");
+      jsCtorMethods.push(makeMethod(methodName, classWrapper, CONSTRUCTOR_METHOD, defaultConstructor, jsRetType, [], env2));
+      jsInitMethods.push(makeMethod(methodName, classWrapper, INSTANCE_METHOD, defaultConstructor, jsVoidType, [], env2));
     }
   } finally {
-    env.deleteLocalRef(constructors);
+    env2.deleteLocalRef(constructors);
   }
   if (jsInitMethods.length === 0) {
     throw new Error("no supported overloads");
@@ -12189,56 +11342,56 @@ function makeConstructor(classHandle, classWrapper, env) {
     initOnly: makeMethodDispatcher(jsInitMethods)
   };
 }
-function makeMember(name, spec, classHandle, classWrapper, env) {
+function makeMember(name, spec, classHandle, classWrapper, env2) {
   if (spec.startsWith("m")) {
-    return makeMethodFromSpec(name, spec, classHandle, classWrapper, env);
+    return makeMethodFromSpec(name, spec, classHandle, classWrapper, env2);
   }
-  return makeFieldFromSpec(name, spec, classHandle, classWrapper, env);
+  return makeFieldFromSpec(name, spec, classHandle, classWrapper, env2);
 }
-function makeMethodFromSpec(name, spec, classHandle, classWrapper, env) {
+function makeMethodFromSpec(name, spec, classHandle, classWrapper, env2) {
   const { $f: factory } = classWrapper;
   const overloads = spec.split(":").slice(1);
-  const Method = env.javaLangReflectMethod();
-  const invokeObjectMethodNoArgs = env.vaMethod("pointer", []);
-  const invokeUInt8MethodNoArgs = env.vaMethod("uint8", []);
+  const Method = env2.javaLangReflectMethod();
+  const invokeObjectMethodNoArgs = env2.vaMethod("pointer", []);
+  const invokeUInt8MethodNoArgs = env2.vaMethod("uint8", []);
   const methods = overloads.map((params) => {
     const type = params[0] === "s" ? STATIC_METHOD : INSTANCE_METHOD;
     const methodId = ptr(params.substr(1));
     let jsRetType;
     const jsArgTypes = [];
-    const handle = env.toReflectedMethod(classHandle, methodId, type === STATIC_METHOD ? 1 : 0);
+    const handle = env2.toReflectedMethod(classHandle, methodId, type === STATIC_METHOD ? 1 : 0);
     try {
-      const isVarArgs = !!invokeUInt8MethodNoArgs(env.handle, handle, Method.isVarArgs);
-      const retType = invokeObjectMethodNoArgs(env.handle, handle, Method.getGenericReturnType);
-      env.throwIfExceptionPending();
+      const isVarArgs = !!invokeUInt8MethodNoArgs(env2.handle, handle, Method.isVarArgs);
+      const retType = invokeObjectMethodNoArgs(env2.handle, handle, Method.getGenericReturnType);
+      env2.throwIfExceptionPending();
       try {
-        jsRetType = factory._getType(env.getTypeName(retType));
+        jsRetType = factory._getType(env2.getTypeName(retType));
       } finally {
-        env.deleteLocalRef(retType);
+        env2.deleteLocalRef(retType);
       }
-      const argTypes = invokeObjectMethodNoArgs(env.handle, handle, Method.getParameterTypes);
+      const argTypes = invokeObjectMethodNoArgs(env2.handle, handle, Method.getParameterTypes);
       try {
-        const n = env.getArrayLength(argTypes);
+        const n = env2.getArrayLength(argTypes);
         for (let i = 0; i !== n; i++) {
-          const t = env.getObjectArrayElement(argTypes, i);
+          const t = env2.getObjectArrayElement(argTypes, i);
           let argClassName;
           try {
-            argClassName = isVarArgs && i === n - 1 ? env.getArrayTypeName(t) : env.getTypeName(t);
+            argClassName = isVarArgs && i === n - 1 ? env2.getArrayTypeName(t) : env2.getTypeName(t);
           } finally {
-            env.deleteLocalRef(t);
+            env2.deleteLocalRef(t);
           }
           const argType = factory._getType(argClassName);
           jsArgTypes.push(argType);
         }
       } finally {
-        env.deleteLocalRef(argTypes);
+        env2.deleteLocalRef(argTypes);
       }
     } catch (e) {
       return null;
     } finally {
-      env.deleteLocalRef(handle);
+      env2.deleteLocalRef(handle);
     }
-    return makeMethod(name, classWrapper, type, methodId, jsRetType, jsArgTypes, env);
+    return makeMethod(name, classWrapper, type, methodId, jsRetType, jsArgTypes, env2);
   }).filter((m) => m !== null);
   if (methods.length === 0) {
     throw new Error("No supported overloads");
@@ -12263,121 +11416,6 @@ function makeMethodDispatcherCallable() {
   };
   return m;
 }
-dispatcherPrototype = Object.create(Function.prototype, {
-  overloads: {
-    enumerable: true,
-    get() {
-      return this._o;
-    }
-  },
-  overload: {
-    value(...args) {
-      const overloads = this._o;
-      const numArgs = args.length;
-      const signature = args.join(":");
-      for (let i = 0; i !== overloads.length; i++) {
-        const method = overloads[i];
-        const { argumentTypes } = method;
-        if (argumentTypes.length !== numArgs) {
-          continue;
-        }
-        const s = argumentTypes.map((t) => t.className).join(":");
-        if (s === signature) {
-          return method;
-        }
-      }
-      throwOverloadError(this.methodName, this.overloads, "specified argument types do not match any of:");
-    }
-  },
-  methodName: {
-    enumerable: true,
-    get() {
-      return this._o[0].methodName;
-    }
-  },
-  holder: {
-    enumerable: true,
-    get() {
-      return this._o[0].holder;
-    }
-  },
-  type: {
-    enumerable: true,
-    get() {
-      return this._o[0].type;
-    }
-  },
-  handle: {
-    enumerable: true,
-    get() {
-      throwIfDispatcherAmbiguous(this);
-      return this._o[0].handle;
-    }
-  },
-  implementation: {
-    enumerable: true,
-    get() {
-      throwIfDispatcherAmbiguous(this);
-      return this._o[0].implementation;
-    },
-    set(fn) {
-      throwIfDispatcherAmbiguous(this);
-      this._o[0].implementation = fn;
-    }
-  },
-  returnType: {
-    enumerable: true,
-    get() {
-      throwIfDispatcherAmbiguous(this);
-      return this._o[0].returnType;
-    }
-  },
-  argumentTypes: {
-    enumerable: true,
-    get() {
-      throwIfDispatcherAmbiguous(this);
-      return this._o[0].argumentTypes;
-    }
-  },
-  canInvokeWith: {
-    enumerable: true,
-    get(args) {
-      throwIfDispatcherAmbiguous(this);
-      return this._o[0].canInvokeWith;
-    }
-  },
-  clone: {
-    enumerable: true,
-    value(options) {
-      throwIfDispatcherAmbiguous(this);
-      return this._o[0].clone(options);
-    }
-  },
-  invoke: {
-    value(receiver, args) {
-      const overloads = this._o;
-      const isInstance = receiver.$h !== null;
-      for (let i = 0; i !== overloads.length; i++) {
-        const method = overloads[i];
-        if (!method.canInvokeWith(args)) {
-          continue;
-        }
-        if (method.type === INSTANCE_METHOD && !isInstance) {
-          const name = this.methodName;
-          if (name === "toString") {
-            return `<class: ${receiver.$n}>`;
-          }
-          throw new Error(name + ": cannot call instance method without an instance");
-        }
-        return method.apply(receiver, args);
-      }
-      if (this.methodName === "toString") {
-        return `<class: ${receiver.$n}>`;
-      }
-      throwOverloadError(this.methodName, this.overloads, "argument types do not match any of:");
-    }
-  }
-});
 function makeOverloadId(name, returnType, argumentTypes) {
   return `${returnType.className} ${name}(${argumentTypes.map((t) => t.className).join(", ")})`;
 }
@@ -12400,21 +11438,21 @@ function throwOverloadError(name, methods, message) {
   throw new Error(`${name}(): ${message}
 	${overloads.join("\n	")}`);
 }
-function makeMethod(methodName, classWrapper, type, methodId, retType, argTypes, env, invocationOptions) {
+function makeMethod(methodName, classWrapper, type, methodId, retType, argTypes, env2, invocationOptions) {
   const rawRetType = retType.type;
   const rawArgTypes = argTypes.map((t) => t.type);
-  if (env === null) {
-    env = vm2.getEnv();
+  if (env2 === null) {
+    env2 = vm2.getEnv();
   }
   let callVirtually, callDirectly;
   if (type === INSTANCE_METHOD) {
-    callVirtually = env.vaMethod(rawRetType, rawArgTypes, invocationOptions);
-    callDirectly = env.nonvirtualVaMethod(rawRetType, rawArgTypes, invocationOptions);
+    callVirtually = env2.vaMethod(rawRetType, rawArgTypes, invocationOptions);
+    callDirectly = env2.nonvirtualVaMethod(rawRetType, rawArgTypes, invocationOptions);
   } else if (type === STATIC_METHOD) {
-    callVirtually = env.staticVaMethod(rawRetType, rawArgTypes, invocationOptions);
+    callVirtually = env2.staticVaMethod(rawRetType, rawArgTypes, invocationOptions);
     callDirectly = callVirtually;
   } else {
-    callVirtually = env.constructor(rawArgTypes, invocationOptions);
+    callVirtually = env2.constructor(rawArgTypes, invocationOptions);
     callDirectly = callVirtually;
   }
   return makeMethodInstance([methodName, classWrapper, type, methodId, retType, argTypes, callVirtually, callDirectly]);
@@ -12431,163 +11469,6 @@ function makeMethodCallable() {
   };
   return m;
 }
-methodPrototype = Object.create(Function.prototype, {
-  methodName: {
-    enumerable: true,
-    get() {
-      return this._p[0];
-    }
-  },
-  holder: {
-    enumerable: true,
-    get() {
-      return this._p[1];
-    }
-  },
-  type: {
-    enumerable: true,
-    get() {
-      return this._p[2];
-    }
-  },
-  handle: {
-    enumerable: true,
-    get() {
-      return this._p[3];
-    }
-  },
-  implementation: {
-    enumerable: true,
-    get() {
-      const replacement = this._r;
-      return replacement !== void 0 ? replacement : null;
-    },
-    set(fn) {
-      const params = this._p;
-      const holder = params[1];
-      const type = params[2];
-      if (type === CONSTRUCTOR_METHOD) {
-        throw new Error("Reimplementing $new is not possible; replace implementation of $init instead");
-      }
-      const existingReplacement = this._r;
-      if (existingReplacement !== void 0) {
-        holder.$f._patchedMethods.delete(this);
-        const mangler = existingReplacement._m;
-        mangler.revert(vm2);
-        this._r = void 0;
-      }
-      if (fn !== null) {
-        const [methodName, classWrapper, type2, methodId, retType, argTypes] = params;
-        const replacement = implement(methodName, classWrapper, type2, retType, argTypes, fn, this);
-        const mangler = makeMethodMangler3(methodId);
-        replacement._m = mangler;
-        this._r = replacement;
-        mangler.replace(replacement, type2 === INSTANCE_METHOD, argTypes, vm2, api);
-        holder.$f._patchedMethods.add(this);
-      }
-    }
-  },
-  returnType: {
-    enumerable: true,
-    get() {
-      return this._p[4];
-    }
-  },
-  argumentTypes: {
-    enumerable: true,
-    get() {
-      return this._p[5];
-    }
-  },
-  canInvokeWith: {
-    enumerable: true,
-    value(args) {
-      const argTypes = this._p[5];
-      if (args.length !== argTypes.length) {
-        return false;
-      }
-      return argTypes.every((t, i) => {
-        return t.isCompatible(args[i]);
-      });
-    }
-  },
-  clone: {
-    enumerable: true,
-    value(options) {
-      const params = this._p.slice(0, 6);
-      return makeMethod(...params, null, options);
-    }
-  },
-  invoke: {
-    value(receiver, args) {
-      const env = vm2.getEnv();
-      const params = this._p;
-      const type = params[2];
-      const retType = params[4];
-      const argTypes = params[5];
-      const replacement = this._r;
-      const isInstanceMethod = type === INSTANCE_METHOD;
-      const numArgs = args.length;
-      const frameCapacity = 2 + numArgs;
-      env.pushLocalFrame(frameCapacity);
-      let borrowedHandle = null;
-      try {
-        let jniThis;
-        if (isInstanceMethod) {
-          jniThis = receiver.$getHandle();
-        } else {
-          borrowedHandle = receiver.$borrowClassHandle(env);
-          jniThis = borrowedHandle.value;
-        }
-        let methodId;
-        let strategy = receiver.$t;
-        if (replacement === void 0) {
-          methodId = params[3];
-        } else {
-          const mangler = replacement._m;
-          methodId = mangler.resolveTarget(receiver, isInstanceMethod, env, api);
-          if (isArtVm) {
-            const pendingCalls = replacement._c;
-            if (pendingCalls.has(getCurrentThreadId())) {
-              strategy = STRATEGY_DIRECT;
-            }
-          }
-        }
-        const jniArgs = [
-          env.handle,
-          jniThis,
-          methodId
-        ];
-        for (let i = 0; i !== numArgs; i++) {
-          jniArgs.push(argTypes[i].toJni(args[i], env));
-        }
-        let jniCall;
-        if (strategy === STRATEGY_VIRTUAL) {
-          jniCall = params[6];
-        } else {
-          jniCall = params[7];
-          if (isInstanceMethod) {
-            jniArgs.splice(2, 0, receiver.$copyClassHandle(env));
-          }
-        }
-        const jniRetval = jniCall.apply(null, jniArgs);
-        env.throwIfExceptionPending();
-        return retType.fromJni(jniRetval, env, true);
-      } finally {
-        if (borrowedHandle !== null) {
-          borrowedHandle.unref(env);
-        }
-        env.popLocalFrame(NULL);
-      }
-    }
-  },
-  toString: {
-    enumerable: true,
-    value() {
-      return `function ${this.methodName}(${this.argumentTypes.map((t) => t.className).join(", ")}): ${this.returnType.className}`;
-    }
-  }
-});
 function implement(methodName, classWrapper, type, retType, argTypes, handler, fallback = null) {
   const pendingCalls = /* @__PURE__ */ new Set();
   const f = makeMethodImplementation([methodName, classWrapper, type, retType, argTypes, handler, fallback, pendingCalls]);
@@ -12601,20 +11482,20 @@ function makeMethodImplementation(params) {
   };
 }
 function handleMethodInvocation(jniArgs, params) {
-  const env = new Env(jniArgs[0], vm2);
+  const env2 = new Env(jniArgs[0], vm2);
   const [methodName, classWrapper, type, retType, argTypes, handler, fallback, pendingCalls] = params;
   const ownedObjects = [];
   let self;
   if (type === INSTANCE_METHOD) {
     const C = classWrapper.$C;
-    self = new C(jniArgs[1], STRATEGY_VIRTUAL, env, false);
+    self = new C(jniArgs[1], STRATEGY_VIRTUAL, env2, false);
   } else {
     self = classWrapper;
   }
   const tid = getCurrentThreadId();
-  env.pushLocalFrame(3);
+  env2.pushLocalFrame(3);
   let haveFrame = true;
-  vm2.link(tid, env);
+  vm2.link(tid, env2);
   try {
     pendingCalls.add(tid);
     let fn;
@@ -12627,7 +11508,7 @@ function handleMethodInvocation(jniArgs, params) {
     const numArgs = jniArgs.length - 2;
     for (let i = 0; i !== numArgs; i++) {
       const t = argTypes[i];
-      const value = t.fromJni(jniArgs[2 + i], env, false);
+      const value = t.fromJni(jniArgs[2 + i], env2, false);
       args.push(value);
       ownedObjects.push(value);
     }
@@ -12635,9 +11516,9 @@ function handleMethodInvocation(jniArgs, params) {
     if (!retType.isCompatible(retval)) {
       throw new Error(`Implementation for ${methodName} expected return value compatible with ${retType.className}`);
     }
-    let jniRetval = retType.toJni(retval, env);
+    let jniRetval = retType.toJni(retval, env2);
     if (retType.type === "pointer") {
-      jniRetval = env.popLocalFrame(jniRetval);
+      jniRetval = env2.popLocalFrame(jniRetval);
       haveFrame = false;
       ownedObjects.push(retval);
     }
@@ -12645,7 +11526,7 @@ function handleMethodInvocation(jniArgs, params) {
   } catch (e) {
     const jniException = e.$h;
     if (jniException !== void 0) {
-      env.throw(jniException);
+      env2.throw(jniException);
     } else {
       Script.nextTick(() => {
         throw e;
@@ -12655,7 +11536,7 @@ function handleMethodInvocation(jniArgs, params) {
   } finally {
     vm2.unlink(tid);
     if (haveFrame) {
-      env.popLocalFrame(NULL);
+      env2.popLocalFrame(NULL);
     }
     pendingCalls.delete(tid);
     ownedObjects.forEach((obj) => {
@@ -12689,91 +11570,32 @@ function makeValueOfCallable() {
   };
   return m;
 }
-valueOfPrototype = Object.create(Function.prototype, {
-  methodName: {
-    enumerable: true,
-    get() {
-      return "valueOf";
-    }
-  },
-  holder: {
-    enumerable: true,
-    get() {
-      return this._p[0];
-    }
-  },
-  type: {
-    enumerable: true,
-    get() {
-      return this._p[1];
-    }
-  },
-  handle: {
-    enumerable: true,
-    get() {
-      return NULL;
-    }
-  },
-  implementation: {
-    enumerable: true,
-    get() {
-      return null;
-    },
-    set(fn) {
-    }
-  },
-  returnType: {
-    enumerable: true,
-    get() {
-      const classWrapper = this.holder;
-      return classWrapper.$f.use(classWrapper.$n);
-    }
-  },
-  argumentTypes: {
-    enumerable: true,
-    get() {
-      return [];
-    }
-  },
-  canInvokeWith: {
-    enumerable: true,
-    value(args) {
-      return args.length === 0;
-    }
-  },
-  clone: {
-    enumerable: true,
-    value(options) {
-      throw new Error("Invalid operation");
-    }
-  }
-});
-function makeFieldFromSpec(name, spec, classHandle, classWrapper, env) {
+function makeFieldFromSpec(name, spec, classHandle, classWrapper, env2) {
   const type = spec[2] === "s" ? STATIC_FIELD : INSTANCE_FIELD;
   const id = ptr(spec.substr(3));
   const { $f: factory } = classWrapper;
   let fieldType;
-  const field = env.toReflectedField(classHandle, id, type === STATIC_FIELD ? 1 : 0);
+  const field = env2.toReflectedField(classHandle, id, type === STATIC_FIELD ? 1 : 0);
   try {
-    fieldType = env.vaMethod("pointer", [])(env.handle, field, env.javaLangReflectField().getGenericType);
-    env.throwIfExceptionPending();
+    fieldType = env2.vaMethod("pointer", [])(env2.handle, field, env2.javaLangReflectField().getGenericType);
+    env2.throwIfExceptionPending();
   } finally {
-    env.deleteLocalRef(field);
+    env2.deleteLocalRef(field);
   }
   let rtype;
   try {
-    rtype = factory._getType(env.getTypeName(fieldType));
+    rtype = factory._getType(env2.getTypeName(fieldType));
   } finally {
-    env.deleteLocalRef(fieldType);
+    env2.deleteLocalRef(fieldType);
   }
   let getValue, setValue;
   const rtypeJni = rtype.type;
   if (type === STATIC_FIELD) {
-    getValue = env.getStaticField(rtypeJni);
-    setValue = env.setStaticField(rtypeJni);
+    getValue = env2.getStaticField(rtypeJni);
+    setValue = env2.setStaticField(rtypeJni);
   } else {
-    getValue = env.getField(rtypeJni);
-    setValue = env.setField(rtypeJni);
+    getValue = env2.getField(rtypeJni);
+    setValue = env2.setField(rtypeJni);
   }
   return makeFieldFromParams([type, rtype, id, getValue, setValue]);
 }
@@ -12785,144 +11607,6 @@ function makeFieldFromParams(params) {
 function Field(params) {
   this._p = params;
 }
-Object.defineProperties(Field.prototype, {
-  value: {
-    enumerable: true,
-    get() {
-      const [holder, type, rtype, id, getValue] = this._p;
-      const env = vm2.getEnv();
-      env.pushLocalFrame(4);
-      let borrowedHandle = null;
-      try {
-        let jniThis;
-        if (type === INSTANCE_FIELD) {
-          jniThis = holder.$getHandle();
-          if (jniThis === null) {
-            throw new Error("Cannot access an instance field without an instance");
-          }
-        } else {
-          borrowedHandle = holder.$borrowClassHandle(env);
-          jniThis = borrowedHandle.value;
-        }
-        const jniRetval = getValue(env.handle, jniThis, id);
-        env.throwIfExceptionPending();
-        return rtype.fromJni(jniRetval, env, true);
-      } finally {
-        if (borrowedHandle !== null) {
-          borrowedHandle.unref(env);
-        }
-        env.popLocalFrame(NULL);
-      }
-    },
-    set(value) {
-      const [holder, type, rtype, id, , setValue] = this._p;
-      const env = vm2.getEnv();
-      env.pushLocalFrame(4);
-      let borrowedHandle = null;
-      try {
-        let jniThis;
-        if (type === INSTANCE_FIELD) {
-          jniThis = holder.$getHandle();
-          if (jniThis === null) {
-            throw new Error("Cannot access an instance field without an instance");
-          }
-        } else {
-          borrowedHandle = holder.$borrowClassHandle(env);
-          jniThis = borrowedHandle.value;
-        }
-        if (!rtype.isCompatible(value)) {
-          throw new Error(`Expected value compatible with ${rtype.className}`);
-        }
-        const jniValue = rtype.toJni(value, env);
-        setValue(env.handle, jniThis, id, jniValue);
-        env.throwIfExceptionPending();
-      } finally {
-        if (borrowedHandle !== null) {
-          borrowedHandle.unref(env);
-        }
-        env.popLocalFrame(NULL);
-      }
-    }
-  },
-  holder: {
-    enumerable: true,
-    get() {
-      return this._p[0];
-    }
-  },
-  fieldType: {
-    enumerable: true,
-    get() {
-      return this._p[1];
-    }
-  },
-  fieldReturnType: {
-    enumerable: true,
-    get() {
-      return this._p[2];
-    }
-  },
-  toString: {
-    enumerable: true,
-    value() {
-      const inlineString = `Java.Field{holder: ${this.holder}, fieldType: ${this.fieldType}, fieldReturnType: ${this.fieldReturnType}, value: ${this.value}}`;
-      if (inlineString.length < 200) {
-        return inlineString;
-      }
-      const multilineString = `Java.Field{
-	holder: ${this.holder},
-	fieldType: ${this.fieldType},
-	fieldReturnType: ${this.fieldReturnType},
-	value: ${this.value},
-}`;
-      return multilineString.split("\n").map((l) => l.length > 200 ? l.slice(0, l.indexOf(" ") + 1) + "...," : l).join("\n");
-    }
-  }
-});
-var DexFile = class _DexFile {
-  static fromBuffer(buffer, factory) {
-    const fileValue = createTemporaryDex(factory);
-    const filePath = fileValue.getCanonicalPath().toString();
-    const file = new File(filePath, "w");
-    file.write(buffer.buffer);
-    file.close();
-    setReadOnlyDex(filePath, factory);
-    return new _DexFile(filePath, fileValue, factory);
-  }
-  constructor(path, file, factory) {
-    this.path = path;
-    this.file = file;
-    this._factory = factory;
-  }
-  load() {
-    const { _factory: factory } = this;
-    const { codeCacheDir } = factory;
-    const DexClassLoader = factory.use("dalvik.system.DexClassLoader");
-    const JFile = factory.use("java.io.File");
-    let file = this.file;
-    if (file === null) {
-      file = factory.use("java.io.File").$new(this.path);
-    }
-    if (!file.exists()) {
-      throw new Error("File not found");
-    }
-    JFile.$new(codeCacheDir).mkdirs();
-    factory.loader = DexClassLoader.$new(file.getCanonicalPath(), codeCacheDir, null, factory.loader);
-    vm2.preventDetachDueToClassLoader();
-  }
-  getClassNames() {
-    const { _factory: factory } = this;
-    const DexFile2 = factory.use("dalvik.system.DexFile");
-    const optimizedDex = createTemporaryDex(factory);
-    const dx = DexFile2.loadDex(this.path, optimizedDex.getCanonicalPath(), 0);
-    const classNames = [];
-    const enumeratorClassNames = dx.entries();
-    while (enumeratorClassNames.hasMoreElements()) {
-      classNames.push(enumeratorClassNames.nextElement().toString());
-    }
-    return classNames;
-  }
-};
 function createTemporaryDex(factory) {
   const { cacheDir, tempFileNaming } = factory;
   const JFile = factory.use("java.io.File");
@@ -12994,15 +11678,15 @@ function unignore(threadId) {
 function basename(className) {
   return className.slice(className.lastIndexOf(".") + 1);
 }
-function readTypeNames(env, types) {
+function readTypeNames(env2, types) {
   const names = [];
-  const n = env.getArrayLength(types);
+  const n = env2.getArrayLength(types);
   for (let i = 0; i !== n; i++) {
-    const t = env.getObjectArrayElement(types, i);
+    const t = env2.getObjectArrayElement(types, i);
     try {
-      names.push(env.getTypeName(t));
+      names.push(env2.getTypeName(t));
     } finally {
-      env.deleteLocalRef(t);
+      env2.deleteLocalRef(t);
     }
   }
   return names;
@@ -13011,460 +11695,1558 @@ function makeSourceFileName(className) {
   const tokens = className.split(".");
   return tokens[tokens.length - 1] + ".java";
 }
-
-// node_modules/frida-java-bridge/index.js
-var jsizeSize4 = 4;
-var pointerSize8 = Process.pointerSize;
-var Runtime = class {
-  ACC_PUBLIC = 1;
-  ACC_PRIVATE = 2;
-  ACC_PROTECTED = 4;
-  ACC_STATIC = 8;
-  ACC_FINAL = 16;
-  ACC_SYNCHRONIZED = 32;
-  ACC_BRIDGE = 64;
-  ACC_VARARGS = 128;
-  ACC_NATIVE = 256;
-  ACC_ABSTRACT = 1024;
-  ACC_STRICT = 2048;
-  ACC_SYNTHETIC = 4096;
-  constructor() {
-    this.classFactory = null;
-    this.ClassFactory = ClassFactory;
-    this.vm = null;
-    this.api = null;
-    this._initialized = false;
-    this._apiError = null;
-    this._wakeupHandler = null;
-    this._pollListener = null;
-    this._pendingMainOps = [];
-    this._pendingVmOps = [];
-    this._cachedIsAppProcess = null;
-    try {
-      this._tryInitialize();
-    } catch (e) {
-    }
-  }
-  _tryInitialize() {
-    if (this._initialized) {
-      return true;
-    }
-    if (this._apiError !== null) {
-      throw this._apiError;
-    }
-    let api2;
-    try {
-      api2 = api_default();
-      this.api = api2;
-    } catch (e) {
-      this._apiError = e;
-      throw e;
-    }
-    if (api2 === null) {
-      return false;
-    }
-    const vm3 = new VM(api2);
-    this.vm = vm3;
-    initialize(vm3);
-    ClassFactory._initialize(vm3, api2);
-    this.classFactory = new ClassFactory();
-    this._initialized = true;
-    return true;
-  }
-  _dispose() {
-    if (this.api === null) {
-      return;
-    }
-    const { vm: vm3 } = this;
-    vm3.perform((env) => {
-      ClassFactory._disposeAll(env);
-      Env.dispose(env);
-    });
-    Script.nextTick(() => {
-      VM.dispose(vm3);
-    });
-  }
-  get available() {
-    return this._tryInitialize();
-  }
-  get androidVersion() {
-    return getAndroidVersion();
-  }
-  synchronized(obj, fn) {
-    const { $h: objHandle = obj } = obj;
-    if (!(objHandle instanceof NativePointer)) {
-      throw new Error("Java.synchronized: the first argument `obj` must be either a pointer or a Java instance");
-    }
-    const env = this.vm.getEnv();
-    checkJniResult("VM::MonitorEnter", env.monitorEnter(objHandle));
-    try {
-      fn();
-    } finally {
-      env.monitorExit(objHandle);
-    }
-  }
-  enumerateLoadedClasses(callbacks) {
-    this._checkAvailable();
-    const { flavor } = this.api;
-    if (flavor === "jvm") {
-      this._enumerateLoadedClassesJvm(callbacks);
-    } else if (flavor === "art") {
-      this._enumerateLoadedClassesArt(callbacks);
-    } else {
-      this._enumerateLoadedClassesDalvik(callbacks);
-    }
-  }
-  enumerateLoadedClassesSync() {
-    const classes = [];
-    this.enumerateLoadedClasses({
-      onMatch(c) {
-        classes.push(c);
-      },
-      onComplete() {
-      }
-    });
-    return classes;
-  }
-  enumerateClassLoaders(callbacks) {
-    this._checkAvailable();
-    const { flavor } = this.api;
-    if (flavor === "jvm") {
-      this._enumerateClassLoadersJvm(callbacks);
-    } else if (flavor === "art") {
-      this._enumerateClassLoadersArt(callbacks);
-    } else {
-      throw new Error("Enumerating class loaders is not supported on Dalvik");
-    }
-  }
-  enumerateClassLoadersSync() {
-    const loaders = [];
-    this.enumerateClassLoaders({
-      onMatch(c) {
-        loaders.push(c);
-      },
-      onComplete() {
-      }
-    });
-    return loaders;
-  }
-  _enumerateLoadedClassesJvm(callbacks) {
-    const { api: api2, vm: vm3 } = this;
-    const { jvmti } = api2;
-    const env = vm3.getEnv();
-    const countPtr = Memory.alloc(jsizeSize4);
-    const classesPtr = Memory.alloc(pointerSize8);
-    jvmti.getLoadedClasses(countPtr, classesPtr);
-    const count = countPtr.readS32();
-    const classes = classesPtr.readPointer();
-    const handles = [];
-    for (let i = 0; i !== count; i++) {
-      handles.push(classes.add(i * pointerSize8).readPointer());
-    }
-    jvmti.deallocate(classes);
-    try {
-      for (const handle of handles) {
-        const className = env.getClassName(handle);
-        callbacks.onMatch(className, handle);
-      }
-      callbacks.onComplete();
-    } finally {
-      handles.forEach((handle) => {
-        env.deleteLocalRef(handle);
-      });
-    }
-  }
-  _enumerateClassLoadersJvm(callbacks) {
-    this.choose("java.lang.ClassLoader", callbacks);
-  }
-  _enumerateLoadedClassesArt(callbacks) {
-    const { vm: vm3, api: api2 } = this;
-    const env = vm3.getEnv();
-    const addGlobalReference = api2["art::JavaVMExt::AddGlobalRef"];
-    const { vm: vmHandle } = api2;
-    withRunnableArtThread(vm3, env, (thread) => {
-      const collectClassHandles = makeArtClassVisitor((klass) => {
-        const handle = addGlobalReference(vmHandle, thread, klass);
-        try {
-          const className = env.getClassName(handle);
-          callbacks.onMatch(className, handle);
-        } finally {
-          env.deleteGlobalRef(handle);
+var jsizeSize3, ensureClassInitialized3, makeMethodMangler3, kAccStatic2, CONSTRUCTOR_METHOD, STATIC_METHOD, INSTANCE_METHOD, STATIC_FIELD, INSTANCE_FIELD, STRATEGY_VIRTUAL, STRATEGY_DIRECT, PENDING_USE, DEFAULT_CACHE_DIR, getCurrentThreadId, pointerSize7, factoryCache, vm2, api, isArtVm, wrapperHandler, dispatcherPrototype, methodPrototype, valueOfPrototype, cachedLoaderInvoke, cachedLoaderMethod, ignoredThreads, ClassFactory, DexFile;
+var init_class_factory = __esm({
+  "backend/app/engines/frida_hooks/node_modules/frida-java-bridge/lib/class-factory.js"() {
+    init_node_globals();
+    init_env();
+    init_android();
+    init_jvm();
+    init_class_model();
+    init_lru();
+    init_mkdex();
+    init_types();
+    jsizeSize3 = 4;
+    ({
+      ensureClassInitialized: ensureClassInitialized3,
+      makeMethodMangler: makeMethodMangler3
+    } = android_exports);
+    kAccStatic2 = 8;
+    CONSTRUCTOR_METHOD = 1;
+    STATIC_METHOD = 2;
+    INSTANCE_METHOD = 3;
+    STATIC_FIELD = 1;
+    INSTANCE_FIELD = 2;
+    STRATEGY_VIRTUAL = 1;
+    STRATEGY_DIRECT = 2;
+    PENDING_USE = Symbol("PENDING_USE");
+    DEFAULT_CACHE_DIR = "/data/local/tmp";
+    ({
+      getCurrentThreadId,
+      pointerSize: pointerSize7
+    } = Process);
+    factoryCache = {
+      state: "empty",
+      factories: [],
+      loaders: null,
+      Integer: null
+    };
+    vm2 = null;
+    api = null;
+    isArtVm = null;
+    wrapperHandler = null;
+    dispatcherPrototype = null;
+    methodPrototype = null;
+    valueOfPrototype = null;
+    cachedLoaderInvoke = null;
+    cachedLoaderMethod = null;
+    ignoredThreads = /* @__PURE__ */ new Map();
+    ClassFactory = class _ClassFactory {
+      static _initialize(_vm, _api) {
+        vm2 = _vm;
+        api = _api;
+        isArtVm = _api.flavor === "art";
+        if (_api.flavor === "jvm") {
+          ensureClassInitialized3 = ensureClassInitialized2;
+          makeMethodMangler3 = makeMethodMangler2;
         }
-        return true;
-      });
-      api2["art::ClassLinker::VisitClasses"](api2.artClassLinker.address, collectClassHandles);
-    });
-    callbacks.onComplete();
-  }
-  _enumerateClassLoadersArt(callbacks) {
-    const { classFactory: factory, vm: vm3, api: api2 } = this;
-    const env = vm3.getEnv();
-    const visitClassLoaders = api2["art::ClassLinker::VisitClassLoaders"];
-    if (visitClassLoaders === void 0) {
-      throw new Error("This API is only available on Android >= 7.0");
-    }
-    const ClassLoader = factory.use("java.lang.ClassLoader");
-    const loaderHandles = [];
-    const addGlobalReference = api2["art::JavaVMExt::AddGlobalRef"];
-    const { vm: vmHandle } = api2;
-    withRunnableArtThread(vm3, env, (thread) => {
-      const collectLoaderHandles = makeArtClassLoaderVisitor((loader) => {
-        loaderHandles.push(addGlobalReference(vmHandle, thread, loader));
-        return true;
-      });
-      withAllArtThreadsSuspended(() => {
-        visitClassLoaders(api2.artClassLinker.address, collectLoaderHandles);
-      });
-    });
-    try {
-      loaderHandles.forEach((handle) => {
-        const loader = factory.cast(handle, ClassLoader);
-        callbacks.onMatch(loader);
-      });
-    } finally {
-      loaderHandles.forEach((handle) => {
-        env.deleteGlobalRef(handle);
-      });
-    }
-    callbacks.onComplete();
-  }
-  _enumerateLoadedClassesDalvik(callbacks) {
-    const { api: api2 } = this;
-    const HASH_TOMBSTONE = ptr("0xcbcacccd");
-    const loadedClassesOffset = 172;
-    const hashEntrySize = 8;
-    const ptrLoadedClassesHashtable = api2.gDvm.add(loadedClassesOffset);
-    const hashTable = ptrLoadedClassesHashtable.readPointer();
-    const tableSize = hashTable.readS32();
-    const ptrpEntries = hashTable.add(12);
-    const pEntries = ptrpEntries.readPointer();
-    const end = tableSize * hashEntrySize;
-    for (let offset = 0; offset < end; offset += hashEntrySize) {
-      const pEntryPtr = pEntries.add(offset);
-      const dataPtr = pEntryPtr.add(4).readPointer();
-      if (dataPtr.isNull() || dataPtr.equals(HASH_TOMBSTONE)) {
-        continue;
       }
-      const descriptionPtr = dataPtr.add(24).readPointer();
-      const description = descriptionPtr.readUtf8String();
-      if (description.startsWith("L")) {
-        const name = description.substring(1, description.length - 1).replace(/\//g, ".");
-        callbacks.onMatch(name);
+      static _disposeAll(env2) {
+        factoryCache.factories.forEach((factory) => {
+          factory._dispose(env2);
+        });
       }
-    }
-    callbacks.onComplete();
-  }
-  enumerateMethods(query) {
-    const { classFactory: factory } = this;
-    const env = this.vm.getEnv();
-    const ClassLoader = factory.use("java.lang.ClassLoader");
-    return Model.enumerateMethods(query, this.api, env).map((group) => {
-      const handle = group.loader;
-      group.loader = handle !== null ? factory.wrap(handle, ClassLoader, env) : null;
-      return group;
-    });
-  }
-  scheduleOnMainThread(fn) {
-    this.performNow(() => {
-      this._pendingMainOps.push(fn);
-      let { _wakeupHandler: wakeupHandler } = this;
-      if (wakeupHandler === null) {
-        const { classFactory: factory } = this;
-        const Handler = factory.use("android.os.Handler");
-        const Looper = factory.use("android.os.Looper");
-        wakeupHandler = Handler.$new(Looper.getMainLooper());
-        this._wakeupHandler = wakeupHandler;
+      static get(classLoader) {
+        const cache = getFactoryCache();
+        const defaultFactory = cache.factories[0];
+        if (classLoader === null) {
+          return defaultFactory;
+        }
+        const indexObj = cache.loaders.get(classLoader);
+        if (indexObj !== null) {
+          const index = defaultFactory.cast(indexObj, cache.Integer);
+          return cache.factories[index.intValue()];
+        }
+        const factory = new _ClassFactory();
+        factory.loader = classLoader;
+        factory.cacheDir = defaultFactory.cacheDir;
+        addFactoryToCache(factory, classLoader);
+        return factory;
       }
-      if (this._pollListener === null) {
-        this._pollListener = Interceptor.attach(Process.getModuleByName("libc.so").getExportByName("epoll_wait"), this._makePollHook());
-        Interceptor.flush();
+      constructor() {
+        this.cacheDir = DEFAULT_CACHE_DIR;
+        this.codeCacheDir = DEFAULT_CACHE_DIR + "/dalvik-cache";
+        this.tempFileNaming = {
+          prefix: "frida",
+          suffix: ""
+        };
+        this._classes = {};
+        this._classHandles = new LRU(10, releaseClassHandle);
+        this._patchedMethods = /* @__PURE__ */ new Set();
+        this._loader = null;
+        this._types = [{}, {}];
+        factoryCache.factories.push(this);
       }
-      wakeupHandler.sendEmptyMessage(1);
-    });
-  }
-  _makePollHook() {
-    const mainThreadId = Process.id;
-    const { _pendingMainOps: pending } = this;
-    return function() {
-      if (this.threadId !== mainThreadId) {
-        return;
+      _dispose(env2) {
+        Array.from(this._patchedMethods).forEach((method) => {
+          method.implementation = null;
+        });
+        this._patchedMethods.clear();
+        revertGlobalPatches();
+        this._classHandles.dispose(env2);
+        this._classes = {};
       }
-      let fn;
-      while ((fn = pending.shift()) !== void 0) {
+      get loader() {
+        return this._loader;
+      }
+      set loader(value) {
+        const isInitial = this._loader === null && value !== null;
+        this._loader = value;
+        if (isInitial && factoryCache.state === "ready" && this === factoryCache.factories[0]) {
+          addFactoryToCache(this, value);
+        }
+      }
+      use(className, options = {}) {
+        const allowCached = options.cache !== "skip";
+        let C = allowCached ? this._getUsedClass(className) : void 0;
+        if (C === void 0) {
+          try {
+            const env2 = vm2.getEnv();
+            const { _loader: loader } = this;
+            const getClassHandle = loader !== null ? makeLoaderClassHandleGetter(className, loader, env2) : makeBasicClassHandleGetter(className);
+            C = this._make(className, getClassHandle, env2);
+          } finally {
+            if (allowCached) {
+              this._setUsedClass(className, C);
+            }
+          }
+        }
+        return C;
+      }
+      _getUsedClass(className) {
+        let c;
+        while ((c = this._classes[className]) === PENDING_USE) {
+          Thread.sleep(0.05);
+        }
+        if (c === void 0) {
+          this._classes[className] = PENDING_USE;
+        }
+        return c;
+      }
+      _setUsedClass(className, c) {
+        if (c !== void 0) {
+          this._classes[className] = c;
+        } else {
+          delete this._classes[className];
+        }
+      }
+      _make(name, getClassHandle, env2) {
+        const C = makeClassWrapperConstructor();
+        const proto = Object.create(Wrapper.prototype, {
+          [Symbol.for("n")]: {
+            value: name
+          },
+          $n: {
+            get() {
+              return this[Symbol.for("n")];
+            }
+          },
+          [Symbol.for("C")]: {
+            value: C
+          },
+          $C: {
+            get() {
+              return this[Symbol.for("C")];
+            }
+          },
+          [Symbol.for("w")]: {
+            value: null,
+            writable: true
+          },
+          $w: {
+            get() {
+              return this[Symbol.for("w")];
+            },
+            set(val) {
+              this[Symbol.for("w")] = val;
+            }
+          },
+          [Symbol.for("_s")]: {
+            writable: true
+          },
+          $_s: {
+            get() {
+              return this[Symbol.for("_s")];
+            },
+            set(val) {
+              this[Symbol.for("_s")] = val;
+            }
+          },
+          [Symbol.for("c")]: {
+            value: [null]
+          },
+          $c: {
+            get() {
+              return this[Symbol.for("c")];
+            }
+          },
+          [Symbol.for("m")]: {
+            value: /* @__PURE__ */ new Map()
+          },
+          $m: {
+            get() {
+              return this[Symbol.for("m")];
+            }
+          },
+          [Symbol.for("l")]: {
+            value: null,
+            writable: true
+          },
+          $l: {
+            get() {
+              return this[Symbol.for("l")];
+            },
+            set(val) {
+              this[Symbol.for("l")] = val;
+            }
+          },
+          [Symbol.for("gch")]: {
+            value: getClassHandle
+          },
+          $gch: {
+            get() {
+              return this[Symbol.for("gch")];
+            }
+          },
+          [Symbol.for("f")]: {
+            value: this
+          },
+          $f: {
+            get() {
+              return this[Symbol.for("f")];
+            }
+          }
+        });
+        C.prototype = proto;
+        const classWrapper = new C(null);
+        proto[Symbol.for("w")] = classWrapper;
+        proto.$w = classWrapper;
+        const h = classWrapper.$borrowClassHandle(env2);
         try {
-          fn();
-        } catch (e) {
-          Script.nextTick(() => {
-            throw e;
+          const classHandle = h.value;
+          ensureClassInitialized3(env2, classHandle);
+          proto.$l = Model.build(classHandle, env2);
+        } finally {
+          h.unref(env2);
+        }
+        return classWrapper;
+      }
+      retain(obj) {
+        const env2 = vm2.getEnv();
+        return obj.$clone(env2);
+      }
+      cast(obj, klass, owned) {
+        const env2 = vm2.getEnv();
+        let handle = obj.$h;
+        if (handle === void 0) {
+          handle = obj;
+        }
+        const h = klass.$borrowClassHandle(env2);
+        try {
+          const isValidCast = env2.isInstanceOf(handle, h.value);
+          if (!isValidCast) {
+            throw new Error(`Cast from '${env2.getObjectClassName(handle)}' to '${klass.$n}' isn't possible`);
+          }
+        } finally {
+          h.unref(env2);
+        }
+        const C = klass.$C;
+        return new C(handle, STRATEGY_VIRTUAL, env2, owned);
+      }
+      wrap(handle, klass, env2) {
+        const C = klass.$C;
+        const wrapper = new C(handle, STRATEGY_VIRTUAL, env2, false);
+        wrapper.$r = Script.bindWeak(wrapper, vm2.makeHandleDestructor(handle));
+        return wrapper;
+      }
+      array(type, elements) {
+        const env2 = vm2.getEnv();
+        const primitiveType = getPrimitiveType(type);
+        if (primitiveType !== null) {
+          type = primitiveType.name;
+        }
+        const arrayType = getArrayType("[" + type, false, this);
+        const rawArray = arrayType.toJni(elements, env2);
+        return arrayType.fromJni(rawArray, env2, true);
+      }
+      registerClass(spec) {
+        const env2 = vm2.getEnv();
+        const tempHandles = [];
+        try {
+          const Class = this.use("java.lang.Class");
+          const Method = env2.javaLangReflectMethod();
+          const invokeObjectMethodNoArgs = env2.vaMethod("pointer", []);
+          const className = spec.name;
+          const interfaces = spec.implements || [];
+          const superClass = spec.superClass || this.use("java.lang.Object");
+          const dexFields = [];
+          const dexMethods = [];
+          const dexSpec = {
+            name: makeJniObjectTypeName(className),
+            sourceFileName: makeSourceFileName(className),
+            superClass: makeJniObjectTypeName(superClass.$n),
+            interfaces: interfaces.map((iface) => makeJniObjectTypeName(iface.$n)),
+            fields: dexFields,
+            methods: dexMethods
+          };
+          const allInterfaces = interfaces.slice();
+          interfaces.forEach((iface) => {
+            Array.prototype.slice.call(iface.class.getInterfaces()).forEach((baseIface) => {
+              const baseIfaceName = this.cast(baseIface, Class).getCanonicalName();
+              allInterfaces.push(this.use(baseIfaceName));
+            });
+          });
+          const fields = spec.fields || {};
+          Object.getOwnPropertyNames(fields).forEach((name) => {
+            const fieldType = this._getType(fields[name]);
+            dexFields.push([name, fieldType.name]);
+          });
+          const baseMethods = {};
+          const pendingOverloads = {};
+          allInterfaces.forEach((iface) => {
+            const h = iface.$borrowClassHandle(env2);
+            tempHandles.push(h);
+            const ifaceHandle = h.value;
+            iface.$ownMembers.filter((name) => {
+              return iface[name].overloads !== void 0;
+            }).forEach((name) => {
+              const method = iface[name];
+              const overloads = method.overloads;
+              const overloadIds = overloads.map((overload) => makeOverloadId(name, overload.returnType, overload.argumentTypes));
+              baseMethods[name] = [method, overloadIds, ifaceHandle];
+              overloads.forEach((overload, index) => {
+                const id = overloadIds[index];
+                pendingOverloads[id] = [overload, ifaceHandle];
+              });
+            });
+          });
+          const methods = spec.methods || {};
+          const methodNames = Object.keys(methods);
+          const methodEntries = methodNames.reduce((result, name) => {
+            const entry = methods[name];
+            const rawName = name === "$init" ? "<init>" : name;
+            if (entry instanceof Array) {
+              result.push(...entry.map((e) => [rawName, e]));
+            } else {
+              result.push([rawName, entry]);
+            }
+            return result;
+          }, []);
+          const implMethods = [];
+          methodEntries.forEach(([name, methodValue]) => {
+            let type = INSTANCE_METHOD;
+            let returnType;
+            let argumentTypes;
+            let thrownTypeNames = [];
+            let impl;
+            if (typeof methodValue === "function") {
+              const m = baseMethods[name];
+              if (m !== void 0 && Array.isArray(m)) {
+                const [baseMethod, overloadIds, parentTypeHandle] = m;
+                if (overloadIds.length > 1) {
+                  throw new Error(`More than one overload matching '${name}': signature must be specified`);
+                }
+                delete pendingOverloads[overloadIds[0]];
+                const overload = baseMethod.overloads[0];
+                type = overload.type;
+                returnType = overload.returnType;
+                argumentTypes = overload.argumentTypes;
+                impl = methodValue;
+                const reflectedMethod = env2.toReflectedMethod(parentTypeHandle, overload.handle, 0);
+                const thrownTypes = invokeObjectMethodNoArgs(env2.handle, reflectedMethod, Method.getGenericExceptionTypes);
+                thrownTypeNames = readTypeNames(env2, thrownTypes).map(makeJniObjectTypeName);
+                env2.deleteLocalRef(thrownTypes);
+                env2.deleteLocalRef(reflectedMethod);
+              } else {
+                returnType = this._getType("void");
+                argumentTypes = [];
+                impl = methodValue;
+              }
+            } else {
+              if (methodValue.isStatic) {
+                type = STATIC_METHOD;
+              }
+              returnType = this._getType(methodValue.returnType || "void");
+              argumentTypes = (methodValue.argumentTypes || []).map((name2) => this._getType(name2));
+              impl = methodValue.implementation;
+              if (typeof impl !== "function") {
+                throw new Error("Expected a function implementation for method: " + name);
+              }
+              const id = makeOverloadId(name, returnType, argumentTypes);
+              const pendingOverload = pendingOverloads[id];
+              if (pendingOverload !== void 0) {
+                const [overload, parentTypeHandle] = pendingOverload;
+                delete pendingOverloads[id];
+                type = overload.type;
+                returnType = overload.returnType;
+                argumentTypes = overload.argumentTypes;
+                const reflectedMethod = env2.toReflectedMethod(parentTypeHandle, overload.handle, 0);
+                const thrownTypes = invokeObjectMethodNoArgs(env2.handle, reflectedMethod, Method.getGenericExceptionTypes);
+                thrownTypeNames = readTypeNames(env2, thrownTypes).map(makeJniObjectTypeName);
+                env2.deleteLocalRef(thrownTypes);
+                env2.deleteLocalRef(reflectedMethod);
+              }
+            }
+            const returnTypeName = returnType.name;
+            const argumentTypeNames = argumentTypes.map((t) => t.name);
+            const signature = "(" + argumentTypeNames.join("") + ")" + returnTypeName;
+            dexMethods.push([name, returnTypeName, argumentTypeNames, thrownTypeNames, type === STATIC_METHOD ? kAccStatic2 : 0]);
+            implMethods.push([name, signature, type, returnType, argumentTypes, impl]);
+          });
+          const unimplementedMethodIds = Object.keys(pendingOverloads);
+          if (unimplementedMethodIds.length > 0) {
+            throw new Error("Missing implementation for: " + unimplementedMethodIds.join(", "));
+          }
+          const dex = DexFile.fromBuffer(mkdex_default(dexSpec), this);
+          try {
+            dex.load();
+          } finally {
+            dex.file.delete();
+          }
+          const classWrapper = this.use(spec.name);
+          const numMethods = methodEntries.length;
+          if (numMethods > 0) {
+            const methodElementSize = 3 * pointerSize7;
+            const methodElements = Memory.alloc(numMethods * methodElementSize);
+            const nativeMethods = [];
+            const temporaryHandles = [];
+            implMethods.forEach(([name, signature, type, returnType, argumentTypes, impl], index) => {
+              const rawName = Memory.allocUtf8String(name);
+              const rawSignature = Memory.allocUtf8String(signature);
+              const rawImpl = implement(name, classWrapper, type, returnType, argumentTypes, impl);
+              methodElements.add(index * methodElementSize).writePointer(rawName);
+              methodElements.add(index * methodElementSize + pointerSize7).writePointer(rawSignature);
+              methodElements.add(index * methodElementSize + 2 * pointerSize7).writePointer(rawImpl);
+              temporaryHandles.push(rawName, rawSignature);
+              nativeMethods.push(rawImpl);
+            });
+            const h = classWrapper.$borrowClassHandle(env2);
+            tempHandles.push(h);
+            const classHandle = h.value;
+            env2.registerNatives(classHandle, methodElements, numMethods);
+            env2.throwIfExceptionPending();
+            classWrapper.$nativeMethods = nativeMethods;
+          }
+          return classWrapper;
+        } finally {
+          tempHandles.forEach((h) => {
+            h.unref(env2);
           });
         }
       }
+      choose(specifier, callbacks) {
+        const env2 = vm2.getEnv();
+        const { flavor } = api;
+        if (flavor === "jvm") {
+          this._chooseObjectsJvm(specifier, env2, callbacks);
+        } else if (flavor === "art") {
+          const legacyApiMissing = api["art::gc::Heap::VisitObjects"] === void 0;
+          if (legacyApiMissing) {
+            const preA12ApiMissing = api["art::gc::Heap::GetInstances"] === void 0;
+            if (preA12ApiMissing) {
+              return this._chooseObjectsJvm(specifier, env2, callbacks);
+            }
+          }
+          withRunnableArtThread(vm2, env2, (thread) => {
+            if (legacyApiMissing) {
+              this._chooseObjectsArtPreA12(specifier, env2, thread, callbacks);
+            } else {
+              this._chooseObjectsArtLegacy(specifier, env2, thread, callbacks);
+            }
+          });
+        } else {
+          this._chooseObjectsDalvik(specifier, env2, callbacks);
+        }
+      }
+      _chooseObjectsJvm(className, env2, callbacks) {
+        const classWrapper = this.use(className);
+        const { jvmti } = api;
+        const JVMTI_ITERATION_CONTINUE = 1;
+        const JVMTI_HEAP_OBJECT_EITHER = 3;
+        const h = classWrapper.$borrowClassHandle(env2);
+        const tag = int64(h.value.toString());
+        try {
+          const heapObjectCallback = new NativeCallback((classTag, size, tagPtr2, userData) => {
+            tagPtr2.writeS64(tag);
+            return JVMTI_ITERATION_CONTINUE;
+          }, "int", ["int64", "int64", "pointer", "pointer"]);
+          jvmti.iterateOverInstancesOfClass(h.value, JVMTI_HEAP_OBJECT_EITHER, heapObjectCallback, h.value);
+          const tagPtr = Memory.alloc(8);
+          tagPtr.writeS64(tag);
+          const countPtr = Memory.alloc(jsizeSize3);
+          const objectsPtr = Memory.alloc(pointerSize7);
+          jvmti.getObjectsWithTags(1, tagPtr, countPtr, objectsPtr, NULL);
+          const count = countPtr.readS32();
+          const objects = objectsPtr.readPointer();
+          const handles = [];
+          for (let i = 0; i !== count; i++) {
+            handles.push(objects.add(i * pointerSize7).readPointer());
+          }
+          jvmti.deallocate(objects);
+          try {
+            for (const handle of handles) {
+              const instance = this.cast(handle, classWrapper);
+              const result = callbacks.onMatch(instance);
+              if (result === "stop") {
+                break;
+              }
+            }
+            callbacks.onComplete();
+          } finally {
+            handles.forEach((handle) => {
+              env2.deleteLocalRef(handle);
+            });
+          }
+        } finally {
+          h.unref(env2);
+        }
+      }
+      _chooseObjectsArtPreA12(className, env2, thread, callbacks) {
+        const classWrapper = this.use(className);
+        const scope = VariableSizedHandleScope.$new(thread, vm2);
+        let needle;
+        const h = classWrapper.$borrowClassHandle(env2);
+        try {
+          const object = api["art::JavaVMExt::DecodeGlobal"](api.vm, thread, h.value);
+          needle = scope.newHandle(object);
+        } finally {
+          h.unref(env2);
+        }
+        const maxCount = 0;
+        const instances = HandleVector.$new();
+        api["art::gc::Heap::GetInstances"](api.artHeap, scope, needle, maxCount, instances);
+        const instanceHandles = instances.handles.map((handle) => env2.newGlobalRef(handle));
+        instances.$delete();
+        scope.$delete();
+        try {
+          for (const handle of instanceHandles) {
+            const instance = this.cast(handle, classWrapper);
+            const result = callbacks.onMatch(instance);
+            if (result === "stop") {
+              break;
+            }
+          }
+          callbacks.onComplete();
+        } finally {
+          instanceHandles.forEach((handle) => {
+            env2.deleteGlobalRef(handle);
+          });
+        }
+      }
+      _chooseObjectsArtLegacy(className, env2, thread, callbacks) {
+        const classWrapper = this.use(className);
+        const instanceHandles = [];
+        const addGlobalReference = api["art::JavaVMExt::AddGlobalRef"];
+        const vmHandle = api.vm;
+        let needle;
+        const h = classWrapper.$borrowClassHandle(env2);
+        try {
+          needle = api["art::JavaVMExt::DecodeGlobal"](vmHandle, thread, h.value).toInt32();
+        } finally {
+          h.unref(env2);
+        }
+        const collectMatchingInstanceHandles = makeObjectVisitorPredicate(needle, (object) => {
+          instanceHandles.push(addGlobalReference(vmHandle, thread, object));
+        });
+        api["art::gc::Heap::VisitObjects"](api.artHeap, collectMatchingInstanceHandles, NULL);
+        try {
+          for (const handle of instanceHandles) {
+            const instance = this.cast(handle, classWrapper);
+            const result = callbacks.onMatch(instance);
+            if (result === "stop") {
+              break;
+            }
+          }
+        } finally {
+          instanceHandles.forEach((handle) => {
+            env2.deleteGlobalRef(handle);
+          });
+        }
+        callbacks.onComplete();
+      }
+      _chooseObjectsDalvik(className, callerEnv, callbacks) {
+        const classWrapper = this.use(className);
+        if (api.addLocalReference === null) {
+          const libdvm = Process.getModuleByName("libdvm.so");
+          let pattern;
+          switch (Process.arch) {
+            case "arm":
+              pattern = "2d e9 f0 41 05 46 15 4e 0c 46 7e 44 11 b3 43 68";
+              break;
+            case "ia32":
+              pattern = "8d 64 24 d4 89 5c 24 1c 89 74 24 20 e8 ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? 85 d2";
+              break;
+          }
+          Memory.scan(libdvm.base, libdvm.size, pattern, {
+            onMatch: (address, size) => {
+              let wrapper;
+              if (Process.arch === "arm") {
+                address = address.or(1);
+                wrapper = new NativeFunction(address, "pointer", ["pointer", "pointer"]);
+              } else {
+                const thunk = Memory.alloc(Process.pageSize);
+                Memory.patchCode(thunk, 16, (code3) => {
+                  const cw = new X86Writer(code3, { pc: thunk });
+                  cw.putMovRegRegOffsetPtr("eax", "esp", 4);
+                  cw.putMovRegRegOffsetPtr("edx", "esp", 8);
+                  cw.putJmpAddress(address);
+                  cw.flush();
+                });
+                wrapper = new NativeFunction(thunk, "pointer", ["pointer", "pointer"]);
+                wrapper._thunk = thunk;
+              }
+              api.addLocalReference = wrapper;
+              vm2.perform((env2) => {
+                enumerateInstances(this, env2);
+              });
+              return "stop";
+            },
+            onError(reason) {
+            },
+            onComplete() {
+              if (api.addLocalReference === null) {
+                callbacks.onComplete();
+              }
+            }
+          });
+        } else {
+          enumerateInstances(this, callerEnv);
+        }
+        function enumerateInstances(factory, env2) {
+          const { DVM_JNI_ENV_OFFSET_SELF: DVM_JNI_ENV_OFFSET_SELF2 } = android_exports;
+          const thread = env2.handle.add(DVM_JNI_ENV_OFFSET_SELF2).readPointer();
+          let ptrClassObject;
+          const h = classWrapper.$borrowClassHandle(env2);
+          try {
+            ptrClassObject = api.dvmDecodeIndirectRef(thread, h.value);
+          } finally {
+            h.unref(env2);
+          }
+          const pattern = ptrClassObject.toMatchPattern();
+          const heapSourceBase = api.dvmHeapSourceGetBase();
+          const heapSourceLimit = api.dvmHeapSourceGetLimit();
+          const size = heapSourceLimit.sub(heapSourceBase).toInt32();
+          Memory.scan(heapSourceBase, size, pattern, {
+            onMatch: (address, size2) => {
+              if (api.dvmIsValidObject(address)) {
+                vm2.perform((env3) => {
+                  const thread2 = env3.handle.add(DVM_JNI_ENV_OFFSET_SELF2).readPointer();
+                  let instance;
+                  const localReference = api.addLocalReference(thread2, address);
+                  try {
+                    instance = factory.cast(localReference, classWrapper);
+                  } finally {
+                    env3.deleteLocalRef(localReference);
+                  }
+                  const result = callbacks.onMatch(instance);
+                  if (result === "stop") {
+                    return "stop";
+                  }
+                });
+              }
+            },
+            onError(reason) {
+            },
+            onComplete() {
+              callbacks.onComplete();
+            }
+          });
+        }
+      }
+      openClassFile(filePath) {
+        return new DexFile(filePath, null, this);
+      }
+      _getType(typeName, unbox = true) {
+        return getType(typeName, unbox, this);
+      }
+    };
+    wrapperHandler = {
+      has(target, property) {
+        if (property in target) {
+          return true;
+        }
+        return target.$has(property);
+      },
+      get(target, property, receiver) {
+        if (typeof property !== "string" || property.startsWith("$") || property === "class") {
+          return target[property];
+        }
+        const unwrap2 = target.$find(property);
+        if (unwrap2 !== null) {
+          return unwrap2(receiver);
+        }
+        return target[property];
+      },
+      set(target, property, value, receiver) {
+        target[property] = value;
+        return true;
+      },
+      ownKeys(target) {
+        return target.$list();
+      },
+      getOwnPropertyDescriptor(target, property) {
+        if (Object.prototype.hasOwnProperty.call(target, property)) {
+          return Object.getOwnPropertyDescriptor(target, property);
+        }
+        return {
+          writable: false,
+          configurable: true,
+          enumerable: true
+        };
+      }
+    };
+    Object.defineProperties(Wrapper.prototype, {
+      [Symbol.for("new")]: {
+        enumerable: false,
+        get() {
+          return this.$getCtor("allocAndInit");
+        }
+      },
+      $new: {
+        enumerable: true,
+        get() {
+          return this[Symbol.for("new")];
+        }
+      },
+      [Symbol.for("alloc")]: {
+        enumerable: false,
+        value() {
+          const env2 = vm2.getEnv();
+          const h = this.$borrowClassHandle(env2);
+          try {
+            const obj = env2.allocObject(h.value);
+            const factory = this.$f;
+            return factory.cast(obj, this);
+          } finally {
+            h.unref(env2);
+          }
+        }
+      },
+      $alloc: {
+        enumerable: true,
+        get() {
+          return this[Symbol.for("alloc")];
+        }
+      },
+      [Symbol.for("init")]: {
+        enumerable: false,
+        get() {
+          return this.$getCtor("initOnly");
+        }
+      },
+      $init: {
+        enumerable: true,
+        get() {
+          return this[Symbol.for("init")];
+        }
+      },
+      [Symbol.for("dispose")]: {
+        enumerable: false,
+        value() {
+          const ref = this.$r;
+          if (ref !== null) {
+            this.$r = null;
+            Script.unbindWeak(ref);
+          }
+          if (this.$h !== null) {
+            this.$h = void 0;
+          }
+        }
+      },
+      $dispose: {
+        enumerable: true,
+        get() {
+          return this[Symbol.for("dispose")];
+        }
+      },
+      [Symbol.for("clone")]: {
+        enumerable: false,
+        value(env2) {
+          const C = this.$C;
+          return new C(this.$h, this.$t, env2);
+        }
+      },
+      $clone: {
+        value(env2) {
+          return this[Symbol.for("clone")](env2);
+        }
+      },
+      [Symbol.for("class")]: {
+        enumerable: false,
+        get() {
+          const env2 = vm2.getEnv();
+          const h = this.$borrowClassHandle(env2);
+          try {
+            const factory = this.$f;
+            return factory.cast(h.value, factory.use("java.lang.Class"));
+          } finally {
+            h.unref(env2);
+          }
+        }
+      },
+      class: {
+        enumerable: true,
+        get() {
+          return this[Symbol.for("class")];
+        }
+      },
+      [Symbol.for("className")]: {
+        enumerable: false,
+        get() {
+          const handle = this.$h;
+          if (handle === null) {
+            return this.$n;
+          }
+          return vm2.getEnv().getObjectClassName(handle);
+        }
+      },
+      $className: {
+        enumerable: true,
+        get() {
+          return this[Symbol.for("className")];
+        }
+      },
+      [Symbol.for("ownMembers")]: {
+        enumerable: false,
+        get() {
+          const model = this.$l;
+          return model.list();
+        }
+      },
+      $ownMembers: {
+        enumerable: true,
+        get() {
+          return this[Symbol.for("ownMembers")];
+        }
+      },
+      [Symbol.for("super")]: {
+        enumerable: false,
+        get() {
+          const env2 = vm2.getEnv();
+          const C = this.$s.$C;
+          return new C(this.$h, STRATEGY_DIRECT, env2);
+        }
+      },
+      $super: {
+        enumerable: true,
+        get() {
+          return this[Symbol.for("super")];
+        }
+      },
+      [Symbol.for("s")]: {
+        enumerable: false,
+        get() {
+          const proto = Object.getPrototypeOf(this);
+          let superWrapper = proto.$_s;
+          if (superWrapper === void 0) {
+            const env2 = vm2.getEnv();
+            const h = this.$borrowClassHandle(env2);
+            try {
+              const superHandle = env2.getSuperclass(h.value);
+              if (!superHandle.isNull()) {
+                try {
+                  const superClassName = env2.getClassName(superHandle);
+                  const factory = proto.$f;
+                  superWrapper = factory._getUsedClass(superClassName);
+                  if (superWrapper === void 0) {
+                    try {
+                      const getSuperClassHandle = makeSuperHandleGetter(this);
+                      superWrapper = factory._make(superClassName, getSuperClassHandle, env2);
+                    } finally {
+                      factory._setUsedClass(superClassName, superWrapper);
+                    }
+                  }
+                } finally {
+                  env2.deleteLocalRef(superHandle);
+                }
+              } else {
+                superWrapper = null;
+              }
+            } finally {
+              h.unref(env2);
+            }
+            proto.$_s = superWrapper;
+          }
+          return superWrapper;
+        }
+      },
+      $s: {
+        get() {
+          return this[Symbol.for("s")];
+        }
+      },
+      [Symbol.for("isSameObject")]: {
+        enumerable: false,
+        value(obj) {
+          const env2 = vm2.getEnv();
+          return env2.isSameObject(obj.$h, this.$h);
+        }
+      },
+      $isSameObject: {
+        value(obj) {
+          return this[Symbol.for("isSameObject")](obj);
+        }
+      },
+      [Symbol.for("getCtor")]: {
+        enumerable: false,
+        value(type) {
+          const slot = this.$c;
+          let ctor = slot[0];
+          if (ctor === null) {
+            const env2 = vm2.getEnv();
+            const h = this.$borrowClassHandle(env2);
+            try {
+              ctor = makeConstructor(h.value, this.$w, env2);
+              slot[0] = ctor;
+            } finally {
+              h.unref(env2);
+            }
+          }
+          return ctor[type];
+        }
+      },
+      $getCtor: {
+        value(type) {
+          return this[Symbol.for("getCtor")](type);
+        }
+      },
+      [Symbol.for("borrowClassHandle")]: {
+        enumerable: false,
+        value(env2) {
+          const className = this.$n;
+          const classHandles = this.$f._classHandles;
+          let handle = classHandles.get(className);
+          if (handle === void 0) {
+            handle = new ClassHandle(this.$gch(env2), env2);
+            classHandles.set(className, handle, env2);
+          }
+          return handle.ref();
+        }
+      },
+      $borrowClassHandle: {
+        value(env2) {
+          return this[Symbol.for("borrowClassHandle")](env2);
+        }
+      },
+      [Symbol.for("copyClassHandle")]: {
+        enumerable: false,
+        value(env2) {
+          const h = this.$borrowClassHandle(env2);
+          try {
+            return env2.newLocalRef(h.value);
+          } finally {
+            h.unref(env2);
+          }
+        }
+      },
+      $copyClassHandle: {
+        value(env2) {
+          return this[Symbol.for("copyClassHandle")](env2);
+        }
+      },
+      [Symbol.for("getHandle")]: {
+        enumerable: false,
+        value(env2) {
+          const handle = this.$h;
+          const isDisposed = handle === void 0;
+          if (isDisposed) {
+            throw new Error("Wrapper is disposed; perhaps it was borrowed from a hook instead of calling Java.retain() to make a long-lived wrapper?");
+          }
+          return handle;
+        }
+      },
+      $getHandle: {
+        value(env2) {
+          return this[Symbol.for("getHandle")](env2);
+        }
+      },
+      [Symbol.for("list")]: {
+        enumerable: false,
+        value() {
+          const superWrapper = this.$s;
+          const superMembers = superWrapper !== null ? superWrapper.$list() : [];
+          const model = this.$l;
+          return Array.from(new Set(superMembers.concat(model.list())));
+        }
+      },
+      $list: {
+        get() {
+          return this[Symbol.for("list")];
+        }
+      },
+      [Symbol.for("has")]: {
+        enumerable: false,
+        value(member) {
+          const members = this.$m;
+          if (members.has(member)) {
+            return true;
+          }
+          const model = this.$l;
+          if (model.has(member)) {
+            return true;
+          }
+          const superWrapper = this.$s;
+          if (superWrapper !== null && superWrapper.$has(member)) {
+            return true;
+          }
+          return false;
+        }
+      },
+      $has: {
+        value(member) {
+          return this[Symbol.for("has")](member);
+        }
+      },
+      [Symbol.for("find")]: {
+        enumerable: false,
+        value(member) {
+          const members = this.$m;
+          let value = members.get(member);
+          if (value !== void 0) {
+            return value;
+          }
+          const model = this.$l;
+          const spec = model.find(member);
+          if (spec !== null) {
+            const env2 = vm2.getEnv();
+            const h = this.$borrowClassHandle(env2);
+            try {
+              value = makeMember(member, spec, h.value, this.$w, env2);
+            } finally {
+              h.unref(env2);
+            }
+            members.set(member, value);
+            return value;
+          }
+          const superWrapper = this.$s;
+          if (superWrapper !== null) {
+            return superWrapper.$find(member);
+          }
+          return null;
+        }
+      },
+      $find: {
+        value(member) {
+          return this[Symbol.for("find")](member);
+        }
+      },
+      [Symbol.for("toJSON")]: {
+        enumerable: false,
+        value() {
+          const wrapperName = this.$n;
+          const handle = this.$h;
+          if (handle === null) {
+            return `<class: ${wrapperName}>`;
+          }
+          const actualName = this.$className;
+          if (wrapperName === actualName) {
+            return `<instance: ${wrapperName}>`;
+          }
+          return `<instance: ${wrapperName}, $className: ${actualName}>`;
+        }
+      },
+      toJSON: {
+        get() {
+          return this[Symbol.for("toJSON")];
+        }
+      }
+    });
+    ClassHandle.prototype.ref = function() {
+      this.refs++;
+      return this;
+    };
+    ClassHandle.prototype.unref = function(env2) {
+      if (--this.refs === 0) {
+        env2.deleteGlobalRef(this.value);
+      }
+    };
+    dispatcherPrototype = Object.create(Function.prototype, {
+      overloads: {
+        enumerable: true,
+        get() {
+          return this._o;
+        }
+      },
+      overload: {
+        value(...args) {
+          const overloads = this._o;
+          const numArgs = args.length;
+          const signature = args.join(":");
+          for (let i = 0; i !== overloads.length; i++) {
+            const method = overloads[i];
+            const { argumentTypes } = method;
+            if (argumentTypes.length !== numArgs) {
+              continue;
+            }
+            const s = argumentTypes.map((t) => t.className).join(":");
+            if (s === signature) {
+              return method;
+            }
+          }
+          throwOverloadError(this.methodName, this.overloads, "specified argument types do not match any of:");
+        }
+      },
+      methodName: {
+        enumerable: true,
+        get() {
+          return this._o[0].methodName;
+        }
+      },
+      holder: {
+        enumerable: true,
+        get() {
+          return this._o[0].holder;
+        }
+      },
+      type: {
+        enumerable: true,
+        get() {
+          return this._o[0].type;
+        }
+      },
+      handle: {
+        enumerable: true,
+        get() {
+          throwIfDispatcherAmbiguous(this);
+          return this._o[0].handle;
+        }
+      },
+      implementation: {
+        enumerable: true,
+        get() {
+          throwIfDispatcherAmbiguous(this);
+          return this._o[0].implementation;
+        },
+        set(fn) {
+          throwIfDispatcherAmbiguous(this);
+          this._o[0].implementation = fn;
+        }
+      },
+      returnType: {
+        enumerable: true,
+        get() {
+          throwIfDispatcherAmbiguous(this);
+          return this._o[0].returnType;
+        }
+      },
+      argumentTypes: {
+        enumerable: true,
+        get() {
+          throwIfDispatcherAmbiguous(this);
+          return this._o[0].argumentTypes;
+        }
+      },
+      canInvokeWith: {
+        enumerable: true,
+        get(args) {
+          throwIfDispatcherAmbiguous(this);
+          return this._o[0].canInvokeWith;
+        }
+      },
+      clone: {
+        enumerable: true,
+        value(options) {
+          throwIfDispatcherAmbiguous(this);
+          return this._o[0].clone(options);
+        }
+      },
+      invoke: {
+        value(receiver, args) {
+          const overloads = this._o;
+          const isInstance = receiver.$h !== null;
+          for (let i = 0; i !== overloads.length; i++) {
+            const method = overloads[i];
+            if (!method.canInvokeWith(args)) {
+              continue;
+            }
+            if (method.type === INSTANCE_METHOD && !isInstance) {
+              const name = this.methodName;
+              if (name === "toString") {
+                return `<class: ${receiver.$n}>`;
+              }
+              throw new Error(name + ": cannot call instance method without an instance");
+            }
+            return method.apply(receiver, args);
+          }
+          if (this.methodName === "toString") {
+            return `<class: ${receiver.$n}>`;
+          }
+          throwOverloadError(this.methodName, this.overloads, "argument types do not match any of:");
+        }
+      }
+    });
+    methodPrototype = Object.create(Function.prototype, {
+      methodName: {
+        enumerable: true,
+        get() {
+          return this._p[0];
+        }
+      },
+      holder: {
+        enumerable: true,
+        get() {
+          return this._p[1];
+        }
+      },
+      type: {
+        enumerable: true,
+        get() {
+          return this._p[2];
+        }
+      },
+      handle: {
+        enumerable: true,
+        get() {
+          return this._p[3];
+        }
+      },
+      implementation: {
+        enumerable: true,
+        get() {
+          const replacement = this._r;
+          return replacement !== void 0 ? replacement : null;
+        },
+        set(fn) {
+          const params = this._p;
+          const holder = params[1];
+          const type = params[2];
+          if (type === CONSTRUCTOR_METHOD) {
+            throw new Error("Reimplementing $new is not possible; replace implementation of $init instead");
+          }
+          const existingReplacement = this._r;
+          if (existingReplacement !== void 0) {
+            holder.$f._patchedMethods.delete(this);
+            const mangler = existingReplacement._m;
+            mangler.revert(vm2);
+            this._r = void 0;
+          }
+          if (fn !== null) {
+            const [methodName, classWrapper, type2, methodId, retType, argTypes] = params;
+            const replacement = implement(methodName, classWrapper, type2, retType, argTypes, fn, this);
+            const mangler = makeMethodMangler3(methodId);
+            replacement._m = mangler;
+            this._r = replacement;
+            mangler.replace(replacement, type2 === INSTANCE_METHOD, argTypes, vm2, api);
+            holder.$f._patchedMethods.add(this);
+          }
+        }
+      },
+      returnType: {
+        enumerable: true,
+        get() {
+          return this._p[4];
+        }
+      },
+      argumentTypes: {
+        enumerable: true,
+        get() {
+          return this._p[5];
+        }
+      },
+      canInvokeWith: {
+        enumerable: true,
+        value(args) {
+          const argTypes = this._p[5];
+          if (args.length !== argTypes.length) {
+            return false;
+          }
+          return argTypes.every((t, i) => {
+            return t.isCompatible(args[i]);
+          });
+        }
+      },
+      clone: {
+        enumerable: true,
+        value(options) {
+          const params = this._p.slice(0, 6);
+          return makeMethod(...params, null, options);
+        }
+      },
+      invoke: {
+        value(receiver, args) {
+          const env2 = vm2.getEnv();
+          const params = this._p;
+          const type = params[2];
+          const retType = params[4];
+          const argTypes = params[5];
+          const replacement = this._r;
+          const isInstanceMethod = type === INSTANCE_METHOD;
+          const numArgs = args.length;
+          const frameCapacity = 2 + numArgs;
+          env2.pushLocalFrame(frameCapacity);
+          let borrowedHandle = null;
+          try {
+            let jniThis;
+            if (isInstanceMethod) {
+              jniThis = receiver.$getHandle();
+            } else {
+              borrowedHandle = receiver.$borrowClassHandle(env2);
+              jniThis = borrowedHandle.value;
+            }
+            let methodId;
+            let strategy = receiver.$t;
+            if (replacement === void 0) {
+              methodId = params[3];
+            } else {
+              const mangler = replacement._m;
+              methodId = mangler.resolveTarget(receiver, isInstanceMethod, env2, api);
+              if (isArtVm) {
+                const pendingCalls = replacement._c;
+                if (pendingCalls.has(getCurrentThreadId())) {
+                  strategy = STRATEGY_DIRECT;
+                }
+              }
+            }
+            const jniArgs = [
+              env2.handle,
+              jniThis,
+              methodId
+            ];
+            for (let i = 0; i !== numArgs; i++) {
+              jniArgs.push(argTypes[i].toJni(args[i], env2));
+            }
+            let jniCall;
+            if (strategy === STRATEGY_VIRTUAL) {
+              jniCall = params[6];
+            } else {
+              jniCall = params[7];
+              if (isInstanceMethod) {
+                jniArgs.splice(2, 0, receiver.$copyClassHandle(env2));
+              }
+            }
+            const jniRetval = jniCall.apply(null, jniArgs);
+            env2.throwIfExceptionPending();
+            return retType.fromJni(jniRetval, env2, true);
+          } finally {
+            if (borrowedHandle !== null) {
+              borrowedHandle.unref(env2);
+            }
+            env2.popLocalFrame(NULL);
+          }
+        }
+      },
+      toString: {
+        enumerable: true,
+        value() {
+          return `function ${this.methodName}(${this.argumentTypes.map((t) => t.className).join(", ")}): ${this.returnType.className}`;
+        }
+      }
+    });
+    valueOfPrototype = Object.create(Function.prototype, {
+      methodName: {
+        enumerable: true,
+        get() {
+          return "valueOf";
+        }
+      },
+      holder: {
+        enumerable: true,
+        get() {
+          return this._p[0];
+        }
+      },
+      type: {
+        enumerable: true,
+        get() {
+          return this._p[1];
+        }
+      },
+      handle: {
+        enumerable: true,
+        get() {
+          return NULL;
+        }
+      },
+      implementation: {
+        enumerable: true,
+        get() {
+          return null;
+        },
+        set(fn) {
+        }
+      },
+      returnType: {
+        enumerable: true,
+        get() {
+          const classWrapper = this.holder;
+          return classWrapper.$f.use(classWrapper.$n);
+        }
+      },
+      argumentTypes: {
+        enumerable: true,
+        get() {
+          return [];
+        }
+      },
+      canInvokeWith: {
+        enumerable: true,
+        value(args) {
+          return args.length === 0;
+        }
+      },
+      clone: {
+        enumerable: true,
+        value(options) {
+          throw new Error("Invalid operation");
+        }
+      }
+    });
+    Object.defineProperties(Field.prototype, {
+      value: {
+        enumerable: true,
+        get() {
+          const [holder, type, rtype, id, getValue] = this._p;
+          const env2 = vm2.getEnv();
+          env2.pushLocalFrame(4);
+          let borrowedHandle = null;
+          try {
+            let jniThis;
+            if (type === INSTANCE_FIELD) {
+              jniThis = holder.$getHandle();
+              if (jniThis === null) {
+                throw new Error("Cannot access an instance field without an instance");
+              }
+            } else {
+              borrowedHandle = holder.$borrowClassHandle(env2);
+              jniThis = borrowedHandle.value;
+            }
+            const jniRetval = getValue(env2.handle, jniThis, id);
+            env2.throwIfExceptionPending();
+            return rtype.fromJni(jniRetval, env2, true);
+          } finally {
+            if (borrowedHandle !== null) {
+              borrowedHandle.unref(env2);
+            }
+            env2.popLocalFrame(NULL);
+          }
+        },
+        set(value) {
+          const [holder, type, rtype, id, , setValue] = this._p;
+          const env2 = vm2.getEnv();
+          env2.pushLocalFrame(4);
+          let borrowedHandle = null;
+          try {
+            let jniThis;
+            if (type === INSTANCE_FIELD) {
+              jniThis = holder.$getHandle();
+              if (jniThis === null) {
+                throw new Error("Cannot access an instance field without an instance");
+              }
+            } else {
+              borrowedHandle = holder.$borrowClassHandle(env2);
+              jniThis = borrowedHandle.value;
+            }
+            if (!rtype.isCompatible(value)) {
+              throw new Error(`Expected value compatible with ${rtype.className}`);
+            }
+            const jniValue = rtype.toJni(value, env2);
+            setValue(env2.handle, jniThis, id, jniValue);
+            env2.throwIfExceptionPending();
+          } finally {
+            if (borrowedHandle !== null) {
+              borrowedHandle.unref(env2);
+            }
+            env2.popLocalFrame(NULL);
+          }
+        }
+      },
+      holder: {
+        enumerable: true,
+        get() {
+          return this._p[0];
+        }
+      },
+      fieldType: {
+        enumerable: true,
+        get() {
+          return this._p[1];
+        }
+      },
+      fieldReturnType: {
+        enumerable: true,
+        get() {
+          return this._p[2];
+        }
+      },
+      toString: {
+        enumerable: true,
+        value() {
+          const inlineString = `Java.Field{holder: ${this.holder}, fieldType: ${this.fieldType}, fieldReturnType: ${this.fieldReturnType}, value: ${this.value}}`;
+          if (inlineString.length < 200) {
+            return inlineString;
+          }
+          const multilineString = `Java.Field{
+	holder: ${this.holder},
+	fieldType: ${this.fieldType},
+	fieldReturnType: ${this.fieldReturnType},
+	value: ${this.value},
+}`;
+          return multilineString.split("\n").map((l) => l.length > 200 ? l.slice(0, l.indexOf(" ") + 1) + "...," : l).join("\n");
+        }
+      }
+    });
+    DexFile = class _DexFile {
+      static fromBuffer(buffer, factory) {
+        const fileValue = createTemporaryDex(factory);
+        const filePath = fileValue.getCanonicalPath().toString();
+        const file = new File(filePath, "w");
+        file.write(buffer.buffer);
+        file.close();
+        setReadOnlyDex(filePath, factory);
+        return new _DexFile(filePath, fileValue, factory);
+      }
+      constructor(path, file, factory) {
+        this.path = path;
+        this.file = file;
+        this._factory = factory;
+      }
+      load() {
+        const { _factory: factory } = this;
+        const { codeCacheDir } = factory;
+        const DexClassLoader = factory.use("dalvik.system.DexClassLoader");
+        const JFile = factory.use("java.io.File");
+        let file = this.file;
+        if (file === null) {
+          file = factory.use("java.io.File").$new(this.path);
+        }
+        if (!file.exists()) {
+          throw new Error("File not found");
+        }
+        JFile.$new(codeCacheDir).mkdirs();
+        factory.loader = DexClassLoader.$new(file.getCanonicalPath(), codeCacheDir, null, factory.loader);
+        vm2.preventDetachDueToClassLoader();
+      }
+      getClassNames() {
+        const { _factory: factory } = this;
+        const DexFile2 = factory.use("dalvik.system.DexFile");
+        const optimizedDex = createTemporaryDex(factory);
+        const dx = DexFile2.loadDex(this.path, optimizedDex.getCanonicalPath(), 0);
+        const classNames = [];
+        const enumeratorClassNames = dx.entries();
+        while (enumeratorClassNames.hasMoreElements()) {
+          classNames.push(enumeratorClassNames.nextElement().toString());
+        }
+        return classNames;
+      }
     };
   }
-  perform(fn) {
-    this._checkAvailable();
-    if (!this._isAppProcess() || this.classFactory.loader !== null) {
-      try {
-        this.vm.perform(fn);
-      } catch (e) {
-        Script.nextTick(() => {
-          throw e;
-        });
-      }
-    } else {
-      this._pendingVmOps.push(fn);
-      if (this._pendingVmOps.length === 1) {
-        this._performPendingVmOpsWhenReady();
-      }
-    }
-  }
-  performNow(fn) {
-    this._checkAvailable();
-    return this.vm.perform(() => {
-      const { classFactory: factory } = this;
-      if (this._isAppProcess() && factory.loader === null) {
-        const ActivityThread = factory.use("android.app.ActivityThread");
-        const app = ActivityThread.currentApplication();
-        if (app !== null) {
-          initFactoryFromApplication(factory, app);
-        }
-      }
-      return fn();
-    });
-  }
-  _performPendingVmOpsWhenReady() {
-    this.vm.perform(() => {
-      const { classFactory: factory } = this;
-      const ActivityThread = factory.use("android.app.ActivityThread");
-      const app = ActivityThread.currentApplication();
-      if (app !== null) {
-        initFactoryFromApplication(factory, app);
-        this._performPendingVmOps();
-        return;
-      }
-      const runtime2 = this;
-      let initialized = false;
-      let hookpoint = "early";
-      const handleBindApplication = ActivityThread.handleBindApplication;
-      handleBindApplication.implementation = function(data) {
-        if (data.instrumentationName.value !== null) {
-          hookpoint = "late";
-          const LoadedApk = factory.use("android.app.LoadedApk");
-          const makeApplication = LoadedApk.makeApplication;
-          makeApplication.implementation = function(forceDefaultAppClass, instrumentation) {
-            if (!initialized) {
-              initialized = true;
-              initFactoryFromLoadedApk(factory, this);
-              runtime2._performPendingVmOps();
-            }
-            return makeApplication.apply(this, arguments);
-          };
-        }
-        handleBindApplication.apply(this, arguments);
-      };
-      const getPackageInfoCandidates = ActivityThread.getPackageInfo.overloads.map((m) => [m.argumentTypes.length, m]).sort(([arityA], [arityB]) => arityB - arityA).map(([_, method]) => method);
-      const getPackageInfo = getPackageInfoCandidates[0];
-      getPackageInfo.implementation = function(...args) {
-        const apk = getPackageInfo.call(this, ...args);
-        if (!initialized && hookpoint === "early") {
-          initialized = true;
-          initFactoryFromLoadedApk(factory, apk);
-          runtime2._performPendingVmOps();
-        }
-        return apk;
-      };
-    });
-  }
-  _performPendingVmOps() {
-    const { vm: vm3, _pendingVmOps: pending } = this;
-    let fn;
-    while ((fn = pending.shift()) !== void 0) {
-      try {
-        vm3.perform(fn);
-      } catch (e) {
-        Script.nextTick(() => {
-          throw e;
-        });
-      }
-    }
-  }
-  use(className, options) {
-    return this.classFactory.use(className, options);
-  }
-  openClassFile(filePath) {
-    return this.classFactory.openClassFile(filePath);
-  }
-  choose(specifier, callbacks) {
-    this.classFactory.choose(specifier, callbacks);
-  }
-  retain(obj) {
-    return this.classFactory.retain(obj);
-  }
-  cast(obj, C) {
-    return this.classFactory.cast(obj, C);
-  }
-  array(type, elements) {
-    return this.classFactory.array(type, elements);
-  }
-  backtrace(options) {
-    return backtrace(this.vm, options);
-  }
-  // Reference: http://stackoverflow.com/questions/2848575/how-to-detect-ui-thread-on-android
-  isMainThread() {
-    const Looper = this.classFactory.use("android.os.Looper");
-    const mainLooper = Looper.getMainLooper();
-    const myLooper = Looper.myLooper();
-    if (myLooper === null) {
-      return false;
-    }
-    return mainLooper.$isSameObject(myLooper);
-  }
-  registerClass(spec) {
-    return this.classFactory.registerClass(spec);
-  }
-  deoptimizeEverything() {
-    const { vm: vm3 } = this;
-    return deoptimizeEverything(vm3, vm3.getEnv());
-  }
-  deoptimizeBootImage() {
-    const { vm: vm3 } = this;
-    return deoptimizeBootImage(vm3, vm3.getEnv());
-  }
-  deoptimizeMethod(method) {
-    const { vm: vm3 } = this;
-    return deoptimizeMethod(vm3, vm3.getEnv(), method);
-  }
-  _checkAvailable() {
-    if (!this.available) {
-      throw new Error("Java API not available");
-    }
-  }
-  _isAppProcess() {
-    let result = this._cachedIsAppProcess;
-    if (result === null) {
-      if (this.api.flavor === "jvm") {
-        result = false;
-        this._cachedIsAppProcess = result;
-        return result;
-      }
-      const readlink = new NativeFunction(Module.getGlobalExportByName("readlink"), "pointer", ["pointer", "pointer", "pointer"], {
-        exceptions: "propagate"
-      });
-      const pathname = Memory.allocUtf8String("/proc/self/exe");
-      const bufferSize = 1024;
-      const buffer = Memory.alloc(bufferSize);
-      const size = readlink(pathname, buffer, ptr(bufferSize)).toInt32();
-      if (size !== -1) {
-        const exe = buffer.readUtf8String(size);
-        result = /^\/system\/bin\/app_process/.test(exe);
-      } else {
-        result = true;
-      }
-      this._cachedIsAppProcess = result;
-    }
-    return result;
-  }
-};
+});
+
+// backend/app/engines/frida_hooks/node_modules/frida-java-bridge/index.js
+var frida_java_bridge_exports = {};
+__export(frida_java_bridge_exports, {
+  default: () => frida_java_bridge_default
+});
 function initFactoryFromApplication(factory, app) {
   const Process2 = factory.use("android.os.Process");
   factory.loader = app.getClassLoader();
@@ -13488,14 +13270,482 @@ function initFactoryFromLoadedApk(factory, apk) {
   factory.cacheDir = dataDir;
   factory.codeCacheDir = dataDir + "/cache";
 }
-var runtime = new Runtime();
-Script.bindWeak(runtime, () => {
-  runtime._dispose();
+var jsizeSize4, pointerSize8, Runtime, runtime, frida_java_bridge_default;
+var init_frida_java_bridge = __esm({
+  "backend/app/engines/frida_hooks/node_modules/frida-java-bridge/index.js"() {
+    init_node_globals();
+    init_api();
+    init_android();
+    init_class_factory();
+    init_class_model();
+    init_env();
+    init_types();
+    init_vm();
+    init_result();
+    jsizeSize4 = 4;
+    pointerSize8 = Process.pointerSize;
+    Runtime = class {
+      ACC_PUBLIC = 1;
+      ACC_PRIVATE = 2;
+      ACC_PROTECTED = 4;
+      ACC_STATIC = 8;
+      ACC_FINAL = 16;
+      ACC_SYNCHRONIZED = 32;
+      ACC_BRIDGE = 64;
+      ACC_VARARGS = 128;
+      ACC_NATIVE = 256;
+      ACC_ABSTRACT = 1024;
+      ACC_STRICT = 2048;
+      ACC_SYNTHETIC = 4096;
+      constructor() {
+        this.classFactory = null;
+        this.ClassFactory = ClassFactory;
+        this.vm = null;
+        this.api = null;
+        this._initialized = false;
+        this._apiError = null;
+        this._wakeupHandler = null;
+        this._pollListener = null;
+        this._pendingMainOps = [];
+        this._pendingVmOps = [];
+        this._cachedIsAppProcess = null;
+        try {
+          this._tryInitialize();
+        } catch (e) {
+        }
+      }
+      _tryInitialize() {
+        if (this._initialized) {
+          return true;
+        }
+        if (this._apiError !== null) {
+          throw this._apiError;
+        }
+        let api2;
+        try {
+          api2 = api_default();
+          this.api = api2;
+        } catch (e) {
+          this._apiError = e;
+          throw e;
+        }
+        if (api2 === null) {
+          return false;
+        }
+        const vm3 = new VM(api2);
+        this.vm = vm3;
+        initialize(vm3);
+        ClassFactory._initialize(vm3, api2);
+        this.classFactory = new ClassFactory();
+        this._initialized = true;
+        return true;
+      }
+      _dispose() {
+        if (this.api === null) {
+          return;
+        }
+        const { vm: vm3 } = this;
+        vm3.perform((env2) => {
+          ClassFactory._disposeAll(env2);
+          Env.dispose(env2);
+        });
+        Script.nextTick(() => {
+          VM.dispose(vm3);
+        });
+      }
+      get available() {
+        return this._tryInitialize();
+      }
+      get androidVersion() {
+        return getAndroidVersion();
+      }
+      synchronized(obj, fn) {
+        const { $h: objHandle = obj } = obj;
+        if (!(objHandle instanceof NativePointer)) {
+          throw new Error("Java.synchronized: the first argument `obj` must be either a pointer or a Java instance");
+        }
+        const env2 = this.vm.getEnv();
+        checkJniResult("VM::MonitorEnter", env2.monitorEnter(objHandle));
+        try {
+          fn();
+        } finally {
+          env2.monitorExit(objHandle);
+        }
+      }
+      enumerateLoadedClasses(callbacks) {
+        this._checkAvailable();
+        const { flavor } = this.api;
+        if (flavor === "jvm") {
+          this._enumerateLoadedClassesJvm(callbacks);
+        } else if (flavor === "art") {
+          this._enumerateLoadedClassesArt(callbacks);
+        } else {
+          this._enumerateLoadedClassesDalvik(callbacks);
+        }
+      }
+      enumerateLoadedClassesSync() {
+        const classes = [];
+        this.enumerateLoadedClasses({
+          onMatch(c) {
+            classes.push(c);
+          },
+          onComplete() {
+          }
+        });
+        return classes;
+      }
+      enumerateClassLoaders(callbacks) {
+        this._checkAvailable();
+        const { flavor } = this.api;
+        if (flavor === "jvm") {
+          this._enumerateClassLoadersJvm(callbacks);
+        } else if (flavor === "art") {
+          this._enumerateClassLoadersArt(callbacks);
+        } else {
+          throw new Error("Enumerating class loaders is not supported on Dalvik");
+        }
+      }
+      enumerateClassLoadersSync() {
+        const loaders = [];
+        this.enumerateClassLoaders({
+          onMatch(c) {
+            loaders.push(c);
+          },
+          onComplete() {
+          }
+        });
+        return loaders;
+      }
+      _enumerateLoadedClassesJvm(callbacks) {
+        const { api: api2, vm: vm3 } = this;
+        const { jvmti } = api2;
+        const env2 = vm3.getEnv();
+        const countPtr = Memory.alloc(jsizeSize4);
+        const classesPtr = Memory.alloc(pointerSize8);
+        jvmti.getLoadedClasses(countPtr, classesPtr);
+        const count = countPtr.readS32();
+        const classes = classesPtr.readPointer();
+        const handles = [];
+        for (let i = 0; i !== count; i++) {
+          handles.push(classes.add(i * pointerSize8).readPointer());
+        }
+        jvmti.deallocate(classes);
+        try {
+          for (const handle of handles) {
+            const className = env2.getClassName(handle);
+            callbacks.onMatch(className, handle);
+          }
+          callbacks.onComplete();
+        } finally {
+          handles.forEach((handle) => {
+            env2.deleteLocalRef(handle);
+          });
+        }
+      }
+      _enumerateClassLoadersJvm(callbacks) {
+        this.choose("java.lang.ClassLoader", callbacks);
+      }
+      _enumerateLoadedClassesArt(callbacks) {
+        const { vm: vm3, api: api2 } = this;
+        const env2 = vm3.getEnv();
+        const addGlobalReference = api2["art::JavaVMExt::AddGlobalRef"];
+        const { vm: vmHandle } = api2;
+        withRunnableArtThread(vm3, env2, (thread) => {
+          const collectClassHandles = makeArtClassVisitor((klass) => {
+            const handle = addGlobalReference(vmHandle, thread, klass);
+            try {
+              const className = env2.getClassName(handle);
+              callbacks.onMatch(className, handle);
+            } finally {
+              env2.deleteGlobalRef(handle);
+            }
+            return true;
+          });
+          api2["art::ClassLinker::VisitClasses"](api2.artClassLinker.address, collectClassHandles);
+        });
+        callbacks.onComplete();
+      }
+      _enumerateClassLoadersArt(callbacks) {
+        const { classFactory: factory, vm: vm3, api: api2 } = this;
+        const env2 = vm3.getEnv();
+        const visitClassLoaders = api2["art::ClassLinker::VisitClassLoaders"];
+        if (visitClassLoaders === void 0) {
+          throw new Error("This API is only available on Android >= 7.0");
+        }
+        const ClassLoader = factory.use("java.lang.ClassLoader");
+        const loaderHandles = [];
+        const addGlobalReference = api2["art::JavaVMExt::AddGlobalRef"];
+        const { vm: vmHandle } = api2;
+        withRunnableArtThread(vm3, env2, (thread) => {
+          const collectLoaderHandles = makeArtClassLoaderVisitor((loader) => {
+            loaderHandles.push(addGlobalReference(vmHandle, thread, loader));
+            return true;
+          });
+          withAllArtThreadsSuspended(() => {
+            visitClassLoaders(api2.artClassLinker.address, collectLoaderHandles);
+          });
+        });
+        try {
+          loaderHandles.forEach((handle) => {
+            const loader = factory.cast(handle, ClassLoader);
+            callbacks.onMatch(loader);
+          });
+        } finally {
+          loaderHandles.forEach((handle) => {
+            env2.deleteGlobalRef(handle);
+          });
+        }
+        callbacks.onComplete();
+      }
+      _enumerateLoadedClassesDalvik(callbacks) {
+        const { api: api2 } = this;
+        const HASH_TOMBSTONE = ptr("0xcbcacccd");
+        const loadedClassesOffset = 172;
+        const hashEntrySize = 8;
+        const ptrLoadedClassesHashtable = api2.gDvm.add(loadedClassesOffset);
+        const hashTable = ptrLoadedClassesHashtable.readPointer();
+        const tableSize = hashTable.readS32();
+        const ptrpEntries = hashTable.add(12);
+        const pEntries = ptrpEntries.readPointer();
+        const end = tableSize * hashEntrySize;
+        for (let offset = 0; offset < end; offset += hashEntrySize) {
+          const pEntryPtr = pEntries.add(offset);
+          const dataPtr = pEntryPtr.add(4).readPointer();
+          if (dataPtr.isNull() || dataPtr.equals(HASH_TOMBSTONE)) {
+            continue;
+          }
+          const descriptionPtr = dataPtr.add(24).readPointer();
+          const description = descriptionPtr.readUtf8String();
+          if (description.startsWith("L")) {
+            const name = description.substring(1, description.length - 1).replace(/\//g, ".");
+            callbacks.onMatch(name);
+          }
+        }
+        callbacks.onComplete();
+      }
+      enumerateMethods(query) {
+        const { classFactory: factory } = this;
+        const env2 = this.vm.getEnv();
+        const ClassLoader = factory.use("java.lang.ClassLoader");
+        return Model.enumerateMethods(query, this.api, env2).map((group) => {
+          const handle = group.loader;
+          group.loader = handle !== null ? factory.wrap(handle, ClassLoader, env2) : null;
+          return group;
+        });
+      }
+      scheduleOnMainThread(fn) {
+        this.performNow(() => {
+          this._pendingMainOps.push(fn);
+          let { _wakeupHandler: wakeupHandler } = this;
+          if (wakeupHandler === null) {
+            const { classFactory: factory } = this;
+            const Handler = factory.use("android.os.Handler");
+            const Looper = factory.use("android.os.Looper");
+            wakeupHandler = Handler.$new(Looper.getMainLooper());
+            this._wakeupHandler = wakeupHandler;
+          }
+          if (this._pollListener === null) {
+            this._pollListener = Interceptor.attach(Process.getModuleByName("libc.so").getExportByName("epoll_wait"), this._makePollHook());
+            Interceptor.flush();
+          }
+          wakeupHandler.sendEmptyMessage(1);
+        });
+      }
+      _makePollHook() {
+        const mainThreadId = Process.id;
+        const { _pendingMainOps: pending } = this;
+        return function() {
+          if (this.threadId !== mainThreadId) {
+            return;
+          }
+          let fn;
+          while ((fn = pending.shift()) !== void 0) {
+            try {
+              fn();
+            } catch (e) {
+              Script.nextTick(() => {
+                throw e;
+              });
+            }
+          }
+        };
+      }
+      perform(fn) {
+        this._checkAvailable();
+        if (!this._isAppProcess() || this.classFactory.loader !== null) {
+          try {
+            this.vm.perform(fn);
+          } catch (e) {
+            Script.nextTick(() => {
+              throw e;
+            });
+          }
+        } else {
+          this._pendingVmOps.push(fn);
+          if (this._pendingVmOps.length === 1) {
+            this._performPendingVmOpsWhenReady();
+          }
+        }
+      }
+      performNow(fn) {
+        this._checkAvailable();
+        return this.vm.perform(() => {
+          const { classFactory: factory } = this;
+          if (this._isAppProcess() && factory.loader === null) {
+            const ActivityThread = factory.use("android.app.ActivityThread");
+            const app = ActivityThread.currentApplication();
+            if (app !== null) {
+              initFactoryFromApplication(factory, app);
+            }
+          }
+          return fn();
+        });
+      }
+      _performPendingVmOpsWhenReady() {
+        this.vm.perform(() => {
+          const { classFactory: factory } = this;
+          const ActivityThread = factory.use("android.app.ActivityThread");
+          const app = ActivityThread.currentApplication();
+          if (app !== null) {
+            initFactoryFromApplication(factory, app);
+            this._performPendingVmOps();
+            return;
+          }
+          const runtime2 = this;
+          let initialized = false;
+          let hookpoint = "early";
+          const handleBindApplication = ActivityThread.handleBindApplication;
+          handleBindApplication.implementation = function(data) {
+            if (data.instrumentationName.value !== null) {
+              hookpoint = "late";
+              const LoadedApk = factory.use("android.app.LoadedApk");
+              const makeApplication = LoadedApk.makeApplication;
+              makeApplication.implementation = function(forceDefaultAppClass, instrumentation) {
+                if (!initialized) {
+                  initialized = true;
+                  initFactoryFromLoadedApk(factory, this);
+                  runtime2._performPendingVmOps();
+                }
+                return makeApplication.apply(this, arguments);
+              };
+            }
+            handleBindApplication.apply(this, arguments);
+          };
+          const getPackageInfoCandidates = ActivityThread.getPackageInfo.overloads.map((m) => [m.argumentTypes.length, m]).sort(([arityA], [arityB]) => arityB - arityA).map(([_, method]) => method);
+          const getPackageInfo = getPackageInfoCandidates[0];
+          getPackageInfo.implementation = function(...args) {
+            const apk = getPackageInfo.call(this, ...args);
+            if (!initialized && hookpoint === "early") {
+              initialized = true;
+              initFactoryFromLoadedApk(factory, apk);
+              runtime2._performPendingVmOps();
+            }
+            return apk;
+          };
+        });
+      }
+      _performPendingVmOps() {
+        const { vm: vm3, _pendingVmOps: pending } = this;
+        let fn;
+        while ((fn = pending.shift()) !== void 0) {
+          try {
+            vm3.perform(fn);
+          } catch (e) {
+            Script.nextTick(() => {
+              throw e;
+            });
+          }
+        }
+      }
+      use(className, options) {
+        return this.classFactory.use(className, options);
+      }
+      openClassFile(filePath) {
+        return this.classFactory.openClassFile(filePath);
+      }
+      choose(specifier, callbacks) {
+        this.classFactory.choose(specifier, callbacks);
+      }
+      retain(obj) {
+        return this.classFactory.retain(obj);
+      }
+      cast(obj, C) {
+        return this.classFactory.cast(obj, C);
+      }
+      array(type, elements) {
+        return this.classFactory.array(type, elements);
+      }
+      backtrace(options) {
+        return backtrace(this.vm, options);
+      }
+      // Reference: http://stackoverflow.com/questions/2848575/how-to-detect-ui-thread-on-android
+      isMainThread() {
+        const Looper = this.classFactory.use("android.os.Looper");
+        const mainLooper = Looper.getMainLooper();
+        const myLooper = Looper.myLooper();
+        if (myLooper === null) {
+          return false;
+        }
+        return mainLooper.$isSameObject(myLooper);
+      }
+      registerClass(spec) {
+        return this.classFactory.registerClass(spec);
+      }
+      deoptimizeEverything() {
+        const { vm: vm3 } = this;
+        return deoptimizeEverything(vm3, vm3.getEnv());
+      }
+      deoptimizeBootImage() {
+        const { vm: vm3 } = this;
+        return deoptimizeBootImage(vm3, vm3.getEnv());
+      }
+      deoptimizeMethod(method) {
+        const { vm: vm3 } = this;
+        return deoptimizeMethod(vm3, vm3.getEnv(), method);
+      }
+      _checkAvailable() {
+        if (!this.available) {
+          throw new Error("Java API not available");
+        }
+      }
+      _isAppProcess() {
+        let result = this._cachedIsAppProcess;
+        if (result === null) {
+          if (this.api.flavor === "jvm") {
+            result = false;
+            this._cachedIsAppProcess = result;
+            return result;
+          }
+          const readlink = new NativeFunction(Module.getGlobalExportByName("readlink"), "pointer", ["pointer", "pointer", "pointer"], {
+            exceptions: "propagate"
+          });
+          const pathname = Memory.allocUtf8String("/proc/self/exe");
+          const bufferSize = 1024;
+          const buffer = Memory.alloc(bufferSize);
+          const size = readlink(pathname, buffer, ptr(bufferSize)).toInt32();
+          if (size !== -1) {
+            const exe = buffer.readUtf8String(size);
+            result = /^\/system\/bin\/app_process/.test(exe);
+          } else {
+            result = true;
+          }
+          this._cachedIsAppProcess = result;
+        }
+        return result;
+      }
+    };
+    runtime = new Runtime();
+    Script.bindWeak(runtime, () => {
+      runtime._dispose();
+    });
+    frida_java_bridge_default = runtime;
+  }
 });
-var frida_java_bridge_default = runtime;
 
-// agent.js
-globalThis.Java = frida_java_bridge_default;
+// backend/app/engines/frida_hooks/banking_trojan.js
+init_node_globals();
+var _JavaBridge = (init_frida_java_bridge(), __toCommonJS(frida_java_bridge_exports));
+var Java = _JavaBridge.default || _JavaBridge;
 var events = {
   accessibility: [],
   sms: [],
@@ -13511,7 +13761,7 @@ var events = {
 function captureStack(maxFrames) {
   maxFrames = maxFrames || 6;
   try {
-    var exc = frida_java_bridge_default.use("java.lang.Exception").$new();
+    var exc = Java.use("java.lang.Exception").$new();
     var frames = exc.getStackTrace();
     var result = [];
     var limit = Math.min(frames.length, maxFrames + 2);
@@ -13524,7 +13774,7 @@ function captureStack(maxFrames) {
     return [];
   }
 }
-function emit(category, data) {
+function emit2(category, data) {
   var stack = captureStack(6);
   var event = {
     timestamp: Date.now(),
@@ -13540,23 +13790,25 @@ function emit(category, data) {
   }
   send({ type: "event", payload: event });
 }
-function waitForJava() {
-  if (typeof frida_java_bridge_default !== "undefined" && frida_java_bridge_default.available) {
-    initHooks();
-  } else {
-    setTimeout(waitForJava, 100);
-  }
-}
-setImmediate(waitForJava);
+send({ type: "canary", msg: "script_loaded", ts: Date.now() });
+setImmediate(initHooks);
 function initHooks() {
   try {
-    frida_java_bridge_default.perform(function() {
+    Java.perform(function() {
+      if (typeof process_default !== "undefined" && process_default.env && process_default.env.FRIDA_DEOPT === "1") {
+        try {
+          Java.deoptimizeEverything();
+          send({ type: "diag", msg: "deoptimizeEverything_success" });
+        } catch (e) {
+          send({ type: "diag", msg: "deoptimizeEverything_failed", error: e.message });
+        }
+      }
       try {
-        var AccessibilityService = frida_java_bridge_default.use("android.accessibilityservice.AccessibilityService");
+        var AccessibilityService = Java.use("android.accessibilityservice.AccessibilityService");
         AccessibilityService.onAccessibilityEvent.implementation = function(event) {
           var eventType = event.getEventType();
           var pkgName = event.getPackageName();
-          emit("accessibility", {
+          emit2("accessibility", {
             hook: "AccessibilityService.onAccessibilityEvent",
             severity: "CRITICAL",
             event_type: eventType,
@@ -13570,11 +13822,11 @@ function initHooks() {
         send({ type: "hook_error", hook: "AccessibilityService.onAccessibilityEvent", error: e.message });
       }
       try {
-        var AccessibilityNodeInfo = frida_java_bridge_default.use("android.view.accessibility.AccessibilityNodeInfo");
+        var AccessibilityNodeInfo = Java.use("android.view.accessibility.AccessibilityNodeInfo");
         AccessibilityNodeInfo.getText.implementation = function() {
           var text = this.getText();
           if (text) {
-            emit("accessibility", {
+            emit2("accessibility", {
               hook: "AccessibilityNodeInfo.getText",
               severity: "HIGH",
               text_length: text.length(),
@@ -13586,7 +13838,7 @@ function initHooks() {
           return text;
         };
         AccessibilityNodeInfo.performAction.overload("int").implementation = function(action) {
-          emit("accessibility", {
+          emit2("accessibility", {
             hook: "AccessibilityNodeInfo.performAction",
             severity: "CRITICAL",
             action,
@@ -13599,10 +13851,10 @@ function initHooks() {
         send({ type: "hook_error", hook: "AccessibilityNodeInfo", error: e.message });
       }
       try {
-        var SmsMessage = frida_java_bridge_default.use("android.telephony.SmsMessage");
+        var SmsMessage = Java.use("android.telephony.SmsMessage");
         SmsMessage.getMessageBody.implementation = function() {
           var body = this.getMessageBody();
-          emit("sms", {
+          emit2("sms", {
             hook: "SmsMessage.getMessageBody",
             severity: "CRITICAL",
             body_length: body ? body.length() : 0,
@@ -13616,7 +13868,7 @@ function initHooks() {
         send({ type: "hook_error", hook: "SmsMessage.getMessageBody", error: e.message });
       }
       try {
-        var SmsManager = frida_java_bridge_default.use("android.telephony.SmsManager");
+        var SmsManager = Java.use("android.telephony.SmsManager");
         SmsManager.sendTextMessage.overload(
           "java.lang.String",
           "java.lang.String",
@@ -13624,7 +13876,7 @@ function initHooks() {
           "android.app.PendingIntent",
           "android.app.PendingIntent"
         ).implementation = function(destinationAddress, scAddress, text, sentIntent, deliveryIntent) {
-          emit("sms", {
+          emit2("sms", {
             hook: "SmsManager.sendTextMessage",
             severity: "CRITICAL",
             destination: destinationAddress ? destinationAddress.toString() : null,
@@ -13638,8 +13890,8 @@ function initHooks() {
         send({ type: "hook_error", hook: "SmsManager.sendTextMessage", error: e.message });
       }
       try {
-        var ContentResolver = frida_java_bridge_default.use("android.content.ContentResolver");
-        var Uri = frida_java_bridge_default.use("android.net.Uri");
+        var ContentResolver = Java.use("android.content.ContentResolver");
+        var Uri = Java.use("android.net.Uri");
         ContentResolver.query.overload(
           "android.net.Uri",
           "[Ljava.lang.String;",
@@ -13649,7 +13901,7 @@ function initHooks() {
         ).implementation = function(uri, projection, selection, selectionArgs, sortOrder) {
           var uriStr = uri ? uri.toString() : "";
           if (uriStr.indexOf("sms") !== -1 || uriStr.indexOf("mms") !== -1 || uriStr.indexOf("contacts") !== -1) {
-            emit("sms", {
+            emit2("sms", {
               hook: "ContentResolver.query",
               severity: "HIGH",
               uri: uriStr,
@@ -13663,20 +13915,23 @@ function initHooks() {
         send({ type: "hook_error", hook: "ContentResolver.query", error: e.message });
       }
       try {
-        var LayoutParams = frida_java_bridge_default.use("android.view.WindowManager$LayoutParams");
-        var wm_impl = frida_java_bridge_default.use("android.view.WindowManagerImpl");
+        var LayoutParams = Java.use("android.view.WindowManager$LayoutParams");
+        var wm_impl = Java.use("android.view.WindowManagerImpl");
         wm_impl.addView.overload("android.view.View", "android.view.ViewGroup$LayoutParams").implementation = function(view, params) {
-          if (params instanceof LayoutParams.$jni_type) {
-            var lp = frida_java_bridge_default.cast(params, LayoutParams);
-            var type = lp.type.value;
-            if (type === 2038 || type === 2003 || type === 2006 || type === 2010) {
-              emit("overlay", {
-                hook: "WindowManager.addView",
-                severity: "HIGH",
-                window_type: type,
-                args: [String(type)],
-                description: "App is drawing an overlay window on top of other apps (phishing screen)"
-              });
+          if (params) {
+            try {
+              var lp = Java.cast(params, LayoutParams);
+              var type = lp.type.value;
+              if (type === 2038 || type === 2003 || type === 2006 || type === 2010) {
+                emit2("overlay", {
+                  hook: "WindowManager.addView",
+                  severity: "HIGH",
+                  window_type: type,
+                  args: [String(type)],
+                  description: "App is drawing an overlay window on top of other apps (phishing screen)"
+                });
+              }
+            } catch (castErr) {
             }
           }
           return this.addView(view, params);
@@ -13699,7 +13954,24 @@ function initHooks() {
         "com.whatsapp"
       ];
       try {
-        var ActivityManager = frida_java_bridge_default.use("android.app.ActivityManager");
+        var Activity = Java.use("android.app.Activity");
+        Activity.onResume.implementation = function() {
+          var name = this.getClass().getName();
+          emit2("banking", {
+            hook: "Activity.onResume",
+            severity: "LOW",
+            activity: name,
+            args: [name],
+            description: "App activity resumed: " + name
+          });
+          return this.onResume();
+        };
+        send({ type: "diag", msg: "Activity.onResume hook installed" });
+      } catch (e) {
+        send({ type: "hook_error", hook: "Activity.onResume", error: e.message });
+      }
+      try {
+        var ActivityManager = Java.use("android.app.ActivityManager");
         ActivityManager.getRunningTasks.implementation = function(maxNum) {
           var tasks = this.getRunningTasks(maxNum);
           if (tasks && tasks.size() > 0) {
@@ -13708,7 +13980,7 @@ function initHooks() {
             if (topActivity) {
               var pkg = topActivity.getPackageName();
               if (BANKING_PACKAGES.indexOf(pkg) !== -1) {
-                emit("banking", {
+                emit2("banking", {
                   hook: "ActivityManager.getRunningTasks",
                   severity: "HIGH",
                   target_package: pkg,
@@ -13724,10 +13996,10 @@ function initHooks() {
         send({ type: "hook_error", hook: "ActivityManager.getRunningTasks", error: e.message });
       }
       try {
-        var URL = frida_java_bridge_default.use("java.net.URL");
+        var URL = Java.use("java.net.URL");
         URL.openConnection.overload().implementation = function() {
           var urlStr = this.toString();
-          emit("network", {
+          emit2("network", {
             hook: "URL.openConnection",
             severity: "MED",
             url: urlStr,
@@ -13742,15 +14014,15 @@ function initHooks() {
       try {
         var OkHttpClient = null;
         try {
-          OkHttpClient = frida_java_bridge_default.use("okhttp3.OkHttpClient");
+          OkHttpClient = Java.use("okhttp3.OkHttpClient");
         } catch (e2) {
         }
         if (OkHttpClient) {
-          var RealCall = frida_java_bridge_default.use("okhttp3.internal.connection.RealCall");
+          var RealCall = Java.use("okhttp3.internal.connection.RealCall");
           RealCall.execute.implementation = function() {
             var request = this.request();
             var urlStr = request.url().toString();
-            emit("network", {
+            emit2("network", {
               hook: "OkHttp.RealCall.execute",
               severity: "MED",
               url: urlStr,
@@ -13765,10 +14037,10 @@ function initHooks() {
         send({ type: "hook_error", hook: "OkHttp", error: e.message });
       }
       try {
-        var DevicePolicyManager = frida_java_bridge_default.use("android.app.admin.DevicePolicyManager");
+        var DevicePolicyManager = Java.use("android.app.admin.DevicePolicyManager");
         DevicePolicyManager.isAdminActive.implementation = function(who) {
           var result = this.isAdminActive(who);
-          emit("persistence", {
+          emit2("persistence", {
             hook: "DevicePolicyManager.isAdminActive",
             severity: "HIGH",
             args: [who ? who.toString() : "null"],
@@ -13778,7 +14050,7 @@ function initHooks() {
           return result;
         };
         DevicePolicyManager.lockNow.overload().implementation = function() {
-          emit("persistence", {
+          emit2("persistence", {
             hook: "DevicePolicyManager.lockNow",
             severity: "CRITICAL",
             args: [],
@@ -13790,14 +14062,14 @@ function initHooks() {
         send({ type: "hook_error", hook: "DevicePolicyManager", error: e.message });
       }
       try {
-        var DexClassLoader = frida_java_bridge_default.use("dalvik.system.DexClassLoader");
+        var DexClassLoader = Java.use("dalvik.system.DexClassLoader");
         DexClassLoader.$init.overload(
           "java.lang.String",
           "java.lang.String",
           "java.lang.String",
           "java.lang.ClassLoader"
         ).implementation = function(dexPath, optimizedDirectory, librarySearchPath, parent) {
-          emit("dangerous_apis", {
+          emit2("dangerous_apis", {
             hook: "DexClassLoader.<init>",
             severity: "HIGH",
             dex_path: dexPath ? dexPath.toString() : null,
@@ -13810,11 +14082,11 @@ function initHooks() {
         send({ type: "hook_error", hook: "DexClassLoader", error: e.message });
       }
       try {
-        var File2 = frida_java_bridge_default.use("java.io.File");
+        var File2 = Java.use("java.io.File");
         File2.$init.overload("java.lang.String").implementation = function(path) {
           var p = path ? path.toString() : "";
           if (p.indexOf("/data/data") !== -1 || p.indexOf("shared_prefs") !== -1 || p.indexOf("databases") !== -1) {
-            emit("files_accessed", {
+            emit2("files_accessed", {
               hook: "File.<init>",
               severity: "LOW",
               path: p,
@@ -13828,7 +14100,7 @@ function initHooks() {
         send({ type: "hook_error", hook: "File", error: e.message });
       }
       try {
-        var SystemProperties = frida_java_bridge_default.use("android.os.SystemProperties");
+        var SystemProperties = Java.use("android.os.SystemProperties");
         SystemProperties.get.overload("java.lang.String").implementation = function(key) {
           var val = this.get(key);
           var keyStr = key ? key.toString() : "";
@@ -13836,7 +14108,7 @@ function initHooks() {
             var spoofed = "";
             if (keyStr === "ro.kernel.qemu") spoofed = "0";
             else if (keyStr === "ro.product.model") spoofed = "SM-G991B";
-            emit("anti_analysis", {
+            emit2("anti_analysis", {
               hook: "SystemProperties.get",
               severity: "HIGH",
               property_key: keyStr,
@@ -13854,9 +14126,9 @@ function initHooks() {
         send({ type: "hook_error", hook: "SystemProperties.get", error: e.message });
       }
       try {
-        var Debug = frida_java_bridge_default.use("android.os.Debug");
+        var Debug = Java.use("android.os.Debug");
         Debug.isDebuggerConnected.implementation = function() {
-          emit("anti_analysis", {
+          emit2("anti_analysis", {
             hook: "Debug.isDebuggerConnected",
             severity: "HIGH",
             args: [],
@@ -13870,7 +14142,7 @@ function initHooks() {
         send({ type: "hook_error", hook: "Debug.isDebuggerConnected", error: e.message });
       }
       try {
-        var Build = frida_java_bridge_default.use("android.os.Build");
+        var Build = Java.use("android.os.Build");
         var buildModelDesc = Object.getOwnPropertyDescriptor(Build, "MODEL");
         if (buildModelDesc) {
           var _origModelGet = buildModelDesc.get;
@@ -13879,7 +14151,7 @@ function initHooks() {
               get: function() {
                 var model = _origModelGet.call(this);
                 if (model && (model.indexOf("sdk") !== -1 || model.indexOf("Emulator") !== -1 || model.indexOf("Android SDK") !== -1)) {
-                  emit("anti_analysis", {
+                  emit2("anti_analysis", {
                     hook: "Build.MODEL.read",
                     severity: "MED",
                     original_val: model,
@@ -13899,11 +14171,11 @@ function initHooks() {
         send({ type: "hook_error", hook: "Build.MODEL", error: e.message });
       }
       try {
-        var PackageManager_cls = frida_java_bridge_default.use("android.app.ApplicationPackageManager");
+        var PackageManager_cls = Java.use("android.app.ApplicationPackageManager");
         PackageManager_cls.getPackageInfo.overload("java.lang.String", "int").implementation = function(pkgName, flags) {
           var name = pkgName ? pkgName.toString() : "";
           if (name.indexOf("frida") !== -1 || name.indexOf("xposed") !== -1 || name.indexOf("rootbeer") !== -1 || name.indexOf("substrate") !== -1) {
-            emit("anti_analysis", {
+            emit2("anti_analysis", {
               hook: "PackageManager.getPackageInfo",
               severity: "HIGH",
               target_pkg: name,
@@ -13911,7 +14183,7 @@ function initHooks() {
               description: "App queried for security/analysis tool package \u2014 Frida/Xposed detection attempt",
               technique: "tool_detection"
             });
-            var NameNotFoundException = frida_java_bridge_default.use("android.content.pm.PackageManager$NameNotFoundException");
+            var NameNotFoundException = Java.use("android.content.pm.PackageManager$NameNotFoundException");
             throw NameNotFoundException.$new(name + " not found (spoofed by Sudarshan)");
           }
           return this.getPackageInfo(pkgName, flags);
@@ -13920,10 +14192,10 @@ function initHooks() {
         send({ type: "hook_error", hook: "PackageManager.getPackageInfo", error: e.message });
       }
       try {
-        var KeyStore = frida_java_bridge_default.use("java.security.KeyStore");
+        var KeyStore = Java.use("java.security.KeyStore");
         KeyStore.getInstance.overload("java.lang.String").implementation = function(type) {
           var typeStr = type ? type.toString() : "";
-          emit("dangerous_apis", {
+          emit2("dangerous_apis", {
             hook: "KeyStore.getInstance",
             severity: "MED",
             keystore_type: typeStr,
@@ -13936,12 +14208,13 @@ function initHooks() {
         send({ type: "hook_error", hook: "KeyStore.getInstance", error: e.message });
       }
       try {
-        var SharedPreferencesImpl = frida_java_bridge_default.use("android.app.SharedPreferencesImpl");
+        var SharedPreferencesImpl = Java.use("android.app.SharedPreferencesImpl");
         SharedPreferencesImpl.getString.implementation = function(key, defValue) {
           var value = this.getString(key, defValue);
           var keyStr = key ? key.toString() : "";
+          send({ type: "diag", msg: "SharedPreferencesImpl.getString executed", key: keyStr });
           if (CREDENTIAL_KEY_PATTERN.test(keyStr)) {
-            emit("banking", {
+            emit2("banking", {
               hook: "SharedPreferences.getString",
               severity: "HIGH",
               pref_key: keyStr,
@@ -13953,11 +14226,12 @@ function initHooks() {
           }
           return value;
         };
+        send({ type: "diag", msg: "SharedPreferencesImpl.getString hook installed" });
       } catch (e) {
         send({ type: "hook_error", hook: "SharedPreferences.getString", error: e.message });
       }
       try {
-        var Cipher = frida_java_bridge_default.use("javax.crypto.Cipher");
+        var Cipher = Java.use("javax.crypto.Cipher");
         Cipher.doFinal.overload("[B").implementation = function(input) {
           var output = this.doFinal(input);
           var algo = "";
@@ -13966,7 +14240,7 @@ function initHooks() {
           } catch (inner) {
             algo = "unknown";
           }
-          emit("banking", {
+          emit2("banking", {
             hook: "Cipher.doFinal",
             severity: "HIGH",
             algorithm: algo ? algo.toString() : "unknown",
@@ -13980,8 +14254,8 @@ function initHooks() {
       } catch (e) {
         send({ type: "hook_error", hook: "Cipher.doFinal", error: e.message });
       }
+      send({ type: "ready", message: "SUDARSHAN Frida hooks v2 loaded \u2014 rich evidence collection active" });
     });
-    send({ type: "ready", message: "SUDARSHAN Frida hooks v2 loaded \u2014 rich evidence collection active" });
   } catch (e) {
     send({ type: "error", description: "Exception during hook initialization: " + e.message });
   }

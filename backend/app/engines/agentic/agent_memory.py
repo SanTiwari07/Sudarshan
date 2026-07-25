@@ -355,7 +355,7 @@ class AgentMemory:
         ]
         for r in recent:
             status = "✓" if r.success else "✗"
-            cred_note = f" [cred_key={r.credential_key}]" if r.credential_key else ""
+            cred_note = f" [cred_key={sanitize(r.credential_key, max_length=40)}]" if r.credential_key else ""
             # r.target is a UI label from the app; r.reasoning is model output.
             # Both re-enter the next prompt, so both are sanitized.
             lines.append(

@@ -110,6 +110,26 @@ export type DynamicAnalysis = {
   yara_matches: any[];
 };
 
+export type WorkflowStage = {
+  label: string;
+  technique_id: string;
+  description: string;
+  start_ms: number;
+  end_ms: number;
+  evidence_ids: string[];
+  hook_names: string[];
+  confidence: number;
+};
+
+export type FraudWorkflow = {
+  stages: WorkflowStage[];
+  fraud_sequence_detected: boolean;
+  sequence_label: string;
+  chain_confidence: number;
+  total_events_analyzed: number;
+  stage_count: number;
+};
+
 export type FraudCardData = {
   // Identity
   sha256: string;
@@ -172,6 +192,9 @@ export type FraudCardData = {
 
   // Intelligence report
   intelligence_report?: IntelligenceReport;
+
+  // Fraud Workflow Reconstruction (from WorkflowReconstructor)
+  fraud_workflow?: FraudWorkflow;
 
   // Legacy compat
   executive_view: {

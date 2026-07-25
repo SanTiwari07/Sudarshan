@@ -24,6 +24,10 @@
 
 'use strict';
 
+var _JavaBridge = require('frida-java-bridge');
+var Java = _JavaBridge.default || _JavaBridge;
+
+
 // ─── Event Collector ──────────────────────────────────────────────────────────
 
 var events = {
@@ -86,19 +90,31 @@ function emit(category, data) {
 
 // ─── Hook Initialisation ──────────────────────────────────────────────────────
 
-function waitForJava() {
-  if (typeof Java !== 'undefined' && Java.available) {
-    initHooks();
-  } else {
-    setTimeout(waitForJava, 100);
-  }
-}
+send({ type: 'canary', msg: 'script_loaded', ts: Date.now() });
 
-setImmediate(waitForJava);
+setImmediate(initHooks);
 
 function initHooks() {
   try {
     Java.perform(function () {
+
+      // ── ART Deoptimization (MUST be first inside Java.perform) ──────────────
+      // Frida hooks use Java.use() which patches ART's interpreter tables.
+      // On API 37 (Android 15), ART aggressively JIT-compiles and inlines
+      // lightweight methods, which bypasses interpreter tables entirely, causing
+      // hooks to silently install but never fire.
+      // Java.deoptimizeEverything() forces ART to deoptimize all compiled
+      // methods, routing them back through the interpreter where hooks fire.
+      // NOTE: process.env is Node.js API — NOT available in Frida's JS runtime.
+      //       The previous conditional guard was always false. Call unconditionally.
+      try {
+        Java.deoptimizeEverything();
+        send({type: 'diag', msg: 'deoptimizeEverything_success', ts: Date.now()});
+      } catch (e) {
+        send({type: 'diag', msg: 'deoptimizeEverything_failed', error: e.message, ts: Date.now()});
+      }
+
+
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // [A] ACCESSIBILITY SERVICE HOOKS
@@ -235,22 +251,25 @@ try {
   var wm_impl     = Java.use('android.view.WindowManagerImpl');
 
   wm_impl.addView.overload('android.view.View', 'android.view.ViewGroup$LayoutParams').implementation = function (view, params) {
-    if (params instanceof LayoutParams.$jni_type) {
-      var lp   = Java.cast(params, LayoutParams);
-      var type = lp.type.value;
-      // TYPE_APPLICATION_OVERLAY=2038, TYPE_SYSTEM_ALERT=2003, TYPE_SYSTEM_OVERLAY=2006
-      if (type === 2038 || type === 2003 || type === 2006 || type === 2010) {
-        emit('overlay', {
-          hook:        'WindowManager.addView',
-          severity:    'HIGH',
-          window_type: type,
-          args:        [String(type)],
-          description: 'App is drawing an overlay window on top of other apps (phishing screen)',
-        });
-      }
+    if (params) {
+      try {
+        var lp   = Java.cast(params, LayoutParams);
+        var type = lp.type.value;
+        // TYPE_APPLICATION_OVERLAY=2038, TYPE_SYSTEM_ALERT=2003, TYPE_SYSTEM_OVERLAY=2006
+        if (type === 2038 || type === 2003 || type === 2006 || type === 2010) {
+          emit('overlay', {
+            hook:        'WindowManager.addView',
+            severity:    'HIGH',
+            window_type: type,
+            args:        [String(type)],
+            description: 'App is drawing an overlay window on top of other apps (phishing screen)',
+          });
+        }
+      } catch (castErr) {}
     }
     return this.addView(view, params);
   };
+
 } catch (e) {
   send({ type: 'hook_error', hook: 'WindowManager.addView', error: e.message });
 }
@@ -272,8 +291,26 @@ var BANKING_PACKAGES = [
 ];
 
 try {
-  var ActivityManager = Java.use('android.app.ActivityManager');
+  var Activity = Java.use('android.app.Activity');
+  Activity.onResume.implementation = function () {
+    var name = this.getClass().getName();
+    emit('banking', {
+      hook:        'Activity.onResume',
+      severity:    'LOW',
+      activity:    name,
+      args:        [name],
+      description: 'App activity resumed: ' + name,
+    });
+    return this.onResume();
+  };
+  send({type: 'diag', msg: 'Activity.onResume hook installed'});
+} catch (e) {
+  send({ type: 'hook_error', hook: 'Activity.onResume', error: e.message });
+}
 
+
+try {
+  var ActivityManager = Java.use('android.app.ActivityManager');
   ActivityManager.getRunningTasks.implementation = function (maxNum) {
     var tasks = this.getRunningTasks(maxNum);
     if (tasks && tasks.size() > 0) {
@@ -297,6 +334,7 @@ try {
 } catch (e) {
   send({ type: 'hook_error', hook: 'ActivityManager.getRunningTasks', error: e.message });
 }
+
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // [N] NETWORK C2 COMMUNICATION HOOKS
@@ -575,6 +613,7 @@ try {
   SharedPreferencesImpl.getString.implementation = function (key, defValue) {
     var value  = this.getString(key, defValue);
     var keyStr = key ? key.toString() : '';
+    send({type: 'diag', msg: 'SharedPreferencesImpl.getString executed', key: keyStr});
 
     if (CREDENTIAL_KEY_PATTERN.test(keyStr)) {
       emit('banking', {
@@ -588,6 +627,8 @@ try {
     }
     return value;
   };
+  send({type: 'diag', msg: 'SharedPreferencesImpl.getString hook installed'});
+
 } catch (e) {
   send({ type: 'hook_error', hook: 'SharedPreferences.getString', error: e.message });
 }
@@ -623,12 +664,10 @@ try {
   send({ type: 'hook_error', hook: 'Cipher.doFinal', error: e.message });
 }
 
-// ─── Heartbeat ────────────────────────────────────────────────────────────────
-
+      send({ type: 'ready', message: 'SUDARSHAN Frida hooks v2 loaded — rich evidence collection active' });
     }); // end Java.perform
-
-    send({ type: 'ready', message: 'SUDARSHAN Frida hooks v2 loaded — rich evidence collection active' });
   } catch (e) {
     send({ type: 'error', description: 'Exception during hook initialization: ' + e.message });
   }
 } // end initHooks
+

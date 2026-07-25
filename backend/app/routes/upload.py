@@ -35,12 +35,14 @@ from app.models.schemas import (
     FraudCardExecutiveView,
     FraudCardTechnicalView,
     FRSBreakdown,
+    FraudWorkflow,
     IntelligenceReport,
     IOCReputation,
     ManifestFinding,
     StaticAnalysisFlags,
     ThreatCorrelationResult,
     ThreatScenarioRow,
+    WorkflowStage,
 )
 from app.rag.knowledge_base import build_rag_context  # noqa: F401
 from app.ai.gemini_rag import build_investigation_index
@@ -48,6 +50,8 @@ from app.routes.report import cache_report
 from app.services.mobsf_client import MobSFAnalysisError, MobSFClient, MobSFNotAvailable
 from app.services.threat_correlator import correlate
 from app.workers.analysis_queue import create_job, enqueue, get_job
+from app.models.manifest import build_manifest, InvestigationManifest
+from app.engines.frida_sandbox import artifact_dir_for
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -95,6 +99,37 @@ def _build_correlation_model(raw: Dict) -> ThreatCorrelationResult:
         suspicious_domains=raw.get("suspicious_domains", []),
         malicious_ips=raw.get("malicious_ips", []),
     )
+
+
+def _build_fraud_workflow(raw: Optional[Dict]) -> Optional[FraudWorkflow]:
+    """Convert raw fraud workflow dict -> FraudWorkflow Pydantic model."""
+    if not raw or not isinstance(raw, dict):
+        return None
+    try:
+        stages = []
+        for s in raw.get("stages", []):
+            if isinstance(s, dict):
+                stages.append(WorkflowStage(
+                    label=s.get("label", ""),
+                    technique_id=s.get("technique_id", "T1000"),
+                    description=s.get("description", ""),
+                    start_ms=s.get("start_ms", 0),
+                    end_ms=s.get("end_ms", 0),
+                    evidence_ids=s.get("evidence_ids", []),
+                    hook_names=s.get("hook_names", []),
+                    confidence=s.get("confidence", 0.0),
+                ))
+        return FraudWorkflow(
+            stages=stages,
+            fraud_sequence_detected=raw.get("fraud_sequence_detected", False),
+            sequence_label=raw.get("sequence_label", "NONE"),
+            chain_confidence=raw.get("chain_confidence", 0.0),
+            total_events_analyzed=raw.get("total_events_analyzed", 0),
+            stage_count=raw.get("stage_count", len(stages)),
+        )
+    except Exception as e:
+        logger.warning(f"[Workflow] Failed to build FraudWorkflow model: {e}")
+        return None
 
 
 # ─── Core Analysis Logic (shared by sync + async) ────────────────────────────
@@ -172,7 +207,79 @@ async def _run_analysis_pipeline(
         flags_dict = _flags_to_dict(androguard_output.flags)
         suspicious_strings = androguard_output.suspicious_strings
 
-    # ── STEP 1.5: Frida Dynamic Analysis ─────────────────────────────────────
+    # ── STEP 1.5a: APKTool + JADX Enrichment (optional, gracefully skipped if not installed) ──
+    apktool_result = None
+    jadx_result = None
+    try:
+        from app.engines.apktool_engine import ApktoolEngine
+        from app.engines.jadx_engine import JadxEngine
+        _apktool = ApktoolEngine()
+        _jadx = JadxEngine()
+        if _apktool.is_available():
+            apktool_result = await asyncio.to_thread(_apktool.analyze, temp_path)
+            if apktool_result.available:
+                # Enrich suspicious_strings with resource-level URL hits
+                suspicious_strings = list(dict.fromkeys(
+                    suspicious_strings + apktool_result.resource_strings
+                ))[:100]
+                logger.info(
+                    f"[APKTool] Enrichment: {len(apktool_result.suspicious_resources)} suspicious resources, "
+                    f"{apktool_result.obfuscated_resource_count} obfuscated names"
+                )
+        if _jadx.is_available():
+            jadx_result = await asyncio.to_thread(_jadx.analyze, temp_path)
+            if jadx_result.available:
+                # Promote JADX-detected fraud patterns into flags_dict
+                for hit in jadx_result.fraud_class_hits:
+                    label = hit.split(":")[0]
+                    if label == "ACCESSIBILITY_SERVICE":
+                        flags_dict["has_accessibility_abuse"] = True
+                    elif label == "SMS_RECEIVER":
+                        flags_dict["has_sms_read_write"] = True
+                    elif label in ("OVERLAY_WINDOW", "OVERLAY_DRAW"):
+                        flags_dict["has_system_alert_window"] = True
+                    elif label == "DEVICE_ADMIN":
+                        flags_dict["has_device_admin"] = True
+                    elif label == "DYNAMIC_CLASS_LOAD":
+                        flags_dict["has_dynamic_code_loading"] = True
+                # Merge JADX-extracted URL strings
+                suspicious_strings = list(dict.fromkeys(
+                    suspicious_strings + jadx_result.suspicious_strings
+                ))[:100]
+                logger.info(
+                    f"[JADX] Enrichment: {len(jadx_result.fraud_class_hits)} fraud class hits, "
+                    f"{jadx_result.decompiled_class_count} classes decompiled"
+                )
+    except Exception as e:
+        logger.warning(f"[Static Enrichment] APKTool/JADX enrichment failed (non-critical): {e}")
+
+    # ── STEP 1.5b: Build Investigation Manifest (pre-sandbox data contract) ──
+    apk_artifact_dir = artifact_dir_for(temp_path)
+    manifest: Optional[InvestigationManifest] = None
+    try:
+        manifest = build_manifest(
+            sha256=sha256_hash,
+            package_name=package_name,
+            flags_dict=flags_dict,
+            analysis_mode=analysis_mode,
+            app_name=mobsf_report.get("app_name") if mobsf_report else None,
+            all_permissions=all_permissions,
+            dangerous_permissions=dangerous_perms,
+            activities=activities,
+            services=services_list,
+            receivers=receivers,
+        )
+        manifest.to_file(apk_artifact_dir / "manifest.json")
+        logger.info(
+            f"[Manifest] Generated: hook_profiles={manifest.hook_profiles}, "
+            f"priorities={{A:{manifest.goal_priority_config.accessibility_priority},"
+            f"S:{manifest.goal_priority_config.sms_priority},"
+            f"O:{manifest.goal_priority_config.overlay_priority}}}"
+        )
+    except Exception as e:
+        logger.warning(f"[Manifest] Manifest generation failed (non-critical): {e}")
+
+    # ── STEP 1.5c: Frida Dynamic Analysis ────────────────────────────────────
     dynamic_result: Optional[Dict] = None
     frida_status = get_sandbox_status()
 
@@ -268,6 +375,7 @@ async def _run_analysis_pipeline(
         "threat_correlation": correlation_raw,
         "dynamic_available": bool(dynamic_result and dynamic_result.get("available")),
         "dynamic_result": dynamic_result,
+        "fraud_workflow": dynamic_result.get("fraud_workflow") if dynamic_result else None,
         "manifest_findings": manifest_findings,
         "code_findings": code_findings,
         "dangerous_perms": dangerous_perms,
@@ -282,6 +390,20 @@ async def _run_analysis_pipeline(
         "suspicious_strings": suspicious_strings,
         "intelligence_report": llm_response,
         "matched_rule": matched_rule,
+        # ── Static enrichment results ──────────────────────────────────────────
+        "investigation_manifest": manifest.model_dump() if manifest else None,
+        "apktool_enrichment": {
+            "available": apktool_result.available if apktool_result else False,
+            "suspicious_resources": apktool_result.suspicious_resources if apktool_result and apktool_result.available else [],
+            "obfuscated_resource_count": apktool_result.obfuscated_resource_count if apktool_result and apktool_result.available else 0,
+            "decoded_manifest_available": bool(apktool_result and apktool_result.decoded_manifest_xml),
+        } if apktool_result else None,
+        "jadx_enrichment": {
+            "available": jadx_result.available if jadx_result else False,
+            "fraud_class_hits": jadx_result.fraud_class_hits if jadx_result and jadx_result.available else [],
+            "dynamic_load_hits": jadx_result.dynamic_load_hits if jadx_result and jadx_result.available else [],
+            "decompiled_class_count": jadx_result.decompiled_class_count if jadx_result and jadx_result.available else 0,
+        } if jadx_result else None,
     }
 
     # ── Persist to DB ─────────────────────────────────────────────────────────
@@ -421,6 +543,7 @@ def _build_response(result: Dict[str, Any], job_id: Optional[str] = None) -> Ana
         appsec_score=result.get("appsec_score"),
         mobsf_scan_hash=result.get("mobsf_scan_hash"),
         intelligence_report=intel_report,
+        fraud_workflow=_build_fraud_workflow(result.get("fraud_workflow")),
         executive_view=executive_view,
         technical_view=technical_view,
     )

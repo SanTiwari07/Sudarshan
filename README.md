@@ -1,97 +1,424 @@
 <div align="center">
   <img src="frontend/public/vite.svg" alt="Sudarshan Logo" width="120" height="120" />
   <h1>SUDARSHAN</h1>
-  <p><b>Banking Threat Intelligence Platform for Mobile Fraud Operations</b></p>
+  <p><b>AI-Assisted Autonomous Mobile Fraud Investigation Platform</b></p>
   <p><i>Prepared and Submitted for Bank of India and IIT Hyderabad under the BOI Hackathon 2026</i></p>
   
   <p>
     <b>80M+</b> Customers Protected &nbsp;&nbsp;|&nbsp;&nbsp; 
     <b>47</b> Banking Apps Monitored &nbsp;&nbsp;|&nbsp;&nbsp; 
-    <b>&lt;5 Min</b> Intelligence Generation
+    <b>299 / 299</b> Passing Tests (100%) &nbsp;&nbsp;|&nbsp;&nbsp;
+    <b>25 / 25</b> Architecture Flowchart Nodes (100% Operational)
   </p>
 </div>
 
 ---
 
-## The Problem: Intelligence Translation
-A malicious APK can compromise a customer account in under 90 seconds. A fraud analyst typically begins an investigation 3–7 days later. **This is not a malware detection problem; this is an intelligence translation problem.**
-
-*Existing tools generate technical reports. **Sudarshan generates fraud operations decisions.***
-
----
-
-## Documentation System
-
-Sudarshan features a complete enterprise documentation portal located in [`docs/`](docs/README.md):
-
-| Document | Description |
-| :--- | :--- |
-| [**Documentation Portal**](docs/README.md) | Central index, technology stack, navigation map, quick start guide. |
-| [**01 — Introduction**](docs/01_INTRODUCTION.md) | Problem statement, core principles, target audience, and scope. |
-| [**02 — System Overview**](docs/02_SYSTEM_OVERVIEW.md) | High-level system architecture, microservices layout, and tech stack. |
-| [**03 — Static Threat Intelligence**](docs/architecture/03_STATIC_THREAT_INTELLIGENCE.md) | MobSF container integration, Androguard fallback, manifest/code scanners. |
-| [**04 — Dynamic Analysis Engine**](docs/architecture/04_DYNAMIC_ANALYSIS_ENGINE.md) | Frida 17 sandbox, AVD bridge, Agentic Explorer, 15-stage DAG. |
-| [**05 — AI Investigation Engine**](docs/architecture/05_AI_INVESTIGATION_ENGINE.md) | Gemini 2.5 Flash, local Ollama, RAG evidence index, prompt sanitizer. |
-| [**06 — Evidence Processing**](docs/architecture/06_EVIDENCE_PROCESSING.md) | EvidenceStore, EventBus, MITRE ATT&CK for Mobile mapper, YARA, IOCs. |
-| [**07 — Fraud Intelligence Engine**](docs/architecture/07_FRAUD_INTELLIGENCE_ENGINE.md) | Threat correlator (VirusTotal/OTX/AbuseIPDB) and family classifier. |
-| [**08 — Deterministic Risk Engine**](docs/architecture/08_DETERMINISTIC_RISK_ENGINE.md) | 5-axis STEI, BFCI, FRS mathematical models, threat scenario matrix. |
-| [**09 — AI Report Generation**](docs/architecture/09_AI_REPORT_GENERATION.md) | Jinja2 HTML security reports, STIX 2.1 JSON exporter, CSV IOC feed. |
-| [**10 — Analyst Dashboard**](docs/dashboard/10_DASHBOARD.md) | React 18 SPA architecture, Executive Fraud Card, Technical SOC View. |
-| [**11 — Evaluation Strategy**](docs/evaluation/11_EVALUATION.md) | Automated testing framework (285 passing tests) and determinism baselines. |
-| [**Case Studies**](docs/evaluation/CASE_STUDIES.md) | InsecureBankv2, Drinik, and Xenomorph trojan sample walkthroughs. |
-| [**Benchmarks**](docs/evaluation/BENCHMARKS.md) | Execution latencies, resource consumption, and queue capacity bounds. |
-| [**12 — Future Work**](docs/future/12_FUTURE_WORK.md) | eBPF kernel telemetry floor, Celery queue, ChromaDB vector RAG roadmap. |
-| [**How to Run Guide**](docs/HOW_TO_RUN.md) | Complete local and Docker installation instructions. |
-| [**Project Context**](docs/PROJECT_CONTEXT.md) | Master context document for developer onboarding. |
-| [**DAE Current State**](docs/DAE_CURRENT_STATE.md) | Technical assessment of dynamic analysis engine state. |
-| [**Validation Protocols**](docs/VALIDATION.md) | Pipeline validation standards and ground-truth mapping rules. |
-| [**Changelog**](docs/CHANGELOG.md) | Version history and release notes. |
-| [**Contributing Guide**](docs/CONTRIBUTING.md) | Contribution standards and developer guidelines. |
+## Table of Contents
+- [Executive Overview](#executive-overview)
+- [Master Architecture Flowchart](#master-architecture-flowchart)
+- [Key Platform Features](#key-platform-features)
+- [System Architecture & Technology Stack](#system-architecture--technology-stack)
+- [Repository Structure](#repository-structure)
+- [Deterministic Risk Engine & Scoring](#deterministic-risk-scoring)
+- [Complete API Documentation Overview](#complete-api-documentation-overview)
+- [Installation & Setup Guide](#installation--setup-guide)
+- [Documentation Portal Index](#documentation-portal-index)
+- [License & Governance](#license--governance)
 
 ---
 
-## Core Design Principles
+## Executive Overview
 
-1. **Deterministic Detection, Explainable Intelligence** *(Inspired by PayPal & RBI)*  
-   AI should explain decisions, not make them. Every alert, risk score, or recommendation is derived from transparent, weighted mathematical formulas based on observable threat behaviors.
-2. **Human Judgment, Machine Scale** *(Inspired by Palantir)*  
-   Machines process evidence at scale; humans make accountable decisions. Sudarshan automates analysis while keeping critical fraud response decisions with analysts.
-3. **Fraud-First, Not Malware-First** *(Inspired by UPI Ecosystem)*  
-   Traditional tools ask "What is this malware?" Sudarshan asks "Who is at risk, what is being targeted, and what action should be taken?"
+A malicious Android application can execute account takeover (ATO), OTP theft, or overlay phishing within **90 seconds** of installation. Conversely, a financial fraud analyst typically begins an investigation days later. **Sudarshan** bridges this critical time gap by delivering an end-to-end autonomous mobile threat intelligence platform specifically tailored for banking fraud operations.
+
+Rather than producing generic static vulnerability summaries, Sudarshan performs deep static code decompilation (via **MobSF**, **Androguard**, **APKTool**, and **JADX**), autonomous dynamic runtime sandbox execution (via **Frida 17** with ART deoptimization and **mitmproxy** transparent HTTPS decryption), deterministic multi-axis risk scoring ($STEI$, $BFCI\text{ v2}$, $FRS$), and causal workflow reconstruction. Structured findings are indexed into an evidence-constrained Large Language Model (**Gemini 2.5 Flash** / **Ollama**) to generate analyst-actionable threat intelligence cards, MITRE ATT&CK mappings, regulatory customer advisories, and STIX 2.1 feeds.
+
+---
+
+## Master Architecture Flowchart
+
+The flowchart below represents the verified operational data flow of the Sudarshan platform. **All 25 core nodes and failure paths are fully operational in the codebase.**
+
+```mermaid
+flowchart TB
+
+%% =====================================================
+%% INPUT
+%% =====================================================
+
+APK([APK Upload])
+
+%% =====================================================
+%% STATIC ANALYSIS
+%% =====================================================
+
+subgraph STATIC["Static Intelligence Layer"]
+
+SA["Static Analysis"]
+
+MobSF["MobSF"]
+Andro["Androguard"]
+APKT["APKTool Engine"]
+JADX["JADX Engine"]
+
+Normalize["Evidence Normalizer"]
+
+STEI["STEI Score (5-Axis)"]
+Planner["Investigation Planner"]
+
+SA --> MobSF
+SA --> Andro
+SA --> APKT
+SA --> JADX
+
+MobSF --> Normalize
+Andro --> Normalize
+APKT --> Normalize
+JADX --> Normalize
+
+Normalize --> STEI
+Normalize --> Planner
+
+end
+
+APK --> SA
+
+%% =====================================================
+%% PLANNING
+%% =====================================================
+
+subgraph PLAN["Planning Layer"]
+
+Manifest["Investigation Manifest"]
+
+Goals["15-Stage Fraud Goals"]
+Sandbox["Sandbox Config"]
+Profiles["Dynamic Hook Profiles"]
+UIGoals["UI Exploration Goals"]
+
+Planner --> Manifest
+
+Manifest --> Goals
+Manifest --> Sandbox
+Manifest --> Profiles
+Manifest --> UIGoals
+
+end
+
+%% =====================================================
+%% DYNAMIC EXECUTION
+%% =====================================================
+
+subgraph DYNAMIC["Dynamic Analysis Layer"]
+
+Prepare["Prepare Android Sandbox"]
+
+Install["Install APK (Bypass SDK)"]
+
+Launch["Launch Application"]
+
+Explorer["Agentic UI Explorer"]
+
+Frida["Frida 17 (ART Deopt)"]
+
+Proxy["mitmproxy Sidecar"]
+
+Logcat["Logcat Collector"]
+
+Prepare --> Install
+Install --> Launch
+
+Launch --> Explorer
+Launch --> Frida
+Launch --> Proxy
+Launch --> Logcat
+
+end
+
+Manifest --> Prepare
+
+%% =====================================================
+%% EVIDENCE COLLECTION
+%% =====================================================
+
+subgraph EVIDENCE["Runtime Evidence"]
+
+Collector["Versioned Event Collector"]
+
+Evidence["Evidence Store"]
+
+Explorer --> Collector
+Frida --> Collector
+Proxy --> Collector
+Logcat --> Collector
+
+Decision{"Stop Conditions Met?"}
+
+Collector --> Decision
+
+Decision -- "No" --> Explorer
+
+Decision -- "Yes" --> Evidence
+
+end
+
+%% =====================================================
+%% FAILURE PATH
+%% =====================================================
+
+Instrumentation{"Runtime Evidence Collected?"}
+
+Evidence --> Instrumentation
+
+Instrumentation -- "No" --> Failed["Instrumentation Failed"]
+
+%% =====================================================
+%% INTELLIGENCE
+%% =====================================================
+
+Instrumentation -- "Yes" --> BFCI
+
+subgraph INTEL["Fraud Intelligence"]
+
+BFCI["BFCI v2 Scorer"]
+
+Workflow["Behavior Workflow Reconstruction"]
+
+ThreatIntel["Threat Intelligence Correlation"]
+
+BankImpact["Banking Impact"]
+
+Evidence --> Workflow
+
+Workflow --> ThreatIntel
+
+Workflow --> BFCI
+
+Risk["Fraud Risk Engine"]
+
+STEI --> Risk
+BFCI --> Risk
+ThreatIntel --> Risk
+BankImpact --> Risk
+
+FRS["Fraud Risk Score (FRS)"]
+
+Risk --> FRS
+
+Confidence["Rule-derived AI Confidence Clamp"]
+
+FRS --> Confidence
+
+Report["AI Investigation Report"]
+
+Confidence --> Report
+
+end
+
+%% =====================================================
+%% STATIC FALLBACK
+%% =====================================================
+
+Gate{"Dynamic Analysis Available?"}
+
+STEI --> Gate
+
+Gate -- "No" --> StaticRisk["Static Fallback Risk Engine"]
+
+ThreatIntel --> StaticRisk
+
+BankImpact --> StaticRisk
+
+StaticRisk --> Confidence
+
+Gate -- "Yes" --> Prepare
+
+%% =====================================================
+%% OUTPUT
+%% =====================================================
+
+Dashboard([Analyst Dashboard])
+
+Report --> Dashboard
+
+Failed --> Dashboard
+```
+
+---
+
+## Key Platform Features
+
+- **Dual Static Decompilation Pipeline**: Combines **APKTool** (xml/asset decompilation & obfuscated resource extraction) and **JADX** (DEX-to-Java source scanning across 10 fraud patterns) to complement MobSF & Androguard.
+- **Pre-Sandbox Investigation Manifest (`manifest.py`)**: Produces a standardized `manifest.json` artifact before dynamic execution to dynamically select hook profiles (`canary`, `accessibility`, `sms`, `overlay`, `banking`, `dynamic_code`, `persistence`, `network`) and weigh goal priorities.
+- **Frida 17 ART Deoptimization**: Executes `Java.deoptimizeEverything()` unconditionally upon attachment to guarantee hook execution on JIT-compiled Android system methods.
+- **mitmproxy Sidecar Interception**: Intercepts transparent HTTPS traffic via Docker sidecar and merges decrypted HAR dumps (headers, status codes, payload sizes) with Frida socket hooks.
+- **Agentic Dynamic Explorer**: LLM-guided autonomous UI navigation engine operating over a 15-stage fraud goal DAG with screen-hash loop detection and deterministic action fallbacks.
+- **Behavioral Fraud Confidence Index (BFCI v2)**: Calculates volume-aware logarithmic event scoring with a 30-second temporal sequence bonus.
+- **Causal Workflow Reconstructor (`workflow_reconstructor.py`)**: Reconstructs temporal causal chains (e.g., Overlay Phishing $\rightarrow$ SMS Theft $\rightarrow$ Account Takeover) mapped directly to MITRE ATT&CK for Mobile techniques.
+- **Interactive UI Workflow Timeline (`WorkflowDiagram.tsx`)**: Displays expandable causal chain stages, confidence levels, hook badges, and MITRE technique links in the Analyst Dashboard.
+- **Evidence-Constrained RAG Core**: Gemini 2.5 Flash / Ollama integration guarded by input sanitization (`sanitizer.py`) preventing prompt injection and hallucinated verdicts.
+
+---
+
+## System Architecture & Technology Stack
+
+| Layer | Component | Technologies Used |
+| :--- | :--- | :--- |
+| **Frontend UI** | React 18 SPA | TypeScript, Vite, Tailwind CSS, Lucide React, React Router v6 |
+| **API & Gateway** | FastAPI Backend | Python 3.10+, Pydantic v2, PyJWT, Uvicorn, Asyncio |
+| **Storage & Queue** | Persistent Case Store | SQLite (`sudarshan.db`), Async Worker Pool, File Artifact Store |
+| **Static Analysis** | Decompilation Engines | MobSF Docker (Port 8001), Androguard 4.x, APKTool CLI, JADX CLI |
+| **Dynamic Sandbox** | Execution Environment | Android Studio AVD (Android 13, 16KB Page Size), ADB TCP (Port 5555), Frida 17.16.4 |
+| **Network Intercept**| Transparent Proxy | mitmproxy Docker Sidecar (Ports 8080 / 8081), HAR Dump Parser |
+| **Risk & Scoring** | Math Scoring Engine | 5-Axis STEI, Volume Logarithmic BFCI v2, 4-Axis FRS, Threat Scenario Matrix |
+| **AI Intelligence** | RAG & LLM Engine | Gemini 2.5 Flash, Ollama (Llama-3/Mistral/Qwen3), FAISS Vector RAG |
+
+---
+
+## Repository Structure
+
+```text
+Sudarshan BOI/
+├── backend/
+│   ├── app/
+│   │   ├── ai/                      # Gemini 2.5 RAG indexer & Ollama client
+│   │   ├── analyzers/               # Androguard static analyzer engine
+│   │   ├── auth/                    # JWT authentication & bcrypt user management
+│   │   ├── db/                      # SQLite database initialization & case persistence
+│   │   ├── engines/
+│   │   │   ├── agentic/             # Goal tracker DAG, LLM planner, prompt sanitizer
+│   │   │   ├── frida_hooks/         # Frida JavaScript hooks (banking_trojan.bundle.js)
+│   │   │   ├── agentic_explorer.py  # Autonomous UI explorer loop
+│   │   │   ├── apktool_engine.py    # APKTool CLI resource decompilation engine
+│   │   │   ├── bfci_scorer.py       # BFCI v2 logarithmic volume scoring engine
+│   │   │   ├── event_bus.py         # Runtime event pub/sub bus
+│   │   │   ├── evidence_store.py    # Structured evidence record storage
+│   │   │   ├── frida_sandbox.py     # ADB controller, PID attach & Frida orchestrator
+│   │   │   ├── jadx_engine.py       # JADX DEX-to-Java source pattern scanner
+│   │   │   ├── network_capture.py   # mitmproxy HAR dump & Frida hook merger
+│   │   │   ├── risk_engine.py       # Deterministic STEI, BFCI, FRS risk engine
+│   │   │   ├── ui_explorer.py       # Deterministic UI node clicker & bounds parser
+│   │   │   └── workflow_reconstructor.py # Causal chain workflow engine
+│   │   ├── models/                  # Pydantic v2 schemas & InvestigationManifest model
+│   │   ├── routes/                  # FastAPI endpoints (upload, report, cases, auth)
+│   │   ├── services/                # MobSF REST client & Threat Correlator (VT/OTX)
+│   │   └── workers/                 # Async job queue dispatcher & worker pool
+│   ├── tests/                       # 299 automated unit & integration tests
+│   ├── Dockerfile                   # FastAPI backend container configuration
+│   └── requirements.txt             # Python dependencies
+├── frontend/
+│   ├── src/
+│   │   ├── components/              # Reusable UI primitives & WorkflowDiagram.tsx
+│   │   ├── pages/                   # Upload, FraudCard, TechnicalView, ThreatIntel, Chat
+│   │   ├── utils/                   # Data derivation helpers & export formatting
+│   │   ├── App.tsx                  # Primary router, layout & FraudCardData interfaces
+│   │   └── main.tsx                 # React entry point
+│   ├── Dockerfile                   # Nginx frontend container configuration
+│   └── package.json                 # Node.js dependencies
+├── docs/                            # Enterprise documentation portal
+├── docker-compose.yml               # Multi-container orchestration (Backend, Frontend, MobSF, mitmproxy)
+└── start.ps1                        # One-command bootstrapper script
+```
 
 ---
 
 ## Deterministic Risk Scoring
 
-Sudarshan eliminates black-box AI by using transparent, weighted mathematical formulas:
+Sudarshan enforces a strict **Determinism Invariant**: AI models generate narrative explanations downstream, but mathematical risk scores are strictly computed by deterministic formulas.
 
-### Fraud Risk Score (FRS)
-```text
-FRS = 0.25(Static Exposure) + 0.35(Dynamic Behavior) + 0.20(Correlation) + 0.20(Banking Impact)
-```
+### 1. Fraud Risk Score ($FRS$)
+$$FRS = 0.25 \times STEI + 0.35 \times BFCI_{\text{v2}} + 0.20 \times \text{ThreatCorrelation} + 0.20 \times \text{BankingImpact}$$
 
-### Static Threat and Environmental Index (STEI)
-```text
-STEI = 0.60(Credential Theft) + 0.20(Banking Targeting) + 0.10(Permission Risk) + 0.05(Obfuscation) + 0.05(Infrastructure)
-```
+### 2. Static Threat and Environmental Index ($STEI$)
+$$STEI = 0.60 \times CT + 0.20 \times BT + 0.10 \times PR + 0.05 \times OB + 0.05 \times IR$$
+- **Credential Theft ($CT$)**: Accessibility, SMS read/write, overlay window abuse.
+- **Banking Targeting ($BT$)**: Matches against 47 Indian banking package signatures (SBI, HDFC, ICICI, etc.).
+- **Permission Risk ($PR$)**: Ratio of dangerous Android permissions.
+- **Obfuscation ($OB$)**: Shannon entropy ratio of classes.dex & reflection usage.
+- **Infrastructure Risk ($IR$)**: Malicious C2 domains/IPs extracted from bytecode.
+
+### 3. Behavioral Fraud Confidence Index ($BFCI\text{ v2}$)
+$$BFCI_{\text{v2}} = \min\left(100.0, \sum_{c} W_c \cdot \min\left(1.0, \frac{\ln(1 + N_c)}{\ln(1 + M_c)}\right) \times 100 + S_{\text{sequence}}\right)$$
+Where $N_c$ is the observed event count for category $c$, $M_c$ is the category saturation threshold, $W_c$ is category weight, and $S_{\text{sequence}}$ is a +15 bonus when a temporal causal chain (e.g., Overlay $\rightarrow$ SMS Intercept) completes within 30 seconds.
 
 ---
 
-## Quick Start
+## Complete API Documentation Overview
 
-> **Prerequisite**: Ensure your Android Emulator (AVD) is running.
+The FastAPI backend exposes versioned REST API endpoints (`/api/v1`):
 
-Launch the entire platform with a single command:
+| Method | Endpoint | Authorization | Description |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/v1/auth/login` | None | Authenticate user & issue JWT Access Token. |
+| `POST` | `/api/v1/analyze` | Bearer Token | Synchronous analysis pipeline; returns full `AnalysisResponse` JSON. |
+| `POST` | `/api/v1/analyze/async` | Bearer Token | Asynchronous analysis; enqueues job and returns `job_id`. |
+| `GET` | `/api/v1/status/{job_id}` | Bearer Token | Poll status of asynchronous analysis job. |
+| `GET` | `/api/v1/sandbox/status` | Bearer Token | Check ADB connectivity and Frida sandbox readiness. |
+| `GET` | `/api/v1/cases` | Bearer Token | Retrieve paginated historical analysis cases from SQLite. |
+| `GET` | `/api/v1/report/export/json/{sha256}` | Bearer Token | Export complete STIX 2.1 structured JSON report. |
+| `GET` | `/api/v1/report/export/csv/{sha256}` | Bearer Token | Export extracted Indicators of Compromise (IOCs) as CSV. |
+| `POST` | `/api/v1/chat/investigation` | Bearer Token | RAG-grounded AI assistant query endpoint. |
 
+---
+
+## Installation & Setup Guide
+
+### Prerequisites
+- **Python**: Version 3.10 or higher
+- **Node.js**: Version 18.x or higher & `npm`
+- **Docker**: Docker Desktop with Docker Compose
+- **Android Emulator (AVD)**: Running Android Studio AVD (Android 13, x86_64)
+- **ADB**: Installed and added to system PATH (`adb tcpip 5555`)
+- **Frida**: Version 17.16.4 host tools (`pip install frida-tools==17.16.4`)
+- **APKTool**: Installed in PATH or `APKTOOL_PATH` env variable set
+- **JADX**: Installed in PATH or `JADX_PATH` env variable set
+
+### Quick Start (Single Command)
+Run the automated bootstrapper script from PowerShell:
 ```powershell
 .\start.ps1
 ```
 
-| Service | Access URL |
-|---|---|
-| **Fraud Analyst Dashboard** | `http://localhost:5173` |
-| **Backend API Gateway Docs** | `http://localhost:8000/docs` |
-| **MobSF Engine** | `http://localhost:8001` (mobsf / mobsf) |
+### Manual Docker Deployment
+```bash
+# 1. Set environment variables
+export GEMINI_API_KEY="your_api_key_here"
+export GEMINI_MODEL="gemini-2.5-flash"
+
+# 2. Build and launch services
+docker-compose up --build -d
+```
+
+### Accessing Platform Interfaces
+- **Fraud Analyst Dashboard**: `http://localhost:5173`
+- **FastAPI Interactive API Docs**: `http://localhost:8000/docs`
+- **MobSF Static Engine**: `http://localhost:8001`
+- **mitmproxy Web Interface**: `http://localhost:8081`
+
+---
+
+## Documentation Portal Index
+
+The detailed documentation portal is available under [`docs/`](docs/README.md):
+
+| Guide / Document | Summary |
+| :--- | :--- |
+| [**Docs Portal Index**](docs/README.md) | Central entry point, component inventory, data flow specifications. |
+| [**01 — Introduction**](docs/01_INTRODUCTION.md) | Problem statement, threat model, target banking operational scope. |
+| [**02 — System Overview**](docs/02_SYSTEM_OVERVIEW.md) | Platform architecture, microservices layout, container topology. |
+| [**03 — Static Threat Intelligence**](docs/architecture/03_STATIC_THREAT_INTELLIGENCE.md) | APKTool, JADX, MobSF, Androguard, Manifest serialization, STEI formula. |
+| [**04 — Dynamic Analysis Engine**](docs/architecture/04_DYNAMIC_ANALYSIS_ENGINE.md) | Frida 17 PID attach, ART deopt, mitmproxy HAR, Agentic Explorer 15-stage DAG. |
+| [**05 — AI Investigation Engine**](docs/architecture/05_AI_INVESTIGATION_ENGINE.md) | RAG graph index, Gemini 2.5 Flash, Ollama, prompt sanitization. |
+| [**06 — Evidence Processing**](docs/architecture/06_EVIDENCE_PROCESSING.md) | EventBus, EvidenceStore, WorkflowReconstructor causal chain engine. |
+| [**07 — Fraud Intelligence Engine**](docs/architecture/07_FRAUD_INTELLIGENCE_ENGINE.md) | Threat correlation (VirusTotal/OTX/AbuseIPDB) & family classifier. |
+| [**08 — Deterministic Risk Engine**](docs/architecture/08_DETERMINISTIC_RISK_ENGINE.md) | Math formulas for 5-axis STEI, BFCI v2, FRS, Threat Scenario Matrix. |
+| [**09 — AI Report Generation**](docs/architecture/09_AI_REPORT_GENERATION.md) | HTML security reports, STIX 2.1 exporter, CSV IOC feeds. |
+| [**10 — Analyst Dashboard**](docs/dashboard/10_DASHBOARD.md) | React 18 SPA workflow, Executive Fraud Card, Technical View, Workflow UI. |
+| [**11 — Evaluation Strategy**](docs/evaluation/11_EVALUATION.md) | Automated testing suite (299 tests), benchmarks, determinism baselines. |
+| [**How to Run Guide**](docs/HOW_TO_RUN.md) | Comprehensive installation, configuration, and execution guide. |
+| [**DAE Current State**](docs/DAE_CURRENT_STATE.md) | Complete resolution audit and technical current state document. |
+| [**Documentation Audit Report**](docs/DOCUMENTATION_AUDIT_REPORT.md) | Formal documentation audit, file mapping, and verification report. |
 
 ---
 

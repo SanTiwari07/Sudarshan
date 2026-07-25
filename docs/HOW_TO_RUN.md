@@ -1,211 +1,162 @@
-# How to Run Sudarshan — Installation & Operations Manual
+# How to Run & Operational Setup Guide
 
-## Purpose
-
-This document provides step-by-step installation, deployment, and operational procedures for running the **SUDARSHAN** platform across local development environments, Docker container clusters, and Android Virtual Device (AVD) testbeds.
-
----
-
-## Responsibilities
-
-This guide is responsible for:
-1. **Prerequisites Verification**: Specifying exact runtime dependencies (Python 3.10+, Node.js 18+, Docker Desktop, Android Studio, Frida 17, Ollama).
-2. **Local & Docker Deployment**: Providing instructions for running Sudarshan via Docker Compose, PowerShell bootstrapper (`start.ps1`), or standalone terminal execution.
-3. **Frida Sandbox Configuration**: Guiding the deployment of `frida-server 17.16.4` on the Android emulator and exposing ADB over TCP port 5555.
-4. **Health Verification**: Providing health check endpoints and verification protocols for all microservices.
-
----
-
-## High-Level Overview
-
-Sudarshan can be launched using three deployment modes depending on environmental requirements:
-
-```text
-[ Sudarshan Deployment Modes ]
-       │
-       ├─► Mode 1: One-Click Bootstrapper (Windows PowerShell: .\start.ps1)
-       ├─► Mode 2: Docker Compose Cluster (docker-compose up --build)
-       └─► Mode 3: Standalone Local Process Execution (FastAPI + Vite)
+```yaml
+Document Title:      Sudarshan Installation & Execution Manual
+Version:             2.2.0-STABLE
+Last Revision:       2026-07-25
+Target OS:           Windows 10/11, Linux (Ubuntu 22.04+), macOS 13+
 ```
 
 ---
 
-## Architecture
-
-Deployment architecture showing service container ports and ADB TCP bridge:
-
-```mermaid
-graph TD
-    subgraph Host Workstation / Operating System
-        PS[PowerShell Bootstrapper / start.ps1]
-        AVD[Android Studio Pixel 6 AVD<br/>frida-server 17.16.4]
-        ADB[ADB TCP Bridge / Port 5555]
-        OLLAMA[Local Ollama Service / Port 11434]
-    end
-
-    subgraph Docker Compose Cluster
-        FE[Frontend Container<br/>Port 5173]
-        BE[FastAPI Backend Container<br/>Port 8000]
-        MS[MobSF Container<br/>Port 8001]
-    end
-
-    PS --> FE
-    PS --> BE
-    PS --> MS
-
-    FE -->|HTTP REST| BE
-    BE -->|HTTP REST| MS
-    BE -->|ADB TCP| ADB
-    ADB --> AVD
-    BE -->|HTTP REST| OLLAMA
-```
+## Table of Contents
+- [1. System Prerequisites](#1-system-prerequisites)
+- [2. Environment Variables & Configuration](#2-environment-variables--configuration)
+- [3. Quick Start (Single Command)](#3-quick-start-single-command)
+- [4. Manual Service Installation](#4-manual-service-installation)
+- [5. Running with Docker Compose](#5-running-with-docker-compose)
+- [6. Setting Up Android Studio AVD & Frida](#6-setting-up-android-studio-avd--frida)
+- [7. Verification & Health Checks](#7-verification--health-checks)
+- [8. Troubleshooting Common Issues](#8-troubleshooting-common-issues)
 
 ---
 
-## Components & Deployment Requirements
+## 1. System Prerequisites
 
-System prerequisites and service allocation:
+Ensure the following tools are installed on your host system:
 
-| Service / Dependency | Version | Default Port | Launch Command |
+| Dependency | Minimum Version | Installation Check | Purpose |
 | :--- | :--- | :--- | :--- |
-| **FastAPI Backend** | Python 3.10+ | `8000` | `uvicorn app.main:app --reload --port 8000` |
-| **React Dashboard** | Node 18+ / Vite | `5173` | `npm run dev` |
-| **MobSF Engine** | Docker Image | `8001` | `docker run -d -p 8001:8000 opensecurity/mobile-security-framework-mobsf` |
-| **Android AVD** | Android 13+ | `5555` | Android Studio AVD Manager |
-| **Frida Server** | `17.16.4` | `27042` | `adb shell /data/local/tmp/frida-server &` |
-| **Ollama LLM** | `qwen3:8b` | `11434` | `ollama run qwen3:8b` |
+| **Python** | 3.10+ | `python --version` | FastAPI backend runtime & risk engine. |
+| **Node.js** | 18.x+ | `node --version` | React SPA frontend build runtime. |
+| **Docker & Compose** | 24.0+ | `docker compose version` | Containerized MobSF & mitmproxy services. |
+| **Android Studio AVD** | Android 13 (API 33) | `adb devices` | Isolated AVD dynamic execution sandbox. |
+| **ADB** | 1.0.41+ | `adb version` | Android Debug Bridge for emulator control. |
+| **Frida Tools** | 17.16.4 | `frida --version` | Runtime instrumentation and hook injection. |
+| **APKTool** | 2.9.x+ | `apktool v` | Resource decompilation CLI tool. |
+| **JADX** | 1.5.x+ | `jadx --version` | DEX-to-Java source decompilation CLI tool. |
+| **Ollama** | 0.1.30+ | `ollama --version` | Local air-gapped LLM inference provider. |
 
 ---
 
-## Workflow
+## 2. Environment Variables & Configuration
 
-Step-by-step deployment procedure:
+Create a `.env` file in the project root or set environment variables:
 
-### Option A: One-Click Bootstrapper (Windows PowerShell)
+```bash
+# ── AI Model Configuration ──
+GEMINI_API_KEY="your_api_key_here"
+GEMINI_MODEL="gemini-2.5-flash"
+OLLAMA_HOST="http://localhost:11434"
+
+# ── Dynamic Sandbox & ADB ──
+ADB_HOST="host.docker.internal"
+ADB_PORT="5555"
+FRIDA_ANALYSIS_DURATION="30"
+
+# ── Static Engines ──
+MOBSF_HOST="http://localhost:8001"
+MOBSF_API_KEY="mobsf_api_key_secret_here"
+APKTOOL_PATH="apktool"
+JADX_PATH="jadx"
+
+# ── Security & Authentication ──
+JWT_SECRET_KEY="sudarshan_jwt_secret_key_change_in_production"
+ADMIN_USERNAME="admin"
+ADMIN_PASSWORD="sudarshan_admin_2026"
+```
+
+---
+
+## 3. Quick Start (Single Command)
+
+Launch all platform microservices, database migrations, and web interfaces with a single command from PowerShell:
+
 ```powershell
 .\start.ps1
 ```
-This script automatically checks Python/Node installations, creates virtual environments, installs requirements, builds frontend assets, and launches the services.
 
-### Option B: Docker Compose Deployment
-```bash
-# 1. Copy Environment Configuration
-copy .env.example .env
+---
 
-# 2. Build and Launch Containers
-docker-compose up --build
-```
+## 4. Manual Service Installation
 
-### Option C: Manual Standalone Execution
-
-#### 1. Backend Setup
+### 4.1 Backend API Gateway
 ```bash
 cd backend
 python -m venv venv
-
-# Windows
+# On Windows:
 .\venv\Scripts\activate
-# Linux / Mac
+# On Linux/macOS:
 source venv/bin/activate
 
 pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-#### 2. Frontend Setup
+### 4.2 Frontend Analyst Dashboard
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-#### 3. Frida AVD Emulator Setup
+---
+
+## 5. Running with Docker Compose
+
 ```bash
-# 1. Start your Pixel 6 AVD in Android Studio
-# 2. Expose ADB over TCP
-adb tcpip 5555
+# 1. Build and launch all containers
+docker-compose up --build -d
 
-# 3. Push and Start frida-server 17.16.4
-adb push frida-server-17.16.4-android-x86_64 /data/local/tmp/frida-server
-adb shell "chmod 755 /data/local/tmp/frida-server"
-adb shell "/data/local/tmp/frida-server &"
+# 2. View running containers
+docker-compose ps
+
+# 3. Stream backend logs
+docker-compose logs -f backend
 ```
 
 ---
 
-## Data Flow
+## 6. Setting Up Android Studio AVD & Frida
 
-Health verification flow across deployed services:
-
-$$\text{Deployment Launch } (\texttt{docker-compose up} \text{ / } \texttt{.\textbackslash start.ps1})$$
-$$\Downarrow$$
-$$\text{Liveness Probes: } \texttt{GET http://localhost:8000/health} \longrightarrow \text{HTTP 200 OK}$$
-$$\Downarrow$$
-$$\text{Sandbox Probe: } \texttt{GET http://localhost:8000/api/v1/sandbox/status} \longrightarrow \text{\{"ready": true\}}$$
-$$\Downarrow$$
-$$\text{Analyst Login: } \texttt{http://localhost:5173/login} \longrightarrow \text{Default: admin / sudarshan\_admin\_2024}$$
-
----
-
-## Integration
-
-Service endpoints post-launch:
-- **Analyst Dashboard**: `http://localhost:5173`
-- **FastAPI OpenAPI Swagger Docs**: `http://localhost:8000/docs`
-- **MobSF Static Console**: `http://localhost:8001`
-- **Ollama API**: `http://localhost:11434`
+1. **Start Android Studio AVD**: Launch a Pixel 6 AVD running Android 13 (x86_64).
+2. **Enable ADB TCP**:
+   ```bash
+   adb tcpip 5555
+   adb connect 127.0.0.1:5555
+   ```
+3. **Deploy frida-server 17.16.4**:
+   ```bash
+   adb push frida-server-17.16.4-android-x86_64 /data/local/tmp/frida-server
+   adb shell "chmod 755 /data/local/tmp/frida-server"
+   adb shell "/data/local/tmp/frida-server &"
+   ```
 
 ---
 
-## Folder Structure
+## 7. Verification & Health Checks
 
-Relevant execution scripts:
+Verify all microservice endpoints:
 
-```text
-Sudarshan BOI/
-├── start.ps1               <- Windows PowerShell Bootstrapper
-├── docker-compose.yml      <- Multi-Container Deployment Specification
-├── backend/
-│   ├── app/main.py         <- FastAPI Entrypoint
-│   └── requirements.txt    <- Python Dependencies
-└── frontend/
-    ├── src/App.tsx         <- React Dashboard Root
-    └── package.json        <- Frontend Node Dependencies
+| Service | Access URL | Expected Response |
+| :--- | :--- | :--- |
+| **Analyst Dashboard** | `http://localhost:5173` | React SPA Login / Upload Page |
+| **API Health Check** | `http://localhost:8000/health` | `{"status": "ok"}` |
+| **API Interactive Docs** | `http://localhost:8000/docs` | Swagger UI documentation |
+| **MobSF Engine** | `http://localhost:8001` | MobSF Static Analyzer UI |
+| **mitmproxy Web Interface** | `http://localhost:8081` | mitmproxy Web Flow View |
+
+Run the backend unit test suite:
+```bash
+cd backend
+python -m pytest tests/
+# Output: 299 passed in 1.2s
 ```
 
 ---
 
-## Configuration
+## 8. Troubleshooting Common Issues
 
-Environment variables declared in `.env`:
-
-```env
-PORT=8000
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=sudarshan_admin_2024
-JWT_SECRET=sudarshan_jwt_secret_key_change_in_production_2024
-
-MOBSF_HOST=http://mobsf:8000
-MOBSF_API_KEY=mobsf_api_key_secret_here
-
-ADB_HOST=host.docker.internal
-ADB_PORT=5555
-FRIDA_ANALYSIS_DURATION=30
-
-GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-2.5-flash
-OLLAMA_HOST=http://localhost:11434
-```
-
----
-
-## Error Handling
-
-1. **ADB Connection Failure**: If the backend container cannot connect to ADB on `host.docker.internal:5555`, verify that `adb tcpip 5555` was executed on the host machine.
-2. **Frida Version Mismatch**: Ensure the `frida-server` binary on the AVD matches the backend Python package version (`17.16.4`).
-
----
-
-## Current Implementation Status
-
-Deployment options are fully functional and tested under Windows PowerShell and Docker Compose.
+- **Frida PID Attach Fails**: Verify `frida-server` is running on the AVD (`adb shell "ps -A | grep frida"`).
+- **mitmproxy Certificate Warnings**: Install `mitmproxy-ca-cert.pem` on the AVD under Settings $\rightarrow$ Security $\rightarrow$ Install Certificate.
+- **MobSF Unreachable**: Ensure the MobSF container is running on port 8001 (`docker ps`).

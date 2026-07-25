@@ -341,11 +341,25 @@ class AgentPlanner:
         system_prompt = self._build_system_prompt()
         user_context  = self._build_user_context(obs, memory, goals, next_goal, previous_error)
 
+        contents: Any = user_context
+        if obs.screenshot_taken and obs.screenshot_path and os.path.exists(obs.screenshot_path):
+            try:
+                with open(obs.screenshot_path, "rb") as f:
+                    img_bytes = f.read()
+                if img_bytes:
+                    contents = [
+                        user_context,
+                        types.Part.from_bytes(data=img_bytes, mime_type="image/png"),
+                    ]
+                    logger.debug(f"[Planner] Attached screenshot bytes ({len(img_bytes)} bytes) to Gemini prompt")
+            except Exception as e:
+                logger.warning(f"[Planner] Could not load screenshot bytes ({e}) — proceeding text-only")
+
         try:
             response = await asyncio.to_thread(
                 self._client.models.generate_content,
                 model=GEMINI_MODEL,
-                contents=user_context,
+                contents=contents,
                 config=types.GenerateContentConfig(
                     system_instruction=system_prompt,
                     response_mime_type="application/json",

@@ -1,0 +1,13 @@
+{
+    "domains": [],
+    "urls": [],
+    "ips": [],
+    "dropped_dex": [],
+    "dropped_so": [],
+    "sha256_hashes": [
+        "1da8bf57d266109f9a07c01bf7111a1975ce01f190b9d914bcd3ae3dbef96f21"
+    ],
+    "yara_matches": [],
+    "accessed_files": [],
+    "total_count": 1
+}

@@ -178,12 +178,25 @@ def _build_default_goals() -> List[FraudGoal]:
             stage=5,
             description=(
                 "Complete the application's login or registration flow. Fill username/email "
-                "and password fields. Submit credentials. Reach the authenticated state."
+                "and password fields. Submit credentials. Reach the authenticated state. "
+                "If no login UI is present after 8 actions, this stage is auto-skipped."
             ),
             frida_categories=["banking", "dangerous_apis"],
-            frida_hooks=["SharedPreferences.getString", "Cipher.doFinal"],
+            frida_hooks=[
+                "SharedPreferences.getString",
+                "Cipher.doFinal",
+                # Banking trojans often skip login and go straight to a dashboard.
+                # Activity.onResume for any 'home', 'main', 'dashboard', or 'wallet'
+                # activity is a reliable signal that the post-auth state is reached.
+                "Activity.onResume/home",
+                "Activity.onResume/main",
+                "Activity.onResume/dashboard",
+                "Activity.onResume/wallet",
+            ],
             depends_on=[1, 2],
-            skip_if_missing=False,
+            # skip_if_missing=True allows auto-skip after MAX_ATTEMPTS_PER_GOAL
+            # when the app has no conventional login screen (most banking trojans).
+            skip_if_missing=True,
         ),
         FraudGoal(
             name="SMS / OTP Interception",

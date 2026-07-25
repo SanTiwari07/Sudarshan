@@ -272,7 +272,7 @@ class ToolExecutor:
         if x_param is not None and y_param is not None:
             try:
                 x, y = int(x_param), int(y_param)
-                if 0 <= x <= SCREEN_WIDTH and 0 <= y <= SCREEN_HEIGHT:
+                if 0 <= x <= self.screen_size[0] and 0 <= y <= self.screen_size[1]:
                     ok, out = await self._adb("shell", "input", "tap", str(x), str(y))
                     await asyncio.sleep(0.8)
                     return ToolResult(
@@ -303,11 +303,12 @@ class ToolExecutor:
     async def _tool_scroll(self, action: Dict) -> ToolResult:
         direction = action.get("direction", "down")
         amount    = int(action.get("amount", DEFAULT_SCROLL_AMOUNT))
-        cx = SCREEN_WIDTH // 2
+        sw, sh = self.screen_size
+        cx = sw // 2
         if direction == "down":
-            y1, y2 = SCREEN_HEIGHT // 2 + amount // 2, SCREEN_HEIGHT // 2 - amount // 2
+            y1, y2 = sh // 2 + amount // 2, sh // 2 - amount // 2
         else:
-            y1, y2 = SCREEN_HEIGHT // 2 - amount // 2, SCREEN_HEIGHT // 2 + amount // 2
+            y1, y2 = sh // 2 - amount // 2, sh // 2 + amount // 2
         ok, out = await self._adb(
             "shell", "input", "swipe",
             str(cx), str(y1), str(cx), str(y2), "300"
@@ -335,8 +336,9 @@ class ToolExecutor:
         The value is used for ADB input but is NOT stored in ToolResult.data.
         Only field_hint is echoed back — never the actual text value.
         """
-        x = int(action.get("x", SCREEN_WIDTH // 2))
-        y = int(action.get("y", SCREEN_HEIGHT // 2))
+        sw, sh = self.screen_size
+        x = int(action.get("x", sw // 2))
+        y = int(action.get("y", sh // 2))
         field_hint = action.get("field_hint", "search")
 
         # Resolve actual value (not stored in result)

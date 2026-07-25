@@ -11,6 +11,7 @@ import {
   getTopEvidence, getRiskBreakdown, severityBg, riskBandText, statusChip,
   expectedChip, exportJSON, exportCSV,
 } from '../utils/derive';
+import WorkflowDiagram from '../components/WorkflowDiagram';
 
 // ─── Shared UI Primitives ────────────────────────────────────────────────────────
 
@@ -727,6 +728,15 @@ function DynamicAnalysisPanel({ data }: { data: FraudCardData }) {
              </div>
           ) : <div className="text-sm text-gray-400 flex h-24 items-center justify-center border-2 border-dashed border-gray-100 rounded">No screenshots captured</div>}
         </div>
+      </div>
+
+      {/* Fraud Workflow Reconstruction */}
+      <div className="border-t border-gray-100 p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-xs font-semibold uppercase text-gray-500 tracking-wide">Fraud Workflow Reconstruction</span>
+          <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded font-medium">Causal Chain Analysis</span>
+        </div>
+        <WorkflowDiagram workflow={(data as any).fraud_workflow ?? null} />
       </div>
     </SocCard>
   );

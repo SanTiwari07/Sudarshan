@@ -34,6 +34,7 @@ import os
 import re
 import subprocess
 import threading
+import time
 from typing import Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -52,8 +53,13 @@ _MAX_DIMENSION: int = 8192
 _PHYSICAL_RE = re.compile(r"Physical size:\s*(\d+)x(\d+)")
 _OVERRIDE_RE = re.compile(r"Override size:\s*(\d+)x(\d+)")
 
-_cache: Dict[Tuple[str, str], Tuple[int, int]] = {}
+# Cache stores (width, height, cached_at_timestamp)
+_cache: Dict[Tuple[str, str], Tuple[int, int, float]] = {}
 _cache_lock = threading.Lock()
+
+# Re-query the device after this many seconds. Protects against transient ADB
+# failures that would otherwise pin the wrong resolution process-wide forever.
+_CACHE_TTL_SECONDS: float = 300.0
 
 
 def _env_override() -> Optional[Tuple[int, int]]:
@@ -123,7 +129,15 @@ def get_screen_size(
     if use_cache:
         with _cache_lock:
             if key in _cache:
-                return _cache[key]
+                cached_w, cached_h, cached_at = _cache[key]
+                age = time.monotonic() - cached_at
+                # Accept cached value only if:
+                #   1. It has not expired, AND
+                #   2. It is not the fallback (which may have been cached due to a
+                #      transient ADB failure — re-query to get the real dimensions)
+                is_fallback = (cached_w == FALLBACK_SCREEN_WIDTH and cached_h == FALLBACK_SCREEN_HEIGHT)
+                if age < _CACHE_TTL_SECONDS and not is_fallback:
+                    return (cached_w, cached_h)
 
     size: Optional[Tuple[int, int]] = None
     try:
@@ -147,7 +161,7 @@ def get_screen_size(
 
     if use_cache:
         with _cache_lock:
-            _cache[key] = size
+            _cache[key] = (size[0], size[1], time.monotonic())
     return size
 
 
@@ -155,3 +169,10 @@ def clear_cache() -> None:
     """Drop cached resolutions. Used by tests and on device reconnection."""
     with _cache_lock:
         _cache.clear()
+
+
+def invalidate_device(adb_path: str = "adb", device_serial: str = "") -> None:
+    """Force re-query for a specific device on the next call (e.g. after reconnect)."""
+    key = (adb_path or "adb", device_serial or "")
+    with _cache_lock:
+        _cache.pop(key, None)

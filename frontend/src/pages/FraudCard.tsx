@@ -1,10 +1,10 @@
 import React, { useState, useRef } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import {
   Shield, CheckCircle2, XCircle, AlertTriangle, AlertOctagon,
   ChevronRight, Copy, Download, MessageSquare, User,
   Clock, Send, BarChart2, Zap, Info, FileText, Activity,
-  Target, Globe
+  Target, Globe, ExternalLink
 } from 'lucide-react';
 import type { FraudCardData } from '../App';
 import {
@@ -619,71 +619,115 @@ function ExportOptions({ data }: { data: FraudCardData }) {
 
 // ─── AI Chat ─────────────────────────────────────────────────────────────────────
 
-type ChatMessage = { role: 'user' | 'assistant'; content: string; refs?: string[] };
+type ChatMessage = { role: 'user' | 'assistant'; content: string; loading?: boolean };
 
 function AIChat({ data }: { data: FraudCardData }) {
+  const navigate = useNavigate();
   const QUICK_QUESTIONS = [
-    'Why is this classified Safe?',
-    'What increased the score?',
-    'What evidence supports this?',
-    'Which MITRE techniques apply?',
+    'Is this APK safe?',
+    'Explain the risk score',
+    'Did it steal OTP?',
     'Should I block this APK?',
-    'Explain the network indicators',
   ];
 
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: 'assistant', content: `Analysis ready for ${data.package_name || 'this APK'}. Risk: ${data.final_risk_score.toFixed(1)}/100 (${data.risk_band}). Ask me anything about this investigation.` }
+    { role: 'assistant', content: `Investigation loaded for ${data.package_name || 'this APK'}. Risk: ${data.final_risk_score.toFixed(1)}/100 (${data.risk_band}). Ask a quick question or open the full AI Assistant for a complete analysis.` }
   ]);
   const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const send = (q: string) => {
-    if (!q.trim()) return;
-    const resp = generateAIResponse(q, data);
+  const send = async (q: string) => {
+    if (!q.trim() || isLoading) return;
+
     setMessages(prev => [
       ...prev,
       { role: 'user', content: q },
-      { role: 'assistant', content: resp.answer, refs: resp.evidenceRefs },
+      { role: 'assistant', content: '', loading: true },
     ]);
     setInput('');
-    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    setIsLoading(true);
+    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/v1/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ sha256: data.sha256, question: q, history: [] }),
+      });
+      const result = await res.json();
+      const answer = result.answer || 'No response received.';
+      setMessages(prev => {
+        const copy = [...prev];
+        const lastIdx = copy.length - 1;
+        copy[lastIdx] = { role: 'assistant', content: answer, loading: false };
+        return copy;
+      });
+    } catch (e: any) {
+      setMessages(prev => {
+        const copy = [...prev];
+        copy[copy.length - 1] = { role: 'assistant', content: `Error: ${e.message}`, loading: false };
+        return copy;
+      });
+    } finally {
+      setIsLoading(false);
+      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    }
   };
 
   return (
     <SocCard className="flex flex-col">
-      <SectionHeader icon={<MessageSquare className="h-4 w-4" />} title="AI Investigation Assistant" subtitle="Evidence-grounded responses" />
+      <SectionHeader icon={<MessageSquare className="h-4 w-4" />} title="AI Investigation Assistant" subtitle="Gemini RAG — evidence-grounded responses" />
+
+      {/* Open full assistant button */}
+      <div className="px-4 pt-2.5 pb-1">
+        <button
+          onClick={() => navigate('/chat')}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+          Open Full AI Investigation Assistant
+        </button>
+      </div>
+
       {/* Quick questions */}
-      <div className="px-4 py-2.5 border-b border-gray-200 flex flex-wrap gap-1.5">
+      <div className="px-4 py-2 border-b border-gray-200 flex flex-wrap gap-1.5">
         {QUICK_QUESTIONS.map(q => (
           <button
             key={q}
             onClick={() => send(q)}
-            className="text-xs px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-full hover:bg-blue-100 transition-colors"
+            disabled={isLoading}
+            className="text-xs px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-full hover:bg-blue-100 transition-colors disabled:opacity-50"
           >
             {q}
           </button>
         ))}
       </div>
+
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 max-h-64">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 max-h-56">
         {messages.map((m, i) => (
           <div key={i} className={`flex gap-2 ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
             <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-white ${m.role === 'user' ? 'bg-blue-600' : 'bg-gray-700'}`}>
               {m.role === 'user' ? <User className="h-3 w-3" /> : <Shield className="h-3 w-3" />}
             </div>
             <div className={`max-w-xs lg:max-w-sm ${m.role === 'user' ? 'text-right' : ''}`}>
-              <div className={`text-xs p-2.5 rounded-xl leading-relaxed ${m.role === 'user' ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-gray-100 text-gray-800 rounded-tl-sm'}`}>
-                {m.content}
-              </div>
-              {m.refs && m.refs.length > 0 && (
-                <div className="mt-1 flex flex-wrap gap-1">
-                  {m.refs.slice(0, 2).map((r, ri) => (
-                    <span key={ri} className="text-xs px-1.5 py-0.5 bg-orange-50 text-orange-700 border border-orange-200 rounded font-mono truncate max-w-xs">
-                      {r.length > 40 ? r.slice(0, 40) + '…' : r}
+              <div className={`text-xs p-2.5 rounded-xl leading-relaxed ${
+                m.role === 'user' ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-gray-100 text-gray-800 rounded-tl-sm'
+              }`}>
+                {m.loading
+                  ? <span className="inline-flex gap-1">
+                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{animationDelay:'0s'}} />
+                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{animationDelay:'0.15s'}} />
+                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{animationDelay:'0.3s'}} />
                     </span>
-                  ))}
-                </div>
-              )}
+                  : m.content
+                }
+              </div>
             </div>
           </div>
         ))}
@@ -696,11 +740,12 @@ function AIChat({ data }: { data: FraudCardData }) {
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && send(input)}
           placeholder="Ask about this APK..."
-          className="flex-1 text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          disabled={isLoading}
+          className="flex-1 text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
         />
         <button
           onClick={() => send(input)}
-          disabled={!input.trim()}
+          disabled={!input.trim() || isLoading}
           className="p-2 bg-blue-700 text-white rounded-lg hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           <Send className="h-3.5 w-3.5" />

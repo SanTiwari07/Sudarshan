@@ -1,11 +1,12 @@
 import { Routes, Route, Link, useNavigate, Navigate } from 'react-router-dom';
-import { Shield, LayoutDashboard, Terminal, Globe, Database, LogOut, LogIn } from 'lucide-react';
+import { Shield, LayoutDashboard, Terminal, Globe, Database, LogOut, LogIn, MessageSquare } from 'lucide-react';
 import Upload from './pages/Upload';
 import FraudCard from './pages/FraudCard';
 import TechnicalView from './pages/TechnicalView';
 import ThreatIntelView from './pages/ThreatIntelView';
 import Login, { getToken, getUser, clearToken } from './pages/Login';
 import History from './pages/History';
+import InvestigationChat from './pages/InvestigationChat';
 import { useState } from 'react';
 
 // ─── Type Definitions ─────────────────────────────────────────────────────────
@@ -242,6 +243,14 @@ function App() {
                     <span className="hidden sm:inline">SOC / Technical</span>
                   </Link>
                   <Link
+                    to="/chat"
+                    className="flex items-center px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-800 transition-colors relative"
+                  >
+                    <MessageSquare className="h-4 w-4 mr-1.5" />
+                    <span className="hidden sm:inline">AI Assistant</span>
+                    <span className="ml-1.5 w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                  </Link>
+                  <Link
                     to="/threat-intel"
                     className="flex items-center px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-800 transition-colors relative"
                   >
@@ -302,6 +311,9 @@ function App() {
           } />
           <Route path="/threat-intel" element={
             <RequireAuth><ThreatIntelView data={analysisResult} /></RequireAuth>
+          } />
+          <Route path="/chat" element={
+            <RequireAuth><InvestigationChat data={analysisResult} /></RequireAuth>
           } />
           <Route path="/history" element={
             <RequireAuth><History /></RequireAuth>

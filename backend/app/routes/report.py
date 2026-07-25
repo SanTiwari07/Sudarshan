@@ -6,7 +6,8 @@ Provides:
   GET /api/v1/report/stix/{sha256}  — STIX 2.1 JSON export
   GET /api/v1/report/iocs/{sha256}  — IOC CSV export
   GET /api/v1/report/pdf/{sha256}   — PDF report (stub, requires pdfkit)
-  POST /api/v1/chat                 — AI chat endpoint
+  POST /api/v1/chat                 — AI chat endpoint (legacy, non-streaming)
+  POST /api/v1/chat/stream          — Gemini RAG SSE streaming endpoint (primary)
 """
 
 import json
@@ -15,8 +16,8 @@ from datetime import datetime, timezone
 from io import StringIO
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -203,86 +204,88 @@ async def export_iocs_csv(sha256: str):
     )
 
 
-# ─── AI Chat Endpoint ─────────────────────────────────────────────────────────
+
+# ─── AI Investigation Assistant Endpoints ─────────────────────────────────────
 
 class ChatRequest(BaseModel):
     sha256: str
     question: str
+    history: List[Dict[str, str]] = []
 
 
 class ChatResponse(BaseModel):
     answer: str
+    sections_used: List[str] = []
     source: str
+
+
+@router.post("/chat/stream")
+async def analyst_chat_stream(req: ChatRequest):
+    """
+    Gemini RAG streaming SSE endpoint — primary chat interface.
+
+    Streams a 7-section structured investigation response in real-time.
+    Evidence is retrieved from the per-investigation knowledge graph.
+    Gemini only explains — never decides.
+
+    Events:
+      sections — JSON array of evidence sections used
+      token    — response text chunk
+      done     — end of stream
+      error    — error message
+    """
+    from app.ai.gemini_rag import stream_investigation_response
+
+    async def event_generator():
+        async for chunk in stream_investigation_response(
+            sha256=req.sha256,
+            question=req.question,
+            conversation_history=req.history,
+        ):
+            yield chunk
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @router.post("/chat", response_model=ChatResponse)
 async def analyst_chat(req: ChatRequest):
     """
-    RAG-grounded analyst chat endpoint.
-    Uses the cached report context to answer questions without hallucination.
+    Gemini RAG non-streaming endpoint (legacy / fallback).
+    Returns complete answer in one response.
+    Uses the same investigation knowledge graph as /chat/stream.
     """
-    import httpx
-    import os
+    from app.ai.gemini_rag import get_investigation_answer, is_indexed, build_investigation_index
+    from app.ai.gemini_rag import _investigation_index
 
-    report = get_cached_report(req.sha256)
-    if not report:
-        return ChatResponse(
-            answer="No analysis found for this hash. Please analyze the APK first.",
-            source="cache"
-        )
-
-    # Build minimal context from cached report
-    risk_band = report.get("risk_band", "Unknown")
-    family = report.get("family_classification", "Unknown")
-    score = report.get("final_risk_score", 0)
-    flags = {
-        "has_accessibility_abuse": report.get("has_accessibility_abuse", False),
-        "has_sms_read_write": report.get("has_sms_read_write", False),
-        "has_system_alert_window": report.get("has_system_alert_window", False),
-        "hardcoded_urls_ips": report.get("hardcoded_urls_ips", []),
-        "targets_indian_banks": report.get("targets_indian_banks", False),
-    }
-
-    intel = report.get("intelligence_report") or {}
-    narrative = intel.get("plain_english_narrative", "") if isinstance(intel, dict) else ""
-
-    context_summary = f"""
-APK Analysis Context:
-- SHA256: {req.sha256}
-- Package: {report.get("package_name", "Unknown")}
-- Family: {family}
-- Risk Score: {score}/100 ({risk_band})
-- Accessibility Abuse: {flags["has_accessibility_abuse"]}
-- SMS Interception: {flags["has_sms_read_write"]}
-- Overlay Attack: {flags["has_system_alert_window"]}
-- Banking Target: {flags["targets_indian_banks"]}
-- URLs: {", ".join(flags["hardcoded_urls_ips"][:3]) or "None"}
-- AI Narrative: {narrative[:300]}
-"""
-
-    prompt = f"""You are SUDARSHAN, a senior banking malware analyst. Answer the analyst's question using ONLY the provided APK analysis context. Do not guess or add information not in the context.
-
-{context_summary}
-
-Analyst Question: {req.question}
-
-Provide a concise, factual answer based strictly on the evidence above. If the question cannot be answered from the available data, say so."""
-
-    ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-    model = os.getenv("OLLAMA_MODEL", "qwen3:8b")
-
-    try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            r = await client.post(
-                f"{ollama_host}/api/generate",
-                json={"model": model, "prompt": prompt, "stream": False}
+    # Auto-index from cache if not yet indexed
+    if not is_indexed(req.sha256):
+        report = get_cached_report(req.sha256)
+        if report:
+            build_investigation_index(req.sha256, report)
+        else:
+            return ChatResponse(
+                answer="No analysis found for this APK. Please analyze it first.",
+                sections_used=[],
+                source="not_found",
             )
-            r.raise_for_status()
-            answer = r.json().get("response", "").strip()
-            return ChatResponse(answer=answer, source="rag_ollama")
-    except Exception as e:
-        logger.error(f"Chat failed: {e}")
-        return ChatResponse(
-            answer=f"AI chat unavailable. Based on the evidence: {narrative[:200] or 'No narrative available.'}",
-            source="fallback"
-        )
+
+    result = await get_investigation_answer(
+        sha256=req.sha256,
+        question=req.question,
+        conversation_history=req.history,
+    )
+
+    return ChatResponse(
+        answer=result["answer"],
+        sections_used=result.get("sections_used", []),
+        source=result.get("source", "gemini_rag"),
+    )
+

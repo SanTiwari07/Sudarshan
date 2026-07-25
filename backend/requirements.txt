@@ -36,3 +36,6 @@ python-dotenv
 pytesseract
 Pillow
 yara-python
+
+# Streaming support for Investigation Assistant
+sse-starlette

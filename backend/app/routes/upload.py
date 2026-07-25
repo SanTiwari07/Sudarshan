@@ -43,6 +43,7 @@ from app.models.schemas import (
     ThreatScenarioRow,
 )
 from app.rag.knowledge_base import build_rag_context  # noqa: F401
+from app.ai.gemini_rag import build_investigation_index
 from app.routes.report import cache_report
 from app.services.mobsf_client import MobSFAnalysisError, MobSFClient, MobSFNotAvailable
 from app.services.threat_correlator import correlate
@@ -287,7 +288,7 @@ async def _run_analysis_pipeline(
     await save_case(sha256_hash, result, analyst_id=analyst_id)
 
     # ── Cache for export endpoints ────────────────────────────────────────────
-    cache_report(sha256_hash, {
+    report_cache_data = {
         "sha256": sha256_hash,
         "package_name": package_name,
         "family_classification": family_class,
@@ -301,7 +302,15 @@ async def _run_analysis_pipeline(
         "targets_indian_banks": flags_dict.get("targets_indian_banks", False),
         "threat_correlation": correlation_raw,
         "intelligence_report": llm_response,
-    })
+    }
+    cache_report(sha256_hash, report_cache_data)
+
+    # ── Build RAG investigation index for AI Assistant ────────────────────────
+    try:
+        build_investigation_index(sha256_hash, result)
+        logger.info(f"[RAG] Investigation indexed for {sha256_hash}")
+    except Exception as e:
+        logger.warning(f"[RAG] Investigation indexing failed (non-critical): {e}")
 
     return result
 

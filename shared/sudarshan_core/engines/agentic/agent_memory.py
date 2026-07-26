@@ -37,7 +37,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Deque, Dict, List, Optional, Set, Tuple
 
-from app.engines.agentic.sanitizer import sanitize, sanitize_all
+from sudarshan_core.engines.agentic.sanitizer import sanitize, sanitize_all
 
 logger = logging.getLogger(__name__)
 

@@ -1,4 +1,4 @@
-from app.models.schemas import StaticAnalysisFlags
+from sudarshan_core.models.schemas import StaticAnalysisFlags
 
 FAMILIES = ["Xenomorph", "Cerberus", "Anubis", "Hydra", "SpyNote", "Joker", "Drinik", "Unknown"]
 

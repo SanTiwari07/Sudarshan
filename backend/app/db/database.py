@@ -13,7 +13,8 @@ import json
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator, Dict, List, Optional
 
 import aiosqlite
 
@@ -70,14 +71,46 @@ CREATE TABLE IF NOT EXISTS ioc_cache (
 """
 
 
-async def init_db() -> None:
-    """Create all tables if they don't exist."""
+# ─── Indexes ──────────────────────────────────────────────────────────────────
+# Without these, every /api/v1/cases request full-scans and sorts the cases
+# table (once for the page, once for COUNT). SQLite does NOT index foreign keys
+# automatically, so analyst_id needs an explicit one too.
+_CREATE_INDEXES = (
+    "CREATE INDEX IF NOT EXISTS idx_cases_created_at ON cases(created_at DESC);",
+    "CREATE INDEX IF NOT EXISTS idx_cases_analyst    ON cases(analyst_id);",
+    "CREATE INDEX IF NOT EXISTS idx_ioc_expires      ON ioc_cache(expires_at);",
+)
+
+
+@asynccontextmanager
+async def _connect() -> AsyncIterator[aiosqlite.Connection]:
+    """
+    Open a connection with the pragmas this app depends on.
+
+    These are per-connection in SQLite, so they must be set on every handle:
+      journal_mode=WAL  readers no longer block on a writer
+      busy_timeout      wait for a lock instead of raising 'database is locked'
+                        immediately (the default is 0)
+      foreign_keys=ON   without this the cases.analyst_id REFERENCES clause is
+                        silently unenforced
+    """
     async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("PRAGMA journal_mode=WAL;")
+        await db.execute("PRAGMA busy_timeout=5000;")
+        await db.execute("PRAGMA foreign_keys=ON;")
+        yield db
+
+
+async def init_db() -> None:
+    """Create all tables and indexes if they don't exist."""
+    async with _connect() as db:
         await db.execute(_CREATE_USERS)
         await db.execute(_CREATE_CASES)
         await db.execute(_CREATE_IOC_CACHE)
+        for stmt in _CREATE_INDEXES:
+            await db.execute(stmt)
         await db.commit()
-    logger.info(f"[DB] Initialized SQLite at {DB_PATH}")
+    logger.info(f"[DB] Initialized SQLite at {DB_PATH} (WAL, FK enforced, indexed)")
 
 
 # ─── Cases ───────────────────────────────────────────────────────────────────
@@ -89,7 +122,7 @@ async def save_case(sha256: str, result: Dict[str, Any], analyst_id: Optional[in
     scenario_json = json.dumps(result.get("threat_scenario_table", []))
     intel_json = json.dumps(result.get("intelligence_report") or {})
 
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with _connect() as db:
         await db.execute(
             """
             INSERT OR REPLACE INTO cases
@@ -124,7 +157,7 @@ async def save_case(sha256: str, result: Dict[str, Any], analyst_id: Optional[in
 
 async def get_case(sha256: str) -> Optional[Dict[str, Any]]:
     """Retrieve a single case by SHA256."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with _connect() as db:
         db.row_factory = aiosqlite.Row
         async with db.execute("SELECT * FROM cases WHERE sha256 = ?", (sha256,)) as cur:
             row = await cur.fetchone()
@@ -135,9 +168,9 @@ async def get_case(sha256: str) -> Optional[Dict[str, Any]]:
 
 async def list_cases(limit: int = 50, offset: int = 0, analyst_id: Optional[int] = None) -> List[Dict[str, Any]]:
     """Return paginated list of cases, newest first."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with _connect() as db:
         db.row_factory = aiosqlite.Row
-        if analyst_id:
+        if analyst_id is not None:
             sql = "SELECT * FROM cases WHERE analyst_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?"
             params = (analyst_id, limit, offset)
         else:
@@ -149,7 +182,7 @@ async def list_cases(limit: int = 50, offset: int = 0, analyst_id: Optional[int]
 
 
 async def count_cases() -> int:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with _connect() as db:
         async with db.execute("SELECT COUNT(*) FROM cases") as cur:
             row = await cur.fetchone()
     return row[0] if row else 0
@@ -173,7 +206,7 @@ def _row_to_case(row: Dict) -> Dict[str, Any]:
 async def get_cached_ioc(indicator: str, ioc_type: str) -> Optional[Dict[str, Any]]:
     """Return cached IOC reputation if not expired."""
     now = datetime.now(timezone.utc).isoformat()
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with _connect() as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
             "SELECT * FROM ioc_cache WHERE indicator=? AND ioc_type=? AND expires_at>?",
@@ -204,7 +237,7 @@ async def save_ioc_cache(
     from datetime import timedelta
     now = datetime.now(timezone.utc)
     expires = (now + timedelta(hours=ttl_hours)).isoformat()
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with _connect() as db:
         await db.execute(
             """
             INSERT OR REPLACE INTO ioc_cache
@@ -220,7 +253,7 @@ async def save_ioc_cache(
 # ─── Users ────────────────────────────────────────────────────────────────────
 
 async def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with _connect() as db:
         db.row_factory = aiosqlite.Row
         async with db.execute("SELECT * FROM users WHERE username=?", (username,)) as cur:
             row = await cur.fetchone()
@@ -228,7 +261,7 @@ async def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
 
 
 async def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with _connect() as db:
         db.row_factory = aiosqlite.Row
         async with db.execute("SELECT * FROM users WHERE id=?", (user_id,)) as cur:
             row = await cur.fetchone()
@@ -238,7 +271,7 @@ async def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
 async def create_user(username: str, hashed_pw: str, role: str = "analyst") -> int:
     """Insert a new user, return the new row id."""
     now = datetime.now(timezone.utc).isoformat()
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with _connect() as db:
         cur = await db.execute(
             "INSERT INTO users (username, hashed_pw, role, created_at) VALUES (?,?,?,?)",
             (username, hashed_pw, role, now),
@@ -247,7 +280,14 @@ async def create_user(username: str, hashed_pw: str, role: str = "analyst") -> i
         return cur.lastrowid
 
 
+async def update_user_role(user_id: int, role: str) -> None:
+    """Change a user's role. Callers must enforce that the actor is an admin."""
+    async with _connect() as db:
+        await db.execute("UPDATE users SET role=? WHERE id=?", (role, user_id))
+        await db.commit()
+
+
 async def username_exists(username: str) -> bool:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with _connect() as db:
         async with db.execute("SELECT id FROM users WHERE username=?", (username,)) as cur:
             return await cur.fetchone() is not None

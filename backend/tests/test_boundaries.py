@@ -18,15 +18,15 @@ import math
 
 import pytest
 
-from app.engines.agentic.device_properties import (
+from sudarshan_core.engines.agentic.device_properties import (
     FALLBACK_SCREEN_HEIGHT,
     FALLBACK_SCREEN_WIDTH,
     clear_cache,
     get_screen_size,
     parse_wm_size,
 )
-from app.engines.risk_engine import calculate_risk_score
-from app.models.schemas import StaticAnalysisFlags
+from sudarshan_core.engines.risk_engine import calculate_risk_score
+from sudarshan_core.models.schemas import StaticAnalysisFlags
 
 
 def _score(dynamic):
@@ -175,8 +175,8 @@ def test_validator_and_executor_agree(monkeypatch):
     monkeypatch.setenv("SUDARSHAN_SCREEN_WIDTH", "1080")
     monkeypatch.setenv("SUDARSHAN_SCREEN_HEIGHT", "2400")
 
-    from app.engines.agentic.planner import AgentPlanner
-    from app.engines.agentic.tool_executor import ToolExecutor
+    from sudarshan_core.engines.agentic.planner import AgentPlanner
+    from sudarshan_core.engines.agentic.tool_executor import ToolExecutor
 
     planner = AgentPlanner(api_key=None, device_serial="s", package_name="p")
     executor = ToolExecutor(device_serial="s", package_name="p")
@@ -194,8 +194,8 @@ def test_tall_screen_coordinates_are_accepted(monkeypatch):
 
     import json as _json
 
-    from app.engines.agentic.perception import Observation
-    from app.engines.agentic.planner import AgentPlanner
+    from sudarshan_core.engines.agentic.perception import Observation
+    from sudarshan_core.engines.agentic.planner import AgentPlanner
 
     planner = AgentPlanner(api_key=None, device_serial="s", package_name="p")
     action = _json.dumps({
@@ -215,8 +215,8 @@ def test_coordinate_beyond_real_screen_is_still_rejected(monkeypatch):
 
     import json as _json
 
-    from app.engines.agentic.perception import Observation
-    from app.engines.agentic.planner import AgentPlanner
+    from sudarshan_core.engines.agentic.perception import Observation
+    from sudarshan_core.engines.agentic.planner import AgentPlanner
 
     planner = AgentPlanner(api_key=None, device_serial="s", package_name="p")
     action = _json.dumps({

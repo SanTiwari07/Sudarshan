@@ -9,7 +9,7 @@ import {
 import type { FraudCardData } from '../App';
 import {
   getMitreAttack, getRiskBreakdown, getAttackChain, getTopEvidence,
-  getConfidencePercent, generateAIResponse, riskBandBg, riskBandText,
+  getConfidencePercent, riskBandBg, riskBandText,
   severityBg, exportJSON, exportCSV,
 } from '../utils/derive';
 
@@ -483,7 +483,6 @@ function AIConfidenceWidget({ data, confidence }: { data: FraudCardData; confide
 
 function RiskBreakdownSidebar({ data }: { data: FraudCardData }) {
   const breakdown = getRiskBreakdown(data);
-  const maxAll = Math.max(...breakdown.map(b => b.maxScore), 1);
 
   return (
     <SocCard>

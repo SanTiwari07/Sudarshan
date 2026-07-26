@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
-  Globe, Shield, AlertTriangle, CheckCircle2, XCircle,
+  Globe, Shield, CheckCircle2, XCircle,
   ExternalLink, Copy, Activity, Target, FileText,
-  BarChart2, Zap, Info, AlertOctagon, TrendingUp,
-  Database, Lock
+  BarChart2, Info, AlertOctagon,
+  Database
 } from 'lucide-react';
 import type { FraudCardData, IOCReputation } from '../App';
+import { API_BASE, downloadAuthed } from '../config';
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
@@ -598,33 +599,40 @@ function ExportPanel({ data }: { data: FraudCardData }) {
   const [toast, setToast] = useState<string | null>(null);
   const show = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500); };
 
-  const stixUrl = `http://localhost:8000/api/v1/report/stix/${data.sha256}`;
-  const iocsUrl = `http://localhost:8000/api/v1/report/iocs/${data.sha256}`;
+  const stixUrl = `${API_BASE}/report/stix/${data.sha256}`;
+  const iocsUrl = `${API_BASE}/report/iocs/${data.sha256}`;
+
+  // These endpoints require a Bearer token, so they cannot be plain <a href>
+  // links — the browser would not attach the Authorization header.
+  const exportFile = async (url: string, filename: string) => {
+    try {
+      await downloadAuthed(url, filename);
+      show('Export downloaded');
+    } catch (e) {
+      show(e instanceof Error ? e.message : 'Export failed');
+    }
+  };
 
   return (
     <SocCard className="relative">
       <SectionHeader icon={<FileText className="h-4 w-4" />} title="Export & Share" />
       <div className="p-4 grid grid-cols-2 gap-2">
-        <a
-          href={stixUrl}
-          target="_blank"
-          rel="noreferrer"
+        <button
+          onClick={() => exportFile(stixUrl, `sudarshan_stix_${data.sha256.slice(0, 12)}.json`)}
           className="flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium text-gray-700 bg-gray-50 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors"
         >
           <Globe className="h-3.5 w-3.5" />
           STIX 2.1 Bundle
           <ExternalLink className="h-2.5 w-2.5 ml-auto" />
-        </a>
-        <a
-          href={iocsUrl}
-          target="_blank"
-          rel="noreferrer"
+        </button>
+        <button
+          onClick={() => exportFile(iocsUrl, `sudarshan_iocs_${data.sha256.slice(0, 12)}.csv`)}
           className="flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium text-gray-700 bg-gray-50 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors"
         >
           <Database className="h-3.5 w-3.5" />
           IOC CSV Export
           <ExternalLink className="h-2.5 w-2.5 ml-auto" />
-        </a>
+        </button>
         <button
           onClick={() => { navigator.clipboard.writeText(data.sha256); show('SHA256 copied'); }}
           className="flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium text-gray-700 bg-gray-50 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors"

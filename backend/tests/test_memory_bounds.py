@@ -15,7 +15,7 @@ import time
 
 import pytest
 
-from app.engines.agentic.agent_memory import (
+from sudarshan_core.engines.agentic.agent_memory import (
     MAX_ACTIONS_TRACKED_PER_SCREEN,
     MAX_FAILED_ACTIONS,
     MAX_NETWORK_EVENTS,
@@ -87,7 +87,7 @@ def test_per_screen_action_list_is_bounded(memory):
 
 def test_loop_detection_still_works_after_bounding(memory):
     """Bounding must not break the behaviour the collection exists for."""
-    from app.engines.agentic.agent_memory import MAX_ACTIONS_PER_SCREEN
+    from sudarshan_core.engines.agentic.agent_memory import MAX_ACTIONS_PER_SCREEN
     memory.register_screen("s", "com.x/.A")
     for _ in range(MAX_ACTIONS_PER_SCREEN):
         memory.record_action(tool="tap", target="btn", goal_name="g",
@@ -164,7 +164,7 @@ def test_most_recent_failures_are_the_ones_retained(memory):
 # ─── Credential safety must survive the refactor ──────────────────────────────
 
 def test_credential_values_never_stored(memory):
-    from app.engines.agentic.tool_executor import FORM_VALUES
+    from sudarshan_core.engines.agentic.tool_executor import FORM_VALUES
     memory.register_screen("s", "com.x/.A")
     memory.record_action(tool="type_text", target="pwd", goal_name="Login Flow",
                          reasoning="r", success=True, credential_key="password")

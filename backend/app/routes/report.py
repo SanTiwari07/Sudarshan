@@ -16,9 +16,11 @@ from datetime import datetime, timezone
 from io import StringIO
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
+
+from app.auth.auth import require_analyst
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -150,7 +152,7 @@ def _build_stix_bundle(report: Dict[str, Any]) -> Dict:
 
 
 @router.get("/report/stix/{sha256}")
-async def export_stix(sha256: str):
+async def export_stix(sha256: str, user: dict = Depends(require_analyst)):
     """Export analysis as STIX 2.1 JSON bundle."""
     report = get_cached_report(sha256)
     if not report:
@@ -162,7 +164,7 @@ async def export_stix(sha256: str):
 # ─── IOC CSV Export ───────────────────────────────────────────────────────────
 
 @router.get("/report/iocs/{sha256}", response_class=PlainTextResponse)
-async def export_iocs_csv(sha256: str):
+async def export_iocs_csv(sha256: str, user: dict = Depends(require_analyst)):
     """Export IOCs as CSV for SIEM ingestion."""
     report = get_cached_report(sha256)
     if not report:
@@ -220,7 +222,7 @@ class ChatResponse(BaseModel):
 
 
 @router.post("/chat/stream")
-async def analyst_chat_stream(req: ChatRequest):
+async def analyst_chat_stream(req: ChatRequest, user: dict = Depends(require_analyst)):
     """
     Gemini RAG streaming SSE endpoint — primary chat interface.
 
@@ -256,7 +258,7 @@ async def analyst_chat_stream(req: ChatRequest):
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def analyst_chat(req: ChatRequest):
+async def analyst_chat(req: ChatRequest, user: dict = Depends(require_analyst)):
     """
     Gemini RAG non-streaming endpoint (legacy / fallback).
     Returns complete answer in one response.

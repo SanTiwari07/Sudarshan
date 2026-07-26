@@ -22,8 +22,8 @@ import math
 
 import pytest
 
-from app.engines.risk_engine import calculate_risk_score
-from app.models.schemas import StaticAnalysisFlags
+from sudarshan_core.engines.risk_engine import calculate_risk_score
+from sudarshan_core.models.schemas import StaticAnalysisFlags
 
 # Band edges, from risk_engine: <=30 Safe, <=60 Suspicious, <=89 High Risk, else Critical
 BANDS = ("Safe", "Suspicious", "High Risk", "Critical")
@@ -139,8 +139,18 @@ def test_full_branch_is_selected_with_dynamic():
     assert result["frs_breakdown"]["dynamic_available"] is True
 
 
-def test_static_only_weights_sum_correctly():
-    """FRS = 0.50*STEI + 0.25*Correlation + 0.25*Banking when no dynamic data."""
+def test_static_only_weights_renormalise_over_available_axes():
+    """
+    With dynamic unavailable, the remaining axes are renormalised so their
+    weights sum to 1.0.
+
+    This replaces the previous fixed 0.50/0.25/0.25 assertion. That formula
+    multiplied every unavailable axis by its weight against a value of 0, so a
+    deployment without VirusTotal/OTX keys had ~20-25% of every score pinned at
+    zero — absence of evidence scored as evidence of innocence. Measured on the
+    labelled corpus, that alone kept real banking trojans inside the "Safe"
+    band. See tests/test_detection_regressions.py.
+    """
     result = calculate_risk_score(
         StaticAnalysisFlags(has_accessibility_abuse=True),
         ai_confidence=1.0,
@@ -148,8 +158,15 @@ def test_static_only_weights_sum_correctly():
         family="Anubis",
     )
     b = result["frs_breakdown"]
-    expected = 0.50 * b["stei"] + 0.25 * b["correlation"] + 0.25 * b["banking_impact"]
-    assert result["base_score"] == pytest.approx(round(expected, 2), abs=0.01)
+
+    # dynamic is the only unavailable axis here
+    assert b["axes_excluded"] == ["dynamic"]
+    assert abs(sum(b["axes_used"].values()) - 1.0) < 0.01
+
+    # axes_used publishes weights rounded to 3 decimals for readability, so
+    # recomputing from them cannot be exact — allow for that rounding only.
+    expected = sum(w * b[axis] for axis, w in b["axes_used"].items())
+    assert result["base_score"] == pytest.approx(expected, abs=0.1)
 
 
 def test_full_frs_weights_sum_correctly():
@@ -282,15 +299,37 @@ def test_result_is_finite_for_all_scenarios():
 
 
 def test_confidence_rises_with_more_sources():
+    """
+    A corroborating source must raise confidence — but only if it actually
+    observed something. The dynamic fixture here now carries real events; it
+    previously passed an empty run (bfci 10, no API/network/activity records),
+    which under the corrected contract is an inconclusive run and no longer
+    counts as a source. See test_confidence_does_not_rise_on_an_empty_run.
+    """
     static_only = calculate_risk_score(StaticAnalysisFlags(), ai_confidence=1.0)
     all_sources = calculate_risk_score(
         StaticAnalysisFlags(), ai_confidence=1.0,
-        dynamic_result={"available": True, "engine": "frida", "bfci": 10.0, "bfci_components": {}},
+        dynamic_result={
+            "available": True, "engine": "frida", "bfci": 10.0, "bfci_components": {},
+            "api_calls": ["Activity.onCreate"],
+            "activities_triggered": ["MainActivity"],
+            "network_logs": ["GET https://example/config"],
+        },
         correlation_result={"available": True, "threat_score": 10.0},
         family="Anubis",
     )
     assert all_sources["confidence"] > static_only["confidence"]
     assert all_sources["confidence"] <= 99.0
+
+
+def test_confidence_does_not_rise_on_an_empty_run():
+    """A sandbox run that observed nothing is not corroboration."""
+    static_only = calculate_risk_score(StaticAnalysisFlags(), ai_confidence=1.0)
+    empty_run = calculate_risk_score(
+        StaticAnalysisFlags(), ai_confidence=1.0,
+        dynamic_result={"available": True, "engine": "frida", "bfci": 10.0, "bfci_components": {}},
+    )
+    assert empty_run["confidence"] <= static_only["confidence"]
 
 
 # ─── Determinism ──────────────────────────────────────────────────────────────

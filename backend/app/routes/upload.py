@@ -16,6 +16,7 @@ import hashlib
 import logging
 import os
 import tempfile
+from pathlib import Path
 import asyncio
 import httpx
 from typing import Any, Dict, Optional
@@ -23,13 +24,13 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from app.ai.ollama_client import analyze_with_llm
-from app.analyzers.apk_analyzer import analyze_apk
+from sudarshan_core.analyzers.apk_analyzer import analyze_apk
 from app.auth.auth import get_current_user, require_analyst
 from app.db.database import save_case
-from app.engines.classification_engine import classify_family
-from app.engines.frida_sandbox import get_sandbox_status, run_frida_analysis
-from app.engines.risk_engine import calculate_risk_score
-from app.models.schemas import (
+from sudarshan_core.engines.classification_engine import classify_family
+from sudarshan_core.engines.frida_sandbox import get_sandbox_status, run_frida_analysis
+from sudarshan_core.engines.risk_engine import calculate_risk_score
+from sudarshan_core.models.schemas import (
     AnalysisResponse,
     CodeFinding,
     DynamicAnalysisResult,
@@ -48,11 +49,11 @@ from app.models.schemas import (
 from app.rag.knowledge_base import build_rag_context  # noqa: F401
 from app.ai.gemini_rag import build_investigation_index
 from app.routes.report import cache_report
-from app.services.mobsf_client import MobSFAnalysisError, MobSFClient, MobSFNotAvailable
-from app.services.threat_correlator import correlate
+from sudarshan_core.services.mobsf_client import MobSFAnalysisError, MobSFClient, MobSFNotAvailable
+from sudarshan_core.services.threat_correlator import correlate
 from app.workers.analysis_queue import create_job, enqueue, get_job
-from app.models.manifest import build_manifest, InvestigationManifest
-from app.engines.frida_sandbox import artifact_dir_for
+from sudarshan_core.models.manifest import build_manifest, InvestigationManifest
+from sudarshan_core.engines.frida_sandbox import artifact_dir_for
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -63,18 +64,24 @@ _mobsf = MobSFClient()
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
 def _flags_to_dict(flags: Any) -> Dict[str, Any]:
-    """Convert StaticAnalysisFlags to plain dict."""
-    return {
-        "has_accessibility_abuse": flags.has_accessibility_abuse,
-        "has_sms_read_write": flags.has_sms_read_write,
-        "has_system_alert_window": flags.has_system_alert_window,
-        "dangerous_apis_found": flags.dangerous_apis_found,
-        "hardcoded_urls_ips": flags.hardcoded_urls_ips,
-        "targets_indian_banks": flags.targets_indian_banks,
-        "indian_bank_packages_found": getattr(flags, "indian_bank_packages_found", []),
-        "obfuscation_score": getattr(flags, "obfuscation_score", 0.0),
-        "has_reflection": getattr(flags, "has_reflection", False),
-    }
+    """
+    Convert StaticAnalysisFlags to a plain dict for the risk engine.
+
+    Dumps the model rather than enumerating fields by hand. The previous
+    hand-written list silently dropped any flag added later: when
+    has_concealed_payload was introduced, the analyser set it correctly but this
+    function discarded it, so the Obfuscation axis never saw it and packed
+    malware (Anubis) still scored "Safe" through the backend while the engine
+    scored it "Suspicious". A field list that must be kept in sync by hand will
+    fall out of sync.
+    """
+    if hasattr(flags, "model_dump"):        # pydantic v2
+        return flags.model_dump()
+    if hasattr(flags, "dict"):              # pydantic v1
+        return flags.dict()
+    if isinstance(flags, dict):
+        return dict(flags)
+    return {k: v for k, v in vars(flags).items() if not k.startswith("_")}
 
 
 def _build_correlation_model(raw: Dict) -> ThreatCorrelationResult:
@@ -134,6 +141,10 @@ def _build_fraud_workflow(raw: Optional[Dict]) -> Optional[FraudWorkflow]:
 
 
 ANALYSIS_ENGINE_URL: str = os.getenv("ANALYSIS_ENGINE_URL", "http://analysis-engine:8001")
+
+# Shared with analysis-engine via the `uploads` docker volume.
+_UPLOADS_DIR = Path(os.getenv("UPLOADS_DIR", "/app/uploads"))
+_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 async def _call_analysis_engine(temp_path: str, sha256_hash: str) -> Optional[Dict[str, Any]]:
@@ -236,8 +247,8 @@ async def _run_analysis_pipeline(
     apktool_result = None
     jadx_result = None
     try:
-        from app.engines.apktool_engine import ApktoolEngine
-        from app.engines.jadx_engine import JadxEngine
+        from sudarshan_core.engines.apktool_engine import ApktoolEngine
+        from sudarshan_core.engines.jadx_engine import JadxEngine
         _apktool = ApktoolEngine()
         _jadx = JadxEngine()
         if _apktool.is_available():
@@ -313,11 +324,11 @@ async def _run_analysis_pipeline(
         try:
             use_multistage = os.getenv("SUDARSHAN_MULTISTAGE", "false").lower() == "true"
             if use_multistage:
-                from app.engines.multi_stage_engine import MultiStageEngine
+                from sudarshan_core.engines.multi_stage_engine import MultiStageEngine
                 engine = MultiStageEngine(apk_path=temp_path, package_name=package_name)
                 dynamic_result = await engine.run_all_stages()
             else:
-                from app.engines.frida_sandbox import run_frida_analysis
+                from sudarshan_core.engines.frida_sandbox import run_frida_analysis
                 dynamic_result = await run_frida_analysis(temp_path, package_name=package_name)
             if dynamic_result.get("available"):
                 logger.info(f"Frida BFCI={dynamic_result.get('bfci', 0):.1f}")
@@ -498,16 +509,14 @@ def _build_response(result: Dict[str, Any], job_id: Optional[str] = None) -> Ana
         analysis_note=llm_response.get("analysis_note"),
     )
 
-    frs_bd = result.get("frs_breakdown", {})
-    frs_model = FRSBreakdown(
-        stei=frs_bd.get("stei", 0.0),
-        dynamic=frs_bd.get("dynamic", 0.0),
-        correlation=frs_bd.get("correlation", 0.0),
-        banking_impact=frs_bd.get("banking_impact", 0.0),
-        formula_used=frs_bd.get("formula_used", "static_only_frs"),
-        dynamic_available=frs_bd.get("dynamic_available", False),
-        stei_axes=frs_bd.get("stei_axes", {}),
-    )
+    # Build from the engine's own keys rather than re-listing them. The previous
+    # explicit mapping dropped every field added later (axes_excluded,
+    # concealed_payload, verdict_floored_for_visibility, dynamic_conclusive), so
+    # the API reported null for provenance the engine had actually computed.
+    # Unknown keys are ignored by pydantic, so this stays safe as the engine grows.
+    frs_bd = result.get("frs_breakdown", {}) or {}
+    known = set(FRSBreakdown.model_fields)
+    frs_model = FRSBreakdown(**{k: v for k, v in frs_bd.items() if k in known})
 
     scenario_rows = [
         ThreatScenarioRow(**row)
@@ -589,6 +598,16 @@ async def analyze_upload(
         raise HTTPException(status_code=400, detail="Invalid file type. Only .apk files are allowed.")
 
     hasher = hashlib.sha256()
+    # NOTE: deliberately NOT on the shared uploads volume.
+    #
+    # Putting it there makes _call_analysis_engine succeed, and the engine
+    # result is then returned verbatim by _run_analysis_pipeline — but the
+    # engine cannot produce intelligence_report (LLM/RAG is backend-only),
+    # so _build_response raises KeyError and the request 500s.
+    #
+    # The delegation path therefore stays disabled until the gateway MERGES
+    # the engine result into its own pipeline instead of returning it raw.
+    # See audit/01_Architecture.md §4 and audit/03_Backend_Audit.md §1.
     with tempfile.NamedTemporaryFile(delete=False, suffix=".apk") as tmp:
         while True:
             chunk = await file.read(1024 * 1024 * 8) # 8MB chunks
@@ -641,6 +660,16 @@ async def analyze_upload_async(
         raise HTTPException(status_code=400, detail="Invalid file type. Only .apk files are allowed.")
 
     hasher = hashlib.sha256()
+    # NOTE: deliberately NOT on the shared uploads volume.
+    #
+    # Putting it there makes _call_analysis_engine succeed, and the engine
+    # result is then returned verbatim by _run_analysis_pipeline — but the
+    # engine cannot produce intelligence_report (LLM/RAG is backend-only),
+    # so _build_response raises KeyError and the request 500s.
+    #
+    # The delegation path therefore stays disabled until the gateway MERGES
+    # the engine result into its own pipeline instead of returning it raw.
+    # See audit/01_Architecture.md §4 and audit/03_Backend_Audit.md §1.
     with tempfile.NamedTemporaryFile(delete=False, suffix=".apk") as tmp:
         while True:
             chunk = await file.read(1024 * 1024 * 8)
@@ -688,7 +717,7 @@ async def job_status(job_id: str, user: dict = Depends(require_analyst)):
 # ─── Sandbox Status Endpoint ──────────────────────────────────────────────────
 
 @router.get("/sandbox/status")
-async def sandbox_status():
+async def sandbox_status(user: dict = Depends(require_analyst)):
     """
     Returns the current status of the Frida dynamic analysis sandbox.
     Check this endpoint before running dynamic analysis.

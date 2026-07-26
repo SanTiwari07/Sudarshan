@@ -34,8 +34,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
-from app.engines.agentic.device_properties import get_screen_size
-from app.engines.agentic.tool_registry import get_tool
+from sudarshan_core.engines.agentic.device_properties import get_screen_size
+from sudarshan_core.engines.agentic.tool_registry import get_tool
 
 logger = logging.getLogger(__name__)
 

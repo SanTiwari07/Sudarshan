@@ -17,7 +17,7 @@ Environment variable:
 
 Usage::
 
-    from app.engines.jadx_engine import JadxEngine
+    from sudarshan_core.engines.jadx_engine import JadxEngine
 
     engine = JadxEngine()
     result = engine.analyze(apk_path)

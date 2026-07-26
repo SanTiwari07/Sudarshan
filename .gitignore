@@ -93,15 +93,22 @@ npm-debug.log
 yarn-error.log
 yarn-debug.log
 .pnpm-debug.log
-package-lock.json
-yarn.lock
-pnpm-lock.yaml
+# Lockfiles are COMMITTED on purpose — without one, `npm install` can resolve
+# different dependency versions from the same commit, so builds are not
+# reproducible and a compromised transitive dep cannot be pinned out.
 
 # Build output (frontend)
 dist/
 build/
 out/
 .next/
+
+# Databases — these contain user accounts and password hashes. Never track.
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
 
 # Project Specific
 backend_logs_output.txt
@@ -119,3 +126,11 @@ backend/sudarshan_artifacts/
 .idea/
 .idea
 powershell.cmd
+
+
+.github/
+.github
+
+audit/
+
+test apk/

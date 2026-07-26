@@ -1,9 +1,9 @@
 """
-Unit tests for Sudarshan Fraud Workflow Reconstructor (app.engines.workflow_reconstructor)
+Unit tests for Sudarshan Fraud Workflow Reconstructor (sudarshan_core.engines.workflow_reconstructor)
 """
 
 import pytest
-from app.engines.workflow_reconstructor import WorkflowReconstructor, FraudWorkflow
+from sudarshan_core.engines.workflow_reconstructor import WorkflowReconstructor, FraudWorkflow
 
 def test_reconstruct_empty():
     recon = WorkflowReconstructor()

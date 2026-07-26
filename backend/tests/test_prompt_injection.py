@@ -15,8 +15,8 @@ All app-derived strings now pass through one centralized sanitizer.
 
 import pytest
 
-from app.engines.agentic.perception import Observation, UINode
-from app.engines.agentic.sanitizer import (
+from sudarshan_core.engines.agentic.perception import Observation, UINode
+from sudarshan_core.engines.agentic.sanitizer import (
     MAX_FIELD_LENGTH,
     contains_injection_attempt,
     sanitize,
@@ -90,7 +90,7 @@ def test_frida_hook_name_payload_cannot_escape():
 
 
 def test_memory_context_payload_cannot_escape():
-    from app.engines.agentic.agent_memory import AgentMemory
+    from sudarshan_core.engines.agentic.agent_memory import AgentMemory
     memory = AgentMemory()
     memory.register_screen("s1", f"com.evil/{FENCE_CLOSE}")
     memory.record_action(

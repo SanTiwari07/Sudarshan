@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from app.engines.risk_engine import calculate_risk_score
+from sudarshan_core.engines.risk_engine import calculate_risk_score
 from tests.determinism_fixtures import VERDICT_FIELDS, replay_scenarios
 
 BASELINE_PATH = Path(__file__).parent / "determinism_baseline.json"
@@ -80,13 +80,13 @@ def test_agentic_imports_do_not_perturb_the_verdict():
     kwargs.pop("_name")
     before = _verdict(calculate_risk_score(**kwargs))
 
-    import app.engines.agentic.agent_memory          # noqa: F401
-    import app.engines.agentic.goal_tracker          # noqa: F401
-    import app.engines.agentic.perception            # noqa: F401
-    import app.engines.agentic.planner               # noqa: F401
-    import app.engines.agentic.sanitizer             # noqa: F401
-    import app.engines.agentic.tool_executor         # noqa: F401
-    import app.engines.agentic_explorer              # noqa: F401
+    import sudarshan_core.engines.agentic.agent_memory          # noqa: F401
+    import sudarshan_core.engines.agentic.goal_tracker          # noqa: F401
+    import sudarshan_core.engines.agentic.perception            # noqa: F401
+    import sudarshan_core.engines.agentic.planner               # noqa: F401
+    import sudarshan_core.engines.agentic.sanitizer             # noqa: F401
+    import sudarshan_core.engines.agentic.tool_executor         # noqa: F401
+    import sudarshan_core.engines.agentic_explorer              # noqa: F401
 
     assert _verdict(calculate_risk_score(**kwargs)) == before
 

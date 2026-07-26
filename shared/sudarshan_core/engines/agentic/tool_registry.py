@@ -22,7 +22,7 @@ Tool Definition fields:
 
 Usage::
 
-    from app.engines.agentic.tool_registry import TOOL_REGISTRY, ToolDef, ToolParam
+    from sudarshan_core.engines.agentic.tool_registry import TOOL_REGISTRY, ToolDef, ToolParam
     tool = TOOL_REGISTRY.get("tap")
     if tool:
         print(tool.description)

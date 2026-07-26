@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UploadCloud, FileType, AlertTriangle, Loader2 } from 'lucide-react';
+import { UploadCloud, AlertTriangle, Loader2 } from 'lucide-react';
 import type { FraudCardData } from '../App';
 import { getToken } from './Login';
 

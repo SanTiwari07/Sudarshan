@@ -15,7 +15,7 @@ This client handles:
   - Graceful fallback when MobSF is not available
 
 Usage:
-  from app.services.mobsf_client import MobSFClient, MobSFNotAvailable
+  from sudarshan_core.services.mobsf_client import MobSFClient, MobSFNotAvailable
 
   client = MobSFClient()
   if await client.is_available():

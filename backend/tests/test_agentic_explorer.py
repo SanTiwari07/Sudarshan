@@ -33,20 +33,20 @@ print(f"[SmokeTest] Python = {sys.version}")
 class TestImports(unittest.TestCase):
 
     def test_goal_tracker_imports(self):
-        from app.engines.agentic.goal_tracker import (
+        from sudarshan_core.engines.agentic.goal_tracker import (
             GoalTracker, GoalStatus, FraudGoal, _build_default_goals
         )
         self.assertTrue(True)
 
     def test_agent_memory_imports(self):
-        from app.engines.agentic.agent_memory import (
+        from sudarshan_core.engines.agentic.agent_memory import (
             AgentMemory, MAX_REASONING_HISTORY, MAX_ACTIONS_PER_SCREEN,
             MAX_TOTAL_HISTORY, MAX_FRIDA_EVENTS_PER_GOAL
         )
         self.assertTrue(True)
 
     def test_tool_registry_imports(self):
-        from app.engines.agentic.tool_registry import (
+        from sudarshan_core.engines.agentic.tool_registry import (
             TOOL_REGISTRY, ToolDef, ToolParam, get_tool, is_registered,
             all_tool_names, prompt_tool_catalog,
             DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT
@@ -54,14 +54,14 @@ class TestImports(unittest.TestCase):
         self.assertTrue(True)
 
     def test_tool_executor_imports(self):
-        from app.engines.agentic.tool_executor import (
+        from sudarshan_core.engines.agentic.tool_executor import (
             ToolExecutor, ToolResult, FORM_VALUES,
             SCREEN_WIDTH, SCREEN_HEIGHT
         )
         self.assertTrue(True)
 
     def test_perception_imports(self):
-        from app.engines.agentic.perception import (
+        from sudarshan_core.engines.agentic.perception import (
             PerceptionPipeline, Observation, UINode,
             LABELED_NODE_FRACTION_THRESHOLD, MIN_ACTIONABLE_NODES,
             WEBVIEW_ACTIVITY_PATTERNS, LOGCAT_LINES
@@ -69,17 +69,17 @@ class TestImports(unittest.TestCase):
         self.assertTrue(True)
 
     def test_audit_log_imports(self):
-        from app.engines.agentic.audit_log import (
+        from sudarshan_core.engines.agentic.audit_log import (
             AuditLog, MAX_FRIDA_EVENTS_PER_ENTRY
         )
         self.assertTrue(True)
 
     def test_benchmark_imports(self):
-        from app.engines.agentic.benchmark import BenchmarkCollector
+        from sudarshan_core.engines.agentic.benchmark import BenchmarkCollector
         self.assertTrue(True)
 
     def test_planner_imports(self):
-        from app.engines.agentic.planner import (
+        from sudarshan_core.engines.agentic.planner import (
             AgentPlanner, FallbackPlanner, GOAL_KEYWORD_MAP,
             FALLBACK_MAX_CONSECUTIVE_FAILURES, GEMINI_MODEL,
             ACTION_SCHEMA_REQUIRED
@@ -87,7 +87,7 @@ class TestImports(unittest.TestCase):
         self.assertTrue(True)
 
     def test_agentic_explorer_imports(self):
-        from app.engines.agentic_explorer import (
+        from sudarshan_core.engines.agentic_explorer import (
             AgenticExplorer, ACTION_BUDGET, FRIDA_SILENCE_THRESHOLD,
             HYBRID_JITTER_MIN, HYBRID_JITTER_MAX
         )
@@ -101,7 +101,7 @@ class TestImports(unittest.TestCase):
 class TestGoalTracker(unittest.TestCase):
 
     def setUp(self):
-        from app.engines.agentic.goal_tracker import GoalTracker, GoalStatus
+        from sudarshan_core.engines.agentic.goal_tracker import GoalTracker, GoalStatus
         self.GoalStatus = GoalStatus
         self.tracker = GoalTracker()
 
@@ -113,7 +113,7 @@ class TestGoalTracker(unittest.TestCase):
         a real permission Frida hook. No LLM/agent assertion is involved, which
         is exactly the property the production code must preserve.
         """
-        from app.engines.agentic.goal_tracker import LAUNCH_CONFIRMATIONS_REQUIRED
+        from sudarshan_core.engines.agentic.goal_tracker import LAUNCH_CONFIRMATIONS_REQUIRED
         for _ in range(LAUNCH_CONFIRMATIONS_REQUIRED):
             self.tracker.update_from_foreground(package, package)
         perms = self.tracker.get_goal_by_name("Grant Runtime Permissions")
@@ -191,7 +191,7 @@ class TestGoalTracker(unittest.TestCase):
 class TestAgentMemory(unittest.TestCase):
 
     def setUp(self):
-        from app.engines.agentic.agent_memory import (
+        from sudarshan_core.engines.agentic.agent_memory import (
             AgentMemory, MAX_ACTIONS_PER_SCREEN
         )
         self.AgentMemory = AgentMemory
@@ -245,7 +245,7 @@ class TestAgentMemory(unittest.TestCase):
 
     def test_prompt_context_does_not_contain_credential_values(self):
         """build_prompt_context() must never embed actual form values."""
-        from app.engines.agentic.tool_executor import FORM_VALUES
+        from sudarshan_core.engines.agentic.tool_executor import FORM_VALUES
         self.memory.record_action(
             tool="type_text", target="pwd_field", goal_name="Login Flow",
             reasoning="test", success=True, credential_key="password"
@@ -256,7 +256,7 @@ class TestAgentMemory(unittest.TestCase):
                              f"FORM_VALUE '{actual_value}' leaked into prompt context")
 
     def test_frida_events_recorded_with_cap(self):
-        from app.engines.agentic.agent_memory import MAX_FRIDA_EVENTS_PER_GOAL
+        from sudarshan_core.engines.agentic.agent_memory import MAX_FRIDA_EVENTS_PER_GOAL
         # Add more than the cap
         events = [{"category": "accessibility", "data": {"hook": f"hook_{i}"}}
                   for i in range(MAX_FRIDA_EVENTS_PER_GOAL + 10)]
@@ -268,7 +268,7 @@ class TestAgentMemory(unittest.TestCase):
                          MAX_FRIDA_EVENTS_PER_GOAL + 10)
 
     def test_reasoning_history_bounded(self):
-        from app.engines.agentic.agent_memory import MAX_REASONING_HISTORY
+        from sudarshan_core.engines.agentic.agent_memory import MAX_REASONING_HISTORY
         for i in range(MAX_REASONING_HISTORY + 5):
             self.memory.record_reasoning(f"reasoning {i}")
         self.assertLessEqual(len(self.memory.get_recent_reasoning()), MAX_REASONING_HISTORY)
@@ -281,7 +281,7 @@ class TestAgentMemory(unittest.TestCase):
 class TestToolRegistry(unittest.TestCase):
 
     def setUp(self):
-        from app.engines.agentic.tool_registry import (
+        from sudarshan_core.engines.agentic.tool_registry import (
             TOOL_REGISTRY, all_tool_names, is_registered, get_tool
         )
         self.TOOL_REGISTRY = TOOL_REGISTRY
@@ -343,7 +343,7 @@ class TestToolRegistry(unittest.TestCase):
 class TestPerception(unittest.TestCase):
 
     def setUp(self):
-        from app.engines.agentic.perception import (
+        from sudarshan_core.engines.agentic.perception import (
             PerceptionPipeline, Observation, UINode,
             LABELED_NODE_FRACTION_THRESHOLD, MIN_ACTIONABLE_NODES
         )
@@ -356,7 +356,7 @@ class TestPerception(unittest.TestCase):
         self.pipeline = PerceptionPipeline("emulator-5554", "com.test", "adb")
 
     def _make_node(self, text="", desc="", resource_id="", is_input=False):
-        from app.engines.agentic.perception import UINode
+        from sudarshan_core.engines.agentic.perception import UINode
         return UINode(
             node_id="n0", class_name="Button", text=text, desc=desc,
             resource_id=resource_id, center_x=540, center_y=960,
@@ -475,8 +475,8 @@ class TestPerception(unittest.TestCase):
 class TestPlannerValidation(unittest.TestCase):
 
     def setUp(self):
-        from app.engines.agentic.planner import AgentPlanner
-        from app.engines.agentic.perception import Observation
+        from sudarshan_core.engines.agentic.planner import AgentPlanner
+        from sudarshan_core.engines.agentic.perception import Observation
         # Planner without API key — testing validation only (no LLM calls)
         self.planner = AgentPlanner(
             api_key=None,
@@ -597,7 +597,7 @@ class TestPlannerValidation(unittest.TestCase):
 class TestAuditLog(unittest.TestCase):
 
     def setUp(self):
-        from app.engines.agentic.audit_log import AuditLog
+        from sudarshan_core.engines.agentic.audit_log import AuditLog
         self.AuditLog = AuditLog
         self.log = AuditLog()
 
@@ -630,8 +630,8 @@ class TestAuditLog(unittest.TestCase):
         self.assertEqual(entries[0]["event"], "test_start")
 
     def test_sanitize_action_redacts_credential_value(self):
-        from app.engines.agentic.audit_log import AuditLog
-        from app.engines.agentic.tool_executor import FORM_VALUES
+        from sudarshan_core.engines.agentic.audit_log import AuditLog
+        from sudarshan_core.engines.agentic.tool_executor import FORM_VALUES
         # Inject a real credential value into an action dict (belt-and-suspenders test)
         action_with_leak = {"tool": "type_text", "text": FORM_VALUES["password"],
                              "goal": "Login", "reasoning": "test", "confidence": 0.9}
@@ -641,7 +641,7 @@ class TestAuditLog(unittest.TestCase):
         self.assertIn("REDACTED", safe["text"])
 
     def test_sanitize_action_preserves_non_credential_text(self):
-        from app.engines.agentic.audit_log import AuditLog
+        from sudarshan_core.engines.agentic.audit_log import AuditLog
         action = {"tool": "click_text", "text": "Login",
                   "goal": "Login Flow", "reasoning": "test", "confidence": 0.9}
         safe = AuditLog._sanitize_action(action)
@@ -677,10 +677,10 @@ class TestAuditLog(unittest.TestCase):
 class TestFallbackPlanner(unittest.TestCase):
 
     def setUp(self):
-        from app.engines.agentic.planner import FallbackPlanner, FALLBACK_MAX_CONSECUTIVE_FAILURES
-        from app.engines.agentic.perception import Observation, UINode
-        from app.engines.agentic.goal_tracker import GoalTracker
-        from app.engines.agentic.agent_memory import AgentMemory
+        from sudarshan_core.engines.agentic.planner import FallbackPlanner, FALLBACK_MAX_CONSECUTIVE_FAILURES
+        from sudarshan_core.engines.agentic.perception import Observation, UINode
+        from sudarshan_core.engines.agentic.goal_tracker import GoalTracker
+        from sudarshan_core.engines.agentic.agent_memory import AgentMemory
         self.FallbackPlanner = FallbackPlanner
         self.LIMIT = FALLBACK_MAX_CONSECUTIVE_FAILURES
         self.Observation = Observation
@@ -688,7 +688,7 @@ class TestFallbackPlanner(unittest.TestCase):
         self.planner = FallbackPlanner()
 
     def _make_obs(self, nodes=None, screen_hash="s1", frida_events=None):
-        from app.engines.agentic.perception import Observation
+        from sudarshan_core.engines.agentic.perception import Observation
         return Observation(
             screen_hash=screen_hash,
             ui_nodes=nodes or [],
@@ -697,7 +697,7 @@ class TestFallbackPlanner(unittest.TestCase):
         )
 
     def _make_node(self, text):
-        from app.engines.agentic.perception import UINode
+        from sudarshan_core.engines.agentic.perception import UINode
         return UINode(
             node_id="n0", class_name="Button", text=text, desc="",
             resource_id="", center_x=540, center_y=960,
@@ -705,8 +705,8 @@ class TestFallbackPlanner(unittest.TestCase):
         )
 
     def _make_tracker_and_memory(self):
-        from app.engines.agentic.goal_tracker import GoalTracker
-        from app.engines.agentic.agent_memory import AgentMemory
+        from sudarshan_core.engines.agentic.goal_tracker import GoalTracker
+        from sudarshan_core.engines.agentic.agent_memory import AgentMemory
         return GoalTracker(), AgentMemory()
 
     def test_high_priority_keyword_selected_over_low(self):
@@ -779,25 +779,25 @@ class TestAgenticExplorerInterface(unittest.TestCase):
     """
 
     def test_start_method_exists_and_is_coroutine(self):
-        from app.engines.agentic_explorer import AgenticExplorer
+        from sudarshan_core.engines.agentic_explorer import AgenticExplorer
         import inspect
         self.assertTrue(inspect.iscoroutinefunction(AgenticExplorer.start))
 
     def test_stop_method_exists(self):
-        from app.engines.agentic_explorer import AgenticExplorer
+        from sudarshan_core.engines.agentic_explorer import AgenticExplorer
         self.assertTrue(callable(getattr(AgenticExplorer, "stop", None)))
 
     def test_get_reports_method_exists(self):
-        from app.engines.agentic_explorer import AgenticExplorer
+        from sudarshan_core.engines.agentic_explorer import AgenticExplorer
         self.assertTrue(callable(getattr(AgenticExplorer, "get_reports", None)))
 
     def test_flush_artifacts_method_exists(self):
-        from app.engines.agentic_explorer import AgenticExplorer
+        from sudarshan_core.engines.agentic_explorer import AgenticExplorer
         self.assertTrue(callable(getattr(AgenticExplorer, "flush_artifacts", None)))
 
     def test_get_reports_returns_all_required_keys(self):
         """get_reports() must return all keys that frida_sandbox.py reads."""
-        from app.engines.agentic_explorer import AgenticExplorer
+        from sudarshan_core.engines.agentic_explorer import AgenticExplorer
         explorer = AgenticExplorer(
             device_serial="emulator-5554",
             package_name="com.test",
@@ -813,7 +813,7 @@ class TestAgenticExplorerInterface(unittest.TestCase):
 
     def test_hybrid_jitter_constants_consistent(self):
         """Verify jitter values in code match documentation (100–300ms)."""
-        from app.engines.agentic_explorer import HYBRID_JITTER_MIN, HYBRID_JITTER_MAX
+        from sudarshan_core.engines.agentic_explorer import HYBRID_JITTER_MIN, HYBRID_JITTER_MAX
         self.assertAlmostEqual(HYBRID_JITTER_MIN, 0.1, places=3,
                                msg="HYBRID_JITTER_MIN should be 0.1s (100ms)")
         self.assertAlmostEqual(HYBRID_JITTER_MAX, 0.3, places=3,
@@ -827,7 +827,7 @@ class TestAgenticExplorerInterface(unittest.TestCase):
 class TestBenchmarkCollector(unittest.TestCase):
 
     def setUp(self):
-        from app.engines.agentic.benchmark import BenchmarkCollector
+        from sudarshan_core.engines.agentic.benchmark import BenchmarkCollector
         self.bm = BenchmarkCollector(explorer_mode="ai", package_name="com.test")
 
     def test_unique_screen_count(self):

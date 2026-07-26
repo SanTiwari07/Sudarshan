@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { GitBranch, ChevronDown, ChevronRight, AlertTriangle, CheckCircle2, Activity, Shield } from 'lucide-react';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────

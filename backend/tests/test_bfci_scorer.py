@@ -1,9 +1,9 @@
 """
-Unit tests for Sudarshan BFCI v2 Scoring Engine (app.engines.bfci_scorer)
+Unit tests for Sudarshan BFCI v2 Scoring Engine (sudarshan_core.engines.bfci_scorer)
 """
 
 import pytest
-from app.engines.bfci_scorer import (
+from sudarshan_core.engines.bfci_scorer import (
     score_component,
     detect_fraud_sequences,
     calculate_bfci_v2,

@@ -43,11 +43,19 @@ RUN curl -L "https://github.com/skylot/jadx/releases/download/v1.5.1/jadx-1.5.1.
 WORKDIR /app
 
 # 4. Install Python dependencies
-COPY requirements.txt .
+# Build context is the REPO ROOT (see docker-compose.yml).
+COPY analysis-engine/requirements.txt .
 RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
 
+# 4b. Shared analysis layer — the same package the backend installs, so the two
+#     services can no longer drift.
+COPY shared/ /opt/sudarshan-core/
+# Editable so the ./shared bind mount in docker-compose.yml gives the same
+# live-reload behaviour the service code already had.
+RUN pip install --no-cache-dir --break-system-packages -e /opt/sudarshan-core
+
 # 5. Copy Application Source Code & Entrypoint
-COPY . .
+COPY analysis-engine/ .
 RUN chmod +x /app/entrypoint.sh
 
 EXPOSE 8001

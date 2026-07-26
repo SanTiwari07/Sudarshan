@@ -64,11 +64,11 @@ import threading
 from collections import OrderedDict
 from typing import Any, Dict, List, Optional, Tuple
 
-from app.engines.agentic.agent_memory import AgentMemory
-from app.engines.agentic.goal_tracker import FraudGoal, GoalTracker
-from app.engines.agentic.perception import Observation
-from app.engines.agentic.device_properties import get_screen_size
-from app.engines.agentic.tool_registry import (
+from sudarshan_core.engines.agentic.agent_memory import AgentMemory
+from sudarshan_core.engines.agentic.goal_tracker import FraudGoal, GoalTracker
+from sudarshan_core.engines.agentic.perception import Observation
+from sudarshan_core.engines.agentic.device_properties import get_screen_size
+from sudarshan_core.engines.agentic.tool_registry import (
     TOOL_REGISTRY,
     is_registered,
 )
@@ -417,7 +417,7 @@ class AgentPlanner:
         It is NEVER mixed with application-controlled content.
         Application content only appears in the user context, tagged UNTRUSTED.
         """
-        from app.engines.agentic.tool_registry import prompt_tool_catalog
+        from sudarshan_core.engines.agentic.tool_registry import prompt_tool_catalog
         return f"""You are SUDARSHAN AGENT — an autonomous Android security analysis tool.
 
 YOUR ROLE:

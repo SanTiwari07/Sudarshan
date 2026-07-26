@@ -1,13 +1,18 @@
 import { Routes, Route, Link, useNavigate, Navigate } from 'react-router-dom';
 import { Shield, LayoutDashboard, Terminal, Globe, Database, LogOut, LogIn, MessageSquare } from 'lucide-react';
-import Upload from './pages/Upload';
-import FraudCard from './pages/FraudCard';
-import TechnicalView from './pages/TechnicalView';
-import ThreatIntelView from './pages/ThreatIntelView';
 import Login, { getToken, getUser, clearToken } from './pages/Login';
-import History from './pages/History';
-import InvestigationChat from './pages/InvestigationChat';
-import { useState } from 'react';
+import { lazy, Suspense, useState, useCallback, useMemo } from 'react';
+import ErrorBoundary from './components/ErrorBoundary';
+
+// Every route used to be a static import, so the login screen shipped the whole
+// application — including the 882-line FraudCard and the 620-line derive module.
+// Login itself stays eager: it is the first paint for an unauthenticated user.
+const Upload = lazy(() => import('./pages/Upload'));
+const FraudCard = lazy(() => import('./pages/FraudCard'));
+const TechnicalView = lazy(() => import('./pages/TechnicalView'));
+const ThreatIntelView = lazy(() => import('./pages/ThreatIntelView'));
+const History = lazy(() => import('./pages/History'));
+const InvestigationChat = lazy(() => import('./pages/InvestigationChat'));
 
 // ─── Type Definitions ─────────────────────────────────────────────────────────
 
@@ -214,10 +219,28 @@ export type FraudCardData = {
 
 // ─── Auth Guard ───────────────────────────────────────────────────────────────
 
-function RequireAuth({ children }: { children: React.ReactNode }) {
+function RouteFallback() {
+  return (
+    <div className="flex items-center justify-center py-24" role="status" aria-live="polite">
+      <div className="h-6 w-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      <span className="sr-only">Loading view…</span>
+    </div>
+  );
+}
+
+/**
+ * Auth guard. Note this checks token PRESENCE only — the server is the actual
+ * authority on validity, and every protected endpoint enforces it. This exists
+ * to avoid rendering a view that is guaranteed to 401.
+ */
+function RequireAuth({ children, label }: { children: React.ReactNode; label?: string }) {
   const token = getToken();
   if (!token) return <Navigate to="/login" replace />;
-  return <>{children}</>;
+  return (
+    <ErrorBoundary label={label}>
+      <Suspense fallback={<RouteFallback />}>{children}</Suspense>
+    </ErrorBoundary>
+  );
 }
 
 // ─── App ──────────────────────────────────────────────────────────────────────
@@ -228,13 +251,13 @@ function App() {
   const user = getUser();
   const isAuthed = !!getToken();
 
-  const hasIntel = analysisResult?.threat_correlation?.available;
+  const hasIntel = useMemo(() => analysisResult?.threat_correlation?.available, [analysisResult]);
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     clearToken();
     setAnalysisResult(null);
     navigate('/login');
-  };
+  }, [navigate]);
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-100">
@@ -324,22 +347,22 @@ function App() {
 
           {/* Protected */}
           <Route path="/" element={
-            <RequireAuth><Upload onAnalysisComplete={setAnalysisResult} /></RequireAuth>
+            <RequireAuth label="Upload"><Upload onAnalysisComplete={setAnalysisResult} /></RequireAuth>
           } />
           <Route path="/fraud-card" element={
-            <RequireAuth><FraudCard data={analysisResult} /></RequireAuth>
+            <RequireAuth label="Fraud Card"><FraudCard data={analysisResult} /></RequireAuth>
           } />
           <Route path="/technical" element={
-            <RequireAuth><TechnicalView data={analysisResult} /></RequireAuth>
+            <RequireAuth label="Technical View"><TechnicalView data={analysisResult} /></RequireAuth>
           } />
           <Route path="/threat-intel" element={
-            <RequireAuth><ThreatIntelView data={analysisResult} /></RequireAuth>
+            <RequireAuth label="Threat Intelligence"><ThreatIntelView data={analysisResult} /></RequireAuth>
           } />
           <Route path="/chat" element={
-            <RequireAuth><InvestigationChat data={analysisResult} /></RequireAuth>
+            <RequireAuth label="Investigation Chat"><InvestigationChat data={analysisResult} /></RequireAuth>
           } />
           <Route path="/history" element={
-            <RequireAuth><History /></RequireAuth>
+            <RequireAuth label="Case History"><History /></RequireAuth>
           } />
         </Routes>
       </main>

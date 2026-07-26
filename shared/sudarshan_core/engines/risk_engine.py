@@ -160,6 +160,18 @@ def _axis_ob(flags: Dict[str, Any]) -> Tuple[float, List[str]]:
         score += e_contrib
         evidence.append(f"String entropy {entropy:.2f} → obfuscated strings (+{e_contrib:.1f} OB)")
 
+    # Concealed payload — a nested APK/DEX or encrypted blob shipped as an asset.
+    # Weighted highest in this axis because it defeats static analysis outright:
+    # the manifest describes a stub, not the code that will actually run. Three
+    # trojans in the labelled corpus (Anubis, Hook, Drinik) declared 4, 1 and 16
+    # permissions respectively and scored below a file manager without this.
+    if flags.get("has_concealed_payload"):
+        score += 60.0
+        for line in (flags.get("concealment_evidence") or [])[:3]:
+            evidence.append(f"{line} (+60 OB)")
+        if not flags.get("concealment_evidence"):
+            evidence.append("Concealed executable payload detected (+60 OB)")
+
     return min(score, 100.0), evidence
 
 
@@ -440,6 +452,57 @@ def _calculate_bfci_from_frida(dynamic: Dict) -> Tuple[float, List[str]]:
     return round(min(bfci, 100.0), 2), evidence
 
 
+# Minimum observable activity for a sandbox run to count as evidence about the
+# sample rather than evidence about the sandbox.
+_MIN_DYNAMIC_EVENTS = 3
+
+
+def _dynamic_run_was_conclusive(dynamic: Optional[Dict]) -> bool:
+    """
+    Did the sandbox actually observe enough to reason about?
+
+    A run is inconclusive when the app was installed and launched but produced
+    essentially no observable behaviour — the usual outcome for a sample that
+    detected the analysis environment, waited for a trigger it never received,
+    or crashed on start. In that case the run tells us about our sandbox, not
+    about the sample, and must not contribute to the score in either direction.
+
+    Counts concrete observations only: API calls, network activity, triggered
+    activities, files touched, and captured evidence items.
+    """
+    if not dynamic:
+        return False
+
+    # Only an explicitly bad status is disqualifying. A MISSING status must fall
+    # through to the evidence count — several callers (and the recorded
+    # determinism fixtures) never set this field, and treating absent as failed
+    # would discard perfectly good runs.
+    status = str(dynamic.get("dynamic_status") or "").upper()
+    if status in {"NO_BEHAVIOR_OBSERVED", "INSTRUMENTATION_FAILED", "TIMEOUT", "FAILED"}:
+        return False
+
+    observed = 0
+    for field in ("api_calls", "network_logs", "activities_triggered",
+                  "files_accessed", "evidence"):
+        value = dynamic.get(field)
+        try:
+            observed += len(value or [])
+        except TypeError:
+            # A malformed field is not an observation. Never raise here: this is
+            # attacker-influenced data and the scorer must stay a total function.
+            continue
+    if observed >= _MIN_DYNAMIC_EVENTS:
+        return True
+
+    # A non-trivial BFCI means the hooks scored something concrete even if the
+    # raw event lists are sparse. Non-numeric BFCI is rejected upstream by
+    # _calculate_bfci_from_frida; treat it as no evidence rather than crashing.
+    try:
+        return float(dynamic.get("bfci") or 0.0) >= 20.0
+    except (TypeError, ValueError):
+        return False
+
+
 def _calculate_dynamic_score(dynamic: Optional[Dict]) -> Tuple[float, List[str]]:
     """
     Dynamic behavioral score dispatcher.
@@ -613,6 +676,9 @@ def calculate_risk_score(
             "indian_bank_packages_found": getattr(flags, "indian_bank_packages_found", []),
             "obfuscation_score": getattr(flags, "obfuscation_score", 0.0),
             "has_reflection": getattr(flags, "has_reflection", False),
+            "has_concealed_payload": getattr(flags, "has_concealed_payload", False),
+            "concealment_evidence": getattr(flags, "concealment_evidence", []),
+            "limited_static_visibility": getattr(flags, "limited_static_visibility", False),
         }
     else:
         flags_dict = flags
@@ -629,21 +695,49 @@ def calculate_risk_score(
     # ── FRS Formula ───────────────────────────────────────────────────────────
     dynamic_available = dynamic_result is not None and dynamic_result.get("available", False)
 
-    if dynamic_available:
-        frs = (
-            0.25 * stei +
-            0.35 * dynamic_score +
-            0.20 * correlation_score +
-            0.20 * banking_score
-        )
-    else:
-        # Redistribute dynamic weight to static when not available
-        # STEI gets 0.50, Correlation 0.25, Banking 0.25
-        frs = (
-            0.50 * stei +
-            0.25 * correlation_score +
-            0.25 * banking_score
-        )
+    # An axis with no data must be EXCLUDED, not scored as 0.
+    #
+    # Previously an unconfigured threat-intel provider contributed
+    # `0.20 * 0.0`, so 20-25% of every score was pinned at zero in any
+    # deployment without VirusTotal/OTX/AbuseIPDB keys. That is absence of
+    # evidence being treated as evidence of innocence, and it is why real
+    # banking trojans landed in the "Safe" band: measured on the labelled
+    # corpus, Teabot scored 30.8 with correlation forced to 0, versus 41.1
+    # when the axis is properly excluded and the remaining weights renormalised.
+    #
+    # The author already knew this pattern — the old code redistributed the
+    # dynamic weight — it just was not applied to correlation.
+    correlation_available = bool(correlation_result and correlation_result.get("available"))
+
+    # A sandbox run that observed nothing is INCONCLUSIVE, not clean.
+    #
+    # Evasive malware is built to stay dormant under analysis — banking trojans
+    # routinely fingerprint ADB, Frida and emulator properties and suppress
+    # behaviour. Scoring "no events captured" as a near-zero dynamic value meant
+    # the axis with the LARGEST weight actively diluted strong static evidence,
+    # so the better a sample's evasion, the safer this engine rated it.
+    #
+    # Measured on Cerberus: static-only 38.74 "Suspicious"; after a 30 s run that
+    # captured 0 API calls and 0 network events, the dynamic axis took 0.437 of
+    # the weight at a value of 5.0 and pulled the verdict down to 23.98 "Safe".
+    #
+    # This is NOT "dynamic may only ever raise the score" — a run with real
+    # coverage that observes benign behaviour is legitimate evidence and still
+    # lowers it. The distinction is whether the sandbox actually observed
+    # anything to reason about.
+    dynamic_conclusive = dynamic_available and _dynamic_run_was_conclusive(dynamic_result)
+
+    axes = [("stei", 0.25, stei, True)]
+    axes.append(("dynamic", 0.35, dynamic_score, dynamic_conclusive))
+    axes.append(("correlation", 0.20, correlation_score, correlation_available))
+    axes.append(("banking_impact", 0.20, banking_score, True))
+
+    live = [(n, w, v) for (n, w, v, ok) in axes if ok]
+    total_weight = sum(w for _, w, _ in live)
+    frs = sum(w * v for _, w, v in live) / total_weight if total_weight else 0.0
+
+    axes_used = {n: round(w / total_weight, 3) for n, w, _ in live} if total_weight else {}
+    axes_excluded = [n for (n, _, _, ok) in axes if not ok]
 
     # Apply AI confidence multiplier (1.0 or 1.2)
     ai_multiplier = max(0.5, min(ai_confidence, 1.5))
@@ -662,13 +756,45 @@ def calculate_risk_score(
     else:
         band = "Critical"
 
+    # ── Visibility floor ──────────────────────────────────────────────────────
+    # "We could not see the code" is not the same claim as "the code is safe".
+    #
+    # A dropper ships a stub manifest and unpacks its real payload at runtime, so
+    # every capability-based axis reads near zero and the arithmetic lands in
+    # "Safe". On the labelled corpus Anubis (4 permissions) and Hook (1
+    # permission, 0 services, a nested assets/base.apk) both scored below a file
+    # manager for exactly this reason.
+    #
+    # This does NOT assert the sample is malicious — the score is left untouched.
+    # It refuses to certify as safe something that was never actually analysed,
+    # and says so in the evidence. Dynamic analysis, which sees the unpacked
+    # payload, is what resolves the ambiguity; if it ran, the score stands on its
+    # own and no floor is applied.
+    visibility_floored = False
+    if band == "Safe" and not dynamic_conclusive and flags_dict.get("has_concealed_payload"):
+        band = "Suspicious"
+        visibility_floored = True
+        stei_evidence.append(
+            "VERDICT FLOORED: payload is concealed and no dynamic analysis was "
+            "available, so static analysis could not observe the code that will "
+            "actually run. Not rated Safe — run dynamic analysis to resolve."
+        )
+
     # ── Confidence ───────────────────────────────────────────────────────────
     sources_available = sum([
         1,                                              # Static always available
-        1 if dynamic_available else 0,
+        1 if dynamic_conclusive else 0,
         1 if correlation_result and correlation_result.get("available") else 0,
     ])
     confidence = round(60 + (sources_available / 3) * 35 + (2 if family != "Unknown" else 0), 1)
+    # Concealed payload with no dynamic run means the analysis largely missed the
+    # code. Reporting the usual confidence there would overstate the result.
+    if flags_dict.get("has_concealed_payload") and not dynamic_conclusive:
+        confidence = min(confidence, 45.0)
+    # An inconclusive sandbox run is not corroboration; do not let it inflate
+    # confidence via sources_available.
+    if dynamic_available and not dynamic_conclusive:
+        confidence = min(confidence, 60.0)
     confidence = min(confidence, 99.0)
 
     all_evidence = stei_evidence + dynamic_evidence + corr_evidence + banking_evidence
@@ -687,6 +813,14 @@ def calculate_risk_score(
             "correlation": round(correlation_score, 2),
             "banking_impact": round(banking_score, 2),
             "formula_used": "full_frs" if dynamic_available else "static_only_frs",
+            # Which axes actually contributed, and at what renormalised weight.
+            # An excluded axis is one with no data — it is not scored as benign.
+            "axes_used": axes_used,
+            "axes_excluded": axes_excluded,
+            "concealed_payload": bool(flags_dict.get("has_concealed_payload")),
+            "dynamic_ran": dynamic_available,
+            "dynamic_conclusive": dynamic_conclusive,
+            "verdict_floored_for_visibility": visibility_floored,
             "dynamic_available": dynamic_available,
             # 5-axis STEI breakdown
             "stei_axes": {

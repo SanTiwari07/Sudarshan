@@ -1,5 +1,6 @@
 import math
 import os
+import zipfile
 import re
 from typing import List, Tuple
 try:
@@ -7,7 +8,7 @@ try:
 except ImportError:
     AnalyzeAPK = None  # Fallback for host environments without androguard installed
 
-from app.models.schemas import AndroguardOutput, StaticAnalysisFlags
+from sudarshan_core.models.schemas import AndroguardOutput, StaticAnalysisFlags
 
 INDIAN_BANK_PACKAGES = [
     "com.boi", "com.sbi", "com.icici", "com.hdfc", "com.axis",
@@ -58,6 +59,143 @@ def _mean_string_entropy(strings: List[str]) -> float:
 
 # ─── Main Analyzer ────────────────────────────────────────────────────────────
 
+_ACCESSIBILITY_MARKERS = (
+    "BIND_ACCESSIBILITY_SERVICE",                        # <service android:permission=…>
+    "android.accessibilityservice.AccessibilityService",  # intent-filter action
+    "android.accessibilityservice",                       # meta-data resource
+)
+
+
+def _detects_accessibility_service(apk) -> bool:
+    """
+    True when the APK declares an AccessibilityService.
+
+    Checks three independent places, because a sample only needs one of them and
+    obfuscators routinely strip or rename the others:
+
+      1. androguard's parsed <service> declarations and their guard permission
+      2. declared intent-filter actions
+      3. the raw decoded manifest, as a last-resort substring match
+
+    Never raises — a manifest that fails to parse must degrade to False rather
+    than abort the whole analysis.
+    """
+    # 1. Parsed service declarations
+    try:
+        for svc in apk.get_services() or []:
+            details = apk.get_element("service", "permission", name=svc) or ""
+            if "BIND_ACCESSIBILITY_SERVICE" in str(details).upper():
+                return True
+    except Exception:
+        pass
+
+    # 2. Declared intent-filter actions
+    try:
+        for svc in apk.get_services() or []:
+            for action in apk.get_intent_filters("service", svc).get("action", []):
+                if "accessibilityservice" in action.lower():
+                    return True
+    except Exception:
+        pass
+
+    # 3. Raw manifest substring match
+    try:
+        xml = apk.get_android_manifest_axml().get_xml().decode("utf-8", errors="replace")
+        return any(m.lower() in xml.lower() for m in _ACCESSIBILITY_MARKERS)
+    except Exception:
+        return False
+
+
+_APK_MAGIC = b"PK\x03\x04"
+_DEX_MAGIC = b"dex\n"
+
+# Below this, a blob is too small to be a meaningful hidden payload.
+_MIN_PAYLOAD_BYTES = 64 * 1024
+# Shannon entropy per byte, normalised 0–1. >0.95 means encrypted/compressed.
+_ENCRYPTED_ENTROPY = 0.95
+
+
+def _byte_entropy(data: bytes) -> float:
+    if not data:
+        return 0.0
+    counts = [0] * 256
+    for b in data:
+        counts[b] += 1
+    n = len(data)
+    return -sum((c / n) * math.log2(c / n) for c in counts if c) / 8.0
+
+
+def _detect_concealed_payload(apk_path: str) -> Tuple[bool, List[str]]:
+    """
+    Detect a payload hidden inside the APK rather than declared in it.
+
+    Two principled indicators, both of which legitimate apps have no reason to
+    exhibit:
+
+      1. A nested executable — an APK or DEX shipped as a resource/asset rather
+         than as a top-level classes*.dex.
+      2. A max-entropy blob (encrypted) that is large relative to the primary
+         classes.dex, i.e. the real code is not the code you can read.
+
+    Measured on the labelled corpus this fired on 5/8 banking trojans
+    (Anubis, Drinik, FluBot, Hook, Octo) and 0/9 non-malware samples
+    (4 legitimate apps, 4 OWASP crackmes, 1 deliberately vulnerable app).
+    That corpus is small — this is a measured signal, not a proven one.
+
+    Never raises: a malformed archive degrades to "not detected".
+    """
+    evidence: List[str] = []
+    try:
+        with zipfile.ZipFile(apk_path) as z:
+            names = z.namelist()
+            try:
+                primary = z.getinfo("classes.dex").file_size
+            except KeyError:
+                primary = 0
+
+            for name in names:
+                try:
+                    info = z.getinfo(name)
+                except KeyError:
+                    continue
+                if info.file_size < _MIN_PAYLOAD_BYTES:
+                    continue
+                # A top-level classes*.dex is normal multidex, not concealment.
+                if name.endswith(".dex") and "/" not in name:
+                    continue
+
+                try:
+                    with z.open(name) as fh:
+                        head = fh.read(8)
+                except Exception:
+                    continue
+
+                if head.startswith(_APK_MAGIC) or head.startswith(_DEX_MAGIC):
+                    kind = "APK" if head.startswith(_APK_MAGIC) else "DEX"
+                    evidence.append(
+                        f"Nested {kind} concealed at '{name}' ({info.file_size // 1024} KB) — "
+                        "executable payload shipped as a resource"
+                    )
+                    continue
+
+                try:
+                    with z.open(name) as fh:
+                        sample = fh.read(65536)
+                except Exception:
+                    continue
+
+                ent = _byte_entropy(sample)
+                if ent > _ENCRYPTED_ENTROPY and info.file_size > max(primary * 0.25, _MIN_PAYLOAD_BYTES):
+                    evidence.append(
+                        f"Encrypted blob '{name}' ({info.file_size // 1024} KB, entropy {ent:.2f}) "
+                        f"vs {primary // 1024} KB classes.dex — payload likely unpacked at runtime"
+                    )
+    except Exception:
+        return False, []
+
+    return bool(evidence), evidence[:5]
+
+
 def analyze_apk(apk_path: str) -> AndroguardOutput:
     if not os.path.exists(apk_path):
         raise FileNotFoundError(f"APK not found: {apk_path}")
@@ -71,12 +209,26 @@ def analyze_apk(apk_path: str) -> AndroguardOutput:
 
     # ── 1. Permission Analysis ────────────────────────────────────────────────
     for perm in permissions:
-        if "BIND_ACCESSIBILITY_SERVICE" in perm:
-            flags.has_accessibility_abuse = True
         if "READ_SMS" in perm or "RECEIVE_SMS" in perm or "SEND_SMS" in perm:
             flags.has_sms_read_write = True
         if "SYSTEM_ALERT_WINDOW" in perm:
             flags.has_system_alert_window = True
+
+    # ── 1b. Accessibility-service abuse ───────────────────────────────────────
+    # BIND_ACCESSIBILITY_SERVICE is NOT a <uses-permission>. It is the guard
+    # attribute on the <service> element that Android requires an accessibility
+    # service to declare:
+    #
+    #   <service android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+    #     <intent-filter>
+    #       <action android:name="android.accessibilityservice.AccessibilityService"/>
+    #
+    # The previous check scanned get_permissions() for that string, so it could
+    # never fire. Measured against the labelled corpus it returned False for all
+    # eight banking trojans — including Cerberus, Octo, SharkBot and Teabot,
+    # which all declare it — while accessibility abuse is the single
+    # highest-weighted signal in the CT axis (BFCI weight 0.35).
+    flags.has_accessibility_abuse = _detects_accessibility_service(a)
 
     # ── 2. String & Constant Analysis ─────────────────────────────────────────
     strings_fired: List[str] = []
@@ -108,6 +260,16 @@ def analyze_apk(apk_path: str) -> AndroguardOutput:
 
     # ── 3. Obfuscation / Entropy ──────────────────────────────────────────────
     flags.obfuscation_score = round(_mean_string_entropy(all_strings), 4)
+
+    # ── 3b. Packer / dropper concealment ──────────────────────────────────────
+    flags.has_concealed_payload, flags.concealment_evidence = _detect_concealed_payload(apk_path)
+
+    # A dropper's manifest is deliberately uninformative. Flag the case where a
+    # low score reflects poor visibility rather than genuine safety, so the
+    # verdict can be qualified downstream instead of reading as a clean bill.
+    flags.limited_static_visibility = bool(
+        flags.has_concealed_payload and len(permissions) <= 6
+    )
 
     # ── 4. API & Reflection Analysis ──────────────────────────────────────────
     if dx:

@@ -21,7 +21,7 @@ Design principles
 
 Usage
 -----
-    from app.engines.workflow_reconstructor import WorkflowReconstructor
+    from sudarshan_core.engines.workflow_reconstructor import WorkflowReconstructor
 
     reconstructor = WorkflowReconstructor()
     workflow = reconstructor.reconstruct(evidence_records)

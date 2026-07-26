@@ -16,6 +16,19 @@ class StaticAnalysisFlags(BaseModel):
     obfuscation_score: float = 0.0   # 0.0–1.0 Shannon entropy ratio
     has_reflection: bool = False      # Class.forName / getDeclaredMethod / invoke
 
+    # Packer / dropper concealment.
+    #
+    # A dropper ships its real payload as an encrypted asset or a nested APK/DEX
+    # and unpacks it at runtime, so the manifest declares almost nothing. On the
+    # labelled corpus Anubis declared 4 permissions and Hook just 1, which made
+    # both score lower than a file manager. Concealment is itself the signal.
+    has_concealed_payload: bool = False
+    concealment_evidence: List[str] = Field(default_factory=list)
+
+    # True when static analysis had so little to work with that a low score
+    # says more about visibility than about safety.
+    limited_static_visibility: bool = False
+
 
 class AndroguardOutput(BaseModel):
     package_name: str
@@ -52,6 +65,22 @@ class FRSBreakdown(BaseModel):
     dynamic_available: bool = False
     # STEI axis breakdown (PDF 5-axis formula)
     stei_axes: Dict[str, float] = Field(default_factory=dict)
+
+    # Scoring provenance. FastAPI's response_model silently drops any key not
+    # declared here, so omitting these made the API report `null` for fields the
+    # engine had actually computed — the analyst could not see WHY a verdict was
+    # reached, or that an axis had been excluded for lack of evidence.
+    axes_used: Dict[str, float] = Field(default_factory=dict)
+    axes_excluded: List[str] = Field(default_factory=list)
+
+    # Why a verdict may be floored despite a low arithmetic score.
+    concealed_payload: bool = False
+    verdict_floored_for_visibility: bool = False
+
+    # Distinguishes "the sandbox ran and saw nothing" from "the sandbox ran and
+    # observed real behaviour" — only the latter is scored.
+    dynamic_ran: bool = False
+    dynamic_conclusive: bool = False
 
 
 # ─── Threat Scenario Table ────────────────────────────────────────────────────

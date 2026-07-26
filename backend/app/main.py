@@ -9,6 +9,7 @@ from app.workers.analysis_queue import start_workers, stop_workers
 from app.auth.auth import hash_password, username_exists, create_user
 import os
 import logging
+import secrets
 
 logger = logging.getLogger(__name__)
 
@@ -23,12 +24,23 @@ app = FastAPI(
     ),
 )
 
+# allow_origins=["*"] together with allow_credentials=True is invalid per the
+# Fetch standard; Starlette resolves it by reflecting the caller's Origin, which
+# means every site on the internet becomes a trusted origin. Use an explicit
+# allow-list instead — override with CORS_ALLOW_ORIGINS (comma-separated).
+_DEFAULT_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
+CORS_ALLOW_ORIGINS = [
+    o.strip()
+    for o in os.getenv("CORS_ALLOW_ORIGINS", _DEFAULT_ORIGINS).split(",")
+    if o.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ALLOW_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # ─── Routers ─────────────────────────────────────────────────────────────────
@@ -47,14 +59,31 @@ async def startup():
     await init_db()
     logger.info("[Startup] Database initialized")
 
-    # 2. Seed default admin user if none exists
+    # 2. Seed the admin user if none exists.
+    #    No hardcoded default password: a known credential in a public repo is a
+    #    published credential. If ADMIN_PASSWORD is unset we mint a random one
+    #    and print it exactly once, on first boot only.
     admin_user = os.getenv("ADMIN_USERNAME", "admin")
-    admin_pass = os.getenv("ADMIN_PASSWORD", "sudarshan_admin_2024")
+    admin_pass = os.getenv("ADMIN_PASSWORD")
 
     if not await username_exists(admin_user):
+        generated = False
+        if not admin_pass:
+            admin_pass = secrets.token_urlsafe(18)
+            generated = True
+
         hashed = hash_password(admin_pass)
         await create_user(admin_user, hashed, role="admin")
-        logger.info(f"[Startup] Seeded default admin user: {admin_user}")
+
+        if generated:
+            logger.warning(
+                "[Startup] ADMIN_PASSWORD was not set. Seeded admin '%s' with a "
+                "generated password: %s  — store it now; it is not recoverable "
+                "and will not be shown again.",
+                admin_user, admin_pass,
+            )
+        else:
+            logger.info(f"[Startup] Seeded admin user: {admin_user}")
 
     # 3. Start async analysis worker pool
     await start_workers()

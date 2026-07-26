@@ -14,6 +14,7 @@ import logging
 import os
 import shutil
 import tempfile
+import time
 import uuid
 from typing import Any, Dict, Optional
 from pathlib import Path
@@ -22,15 +23,15 @@ from fastapi import FastAPI, File, HTTPException, UploadFile, BackgroundTasks, Q
 from pydantic import BaseModel, Field
 
 # Imports from app modules
-from app.analyzers.apk_analyzer import analyze_apk
-from app.engines.apktool_engine import ApktoolEngine
-from app.engines.jadx_engine import JadxEngine
-from app.engines.frida_sandbox import run_frida_analysis
-from app.engines.network_capture import NetworkCapture
-from app.engines.risk_engine import calculate_risk_score as compute_fraud_risk_score
-from app.models.manifest import build_manifest
-from app.services.mobsf_client import MobSFClient
-from app.services.threat_correlator import correlate
+from sudarshan_core.analyzers.apk_analyzer import analyze_apk
+from sudarshan_core.engines.apktool_engine import ApktoolEngine
+from sudarshan_core.engines.jadx_engine import JadxEngine
+from sudarshan_core.engines.frida_sandbox import run_frida_analysis
+from sudarshan_core.engines.network_capture import NetworkCapture
+from sudarshan_core.engines.risk_engine import calculate_risk_score as compute_fraud_risk_score
+from sudarshan_core.models.manifest import build_manifest
+from sudarshan_core.services.mobsf_client import MobSFClient
+from sudarshan_core.services.threat_correlator import correlate
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("analysis-engine")
@@ -45,8 +46,62 @@ DEFAULT_TIMEOUT_SECONDS = int(os.getenv("ANALYSIS_TIMEOUT_SECONDS", "300"))
 UPLOADS_DIR = Path(os.getenv("UPLOADS_DIR", "/app/uploads"))
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
-# In-memory thread-safe job store for async analysis jobs
+# Tool wrappers are stateless; building them per request re-ran the availability
+# probe (a subprocess) on every call, including on /status health polling.
+_apktool = ApktoolEngine()
+_jadx = JadxEngine()
+
+# Bound how many analyses run at once. Each one occupies a worker thread and
+# spawns APKTool/JADX subprocesses, and the container is capped at cpus: 2.0 —
+# without this, concurrent uploads oversubscribe the CPU and every analysis gets
+# slower until they all breach the timeout together.
+MAX_CONCURRENT_ANALYSES = int(os.getenv("MAX_CONCURRENT_ANALYSES", "2"))
+_analysis_slots = asyncio.Semaphore(MAX_CONCURRENT_ANALYSES)
+
+# ─── Upload limits ────────────────────────────────────────────────────────────
+# Uploads were previously unbounded: the read loop ran until the stream ended, so
+# one request could fill the shared volume. Real banking APKs top out around
+# 150 MB; 200 MB leaves headroom without making disk exhaustion cheap.
+MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(200 * 1024 * 1024)))
+UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024      # streaming write size
+HASH_CHUNK_BYTES = 64 * 1024              # streaming hash read size
+
+# Every APK is a ZIP archive. Extension checks alone let any file through.
+#   PK\x03\x04 local header  ·  PK\x05\x06 empty  ·  PK\x07\x08 spanned
+_ZIP_MAGIC = (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08")
+
+# Default when the risk engine returns no confidence of its own.
+DEFAULT_CONFIDENCE = 70.0
+
+# ─── Async job store ──────────────────────────────────────────────────────────
+# In-process, so it does NOT survive a restart and is not shared across workers.
+# entrypoint.sh therefore pins --workers 1; with 2 workers a job created in one
+# process 404s from the other. Externalising this (SQLite/Redis) is the real fix
+# and is still open — see audit/03_Backend_Audit.md §3.
+#
+# It also used to grow without bound, holding every completed job's full report
+# for the process lifetime. Finished jobs now expire.
 JOBS: Dict[str, Dict[str, Any]] = {}
+JOB_RETENTION_SECONDS = int(os.getenv("JOB_RETENTION_SECONDS", "3600"))
+MAX_RETAINED_JOBS = int(os.getenv("MAX_RETAINED_JOBS", "200"))
+
+
+def _evict_finished_jobs() -> None:
+    """Drop finished jobs past their TTL, then cap total retained jobs."""
+    now = time.monotonic()
+    for jid in [
+        jid for jid, j in JOBS.items()
+        if j.get("finished_at") and now - j["finished_at"] > JOB_RETENTION_SECONDS
+    ]:
+        JOBS.pop(jid, None)
+
+    if len(JOBS) > MAX_RETAINED_JOBS:
+        finished = sorted(
+            (j for j in JOBS.values() if j.get("finished_at")),
+            key=lambda j: j["finished_at"],
+        )
+        for j in finished[: len(JOBS) - MAX_RETAINED_JOBS]:
+            JOBS.pop(j["job_id"], None)
 
 
 # ─── Data Contracts ───────────────────────────────────────────────────────────
@@ -72,32 +127,40 @@ def health():
     return {"status": "ok", "service": "analysis-engine"}
 
 
-@app.get("/status")
-def status():
-    apktool = ApktoolEngine()
-    jadx = JadxEngine()
-    
-    # Check ADB device status
-    adb_connected = False
+def _adb_connected() -> bool:
+    """Blocking ADB probe — always call via a worker thread."""
     try:
         import subprocess
         adb_bin = shutil.which("adb") or "adb"
         res = subprocess.run([adb_bin, "devices"], capture_output=True, text=True, timeout=5)
         lines = [line.strip() for line in res.stdout.splitlines()[1:] if line.strip()]
-        adb_connected = any("device" in line for line in lines)
+        return any("device" in line for line in lines)
     except Exception as e:
         logger.warning(f"[Status] ADB check failed: {e}")
+        return False
+
+
+@app.get("/status")
+async def status():
+    # Every probe here shells out. Run them concurrently off the loop rather
+    # than serially on it.
+    adb_connected, apktool_ok, jadx_ok = await asyncio.gather(
+        asyncio.to_thread(_adb_connected),
+        asyncio.to_thread(_apktool.is_available),
+        asyncio.to_thread(_jadx.is_available),
+    )
 
     return {
         "status": "ready",
         "tools": {
-            "apktool": apktool.is_available(),
-            "jadx": jadx.is_available(),
+            "apktool": apktool_ok,
+            "jadx": jadx_ok,
             "androguard": True,
             "adb_connected": adb_connected,
         },
         "uploads_dir": str(UPLOADS_DIR),
         "default_timeout_seconds": DEFAULT_TIMEOUT_SECONDS,
+        "max_concurrent_analyses": MAX_CONCURRENT_ANALYSES,
     }
 
 
@@ -113,7 +176,11 @@ async def _execute_analysis_pipeline(
 
     async def _run():
         # 1. Primary Static Analysis via Androguard / MobSF
-        androguard_output = analyze_apk(apk_path)
+        #    analyze_apk is synchronous and CPU-bound (Androguard parses the whole
+        #    DEX). Called directly it pins the event loop, which meant /health
+        #    stopped answering mid-analysis and the compose healthcheck could
+        #    restart the container out from under a running job.
+        androguard_output = await asyncio.to_thread(analyze_apk, apk_path)
         flags = androguard_output.flags
         package_name = androguard_output.package_name
         permissions = androguard_output.permissions or []
@@ -138,19 +205,27 @@ async def _execute_analysis_pipeline(
         }
 
         # 2. Standalone Static Enrichment (APKTool + JADX)
-        apktool = ApktoolEngine()
-        jadx = JadxEngine()
-
-        apktool_res = apktool.analyze(apk_path) if apktool.is_available() else None
-        jadx_res = jadx.analyze(apk_path) if jadx.is_available() else None
+        #    Both shell out via a blocking subprocess.run (with their own 120s /
+        #    180s timeouts), so they must not run on the loop either.
+        apktool_res = (
+            await asyncio.to_thread(_apktool.analyze, apk_path)
+            if await asyncio.to_thread(_apktool.is_available)
+            else None
+        )
+        jadx_res = (
+            await asyncio.to_thread(_jadx.analyze, apk_path)
+            if await asyncio.to_thread(_jadx.is_available)
+            else None
+        )
 
         if apktool_res and apktool_res.decoded_manifest_xml:
             flags_dict["decoded_manifest_xml"] = apktool_res.decoded_manifest_xml
         if jadx_res and jadx_res.fraud_class_hits:
             flags_dict["jadx_fraud_hits"] = jadx_res.fraud_class_hits
 
-        # 3. Investigation Manifest Generation
-        manifest = build_manifest(
+        # 3. Investigation Manifest Generation (blocking disk I/O)
+        manifest = await asyncio.to_thread(
+            build_manifest,
             sha256=sha256_hash,
             package_name=package_name,
             flags_dict=flags_dict,
@@ -158,8 +233,8 @@ async def _execute_analysis_pipeline(
         )
 
         manifest_dir = UPLOADS_DIR / sha256_hash
-        manifest_dir.mkdir(parents=True, exist_ok=True)
-        manifest.to_file(manifest_dir / "manifest.json")
+        await asyncio.to_thread(manifest_dir.mkdir, parents=True, exist_ok=True)
+        await asyncio.to_thread(manifest.to_file, manifest_dir / "manifest.json")
 
         # 4. Dynamic Sandbox Analysis via Frida & ADB
         dynamic_result = await run_frida_analysis(
@@ -169,10 +244,11 @@ async def _execute_analysis_pipeline(
 
         # 5. mitmproxy HAR Net Ingest
         har_path = os.getenv("MITMPROXY_HAR_PATH")
-        if har_path and os.path.exists(har_path):
+        if har_path and await asyncio.to_thread(os.path.exists, har_path):
             try:
                 nc = NetworkCapture()
-                added = nc.ingest_mitmproxy_har(har_path)
+                # Parses a HAR file off disk — size is attacker-influenced.
+                added = await asyncio.to_thread(nc.ingest_mitmproxy_har, har_path)
                 if dynamic_result and isinstance(dynamic_result, dict):
                     dynamic_result["mitmproxy_flows_added"] = added
             except Exception as e:
@@ -185,23 +261,36 @@ async def _execute_analysis_pipeline(
             package_name=package_name,
         )
 
-        risk_output = compute_fraud_risk_score(
+        risk_output = await asyncio.to_thread(
+            compute_fraud_risk_score,
             flags=flags,
             dynamic_result=dynamic_result,
             correlation_result=threat_corr,
+            # Without this the Permission Risk axis (10% of STEI) scored 0 for
+            # every sample, because _axis_pr falls back to an empty list. The
+            # backend already passed it (routes/upload.py); the engine did not.
+            all_permissions=permissions,
         )
+
+        # MobSF is the only source for component inventory, certificate and
+        # AppSec score. When it is not configured these stay empty/None — they
+        # are NOT invented. Previously this block hardcoded eight fields,
+        # including a fabricated "appsec_score": 50.0 that an analyst could not
+        # distinguish from a computed score.
+        mobsf = mobsf_res or {}
+        analysis_mode = "androguard+mobsf" if mobsf_res else "androguard"
 
         return {
             "sha256": sha256_hash,
             "package_name": package_name,
             "app_name": getattr(androguard_output, "app_name", package_name),
-            "analysis_mode": "androguard",
+            "analysis_mode": analysis_mode,
             "family_classification": risk_output.get("family_classification", "Unknown"),
             "base_score": risk_output["base_score"],
             "ai_confidence_multiplier": risk_output["ai_confidence_multiplier"],
             "final_risk_score": risk_output["final_risk_score"],
             "risk_band": risk_output["risk_band"],
-            "confidence": risk_output.get("confidence", 70.0),
+            "confidence": risk_output.get("confidence", DEFAULT_CONFIDENCE),
             "recommended_action": risk_output.get("recommended_action", ""),
             "frs_breakdown": risk_output.get("frs_breakdown", {}),
             "threat_scenario_table": risk_output.get("threat_scenario_table", []),
@@ -218,25 +307,97 @@ async def _execute_analysis_pipeline(
             "dynamic_result": dynamic_result,
             "dynamic_available": dynamic_result.get("available", False) if dynamic_result else False,
             "fraud_workflow": dynamic_result.get("fraud_workflow") if dynamic_result else None,
-            "manifest_findings": [],
-            "code_findings": [],
-            "activities": [],
-            "services_list": [],
-            "receivers": [],
-            "certificate": {},
-            "domains": [],
-            "hardcoded_secrets": [],
-            "appsec_score": 50.0,
-            "mobsf_scan_hash": mobsf_res.get("hash") if mobsf_res else None,
+            # Androguard genuinely produces this; the engine used to drop it.
+            "suspicious_strings": getattr(androguard_output, "suspicious_strings", []),
+
+            # MobSF-derived. Empty/None when MobSF is not configured — never faked.
+            "manifest_findings": mobsf.get("manifest_analysis", []),
+            "code_findings": mobsf.get("code_analysis", {}).get("findings", []),
+            "activities": mobsf.get("activities", [])[:20],
+            "services_list": mobsf.get("services", [])[:10],
+            "receivers": mobsf.get("receivers", [])[:10],
+            "certificate": mobsf.get("certificate", {}),
+            "domains": mobsf.get("domains", {}),
+            "hardcoded_secrets": mobsf.get("hardcoded_secrets", []),
+            "appsec_score": mobsf.get("appsec_score"),
+            "mobsf_scan_hash": mobsf.get("scan_hash") or mobsf.get("hash"),
+
+            # Lets a caller distinguish "nothing found" from "never computed" —
+            # an evidentiary distinction a forensic report has to make.
+            "analysis_completeness": {
+                "static_androguard": True,
+                "static_apktool": apktool_res is not None,
+                "static_jadx": jadx_res is not None,
+                "static_mobsf": mobsf_res is not None,
+                "dynamic_frida": bool(dynamic_result and dynamic_result.get("available")),
+                "threat_correlation": bool(threat_corr and threat_corr.get("available")),
+            },
         }
 
+    # The timeout only has teeth now that every blocking step is dispatched to a
+    # worker thread: wait_for can only cancel at an await point, and previously
+    # there were none between the blocking calls.
+    #
+    # Caveat, stated honestly: cancelling an asyncio.to_thread call does NOT kill
+    # the thread. On timeout the caller gets a 408 immediately and the loop is
+    # freed, but any in-flight step runs to completion in the background. That is
+    # bounded in practice — APKTool and JADX enforce their own 120s/180s
+    # subprocess timeouts, and the semaphore slot is not released until the step
+    # returns, so a stuck analysis consumes a slot rather than the whole service.
+    # Truly pre-emptive cancellation needs a process pool; see 03_Backend_Audit.
+    async with _analysis_slots:
+        try:
+            return await asyncio.wait_for(_run(), timeout=float(timeout_seconds))
+        except asyncio.TimeoutError:
+            logger.error(f"[Engine] Analysis hard timeout exceeded ({timeout_seconds}s) for {sha256_hash}")
+            raise HTTPException(
+                status_code=408,
+                detail=(
+                    f"Analysis engine timeout exceeded ({timeout_seconds}s). "
+                    "The request was abandoned; any in-flight tool invocation is "
+                    "bounded by its own subprocess timeout."
+                ),
+            )
+
+
+# ─── Input validation ─────────────────────────────────────────────────────────
+
+def _resolve_upload_path(raw: str) -> Path:
+    """
+    Resolve a caller-supplied path and require it to live inside UPLOADS_DIR.
+
+    The previous check was `Path(raw).exists()` and nothing else, so any readable
+    path in the container could be fed to Androguard/APKTool/JADX and the 404
+    body echoed the input back — a filesystem oracle. resolve() collapses
+    '..' and symlinks before the containment test, so neither can escape.
+
+    Errors are deliberately generic and never echo `raw`.
+    """
+    root = UPLOADS_DIR.resolve()
     try:
-        return await asyncio.wait_for(_run(), timeout=float(timeout_seconds))
-    except asyncio.TimeoutError:
-        logger.error(f"[Engine] Analysis hard timeout exceeded ({timeout_seconds}s) for {sha256_hash}")
+        candidate = Path(raw).resolve()
+    except (OSError, RuntimeError):
+        raise HTTPException(status_code=400, detail="Invalid file path.")
+
+    if not candidate.is_relative_to(root):
+        logger.warning("[Engine] Rejected out-of-tree analyze path: %r", raw)
         raise HTTPException(
-            status_code=408,
-            detail=f"Analysis engine timeout exceeded ({timeout_seconds}s). Execution killed to protect container resources."
+            status_code=400,
+            detail="file_path must reference a file inside the shared uploads volume.",
+        )
+    if not candidate.is_file():
+        raise HTTPException(status_code=404, detail="File not found in shared uploads volume.")
+    return candidate
+
+
+def _reject_non_apk(head: bytes, filename: Optional[str]) -> None:
+    """Extension plus ZIP magic. Extension alone accepts any content."""
+    if not filename or not filename.lower().endswith(".apk"):
+        raise HTTPException(status_code=400, detail="Invalid file type. Only .apk files are allowed.")
+    if not head.startswith(_ZIP_MAGIC):
+        raise HTTPException(
+            status_code=400,
+            detail="File is not a valid APK (missing ZIP archive signature).",
         )
 
 
@@ -245,17 +406,16 @@ async def _execute_analysis_pipeline(
 @app.post("/api/v1/analyze")
 async def analyze_path(req: AnalyzePathRequest):
     """
-    Synchronous analysis endpoint — accepts shared volume file path and returns full JSON.
+    Synchronous analysis endpoint — accepts a shared-volume file path.
+    The path must resolve inside UPLOADS_DIR; see _resolve_upload_path.
     """
-    file_path = Path(req.file_path)
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail=f"File not found in shared volume: {req.file_path}")
+    file_path = _resolve_upload_path(req.file_path)
 
     sha256_hash = req.sha256
     if not sha256_hash:
         hasher = hashlib.sha256()
         with open(file_path, "rb") as f:
-            while chunk := f.read(8192):
+            while chunk := f.read(HASH_CHUNK_BYTES):
                 hasher.update(chunk)
         sha256_hash = hasher.hexdigest()
 
@@ -271,28 +431,45 @@ async def analyze_upload(file: UploadFile = File(...)):
     """
     Direct file upload analysis endpoint.
     """
-    if not file.filename.endswith(".apk"):
-        raise HTTPException(status_code=400, detail="Invalid file type. Only .apk files are allowed.")
-
     hasher = hashlib.sha256()
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".apk", dir=UPLOADS_DIR) as tmp:
-        while chunk := await file.read(1024 * 1024 * 8):
-            hasher.update(chunk)
-            tmp.write(chunk)
-        temp_path = tmp.name
+    total = 0
+    temp_path: Optional[str] = None
 
-    sha256_hash = hasher.hexdigest()
     try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".apk", dir=UPLOADS_DIR) as tmp:
+            temp_path = tmp.name
+            first = True
+            while chunk := await file.read(UPLOAD_CHUNK_BYTES):
+                if first:
+                    # Validate before a single byte is committed to the volume.
+                    _reject_non_apk(chunk[:4], file.filename)
+                    first = False
+
+                total += len(chunk)
+                if total > MAX_UPLOAD_BYTES:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"APK exceeds the {MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit.",
+                    )
+
+                hasher.update(chunk)
+                await asyncio.to_thread(tmp.write, chunk)
+
+            if first:
+                raise HTTPException(status_code=400, detail="Empty upload.")
+
         return await _execute_analysis_pipeline(
             apk_path=temp_path,
-            sha256_hash=sha256_hash,
+            sha256_hash=hasher.hexdigest(),
         )
     finally:
-        if os.path.exists(temp_path):
+        # Remove the sample AND the per-analysis manifest directory. The latter
+        # was previously never cleaned, so the shared volume grew without bound.
+        if temp_path and os.path.exists(temp_path):
             try:
-                os.remove(temp_path)
-            except Exception:
-                pass
+                await asyncio.to_thread(os.remove, temp_path)
+            except OSError as e:
+                logger.warning("[Engine] Could not remove temp upload %s: %s", temp_path, e)
 
 
 @app.post("/api/v1/analyze/async")
@@ -303,6 +480,13 @@ async def analyze_async(
     """
     Asynchronous job submission endpoint — returns job_id for polling.
     """
+    # Validate the path up front so a bad request fails fast with 400 rather
+    # than becoming a job that reports FAILED later. Same containment rule as
+    # the synchronous endpoint — this path used req.file_path unchecked.
+    apk_path = _resolve_upload_path(req.file_path)
+
+    _evict_finished_jobs()
+
     job_id = str(uuid.uuid4())
     JOBS[job_id] = {
         "job_id": job_id,
@@ -310,6 +494,7 @@ async def analyze_async(
         "progress_pct": 10,
         "error": None,
         "result": None,
+        "created_at": time.monotonic(),
     }
 
     async def _async_task():
@@ -317,7 +502,7 @@ async def analyze_async(
         JOBS[job_id]["progress_pct"] = 30
         try:
             res = await _execute_analysis_pipeline(
-                apk_path=req.file_path,
+                apk_path=str(apk_path),
                 sha256_hash=req.sha256 or "unknown",
                 timeout_seconds=req.timeout_seconds or DEFAULT_TIMEOUT_SECONDS,
             )
@@ -325,8 +510,11 @@ async def analyze_async(
             JOBS[job_id]["progress_pct"] = 100
             JOBS[job_id]["result"] = res
         except Exception as e:
+            logger.exception("[Engine] Job %s failed", job_id)
             JOBS[job_id]["status"] = "FAILED"
             JOBS[job_id]["error"] = str(e)
+        finally:
+            JOBS[job_id]["finished_at"] = time.monotonic()
 
     background_tasks.add_task(_async_task)
     return {"job_id": job_id, "status": "QUEUED"}

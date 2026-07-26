@@ -36,7 +36,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set
 
-from app.engines.agentic.sanitizer import sanitize, sanitize_block
+from sudarshan_core.engines.agentic.sanitizer import sanitize, sanitize_block
 
 logger = logging.getLogger(__name__)
 

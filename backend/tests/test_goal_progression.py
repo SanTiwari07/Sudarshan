@@ -14,7 +14,7 @@ rather than an LLM assertion.
 
 import pytest
 
-from app.engines.agentic.goal_tracker import (
+from sudarshan_core.engines.agentic.goal_tracker import (
     LAUNCH_CONFIRMATIONS_REQUIRED,
     LAUNCH_GOAL_NAME,
     MAX_GOAL_RETRIES,

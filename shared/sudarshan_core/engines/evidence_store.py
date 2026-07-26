@@ -35,7 +35,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from app.engines.event_bus import RuntimeEventBus
+from sudarshan_core.engines.event_bus import RuntimeEventBus
 
 import logging
 logger = logging.getLogger(__name__)

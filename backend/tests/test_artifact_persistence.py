@@ -14,7 +14,7 @@ import json
 
 import pytest
 
-from app.engines.frida_sandbox import ARTIFACT_ROOT_DIRNAME, FridaSession, artifact_dir_for
+from sudarshan_core.engines.frida_sandbox import ARTIFACT_ROOT_DIRNAME, FridaSession, artifact_dir_for
 
 
 @pytest.fixture

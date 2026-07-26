@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sudarshan-core"
+version = "1.0.0"
+description = "Shared analysis engines, models and services for the Sudarshan platform"
+requires-python = ">=3.11"
+
+# Deliberately no dependency list here. The two consuming services pin their own
+# versions in their requirements.txt, and duplicating them would reintroduce the
+# drift this package exists to remove.
+
+[tool.setuptools.packages.find]
+include = ["sudarshan_core*"]
+
+[tool.setuptools.package-data]
+# The Frida agent is loaded from disk at runtime via
+# Path(__file__).parent / "frida_hooks", so it must ship inside the package.
+"sudarshan_core.engines" = ["frida_hooks/*.js", "frida_hooks/*.json"]

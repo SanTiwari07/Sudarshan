@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, LogIn, Eye, EyeOff, AlertCircle, UserPlus } from 'lucide-react';
+import { API_BASE } from '../config';
 
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api/v1';
+
 
 // Persist JWT token to localStorage
 export function saveToken(token: string, username: string, role: string) {
@@ -224,12 +225,10 @@ export default function Login() {
               )}
             </button>
 
-            {/* Default credentials hint */}
-            {mode === 'login' && (
-              <p className="text-center text-xs text-white/30">
-                Default admin: <span className="font-mono text-white/50">admin / sudarshan_admin_2024</span>
-              </p>
-            )}
+            {/* Never print credentials here — this screen is reachable by
+                anyone who can reach the app. The admin password is set via
+                ADMIN_PASSWORD, or generated once at first boot and written to
+                the backend log. */}
           </form>
         </div>
 

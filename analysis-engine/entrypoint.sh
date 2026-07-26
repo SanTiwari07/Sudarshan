@@ -30,4 +30,7 @@ echo "[Analysis Engine] Attempting ADB connection to ${ADB_HOST}:${ADB_PORT}..."
 
 # Launch FastAPI Uvicorn Server on 0.0.0.0:8001
 echo "[Analysis Engine] Launching FastAPI worker pool on port 8001..."
-exec uvicorn app.main:app --host 0.0.0.0 --port 8001 --workers 2
+# --workers 1 is REQUIRED until the JOBS store is externalised: JOBS is an
+# in-process dict, so with >1 worker a job created in one process returns 404
+# from the other on /api/v1/status/{job_id}.
+exec uvicorn app.main:app --host 0.0.0.0 --port 8001 --workers 1

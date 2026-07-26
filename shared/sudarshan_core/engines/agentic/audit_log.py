@@ -229,7 +229,7 @@ class AuditLog:
         This prevents accidental credential leakage if the planner or fallback
         ever embeds an actual form value directly.
         """
-        from app.engines.agentic.tool_executor import FORM_VALUES
+        from sudarshan_core.engines.agentic.tool_executor import FORM_VALUES
         safe = dict(action)
         if "text" in safe:
             # If the text value is an actual credential value (not a key name), redact it

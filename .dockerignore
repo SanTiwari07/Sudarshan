@@ -1,0 +1,56 @@
+# Keep secrets, credentials and malware samples OUT of built images.
+# Every Dockerfile here uses `COPY . .`, so without this file the committed
+# SQLite databases (which contain admin password hashes), any local .env, and
+# the APK samples are baked into the image layers.
+
+# Secrets & credentials
+.env
+.env.*
+!.env.example
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Malware samples & forensic output
+*.apk
+sudarshan_artifacts/
+backend/sudarshan_artifacts/
+*_logs.txt
+backend_logs.txt
+
+# VCS & CI
+.git
+.gitignore
+.gitattributes
+.github
+
+# Audit / docs — not needed at runtime
+audit/
+docs/
+*.md
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# Node
+node_modules/
+dist/
+build/
+npm-debug.log
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Large local tooling
+tools/
+frida-server-*

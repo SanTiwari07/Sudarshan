@@ -1,0 +1,19 @@
+# Scripts executed inside Linux containers must keep LF endings.
+# Without this, core.autocrlf=true on Windows checkouts rewrites the shebang
+# to "#!/bin/bash\r" and the container fails with
+#   exec /app/entrypoint.sh: no such file or directory
+*.sh            text eol=lf
+Dockerfile      text eol=lf
+*.dockerfile    text eol=lf
+entrypoint.sh   text eol=lf
+
+# Windows-native scripts keep CRLF.
+*.ps1           text eol=crlf
+*.cmd           text eol=crlf
+*.bat           text eol=crlf
+
+# Never touch binaries.
+*.apk           binary
+*.db            binary
+*.so            binary
+*.jar           binary

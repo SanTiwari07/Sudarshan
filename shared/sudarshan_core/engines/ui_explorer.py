@@ -15,7 +15,7 @@ import pytesseract
 from PIL import Image
 import io
 
-from app.engines.event_bus import RuntimeEventBus
+from sudarshan_core.engines.event_bus import RuntimeEventBus
 
 logger = logging.getLogger(__name__)
 

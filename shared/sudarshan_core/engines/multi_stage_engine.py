@@ -12,8 +12,8 @@ import asyncio
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
-from app.engines.frida_sandbox import run_frida_analysis, get_connected_emulators
-from app.engines.device_state_simulator import DeviceStateSimulator
+from sudarshan_core.engines.frida_sandbox import run_frida_analysis, get_connected_emulators
+from sudarshan_core.engines.device_state_simulator import DeviceStateSimulator
 
 logger = logging.getLogger(__name__)
 

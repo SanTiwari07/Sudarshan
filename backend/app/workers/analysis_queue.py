@@ -99,13 +99,13 @@ async def _worker(worker_id: int) -> None:
     import os as _os
 
     from app.ai.ollama_client import analyze_with_llm
-    from app.analyzers.apk_analyzer import analyze_apk
-    from app.engines.classification_engine import classify_family
-    from app.engines.risk_engine import calculate_risk_score, build_threat_scenario_table
-    from app.engines.frida_sandbox import run_frida_analysis, get_sandbox_status
-    from app.models.schemas import StaticAnalysisFlags
-    from app.services.threat_correlator import correlate
-    from app.services.mobsf_client import MobSFClient, MobSFAnalysisError, MobSFNotAvailable
+    from sudarshan_core.analyzers.apk_analyzer import analyze_apk
+    from sudarshan_core.engines.classification_engine import classify_family
+    from sudarshan_core.engines.risk_engine import calculate_risk_score, build_threat_scenario_table
+    from sudarshan_core.engines.frida_sandbox import run_frida_analysis, get_sandbox_status
+    from sudarshan_core.models.schemas import StaticAnalysisFlags
+    from sudarshan_core.services.threat_correlator import correlate
+    from sudarshan_core.services.mobsf_client import MobSFClient, MobSFAnalysisError, MobSFNotAvailable
     from app.db.database import save_case
 
     mobsf = MobSFClient()

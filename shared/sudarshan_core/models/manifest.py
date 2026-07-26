@@ -16,7 +16,7 @@ mode (when MobSF is unavailable).
 
 Usage::
 
-    from app.models.manifest import InvestigationManifest, build_manifest
+    from sudarshan_core.models.manifest import InvestigationManifest, build_manifest
 
     manifest = build_manifest(
         sha256=sha256_hash,

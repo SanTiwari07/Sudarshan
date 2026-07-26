@@ -18,7 +18,7 @@ sys.path.insert(0, str(BACKEND_DIR))
 from dotenv import load_dotenv
 load_dotenv(BACKEND_DIR.parent / ".env")
 
-from app.engines.frida_sandbox import run_frida_analysis
+from sudarshan_core.engines.frida_sandbox import run_frida_analysis
 
 # ── Paths (Windows-native) ────────────────────────────────────────────────────
 # Drop any .apk file here to test it
@@ -91,4 +91,4 @@ async def run():
         print("\n[EXCEPTION] " + str(e))
         traceback.print_exc()
 
-asyncio.run(run())
+asyncio.run(run())

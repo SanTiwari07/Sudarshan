@@ -17,7 +17,7 @@ Environment variable:
 
 Usage::
 
-    from app.engines.apktool_engine import ApktoolEngine
+    from sudarshan_core.engines.apktool_engine import ApktoolEngine
 
     engine = ApktoolEngine()
     result = engine.analyze(apk_path)

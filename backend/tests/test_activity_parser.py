@@ -11,7 +11,7 @@ component. Both defects are covered below.
 import pytest
 from pathlib import Path
 
-from app.engines.agentic.perception import package_of, parse_foreground_activity
+from sudarshan_core.engines.agentic.perception import package_of, parse_foreground_activity
 
 
 # ─── Captured dumpsys samples ─────────────────────────────────────────────────

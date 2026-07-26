@@ -11,8 +11,8 @@ import asyncio
 import logging
 from pathlib import Path
 
-from app.engines.multi_stage_engine import MultiStageEngine
-from app.engines.frida_sandbox import get_connected_emulators
+from sudarshan_core.engines.multi_stage_engine import MultiStageEngine
+from sudarshan_core.engines.frida_sandbox import get_connected_emulators
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s')
 logger = logging.getLogger("BatchRunner")
@@ -59,7 +59,7 @@ async def run_batch(apk_dir: str):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python -m app.engines.batch_runner <directory_containing_apks>")
+        print("Usage: python -m sudarshan_core.engines.batch_runner <directory_containing_apks>")
         sys.exit(1)
         
     asyncio.run(run_batch(sys.argv[1]))

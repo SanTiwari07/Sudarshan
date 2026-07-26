@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  Shield, Send, MessageSquare, ChevronRight, AlertTriangle,
-  CheckCircle2, XCircle, Info, Zap, Globe, Activity, FileText,
-  Target, Lock, BarChart2, User, Clock, RefreshCw, Cpu
+  Shield, Send, MessageSquare, ChevronRight,
+  CheckCircle2, XCircle, Globe, Activity, FileText,
+  Target, Lock, BarChart2, User, RefreshCw, Cpu
 } from 'lucide-react';
 import type { FraudCardData } from '../App';
 import { getToken } from './Login';
@@ -235,7 +235,7 @@ export default function InvestigationChat({ data }: InvestigationChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
-  const [streamingId, setStreamingId] = useState<string | null>(null);
+  const [, setStreamingId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);

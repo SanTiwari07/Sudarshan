@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Database, Search, ChevronRight, Shield, Clock,
+  Database, Search, Shield, Clock,
   TrendingUp, Filter, RefreshCw, AlertTriangle,
   CheckCircle2, XCircle, AlertOctagon, Eye
 } from 'lucide-react';
 import { getToken, getUser } from './Login';
+import { API_BASE } from '../config';
 
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api/v1';
+
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 

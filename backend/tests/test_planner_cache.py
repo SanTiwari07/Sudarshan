@@ -12,7 +12,7 @@ The cache is now per-instance, package- and version-scoped, and LRU-bounded.
 
 import pytest
 
-from app.engines.agentic.planner import (
+from sudarshan_core.engines.agentic.planner import (
     ACTION_CACHE_MAX_ENTRIES,
     PLANNER_VERSION,
     AgentPlanner,
@@ -66,7 +66,7 @@ def test_version_change_invalidates_entries(monkeypatch):
     p._cache_put(p._cache_key("h", "g"), ACTION)
     assert p._cache_get(p._cache_key("h", "g")) is not None
 
-    monkeypatch.setattr("app.engines.agentic.planner.PLANNER_VERSION", "999")
+    monkeypatch.setattr("sudarshan_core.engines.agentic.planner.PLANNER_VERSION", "999")
     assert p._cache_get(p._cache_key("h", "g")) is None, "stale planner version served"
 
 

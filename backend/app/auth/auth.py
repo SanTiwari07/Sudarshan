@@ -28,16 +28,29 @@ from passlib.context import CryptContext
 from pydantic import BaseModel
 
 from app.db.database import (
-    create_user, get_user_by_username, get_user_by_id, username_exists
+    create_user, get_user_by_username, get_user_by_id, username_exists,
+    update_user_role,
 )
 
 logger = logging.getLogger(__name__)
 
 # ─── Config ───────────────────────────────────────────────────────────────────
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "sudarshan-dev-secret-change-in-production-2024")
+# No default. A hardcoded fallback ships a publicly-known signing key in a public
+# repo, letting anyone forge a token for any user/role. Refuse to start instead.
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError(
+        "JWT_SECRET_KEY is not set. Refusing to start with an insecure default. "
+        "Generate one with:  python -c \"import secrets; print(secrets.token_urlsafe(48))\""
+    )
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "12"))
+
+# Self-registration always lands here. Elevation is an admin action.
+DEFAULT_ROLE = "analyst"
+ASSIGNABLE_ROLES = {"analyst", "soc_lead", "admin"}
 
 _pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 _bearer = HTTPBearer(auto_error=False)
@@ -120,12 +133,18 @@ require_admin    = require_role("admin")
 class RegisterRequest(BaseModel):
     username: str
     password: str
-    role: str = "analyst"   # caller-controlled; admin can set soc_lead/admin
+    # NOTE: deliberately no `role` field. Self-registration always yields an
+    # analyst. Elevating a user is an admin operation (see /auth/users/{id}/role),
+    # never something the registering caller can ask for.
 
 
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+
+class RoleChangeRequest(BaseModel):
+    role: str
 
 
 class TokenResponse(BaseModel):
@@ -148,13 +167,9 @@ class UserInfo(BaseModel):
 @router.post("/register", response_model=UserInfo, status_code=status.HTTP_201_CREATED)
 async def register(req: RegisterRequest):
     """
-    Register a new analyst account.
-    Role must be one of: analyst, soc_lead, admin.
+    Register a new account. Always created with the 'analyst' role —
+    privilege is granted by an admin afterwards, never self-assigned.
     """
-    allowed_roles = {"analyst", "soc_lead", "admin"}
-    if req.role not in allowed_roles:
-        raise HTTPException(status_code=400, detail=f"Role must be one of: {allowed_roles}")
-
     if await username_exists(req.username):
         raise HTTPException(status_code=409, detail="Username already taken")
 
@@ -162,14 +177,45 @@ async def register(req: RegisterRequest):
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
 
     hashed = hash_password(req.password)
-    user_id = await create_user(req.username, hashed, req.role)
-    from datetime import datetime, timezone
-    logger.info(f"[Auth] Registered user: {req.username} role={req.role}")
+    user_id = await create_user(req.username, hashed, DEFAULT_ROLE)
+    logger.info(f"[Auth] Registered user: {req.username} role={DEFAULT_ROLE}")
     return UserInfo(
         id=user_id,
         username=req.username,
-        role=req.role,
+        role=DEFAULT_ROLE,
         created_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+@router.patch("/users/{user_id}/role", response_model=UserInfo)
+async def set_user_role(
+    user_id: int,
+    req: RoleChangeRequest,
+    admin: dict = Depends(require_admin),
+):
+    """
+    Grant or revoke a role. Admin only — this is the ONLY way to create a
+    soc_lead or admin, replacing the self-assignment hole in /register.
+    """
+    if req.role not in ASSIGNABLE_ROLES:
+        raise HTTPException(
+            status_code=400, detail=f"Role must be one of: {sorted(ASSIGNABLE_ROLES)}"
+        )
+
+    target = await get_user_by_id(user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    await update_user_role(user_id, req.role)
+    logger.info(
+        f"[Auth] Role change: user_id={user_id} {target['role']} -> {req.role} "
+        f"by admin={admin['username']}"
+    )
+    return UserInfo(
+        id=user_id,
+        username=target["username"],
+        role=req.role,
+        created_at=target.get("created_at", ""),
     )
 
 

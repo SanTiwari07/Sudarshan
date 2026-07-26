@@ -19,8 +19,9 @@ services:
   # ── 2. Backend Gateway Orchestrator (FastAPI & Case Store) ─────────────────
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      # Repo root, so the build can reach shared/ as well as backend/
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: sudarshan-backend
     ports:
       - "8000:8000"
@@ -32,11 +33,12 @@ services:
       - UPLOADS_DIR=/app/uploads
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-sudarshan_jwt_secret_key_2026}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set in .env}
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
     volumes:
       - ./backend:/app
+      - ./shared:/opt/sudarshan-core
       - uploads:/app/uploads
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -48,11 +50,14 @@ services:
   # ── 3. Analysis Engine Container (Ubuntu 24.04 + Java 17 + Python 3.12) ────
   analysis-engine:
     build:
-      context: ./analysis-engine
-      dockerfile: Dockerfile
+      # Repo root, so the build can reach shared/ as well as analysis-engine/
+      context: .
+      dockerfile: analysis-engine/Dockerfile
     container_name: sudarshan-analysis-engine
-    ports:
-      - "8001:8001"
+    # NOT published. This service has no authentication of its own; the backend
+    # reaches it as http://analysis-engine:8001 on the internal compose network.
+    expose:
+      - "8001"
     environment:
       - ADB_HOST=host.docker.internal
       - ADB_PORT=5555
@@ -64,6 +69,7 @@ services:
       - PYTHONUNBUFFERED=1
     volumes:
       - ./analysis-engine:/app
+      - ./shared:/opt/sudarshan-core
       - uploads:/app/uploads
       - ~/.android:/root/.android:ro
       - mitmproxy_har:/mitmproxy_har:ro
@@ -85,8 +91,10 @@ services:
   mitmproxy:
     image: mitmproxy/mitmproxy:latest
     container_name: sudarshan-mitmproxy
+    # Publish only if an external AVD must reach the proxy. Prefer binding to
+    # loopback so it is not exposed on the LAN.
     ports:
-      - "8080:8080"    # Proxy port — point AVD to this
+      - "127.0.0.1:8080:8080"    # Proxy port — point AVD to this
     command: >
       mitmdump
       --listen-host 0.0.0.0

@@ -39,19 +39,19 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from app.engines.event_bus import RuntimeEventBus
-from app.engines.bfci_scorer import calculate_bfci_v2, BFCI_WEIGHTS
+from sudarshan_core.engines.event_bus import RuntimeEventBus
+from sudarshan_core.engines.bfci_scorer import calculate_bfci_v2, BFCI_WEIGHTS
 
 try:
-    from app.engines.evidence_store import EvidenceStore
+    from sudarshan_core.engines.evidence_store import EvidenceStore
 except ImportError:
     EvidenceStore = None
     logger.warning("[Frida] evidence_store module not found. Evidence collection disabled.")
 
 try:
-    from app.engines.screenshot_manager import ScreenshotManager
-    from app.engines.ioc_collector import IOCCollector
-    from app.engines.mitre_mapper import MitreMapper
+    from sudarshan_core.engines.screenshot_manager import ScreenshotManager
+    from sudarshan_core.engines.ioc_collector import IOCCollector
+    from sudarshan_core.engines.mitre_mapper import MitreMapper
 except ImportError:
     ScreenshotManager = None
     IOCCollector = None
@@ -59,17 +59,17 @@ except ImportError:
     logger.warning("[Frida] Wave 2 intelligence modules not found.")
 
 try:
-    from app.engines.permission_orchestrator import PermissionOrchestrator
-    from app.engines.replay_engine import ReplayEngine
+    from sudarshan_core.engines.permission_orchestrator import PermissionOrchestrator
+    from sudarshan_core.engines.replay_engine import ReplayEngine
 except ImportError:
     PermissionOrchestrator = None
     ReplayEngine = None
     logger.warning("[Frida] Wave 3 navigator modules not found.")
 
 try:
-    from app.engines.network_capture import NetworkCapture
-    from app.engines.anti_analysis_detector import AntiAnalysisDetector
-    from app.engines.yara_scanner import YARAScanner
+    from sudarshan_core.engines.network_capture import NetworkCapture
+    from sudarshan_core.engines.anti_analysis_detector import AntiAnalysisDetector
+    from sudarshan_core.engines.yara_scanner import YARAScanner
 except ImportError:
     NetworkCapture = None  # type: ignore[assignment]
     AntiAnalysisDetector = None  # type: ignore[assignment]
@@ -77,14 +77,14 @@ except ImportError:
     logger.warning("[Frida] Wave 4 intelligence modules not found.")
 
 try:
-    from app.engines.workflow_reconstructor import WorkflowReconstructor
+    from sudarshan_core.engines.workflow_reconstructor import WorkflowReconstructor
 except ImportError:
     WorkflowReconstructor = None  # type: ignore[assignment]
     logger.warning("[Frida] workflow_reconstructor not found. Fraud workflow reconstruction disabled.")
 
 try:
-    from app.engines.analysis_history import AnalysisHistory
-    from app.engines.report_generator import ReportGenerator
+    from sudarshan_core.engines.analysis_history import AnalysisHistory
+    from sudarshan_core.engines.report_generator import ReportGenerator
 except ImportError:
     AnalysisHistory = None
     ReportGenerator = None
@@ -111,7 +111,7 @@ _HOOKS_SCRIPT = _HOOKS_BUNDLE if _HOOKS_BUNDLE.exists() else _HOOKS_SOURCE
 EXPLORER_MODE = os.environ.get("SUDARSHAN_EXPLORER_MODE", "ai")
 
 try:
-    from app.engines.ui_explorer import UIExplorer
+    from sudarshan_core.engines.ui_explorer import UIExplorer
 except ImportError:
     UIExplorer = None
     logger.warning("[Frida] ui_explorer module not found. Falling back to monkey mode.")
@@ -444,6 +444,7 @@ class FridaSession:
         
         # ── Wave 3: Navigator Upgrades ─────────────────────────────────────────
         self.permission_orchestrator = None
+        self.last_error: Optional[str] = None
         self.replay_engine = None
         
         # ── Wave 4: Intelligence Depth ─────────────────────────────────────────
@@ -642,15 +643,35 @@ class FridaSession:
             if not self._session:
                 logger.info("[Frida] monkey-attach failed, falling back to device.spawn()")
                 pid = None
+                spawn_errors: List[str] = []
                 for attempt in range(3):
                     try:
                         pid = device.spawn([self.package_name])
                         break
                     except Exception as e:
+                        spawn_errors.append(f"{type(e).__name__}: {e}")
                         logger.warning(f"[Frida] Spawn attempt {attempt+1} failed: {e}")
                         time.sleep(2)
                 if not pid:
-                    raise Exception("Frida attach failed. Ensure frida-server is running on emulator.")
+                    # Report what actually went wrong. The old message always
+                    # blamed frida-server, which cost real debugging time when
+                    # the true cause was SELinux denying ptrace (attach raised
+                    # PermissionDeniedError while frida-server was running fine).
+                    running = self._resolve_pid()
+                    _, enforce = _adb("-s", self.device_serial, "shell", "getenforce", timeout=10)
+                    hint = ""
+                    if "Enforcing" in (enforce or ""):
+                        hint = (" SELinux is Enforcing, which blocks Frida from attaching "
+                                "even as root — run 'adb shell setenforce 0'.")
+                    elif running:
+                        hint = (f" The process IS running (pid={running}) but could not be "
+                                "attached, so this is an injection/permission problem, "
+                                "not a launch problem.")
+                    raise Exception(
+                        "Frida could not instrument "
+                        f"{self.package_name}.{hint} "
+                        f"Last spawn errors: {spawn_errors[-1] if spawn_errors else 'none'}"
+                    )
 
                 for attempt in range(3):
                     try:
@@ -703,7 +724,7 @@ class FridaSession:
             if EXPLORER_MODE in ["ai", "hybrid"]:
                 # ── Agentic Explorer (primary) — falls back to UIExplorer on import error ──
                 try:
-                    from app.engines.agentic_explorer import AgenticExplorer
+                    from sudarshan_core.engines.agentic_explorer import AgenticExplorer
                     explorer = AgenticExplorer(
                         device_serial=self.device_serial,
                         adb_path=_find_adb(),
@@ -806,7 +827,12 @@ class FridaSession:
             return True
 
         except Exception as e:
-            logger.error(f"[Frida] Session failed: {type(e).__name__}: {e}")
+            # Record the real cause so the caller can report it. Previously the
+            # wrapper discarded this and substituted a fixed
+            # "Ensure frida-server is running" string, which named the wrong
+            # component on every failure.
+            self.last_error = f"{type(e).__name__}: {e}"
+            logger.error(f"[Frida] Session failed: {self.last_error}")
             return False
 
         finally:
@@ -895,15 +921,52 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
     device_serial = emulators[0]
     logger.info(f"[Frida] Using emulator: {device_serial}")
 
+    # ── Step 1a: adbd must be root, and SELinux must be permissive ─────────────
+    #
+    # Without this, frida-server runs happily and every attach still fails with
+    #     PermissionDeniedError: unable to access process with pid <pid>
+    # because SELinux (Enforcing by default on Android 15+) denies the ptrace
+    # that injection requires — even for uid 0. The old code only checked that
+    # frida-server was alive, so the failure surfaced as the misleading
+    # "Ensure frida-server is running on emulator", which it was.
+    #
+    # This is an analysis sandbox: the AVD is disposable and exists to be
+    # instrumented. It is never applied to anything but the attached emulator.
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _adb, "-s", device_serial, "root")
+    await asyncio.sleep(1)
+
+    ok, enforce = await loop.run_in_executor(
+        None, _adb, "-s", device_serial, "shell", "getenforce"
+    )
+    if "Enforcing" in (enforce or ""):
+        logger.warning(
+            "[Frida] SELinux is Enforcing — Frida cannot attach to app processes. "
+            "Setting the sandbox emulator to Permissive."
+        )
+        await loop.run_in_executor(
+            None, _adb, "-s", device_serial, "shell", "setenforce 0"
+        )
+        ok, enforce = await loop.run_in_executor(
+            None, _adb, "-s", device_serial, "shell", "getenforce"
+        )
+        if "Permissive" not in (enforce or ""):
+            logger.error(
+                "[Frida] Could not set SELinux permissive (still %r). Attach will "
+                "likely fail with PermissionDeniedError. The emulator must be "
+                "started from a userdebug/eng image.", (enforce or "").strip()
+            )
+    logger.info("[Frida] SELinux mode: %s", (enforce or "unknown").strip())
+
     # ── Step 1b: Automatically start frida-server if dead ──────────────────────
     logger.info("[Frida] Checking frida-server status...")
-    ok, out = await asyncio.get_event_loop().run_in_executor(
+    ok, out = await loop.run_in_executor(
         None, _adb, "-s", device_serial, "shell", "ps -A | grep frida-server"
     )
     if "frida-server" not in out:
         logger.info("[Frida] frida-server not running, starting it automatically...")
         # Since adb is running as root, we can run it directly and background it
-        await asyncio.get_event_loop().run_in_executor(
+        await loop.run_in_executor(
             None, _adb, "-s", device_serial, "shell", "nohup /data/local/tmp/frida-server > /dev/null 2>&1 &"
         )
         await asyncio.sleep(2) # Give it time to start up
@@ -985,7 +1048,10 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
     success = await loop.run_in_executor(None, _run_sync)
 
     if not success:
-        base_result["error"] = "Frida attach failed. Ensure frida-server is running on emulator."
+        base_result["error"] = (
+            getattr(session, "last_error", None)
+            or "Frida instrumentation failed (no further detail reported)."
+        )
         return base_result
 
     # ── Step 5: Compute BFCI & Instrumentation Status ───────────────────────

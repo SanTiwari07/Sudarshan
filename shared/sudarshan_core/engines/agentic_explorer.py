@@ -61,14 +61,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from app.engines.agentic.agent_memory import AgentMemory
-from app.engines.agentic.audit_log import AuditLog
-from app.engines.agentic.benchmark import BenchmarkCollector
-from app.engines.agentic.goal_tracker import GoalStatus, GoalTracker
-from app.engines.agentic.perception import PerceptionPipeline, package_of
-from app.engines.agentic.planner import AgentPlanner
-from app.engines.agentic.tool_executor import ToolExecutor
-from app.engines.event_bus import RuntimeEventBus
+from sudarshan_core.engines.agentic.agent_memory import AgentMemory
+from sudarshan_core.engines.agentic.audit_log import AuditLog
+from sudarshan_core.engines.agentic.benchmark import BenchmarkCollector
+from sudarshan_core.engines.agentic.goal_tracker import GoalStatus, GoalTracker
+from sudarshan_core.engines.agentic.perception import PerceptionPipeline, package_of
+from sudarshan_core.engines.agentic.planner import AgentPlanner
+from sudarshan_core.engines.agentic.tool_executor import ToolExecutor
+from sudarshan_core.engines.event_bus import RuntimeEventBus
 
 logger = logging.getLogger(__name__)
 

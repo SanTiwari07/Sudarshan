@@ -27,10 +27,10 @@ from app.engines.apktool_engine import ApktoolEngine
 from app.engines.jadx_engine import JadxEngine
 from app.engines.frida_sandbox import run_frida_analysis
 from app.engines.network_capture import NetworkCapture
-from app.engines.risk_engine import compute_fraud_risk_score
+from app.engines.risk_engine import calculate_risk_score as compute_fraud_risk_score
 from app.models.manifest import build_manifest
-from app.services.mobsf_client import mobsf_scan
-from app.services.threat_correlator import correlate_threat_intel
+from app.services.mobsf_client import MobSFClient
+from app.services.threat_correlator import correlate
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("analysis-engine")
@@ -81,10 +81,12 @@ def status():
     adb_connected = False
     try:
         import subprocess
-        res = subprocess.run(["adb", "devices"], capture_output=True, text=True, timeout=3)
-        adb_connected = "device" in res.stdout and "emulator" in res.stdout
-    except Exception:
-        pass
+        adb_bin = shutil.which("adb") or "adb"
+        res = subprocess.run([adb_bin, "devices"], capture_output=True, text=True, timeout=5)
+        lines = [line.strip() for line in res.stdout.splitlines()[1:] if line.strip()]
+        adb_connected = any("device" in line for line in lines)
+    except Exception as e:
+        logger.warning(f"[Status] ADB check failed: {e}")
 
     return {
         "status": "ready",
@@ -111,15 +113,19 @@ async def _execute_analysis_pipeline(
 
     async def _run():
         # 1. Primary Static Analysis via Androguard / MobSF
-        flags = analyze_apk(apk_path)
-        mobsf_res = await mobsf_scan(apk_path) if os.getenv("MOBSF_HOST") else None
+        androguard_output = analyze_apk(apk_path)
+        flags = androguard_output.flags
+        package_name = androguard_output.package_name
+        permissions = androguard_output.permissions or []
+
+        mobsf_res = await MobSFClient().analyze(apk_path) if os.getenv("MOBSF_HOST") else None
 
         flags_dict = {
-            "dangerous_permissions": flags.dangerous_permissions,
-            "all_permissions": flags.all_permissions,
-            "activities": flags.activities,
-            "services_list": flags.services_list,
-            "receivers": flags.receivers,
+            "dangerous_permissions": permissions,
+            "all_permissions": permissions,
+            "activities": [],
+            "services_list": [],
+            "receivers": [],
             "dangerous_apis_found": flags.dangerous_apis_found,
             "hardcoded_urls_ips": flags.hardcoded_urls_ips,
             "targets_indian_banks": flags.targets_indian_banks,
@@ -146,7 +152,7 @@ async def _execute_analysis_pipeline(
         # 3. Investigation Manifest Generation
         manifest = build_manifest(
             sha256=sha256_hash,
-            package_name=flags.package_name,
+            package_name=package_name,
             flags_dict=flags_dict,
             analysis_mode="androguard",
         )
@@ -156,11 +162,9 @@ async def _execute_analysis_pipeline(
         manifest.to_file(manifest_dir / "manifest.json")
 
         # 4. Dynamic Sandbox Analysis via Frida & ADB
-        duration = int(os.getenv("FRIDA_ANALYSIS_DURATION", "30"))
-        dynamic_result = run_frida_analysis(
+        dynamic_result = await run_frida_analysis(
             apk_path=apk_path,
-            package_name=flags.package_name,
-            duration=duration,
+            package_name=package_name,
         )
 
         # 5. mitmproxy HAR Net Ingest
@@ -175,22 +179,22 @@ async def _execute_analysis_pipeline(
                 logger.warning(f"[Engine] mitmproxy HAR ingest notice: {e}")
 
         # 6. Threat Correlation & Risk Scoring
-        threat_corr = correlate_threat_intel(
+        threat_corr = await correlate(
             sha256=sha256_hash,
             urls=flags.hardcoded_urls_ips,
-            package_name=flags.package_name,
+            package_name=package_name,
         )
 
         risk_output = compute_fraud_risk_score(
             flags=flags,
             dynamic_result=dynamic_result,
-            threat_corr=threat_corr,
+            correlation_result=threat_corr,
         )
 
         return {
             "sha256": sha256_hash,
-            "package_name": flags.package_name,
-            "app_name": getattr(flags, "app_name", None),
+            "package_name": package_name,
+            "app_name": getattr(androguard_output, "app_name", package_name),
             "analysis_mode": "androguard",
             "family_classification": risk_output.get("family_classification", "Unknown"),
             "base_score": risk_output["base_score"],
@@ -201,8 +205,8 @@ async def _execute_analysis_pipeline(
             "recommended_action": risk_output.get("recommended_action", ""),
             "frs_breakdown": risk_output.get("frs_breakdown", {}),
             "threat_scenario_table": risk_output.get("threat_scenario_table", []),
-            "all_permissions": flags.all_permissions,
-            "dangerous_perms": flags.dangerous_permissions,
+            "all_permissions": permissions,
+            "dangerous_perms": [p for p in permissions if "SMS" in p or "ACCESSIBILITY" in p or "ALERT" in p],
             "hardcoded_urls_ips": flags.hardcoded_urls_ips,
             "targets_indian_banks": flags.targets_indian_banks,
             "has_accessibility_abuse": getattr(flags, "has_accessibility_abuse", False),
@@ -216,13 +220,13 @@ async def _execute_analysis_pipeline(
             "fraud_workflow": dynamic_result.get("fraud_workflow") if dynamic_result else None,
             "manifest_findings": [],
             "code_findings": [],
-            "activities": flags.activities,
-            "services_list": flags.services_list,
-            "receivers": flags.receivers,
-            "certificate": getattr(flags, "certificate", {}),
-            "domains": getattr(flags, "domains", []),
-            "hardcoded_secrets": getattr(flags, "hardcoded_secrets", []),
-            "appsec_score": getattr(flags, "appsec_score", 50.0),
+            "activities": [],
+            "services_list": [],
+            "receivers": [],
+            "certificate": {},
+            "domains": [],
+            "hardcoded_secrets": [],
+            "appsec_score": 50.0,
             "mobsf_scan_hash": mobsf_res.get("hash") if mobsf_res else None,
         }
 

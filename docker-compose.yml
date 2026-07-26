@@ -27,6 +27,8 @@ services:
     environment:
       - OLLAMA_HOST=http://host.docker.internal:11434
       - ANALYSIS_ENGINE_URL=http://analysis-engine:8001
+      - ADB_HOST=host.docker.internal
+      - ADB_PORT=5555
       - UPLOADS_DIR=/app/uploads
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
@@ -36,6 +38,8 @@ services:
     volumes:
       - ./backend:/app
       - uploads:/app/uploads
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       analysis-engine:
         condition: service_healthy
@@ -59,6 +63,7 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
     volumes:
+      - ./analysis-engine:/app
       - uploads:/app/uploads
       - ~/.android:/root/.android:ro
       - mitmproxy_har:/mitmproxy_har:ro
@@ -82,13 +87,10 @@ services:
     container_name: sudarshan-mitmproxy
     ports:
       - "8080:8080"    # Proxy port — point AVD to this
-      - "8081:8081"    # mitmproxy web UI (http://localhost:8081)
     command: >
       mitmdump
       --listen-host 0.0.0.0
       --listen-port 8080
-      --web-host 0.0.0.0
-      --web-port 8081
       --set hardump=/har/dump.har
     volumes:
       - mitmproxy_har:/har

@@ -167,6 +167,35 @@ _FALLBACK_RESPONSE = {
 }
 
 
+def _analyze_with_gemini(prompt: str, cert_recs: List[str]) -> Optional[Dict[str, Any]]:
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    if not gemini_key:
+        return None
+    try:
+        from google import genai
+        from google.genai import types
+        model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        client = genai.Client(api_key=gemini_key)
+        res = client.models.generate_content(
+            model=model_name,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.2,
+            )
+        )
+        if res and res.text:
+            parsed = json.loads(res.text)
+            if "plain_english_narrative" in parsed:
+                if not parsed.get("cert_in_recommendations"):
+                    parsed["cert_in_recommendations"] = cert_recs
+                logger.info("[Gemini] RAG threat intelligence report generated successfully via Gemini Flash.")
+                return parsed
+    except Exception as e:
+        logger.warning(f"[Gemini] Gemini intelligence fallback error: {e}")
+    return None
+
+
 async def analyze_with_llm(
     flags: Dict[str, Any],
     family: str = "Unknown",
@@ -221,9 +250,12 @@ async def analyze_with_llm(
         cert_in_recs=cert_recs_str,
     )
 
-    # Fast-fail if Ollama not available
+    # Fallback to Gemini 2.5 Flash if Ollama is not available
     if not await _check_ollama_available():
-        logger.warning(f"Ollama not reachable at {OLLAMA_HOST}")
+        logger.info(f"Ollama not reachable at {OLLAMA_HOST}. Attempting Gemini Flash AI fallback...")
+        gemini_res = _analyze_with_gemini(prompt, cert_recs)
+        if gemini_res:
+            return gemini_res
         return _FALLBACK_RESPONSE
 
     for attempt in range(max_retries):

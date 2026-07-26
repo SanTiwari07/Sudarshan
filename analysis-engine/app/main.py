@@ -30,7 +30,7 @@ from sudarshan_core.engines.frida_sandbox import run_frida_analysis
 from sudarshan_core.engines.network_capture import NetworkCapture
 from sudarshan_core.engines.risk_engine import calculate_risk_score as compute_fraud_risk_score
 from sudarshan_core.models.manifest import build_manifest
-from sudarshan_core.services.mobsf_client import MobSFClient
+from sudarshan_core.services.mobsf_client import MobSFAnalysisError, MobSFClient, MobSFNotAvailable
 from sudarshan_core.services.threat_correlator import correlate
 
 logging.basicConfig(level=logging.INFO)
@@ -185,7 +185,19 @@ async def _execute_analysis_pipeline(
         package_name = androguard_output.package_name
         permissions = androguard_output.permissions or []
 
-        mobsf_res = await MobSFClient().analyze(apk_path) if os.getenv("MOBSF_HOST") else None
+        # MobSF is OPTIONAL enrichment. Unguarded, an unreachable MOBSF_HOST
+        # raised MobSFAnalysisError straight out of the pipeline and the whole
+        # request 500'd — so the gateway silently fell back to its own
+        # (toolchain-less) local run. The backend has always guarded this
+        # (routes/upload.py); the engine did not.
+        mobsf_res = None
+        if os.getenv("MOBSF_HOST"):
+            try:
+                mobsf_res = await MobSFClient().analyze(apk_path)
+            except (MobSFAnalysisError, MobSFNotAvailable) as e:
+                logger.warning("[Engine] MobSF unavailable, continuing without it: %s", e)
+            except Exception as e:
+                logger.warning("[Engine] MobSF failed unexpectedly, continuing without it: %s", e)
 
         flags_dict = {
             "dangerous_permissions": permissions,

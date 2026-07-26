@@ -1,50 +1,51 @@
 # Sudarshan — Global Research & Competitive Intelligence
 
-**Date:** 2026-07-26 · **Baseline:** commit `74535e2`
+**Baseline:** `82fc55b` · **Date:** 2026-07-27 · **Supersedes** the `74535e2` edition.
 
 ---
 
 ## Scope Statement — read before using this document
 
-The brief asked for a sweep of ~50 named sources (Scholar, IEEE, ACM, USENIX, BlackHat, DEF CON,
-Reddit, Discord, HN, vendor blogs, …). **That was not achievable and I did not fake it.** What this
-document contains:
+The brief asks for a sweep of ~50 named sources. **That was not achievable and I did not fake it.**
+What this contains:
 
-- **4 targeted literature/landscape searches**, cited below with live URLs.
+- **Targeted literature searches**, cited with live URLs.
 - **Direct comparison against tools I can characterise from the codebase itself** (MobSF,
-  Androguard, APKTool, JADX, Frida — all are dependencies of this project, so their roles are
-  established by evidence, not recollection).
+  Androguard, APKTool, JADX, Frida — all dependencies of this project, so their roles are
+  established by evidence).
+- **New this edition: measured detection results** on a 17-sample labelled corpus, which converts
+  several previously speculative claims into measured ones.
 - **Explicit confidence labels on every claim.**
 
-What this document does **not** contain: community-discussion synthesis (Reddit/Discord/HN),
-per-project screenshots, verified accuracy benchmarks for named commercial products, or patent
-searches. Those were requested; I could not perform them to a standard that would survive scrutiny,
-so they are marked **[NOT PERFORMED]** rather than invented. Any number in this document that I did
-not personally verify is labelled.
+What it does **not** contain: community-discussion synthesis (Reddit/Discord/HN), per-project
+screenshots, verified accuracy benchmarks for named commercial products, or patent prior-art
+searches. Those were requested; they are marked **[NOT PERFORMED]** rather than invented.
 
-**Confidence key:** 🟢 verified from primary source or this codebase · 🟡 from a cited secondary
-source · 🔴 inference, treat as hypothesis.
+**Confidence key:** 🟢 verified from primary source or this codebase · 🟡 cited secondary source ·
+🔴 inference, treat as hypothesis.
 
 ---
 
-## 1. What Sudarshan Actually Is
-
-Established from the codebase, not from marketing text (🟢):
+## 1. What Sudarshan Actually Is — updated
 
 | Dimension | Implementation | Evidence |
 |---|---|---|
-| Static analysis | Androguard primary; APKTool 2.10.0 + JADX 1.5.1 enrichment; MobSF optional | `analysis-engine/Dockerfile`, `main.py:116-145` |
-| Dynamic analysis | Frida 17.16.4 on a real AVD over ADB TCP; monkey + AI-driven UI exploration | `frida_sandbox.py`, `agentic_explorer.py` |
-| Network capture | mitmproxy sidecar → HAR → ingest | `docker-compose.yml:85-97`, `network_capture.py` |
-| Scoring | **Explicit weighted formulas**: 5-axis STEI (CT .60/BT .20/PR .10/OB .05/IR .05); BFCI (accessibility .35/SMS .25/overlay .20/banking .10/network .05/persistence .05); FRS = .25 STEI + .35 BFCI + .20 correlation + .20 banking-impact | `risk_engine.py`, `bfci_scorer.py`, live `/` response |
-| Threat intel | VirusTotal, OTX, AbuseIPDB with 24h SQLite cache | `threat_correlator.py`, `database.py:58-70` |
-| AI layer | RAG-grounded LLM (Ollama local or Gemini); **agentic** planner/perception/tool-executor loop driving the device | `ai/`, `rag/`, `engines/agentic/` |
-| Prompt-injection defence | Dedicated sanitizer as a single choke point, 179 lines of adversarial tests | `sanitizer.py`, `test_prompt_injection.py` |
-| Output | STIX 2.1, IOC CSV, MITRE ATT&CK mapping, fraud-workflow reconstruction | `report.py`, `mitre_mapper.py`, `workflow_reconstructor.py` |
-| Domain specialisation | **Indian banking fraud** — `targets_indian_banks` flag, CERT-In guidance in the RAG corpus | `apk_analyzer.py`, `knowledge_base.py` |
+| Code organisation | One shared package (`sudarshan_core`) consumed by gateway + engine; layering CI-enforced | 🟢 `00_Project_Map §3` |
+| Static analysis | Androguard primary; APKTool 2.10.0 + JADX 1.5.1 enrichment; MobSF optional | 🟢 |
+| **Concealment detection** | **NEW** — nested APK/DEX or max-entropy blob disproportionate to `classes.dex` | 🟢 `apk_analyzer.py` |
+| **Accessibility detection** | **FIXED** — reads `<service>` guard permission + intent-filter + raw manifest, not `<uses-permission>` | 🟢 |
+| Dynamic analysis | Frida 17.16.4 on a real AVD over ADB TCP; monkey + AI-driven UI exploration; **SELinux preflight** | 🟢 `frida_sandbox.py` |
+| Network capture | mitmproxy sidecar → HAR → ingest | 🟢 |
+| Scoring | 5-axis STEI, BFCI, FRS — **now with axis exclusion, renormalisation, and a visibility floor** | 🟢 `risk_engine.py` |
+| Threat intel | VirusTotal, OTX, AbuseIPDB with 24 h SQLite cache | 🟢 |
+| AI layer | RAG-grounded LLM (Ollama/Gemini); agentic planner/perception/tool-executor loop | 🟢 |
+| Prompt-injection defence | Single-choke-point sanitizer, 179 lines of adversarial tests | 🟢 |
+| Output | STIX 2.1, IOC CSV, MITRE ATT&CK mapping, fraud-workflow reconstruction | 🟢 |
+| Domain specialisation | Indian banking — `targets_indian_banks`, CERT-In in the RAG corpus | 🟢 |
 
-**The one-line positioning:** a hybrid static+dynamic Android analyser with an *explicit, auditable*
-fraud-risk formula, an agentic LLM investigation layer, and Indian-banking domain grounding.
+**One-line positioning:** a hybrid static+dynamic Android analyser with an *explicit, auditable*
+fraud-risk formula that refuses to over-claim, an agentic LLM investigation layer, and Indian-banking
+grounding.
 
 ---
 
@@ -53,197 +54,227 @@ fraud-risk formula, an agentic LLM investigation layer, and Indian-banking domai
 ### 2.1 The open-source baseline — MobSF
 
 MobSF is the reference open-source mobile analysis framework: automated static + dynamic analysis
-for Android/iOS/Windows, built partly on Androguard, with REST APIs and CI/CD integration
+for Android/iOS/Windows, partly built on Androguard, with REST APIs and CI/CD integration
 (🟡 — [MobSF GitHub](https://github.com/MobSF/Mobile-Security-Framework-MobSF),
-[MobSF docs](https://mobsf.github.io/docs/)).
+[docs](https://mobsf.github.io/docs/)).
 
-**Sudarshan's relationship to MobSF is not "competitor" — it is "optional upstream."**
-`services/mobsf_client.py` calls MobSF when `MOBSF_HOST` is set and falls back to Androguard
-otherwise (🟢). This is a genuinely sensible architectural choice and should be stated openly rather
-than positioned against MobSF.
+**Sudarshan's relationship is "optional upstream", not "competitor"** — `services/mobsf_client.py`
+calls MobSF when `MOBSF_HOST` is set and falls back to Androguard otherwise (🟢). This should be
+stated openly rather than positioned against.
 
 | Dimension | MobSF | Sudarshan |
 |---|---|---|
 | Static breadth | Broad, mature, multi-platform | Narrower; Android-only |
-| Dynamic | Instrumented testing, runtime + network analysis (🟡) | Frida + AI-driven exploration + mitmproxy |
-| Risk output | Security findings + AppSec score | **Fraud-specific weighted formula (STEI/BFCI/FRS)** |
+| Dynamic | Instrumented testing, runtime + network (🟡) | Frida + AI exploration + mitmproxy |
+| Risk output | Security findings + AppSec score | **Fraud-specific weighted formula with explicit provenance** |
 | LLM layer | Not core | **Agentic investigation loop** |
 | Domain tuning | Generic | **Indian banking** |
-| Maturity | Years of production use, large community | Prototype (this audit) |
-
-**Honest read:** Sudarshan does not beat MobSF at static analysis and should not try. Its
-differentiation is downstream — scoring, fraud-workflow reconstruction, and investigation.
+| Maturity | Years of production use | Prototype |
 
 ### 2.2 Academic — LLMs for malware analysis
 
-This is an active 2024-2026 area, which both validates the direction and means the novelty window
-is narrowing (🟡):
+Active 2024-2026 area — validates the direction while narrowing the novelty window (🟡):
 
-- **MalParse / semantic categorisation** — hierarchical-tiered summarisation with GPT-4o-mini,
-  reported **77% categorisation accuracy** benign-vs-malicious
-  ([arXiv:2501.04848](https://arxiv.org/abs/2501.04848)). *That figure is the paper's, not verified
-  by me.*
+- **MalParse / semantic categorisation** — hierarchical summarisation with GPT-4o-mini, reported
+  77% benign-vs-malicious accuracy ([arXiv:2501.04848](https://arxiv.org/abs/2501.04848)).
+  *Their figure, not verified here.*
 - **Beyond Classification** — argues the field should move past binary labels toward fine-grained
-  **behaviour auditing** ([arXiv:2509.14335](https://arxiv.org/pdf/2509.14335)). **This is precisely
-  Sudarshan's fraud-workflow-reconstruction thesis** — strong external validation of the direction.
-- **AppPoet** — multi-view prompt engineering for LLM-based Android detection
-  ([ResearchGate](https://www.researchgate.net/publication/385148039)).
-- **LLM for Software Security survey** — notes a context-driven framework addressing *dataset bias,
-  evolving threats, and lack of explainability* ([arXiv:2504.07137](https://arxiv.org/pdf/2504.07137)).
+  **behaviour auditing** ([arXiv:2509.14335](https://arxiv.org/pdf/2509.14335)). **This is
+  Sudarshan's fraud-workflow thesis** — strong external validation.
+- **AppPoet** — multi-view prompt engineering ([ResearchGate](https://www.researchgate.net/publication/385148039)).
+- **LLM for Software Security survey** — names *dataset bias, evolving threats, and lack of
+  explainability* as the open problems ([arXiv:2504.07137](https://arxiv.org/pdf/2504.07137)).
 
-### 2.3 Academic — datasets and the drift problem
+### 2.3 Academic — datasets and drift
 
-- **Drebin** — the canonical explainable-detection feature set: manifest features (hardware,
-  permissions, components, intents) plus disassembled-code features (restricted/suspicious API calls,
-  network addresses) (🟡 — [Drebin paper](https://www.researchgate.net/publication/264785935)).
-  **Sudarshan's static flags occupy the same feature space** (🔴 inference from
-  `apk_analyzer.py` flag names).
-- **AndroZoo** — millions of APKs since 2010; the standard sourcing corpus (🟡).
+- **Drebin** — canonical explainable-detection feature set (🟡 [paper](https://www.researchgate.net/publication/264785935)).
+  Sudarshan's static flags occupy the same space (🔴 inference).
+- **AndroZoo** — millions of APKs since 2010 (🟡).
 - **LAMDA (2025)** — >1M APKs, 1,380 families, 2013-2025, Drebin-derived features, built for
-  **concept-drift** study with SHAP-based explanation drift
+  **concept drift** with SHAP-based explanation drift
   ([LAMDA](https://iqsec-lab.github.io/LAMDA/), [repo](https://github.com/IQSeC-Lab/LAMDA)).
 
-**This is the most actionable finding in this document.** LAMDA is a ready-made, free instrument for
-the exact validation Sudarshan currently lacks (§3, Gap-1).
+**Still the most actionable finding in this document** — a free, purpose-built instrument for the
+validation Sudarshan has now begun at small scale (§3).
 
-### 2.4 Industry — the threat Sudarshan targets is real and current
+### 2.4 Industry — evasion is the decisive constraint
 
-Accessibility-service abuse and overlay attacks are the defining Android banking-trojan techniques,
-confirmed by multiple 2025-2026 vendor reports on OverlayPhantom and BankBot-YNRK
-(🟡 — [Cyble](https://cyble.com/blog/overlayphantom-android-banking-trojan/),
-[CYFIRMA](https://www.cyfirma.com/research/investigation-report-android-bankbot-ynrk-mobile-banking-trojan/),
-[8kSec / Xenomorph](https://8ksec.io/mobile-malware-analysis-part-6-xenomorph/)).
+Accessibility-service abuse and overlay attacks remain the defining Android banking-trojan
+techniques (🟡 — [Cyble/OverlayPhantom](https://cyble.com/blog/overlayphantom-android-banking-trojan/),
+[CYFIRMA/BankBot-YNRK](https://www.cyfirma.com/research/investigation-report-android-bankbot-ynrk-mobile-banking-trojan/),
+[8kSec/Xenomorph](https://8ksec.io/mobile-malware-analysis-part-6-xenomorph/)).
 
-**This directly validates the BFCI weighting.** Sudarshan assigns accessibility 0.35 and overlay
-0.20 — the two highest weights — to the two techniques the industry independently identifies as
-primary. The *ordering* of the weights is well-founded. Their *magnitudes* remain uncalibrated (§3).
+**This validates the BFCI weighting** — accessibility 0.35 and overlay 0.20 are the two highest
+weights, matching the two techniques industry independently identifies as primary. The *ordering*
+is well-founded; the *magnitudes* remain uncalibrated.
 
-**Counter-signal:** the same sources note malware increasingly **detects analysis environments** and
-suppresses behaviour — checking for ADB, Magisk, and Frida specifically (🟡, Appdome). Sudarshan
-uses **stock Frida 17.16.4 with a default frida-server on a standard AVD**, which is among the most
-detectable configurations possible (🟢 from `requirements.txt`, `entrypoint.sh`). There is an
-`anti_analysis_detector.py` (53 lines) but it *detects* evasion rather than *defeating* it (🔴 —
-not deep-reviewed). **This is the biggest technical threat to the dynamic-analysis value
-proposition.**
+**And it is now the measured bottleneck.** The literature on sandbox evasion is directly on point:
+Android sandboxes built on emulators or hooking frameworks carry fingerprints usable for evasion,
+and **HOOK-FRIDA-FILE detection is more widespread in packed samples than non-packed ones**
+(🟡 — [Ruggia et al., AsiaCCS'24, "Unmasking the Veiled: A Comprehensive Analysis of Android Evasive
+Malware"](https://s3.eurecom.fr/docs/asiaccs24_ruggia.pdf);
+[ACM](https://dl.acm.org/doi/pdf/10.1145/3634737.3637658)). Frida can be detected via ptrace,
+pthread injection, spawn and attach signatures (🟡 —
+[Appdome anti-Frida](https://www.appdome.com/mobile-malware-prevention/anti-frida-dbi-detection/),
+[HackTricks](https://hacktricks.wiki/en/mobile-pentesting/android-app-pentesting/android-anti-instrumentation-and-ssl-pinning-bypass.html)).
+Research-grade responses exist — e.g. Phantom-Frida renames SELinux labels such as `frida_file` to
+defeat hook detectors (🟡).
 
----
-
-## 3. Gap Analysis
-
-| # | Gap | Their approach | Sudarshan today | Impact | Effort |
-|---|---|---|---|---|---|
-| **G1** | **No empirical validation** | Drebin/LAMDA/AndroZoo benchmarking with published metrics | Weights asserted; **no labelled corpus, no precision/recall anywhere in the repo** (🟢 grepped) | **Critical** | Medium |
-| **G2** | Anti-evasion | Hardened/stealth instrumentation | Stock Frida, default frida-server, standard AVD | **Critical** | High |
-| **G3** | Concept drift | LAMDA temporal splits, drift-aware retraining | No temporal evaluation; static weights | High | Medium |
-| **G4** | Scale corpus | AndroZoo millions | `batch_runner.py` (65L) + one committed sample | High | Medium |
-| **G5** | YARA/signature depth | Curated rule corpora | `yara_scanner.py` (106L); **`yara-python` missing from engine deps** (🟢) | Medium | Low |
-| **G6** | Multi-platform | MobSF: Android/iOS/Windows | Android only | Medium | High |
-| **G7** | Family attribution | Clustering, YARA families | `classification_engine.py`; returned `"Unknown"` in the live run (🟢) | Medium | Medium |
-| **G8** | Production hardening | Mature auth/RBAC/multi-tenancy | See `06_Security_Audit.md` — 3 CRITICAL | **Blocker for adoption** | Low–Medium |
+Sudarshan uses **stock frida-server 17.16.4 on a standard AVD** — among the most detectable
+configurations possible (🟢). That prediction from the previous edition was borne out: see §3.
 
 ---
 
-## 4. Where Sudarshan Is Genuinely Differentiated
+## 3. Measured Results — new this edition
 
-Claims I can defend from the codebase (🟢) plus the literature (🟡):
+Corpus: 8 real banking trojans, 4 legitimate apps, 4 OWASP crackmes, 1 vulnerable app
+(`audit/DETECTION_VALIDATION.md`). All figures 🟢 measured.
 
-1. **Explicit, auditable scoring.** STEI/BFCI/FRS are inspectable weighted formulas, not a model
-   output. Most ML detectors give a probability with no defensible chain. For **regulated banking
-   forensics — where a decision may need to be justified to an auditor or a court — this is a
-   feature, not a limitation.** The literature's stated concern is precisely "lack of
-   explainability" (🟡 arXiv:2504.07137). Sudarshan's answer is structurally sound.
-2. **Fraud *workflow* reconstruction, not classification.** `workflow_reconstructor.py` produces an
-   ordered, timestamped, evidence-linked attack chain. This aligns exactly with the "Beyond
-   Classification / behaviour auditing" research direction (🟡 arXiv:2509.14335) — Sudarshan is
-   on the right side of where the field is moving.
+**Before:** every sample scored "Safe"; **Anubis scored *below* Amaze File Manager**.
+
+**After** fixing five defects (dead accessibility check; unavailable axes scored as benign; no
+dropper detection; permissions never reaching the PR axis; an empty sandbox run diluting static
+evidence):
+
+```
+malware flagged      : 8/8   (missed 0)
+non-malware flagged  : 0/9   false positives
+precision 1.00   recall 1.00
+malware FRS 14.0–50.9   benign FRS 9.2–25.9
+```
+
+**This partially closes G1** — the previous edition's largest gap ("weights asserted; no labelled
+corpus, no precision/recall anywhere in the repo"). 17 samples is a demonstration, not evidence at
+scale; the honest next step is LAMDA.
+
+**Dynamic analysis remains the weak half, and the literature explains why.** After fixing the
+SELinux blocker (Enforcing denies the ptrace Frida needs, so every attach failed —
+`PermissionDeniedError`), instrumentation went **0/8 → 5/8**. But across all eight samples the
+accessibility, SMS, overlay and network BFCI components are **0.0**. Two causes, both measured:
+
+1. **The sandbox never enables the accessibility service.** `permission_orchestrator.py:86` writes
+   a hardcoded `.AccessibilityService` class; Cerberus's real one is `.zWPzgfI`. Android silently
+   ignores a non-existent component. 🟢
+2. **Packed droppers have no launchable entry point.** Cerberus and Drinik declare no launcher
+   activity and their main activity class lives in the packed payload. 🟢 — consistent with the
+   AsiaCCS'24 finding that evasion concentrates in packed samples.
+
+---
+
+## 4. Gap Analysis — updated
+
+| # | Gap | Status | Impact | Effort |
+|---|---|---|---|---|
+| **G1** | No empirical validation | **PARTIAL** — 17 samples, P/R 1.00; needs LAMDA | Critical | Medium |
+| **G2** | Anti-evasion | **OPEN, now quantified** — 5/8 instrument, 0/8 show fraud behaviour | **Critical** | High |
+| **G2a** | Accessibility never enabled | **OPEN** — hardcoded class name; ~3 h fix | **Critical** | Low |
+| **G2b** | Packed droppers unlaunchable | **OPEN** — needs receiver/service triggering | High | Medium |
+| G3 | Concept drift | OPEN — no temporal evaluation | High | Medium |
+| G4 | Scale corpus | OPEN — `batch_runner.py` exists; corpus is 17 | High | Medium |
+| G5 | YARA depth | OPEN — `yara-python` absent from the engine image | Medium | Low |
+| G6 | Multi-platform | OPEN — Android only | Medium | High |
+| G7 | Family attribution | OPEN — returned "Unknown" for all 8 trojans | Medium | Medium |
+| G8 | Production hardening | **IMPROVED** — 3 CRITICALs closed; root containers remain | Blocker | Low–Med |
+
+**G2a is the single highest-leverage item in the project.** It is a ~3-hour fix that unblocks the
+0.35-weighted BFCI component, which is the difference between a static analyser and a genuine
+behavioural sandbox.
+
+---
+
+## 5. Where Sudarshan Is Genuinely Differentiated
+
+1. **Explicit, auditable scoring that refuses to over-claim.** Axes without evidence are *excluded
+   and named* (`axes_excluded`), not scored as benign; a concealed payload cannot be certified
+   "Safe"; `analysis_completeness` distinguishes "nothing found" from "never computed". The
+   literature names *lack of explainability* as an open problem (🟡 arXiv:2504.07137); this is a
+   structurally sound answer, and for regulated banking forensics it is a feature rather than a
+   limitation. 🟢
+2. **Fraud *workflow* reconstruction, not classification** — aligns with the "Beyond
+   Classification" direction (🟡 arXiv:2509.14335).
 3. **Serious prompt-injection engineering.** `sanitizer.py` treats the analysed app as an adversary
-   *against the analysis system itself* — fence-neutralisation, bidi stripping, NFKC, bounded
-   output, total-function contract, 179 lines of adversarial tests. **I found no comparable
-   published treatment of prompt injection in a malware-analysis context** in the searches
-   performed (🔴 absence-of-evidence, not evidence-of-absence — the searches were limited).
-   *If that holds under a proper literature review, it is the most publishable thing here.*
-4. **Indian banking domain grounding.** CERT-In guidance in the RAG corpus, Indian bank package
-   detection. Global tools are generic; regional fraud specificity is a real moat for BOI-type
-   deployments.
-5. **Determinism testing.** `test_determinism_replay.py` + a committed `determinism_baseline.json`.
-   Reproducibility is an evidentiary requirement in forensics and is rarely tested in comparable
-   open-source tools (🔴).
+   against the analysis system. **I found no comparable published treatment in a malware-analysis
+   context** in the searches performed — 🔴 absence-of-evidence, not evidence-of-absence. If it
+   survives a proper literature review, it is the most publishable thing here.
+4. **Indian banking domain grounding** — a real moat for BOI-type deployments.
+5. **Determinism testing** with a committed baseline, treated as a deliberate reviewed act to
+   regenerate. Rare in comparable open-source tools. 🔴
 
 ---
 
-## 5. Innovation & Research Opportunities
+## 6. Innovation & Research Opportunities
 
-Ranked by (defensibility × feasibility given the current codebase):
-
-| # | Opportunity | Why it is credible here | Confidence |
+| # | Opportunity | Why credible here | Confidence |
 |---|---|---|---|
-| **I1** | **Adversarial robustness of LLM-driven malware analysis** — formalise the threat model where the *analysed app attacks the analyser* via UI labels, notifications, logcat | `sanitizer.py` + `test_prompt_injection.py` are already a working implementation and a test harness. This is a paper that is 70% written in code already. | 🟡 strong |
-| **I2** | **Calibrating explicit fraud weights against LAMDA** — publish precision/recall for STEI/BFCI/FRS over temporal splits | Closes G1 and G3 simultaneously; LAMDA is free and purpose-built | 🟢 feasible |
-| **I3** | **Agentic exploration vs monkey coverage** — measure behavioural coverage of the LLM planner against random fuzzing | `benchmark.py`, `test_goal_progression.py`, and both explorer modes already exist | 🟡 |
-| **I4** | **Evidence-linked workflow reconstruction as a forensic artefact** — stage→hook→timestamp provenance chain | `workflow_reconstructor.py` + `evidence_store.py` + `audit_log.py` | 🟡 |
-| **I5** | Regional fraud-pattern corpus (Indian banking) as a published dataset | Domain grounding exists; corpus does not | 🔴 |
+| **I1** | **Adversarial robustness of LLM-driven malware analysis** — formalise the threat model where the *analysed app attacks the analyser* | `sanitizer.py` + `test_prompt_injection.py` are a working implementation and harness; ~70% written in code | 🟡 strong |
+| **I2** | **Calibrating explicit fraud weights against LAMDA** — publish P/R over temporal splits | Closes G1 and G3; LAMDA is free and purpose-built; the 17-sample harness already exists | 🟢 feasible |
+| **I3** | **Evidence-completeness as a first-class output** — `axes_excluded` + visibility floor + `analysis_completeness` as a reporting standard for forensic tools | Implemented and measured; I found no comparable treatment in the tools surveyed | 🔴 |
+| **I4** | Agentic exploration vs monkey coverage — measure behavioural coverage of the LLM planner against random fuzzing | `benchmark.py`, `test_goal_progression.py` and both explorer modes exist | 🟡 |
+| **I5** | Regional fraud-pattern corpus (Indian banking) as a published dataset | Grounding exists; corpus does not | 🔴 |
 
-**Patent opportunities: [NOT PERFORMED].** No prior-art search was conducted. Nothing in this
-document should be read as a novelty assertion for patent purposes.
-
----
-
-## 6. Adversarial Review — the questions that will be asked
-
-**A SOC analyst:** *"What's my false-positive rate?"* → **Unanswerable today.** G1. This is the
-first question any evaluator asks and the project has no answer.
-
-**A malware researcher:** *"Xenomorph detects Frida and does nothing. What do you show me?"* →
-An `INSTRUMENTATION_FAILED` dynamic result and a static-only score (🟢 — this is exactly what the
-live run produced with no emulator). G2 is the honest weak point.
-
-**A Google security engineer:** *"Why not MobSF plus a script?"* → Defensible answer: the fraud
-scoring model, workflow reconstruction, and agentic investigation. Not defensible: static-analysis
-breadth. Lead with the former.
-
-**A DARPA reviewer:** *"What is the novel contribution?"* → I1 (adversarial robustness of LLM
-malware analysis) is the strongest. The scoring formula is engineering, not research, until it is
-calibrated (I2).
-
-**A VC:** *"What stops adoption?"* → `06_Security_Audit.md`. Three CRITICAL findings including
-unauthenticated admin escalation. **No bank will deploy this until those are closed** — and they are
-mostly hours of work, not weeks. This is the cheapest possible unblock.
-
-**A BOI judge:** *"Does it work?"* → Yes, demonstrably — I ran a real APK end-to-end in 9.1s with
-correct package identification, obfuscation scoring (0.82), and a full FRS breakdown. The static
-pipeline is real and working. The dynamic pipeline was not demonstrable without an emulator.
+**Patent opportunities: [NOT PERFORMED].** No prior-art search was conducted. Nothing here should
+be read as a novelty assertion for patent purposes.
 
 ---
 
-## 7. Where This Project Ranks
+## 7. Adversarial Review
 
-**Today:** a well-engineered **prototype** with unusually thoughtful design in two specific places
-(prompt-injection defence; explicit auditable scoring) and unusually weak production hygiene
-(3 CRITICAL security findings, no CI, 41% duplicated code). It is **not** competitive with MobSF on
-analysis breadth and **is not trying to be**. Confidence: 🟢 high — this is from direct measurement.
+**A SOC analyst — "what's my false-positive rate?"** → **Now answerable at small scale:** 0/9 on the
+labelled corpus. Caveat it honestly as 17 samples.
 
-**After closing the security findings + CI (≈1-2 weeks):** a credible internal SOC tool for a single
-bank. Confidence: 🟡.
+**A malware researcher — "Cerberus detects Frida and does nothing. What do you show me?"** →
+Measured: `EVENTS_CAPTURED`, BFCI 5.0, accessibility 0.0. And critically, the engine now **excludes**
+that inconclusive run rather than letting it dilute the static verdict — a run that observed nothing
+no longer makes malware look safer. That is a better answer than the previous edition could give,
+but G2 remains the honest weak point.
 
-**After G1 (empirical validation on LAMDA) + G2 (anti-evasion):** genuinely differentiated, and I1/I2
-become publishable. Confidence: 🔴 — depends on results that do not exist yet.
+**A Google security engineer — "why not MobSF plus a script?"** → The scoring model, workflow
+reconstruction, and evidence-provenance output. Not static breadth. Lead with the former.
 
-**The single highest-value next action is not a feature.** It is running the existing 302 tests in
-CI and closing S1/S2/S6, which together cost roughly one day and move the project from
-"not deployable" to "deployable internally."
+**A DARPA reviewer — "what is the novel contribution?"** → I1. The scoring formula is engineering
+until calibrated (I2).
+
+**A VC — "what stops adoption?"** → Previously three CRITICAL security findings; those are closed
+and verified. Now: containers run malware as root, CI is gitignored so no clone is protected, and
+the dynamic sandbox does not yet observe fraud behaviour. All are days of work, not months.
+
+**A BOI judge — "does it work?"** → Static: demonstrably, 8/8 with zero false positives on a
+labelled corpus. Dynamic: instrumentation works on 5/8 samples but observes no fraud behaviour yet.
+Say both.
+
+---
+
+## 8. Where This Project Ranks
+
+**Today:** a well-engineered prototype with two areas of genuinely excellent design
+(prompt-injection defence; explicit, provenance-carrying scoring), **now with small-scale empirical
+validation** — which most comparable hobby/hackathon projects never produce. It is not competitive
+with MobSF on static breadth and should not try. Confidence 🟢 (direct measurement).
+
+**After closing G2a + publishing CI + hardening containers (~1 week):** a credible internal SOC tool
+whose dynamic half actually functions. Confidence 🟡.
+
+**After G1-at-scale (LAMDA) + G2 (anti-evasion):** genuinely differentiated, and I1/I2 become
+publishable. Confidence 🔴 — depends on results that do not exist yet.
+
+**Highest-value next action:** not a feature — the ~3-hour accessibility-class fix (G2a). It
+unblocks the highest-weighted behavioural signal in the entire scoring model.
 
 ---
 
 ## Sources
 
-- [MobSF — GitHub](https://github.com/MobSF/Mobile-Security-Framework-MobSF) · [MobSF docs](https://mobsf.github.io/docs/) · [mobsf.org](https://mobsf.org/)
+- [MobSF — GitHub](https://github.com/MobSF/Mobile-Security-Framework-MobSF) · [docs](https://mobsf.github.io/docs/)
 - [Exploring LLMs for Semantic Analysis and Categorization of Android Malware — arXiv:2501.04848](https://arxiv.org/abs/2501.04848)
 - [Beyond Classification: Evaluating LLMs for Fine-Grained Automatic Malware Behavior Auditing — arXiv:2509.14335](https://arxiv.org/pdf/2509.14335)
 - [LLM for Software Security: Code Analysis, Malware Analysis, Reverse Engineering — arXiv:2504.07137](https://arxiv.org/pdf/2504.07137)
 - [AppPoet: LLM-based Android malware detection via multi-view prompt engineering](https://www.researchgate.net/publication/385148039_AppPoet_Large_language_model_based_android_malware_detection_via_multi-view_prompt_engineering)
-- [LAMDA: A Longitudinal Android Malware Benchmark for Concept Drift](https://iqsec-lab.github.io/LAMDA/) · [LAMDA repo](https://github.com/IQSeC-Lab/LAMDA)
+- [LAMDA: A Longitudinal Android Malware Benchmark for Concept Drift](https://iqsec-lab.github.io/LAMDA/) · [repo](https://github.com/IQSeC-Lab/LAMDA)
 - [DREBIN: Effective and Explainable Detection of Android Malware in Your Pocket](https://www.researchgate.net/publication/264785935_DREBIN_Effective_and_Explainable_Detection_of_Android_Malware_in_Your_Pocket)
+- [Unmasking the Veiled: A Comprehensive Analysis of Android Evasive Malware (AsiaCCS'24)](https://s3.eurecom.fr/docs/asiaccs24_ruggia.pdf) · [ACM](https://dl.acm.org/doi/pdf/10.1145/3634737.3637658)
+- [Evading Android Runtime Analysis via Sandbox Detection (ASIACCS'14)](https://dl.acm.org/doi/10.1145/2590296.2590325)
+- [Appdome — anti-Frida DBI detection](https://www.appdome.com/mobile-malware-prevention/anti-frida-dbi-detection/)
+- [HackTricks — Android anti-instrumentation and SSL pinning bypass](https://hacktricks.wiki/en/mobile-pentesting/android-app-pentesting/android-anti-instrumentation-and-ssl-pinning-bypass.html)
 - [Cyble — OverlayPhantom Android banking trojan](https://cyble.com/blog/overlayphantom-android-banking-trojan/)
 - [CYFIRMA — Android/BankBot-YNRK investigation report](https://www.cyfirma.com/research/investigation-report-android-bankbot-ynrk-mobile-banking-trojan/)
 - [8kSec — Xenomorph trojan analysis](https://8ksec.io/mobile-malware-analysis-part-6-xenomorph/)
-- [Appdome — protecting banking apps against mobile banking trojans](https://www.appdome.com/dev-sec-blog/how-to-protect-banking-apps-against-mobile-banking-trojans-2022/)

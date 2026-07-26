@@ -18,12 +18,8 @@ import os
 import tempfile
 from pathlib import Path
 import asyncio
-from pathlib import Path
 import httpx
 from typing import Any, Dict, Optional
-
-UPLOADS_DIR = Path(os.getenv("UPLOADS_DIR", "/app/uploads"))
-UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
@@ -167,6 +163,188 @@ async def _call_analysis_engine(temp_path: str, sha256_hash: str) -> Optional[Di
     return None
 
 
+# ─── Engine result → gateway contract ────────────────────────────────────────
+
+# Keys `_build_response` indexes directly. Anything absent here raises KeyError,
+# which is exactly how the delegation path used to 500.
+_RESPONSE_DEFAULTS: Dict[str, Any] = {
+    "package_name": "Unknown",
+    "app_name": None,
+    "analysis_mode": "androguard",
+    "family_classification": "Unknown",
+    "base_score": 0.0,
+    "ai_confidence_multiplier": 1.0,
+    "final_risk_score": 0.0,
+    "risk_band": "Safe",
+    "confidence": 70.0,
+    "recommended_action": "",
+    "frs_breakdown": {},
+    "threat_scenario_table": [],
+    "all_permissions": [],
+    "dangerous_perms": [],
+    "hardcoded_urls_ips": [],
+    "targets_indian_banks": False,
+    "has_accessibility_abuse": False,
+    "has_sms_read_write": False,
+    "has_system_alert_window": False,
+    "obfuscation_score": 0.0,
+    "has_reflection": False,
+    "threat_correlation": {"available": False},
+    "dynamic_available": False,
+    "dynamic_result": None,
+    "fraud_workflow": None,
+    "manifest_findings": [],
+    "code_findings": [],
+    "activities": [],
+    "services_list": [],
+    "receivers": [],
+    "certificate": {},
+    "domains": {},
+    "hardcoded_secrets": [],
+    "appsec_score": None,
+    "mobsf_scan_hash": None,
+    "suspicious_strings": [],
+    "dangerous_apis_found_raw": [],
+    "matched_rule": "None",
+    "intelligence_report": {},
+    "investigation_manifest": None,
+    "apktool_enrichment": None,
+    "jadx_enrichment": None,
+}
+
+
+async def _persist_and_index(
+    sha256_hash: str,
+    result: Dict[str, Any],
+    analyst_id: Optional[int],
+) -> None:
+    """
+    Post-processing shared by BOTH the delegated and local paths.
+
+    Previously only the local path did this, so a delegated analysis was never
+    saved, never cached for the STIX/IOC export endpoints, and never indexed for
+    the AI assistant.
+    """
+    await save_case(sha256_hash, result, analyst_id=analyst_id)
+
+    cache_report(sha256_hash, {
+        "sha256": sha256_hash,
+        "package_name": result.get("package_name"),
+        "family_classification": result.get("family_classification"),
+        "final_risk_score": result.get("final_risk_score"),
+        "risk_band": result.get("risk_band"),
+        "confidence": result.get("confidence"),
+        "has_accessibility_abuse": result.get("has_accessibility_abuse", False),
+        "has_sms_read_write": result.get("has_sms_read_write", False),
+        "has_system_alert_window": result.get("has_system_alert_window", False),
+        "hardcoded_urls_ips": result.get("hardcoded_urls_ips", []),
+        "targets_indian_banks": result.get("targets_indian_banks", False),
+        "threat_correlation": result.get("threat_correlation") or {"available": False},
+        "intelligence_report": result.get("intelligence_report") or {},
+    })
+
+    try:
+        build_investigation_index(sha256_hash, result)
+        logger.info(f"[RAG] Investigation indexed for {sha256_hash}")
+    except Exception as e:
+        logger.warning(f"[RAG] Investigation indexing failed (non-critical): {e}")
+
+
+def _coerce_manifest_findings(raw: Any) -> list:
+    """
+    `_build_response` reads `.title` off each manifest finding, so plain dicts
+    from the engine must become ManifestFinding models. Malformed entries are
+    dropped rather than allowed to abort the whole analysis.
+    """
+    out = []
+    for item in raw or []:
+        if isinstance(item, ManifestFinding):
+            out.append(item)
+        elif isinstance(item, dict):
+            try:
+                out.append(ManifestFinding(**item))
+            except Exception:
+                continue
+    return out
+
+
+async def _enrich_engine_result(
+    engine_result: Dict[str, Any],
+    sha256_hash: str,
+    analyst_id: Optional[int],
+) -> Dict[str, Any]:
+    """
+    Bring an analysis-engine result up to the gateway's response contract.
+
+    The engine owns static + dynamic analysis. The gateway owns everything that
+    needs an LLM, the knowledge base or the database. This composes the two
+    instead of letting either pretend to be the other.
+    """
+    result: Dict[str, Any] = {**_RESPONSE_DEFAULTS, **engine_result}
+    result["sha256"] = sha256_hash
+
+    flags_dict = {
+        "has_accessibility_abuse": result.get("has_accessibility_abuse", False),
+        "has_sms_read_write": result.get("has_sms_read_write", False),
+        "has_system_alert_window": result.get("has_system_alert_window", False),
+        "dangerous_apis_found": result.get("dangerous_apis_found_raw")
+                                or result.get("dangerous_apis_found", []),
+        "hardcoded_urls_ips": result.get("hardcoded_urls_ips", []),
+        "targets_indian_banks": result.get("targets_indian_banks", False),
+        "indian_bank_packages_found": result.get("indian_bank_packages_found", []),
+        "obfuscation_score": result.get("obfuscation_score", 0.0),
+        "has_reflection": result.get("has_reflection", False),
+        "has_concealed_payload": (result.get("frs_breakdown") or {}).get("concealed_payload", False),
+    }
+    result["dangerous_apis_found_raw"] = flags_dict["dangerous_apis_found"]
+    result["manifest_findings"] = _coerce_manifest_findings(result.get("manifest_findings"))
+
+    # Family classification — the engine reports one, but only the gateway has
+    # the rule set that also yields `matched_rule`.
+    family = result.get("family_classification") or "Unknown"
+    matched_rule = result.get("matched_rule") or "None"
+    try:
+        derived_family, derived_rule = classify_family(StaticAnalysisFlags(**{
+            k: v for k, v in flags_dict.items()
+            if k in StaticAnalysisFlags.model_fields
+        }))
+        if family == "Unknown" and derived_family != "Unknown":
+            family = derived_family
+        if matched_rule in ("", "None") and derived_rule:
+            matched_rule = derived_rule
+    except Exception as e:
+        logger.warning(f"[Orchestrator] Family classification on engine result failed: {e}")
+    result["family_classification"] = family
+    result["matched_rule"] = matched_rule
+
+    # LLM/RAG synthesis — the engine has no LLM, which is why returning its
+    # result raw produced KeyError: 'intelligence_report'.
+    try:
+        result["intelligence_report"] = await analyze_with_llm(
+            flags=flags_dict,
+            family=family,
+            matched_rule=matched_rule,
+            package_name=result.get("package_name", "Unknown"),
+            risk_result=result.get("frs_breakdown") or {},
+            correlation=result.get("threat_correlation") or {},
+            dynamic=result.get("dynamic_result"),
+        ) or {}
+    except Exception as e:
+        # Degrade visibly rather than failing the analysis.
+        logger.warning(f"[Orchestrator] LLM synthesis failed on engine result: {e}")
+        result["intelligence_report"] = {
+            "plain_english_narrative": (
+                "Static and dynamic analysis completed, but AI narrative synthesis "
+                "was unavailable for this run."
+            ),
+            "analysis_note": f"LLM unavailable: {type(e).__name__}",
+            "confidence": "Low",
+        }
+
+    await _persist_and_index(sha256_hash, result, analyst_id)
+    return result
+
+
 # ─── Core Analysis Logic (shared by sync + async) ────────────────────────────
 
 async def _run_analysis_pipeline(
@@ -178,10 +356,22 @@ async def _run_analysis_pipeline(
     Full analysis pipeline. Returns a dict that can be serialised as AnalysisResponse.
     Delegates to analysis-engine microservice if available.
     """
-    # 1. Attempt containerized microservice execution first
+    # 1. Attempt containerized microservice execution first.
+    #
+    # The engine owns the toolchain: APKTool and JADX exist ONLY in its image,
+    # so a local fallback silently skips resource and Java decompilation. It is
+    # also the only container with memory/CPU limits and no-new-privileges, so
+    # the fallback runs malware in the unrestricted gateway.
+    #
+    # Its result is ENRICHED here rather than returned raw. Returning it raw
+    # skipped LLM/RAG synthesis (which the engine cannot do — no LLM there),
+    # and also skipped save_case / cache_report / build_investigation_index, so
+    # a delegated analysis was never persisted, never exportable and never
+    # indexed for the AI assistant.
     engine_result = await _call_analysis_engine(temp_path, sha256_hash)
     if engine_result:
-        return engine_result
+        logger.info(f"[Orchestrator] Enriching analysis-engine result for {sha256_hash}")
+        return await _enrich_engine_result(engine_result, sha256_hash, analyst_id)
 
     analysis_mode = "androguard"
     mobsf_report: Optional[Dict] = None
@@ -602,17 +792,12 @@ async def analyze_upload(
         raise HTTPException(status_code=400, detail="Invalid file type. Only .apk files are allowed.")
 
     hasher = hashlib.sha256()
-    # NOTE: deliberately NOT on the shared uploads volume.
-    #
-    # Putting it there makes _call_analysis_engine succeed, and the engine
-    # result is then returned verbatim by _run_analysis_pipeline — but the
-    # engine cannot produce intelligence_report (LLM/RAG is backend-only),
-    # so _build_response raises KeyError and the request 500s.
-    #
-    # The delegation path therefore stays disabled until the gateway MERGES
-    # the engine result into its own pipeline instead of returning it raw.
-    # See audit/01_Architecture.md §4 and audit/03_Backend_Audit.md §1.
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".apk") as tmp:
+    # Written to the volume SHARED with analysis-engine so delegation can
+    # resolve it. Previously this was the container-private /tmp, so every
+    # delegation attempt 400d and the gateway silently ran the pipeline
+    # itself — without APKTool/JADX (engine-only) and without any of the
+    # engine's resource limits. See _enrich_engine_result.
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".apk", dir=_UPLOADS_DIR) as tmp:
         while True:
             chunk = await file.read(1024 * 1024 * 8) # 8MB chunks
             if not chunk:
@@ -664,17 +849,12 @@ async def analyze_upload_async(
         raise HTTPException(status_code=400, detail="Invalid file type. Only .apk files are allowed.")
 
     hasher = hashlib.sha256()
-    # NOTE: deliberately NOT on the shared uploads volume.
-    #
-    # Putting it there makes _call_analysis_engine succeed, and the engine
-    # result is then returned verbatim by _run_analysis_pipeline — but the
-    # engine cannot produce intelligence_report (LLM/RAG is backend-only),
-    # so _build_response raises KeyError and the request 500s.
-    #
-    # The delegation path therefore stays disabled until the gateway MERGES
-    # the engine result into its own pipeline instead of returning it raw.
-    # See audit/01_Architecture.md §4 and audit/03_Backend_Audit.md §1.
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".apk") as tmp:
+    # Written to the volume SHARED with analysis-engine so delegation can
+    # resolve it. Previously this was the container-private /tmp, so every
+    # delegation attempt 400d and the gateway silently ran the pipeline
+    # itself — without APKTool/JADX (engine-only) and without any of the
+    # engine's resource limits. See _enrich_engine_result.
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".apk", dir=_UPLOADS_DIR) as tmp:
         while True:
             chunk = await file.read(1024 * 1024 * 8)
             if not chunk:

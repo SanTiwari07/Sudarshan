@@ -7,3 +7,22 @@ androguard>=4.1.1
 frida==17.16.4
 frida-tools==14.10.4
 requests>=2.31.0
+
+# ── Required by sudarshan_core ────────────────────────────────────────────────
+# This service installs the shared analysis package, so it needs everything that
+# package imports — not just what app/main.py imports directly.
+#
+# These were absent, and every one of them fails SILENTLY: the modules are
+# wrapped in try/except ImportError guards, so the service starts healthy and
+# quietly runs with the feature switched off. Observed before this fix:
+#
+#   SUDARSHAN_EXPLORER_MODE=ai  ->  EXPLORER_MODE effective: "monkey"
+#       ui_explorer could not import (no google-genai), so AI-driven UI
+#       exploration silently downgraded to random monkey fuzzing.
+#   "[YARAScanner] yara-python not installed. YARA scanning disabled."
+#
+google-genai        # engines/ui_explorer.py — AI-driven UI exploration
+python-dotenv       # loaded alongside google-genai
+yara-python         # engines/yara_scanner.py
+pytesseract         # engines/ui_explorer.py — OCR of device screenshots
+Pillow              # image handling for the above

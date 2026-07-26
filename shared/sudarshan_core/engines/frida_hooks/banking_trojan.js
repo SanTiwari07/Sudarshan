@@ -185,9 +185,9 @@ try {
     emit('sms', {
       hook:         'SmsMessage.getMessageBody',
       severity:     'CRITICAL',
-      body_length:  body ? body.length() : 0,
+      body_length:  body ? body.length : 0,
       args:         [],
-      return_value: body ? '[' + body.length() + ' chars]' : 'null',
+      return_value: body ? '[' + body.length + ' chars]' : 'null',
       description:  'App is reading incoming SMS message body (OTP interception)',
     });
     return body;
@@ -208,7 +208,7 @@ try {
       hook:        'SmsManager.sendTextMessage',
       severity:    'CRITICAL',
       destination: destinationAddress ? destinationAddress.toString() : null,
-      text_length: text ? text.length() : 0,
+      text_length: text ? text.length : 0,
       args:        [destinationAddress ? destinationAddress.toString() : 'null', '[text]'],
       description: 'App is sending an SMS (potential fraud forwarding or C2 exfil)',
     });
@@ -294,7 +294,11 @@ try {
   var Activity = Java.use('android.app.Activity');
   Activity.onResume.implementation = function () {
     var name = this.getClass().getName();
-    emit('banking', {
+    // NOT 'banking': this fires on every activity resume of ANY app, including
+    // the sample's own. Scored as 'banking' (cap 3) it meant three screen
+    // transitions produced banking=100/100 for a benign app, and since the UI
+    // explorer's whole job is navigating screens it fired on 100% of runs.
+    emit('activity', {
       hook:        'Activity.onResume',
       severity:    'LOW',
       activity:    name,

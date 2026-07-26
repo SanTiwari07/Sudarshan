@@ -1,5 +1,5 @@
 📦
-495921 /backend/app/engines/frida_hooks/banking_trojan.js
+495916 /backend/app/engines/frida_hooks/banking_trojan.js
 ✄
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -13857,9 +13857,9 @@ function initHooks() {
           emit2("sms", {
             hook: "SmsMessage.getMessageBody",
             severity: "CRITICAL",
-            body_length: body ? body.length() : 0,
+            body_length: body ? body.length : 0,
             args: [],
-            return_value: body ? "[" + body.length() + " chars]" : "null",
+            return_value: body ? "[" + body.length + " chars]" : "null",
             description: "App is reading incoming SMS message body (OTP interception)"
           });
           return body;
@@ -13880,7 +13880,7 @@ function initHooks() {
             hook: "SmsManager.sendTextMessage",
             severity: "CRITICAL",
             destination: destinationAddress ? destinationAddress.toString() : null,
-            text_length: text ? text.length() : 0,
+            text_length: text ? text.length : 0,
             args: [destinationAddress ? destinationAddress.toString() : "null", "[text]"],
             description: "App is sending an SMS (potential fraud forwarding or C2 exfil)"
           });
@@ -13957,7 +13957,7 @@ function initHooks() {
         var Activity = Java.use("android.app.Activity");
         Activity.onResume.implementation = function() {
           var name = this.getClass().getName();
-          emit2("banking", {
+          emit2("activity", {
             hook: "Activity.onResume",
             severity: "LOW",
             activity: name,

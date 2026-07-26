@@ -42,6 +42,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from sudarshan_core.engines.event_bus import RuntimeEventBus
 from sudarshan_core.engines.bfci_scorer import calculate_bfci_v2, BFCI_WEIGHTS
 
+logger = logging.getLogger(__name__)
+
 try:
     from sudarshan_core.engines.evidence_store import EvidenceStore
 except ImportError:
@@ -90,7 +92,6 @@ except ImportError:
     ReportGenerator = None
     logger.warning("[Frida] Wave 5 reporting modules not found.")
 
-logger = logging.getLogger(__name__)
 
 # ─── Configuration ─────────────────────────────────────────────────────────────
 
@@ -497,9 +498,27 @@ class FridaSession:
             elif msg_type == "diag":
                 logger.info(f"[Frida DIAG] {payload}")
 
+            elif msg_type == "error":
+                # The agent sends this when the whole Java.perform block dies
+                # (banking_trojan.js: "Exception during hook initialization").
+                # There was no branch for it, so total instrumentation failure
+                # produced NO hook_error at all — and because the canary is sent
+                # BEFORE initHooks, the run still reported canary_received=True,
+                # hook_errors=[], bfci=0.0, available=True. A run where every
+                # hook died was indistinguishable from a dormant sample.
+                err = f"Hook initialization failed: {payload.get('description') or payload}"
+                self.hook_errors.append(err)
+                logger.error(f"[Frida] {err}")
+
 
         elif message.get("type") == "error":
-            logger.error(f"[Frida] Script error: {message.get('description')}")
+            # Frida's own runtime envelope — a hook body that threw. Previously
+            # only logged and discarded, so a hook that failed on EVERY fire
+            # (e.g. the SMS hooks calling .length() on an unboxed String)
+            # produced neither an event nor a recorded error.
+            err = f"Script error: {message.get('description')}"
+            self.hook_errors.append(err)
+            logger.error(f"[Frida] {err}")
 
     def _resolve_pid(self) -> Optional[int]:
         """

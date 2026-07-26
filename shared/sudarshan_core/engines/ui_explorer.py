@@ -209,7 +209,7 @@ class UIExplorer:
         return count >= 3
 
     async def _find_ai_action(self, screen_hash: str, nodes: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-        if not self.model or not nodes:
+        if not self.client or not nodes:   # self.model was never assigned
             return None
             
         # Check Cache

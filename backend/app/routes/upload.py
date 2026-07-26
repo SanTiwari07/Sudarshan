@@ -325,7 +325,19 @@ async def _enrich_engine_result(
             family=family,
             matched_rule=matched_rule,
             package_name=result.get("package_name", "Unknown"),
-            risk_result=result.get("frs_breakdown") or {},
+            # _build_evidence_dict reads final_risk_score / risk_band /
+            # confidence / evidence off this argument. FRSBreakdown has NONE of
+            # them, so passing it told the LLM score=0, band="Unknown" on every
+            # delegated run and the narrative contradicted the on-screen verdict.
+            risk_result={
+                "final_risk_score": result.get("final_risk_score"),
+                "risk_band": result.get("risk_band"),
+                "confidence": result.get("confidence"),
+                "recommended_action": result.get("recommended_action"),
+                "frs_breakdown": result.get("frs_breakdown") or {},
+                "threat_scenario_table": result.get("threat_scenario_table") or [],
+                "evidence": result.get("evidence") or [],
+            },
             correlation=result.get("threat_correlation") or {},
             dynamic=result.get("dynamic_result"),
         ) or {}

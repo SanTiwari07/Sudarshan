@@ -23,6 +23,8 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     container_name: sudarshan-backend
+    env_file:
+      - .env
     ports:
       - "8000:8000"
     environment:
@@ -56,6 +58,8 @@ services:
       context: .
       dockerfile: analysis-engine/Dockerfile
     container_name: sudarshan-analysis-engine
+    env_file:
+      - .env
     # NOT published. This service has no authentication of its own; the backend
     # reaches it as http://analysis-engine:8001 on the internal compose network.
     expose:
@@ -65,6 +69,13 @@ services:
       - ADB_PORT=5555
       - MOBSF_HOST=http://mobsf:8000
       - MOBSF_API_KEY=sudarshan_mobsf_api_key_2026
+      # The engine now performs the analysis, so it needs the same AI
+      # credentials the backend has. Without them ui_explorer and the agentic
+      # planner import successfully but disable themselves, and
+      # SUDARSHAN_EXPLORER_MODE=ai silently degrades to "monkey".
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+      - SUDARSHAN_EXPLORER_MODE=${SUDARSHAN_EXPLORER_MODE:-ai}
       - FRIDA_ANALYSIS_DURATION=30
       - ANALYSIS_TIMEOUT_SECONDS=300
       - UPLOADS_DIR=/app/uploads

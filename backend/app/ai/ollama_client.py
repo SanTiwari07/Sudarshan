@@ -18,7 +18,7 @@ import httpx
 import json
 import logging
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from app.rag.knowledge_base import build_rag_context, get_cert_in_recommendations
 

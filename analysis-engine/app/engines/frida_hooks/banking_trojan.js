@@ -518,6 +518,22 @@ try {
 }
 
 try {
+  var System = Java.use('java.lang.System');
+  System.exit.implementation = function (code) {
+    emit('anti_analysis', {
+      hook:        'System.exit',
+      severity:    'HIGH',
+      args:        [String(code)],
+      description: 'App attempted to self-terminate via System.exit() — exit blocked by Sudarshan',
+      technique:   'anti_analysis_exit',
+    });
+    // Exit blocked to allow dynamic analysis to continue
+  };
+} catch (e) {
+  send({ type: 'hook_error', hook: 'System.exit', error: e.message });
+}
+
+try {
   var Build = Java.use('android.os.Build');
 
   // Intercept field reads to detect model-based emulator detection

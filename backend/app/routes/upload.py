@@ -17,8 +17,12 @@ import logging
 import os
 import tempfile
 import asyncio
+from pathlib import Path
 import httpx
 from typing import Any, Dict, Optional
+
+UPLOADS_DIR = Path(os.getenv("UPLOADS_DIR", "/app/uploads"))
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
@@ -589,7 +593,7 @@ async def analyze_upload(
         raise HTTPException(status_code=400, detail="Invalid file type. Only .apk files are allowed.")
 
     hasher = hashlib.sha256()
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".apk") as tmp:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".apk", dir=str(UPLOADS_DIR)) as tmp:
         while True:
             chunk = await file.read(1024 * 1024 * 8) # 8MB chunks
             if not chunk:
@@ -641,7 +645,7 @@ async def analyze_upload_async(
         raise HTTPException(status_code=400, detail="Invalid file type. Only .apk files are allowed.")
 
     hasher = hashlib.sha256()
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".apk") as tmp:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".apk", dir=str(UPLOADS_DIR)) as tmp:
         while True:
             chunk = await file.read(1024 * 1024 * 8)
             if not chunk:

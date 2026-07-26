@@ -27,6 +27,8 @@ services:
     environment:
       - OLLAMA_HOST=http://host.docker.internal:11434
       - ANALYSIS_ENGINE_URL=http://analysis-engine:8001
+      - MOBSF_HOST=http://mobsf:8000
+      - MOBSF_API_KEY=sudarshan_mobsf_api_key_2026
       - ADB_HOST=host.docker.internal
       - ADB_PORT=5555
       - UPLOADS_DIR=/app/uploads
@@ -56,6 +58,8 @@ services:
     environment:
       - ADB_HOST=host.docker.internal
       - ADB_PORT=5555
+      - MOBSF_HOST=http://mobsf:8000
+      - MOBSF_API_KEY=sudarshan_mobsf_api_key_2026
       - FRIDA_ANALYSIS_DURATION=30
       - ANALYSIS_TIMEOUT_SECONDS=300
       - UPLOADS_DIR=/app/uploads
@@ -94,6 +98,16 @@ services:
       --set hardump=/har/dump.har
     volumes:
       - mitmproxy_har:/har
+    restart: unless-stopped
+
+  # ── 5. MobSF Mobile Security Framework Static Engine ────────────────────────
+  mobsf:
+    image: opensecurity/mobile-security-framework-mobsf:latest
+    container_name: sudarshan-mobsf
+    ports:
+      - "8008:8000"
+    environment:
+      - MOBSF_API_KEY=sudarshan_mobsf_api_key_2026
     restart: unless-stopped
 
 volumes:

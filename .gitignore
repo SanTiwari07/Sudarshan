@@ -119,3 +119,10 @@ backend/sudarshan_artifacts/
 .idea/
 .idea
 powershell.cmd
+
+# Test APKs and binaries
+test apk/
+*.apk
+*.zip
+
+

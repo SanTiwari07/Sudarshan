@@ -228,6 +228,10 @@ def _adb_install_apk(apk_path: str, device: str) -> Tuple[bool, str]:
         if ok:
             return ok, out
 
+        if "INSTALL_PARSE_FAILED" in out:
+            logger.warning(f"[Frida] APK install failed due to parse error (corrupt or obfuscated XML): {out.strip()}")
+            return False, f"APK parse failure: {out.strip()}"
+
         # ── Fallback: bypass deprecated SDK version block ──────────────────
         # Useful for older APKs (targetSdk < 24) on modern emulators (API 34+)
         if "INSTALL_FAILED_DEPRECATED_SDK_VERSION" in out:
@@ -240,6 +244,8 @@ def _adb_install_apk(apk_path: str, device: str) -> Tuple[bool, str]:
             if ok2:
                 return ok2, out2
             last_out = out2
+            if "INSTALL_PARSE_FAILED" in out2:
+                return False, f"APK parse failure: {out2.strip()}"
         else:
             last_out = out
 

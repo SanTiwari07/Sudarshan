@@ -18,8 +18,12 @@ import os
 import tempfile
 from pathlib import Path
 import asyncio
+from pathlib import Path
 import httpx
 from typing import Any, Dict, Optional
+
+UPLOADS_DIR = Path(os.getenv("UPLOADS_DIR", "/app/uploads"))
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 

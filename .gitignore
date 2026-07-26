@@ -127,10 +127,12 @@ backend/sudarshan_artifacts/
 .idea
 powershell.cmd
 
-
+# Local-only: CI config and audit workspace are intentionally not published.
 .github/
-.github
-
 audit/
 
+# Test APKs and binaries — never commit malware samples to the repo.
 test apk/
+*.apk
+*.zip
+

@@ -39,8 +39,8 @@ logger = logging.getLogger(__name__)
 
 # ─── Configuration ───────────────────────────────────────────────────────────
 
-MOBSF_HOST = os.getenv("MOBSF_HOST", "http://localhost:8008")
-MOBSF_API_KEY = os.getenv("MOBSF_API_KEY", "")  # MobSF REST API key
+MOBSF_HOST = os.getenv("MOBSF_HOST", "http://mobsf:8000")
+MOBSF_API_KEY = os.getenv("MOBSF_API_KEY", "sudarshan_mobsf_api_key_2026")  # MobSF REST API key
 
 # Default MobSF API key is shown on MobSF dashboard at http://localhost:8008/api_docs
 # Also set via env: MOBSF_API_KEY=your_key

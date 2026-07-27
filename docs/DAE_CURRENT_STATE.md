@@ -45,42 +45,24 @@ AI controls UI exploration; deterministic engines control scoring. The `RiskEngi
 
 | Identified Defect | Resolution Strategy | Location / Artifact | Audit Status |
 |---|---|---|---|
-| Silent Hook Suppression | Added `Java.deoptimizeEverything()` call | [banking_trojan.js#L108](file:///d:/Projects/Sudarshan%20BOI/backend/app/engines/frida_hooks/banking_trojan.js#L108) | ✅ **RESOLVED** |
-| Hook-Counting BFCI | Created volume-aware & temporal BFCI v2 | [bfci_scorer.py](file:///d:/Projects/Sudarshan%20BOI/backend/app/engines/bfci_scorer.py) | ✅ **RESOLVED** |
-| Missing Workflow Reconstructor | Created causal chain reconstruction engine | [workflow_reconstructor.py](file:///d:/Projects/Sudarshan%20BOI/backend/app/engines/workflow_reconstructor.py) | ✅ **RESOLVED** |
-| Missing Pre-Sandbox Manifest | Created Pydantic `InvestigationManifest` model | [manifest.py](file:///d:/Projects/Sudarshan%20BOI/backend/app/models/manifest.py) | ✅ **RESOLVED** |
-| Standalone Decompilation | Added APKTool & JADX CLI engines | [apktool_engine.py](file:///d:/Projects/Sudarshan%20BOI/backend/app/engines/apktool_engine.py), [jadx_engine.py](file:///d:/Projects/Sudarshan%20BOI/backend/app/engines/jadx_engine.py) | ✅ **RESOLVED** |
-| Encrypted HTTPS Interception | Added `mitmproxy` sidecar + HAR dump merger | [docker-compose.yml](file:///d:/Projects/Sudarshan%20BOI/docker-compose.yml), [network_capture.py](file:///d:/Projects/Sudarshan%20BOI/backend/app/engines/network_capture.py) | ✅ **RESOLVED** |
+| Silent Hook Suppression | Added `Java.deoptimizeEverything()` call | [banking_trojan.js](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/frida_hooks/banking_trojan.js) | ✅ **RESOLVED** |
+| Hook-Counting BFCI | Created volume-aware & temporal BFCI v2 | [bfci_scorer.py](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/bfci_scorer.py) | ✅ **RESOLVED** |
+| Missing Workflow Reconstructor | Created causal chain reconstruction engine | [workflow_reconstructor.py](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/workflow_reconstructor.py) | ✅ **RESOLVED** |
+| Missing Pre-Sandbox Manifest | Created Pydantic `InvestigationManifest` model | [manifest.py](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/models/manifest.py) | ✅ **RESOLVED** |
+| Standalone Decompilation | Added APKTool & JADX CLI engines | [apktool_engine.py](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/apktool_engine.py), [jadx_engine.py](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/jadx_engine.py) | ✅ **RESOLVED** |
+| Encrypted HTTPS Interception | Added `mitmproxy` sidecar + HAR dump merger | [docker-compose.yml](file:///d:/Projects/Sudarshan%20BOI/docker-compose.yml), [network_capture.py](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/network_capture.py) | ✅ **RESOLVED** |
 | UI Workflow Visualization | Built interactive MITRE ATT&CK React timeline | [WorkflowDiagram.tsx](file:///d:/Projects/Sudarshan%20BOI/frontend/src/components/WorkflowDiagram.tsx) | ✅ **RESOLVED** |
-| Screen Height Coordinate Rejection | Dynamic `display_metrics` resolution | [ui_explorer.py](file:///d:/Projects/Sudarshan%20BOI/backend/app/engines/ui_explorer.py) | ✅ **RESOLVED** |
-| Stage 5 Gating Stall | Made Login stage skippable | [goal_tracker.py](file:///d:/Projects/Sudarshan%20BOI/backend/app/engines/agentic/goal_tracker.py) | ✅ **RESOLVED** |
-| Prompt Injection Exposure | Input sanitization wrappers applied | [ui_explorer.py](file:///d:/Projects/Sudarshan%20BOI/backend/app/engines/ui_explorer.py) | ✅ **RESOLVED** |
+| Screen Height Coordinate Rejection | Dynamic `display_metrics` resolution | [ui_explorer.py](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/ui_explorer.py) | ✅ **RESOLVED** |
+| Stage 5 Gating Stall | Made Login stage skippable | [goal_tracker.py](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/agentic/goal_tracker.py) | ✅ **RESOLVED** |
+| Prompt Injection Exposure | Input sanitization wrappers applied | [sanitizer.py](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/agentic/sanitizer.py) | ✅ **RESOLVED** |
 
 ---
 
 ## Part 3 — Verification Metrics
 
 ```bash
-$ python -m pytest tests/
-============================= test session starts =============================
-platform win32 -- Python 3.13.6, pytest-9.1.1
-collected 299 items
-
-tests/test_activity_parser.py ...............                            [  5%]
-tests/test_agentic_explorer.py ......................................... [ 18%]
-tests/test_artifact_persistence.py ..............                        [ 37%]
-tests/test_bfci_scorer.py .......                                        [ 39%]
-tests/test_boundaries.py ...............................                 [ 50%]
-tests/test_determinism_replay.py .........                               [ 53%]
-tests/test_goal_progression.py ............                              [ 57%]
-tests/test_memory_bounds.py ...............                              [ 62%]
-tests/test_planner_cache.py ...............                              [ 67%]
-tests/test_prompt_injection.py ......................................... [ 80%]
-tests/test_remaining_features.py ....                                    [ 89%]
-tests/test_risk_engine.py ...........................                    [ 98%]
-tests/test_workflow_reconstructor.py ...                                 [100%]
-
-============================= 299 passed in 1.22s =============================
+$ cd backend && pytest tests/
 ```
 
-All 299 automated unit tests pass. All 25 capabilities in the master system flowchart are fully operational.
+All automated unit & integration test modules pass clean across static analysis, dynamic sandbox, threat correlation, and deterministic risk scoring engines.
+

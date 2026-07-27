@@ -8,7 +8,7 @@ The Sudarshan platform has been refactored into a **clean 3-container microservi
 graph TD
     User([User Analyst]) -->|HTTP Port 5173| Frontend[sudarshan-frontend<br/>React 18 SPA]
     Frontend -->|REST API Port 8000| Backend[sudarshan-backend<br/>FastAPI Orchestrator Gateway]
-    Backend -->|REST API Port 8001| Engine[sudarshan-analysis-engine<br/>Ubuntu 24.04 + OpenJDK 17 + Python 3.12<br/>APKTool 2.10.0 + JADX 1.5.1 + Frida 17.16.4]
+    Backend -->|REST API Port 8001| Engine[sudarshan-analysis-engine<br/>Ubuntu 24.04 + OpenJDK 17 + Python 3.12<br/>APKTool 2.10.0 + JADX 1.5.1 + Frida 17.16.0]
 
     Backend ---|Shared Volume /app/uploads| Engine
     Engine -->|Network ADB TCP Port 5555| HostAVD[Android Studio AVD Emulator<br/>Host Machine]
@@ -21,7 +21,7 @@ graph TD
 1. **`analysis-engine` Container**:
    - Base OS: **Ubuntu 24.04**
    - Java: OpenJDK 17
-   - Python: 3.12 with PyPI verified `frida==17.16.4` and `frida-tools==14.10.4`
+   - Python: 3.12 with PyPI verified `frida==17.16.0` and `frida-tools`
    - Static Tools: Pinned **APKTool v2.10.0** (`/usr/local/bin/apktool`) and **JADX CLI v1.5.1** (`/usr/local/bin/jadx`)
    - Network ADB: Auto-connects to Android Studio AVD via `host.docker.internal:5555` with an idempotent 10-attempt retry loop.
    - Resource Constraints: Hard limits (`mem_limit: 4g`, `cpus: 2.0`, `no-new-privileges:true`).
@@ -52,19 +52,20 @@ adb tcpip 5555
 
 ### Step 2: Build & Boot Docker Microservices Stack
 ```powershell
-docker-compose up --build -d
+docker compose up --build -d
 ```
 
 ### Step 3: Verify Container Health
 ```powershell
-docker-compose ps
+docker compose ps
 ```
 
 Services running:
 - `sudarshan-frontend`: `http://localhost:5173`
 - `sudarshan-backend`: `http://localhost:8000`
-- `sudarshan-analysis-engine`: `http://localhost:8001`
-- `sudarshan-mitmproxy`: `http://localhost:8081`
+- `sudarshan-analysis-engine`: `http://analysis-engine:8001` (internal)
+- `sudarshan-mobsf`: `http://localhost:8008`
+- `sudarshan-mitmproxy`: `127.0.0.1:8080`
 
 ---
 
@@ -73,6 +74,7 @@ Services running:
 Execute unit test suite against the backend orchestrator:
 ```powershell
 cd backend
-python -m pytest tests/
+pytest tests/
 ```
-Result: **302 / 302 tests passing**.
+Result: **Automated test suite passing clean**.
+

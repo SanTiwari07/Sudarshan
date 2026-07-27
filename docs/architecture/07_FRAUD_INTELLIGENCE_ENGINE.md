@@ -2,10 +2,10 @@
 
 ```yaml
 Module Title:        Threat Intelligence Correlation & Family Classification
-Version:             2.2.0-STABLE
-Primary Files:       backend/app/services/threat_correlator.py
-                     backend/app/engines/classification_engine.py
-Test Suite:          tests/test_risk_engine.py
+Version:             2.3.0-STABLE
+Primary Files:       shared/sudarshan_core/services/threat_correlator.py
+                     shared/sudarshan_core/engines/classification_engine.py
+Test Suite:          backend/tests/test_risk_engine.py
 ```
 
 ---

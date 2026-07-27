@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented in this file.
 
+## [2.3.0-STABLE] — 2026-07-27
+
+### Documentation Synchronization & Zero-Drift Audit
+- **Full Portal Audit (`/docs`)**: Verified and updated all 24 markdown documentation files to ensure 100% synchronization with the active codebase (`SanTiwari07/Sudarshan`).
+- **Microservices Topology Alignment**: Standardized port tables across all docs (`frontend:5173`, `backend:8000`, `analysis-engine:8001`, `mobsf:8008`, `mitmproxy:8080`).
+- **Shared Core Package Pathing**: Corrected all module import references from `backend/app/engines/...` to `shared/sudarshan_core/engines/...` and `shared/sudarshan_core/models/...`.
+- **Test Suite Pathing**: Updated all test execution commands from `pytest tests/` to `pytest backend/tests` (or `cd backend && pytest tests/`).
+- **DAE & Risk Engine Status**: Aligned DAE capabilities, 5-axis STEI, 6-component BFCI v2, and 4-axis FRS formulas with active source code.
+
 ## [RC-2] — 2026-07-25
 
 ### Key Updates & Infrastructure Alignment

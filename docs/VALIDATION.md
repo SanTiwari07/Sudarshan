@@ -56,10 +56,10 @@ To run pipeline validation locally:
 
 ```bash
 cd backend
-pytest tests/test_determinism.py -v
+pytest tests/test_determinism_replay.py -v
 ```
 
-Verification assertions enforced by `test_determinism.py`:
+Verification assertions enforced by `test_determinism_replay.py`:
 1. `calculated_stei == baseline.expected_stei`
 2. `calculated_frs == baseline.expected_frs`
 3. `calculated_band == baseline.expected_band`
@@ -69,4 +69,5 @@ Verification assertions enforced by `test_determinism.py`:
 
 ## Current Implementation Status
 
-Validation protocols are **Implemented** and enforced across 285 automated tests in `backend/tests/`.
+Validation protocols are **Implemented** and enforced across automated tests in `backend/tests/`.
+

@@ -72,14 +72,15 @@ graph TD
 
 Test suite modules in `backend/tests/`:
 
-| Test File | Test Count | Focus & Responsibilities |
-| :--- | :--- | :--- |
-| `test_determinism.py` | 9 Baselines | Replay testing against `determinism_baseline.json` to verify 100% mathematical score reproducibility. |
-| `test_sanitizer.py` | 64 Tests | Prompt injection resilience testing verifying regex filtering against malicious prompt payloads. |
-| `test_risk_engine.py` | 42 Tests | Unit testing 5-axis STEI, BFCI weighting, full FRS, and static fallback formula boundary conditions. |
-| `test_mobsf_client.py` | 28 Tests | Unit and mock testing for MobSF REST API integration and Androguard fallback. |
-| `test_gemini_rag.py` | 35 Tests | Verification of RAG evidence indexing, intent detection, and SSE streaming chat handlers. |
-| `test_api.py` | 107 Tests | Integration testing for FastAPI endpoints, JWT auth, upload routes, and report exports. |
+| Test File | Focus & Responsibilities |
+| :--- | :--- |
+| `test_determinism_replay.py` | Replay testing against `determinism_baseline.json` to verify 100% mathematical score reproducibility. |
+| `test_prompt_injection.py` | Prompt injection resilience testing verifying sanitization against malicious prompt payloads. |
+| `test_risk_engine.py` | Unit testing 5-axis STEI, BFCI weighting, full FRS, and static fallback formula boundary conditions. |
+| `test_bfci_scorer.py` | Logarithmic volume scoring and 30s sequence bonus unit tests. |
+| `test_workflow_reconstructor.py` | Causal temporal chain workflow reconstruction tests. |
+| `test_agentic_explorer.py` | Agentic UI explorer DAG, goal tracking, and perception pipeline tests. |
+| `test_remaining_features.py` | Manifest generation, APKTool, JADX, and mitmproxy HAR ingest tests. |
 
 ---
 
@@ -91,12 +92,12 @@ Determinism replay verification workflow:
 sequenceDiagram
     autonumber
     actor CI as CI/CD Test Pipeline
-    participant Runner as test_determinism.py
+    participant Runner as test_determinism_replay.py
     participant Base as determinism_baseline.json
     participant Risk as risk_engine.py
 
-    CI->>Runner: Execute pytest test_determinism.py
-    Runner->>Base: Load 9 Pinned Feature Fixtures
+    CI->>Runner: Execute pytest tests/test_determinism_replay.py
+    Runner->>Base: Load Pinned Feature Fixtures
     loop For Each Baseline Case
         Runner->>Risk: calculate_frs(static_flags, dynamic, correlation)
         Risk-->>Runner: Return Calculated FRS & Band
@@ -142,7 +143,7 @@ The evaluation framework integrates into the developer workflow and CI/CD pipeli
 |                                                                          |
 |  +--------------------+      +--------------------+      +-------------+ |
 |  | Developer Commit / |=====>| Pytest Test Suite  |=====>| Build Pass /| |
-|  | CI Pipeline        |      | (285 Tests)        |      | Deployment  | |
+|  | CI Pipeline        |      | (backend/tests)    |      | Deployment  | |
 |  +--------------------+      +--------------------+      +-------------+ |
 +--------------------------------------------------------------------------+
 ```
@@ -156,13 +157,14 @@ Test files location:
 ```text
 backend/
 ├── tests/
-│   ├── determinism_baseline.json  <- Pinned Feature & Score Fixtures (9 Cases)
-│   ├── test_determinism.py       <- Replay Test Verification Runner
-│   ├── test_sanitizer.py         <- 64 Prompt Injection Security Tests
+│   ├── determinism_baseline.json  <- Pinned Feature & Score Fixtures
+│   ├── test_determinism_replay.py <- Replay Test Verification Runner
+│   ├── test_prompt_injection.py   <- Prompt Injection Security Tests
 │   ├── test_risk_engine.py        <- STEI, BFCI & FRS Formula Unit Tests
-│   ├── test_mobsf_client.py       <- MobSF REST Client & Fallback Tests
-│   ├── test_gemini_rag.py         <- RAG Indexer & Intent Detection Tests
-│   └── test_api.py                <- FastAPI Endpoint & Router Tests
+│   ├── test_bfci_scorer.py        <- BFCI v2 Scorer Tests
+│   ├── test_workflow_reconstructor.py <- Causal Workflow Tests
+│   ├── test_agentic_explorer.py   <- Agentic Explorer & Goal Tracker Tests
+│   └── test_remaining_features.py <- Manifest, APKTool, JADX & HAR Tests
 ```
 
 ---
@@ -173,12 +175,13 @@ Run the automated test suite locally:
 
 ```bash
 cd backend
-pytest
+pytest tests/
 ```
 
 Run determinism replay tests specifically:
 ```bash
-pytest tests/test_determinism.py -v
+cd backend
+pytest tests/test_determinism_replay.py -v
 ```
 
 ---
@@ -194,8 +197,8 @@ Pytest configuration options in `backend/pytest.ini`:
 
 ## Error Handling
 
-1. **Baseline Mismatch Exception**: If a code change alters `risk_engine.py` formula output, `test_determinism.py` raises `AssertionError` displaying exact expected vs. actual score differences.
-2. **Missing Dependency Mocks**: External API calls (VirusTotal, MobSF, Gemini) are mocked using `unittest.mock` during testing, ensuring tests execute reliably offline.
+1. **Baseline Mismatch Exception**: If a code change alters `risk_engine.py` formula output, `test_determinism_replay.py` raises `AssertionError` displaying exact expected vs. actual score differences.
+2. **Missing Dependency Mocks**: External API calls (VirusTotal, MobSF, Gemini) are mocked using standard test fixtures during testing, ensuring tests execute reliably offline.
 
 ---
 
@@ -203,17 +206,17 @@ Pytest configuration options in `backend/pytest.ini`:
 
 | Evaluation Category | Status | Details |
 | :--- | :--- | :--- |
-| **Total Test Count** | **Implemented** | 285 passing unit, integration, and replay tests. |
-| **Determinism Baselines** | **Implemented** | 9 pinned benchmark cases passing in `test_determinism.py`. |
-| **Sanitizer Tests** | **Implemented** | 64 prompt injection tests passing in `test_sanitizer.py`. |
-| **Risk Formula Tests** | **Implemented** | 42 mathematical boundary tests passing in `test_risk_engine.py`. |
+| **Total Test Suite** | **Implemented** | 16 test modules in `backend/tests/` passing clean. |
+| **Determinism Baselines** | **Implemented** | Pinned benchmark cases passing in `test_determinism_replay.py`. |
+| **Sanitizer Tests** | **Implemented** | Prompt injection tests passing in `test_prompt_injection.py`. |
+| **Risk Formula Tests** | **Implemented** | Mathematical boundary tests passing in `test_risk_engine.py`. |
 
 ---
 
 ## Current Limitations
 
 1. **Dynamic Frida Mocking**: Due to Frida AVD event silence, dynamic test cases use mock Frida hook event fixtures rather than live emulator execution.
-2. **Test Sample Size**: Baselines rely on 9 representative malware fixtures (`InsecureBankv2`, *Drinik*, *Xenomorph*); expanding to 100+ live samples requires external sample licensing.
+2. **Test Sample Size**: Baselines rely on representative malware fixtures (`InsecureBankv2`, *Drinik*, *Xenomorph*); expanding to 100+ live samples requires external sample licensing.
 
 ---
 
@@ -221,3 +224,4 @@ Pytest configuration options in `backend/pytest.ini`:
 
 1. **Automated CI/CD Integration**: Connect `pytest` test suite execution to GitHub Actions PR workflows.
 2. **Dynamic Emulator Test Harness**: Implement headless AVD execution in CI environments to validate Frida hooks automatically.
+

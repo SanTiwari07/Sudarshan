@@ -2,7 +2,7 @@
 
 ```yaml
 Module Title:        React 18 Analyst Dashboard & Workflow Components
-Version:             2.2.0-STABLE
+Version:             2.3.0-STABLE
 Primary Files:       frontend/src/App.tsx
                      frontend/src/pages/Upload.tsx
                      frontend/src/pages/FraudCard.tsx

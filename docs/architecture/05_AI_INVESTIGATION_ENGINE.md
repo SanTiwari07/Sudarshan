@@ -2,11 +2,11 @@
 
 ```yaml
 Module Title:        AI Investigation Engine & RAG Core
-Version:             2.2.0-STABLE
+Version:             2.3.0-STABLE
 Primary Files:       backend/app/ai/gemini_rag.py
                      backend/app/ai/ollama_client.py
-                     backend/app/engines/agentic/sanitizer.py
-Test Suite:          tests/test_prompt_injection.py, tests/test_gemini_rag.py
+                     shared/sudarshan_core/engines/agentic/sanitizer.py
+Test Suite:          backend/tests/test_prompt_injection.py
 ```
 
 ---

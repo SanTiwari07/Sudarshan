@@ -50,17 +50,19 @@ move the score. See §9.
 
 | Layer | Technology |
 |---|---|
-| Frontend | React 18, TypeScript, Vite 5 |
-| Backend | Python 3.11, FastAPI, Uvicorn |
-| Persistence | SQLite (`sudarshan.db`), aiosqlite, databases, SQLAlchemy |
-| Auth | JWT (python-jose), passlib/bcrypt |
-| Static analysis | Androguard 4.1.4, MobSF (optional), aapt |
-| Dynamic analysis | Frida 17.16.4 + frida-tools 14.10.4, ADB, Android emulator |
-| OCR | pytesseract + tesseract-ocr 5.5.0 |
-| Signatures | yara-python 4.5.4 |
-| Threat intel | VirusTotal, AlienVault OTX, AbuseIPDB (all optional) |
-| LLM | Google Gemini via `google-genai` (`gemini-2.5-flash`) |
-| Orchestration | Docker Compose (backend, frontend, MobSF) |
+| Frontend | React 18, TypeScript, Vite 5 (Port 5173) |
+| Gateway Backend | Python 3.12, FastAPI, Uvicorn (Port 8000) |
+| Analysis Engine | Containerized Python 3.12 + Java 17 + Ubuntu 24.04 (Internal Port 8001) |
+| Shared Core | `sudarshan_core` python package mounted as `/opt/sudarshan-core` |
+| Persistence | SQLite (`sudarshan.db`), aiosqlite, SQLAlchemy |
+| Auth | JWT Bearer, passlib/bcrypt |
+| Static analysis | Androguard, MobSF (Port 8008), APKTool 2.10.0, JADX 1.5.1 |
+| Dynamic analysis | Frida 17.16.0 + frida-tools, ADB (`host.docker.internal:5555`), Android emulator |
+| Network Proxy | mitmproxy sidecar (`127.0.0.1:8080:8080`), HAR ingest |
+| Signatures | YARA Python 4.5.4 |
+| Threat intel | VirusTotal, AlienVault OTX, AbuseIPDB (optional correlation) |
+| LLM | Google Gemini via `google-genai` (`gemini-2.5-flash`), Ollama |
+| Orchestration | Docker Compose (frontend, backend, analysis-engine, mitmproxy, mobsf) |
 
 ---
 
@@ -69,36 +71,46 @@ move the score. See §9.
 ```
 Sudarshan/
 ├── start.ps1                       One-command bootstrapper (ADB → frida-server → docker compose)
-├── docker-compose.yml              backend:8000, frontend:5173, mobsf:8001
+├── docker-compose.yml              frontend:5173, backend:8000, analysis-engine:8001, mobsf:8008, mitmproxy:8080
+├── shared/
+│   ├── pyproject.toml              Shared library metadata
+│   └── sudarshan_core/             Core shared library (mounted to /opt/sudarshan-core)
+│       ├── analyzers/              apk_analyzer.py (Androguard engine)
+│       ├── models/                 manifest.py (InvestigationManifest), schemas.py
+│       ├── services/               mobsf_client.py, threat_correlator.py
+│       └── engines/                
+│           ├── risk_engine.py      5-axis STEI + 4-axis FRS deterministic scoring
+│           ├── bfci_scorer.py      BFCI v2 logarithmic behavioral scorer
+│           ├── frida_sandbox.py    Frida PID attach & sandbox controller
+│           ├── apktool_engine.py   APKTool resource decompilation engine
+│           ├── jadx_engine.py      JADX Java source decompilation & signature engine
+│           ├── network_capture.py  mitmproxy HAR dump ingest
+│           ├── workflow_reconstructor.py Causal chain temporal reconstruction
+│           ├── agentic_explorer.py Agentic UI exploration orchestrator
+│           ├── frida_hooks/        banking_trojan.js & banking_trojan.bundle.js
+│           └── agentic/            planner.py, perception.py, goal_tracker.py, sanitizer.py, etc.
 ├── backend/
-│   ├── Dockerfile                  python:3.11-slim + platform-tools + aapt + tesseract-ocr
-│   ├── requirements.txt            frida PINNED to 17.16.4 (see §11)
+│   ├── Dockerfile                  Python 3.12 gateway container definition
+│   ├── requirements.txt            Gateway dependencies
 │   ├── app/
-│   │   ├── main.py                 FastAPI application
-│   │   ├── routes/                 upload.py (analyze), cases.py, auth
-│   │   ├── models/schemas.py       StaticAnalysisFlags, AnalysisResponse, …
-│   │   ├── db/database.py          SQLite persistence
-│   │   └── engines/
-│   │       ├── risk_engine.py          STEI / FRS — SOLE verdict authority (671 lines)
-│   │       ├── frida_sandbox.py        Dynamic orchestration (996+ lines)
-│   │       ├── ui_explorer.py          Legacy explorer (535 lines)
-│   │       ├── agentic_explorer.py     Agent loop (566 lines)
-│   │       ├── frida_hooks/
-│   │       │   ├── banking_trojan.js         Hook source (~620 lines, 19 hooks)
-│   │       │   └── banking_trojan.bundle.js  frida-compile output (loaded at runtime)
-│   │       └── agentic/
-│   │           ├── goal_tracker.py       15-stage fraud goal DAG (529 lines)
-│   │           ├── perception.py         5-level observation pipeline (471 lines)
-│   │           ├── planner.py            LLM + deterministic fallback (587 lines)
-│   │           ├── tool_executor.py      ADB-backed tool implementations (529 lines)
-│   │           ├── tool_registry.py      Tool contracts (450 lines)
-│   │           ├── agent_memory.py       Session memory (331 lines)
-│   │           ├── audit_log.py          Forensic decision log (245 lines)
-│   │           ├── benchmark.py          Metrics collection (182 lines)
-│   │           ├── sanitizer.py          Prompt-injection defence (NEW)
-│   │           └── device_properties.py  Single source of truth for screen size (NEW)
-│   └── tests/                      285 passing tests (see §12)
-└── frontend/src/pages/             FraudCard.tsx, TechnicalView.tsx, …
+│   │   ├── main.py                 FastAPI Gateway entrypoint & lifecycle hooks
+│   │   ├── routes/                 upload.py (orchestrator), cases.py, report.py
+│   │   ├── auth/                   auth.py (JWT authentication & RBAC)
+│   │   ├── db/                     database.py (SQLite case store & audit persistence)
+│   │   ├── ai/                     gemini_rag.py (RAG indexer), ollama_client.py
+│   │   └── workers/                analysis_queue.py (async worker pool)
+│   └── tests/                      16 automated unit & integration test modules
+├── analysis-engine/
+│   ├── Dockerfile                  Ubuntu 24.04 + Java 17 + Python 3.12 microservice
+│   ├── entrypoint.sh               Single-worker uvicorn launcher
+│   └── app/
+│       └── main.py                 REST microservice endpoints (/api/v1/analyze, /status, etc.)
+├── frontend/
+│   ├── src/
+│   │   ├── pages/                  FraudCard.tsx, TechnicalView.tsx, ThreatIntelView.tsx, …
+│   │   └── components/             WorkflowDiagram.tsx, ErrorBoundary.tsx
+│   └── Dockerfile                  Vite/Nginx frontend container definition
+└── tools/                          Standalone APKTool and JADX binaries
 ```
 
 ---

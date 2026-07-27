@@ -22,7 +22,7 @@ All documentation herein is strictly derived from and cross-verified against the
 | [**08 — Deterministic Risk Engine**](architecture/08_DETERMINISTIC_RISK_ENGINE.md) | Risk Scoring & Math Formulas | 5-axis STEI, logarithmic volume-aware BFCI v2, 4-axis FRS formula, static fallback. |
 | [**09 — AI Report Generation**](architecture/09_AI_REPORT_GENERATION.md) | Security Reporting & Export | Executive Fraud Cards, Jinja2 HTML exporter, STIX 2.1 JSON exporter, CSV IOC feed. |
 | [**10 — Analyst Dashboard**](dashboard/10_DASHBOARD.md) | Analyst UI & Visual Workflows | React 18 SPA, Executive View, Technical SOC View, `WorkflowDiagram.tsx` timeline. |
-| [**11 — Evaluation Strategy**](evaluation/11_EVALUATION.md) | Verification & Testing | 302 automated unit/integration tests (`pytest tests/`), determinism baselines. |
+| [**11 — Evaluation Strategy**](evaluation/11_EVALUATION.md) | Verification & Testing | 16 automated test modules in `backend/tests/` (`pytest backend/tests`), determinism baselines. |
 | [**HOW_TO_RUN.md**](HOW_TO_RUN.md) | Installation & Operations | Prerequisites, Docker Compose setup, single-command `start.ps1`, environment variables. |
 | [**DAE_CURRENT_STATE.md**](DAE_CURRENT_STATE.md) | Technical Resolution Audit | Resolution state of containerization, ART JIT deopt, PID attach, BFCI v2, manifest, and HAR merger. |
 | [**CONTRIBUTING.md**](CONTRIBUTING.md) | Developer Guidelines | Code standards, PEP-8/ESLint style, pytest testing workflows, pull request process. |
@@ -40,49 +40,51 @@ graph TD
     end
 
     subgraph Core Gateway & Storage
-        API["FastAPI Orchestrator Gateway<br/>(Port 8000 / main.py)"]
-        AUTH["JWT Auth & RBAC"]
+        API["FastAPI Orchestrator Gateway<br/>(Port 8000 / backend/app/main.py)"]
+        AUTH["JWT Auth & RBAC<br/>(backend/app/auth/auth.py)"]
         DB[(SQLite Case Store<br/>sudarshan.db)]
         VOL[("Shared Volume /app/uploads")]
     end
 
-    subgraph Containerized Analysis Engine Microservice
-        ENGINE["Analysis Engine REST API<br/>(Port 8001 / main.py)"]
-        MANIFEST["Investigation Manifest<br/>(manifest.py -> manifest.json)"]
-        ANDRO["Androguard Engine<br/>(apk_analyzer.py)"]
-        APKT["APKTool v2.10.0 Engine<br/>(apktool_engine.py)"]
-        JADX["JADX v1.5.1 Source Scanner<br/>(jadx_engine.py)"]
-        FRIDA["Frida 17 Sandbox Controller<br/>(frida_sandbox.py)"]
+    subgraph Containerized Analysis Engine Microservice (Port 8001)
+        ENGINE["Analysis Engine REST API<br/>(Port 8001 / analysis-engine/app/main.py)"]
+        MANIFEST["Investigation Manifest<br/>(shared/sudarshan_core/models/manifest.py)"]
+        ANDRO["Androguard Engine<br/>(shared/sudarshan_core/analyzers/apk_analyzer.py)"]
+        APKT["APKTool Engine<br/>(shared/sudarshan_core/engines/apktool_engine.py)"]
+        JADX["JADX Source Scanner<br/>(shared/sudarshan_core/engines/jadx_engine.py)"]
+        FRIDA["Frida 17 Sandbox Controller<br/>(shared/sudarshan_core/engines/frida_sandbox.py)"]
+        AGENT["Agentic UI Explorer<br/>(shared/sudarshan_core/engines/agentic_explorer.py)"]
     end
 
     subgraph External Devices & Network Sidecars
         ADB["ADB TCP Bridge<br/>(host.docker.internal:5555)"]
-        AVD["Android 13 AVD<br/>(frida-server 17.16.4)"]
+        AVD["Android 13 AVD<br/>(frida-server 17.16.0)"]
         MITM["mitmproxy Sidecar<br/>(Port 8080 / HAR Dump Parser)"]
-    endAR Dump Parser)"]
-        AGENT["Agentic UI Explorer<br/>(agentic_explorer.py / 15-Stage DAG)"]
+        MOBSF["MobSF Engine<br/>(Port 8008 / mobsf_client.py)"]
     end
 
     subgraph Intelligence & Scoring Layer
-        BFCI_ENG["BFCI v2 Scorer<br/>(bfci_scorer.py)"]
-        WORKFLOW["Workflow Reconstructor<br/>(workflow_reconstructor.py)"]
-        CORR["Threat Correlator<br/>(VT / OTX / AbuseIPDB)"]
-        RISK["Deterministic Risk Engine<br/>(risk_engine.py / STEI + FRS)"]
-        RAG["Gemini 2.5 RAG Core<br/>(gemini_rag.py)"]
+        BFCI_ENG["BFCI v2 Scorer<br/>(shared/sudarshan_core/engines/bfci_scorer.py)"]
+        WORKFLOW["Workflow Reconstructor<br/>(shared/sudarshan_core/engines/workflow_reconstructor.py)"]
+        CORR["Threat Correlator<br/>(shared/sudarshan_core/services/threat_correlator.py)"]
+        RISK["Deterministic Risk Engine<br/>(shared/sudarshan_core/engines/risk_engine.py)"]
+        RAG["Gemini 2.5 RAG Core<br/>(backend/app/ai/gemini_rag.py)"]
     end
 
     UI -->|HTTPS REST| API
     API --> AUTH
-    API --> QUEUE
-    QUEUE --> DB
+    API --> DB
+    API --- VOL
+    API -->|HTTP REST / Shared Volume| ENGINE
+    ENGINE --- VOL
 
-    QUEUE --> MANIFEST
+    ENGINE --> MANIFEST
     MANIFEST --> MOBSF
     MANIFEST --> ANDRO
     MANIFEST --> APKT
     MANIFEST --> JADX
 
-    QUEUE --> FRIDA
+    ENGINE --> FRIDA
     FRIDA --> ADB
     ADB --> AVD
     FRIDA --> MITM
@@ -90,8 +92,8 @@ graph TD
 
     FRIDA --> BFCI_ENG
     FRIDA --> WORKFLOW
-    QUEUE --> CORR
-    QUEUE --> RISK
+    ENGINE --> CORR
+    ENGINE --> RISK
     RISK --> RAG
 ```
 
@@ -101,12 +103,12 @@ graph TD
 
 The Sudarshan platform codebase is backed by an automated regression and determinism verification test suite:
 
-- **Total Test Cases**: **299 / 299 Passed (100% Pass Rate)**
-- **Execution Latency**: ~1.2 seconds (`pytest tests/`)
-- **Key Test Modules**:
+- **Test Suite Command**: `pytest backend/tests` (or `cd backend && pytest`)
+- **Key Test Modules (in `backend/tests/`)**:
   - `test_remaining_features.py`: Tests `InvestigationManifest`, `ApktoolEngine`, `JadxEngine`, and `NetworkCapture` mitmproxy HAR parsing.
-  - `test_bfci_scorer.py`: Tests logarithmic volume scoring and 30s sequence bonuses.
+  - `test_bfci_scorer.py`: Tests logarithmic volume scoring and sequence bonuses.
   - `test_workflow_reconstructor.py`: Tests temporal causal chain reconstruction and MITRE stage mapping.
   - `test_risk_engine.py`: Tests 5-axis STEI, static fallback gate, and 4-axis FRS formula.
   - `test_prompt_injection.py`: Tests input sanitization against prompt injection attacks.
   - `test_determinism_replay.py`: Asserts byte-for-byte verdict stability across refactors.
+

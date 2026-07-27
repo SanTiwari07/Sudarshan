@@ -55,15 +55,15 @@ ADB_PORT="5555"
 FRIDA_ANALYSIS_DURATION="30"
 
 # ── Static Engines ──
-MOBSF_HOST="http://localhost:8001"
-MOBSF_API_KEY="mobsf_api_key_secret_here"
+MOBSF_HOST="http://mobsf:8000"
+MOBSF_API_KEY="sudarshan_mobsf_api_key_2026"
 APKTOOL_PATH="apktool"
 JADX_PATH="jadx"
 
 # ── Security & Authentication ──
-JWT_SECRET_KEY="sudarshan_jwt_secret_key_change_in_production"
+JWT_SECRET_KEY="generate_with_python_secrets_token_urlsafe_48"
 ADMIN_USERNAME="admin"
-ADMIN_PASSWORD="sudarshan_admin_2026"
+ADMIN_PASSWORD="sudarshan_admin_2024"
 ```
 
 ---
@@ -106,30 +106,30 @@ npm run dev
 
 ```bash
 # 1. Build and launch all containers
-docker-compose up --build -d
+docker compose up --build -d
 
 # 2. View running containers
-docker-compose ps
+docker compose ps
 
 # 3. Stream backend logs
-docker-compose logs -f backend
+docker compose logs -f backend
 ```
 
 ---
 
 ## 6. Setting Up Android Studio AVD & Frida
 
-1. **Start Android Studio AVD**: Launch a Pixel 6 AVD running Android 13 (x86_64).
+1. **Start Android Studio AVD**: Launch a Pixel AVD running Android 13 (x86_64).
 2. **Enable ADB TCP**:
    ```bash
    adb tcpip 5555
    adb connect 127.0.0.1:5555
    ```
-3. **Deploy frida-server 17.16.4**:
+3. **Deploy frida-server 17.16.0**:
    ```bash
-   adb push frida-server-17.16.4-android-x86_64 /data/local/tmp/frida-server
+   adb push frida-server-17.16.0-android-x86_64/frida-server /data/local/tmp/frida-server
    adb shell "chmod 755 /data/local/tmp/frida-server"
-   adb shell "/data/local/tmp/frida-server &"
+   adb shell "nohup /data/local/tmp/frida-server > /dev/null 2>&1 &"
    ```
 
 ---
@@ -143,14 +143,14 @@ Verify all microservice endpoints:
 | **Analyst Dashboard** | `http://localhost:5173` | React SPA Login / Upload Page |
 | **API Health Check** | `http://localhost:8000/health` | `{"status": "ok"}` |
 | **API Interactive Docs** | `http://localhost:8000/docs` | Swagger UI documentation |
-| **MobSF Engine** | `http://localhost:8001` | MobSF Static Analyzer UI |
-| **mitmproxy Web Interface** | `http://localhost:8081` | mitmproxy Web Flow View |
+| **Analysis Engine Health** | `http://localhost:8001/health` (internal) | `{"status": "ok", "service": "analysis-engine"}` |
+| **MobSF Engine** | `http://localhost:8008` | MobSF Static Analyzer UI |
+| **mitmproxy Proxy** | `127.0.0.1:8080` | Transparent HTTPS proxy endpoint |
 
 Run the backend unit test suite:
 ```bash
 cd backend
-python -m pytest tests/
-# Output: 299 passed in 1.2s
+pytest tests/
 ```
 
 ---
@@ -159,4 +159,5 @@ python -m pytest tests/
 
 - **Frida PID Attach Fails**: Verify `frida-server` is running on the AVD (`adb shell "ps -A | grep frida"`).
 - **mitmproxy Certificate Warnings**: Install `mitmproxy-ca-cert.pem` on the AVD under Settings $\rightarrow$ Security $\rightarrow$ Install Certificate.
-- **MobSF Unreachable**: Ensure the MobSF container is running on port 8001 (`docker ps`).
+- **MobSF Unreachable**: Ensure the MobSF container is running on port 8008 (`docker compose ps`).
+

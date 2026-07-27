@@ -2,10 +2,10 @@
 
 ```yaml
 Module Title:        AI Report Generation & STIX 2.1 Exporter
-Version:             2.2.0-STABLE
-Primary Files:       backend/app/engines/report_generator.py
+Version:             2.3.0-STABLE
+Primary Files:       shared/sudarshan_core/engines/report_generator.py
                      backend/app/routes/report.py
-Test Suite:          tests/test_gemini_rag.py
+Test Suite:          backend/tests/test_artifact_persistence.py
 ```
 
 ---

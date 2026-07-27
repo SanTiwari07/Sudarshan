@@ -365,14 +365,14 @@ The FastAPI backend exposes versioned REST API endpoints (`/api/v1`):
 ## Installation & Setup Guide
 
 ### Prerequisites
-- **Python**: Version 3.10 or higher
-- **Node.js**: Version 18.x or higher & `npm`
 - **Docker**: Docker Desktop with Docker Compose
 - **Android Emulator (AVD)**: Running Android Studio AVD (Android 13, x86_64)
 - **ADB**: Installed and added to system PATH (`adb tcpip 5555`)
-- **Frida**: Version 17.16.4 host tools (`pip install frida-tools==17.16.4`)
-- **APKTool**: Installed in PATH or `APKTOOL_PATH` env variable set
-- **JADX**: Installed in PATH or `JADX_PATH` env variable set
+- **Python** *(Optional for dev/tests)*: Version 3.12 or higher (`pytest backend/tests`)
+- **Node.js** *(Optional for UI dev)*: Version 18.x or higher & `npm`
+
+> [!NOTE]
+> **Containerized Toolchain**: APKTool, JADX CLI, Java 17, Frida 17, Androguard, and ADB worker processes are **100% containerized** inside `sudarshan-analysis-engine`. Zero binary installations are required on your host machine.
 
 ### Quick Start (Single Command)
 Run the automated bootstrapper script from PowerShell:
@@ -382,19 +382,21 @@ Run the automated bootstrapper script from PowerShell:
 
 ### Manual Docker Deployment
 ```bash
-# 1. Set environment variables
-export GEMINI_API_KEY="your_api_key_here"
-export GEMINI_MODEL="gemini-2.5-flash"
+# 1. Set environment variables in .env (or export)
+JWT_SECRET_KEY="generate_with_python_secrets_token_urlsafe_48"
+GEMINI_API_KEY="your_api_key_here"
+GEMINI_MODEL="gemini-2.5-flash"
 
 # 2. Build and launch services
-docker-compose up --build -d
+docker compose up --build -d
 ```
 
 ### Accessing Platform Interfaces
 - **Fraud Analyst Dashboard**: `http://localhost:5173`
 - **FastAPI Interactive API Docs**: `http://localhost:8000/docs`
-- **MobSF Static Engine**: `http://localhost:8001`
-- **mitmproxy Web Interface**: `http://localhost:8081`
+- **Analysis Engine Microservice**: `http://localhost:8001/health` (internal)
+- **MobSF Static Engine**: `http://localhost:8008`
+- **mitmproxy Proxy Endpoint**: `127.0.0.1:8080`
 
 ---
 
@@ -415,7 +417,7 @@ The detailed documentation portal is available under [`docs/`](docs/README.md):
 | [**08 — Deterministic Risk Engine**](docs/architecture/08_DETERMINISTIC_RISK_ENGINE.md) | Math formulas for 5-axis STEI, BFCI v2, FRS, Threat Scenario Matrix. |
 | [**09 — AI Report Generation**](docs/architecture/09_AI_REPORT_GENERATION.md) | HTML security reports, STIX 2.1 exporter, CSV IOC feeds. |
 | [**10 — Analyst Dashboard**](docs/dashboard/10_DASHBOARD.md) | React 18 SPA workflow, Executive Fraud Card, Technical View, Workflow UI. |
-| [**11 — Evaluation Strategy**](docs/evaluation/11_EVALUATION.md) | Automated testing suite (299 tests), benchmarks, determinism baselines. |
+| [**11 — Evaluation Strategy**](docs/evaluation/11_EVALUATION.md) | Automated testing suite (`pytest backend/tests`), benchmarks, determinism baselines. |
 | [**How to Run Guide**](docs/HOW_TO_RUN.md) | Comprehensive installation, configuration, and execution guide. |
 | [**DAE Current State**](docs/DAE_CURRENT_STATE.md) | Complete resolution audit and technical current state document. |
 | [**Documentation Audit Report**](docs/DOCUMENTATION_AUDIT_REPORT.md) | Formal documentation audit, file mapping, and verification report. |

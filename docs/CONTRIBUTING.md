@@ -19,10 +19,11 @@ Target Audience:     Core Contributors, Module Developers, Security Researchers
 
 ## 1. Code Standards & Guidelines
 
-### Python (Backend)
-- **Runtime**: Python 3.10+
+### Python (Backend & Shared Core)
+- **Runtime**: Python 3.12+
+- **Shared Library**: Core logic, models, and engines belong in `shared/sudarshan_core/` so both gateway and analysis engine can consume them.
 - **Type Hints**: Mandatory for all function signatures.
-- **Formatting**: PEP-8 compliant. Use `black` and `isort`.
+- **Formatting**: PEP-8 compliant.
 - **Validation**: Use Pydantic v2 schemas (`BaseModel`) for all API parameters and internal domain contracts.
 
 ### TypeScript / React (Frontend)
@@ -44,8 +45,8 @@ Target Audience:     Core Contributors, Module Developers, Security Researchers
    - Install backend dependencies (`pip install -r backend/requirements.txt`).
    - Install frontend dependencies (`cd frontend && npm install`).
 3. **Local Hot-Reload Execution**:
-   - Backend: `uvicorn app.main:app --reload --port 8000`
-   - Frontend: `npm run dev`
+   - Backend Gateway: `uvicorn backend.app.main:app --reload --port 8000`
+   - Frontend: `cd frontend && npm run dev`
 
 ---
 
@@ -56,10 +57,10 @@ All PRs must maintain 100% test suite compliance. Never break existing test asse
 ### Running Automated Tests
 ```bash
 cd backend
-python -m pytest tests/
+pytest tests/
 ```
 
-### Key Test File Inventory
+### Key Test File Inventory (in `backend/tests/`)
 - `tests/test_remaining_features.py`: Tests `InvestigationManifest`, `ApktoolEngine`, `JadxEngine`, and `mitmproxy` HAR parsing.
 - `tests/test_bfci_scorer.py`: Tests logarithmic volume scoring and sequence bonuses.
 - `tests/test_workflow_reconstructor.py`: Tests causal chain workflow reconstruction.
@@ -80,10 +81,7 @@ python -m pytest tests/
 
 ## 5. Submitting Pull Requests
 
-1. Run formatting and lint checks:
-   ```bash
-   black backend/app
-   flake8 backend/app
-   ```
-2. Ensure all 299 pytest test cases pass (`python -m pytest tests/`).
+1. Run formatting and lint checks.
+2. Ensure all automated pytest test cases pass (`cd backend && pytest tests/`).
 3. Push to your branch and submit a Pull Request against `main`. Include a clear summary of changes and reference updated documentation.
+

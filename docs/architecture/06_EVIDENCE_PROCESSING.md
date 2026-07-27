@@ -2,11 +2,11 @@
 
 ```yaml
 Module Title:        Runtime Evidence Processing & Workflow Reconstruction Engine
-Version:             2.2.0-STABLE
-Primary Files:       backend/app/engines/event_bus.py
-                     backend/app/engines/evidence_store.py
-                     backend/app/engines/workflow_reconstructor.py
-Test Suite:          tests/test_workflow_reconstructor.py, tests/test_artifact_persistence.py
+Version:             2.3.0-STABLE
+Primary Files:       shared/sudarshan_core/engines/event_bus.py
+                     shared/sudarshan_core/engines/evidence_store.py
+                     shared/sudarshan_core/engines/workflow_reconstructor.py
+Test Suite:          backend/tests/test_workflow_reconstructor.py, backend/tests/test_artifact_persistence.py
 ```
 
 ---

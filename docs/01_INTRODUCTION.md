@@ -275,7 +275,7 @@ Core environment options defined in `.env`:
 | Capability / Module | Status | Rationale & Code Location |
 | :--- | :--- | :--- |
 | **Intelligence Problem Framing** | **Implemented** | Reflected across dashboard layout, risk engine outputs, and report templates. |
-| **Deterministic Risk Rules** | **Implemented** | $STEI$, $BFCI$, and $FRS$ formulas implemented in `backend/app/engines/risk_engine.py`. |
+| **Deterministic Risk Rules** | **Implemented** | $STEI$, $BFCI$, and $FRS$ formulas implemented in `shared/sudarshan_core/engines/risk_engine.py`. |
 | **JWT Authentication** | **Implemented** | Implemented in `backend/app/auth/auth.py` with seeded admin setup on startup. |
 | **Async Worker Queue** | **Implemented** | In-memory asyncio queue worker pool implemented in `backend/app/workers/analysis_queue.py`. |
 | **Air-Gapped Deployment Support** | **Implemented** | Local Ollama fallback supported in `backend/app/ai/ollama_client.py`. |

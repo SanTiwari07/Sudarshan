@@ -21,13 +21,14 @@ The primary responsibilities of this document are to:
 Sudarshan is designed as a modular, decoupled platform capable of operating in both fully air-gapped corporate data centers and cloud environments. It ingests Android Package Kit (`.apk`) binaries and orchestrates static code analysis, dynamic runtime instrumentation, threat intelligence correlation, deterministic risk scoring, and evidence-constrained generative AI narrative synthesis.
 
 ```text
+```text
 +-----------------------------------------------------------------------------------+
 |                                 SUDARSHAN SYSTEM                                  |
 |                                                                                   |
 |  +--------------------+    +---------------------+    +------------------------+  |
-|  |  React 18 SPA      |    |  FastAPI Gateway    |    |  Async Worker Queue    |  |
-|  |  Analyst Dashboard |===>|  (Port 8000)        |===>|  (analysis_queue.py)   |  |
-|  |  (Port 5173)       |    |  JWT Auth & Router  |    |  Job Dispatcher        |  |
+|  |  React 18 SPA      |    |  FastAPI Gateway    |    |  Analysis Engine       |  |
+|  |  Analyst Dashboard |===>|  (Port 8000)        |===>|  Microservice          |  |
+|  |  (Port 5173)       |    |  JWT Auth & Router  |    |  (Port 8001)           |  |
 |  +--------------------+    +---------------------+    +-----------+------------+  |
 |                                                                   |               |
 |            +-------------------+--------------------+-------------+               |
@@ -35,7 +36,7 @@ Sudarshan is designed as a modular, decoupled platform capable of operating in b
 |            v                   v                    v                             |
 |  +------------------+  +---------------+  +-------------------+                   |
 |  | Static Analysis  |  | Dynamic Engine|  | Threat Correlator |                   |
-|  | MobSF (Port 8001)|  | Frida / ADB   |  | VT / OTX /        |                   |
+|  | MobSF (Port 8008)|  | Frida / ADB   |  | VT / OTX /        |                   |
 |  | / Androguard     |  | (TCP 5555)    |  | AbuseIPDB API     |                   |
 |  +--------+---------+  +-------+-------+  +---------+---------+                   |
 |           |                    |                    |                             |
@@ -70,33 +71,35 @@ The system consists of five primary execution tiers operating over isolated Dock
 ```mermaid
 graph TB
     subgraph Tier 1: Presentation & Ingestion
-        FE[React 18 SPA Frontend<br/>Vite / TypeScript / Tailwind]
+        FE[React 18 SPA Frontend<br/>Vite / TypeScript / Port 5173]
         CLI[PowerShell Bootstrapper<br/>start.ps1]
     end
 
     subgraph Tier 2: API Gateway & Orchestration
-        GW[FastAPI Gateway / main.py]
+        GW[FastAPI Gateway / backend/app/main.py]
         AUTH[JWT Bearer Middleware]
-        Q[Async Job Queue Pool<br/>analysis_queue.py]
+        Q[Async Job Queue Pool<br/>backend/app/workers/analysis_queue.py]
         DB[(SQLite Case Store<br/>sudarshan.db)]
+        VOL[("Shared Volume /app/uploads")]
     end
 
-    subgraph Tier 3: Static & Dynamic Engines
-        MS[MobSF Container<br/>Port 8001]
-        AG[Androguard Analyzer<br/>apk_analyzer.py]
-        FS[Frida Sandbox Controller<br/>frida_sandbox.py]
-        AVD[Android Emulator AVD<br/>frida-server 17.16.4]
+    subgraph Tier 3: Containerized Analysis Microservice (Port 8001)
+        ENG[Analysis Engine Microservice<br/>analysis-engine/app/main.py]
+        MS[MobSF Container<br/>Port 8008]
+        AG[Androguard Analyzer<br/>shared/sudarshan_core/analyzers/apk_analyzer.py]
+        FS[Frida Sandbox Controller<br/>shared/sudarshan_core/engines/frida_sandbox.py]
+        AVD[Android Emulator AVD<br/>frida-server 17.16.0]
     end
 
     subgraph Tier 4: Intelligence & Risk Core
-        TC[Threat Correlator<br/>threat_correlator.py]
-        RE[Deterministic Risk Engine<br/>risk_engine.py]
-        RAG[Gemini RAG Engine<br/>gemini_rag.py]
+        TC[Threat Correlator<br/>shared/sudarshan_core/services/threat_correlator.py]
+        RE[Deterministic Risk Engine<br/>shared/sudarshan_core/engines/risk_engine.py]
+        RAG[Gemini RAG Engine<br/>backend/app/ai/gemini_rag.py]
         LLM[Gemini 2.5 Flash / Ollama]
     end
 
     subgraph Tier 5: Export & Reporting
-        REP[Report Generator<br/>report_generator.py]
+        REP[Report Generator<br/>shared/sudarshan_core/engines/report_generator.py]
         STIX[STIX 2.1 Bundle Exporter]
         CSV[IOC CSV Exporter]
     end
@@ -105,16 +108,19 @@ graph TB
     CLI --> FE
     GW --> AUTH
     GW --> Q
+    GW --- VOL
     Q --> DB
+    GW -->|REST / Shared Vol| ENG
+    ENG --- VOL
 
-    Q --> MS
-    Q --> AG
-    Q --> FS
+    ENG --> MS
+    ENG --> AG
+    ENG --> FS
     FS --> AVD
 
-    Q --> TC
-    Q --> RE
-    Q --> RAG
+    ENG --> TC
+    ENG --> RE
+    RE --> RAG
     RAG --> LLM
 
     GW --> REP
@@ -130,15 +136,16 @@ The architecture breaks down into discrete operational modules:
 
 | Subsystem | Primary Python / TS Modules | Responsibilities & External Dependencies |
 | :--- | :--- | :--- |
-| **API Gateway** | `backend/app/main.py`<br/>`backend/app/routes/upload.py` | Route handling, CORS middleware, JWT authentication, async job queueing (`analysis_queue.py`). Dependencies: `FastAPI`, `Uvicorn`, `Pydantic`. |
-| **Database Access** | `backend/app/db/database.py` | Asynchronous SQLite database management via `aiosqlite` and `databases`. Initializes tables `cases`, `users`, `audit_logs`, and `iocs`. |
+| **API Gateway** | `backend/app/main.py`<br/>`backend/app/routes/upload.py` | Route handling, CORS middleware, JWT authentication, async job queueing (`analysis_queue.py`), analysis-engine delegation. |
+| **Analysis Microservice** | `analysis-engine/app/main.py` | Microservice executing Androguard, MobSF client calls, APKTool, JADX, Frida PID attach, and mitmproxy HAR parsing. |
+| **Database Access** | `backend/app/db/database.py` | Asynchronous SQLite database management via `aiosqlite` and `SQLAlchemy`. Persists cases, users, audit logs, and IOCs. |
 | **Authentication** | `backend/app/auth/auth.py` | Seeded admin account generation, password hashing using `bcrypt`, JWT token encoding/decoding using `python-jose`. |
-| **Static Engine** | `backend/app/services/mobsf_client.py`<br/>`backend/app/analyzers/apk_analyzer.py` | MobSF API client (`httpx`) and Androguard fallback analyzer. Extracts permissions, components, hardcoded URLs, and DEX flags. |
-| **Dynamic Engine** | `backend/app/engines/frida_sandbox.py`<br/>`backend/app/engines/agentic_explorer.py` | ADB controller over TCP (`host.docker.internal:5555`), Frida 17 script runner (`banking_trojan.bundle.js`), 15-stage fraud goal DAG explorer. |
-| **Risk Engine** | `backend/app/engines/risk_engine.py` | Computes 5-axis $STEI$, $BFCI$, $FRS$, severity band, and generates the Threat Scenario Table. |
-| **Threat Correlator** | `backend/app/services/threat_correlator.py`<br/>`backend/app/engines/classification_engine.py` | Queries VirusTotal, AlienVault OTX, and AbuseIPDB. Rule-based family classifier for *Drinik*, *Xenomorph*, *Cerberus*, *Anubis*, etc. |
-| **RAG Intelligence** | `backend/app/ai/gemini_rag.py`<br/>`backend/app/ai/ollama_client.py` | In-memory RAG evidence graph builder per SHA256. Gemini 2.5 Flash API client and local Ollama (`qwen3:8b`) client. |
-| **Reporting & Export**| `backend/app/routes/report.py`<br/>`backend/app/engines/report_generator.py` | Jinja2 HTML report generator, STIX 2.1 JSON exporter (`stix2` library), CSV IOC exporter. |
+| **Static Engine** | `shared/sudarshan_core/services/mobsf_client.py`<br/>`shared/sudarshan_core/analyzers/apk_analyzer.py` | MobSF API client (`httpx`) on Port 8008 and Androguard fallback analyzer. Extracts permissions, components, hardcoded URLs, and DEX flags. |
+| **Dynamic Engine** | `shared/sudarshan_core/engines/frida_sandbox.py`<br/>`shared/sudarshan_core/engines/agentic_explorer.py` | ADB controller over TCP (`host.docker.internal:5555`), Frida 17 script runner (`banking_trojan.bundle.js`), 15-stage fraud goal DAG explorer. |
+| **Risk Engine** | `shared/sudarshan_core/engines/risk_engine.py` | Computes 5-axis $STEI$, $BFCI$, $FRS$, severity band, and generates the Threat Scenario Table. |
+| **Threat Correlator** | `shared/sudarshan_core/services/threat_correlator.py`<br/>`shared/sudarshan_core/engines/classification_engine.py` | Queries VirusTotal, AlienVault OTX, and AbuseIPDB. Rule-based family classifier for *Drinik*, *Xenomorph*, *Cerberus*, *Anubis*, etc. |
+| **RAG Intelligence** | `backend/app/ai/gemini_rag.py`<br/>`backend/app/ai/ollama_client.py` | In-memory RAG evidence index builder per SHA256. Gemini 2.5 Flash API client and local Ollama client. |
+| **Reporting & Export**| `backend/app/routes/report.py`<br/>`shared/sudarshan_core/engines/report_generator.py` | Jinja2 HTML report generator, STIX 2.1 JSON exporter (`stix2` library), CSV IOC exporter. |
 | **Frontend Application**| `frontend/src/App.tsx`<br/>`frontend/src/pages/*` | React 18 SPA with Vite 5, Tailwind CSS, Lucide icons, React Router v6. |
 
 ---

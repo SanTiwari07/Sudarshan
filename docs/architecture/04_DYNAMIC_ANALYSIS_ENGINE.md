@@ -4,14 +4,14 @@
 Module Title:        Dynamic Analysis Engine (DAE) & Agentic Explorer
 Version:             2.3.0-STABLE
 Primary Files:       analysis-engine/app/main.py
-                     analysis-engine/app/engines/frida_sandbox.py
-                     analysis-engine/app/engines/agentic_explorer.py
-                     analysis-engine/app/engines/network_capture.py
-                     analysis-engine/app/engines/bfci_scorer.py
-                     analysis-engine/app/engines/workflow_reconstructor.py
-                     analysis-engine/app/engines/frida_hooks/banking_trojan.js
+                     shared/sudarshan_core/engines/frida_sandbox.py
+                     shared/sudarshan_core/engines/agentic_explorer.py
+                     shared/sudarshan_core/engines/network_capture.py
+                     shared/sudarshan_core/engines/bfci_scorer.py
+                     shared/sudarshan_core/engines/workflow_reconstructor.py
+                     shared/sudarshan_core/engines/frida_hooks/banking_trojan.js
                      frontend/src/components/WorkflowDiagram.tsx
-Test Suite:          tests/test_analysis_client.py, tests/test_remaining_features.py, tests/test_agentic_explorer.py
+Test Suite:          backend/tests/test_analysis_client.py, backend/tests/test_remaining_features.py, backend/tests/test_agentic_explorer.py
 ```
 
 ---

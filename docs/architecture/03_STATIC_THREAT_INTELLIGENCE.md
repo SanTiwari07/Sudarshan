@@ -4,12 +4,13 @@
 Module Title:        Static Threat Intelligence & Decompilation Engine
 Version:             2.3.0-STABLE
 Primary Files:       analysis-engine/app/main.py
-                     analysis-engine/app/models/manifest.py
-                     analysis-engine/app/engines/apktool_engine.py
-                     analysis-engine/app/engines/jadx_engine.py
-                     analysis-engine/app/analyzers/apk_analyzer.py
+                     shared/sudarshan_core/models/manifest.py
+                     shared/sudarshan_core/engines/apktool_engine.py
+                     shared/sudarshan_core/engines/jadx_engine.py
+                     shared/sudarshan_core/analyzers/apk_analyzer.py
+                     shared/sudarshan_core/services/mobsf_client.py
                      backend/app/routes/upload.py
-Test Suite:          tests/test_analysis_client.py, tests/test_remaining_features.py
+Test Suite:          backend/tests/test_analysis_client.py, backend/tests/test_remaining_features.py
 ```
 
 ---
@@ -39,7 +40,7 @@ Findings are normalized via `upload.py` and compiled into a pre-sandbox **Invest
 graph TD
     APK[Target APK Upload] --> SPLIT{Analysis Dispatcher}
 
-    SPLIT -->|REST API Port 8001| MobSF[MobSF Container]
+    SPLIT -->|REST API Port 8008| MobSF[MobSF Container]
     SPLIT -->|Native Python| Andro[Androguard Analyzer]
     SPLIT -->|CLI Subprocess| APKT[APKTool Engine]
     SPLIT -->|CLI Subprocess| JADX[JADX Source Scanner]
@@ -93,8 +94,9 @@ Wraps the JADX CLI to decompile `.dex` bytecode into Java source code files:
 
 ## 5. MobSF & Androguard Analysis
 
-- **MobSF Engine (`mobsf_client.py`)**: Interfaces with the OpenSecurity MobSF container (Port 8001). Extracts security scores, manifest vulnerability findings, dangerous permissions, code analysis findings, hardcoded secrets, and certificate metadata.
+- **MobSF Engine (`mobsf_client.py`)**: Interfaces with the OpenSecurity MobSF container (Port 8008). Extracts security scores, manifest vulnerability findings, dangerous permissions, code analysis findings, hardcoded secrets, and certificate metadata.
 - **Androguard Fallback (`apk_analyzer.py`)**: Native fallback when MobSF is unavailable. Parses `AndroidManifest.xml` via `androguard.misc.AnalyzeAPK` to extract package details, permissions, activities, services, receivers, and bytecode strings.
+
 
 ---
 

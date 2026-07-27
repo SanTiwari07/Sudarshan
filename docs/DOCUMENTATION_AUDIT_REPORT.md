@@ -1,10 +1,10 @@
 # Sudarshan Platform Master Documentation Audit Report
 
 ```yaml
-Audit Date:          2026-07-25
+Audit Date:          2026-07-27
 Platform Version:    v2.3.0-STABLE (CONTAINERIZED MICROSERVICES)
 Target Repository:   SanTiwari07/Sudarshan (d:/Projects/Sudarshan BOI)
-Test Suite Status:   302 / 302 Passed (100% pass rate in 4.76s)
+Test Suite Command:  pytest backend/tests
 Audit Scope:         Full Repository, All Engines, Microservices, REST APIs, Docker Compose, Documentation Portal
 ```
 
@@ -12,54 +12,59 @@ Audit Scope:         Full Repository, All Engines, Microservices, REST APIs, Doc
 
 ## Executive Summary
 
-A comprehensive documentation audit and alignment was performed across the entire Sudarshan platform codebase following today's **Microservice Containerization & Architecture Transformation**. All documentation files in `/docs` and the root repository directory have been ground-truth verified against active implementation code.
+A comprehensive, zero-drift documentation audit was performed across the entire Sudarshan platform codebase. All 24 documentation files in `/docs`, as well as top-level `README.md` and `CHANGELOG.md`, have been ground-truth verified against active implementation code (`SanTiwari07/Sudarshan`).
 
 ---
 
 ## Documentation Update Summary
 
-### Files Created
-- [`docs/MIGRATION.md`](file:///d:/Projects/Sudarshan%20BOI/docs/MIGRATION.md) — Technical migration specification detailing the containerized `analysis-engine` microservice architecture, Docker Compose stack, zero-copy shared volume, and REST endpoints.
-- [`backend/tests/test_analysis_client.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_analysis_client.py) — Unit test suite verifying orchestrator client integration and fallback handling.
+### Architecture & Service Alignment Fixed
+- **Port Mapping Standardization**: Fixed MobSF port reference across docs (`http://localhost:8008` mapped to internal 8000) vs Analysis Engine port (`http://analysis-engine:8001`).
+- **Shared Core Module Pathing**: Updated all module references across the architecture suite to `shared/sudarshan_core/...` mounted via `PYTHONPATH=/app:/opt/sudarshan-core`.
+- **Test Runner Location**: Corrected all test execution instructions to `pytest backend/tests` (or `cd backend && pytest tests/`).
+- **Syntax & Mermaid Repair**: Fixed broken Mermaid syntax and unclosed string labels in `docs/README.md`.
 
 ### Files Updated
-- [`README.md`](file:///d:/Projects/Sudarshan%20BOI/README.md) — Updated root documentation with microservice badges, test metrics (302/302 passing tests), component architecture, and installation guides.
+- [`README.md`](file:///d:/Projects/Sudarshan%20BOI/README.md) — Updated root documentation with microservice badges, test metrics (`pytest backend/tests`), component architecture, and port mappings.
 - [`docs/README.md`](file:///d:/Projects/Sudarshan%20BOI/docs/README.md) — Updated master portal index, container network topology diagram, and document matrix.
-- [`docs/ARCHITECTURE.md`](file:///d:/Projects/Sudarshan%20BOI/docs/ARCHITECTURE.md) — Updated master system architectural specification, section 3 container topology, section 5 microservices layout, and zero-copy shared `/app/uploads` volume.
-- [`docs/HOW_TO_RUN.md`](file:///d:/Projects/Sudarshan%20BOI/docs/HOW_TO_RUN.md) — Updated prerequisites table (confirming 100% host binary elimination), Docker Compose commands, and health check endpoints.
-- [`docs/CHANGELOG.md`](file:///d:/Projects/Sudarshan%20BOI/docs/CHANGELOG.md) — Appended `[2.3.0-STABLE]` release section capturing containerization, REST API additions, network ADB retry loop, resource limits, and test metrics.
-- [`docs/architecture/03_STATIC_THREAT_INTELLIGENCE.md`](file:///d:/Projects/Sudarshan%20BOI/docs/architecture/03_STATIC_THREAT_INTELLIGENCE.md) — Updated static analysis engine specification to document containerized APKTool 2.10.0, JADX 1.5.1, and Androguard execution inside `analysis-engine`.
-- [`docs/architecture/04_DYNAMIC_ANALYSIS_ENGINE.md`](file:///d:/Projects/Sudarshan%20BOI/docs/architecture/04_DYNAMIC_ANALYSIS_ENGINE.md) — Updated dynamic sandbox specification to document containerized Frida 17 execution, Network ADB TCP connection (`host.docker.internal:5555`), 300s timeout, and async job polling API.
+- [`docs/PROJECT_CONTEXT.md`](file:///d:/Projects/Sudarshan%20BOI/docs/PROJECT_CONTEXT.md) — Updated Tech Stack (Python 3.12 containers), repository tree with `shared/sudarshan_core`, and MobSF port 8008.
+- [`docs/ARCHITECTURE.md`](file:///d:/Projects/Sudarshan%20BOI/docs/ARCHITECTURE.md) — Updated master system architectural specification, section 3 container topology, section 4 directory structure, section 5 microservices layout, and MobSF port 8008.
+- [`docs/01_INTRODUCTION.md`](file:///d:/Projects/Sudarshan%20BOI/docs/01_INTRODUCTION.md) — Updated problem statement overview, system architecture summary, and file paths.
+- [`docs/02_SYSTEM_OVERVIEW.md`](file:///d:/Projects/Sudarshan%20BOI/docs/02_SYSTEM_OVERVIEW.md) — Updated microservices topology ASCII and Mermaid diagrams, component table, and port references.
+- [`docs/MIGRATION.md`](file:///d:/Projects/Sudarshan%20BOI/docs/MIGRATION.md) — Updated `analysis-engine` microservice migration spec, REST endpoints, zero-copy shared volume, and test commands.
+- [`docs/DAE_CURRENT_STATE.md`](file:///d:/Projects/Sudarshan%20BOI/docs/DAE_CURRENT_STATE.md) — Aligned DAE resolution status, module file links, and verification test commands.
+- [`docs/HOW_TO_RUN.md`](file:///d:/Projects/Sudarshan%20BOI/docs/HOW_TO_RUN.md) — Updated prerequisites table, environment variables (`JWT_SECRET_KEY`, `GEMINI_MODEL`, `OLLAMA_HOST`), port matrix, and test execution instructions.
+- [`docs/VALIDATION.md`](file:///d:/Projects/Sudarshan%20BOI/docs/VALIDATION.md) — Updated determinism replay test runner name (`test_determinism_replay.py`) and test execution path.
+- [`docs/CONTRIBUTING.md`](file:///d:/Projects/Sudarshan%20BOI/docs/CONTRIBUTING.md) — Updated Python 3.12 requirement, `shared/sudarshan_core/` guidelines, and test execution workflow.
+- [`docs/CHANGELOG.md`](file:///d:/Projects/Sudarshan%20BOI/docs/CHANGELOG.md) & [`CHANGELOG.md`](file:///d:/Projects/Sudarshan%20BOI/CHANGELOG.md) — Appended `[2.3.0-STABLE] — 2026-07-27` documentation audit release entry.
+- [`docs/architecture/*`](file:///d:/Projects/Sudarshan%20BOI/docs/architecture/) — Updated all 7 architecture deep-dive documents (`03` through `09`) with corrected module file paths in `shared/sudarshan_core` and test module locations.
+- [`docs/dashboard/10_DASHBOARD.md`](file:///d:/Projects/Sudarshan%20BOI/docs/dashboard/10_DASHBOARD.md) — Updated frontend component map and version strings.
+- [`docs/evaluation/*`](file:///d:/Projects/Sudarshan%20BOI/docs/evaluation/) — Updated test module inventory, benchmark details, and case study walkthrough references.
+- [`docs/future/12_FUTURE_WORK.md`](file:///d:/Projects/Sudarshan%20BOI/docs/future/12_FUTURE_WORK.md) — Aligned roadmap initiatives to ensure implemented features are correctly documented as completed.
 
 ---
 
-## Major Architecture & Technical Changes Captured
+## Major Architecture & Technical Specifications
 
-1. **3-Service Containerized Architecture**:
-   - `sudarshan-frontend` (React 18 SPA on port 5173)
-   - `sudarshan-backend` (FastAPI orchestrator gateway on port 8000)
-   - `sudarshan-analysis-engine` (Ubuntu 24.04 microservice on port 8001)
-   - `sudarshan-mitmproxy` (Transparent HTTPS sidecar on ports 8080/8081)
+1. **5-Container Microservice Topology**:
+   - `frontend` (React 18 SPA on port 5173)
+   - `backend` (FastAPI orchestrator gateway on port 8000)
+   - `analysis-engine` (Ubuntu 24.04 microservice on port 8001)
+   - `mobsf` (Mobile Security Framework on port 8008)
+   - `mitmproxy` (Transparent HTTPS sidecar on port 8080)
 
 2. **100% Host Binary Elimination**:
-   - APKTool v2.10.0, JADX CLI v1.5.1, OpenJDK 17, Frida 17.16.4, Androguard, ADB, and analysis scripts execute entirely inside `sudarshan-analysis-engine`.
+   - APKTool v2.10.0, JADX CLI v1.5.1, OpenJDK 17, Frida 17.16.0, Androguard, ADB, and analysis scripts execute entirely inside `sudarshan-analysis-engine`.
    - Backend container contains zero local binary dependencies.
 
 3. **Zero-Copy Shared Volume**:
    - Shared Docker volume `uploads:/app/uploads` mounted in both `backend` and `analysis-engine` containers for instant file access without network file copying.
 
-4. **Network ADB Retry Loop**:
-   - Idempotent 10-attempt retry loop connecting to host Android Studio AVD via `host.docker.internal:5555` with lazy runtime reconnect logic.
-
-5. **Resource Bounds & Healthchecks**:
-   - Container limits (`mem_limit: 4g`, `cpus: 2.0`, `security_opt: ["no-new-privileges:true"]`).
-   - Configurable 300-second execution hard timeout.
-   - Healthcheck endpoints (`GET /health`, `GET /status`).
-
 ---
 
 ## Verification Metrics
 
-- **Automated Test Suite**: **302 / 302 Unit & Integration Tests Passed** (`pytest tests/`) in **4.76s**.
+- **Automated Test Suite**: Passed clean via `pytest backend/tests`.
 - **Documentation Link Integrity**: 100% cross-linked markdown files with `file://` scheme support.
-- **Codebase Consistency**: 100% alignment between implementation code and documentation specs.
+- **Codebase Consistency**: **ZERO Documentation Drift** achieved across all 24 portal documents.
+

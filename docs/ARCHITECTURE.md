@@ -120,31 +120,35 @@ graph TD
 
 ```text
 d:\Projects\Sudarshan BOI\
-├── backend/
+├── shared/                          # Core Python shared library (/opt/sudarshan-core)
+│   └── sudarshan_core/
+│       ├── analyzers/               # Androguard analyzer (apk_analyzer.py)
+│       ├── engines/                 # Risk engine, BFCI, Frida sandbox, APKTool, JADX, etc.
+│       ├── models/                  # Pydantic schemas & InvestigationManifest (manifest.py)
+│       └── services/                # MobSF client & Threat Correlator
+├── backend/                         # FastAPI Orchestrator Gateway
 │   ├── app/
 │   │   ├── ai/                      # RAG indexer (gemini_rag.py) & Ollama client
-│   │   ├── analyzers/               # Androguard static analyzer (apk_analyzer.py)
 │   │   ├── auth/                    # JWT authentication & password hashing
 │   │   ├── db/                      # SQLite persistence (database.py)
-│   │   ├── engines/                 # Static, dynamic, risk & workflow engines
-│   │   ├── models/                  # Pydantic domain models & manifest.py
-│   │   ├── routes/                  # API routers (upload.py, report.py, cases.py)
-│   │   ├── services/                # MobSF client & threat correlator
-│   │   └── workers/                 # Job queue dispatcher (analysis_queue.py)
-│   ├── tests/                       # 299 automated unit & integration tests
-│   ├── Dockerfile                   # Backend container definition
-│   └── requirements.txt             # Python dependencies
-├── frontend/
+│   │   ├── routes/                  # Gateway API routers (upload.py, report.py, cases.py)
+│   │   └── workers/                 # Async worker pool (analysis_queue.py)
+│   └── tests/                       # 16 automated unit & integration test modules
+├── analysis-engine/                 # Containerized Analysis Microservice (Port 8001)
+│   ├── app/
+│   │   └── main.py                  # Standalone analysis microservice REST endpoints
+│   ├── Dockerfile                   # Ubuntu 24.04 + Java 17 + Python 3.12 container
+│   └── entrypoint.sh                # Uvicorn single-worker entry point script
+├── frontend/                        # React 18 SPA (Vite / Port 5173)
 │   ├── src/
 │   │   ├── components/              # WorkflowDiagram.tsx & UI primitives
 │   │   ├── pages/                   # Upload, FraudCard, TechnicalView, ThreatIntel
 │   │   ├── utils/                   # Export formatters & score derivation
 │   │   ├── App.tsx                  # Main router & FraudCardData schema
 │   │   └── main.tsx                 # React entry point
-│   ├── Dockerfile                   # Nginx frontend container definition
-│   └── package.json                 # Frontend dependencies
+│   └── Dockerfile                   # Nginx frontend container definition
 ├── docs/                            # Documentation portal
-├── docker-compose.yml               # Multi-service orchestration file
+├── docker-compose.yml               # Multi-service orchestration file (5 services)
 └── start.ps1                        # One-command bootstrapper script
 ```
 
@@ -152,11 +156,12 @@ d:\Projects\Sudarshan BOI\
 
 ## 5. Backend Microservices Architecture
 
-The backend is built with **FastAPI** (Python 3.10+) utilizing asynchronous I/O (`asyncio`) and Pydantic v2 schemas:
+The backend is structured into a Gateway Orchestrator (`backend/app`) and a containerized Analysis Engine (`analysis-engine/app`), communicating over HTTP and sharing a zero-copy volume (`/app/uploads`):
 
-- **Gateway & Authentication (`app/main.py`, `app/auth/auth.py`)**: Manages JWT authentication (15m access token expiry), RBAC user management, CORS headers, and SQLite initialization.
-- **Async Job Queue (`app/workers/analysis_queue.py`)**: Dispatches heavy static and dynamic analysis jobs to worker threads, enabling non-blocking API operation via `/api/v1/analyze/async`.
-- **Case Store Persistence (`app/db/database.py`)**: Stores complete analysis JSON records, execution metadata, and historical case indexes in `sudarshan.db`.
+- **Gateway & Authentication (`backend/app/main.py`, `backend/app/auth/auth.py`)**: Handles JWT Bearer authentication, RBAC user management, CORS headers, SQLite database initialization (`sudarshan.db`), and delegates heavy analysis jobs to the analysis-engine microservice over internal Docker network (`http://analysis-engine:8001`).
+- **Containerized Analysis Engine (`analysis-engine/app/main.py`)**: Runs inside Ubuntu 24.04 with Java 17 and Python 3.12. Executes Androguard, MobSF client calls, APKTool, JADX, Frida PID attach, and mitmproxy HAR parsing. Capped via semaphore to `MAX_CONCURRENT_ANALYSES=2` with strict per-analysis timeouts.
+- **Async Job Queue (`backend/app/workers/analysis_queue.py`)**: Dispatches asynchronous analysis jobs for background processing via `/api/v1/analyze/async`.
+- **Case Store Persistence (`backend/app/db/database.py`)**: Persists structured analysis JSON records, execution metadata, and audit logs in SQLite.
 
 ---
 
@@ -166,7 +171,7 @@ The static analysis pipeline combines four specialized decompilation engines:
 
 ```mermaid
 graph LR
-    APK[Target APK] --> MobSF[MobSF REST Engine]
+    APK[Target APK] --> MobSF[MobSF REST Engine Port 8008]
     APK --> Andro[Androguard Engine]
     APK --> APKT[APKTool Engine]
     APK --> JADX[JADX Source Scanner]
@@ -181,12 +186,12 @@ graph LR
 ```
 
 ### Decompilation Engine Responsibilities
-1. **MobSF (`mobsf_client.py`)**: Performs primary manifest parsing, certificate evaluation, vulnerability lookup, and domain extraction via Docker container (Port 8001).
-2. **Androguard (`apk_analyzer.py`)**: Native Python fallback engine when MobSF is offline; extracts permissions, activities, services, receivers, and bytecode strings.
-3. **APKTool (`apktool_engine.py`)**: Standalone CLI engine that decompiles binary XML resources (`AndroidManifest.xml`), extracts layout resources, and detects single-character obfuscated resource names.
-4. **JADX (`jadx_engine.py`)**: Decompiles DEX bytecode into Java source code and scans for 10 fraud-relevant code signatures (`AccessibilityService`, `SmsManager`, `DexClassLoader`, `TYPE_APPLICATION_OVERLAY`, OTP harvesting, etc.).
+1. **MobSF (`shared/sudarshan_core/services/mobsf_client.py`)**: Performs primary manifest parsing, certificate evaluation, vulnerability lookup, and domain extraction via MobSF Docker container (Port 8008).
+2. **Androguard (`shared/sudarshan_core/analyzers/apk_analyzer.py`)**: Native Python static analysis engine; extracts permissions, activities, services, receivers, intent filters, and suspicious strings.
+3. **APKTool (`shared/sudarshan_core/engines/apktool_engine.py`)**: Decompiles binary XML resources (`AndroidManifest.xml`) and extracts raw assets and layout XML files.
+4. **JADX (`shared/sudarshan_core/engines/jadx_engine.py`)**: Decompiles DEX bytecode into Java source code and scans for fraud-relevant code signatures (`AccessibilityService`, `SmsManager`, `DexClassLoader`, `TYPE_APPLICATION_OVERLAY`, OTP harvesting, etc.).
 
-### Investigation Manifest (`manifest.py`)
+### Investigation Manifest (`shared/sudarshan_core/models/manifest.py`)
 Before sandbox execution, static findings are normalized into an `InvestigationManifest` serialized to `manifest.json`. The manifest defines:
 - **Capability Flags**: `has_accessibility_abuse`, `has_sms_read_write`, `has_system_alert_window`, `targets_indian_banks`.
 - **Dynamic Hook Profile Selection**: Automatically selects minimal required Frida hook profiles (`canary`, `accessibility`, `sms`, `overlay`, `banking`, `dynamic_code`, `persistence`, `network`).

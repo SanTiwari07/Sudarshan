@@ -5,6 +5,8 @@ import re
 from typing import List, Tuple
 try:
     from androguard.misc import AnalyzeAPK
+    import loguru
+    loguru.logger.disable("androguard")
 except ImportError:
     AnalyzeAPK = None  # Fallback for host environments without androguard installed
 

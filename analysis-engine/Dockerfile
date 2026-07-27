@@ -16,9 +16,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     python3-venv \
     adb \
-    unzip \
     zipalign \
     apksigner \
+    aapt \
+    android-framework-res \
     curl \
     wget \
     ca-certificates \

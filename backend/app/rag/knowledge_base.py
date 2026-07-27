@@ -149,7 +149,7 @@ def build_rag_context(
     correlation_result: Optional[Dict] = None,
 ) -> str:
     """
-    Build a verified, evidence-grounded context string for Ollama prompt injection.
+    Build a verified, evidence-grounded context string for Gemini 2.5 Flash prompt injection.
     Returns a formatted string with MITRE techniques, regulatory context, and family profile.
     """
     sections: List[str] = []

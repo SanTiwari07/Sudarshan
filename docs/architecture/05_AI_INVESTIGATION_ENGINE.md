@@ -4,7 +4,7 @@
 Module Title:        AI Investigation Engine & RAG Core
 Version:             2.3.0-STABLE
 Primary Files:       backend/app/ai/gemini_rag.py
-                     backend/app/ai/ollama_client.py
+                     backend/app/ai/gemini_client.py
                      shared/sudarshan_core/engines/agentic/sanitizer.py
 Test Suite:          backend/tests/test_prompt_injection.py
 ```
@@ -14,7 +14,7 @@ Test Suite:          backend/tests/test_prompt_injection.py
 ## Table of Contents
 - [1. Executive Overview](#1-executive-overview)
 - [2. RAG Architecture & Context Vector Graph](#2-rag-architecture--context-vector-graph)
-- [3. Gemini 2.5 Flash & Ollama Integration](#3-gemini-2.5-flash--ollama-integration)
+- [3. Gemini 2.5 Flash Standardization](#3-gemini-25-flash-standardization)
 - [4. Prompt Injection Sanitization Guard](#4-prompt-injection-sanitization-guard)
 - [5. Anti-Hallucination Evidence Clamps](#5-anti-hallucination-evidence-clamps)
 - [6. Threat Attribution & Banking Intelligence Graph](#6-threat-attribution--banking-intelligence-graph)
@@ -48,16 +48,16 @@ graph TD
     QUERY[Analyst Chat Query] --> SEARCH[Cosine Similarity Search]
     RAG --> SEARCH
     SEARCH --> PROMPT[Grounding Prompt Assembly]
-    PROMPT --> LLM[Gemini 2.5 Flash / Ollama]
+    PROMPT --> LLM[Gemini 2.5 Flash API]
     LLM --> RESP[Grounded Investigation Response]
 ```
 
 ---
 
-## 3. Gemini 2.5 Flash & Ollama Integration
+## 3. Gemini 2.5 Flash Standardization
 
 - **Primary Cloud Model**: **Gemini 2.5 Flash** (`gemini-2.5-flash`) via official Google GenAI SDK.
-- **Air-Gapped Local Model**: Local **Ollama** instance (`Qwen3:8b`, `Llama-3`, or `Mistral`) on port 11434.
+- **Direct Investigation Client**: Structured JSON prompts with exponential backoff retries in `gemini_client.py`.
 - **Output Contracts**: Standardized Pydantic `IntelligenceReport` model:
   - `plain_english_narrative`
   - `fraud_objective`

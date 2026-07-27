@@ -20,8 +20,15 @@ logging.basicConfig(
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
 )
 for _noisy in ("androguard", "androguard.core", "androguard.core.analysis",
-               "androguard.core.bytecodes", "androguard.core.analysis.analysis"):
+               "androguard.core.bytecodes", "androguard.core.analysis.analysis",
+               "androguard.core.axml"):
     logging.getLogger(_noisy).setLevel(logging.WARNING)
+
+try:
+    import loguru
+    loguru.logger.disable("androguard")
+except ImportError:
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +37,7 @@ app = FastAPI(
     version="2.1.0",
     description=(
         "APK malware analysis engine with Androguard/MobSF static analysis, "
-        "Frida dynamic behavioral sandbox, RAG-grounded Ollama intelligence, "
+        "Frida dynamic behavioral sandbox, RAG-grounded Gemini Flash intelligence, "
         "threat correlation (VT/OTX/AbuseIPDB), 5-axis STEI scoring, "
         "JWT auth, persistent SQLite case store, and async job queue."
     ),
@@ -121,7 +128,7 @@ def read_root():
             "BFCI (frida dynamic behavioral formula)",
             "FRS = 0.25×STEI + 0.35×BFCI + 0.20×Correlation + 0.20×BankingImpact",
         ],
-        "intelligence": ["rag", "qwen3:8b (ollama)", "virustotal", "otx", "abuseipdb"],
+        "intelligence": ["rag", "gemini-2.5-flash", "virustotal", "otx", "abuseipdb"],
         "export": ["stix-2.1", "ioc-csv"],
         "auth": "JWT Bearer",
         "storage": "SQLite (persistent case store + IOC cache)",

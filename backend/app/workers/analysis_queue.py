@@ -98,7 +98,7 @@ async def _worker(worker_id: int) -> None:
     import tempfile
     import os as _os
 
-    from app.ai.ollama_client import analyze_with_llm
+    from app.ai.gemini_client import analyze_with_llm
     from sudarshan_core.analyzers.apk_analyzer import analyze_apk
     from sudarshan_core.engines.classification_engine import classify_family
     from sudarshan_core.engines.risk_engine import calculate_risk_score, build_threat_scenario_table

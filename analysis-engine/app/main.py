@@ -49,8 +49,15 @@ logging.basicConfig(
 )
 # Silence heavy third-party loggers that produce noise without value
 for _noisy in ("androguard", "androguard.core", "androguard.core.analysis",
-               "androguard.core.bytecodes", "androguard.core.analysis.analysis"):
+               "androguard.core.bytecodes", "androguard.core.analysis.analysis",
+               "androguard.core.axml"):
     logging.getLogger(_noisy).setLevel(logging.WARNING)
+
+try:
+    import loguru
+    loguru.logger.disable("androguard")
+except ImportError:
+    pass
 
 logger = logging.getLogger("analysis-engine")
 
@@ -261,12 +268,18 @@ async def _execute_analysis_pipeline(
             flags_dict["jadx_fraud_hits"] = jadx_res.fraud_class_hits
 
         # 3. Investigation Manifest Generation (blocking disk I/O)
+        analysis_mode_str = "androguard+mobsf" if mobsf_res else "androguard"
         manifest = await asyncio.to_thread(
             build_manifest,
             sha256=sha256_hash,
             package_name=package_name,
             flags_dict=flags_dict,
-            analysis_mode="androguard",
+            analysis_mode=analysis_mode_str,
+            all_permissions=permissions,
+            dangerous_permissions=(mobsf_res or {}).get("dangerous_permissions", []),
+            activities=(mobsf_res or {}).get("activities", []),
+            services=(mobsf_res or {}).get("services", []),
+            receivers=(mobsf_res or {}).get("receivers", []),
         )
 
         manifest_dir = UPLOADS_DIR / sha256_hash

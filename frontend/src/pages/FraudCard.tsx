@@ -159,6 +159,25 @@ function ExecutiveRiskPanel({ data, confidence }: { data: FraudCardData; confide
             </div>
           </div>
         </div>
+        {/* APK Provenance Warning Banner */}
+        {data.dynamic_result?.provenance?.is_repaired_derivative && (
+          <div className="mt-4 p-3 bg-amber-50 border border-amber-300 rounded-lg flex items-start gap-3 text-xs">
+            <Shield className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <div className="font-bold text-amber-800 uppercase tracking-wide">
+                Forensic Notice: Dynamic Sandbox Executed on Repaired Derivative Artifact
+              </div>
+              <div className="text-amber-700 mt-0.5">
+                The original uploaded sample contained corrupted AXML headers / ZIP CRC tampering (anti-sandbox technique). Sudarshan generated an isolated derivative artifact for execution while preserving the original binary read-only.
+              </div>
+              <div className="mt-1 flex flex-wrap gap-4 text-amber-900 font-mono text-[11px]">
+                <span>Original SHA-256: {data.dynamic_result.provenance.original_sha256?.slice(0, 16)}…</span>
+                <span>Derivative SHA-256: {data.dynamic_result.provenance.repaired_sha256?.slice(0, 16)}…</span>
+                <span>Tool: {data.dynamic_result.provenance.repair_tool}</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </SocCard>
   );

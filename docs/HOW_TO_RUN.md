@@ -32,10 +32,10 @@ Ensure the following tools are installed on your host system:
 | **ADB** | 1.0.41+ | `adb version` | Android Debug Bridge for TCP emulator connection (`adb tcpip 5555`). |
 | **Python** *(Dev Optional)* | 3.10+ | `python --version` | Local development and unit testing (`pytest tests/`). |
 | **Node.js** *(Dev Optional)* | 18.x+ | `node --version` | Local frontend UI development. |
-| **Ollama** *(Optional)* | 0.1.30+ | `ollama --version` | Local air-gapped LLM inference provider. |
+| **Google Gemini API** | `google-genai` | API Key | Primary AI Threat Intelligence Provider (`gemini-2.5-flash`). |
 
 > [!NOTE]
-> **Host Dependency Elimination**: APKTool, JADX CLI, Java 17, Frida 17, Androguard, and ADB worker processes are **100% containerized** inside the `sudarshan-analysis-engine` microservice container. Zero binary installations are required on your host machine.
+> **Host Dependency Elimination**: APKTool, JADX CLI, Java 17, Frida 17, Androguard, AAPT, and ADB worker processes are **100% containerized** inside the `sudarshan-analysis-engine` microservice container. Zero binary installations are required on your host machine.
 
 ---
 
@@ -47,7 +47,6 @@ Create a `.env` file in the project root or set environment variables:
 # ── AI Model Configuration ──
 GEMINI_API_KEY="your_api_key_here"
 GEMINI_MODEL="gemini-2.5-flash"
-OLLAMA_HOST="http://localhost:11434"
 
 # ── Dynamic Sandbox & ADB ──
 ADB_HOST="host.docker.internal"

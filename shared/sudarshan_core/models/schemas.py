@@ -258,7 +258,7 @@ class AnalysisResponse(BaseModel):
     appsec_score: Optional[Any] = None
     mobsf_scan_hash: Optional[str] = None
 
-    # Intelligence Report (from RAG + Ollama)
+    # Intelligence Report (from RAG + Gemini 2.5 Flash)
     intelligence_report: Optional[IntelligenceReport] = None
 
     # Fraud Workflow Reconstruction (from WorkflowReconstructor)
@@ -267,3 +267,58 @@ class AnalysisResponse(BaseModel):
     # Legacy view compatibility (kept for existing frontend)
     executive_view: FraudCardExecutiveView
     technical_view: FraudCardTechnicalView
+
+
+# ─── Operational Observability & Provenance Models ─────────────────────────────
+
+class APKProvenance(BaseModel):
+    """Forensic record tracking original vs repaired derivative artifacts."""
+    is_repaired_derivative: bool = False
+    original_sha256: str
+    repaired_sha256: Optional[str] = None
+    repair_tool: str = "apkInspector v1.2.8"
+    repair_reason: Optional[str] = None
+    modifications_performed: List[str] = Field(default_factory=list)
+    signature_used: Optional[str] = None
+    timestamp: str = ""
+
+
+class StageMetrics(BaseModel):
+    """Timing and status record for each of the 12 pipeline stages."""
+    stage_name: str
+    status: str = "SUCCESS"  # SUCCESS | FAILED | SKIPPED | NOT_SUPPORTED
+    duration_ms: float = 0.0
+    timestamp: str = ""
+    root_cause: Optional[str] = None
+    exception_details: Optional[str] = None
+    suggested_remediation: Optional[str] = None
+
+
+class HookCoverage(BaseModel):
+    """Metrics on Frida hook registrations and triggers."""
+    java_registered: int = 0
+    java_active: int = 0
+    java_failed: int = 0
+    java_triggered: int = 0
+    native_registered: int = 0
+    native_active: int = 0
+    native_failed: int = 0
+    native_triggered: int = 0
+    runtime_events_produced: int = 0
+    network_events_produced: int = 0
+
+
+class FridaPreflightStatus(BaseModel):
+    """Prerequisite health diagnostics before sandbox execution."""
+    adb_connected: bool = False
+    device_online: bool = False
+    frida_server_running: bool = False
+    frida_version_match: bool = False
+    frida_version: Optional[str] = None
+    spawn_supported: bool = False
+    attach_supported: bool = False
+    selinux_mode: str = "Unknown"
+    abi_architecture: str = "Unknown"
+    ready: bool = False
+    error: Optional[str] = None
+

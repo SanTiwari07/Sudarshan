@@ -38,7 +38,11 @@ from typing import Any, Dict, Optional
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "shared"))
 
-import requests
+try:
+    import loguru
+    loguru.logger.disable("androguard")
+except ImportError:
+    pass
 
 MOBSF_HOST = os.getenv("MOBSF_HOST_EXTERNAL", "http://localhost:8008")
 MOBSF_API_KEY = os.getenv("MOBSF_API_KEY", "sudarshan_mobsf_api_key_2026")

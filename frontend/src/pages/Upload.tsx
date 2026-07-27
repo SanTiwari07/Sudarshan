@@ -42,7 +42,7 @@ export default function Upload({ onAnalysisComplete }: { onAnalysisComplete: (da
       onAnalysisComplete(data);
       navigate('/fraud-card');
     } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred. This could be due to an Ollama timeout or Androguard parsing failure.');
+      setError(err.message || 'An unexpected error occurred during APK analysis pipeline execution.');
     } finally {
       setLoading(false);
     }

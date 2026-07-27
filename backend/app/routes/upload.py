@@ -3,7 +3,7 @@
 Sudarshan Upload & Analysis Pipeline
 ======================================
 Full pipeline:
-  APK → MobSF (or Androguard fallback) → Frida (if ready) → Threat Correlation → Risk Engine → RAG → Ollama → Response
+  APK → MobSF (or Androguard fallback) → Frida (if ready) → Threat Correlation → Risk Engine → RAG → Gemini 2.5 Flash → Response
 
 Endpoints:
   POST /api/v1/analyze        — sync analysis (returns full result immediately)
@@ -23,7 +23,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
-from app.ai.ollama_client import analyze_with_llm
+from app.ai.gemini_client import analyze_with_llm
 from sudarshan_core.analyzers.apk_analyzer import analyze_apk
 from app.auth.auth import get_current_user, require_analyst
 from app.db.database import save_case
@@ -591,8 +591,8 @@ async def _run_analysis_pipeline(
         all_permissions=all_permissions,
     )
 
-    # ── STEP 5: RAG + Ollama Intelligence ────────────────────────────────────
-    logger.info("Running RAG-grounded LLM analysis...")
+    # ── STEP 5: RAG + Gemini Flash Intelligence ──────────────────────────────
+    logger.info("Running RAG-grounded Gemini Flash AI analysis...")
     llm_response = await analyze_with_llm(
         flags=flags_dict,
         family=family_class,

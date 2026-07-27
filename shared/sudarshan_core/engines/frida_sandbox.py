@@ -217,24 +217,38 @@ def get_connected_emulators() -> List[str]:
     return devices
 
 
-def _adb_install_apk(apk_path: str, device: str) -> Tuple[bool, str]:
-    """Install an APK onto the target device with retries.
-    
-    Automatically falls back to --bypass-low-target-sdk-block if the APK
-    targets an older SDK version (e.g. legacy malware samples).
+def _adb_install_apk(apk_path: str, device: str) -> Tuple[bool, str, Dict[str, Any]]:
+    """Install an APK onto the target device with multi-stage fallback & forensic provenance.
+
+    Stage 1: Attempt installation of original uploaded APK.
+    Stage 2: If low SDK block is encountered, retry with --bypass-low-target-sdk-block.
+    Stage 3: If INSTALL_PARSE_FAILED / Corrupt AXML is caught, invoke conditional derivative repair,
+             re-sign, install derivative, and record APK Provenance Metadata.
     """
+    from sudarshan_core.engines.apk_repair import compute_sha256, repair_obfuscated_apk
+
+    original_sha256 = compute_sha256(apk_path) if os.path.exists(apk_path) else "unknown"
+    default_provenance = {
+        "is_repaired_derivative": False,
+        "original_sha256": original_sha256,
+        "repaired_sha256": None,
+        "repair_tool": "apkInspector v1.2.8",
+        "repair_reason": None,
+        "modifications_performed": [],
+        "signature_used": "Original APK Signature",
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    }
+
     last_out = ""
-    for attempt in range(3):
+
+    # ── Stage 1: Try installing Original APK ─────────────────────────────────
+    for attempt in range(2):
         ok, out = _adb("-s", device, "install", "-r", "-t", apk_path, timeout=120)
         if ok:
-            return ok, out
+            logger.info(f"[Frida] Original APK installed successfully: {os.path.basename(apk_path)}")
+            return True, out, default_provenance
 
-        if "INSTALL_PARSE_FAILED" in out:
-            logger.warning(f"[Frida] APK install failed due to parse error (corrupt or obfuscated XML): {out.strip()}")
-            return False, f"APK parse failure: {out.strip()}"
-
-        # ── Fallback: bypass deprecated SDK version block ──────────────────
-        # Useful for older APKs (targetSdk < 24) on modern emulators (API 34+)
+        # ── Stage 2: Bypass deprecated SDK version block ──────────────────────
         if "INSTALL_FAILED_DEPRECATED_SDK_VERSION" in out:
             logger.info("[Frida] Retrying install with --bypass-low-target-sdk-block")
             ok2, out2 = _adb(
@@ -243,16 +257,37 @@ def _adb_install_apk(apk_path: str, device: str) -> Tuple[bool, str]:
                 apk_path, timeout=120
             )
             if ok2:
-                return ok2, out2
-            last_out = out2
-            if "INSTALL_PARSE_FAILED" in out2:
-                return False, f"APK parse failure: {out2.strip()}"
-        else:
-            last_out = out
+                logger.info(f"[Frida] Original APK installed with SDK bypass: {os.path.basename(apk_path)}")
+                return True, out2, default_provenance
+            out = out2
 
-        logger.warning(f"[Frida] APK install attempt {attempt+1} failed: {last_out}")
-        time.sleep(2)
-    return False, f"Failed to install APK after 3 attempts. Last error: {last_out}"
+        last_out = out
+        if "INSTALL_PARSE_FAILED" in out or "Corrupt XML binary file" in out:
+            break
+        time.sleep(1)
+
+    # ── Stage 3: Conditional Derivative Repair (ZIP/AXML Header Corruption) ──
+    if "INSTALL_PARSE_FAILED" in last_out or "Corrupt XML binary file" in last_out:
+        logger.warning(
+            f"[Frida Repair] Original APK install failed due to parse error ({last_out.strip()}). "
+            f"Preserving original binary and creating isolated derivative..."
+        )
+        rep_ok, rep_path_or_err, rep_provenance = repair_obfuscated_apk(apk_path)
+        if rep_ok and os.path.exists(rep_path_or_err):
+            logger.info(f"[Frida Repair] Retrying installation on repaired derivative: {rep_path_or_err}")
+            ok3, out3 = _adb("-s", device, "install", "-r", "-t", "--bypass-low-target-sdk-block", rep_path_or_err, timeout=120)
+            if ok3:
+                logger.info(f"[Frida Repair] Repaired derivative artifact installed successfully on emulator!")
+                return True, out3, rep_provenance
+            else:
+                logger.error(f"[Frida Repair] Derivative installation failed: {out3}")
+                return False, f"Derivative install failed: {out3.strip()}", default_provenance
+        else:
+            logger.error(f"[Frida Repair] Derivative generation failed: {rep_path_or_err}")
+            return False, f"APK parse failure & derivative generation failed: {last_out.strip()}", default_provenance
+
+    return False, f"Failed to install APK after retries. Last error: {last_out.strip()}", default_provenance
+
 
 
 
@@ -302,9 +337,13 @@ def _extract_apk_info(apk_path: str) -> Tuple[Optional[str], Optional[str]]:
             except Exception:
                 pass
 
-    # ── Strategy 2: androguard (pure-Python, no native tools needed) ──────────
     try:
         from androguard.misc import AnalyzeAPK
+        try:
+            import loguru
+            loguru.logger.disable("androguard")
+        except ImportError:
+            pass
         a, _, _ = AnalyzeAPK(apk_path)
         pkg = a.get_package()
         act = a.get_main_activity()
@@ -1031,12 +1070,13 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
     logger.info(f"[Frida] Target package: {package_name} (Main Activity: {main_activity})")
 
     # ── Step 3: Install APK ────────────────────────────────────────────────────
-    ok, output = await loop.run_in_executor(None, _adb_install_apk, apk_path, device_serial)
+    ok, output, provenance = await loop.run_in_executor(None, _adb_install_apk, apk_path, device_serial)
+    base_result["provenance"] = provenance
     if not ok:
         logger.error(f"[Frida] APK install failed: {output}")
         base_result["error"] = f"APK install failed: {output}"
         return base_result
-    logger.info(f"[Frida] APK installed: {package_name}")
+    logger.info(f"[Frida] APK installed: {package_name} (Derivative Repaired: {provenance.get('is_repaired_derivative', False)})")
 
     # ── Step 4: Run Frida session ──────────────────────────────────────────────
     # Per-sample artifact directory: previously every scan wrote audit_log.json

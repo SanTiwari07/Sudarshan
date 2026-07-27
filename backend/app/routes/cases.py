@@ -16,10 +16,31 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from app.auth.auth import require_analyst
-from app.db.database import get_case, list_cases, count_cases
+from app.db.database import get_case, list_cases, count_cases, add_case_note, get_case_notes
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cases", tags=["Case History"])
+
+
+class NoteCreateRequest(BaseModel):
+    text: str
+    author: Optional[str] = "SOC Analyst"
+
+
+@router.get("/{sha256}/notes")
+async def list_case_notes_endpoint(sha256: str, user: dict = Depends(require_analyst)):
+    """Retrieve analyst notes for a case."""
+    notes = await get_case_notes(sha256)
+    return {"sha256": sha256, "notes": notes}
+
+
+@router.post("/{sha256}/notes")
+async def add_case_note_endpoint(sha256: str, req: NoteCreateRequest, user: dict = Depends(require_analyst)):
+    """Add a new analyst note for a case."""
+    author = req.author or user.get("username", "SOC Analyst")
+    note = await add_case_note(sha256, req.text, author)
+    return note
+
 
 
 # ─── Response Models ──────────────────────────────────────────────────────────

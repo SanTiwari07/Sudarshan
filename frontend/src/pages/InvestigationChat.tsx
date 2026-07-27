@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import type { FraudCardData } from '../App';
 import { getToken } from './Login';
+import { API_BASE } from '../config';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -292,7 +293,7 @@ export default function InvestigationChat({ data }: InvestigationChatProps) {
       const token = getToken();
       abortRef.current = new AbortController();
 
-      const response = await fetch('/api/v1/chat/stream', {
+      const response = await fetch(`${API_BASE}/chat/stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

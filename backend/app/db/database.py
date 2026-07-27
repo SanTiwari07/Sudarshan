@@ -82,6 +82,17 @@ _CREATE_INDEXES = (
 )
 
 
+_CREATE_NOTES = """
+CREATE TABLE IF NOT EXISTS case_notes (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    sha256      TEXT NOT NULL,
+    text        TEXT NOT NULL,
+    author      TEXT NOT NULL,
+    created_at  TEXT NOT NULL
+);
+"""
+
+
 @asynccontextmanager
 async def _connect() -> AsyncIterator[aiosqlite.Connection]:
     """
@@ -107,10 +118,12 @@ async def init_db() -> None:
         await db.execute(_CREATE_USERS)
         await db.execute(_CREATE_CASES)
         await db.execute(_CREATE_IOC_CACHE)
+        await db.execute(_CREATE_NOTES)
         for stmt in _CREATE_INDEXES:
             await db.execute(stmt)
         await db.commit()
     logger.info(f"[DB] Initialized SQLite at {DB_PATH} (WAL, FK enforced, indexed)")
+
 
 
 # ─── Cases ───────────────────────────────────────────────────────────────────
@@ -291,3 +304,25 @@ async def username_exists(username: str) -> bool:
     async with _connect() as db:
         async with db.execute("SELECT id FROM users WHERE username=?", (username,)) as cur:
             return await cur.fetchone() is not None
+
+
+# ─── Case Notes ───────────────────────────────────────────────────────────────
+
+async def add_case_note(sha256: str, text: str, author: str) -> Dict[str, Any]:
+    now = datetime.now(timezone.utc).isoformat()
+    async with _connect() as db:
+        cur = await db.execute(
+            "INSERT INTO case_notes (sha256, text, author, created_at) VALUES (?,?,?,?)",
+            (sha256, text, author, now),
+        )
+        await db.commit()
+        return {"id": cur.lastrowid, "sha256": sha256, "text": text, "author": author, "created_at": now}
+
+
+async def get_case_notes(sha256: str) -> List[Dict[str, Any]]:
+    async with _connect() as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM case_notes WHERE sha256=? ORDER BY id ASC", (sha256,)) as cur:
+            rows = await cur.fetchall()
+    return [dict(r) for r in rows]
+

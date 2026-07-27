@@ -1,12 +1,12 @@
-import { Routes, Route, Link, useNavigate, Navigate } from 'react-router-dom';
+import { Routes, Route, Link, useNavigate, Navigate, useParams } from 'react-router-dom';
 import { Shield, LayoutDashboard, Terminal, Globe, Database, LogOut, LogIn, MessageSquare } from 'lucide-react';
 import Login, { getToken, getUser, clearToken } from './pages/Login';
-import { lazy, Suspense, useState, useCallback, useMemo } from 'react';
+import { lazy, Suspense, useEffect, useCallback } from 'react';
 import ErrorBoundary from './components/ErrorBoundary';
+import { AnalysisProvider, useAnalysis } from './context/AnalysisContext';
+import { LoadingSpinner, ErrorState } from './components/ui/Skeleton';
 
-// Every route used to be a static import, so the login screen shipped the whole
-// application — including the 882-line FraudCard and the 620-line derive module.
-// Login itself stays eager: it is the first paint for an unauthenticated user.
+// Lazy views
 const Upload = lazy(() => import('./pages/Upload'));
 const FraudCard = lazy(() => import('./pages/FraudCard'));
 const TechnicalView = lazy(() => import('./pages/TechnicalView'));
@@ -51,13 +51,12 @@ export type FRSBreakdown = {
   banking_impact: number;
   formula_used: string;
   dynamic_available: boolean;
-  // 5-axis STEI breakdown
   stei_axes?: {
-    ct: number;  // Credential Theft (0.60)
-    bt: number;  // Banking Targeting (0.20)
-    pr: number;  // Permission Risk (0.10)
-    ob: number;  // Obfuscation (0.05)
-    ir: number;  // Infrastructure Risk (0.05)
+    ct: number;
+    bt: number;
+    pr: number;
+    ob: number;
+    ir: number;
   };
 };
 
@@ -136,16 +135,11 @@ export type FraudWorkflow = {
 };
 
 export type FraudCardData = {
-  // Identity
   sha256: string;
   package_name: string;
   app_name?: string;
   analysis_mode: string;
-
-  // Async job
   job_id?: string;
-
-  // Core risk
   family_classification: string;
   base_score: number;
   ai_confidence_multiplier: number;
@@ -153,30 +147,19 @@ export type FraudCardData = {
   risk_band: string;
   confidence: number;
   recommended_action: string;
-
-  // FRS breakdown (5-axis STEI)
   frs_breakdown?: FRSBreakdown;
-
-  // Threat scenario table
   threat_scenario_table?: ThreatScenarioRow[];
-
-  // Raw flags
   all_permissions: string[];
   hardcoded_urls_ips: string[];
   targets_indian_banks: boolean;
   has_accessibility_abuse: boolean;
   has_sms_read_write: boolean;
   has_system_alert_window: boolean;
-  // Obfuscation
   obfuscation_score?: number;
   has_reflection?: boolean;
-
-  // Threat intelligence
   threat_correlation?: ThreatCorrelation;
   dynamic_available: boolean;
   dynamic_analysis?: DynamicAnalysis;
-
-  // MobSF enrichment
   manifest_findings: ManifestFinding[];
   code_findings: CodeFinding[];
   dangerous_permissions: Array<{
@@ -194,14 +177,9 @@ export type FraudCardData = {
   hardcoded_secrets: string[];
   appsec_score?: string | number;
   mobsf_scan_hash?: string;
-
-  // Intelligence report
   intelligence_report?: IntelligenceReport;
-
-  // Fraud Workflow Reconstruction (from WorkflowReconstructor)
   fraud_workflow?: FraudWorkflow;
-
-  // Legacy compat
+  dynamic_result?: any;
   executive_view: {
     risk_badge: string;
     plain_english_narrative: string;
@@ -217,22 +195,12 @@ export type FraudCardData = {
   };
 };
 
-// ─── Auth Guard ───────────────────────────────────────────────────────────────
+// ─── Auth Guard & Wrappers ──────────────────────────────────────────────────
 
 function RouteFallback() {
-  return (
-    <div className="flex items-center justify-center py-24" role="status" aria-live="polite">
-      <div className="h-6 w-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-      <span className="sr-only">Loading view…</span>
-    </div>
-  );
+  return <LoadingSpinner label="Loading view…" />;
 }
 
-/**
- * Auth guard. Note this checks token PRESENCE only — the server is the actual
- * authority on validity, and every protected endpoint enforces it. This exists
- * to avoid rendering a view that is guaranteed to 401.
- */
 function RequireAuth({ children, label }: { children: React.ReactNode; label?: string }) {
   const token = getToken();
   if (!token) return <Navigate to="/login" replace />;
@@ -243,24 +211,44 @@ function RequireAuth({ children, label }: { children: React.ReactNode; label?: s
   );
 }
 
-// ─── App ──────────────────────────────────────────────────────────────────────
+function CaseDetailRoute() {
+  const { sha256 } = useParams<{ sha256: string }>();
+  const { analysisResult, loadCaseByHash, loading, error } = useAnalysis();
 
-function App() {
-  const [analysisResult, setAnalysisResult] = useState<FraudCardData | null>(null);
+  useEffect(() => {
+    if (sha256 && analysisResult?.sha256 !== sha256) {
+      loadCaseByHash(sha256);
+    }
+  }, [sha256, analysisResult, loadCaseByHash]);
+
+  if (loading) return <LoadingSpinner label={`Restoring case ${sha256?.slice(0, 12)}…`} />;
+  if (error) return <ErrorState title="Case Restore Failed" message={error} />;
+  if (!analysisResult) return <Navigate to="/history" replace />;
+
+  return <FraudCard data={analysisResult} />;
+}
+
+function ActiveCaseRoute({ component: Component }: { component: React.ComponentType<{ data: FraudCardData | null }> }) {
+  const { analysisResult } = useAnalysis();
+  return <Component data={analysisResult} />;
+}
+
+// ─── App Structure ──────────────────────────────────────────────────────────
+
+function AppContent() {
   const navigate = useNavigate();
   const user = getUser();
   const isAuthed = !!getToken();
-
-  const hasIntel = useMemo(() => analysisResult?.threat_correlation?.available, [analysisResult]);
+  const { setAnalysisResult, clearAnalysis } = useAnalysis();
 
   const handleLogout = useCallback(() => {
     clearToken();
-    setAnalysisResult(null);
+    clearAnalysis();
     navigate('/login');
-  }, [navigate]);
+  }, [navigate, clearAnalysis]);
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-100">
+    <div className="min-h-screen flex flex-col bg-slate-100">
       <nav className="bg-blue-900 text-white shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
@@ -268,12 +256,19 @@ function App() {
               <Shield className="h-8 w-8 text-blue-400" />
               <div>
                 <span className="font-bold text-xl tracking-wider">SUDARSHAN</span>
-                <span className="ml-2 text-xs text-blue-400 font-mono hidden sm:inline">v2.1 ENTERPRISE</span>
+                <span className="ml-2 text-xs text-blue-400 font-mono hidden sm:inline">ENTERPRISE SOC</span>
               </div>
             </div>
+
             <div className="flex items-center space-x-1">
-              {isAuthed && analysisResult && (
+              {isAuthed && (
                 <>
+                  <Link
+                    to="/"
+                    className="flex items-center px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-800 transition-colors"
+                  >
+                    Upload
+                  </Link>
                   <Link
                     to="/fraud-card"
                     className="flex items-center px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-800 transition-colors"
@@ -302,25 +297,21 @@ function App() {
                   >
                     <Globe className="h-4 w-4 mr-1.5" />
                     <span className="hidden sm:inline">Threat Intel</span>
-                    {hasIntel && (
-                      <span className="ml-1.5 w-2 h-2 rounded-full bg-red-400 animate-pulse" />
-                    )}
+                  </Link>
+                  <Link
+                    to="/history"
+                    className="flex items-center px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-800 transition-colors"
+                  >
+                    <Database className="h-4 w-4 mr-1.5" />
+                    <span className="hidden sm:inline">History</span>
                   </Link>
                 </>
               )}
-              {isAuthed && (
-                <Link
-                  to="/history"
-                  className="flex items-center px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-800 transition-colors"
-                >
-                  <Database className="h-4 w-4 mr-1.5" />
-                  <span className="hidden sm:inline">History</span>
-                </Link>
-              )}
+
               {isAuthed ? (
                 <button
                   onClick={handleLogout}
-                  className="flex items-center px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-800 transition-colors text-blue-300"
+                  className="flex items-center px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-800 transition-colors text-blue-300 ml-2"
                   title={`Logged in as ${user?.username} (${user?.role})`}
                 >
                   <LogOut className="h-4 w-4 mr-1.5" />
@@ -350,19 +341,22 @@ function App() {
             <RequireAuth label="Upload"><Upload onAnalysisComplete={setAnalysisResult} /></RequireAuth>
           } />
           <Route path="/fraud-card" element={
-            <RequireAuth label="Fraud Card"><FraudCard data={analysisResult} /></RequireAuth>
+            <RequireAuth label="Fraud Card"><ActiveCaseRoute component={FraudCard} /></RequireAuth>
           } />
           <Route path="/technical" element={
-            <RequireAuth label="Technical View"><TechnicalView data={analysisResult} /></RequireAuth>
+            <RequireAuth label="Technical View"><ActiveCaseRoute component={TechnicalView} /></RequireAuth>
           } />
           <Route path="/threat-intel" element={
-            <RequireAuth label="Threat Intelligence"><ThreatIntelView data={analysisResult} /></RequireAuth>
+            <RequireAuth label="Threat Intelligence"><ActiveCaseRoute component={ThreatIntelView} /></RequireAuth>
           } />
           <Route path="/chat" element={
-            <RequireAuth label="Investigation Chat"><InvestigationChat data={analysisResult} /></RequireAuth>
+            <RequireAuth label="Investigation Chat"><ActiveCaseRoute component={InvestigationChat} /></RequireAuth>
           } />
           <Route path="/history" element={
             <RequireAuth label="Case History"><History /></RequireAuth>
+          } />
+          <Route path="/history/:sha256" element={
+            <RequireAuth label="Case Detail"><CaseDetailRoute /></RequireAuth>
           } />
         </Routes>
       </main>
@@ -370,4 +364,10 @@ function App() {
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <AnalysisProvider>
+      <AppContent />
+    </AnalysisProvider>
+  );
+}

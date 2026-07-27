@@ -77,7 +77,7 @@ Designed for reverse engineers and SOC tier-2/3 analysts:
 
 ## 6. AI Investigation Assistant Chat (`InvestigationChat.tsx`)
 
-An interactive chat interface backed by `POST /api/v1/chat/investigation`:
+An interactive chat interface backed by `POST /api/v1/chat` (non-streaming) and `POST /api/v1/chat/stream` (SSE, used by the UI):
 - Uses the **Gemini RAG Vector Index** (`gemini_rag.py`) to query specific details about the active sample.
 - Grounded strictly in observable case findings with zero hallucination.
 

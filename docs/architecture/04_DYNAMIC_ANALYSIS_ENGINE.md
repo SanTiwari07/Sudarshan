@@ -31,7 +31,7 @@ Test Suite:          backend/tests/test_analysis_client.py, backend/tests/test_r
 
 ## 1. Executive Overview
 
-The **Dynamic Analysis Engine (DAE)** executes suspicious Android applications inside an isolated Android Virtual Device (Android 13, x86_64, 16KB page size). Combining Frida 17 binary instrumentation, `mitmproxy` transparent HTTPS decryption, an autonomous LLM UI explorer (`AgenticExplorer`), and a causal workflow reconstructor, the DAE captures real-time behavioral evidence of mobile banking fraud.
+The **Dynamic Analysis Engine (DAE)** executes suspicious Android applications inside an isolated Android Virtual Device (x86_64, 16 KB page size; verified against Android 17 / `sdk_gphone16k_x86_64`). Combining Frida 17 binary instrumentation, `mitmproxy` transparent HTTPS decryption, an autonomous LLM UI explorer (`AgenticExplorer`), and a causal workflow reconstructor, the DAE captures real-time behavioral evidence of mobile banking fraud.
 
 ---
 
@@ -56,6 +56,31 @@ graph TD
     STORE --> WORKFLOW[Workflow Reconstructor]
     STORE --> BFCI[BFCI v2 Scorer]
 ```
+
+---
+
+## 2a. SELinux Preflight (required)
+
+Before `frida-server` is checked, `run_frida_analysis` performs:
+
+```
+adb -s <serial> root
+adb -s <serial> shell getenforce      # if "Enforcing":
+adb -s <serial> shell setenforce 0
+```
+
+**Why this is not optional.** SELinux is Enforcing by default on Android 15+ and denies the
+`ptrace` that Frida injection requires, *even for uid 0*. Without this step every attach fails
+with `PermissionDeniedError: unable to access process with pid <n>` while `frida-server` reports
+healthy — a failure mode that previously produced the misleading error
+"Frida attach failed. Ensure frida-server is running on emulator."
+
+The AVD is a disposable analysis device and the command is scoped to `-s <device_serial>`; it
+never touches the host. It does materially weaken isolation on the machine executing live
+malware — run the emulator on a dedicated host and wipe it between samples.
+
+Failures now propagate the real cause (SELinux state, and whether the process was running) via
+`FridaSession.last_error` instead of a fixed string.
 
 ---
 

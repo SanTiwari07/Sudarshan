@@ -29,8 +29,8 @@ The **AI Report Generation Engine** exports structured case findings into standa
 
 Case reports are cached in memory and SQLite upon analysis completion:
 
-- `GET /api/v1/report/export/json/{sha256}`: Returns STIX 2.1 JSON bundle.
-- `GET /api/v1/report/export/csv/{sha256}`: Returns CSV IOC feed (`indicator,type,severity,source`).
+- `GET /api/v1/report/stix/{sha256}`: Returns STIX 2.1 JSON bundle. Requires Bearer auth.
+- `GET /api/v1/report/iocs/{sha256}`: Returns CSV IOC feed (`type,indicator,reputation,source,context`). Requires Bearer auth.
 
 ---
 

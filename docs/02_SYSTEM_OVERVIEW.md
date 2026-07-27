@@ -383,7 +383,7 @@ OLLAMA_HOST=http://localhost:11434
 | **SQLite Case Store** | **Implemented** | Asynchronous persistent storage implemented in `backend/app/db/database.py`. |
 | **Async Queue Pool** | **Implemented** | In-memory asyncio queue worker pool running in background tasks. |
 | **Static Analysis Engine** | **Implemented** | MobSF API client with Androguard fallback active in production pipeline. |
-| **Dynamic Frida Engine** | **Partial** | Frida hooks attach but 0 events fire due to Frida 17 / ART inlining on AVD; BFCI computes 0.0. |
+| **Dynamic Frida Engine** | **Partial** | Attaches and executes hooks (verified: `SharedPreferencesImpl.getString` fired). Roughly 4 of 8 corpus trojans instrument successfully; BFCI components other than `activity` still read 0.0 — see Current Limitations. |
 | **Deterministic Risk Engine** | **Implemented** | 5-Axis STEI, BFCI, and FRS formulas implemented and verified by unit tests. |
 | **AI RAG Investigation Assistant**| **Implemented** | Gemini 2.5 Flash RAG graph active with streaming SSE response support. |
 
@@ -392,7 +392,23 @@ OLLAMA_HOST=http://localhost:11434
 ## Current Limitations
 
 1. **Single-Worker In-Memory Queue**: The job queue operates within the FastAPI process memory space (`analysis_queue.py`), preventing multi-node distributed queue processing.
-2. **Dynamic Instrumentation Silence**: Frida 17 hook installation produces no events on the x86_64 16KB page-size AVD image (`google_apis_ps16k`).
+2. **Dynamic Instrumentation — partial coverage.** The earlier diagnosis in this document
+   ("Frida 17 / ART inlining") was **incorrect** and has been corrected. The actual cause of
+   universal attach failure was **SELinux in Enforcing mode** denying the `ptrace` that Frida
+   injection requires, even for uid 0 — every attach raised
+   `PermissionDeniedError: unable to access process with pid <n>` while `frida-server` was
+   running normally. `run_frida_analysis` now performs an `adb root` + `getenforce` +
+   `setenforce 0` preflight before checking `frida-server`.
+
+   Remaining, separately verified causes of low behavioural signal:
+
+   | Cause | Effect | Status |
+   |---|---|---|
+   | `permission_orchestrator.py` writes a hardcoded `{package}/.AccessibilityService` class; real malware obfuscates it | Accessibility service never activates, so the 0.35-weight BFCI component is always 0.0 | **Open** |
+   | Cerberus and Drinik declare no launcher activity; their main-activity class lives in the packed payload | Nothing can start them | **Open** — sample property |
+   | Teabot ships a deliberately corrupt manifest | `INSTALL_PARSE_FAILED_UNEXPECTED_EXCEPTION` | **Open** — sample property |
+   | SMS hooks called `.length()` on an unboxed Java `String` | Hook threw before `emit()`; the 0.25-weight SMS component could never score | **Fixed**, not yet observed firing |
+   | `Activity.onResume` emitted into the scored `banking` category for any app | Three screen transitions produced `banking: 100` for benign apps | **Fixed** — verified 50-79 to 0.0 |
 
 ---
 

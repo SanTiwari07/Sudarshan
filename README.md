@@ -304,7 +304,7 @@ Sudarshan BOI/
 │   │   ├── routes/                  # FastAPI endpoints (upload, report, cases, auth)
 │   │   ├── services/                # MobSF REST client & Threat Correlator (VT/OTX)
 │   │   └── workers/                 # Async job queue dispatcher & worker pool
-│   ├── tests/                       # 299 automated unit & integration tests
+│   ├── tests/                       # 320 automated unit & integration tests
 │   ├── Dockerfile                   # FastAPI backend container configuration
 │   └── requirements.txt             # Python dependencies
 ├── frontend/
@@ -356,9 +356,16 @@ The FastAPI backend exposes versioned REST API endpoints (`/api/v1`):
 | `GET` | `/api/v1/status/{job_id}` | Bearer Token | Poll status of asynchronous analysis job. |
 | `GET` | `/api/v1/sandbox/status` | Bearer Token | Check ADB connectivity and Frida sandbox readiness. |
 | `GET` | `/api/v1/cases` | Bearer Token | Retrieve paginated historical analysis cases from SQLite. |
-| `GET` | `/api/v1/report/export/json/{sha256}` | Bearer Token | Export complete STIX 2.1 structured JSON report. |
-| `GET` | `/api/v1/report/export/csv/{sha256}` | Bearer Token | Export extracted Indicators of Compromise (IOCs) as CSV. |
-| `POST` | `/api/v1/chat/investigation` | Bearer Token | RAG-grounded AI assistant query endpoint. |
+| `GET` | `/api/v1/report/stix/{sha256}` | Bearer Token | Export complete STIX 2.1 structured JSON report. |
+| `GET` | `/api/v1/report/iocs/{sha256}` | Bearer Token | Export extracted Indicators of Compromise (IOCs) as CSV. |
+| `POST` | `/api/v1/auth/register` | None | Self-registration. Always yields the `analyst` role — the caller cannot request a role. |
+| `GET` | `/api/v1/cases/{sha256}` | Bearer Token | Retrieve a single stored case by hash. |
+| `GET` | `/api/v1/auth/me` | Bearer Token | Return the authenticated user's profile. |
+| `PATCH` | `/api/v1/auth/users/{user_id}/role` | Bearer Token (admin) | Grant or revoke a role. The only way to create a `soc_lead` or `admin`. |
+| `GET` | `/api/v1/cases/{sha256}/notes` | Bearer Token | List analyst notes attached to a case. |
+| `POST` | `/api/v1/cases/{sha256}/notes` | Bearer Token | Attach an analyst note to a case. |
+| `POST` | `/api/v1/chat` | Bearer Token | RAG-grounded AI assistant query (non-streaming). |
+| `POST` | `/api/v1/chat/stream` | Bearer Token | Same, as an SSE stream. This is what the dashboard uses. |
 
 ---
 

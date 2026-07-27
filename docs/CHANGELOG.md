@@ -5,6 +5,65 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2026-07-27 (later revision)
+
+### Fixed
+- **Frida SMS/OTP hooks had never fired.** `banking_trojan.js` called `.length()` on a
+  `java.lang.String`, which frida-java-bridge unboxes to a JS primitive, so the hook threw before
+  `emit()`. The 0.25-weight SMS component could not score on any sample. Fixed at three sites in
+  both the source and the compiled bundle. (`AccessibilityNodeInfo.getText` legitimately is a
+  `CharSequence` and was left unchanged.)
+- **`Activity.onResume` inflated the banking score for every app.** It emitted into the scored
+  `banking` category (cap 3), so three screen transitions produced `banking: 100` for a benign app.
+  Since UI exploration navigates screens, this fired on 100% of runs. Moved to an unscored
+  `activity` category; verified 50-79 to 0.0.
+- **Total hook-initialisation failure was invisible.** `_on_message` had no branch for the agent's
+  `{type:'error'}` payload, so a run where every hook died reported `available: true`,
+  `bfci: 0.0`, `hook_errors: []` — indistinguishable from a dormant sample. Both the
+  initialisation and runtime error envelopes are now recorded in `hook_errors`.
+- **`ui_explorer.py` referenced `self.model`, which is never assigned** (`self.client` is the real
+  attribute), so the fallback explorer raised `AttributeError` on every iteration and the OCR path
+  was unreachable.
+- **`frida_sandbox.py` used `logger` 44 lines before defining it**, turning every optional-import
+  fallback into a `NameError` rather than graceful degradation.
+- **Delegated analyses fed the LLM the wrong object.** `upload.py` passed `frs_breakdown` where
+  `_build_evidence_dict` expects `final_risk_score` / `risk_band` / `confidence` / `evidence`, so
+  every narrative was generated from `score=0, band="Unknown"` and contradicted the verdict shown
+  beside it.
+- **`analysis-engine/Dockerfile` was missing `unzip`**, which the JADX install step invokes. The
+  image build failed with exit code 127 and no containers started.
+
+### Added
+- **SELinux preflight in `run_frida_analysis`** (`adb root` + `getenforce` + `setenforce 0`),
+  executed before the `frida-server` check. This took dynamic instrumentation from 0 of 8 corpus
+  trojans to 4 of 8.
+- **`GEMINI_API_KEY`, `GEMINI_MODEL` and `SUDARSHAN_EXPLORER_MODE` on the analysis-engine service.**
+  Without them `ui_explorer` and the agentic planner imported successfully but disabled themselves,
+  and `SUDARSHAN_EXPLORER_MODE=ai` silently degraded to `monkey`.
+- **`env_file: .env`** on backend and analysis-engine. Compose interpolates `${VAR}` into the YAML
+  but does not inject `.env` into containers, so configured values never reached the services.
+
+### Changed
+- **Failure reporting no longer names the wrong component.** Two call sites asserted a fixed
+  "Ensure frida-server is running on emulator" string, and the outer wrapper discarded the
+  session's real exception to substitute it. Failures now propagate the actual cause via
+  `FridaSession.last_error`, including SELinux state and whether the process was running.
+
+### Documentation
+- Corrected the dynamic-analysis root cause across `02_SYSTEM_OVERVIEW.md`,
+  `04_DYNAMIC_ANALYSIS_ENGINE.md` and `DAE_CURRENT_STATE.md`. The previous diagnosis
+  ("Frida 17 / ART inlining") was wrong; `Java.deoptimizeEverything()` was working.
+- `DAE_CURRENT_STATE.md`: withdrew the "all silent failures fully resolved" claim, corrected the
+  test count from 299 to **320**, and added a Part 3 enumerating five open defects.
+- Corrected phantom endpoints: `/api/v1/chat/investigation` to `/api/v1/chat` +
+  `/api/v1/chat/stream`; `/api/v1/report/export/json/{sha256}` to `/api/v1/report/stix/{sha256}`;
+  `/api/v1/report/export/csv/{sha256}` to `/api/v1/report/iocs/{sha256}`.
+- Documented four previously undocumented endpoints: `GET /api/v1/auth/me`,
+  `PATCH /api/v1/auth/users/{user_id}/role`, `GET`/`POST /api/v1/cases/{sha256}/notes`.
+- Corrected the AVD Android version from 13 to 17 (`sdk_gphone16k_x86_64`).
+
+---
+
 ## [2.3.0-STABLE] — 2026-07-27
 ### Documentation
 - **Complete Portal Zero-Drift Audit**: Verified and updated all 24 markdown documentation files in `/docs/` and root `README.md`/`CHANGELOG.md` to achieve 100% codebase alignment.

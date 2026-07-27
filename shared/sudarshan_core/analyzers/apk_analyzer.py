@@ -203,6 +203,21 @@ def analyze_apk(apk_path: str) -> AndroguardOutput:
     a, d, dx = AnalyzeAPK(apk_path)
 
     package_name = a.get_package()
+    if not package_name or package_name in ("Failed", "Unknown", "None"):
+        # Fallback to reading AndroidManifest.xml from ZIP using regex
+        try:
+            with zipfile.ZipFile(apk_path) as z:
+                if "AndroidManifest.xml" in z.namelist():
+                    raw = z.read("AndroidManifest.xml")
+                    matches = re.findall(rb'[a-zA-Z][a-zA-Z0-9_]*\.[a-zA-Z0-9_.]+', raw)
+                    for match in matches:
+                        decoded = match.decode('ascii', errors='ignore')
+                        if len(decoded) > 5 and "." in decoded and not decoded.startswith("android.") and not decoded.startswith("schemas.") and decoded not in ("Failed", "Unknown", "None"):
+                            package_name = decoded
+                            break
+        except Exception:
+            pass
+
     permissions  = a.get_permissions()
 
     flags = StaticAnalysisFlags()

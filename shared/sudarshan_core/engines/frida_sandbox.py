@@ -306,15 +306,36 @@ def _extract_apk_info(apk_path: str) -> Tuple[Optional[str], Optional[str]]:
     try:
         from androguard.misc import AnalyzeAPK
         a, _, _ = AnalyzeAPK(apk_path)
-        package_name = a.get_package()
-        main_activity = a.get_main_activity()
-        if package_name:
+        pkg = a.get_package()
+        act = a.get_main_activity()
+        if pkg and pkg not in ("Failed", "Unknown", "None"):
+            package_name = pkg
+            main_activity = act
             logger.debug(f"[Frida] Extracted via androguard: {package_name} / {main_activity}")
             return package_name, main_activity
     except ImportError:
         logger.warning("[Frida] androguard not installed — install it: pip install androguard")
     except Exception as e:
         logger.warning(f"[Frida] androguard failed to parse APK: {e}")
+
+    # ── Strategy 3: ZipFile binary AndroidManifest regex inspection ─────────
+    try:
+        import zipfile
+        with zipfile.ZipFile(apk_path) as z:
+            if "AndroidManifest.xml" in z.namelist():
+                raw = z.read("AndroidManifest.xml")
+                matches = re.findall(rb'[a-zA-Z][a-zA-Z0-9_]*\.[a-zA-Z0-9_.]+', raw)
+                for match in matches:
+                    decoded = match.decode('ascii', errors='ignore')
+                    if len(decoded) > 5 and "." in decoded and not decoded.startswith("android.") and not decoded.startswith("schemas.") and decoded not in ("Failed", "Unknown", "None"):
+                        package_name = decoded
+                        logger.debug(f"[Frida] Extracted via zip manifest regex: {package_name}")
+                        return package_name, main_activity
+    except Exception:
+        pass
+
+    if package_name in ("Failed", "Unknown", "None"):
+        package_name = None
 
     return package_name, main_activity
 
@@ -999,12 +1020,12 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
     # ── Step 2: Extract package name ───────────────────────────────────────────
     loop = asyncio.get_event_loop()
     main_activity = None
-    if not package_name:
+    if not package_name or package_name in ("Failed", "Unknown", "None"):
         package_name, main_activity = await loop.run_in_executor(None, _extract_apk_info, apk_path)
         
-    if not package_name:
-        logger.warning("[Frida] Could not extract package name from APK")
-        base_result["error"] = "Could not extract package name from APK. Ensure aapt/aapt2 is in PATH."
+    if not package_name or package_name in ("Failed", "Unknown", "None"):
+        logger.warning("[Frida] Could not extract valid package name from APK")
+        base_result["error"] = "Could not extract valid package name from APK."
         return base_result
 
     logger.info(f"[Frida] Target package: {package_name} (Main Activity: {main_activity})")

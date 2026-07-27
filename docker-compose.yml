@@ -28,6 +28,7 @@ services:
     ports:
       - "8000:8000"
     environment:
+      - PYTHONPATH=/app:/opt/sudarshan-core
       - OLLAMA_HOST=http://host.docker.internal:11434
       - ANALYSIS_ENGINE_URL=http://analysis-engine:8001
       - MOBSF_HOST=http://mobsf:8000
@@ -60,11 +61,13 @@ services:
     container_name: sudarshan-analysis-engine
     env_file:
       - .env
+      - analysis-engine/.env
     # NOT published. This service has no authentication of its own; the backend
     # reaches it as http://analysis-engine:8001 on the internal compose network.
     expose:
       - "8001"
     environment:
+      - PYTHONPATH=/app:/opt/sudarshan-core
       - ADB_HOST=host.docker.internal
       - ADB_PORT=5555
       - MOBSF_HOST=http://mobsf:8000
@@ -77,7 +80,7 @@ services:
       - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
       - SUDARSHAN_EXPLORER_MODE=${SUDARSHAN_EXPLORER_MODE:-ai}
       - FRIDA_ANALYSIS_DURATION=30
-      - ANALYSIS_TIMEOUT_SECONDS=300
+      - ANALYSIS_TIMEOUT_SECONDS=600
       - UPLOADS_DIR=/app/uploads
       - MITMPROXY_HAR_PATH=/mitmproxy_har/dump.har
       - PYTHONDONTWRITEBYTECODE=1
@@ -106,6 +109,7 @@ services:
   mitmproxy:
     image: mitmproxy/mitmproxy:latest
     container_name: sudarshan-mitmproxy
+    user: root
     # Publish only if an external AVD must reach the proxy. Prefer binding to
     # loopback so it is not exposed on the LAN.
     ports:

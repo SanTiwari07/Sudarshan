@@ -1,4 +1,4 @@
-﻿# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 #  Sudarshan Enterprise — One-Command Startup Script
 #  Usage: .\start.ps1
 # ─────────────────────────────────────────────────────────────────────────────
@@ -72,8 +72,24 @@ if ($fridaCheck) {
     Write-Host "        Make sure the binary exists at /data/local/tmp/frida-server on the emulator." -ForegroundColor DarkYellow
 }
 
-# ── Step 5: Launch Docker Compose ────────────────────────────────────────────
-Write-Host "[5/5] Starting Docker stack (backend + frontend + MobSF)..." -ForegroundColor Yellow
+# ── Step 5: Check & Ensure .env configuration ───────────────────────────
+if (-not (Test-Path ".env")) {
+    if (Test-Path ".env.example") {
+        Copy-Item ".env.example" ".env"
+        Write-Host "      Created .env from .env.example" -ForegroundColor Green
+    }
+}
+if (Test-Path ".env") {
+    $envContent = Get-Content ".env" -Raw
+    if ($envContent -notmatch "JWT_SECRET_KEY=\S+") {
+        $secretKey = [System.Guid]::NewGuid().ToString("N") + [System.Guid]::NewGuid().ToString("N")
+        Add-Content -Path ".env" -Value "`nJWT_SECRET_KEY=$secretKey"
+        Write-Host "      Generated JWT_SECRET_KEY in .env" -ForegroundColor Green
+    }
+}
+
+# ── Step 6: Launch Docker Compose ────────────────────────────────────────────
+Write-Host "[6/6] Starting Docker stack (backend + frontend + MobSF)..." -ForegroundColor Yellow
 Write-Host ""
 Write-Host "  Frontend:  http://localhost:5173" -ForegroundColor Cyan
 Write-Host "  Backend:   http://localhost:8000" -ForegroundColor Cyan

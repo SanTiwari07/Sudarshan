@@ -39,11 +39,8 @@ logger = logging.getLogger(__name__)
 
 # ─── Configuration ───────────────────────────────────────────────────────────
 
-MOBSF_HOST = os.getenv("MOBSF_HOST", "http://mobsf:8000")
-MOBSF_API_KEY = os.getenv("MOBSF_API_KEY", "sudarshan_mobsf_api_key_2026")  # MobSF REST API key
-
-# Default MobSF API key is shown on MobSF dashboard at http://localhost:8008/api_docs
-# Also set via env: MOBSF_API_KEY=your_key
+MOBSF_HOST = (os.getenv("MOBSF_HOST") or "http://mobsf:8000").strip()
+MOBSF_API_KEY = (os.getenv("MOBSF_API_KEY") or "sudarshan_mobsf_api_key_2026").strip()
 
 _HEADERS = {"Authorization": MOBSF_API_KEY}
 
@@ -103,9 +100,9 @@ def _empty_report() -> Dict[str, Any]:
 class MobSFClient:
     """REST client for MobSF Docker instance."""
 
-    def __init__(self, host: str = MOBSF_HOST, api_key: str = MOBSF_API_KEY):
-        self.host = host.rstrip("/")
-        self.api_key = api_key
+    def __init__(self, host: Optional[str] = None, api_key: Optional[str] = None):
+        self.host = (host or os.getenv("MOBSF_HOST") or "http://mobsf:8000").rstrip("/")
+        self.api_key = (api_key or os.getenv("MOBSF_API_KEY") or "sudarshan_mobsf_api_key_2026").strip()
         self.headers = {"Authorization": self.api_key} if self.api_key else {}
 
     async def is_available(self) -> bool:

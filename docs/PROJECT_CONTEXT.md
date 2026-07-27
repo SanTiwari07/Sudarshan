@@ -450,11 +450,10 @@ one silently broke the system at some point.
 
 ### Ports
 
-| Service | Port | Note |
-|---|---|---|
-| Backend | 8000 | |
-| Frontend | 5173 | |
-| MobSF | **8001** | `README.md` and `start.ps1` documented 8008 — wrong |
+| Backend | 8000 | Gateway Orchestrator |
+| Frontend | 5173 | React Dashboard |
+| MobSF | 8008 | Mobile Security Framework Static Engine |
+| Analysis Engine | 8001 | Microservice (Internal) |
 
 A stale WSL relay entry can make `localhost:5173` accept the TCP connection then hang forever
 while `127.0.0.1:5173` works. Fix: `wsl --shutdown`.

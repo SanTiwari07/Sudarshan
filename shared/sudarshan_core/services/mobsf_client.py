@@ -107,7 +107,7 @@ class MobSFClient:
 
     async def is_available(self) -> bool:
         """Quick health check — returns True if MobSF responds. Includes retries."""
-        for attempt in range(3):
+        for attempt in range(5):
             try:
                 async with httpx.AsyncClient(timeout=5.0) as client:
                     r = await client.get(f"{self.host}/api_docs", headers=self.headers)
@@ -117,8 +117,8 @@ class MobSFClient:
             except Exception as e:
                 logger.warning(f"MobSF health check attempt {attempt + 1} failed: {e}")
             
-            if attempt < 2:
-                await asyncio.sleep(2)
+            if attempt < 4:
+                await asyncio.sleep(3)
         
         logger.error("MobSF is completely unavailable after retries.")
         return False
@@ -294,16 +294,34 @@ class MobSFClient:
 
         # ── Manifest Analysis (security findings) ───────────────────────────────
         manifest_analysis = raw.get("manifest_analysis", {})
+        findings = []
         if isinstance(manifest_analysis, dict):
-            findings = []
-            for severity in ("high", "warning", "info"):
-                for item in manifest_analysis.get(severity, []):
-                    findings.append({
-                        "severity": severity,
-                        "title": item.get("title", ""),
-                        "description": item.get("description", item.get("desc", "")),
-                        "component": item.get("component", "")
-                    })
+            mf_list = manifest_analysis.get("manifest_findings", [])
+            if isinstance(mf_list, list) and mf_list:
+                for item in mf_list:
+                    if isinstance(item, dict):
+                        comp = item.get("component", "")
+                        if isinstance(comp, list):
+                            comp = ", ".join(str(c) for c in comp)
+                        findings.append({
+                            "severity": item.get("severity", "info"),
+                            "title": item.get("title", item.get("name", "")),
+                            "description": item.get("description", item.get("desc", "")),
+                            "component": str(comp)
+                        })
+            else:
+                for severity in ("high", "warning", "info"):
+                    for item in manifest_analysis.get(severity, []):
+                        if isinstance(item, dict):
+                            comp = item.get("component", "")
+                            if isinstance(comp, list):
+                                comp = ", ".join(str(c) for c in comp)
+                            findings.append({
+                                "severity": severity,
+                                "title": item.get("title", ""),
+                                "description": item.get("description", item.get("desc", "")),
+                                "component": str(comp)
+                            })
             report["manifest_analysis"] = findings
         elif isinstance(manifest_analysis, list):
             report["manifest_analysis"] = manifest_analysis
@@ -315,28 +333,54 @@ class MobSFClient:
 
         # ── Code Analysis (security findings from source) ───────────────────────
         code_analysis = raw.get("code_analysis", {})
+        code_findings = []
         if isinstance(code_analysis, dict):
-            code_findings = []
-            for severity in ("high", "warning", "info", "secure"):
-                section = code_analysis.get(severity, {})
-                if isinstance(section, dict):
-                    for title, detail in section.items():
-                        if isinstance(detail, dict):
-                            code_findings.append({
-                                "severity": severity,
-                                "title": title,
-                                "description": detail.get("metadata", {}).get("description", ""),
-                                "files": list(detail.get("files", {}).keys())[:3]
-                            })
-            report["code_analysis"] = {"findings": code_findings}
+            findings_dict = code_analysis.get("findings", {})
+            if isinstance(findings_dict, dict) and findings_dict:
+                for rule_id, detail in findings_dict.items():
+                    if isinstance(detail, dict):
+                        meta = detail.get("metadata", {})
+                        files_dict = detail.get("files", {})
+                        file_list = list(files_dict.keys())[:5] if isinstance(files_dict, dict) else []
+                        code_findings.append({
+                            "rule_id": rule_id,
+                            "severity": meta.get("severity", "info"),
+                            "title": meta.get("description", rule_id),
+                            "description": meta.get("description", ""),
+                            "masvs": meta.get("masvs", ""),
+                            "cwe": meta.get("cwe", ""),
+                            "files": file_list
+                        })
+            elif isinstance(findings_dict, list):
+                code_findings = findings_dict
+            else:
+                for severity in ("high", "warning", "info", "secure"):
+                    section = code_analysis.get(severity, {})
+                    if isinstance(section, dict):
+                        for title, detail in section.items():
+                            if isinstance(detail, dict):
+                                code_findings.append({
+                                    "severity": severity,
+                                    "title": title,
+                                    "description": detail.get("metadata", {}).get("description", ""),
+                                    "files": list(detail.get("files", {}).keys())[:3]
+                                })
+        report["code_analysis"] = {"findings": code_findings}
 
         # ── Network Security ────────────────────────────────────────────────────
         report["network_security"] = raw.get("network_security", {})
 
         # ── AppSec Score ────────────────────────────────────────────────────────
-        report["appsec_score"] = raw.get("appsec_score")
-        if scorecard:
-            report["security_score"] = scorecard.get("security_score")
+        sec_score = None
+        if isinstance(raw.get("appsec"), dict):
+            sec_score = raw["appsec"].get("security_score")
+        if sec_score is None and scorecard:
+            sec_score = scorecard.get("security_score")
+        if sec_score is None:
+            sec_score = raw.get("security_score") or raw.get("appsec_score")
+
+        report["appsec_score"] = sec_score
+        report["security_score"] = sec_score
 
         logger.info(
             f"MobSF report parsed: pkg={report['package_name']} "

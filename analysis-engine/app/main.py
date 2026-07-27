@@ -33,8 +33,33 @@ from sudarshan_core.models.manifest import build_manifest
 from sudarshan_core.services.mobsf_client import MobSFAnalysisError, MobSFClient, MobSFNotAvailable
 from sudarshan_core.services.threat_correlator import correlate
 
-logging.basicConfig(level=logging.INFO)
+# ─── Structured Logging Configuration ───────────────────────────────────────
+# CRITICAL: Androguard at DEBUG level generates tens of thousands of log records
+# per analysis (one per basic block per method per DEX). Each log record holds
+# references to the call-site arguments, which keeps the entire DEX parse tree
+# in memory indefinitely. On a 3.5 MB APK this alone can consume 2-3 GB.
+# The container is capped at 4 GB; anything larger triggers Docker's OOM killer
+# (exit 137) and takes the backend with it (dependency health-check fails).
+#
+# Androguard must run at WARNING in production. All Sudarshan subsystems use
+# INFO so their operational logs are visible without the DEX-parser noise.
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+)
+# Silence heavy third-party loggers that produce noise without value
+for _noisy in ("androguard", "androguard.core", "androguard.core.analysis",
+               "androguard.core.bytecodes", "androguard.core.analysis.analysis"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
+
 logger = logging.getLogger("analysis-engine")
+
+# Per-subsystem structured loggers used throughout this module
+_log_mobsf   = logging.getLogger("[MOBSF]")
+_log_frida   = logging.getLogger("[FRIDA]")
+_log_adb     = logging.getLogger("[ADB]")
+_log_analysis = logging.getLogger("[ANALYSIS]")
+_log_risk    = logging.getLogger("[RISK]")
 
 app = FastAPI(
     title="Sudarshan APK Analysis Engine Microservice",

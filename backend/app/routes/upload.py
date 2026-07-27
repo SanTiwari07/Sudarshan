@@ -268,6 +268,18 @@ def _coerce_manifest_findings(raw: Any) -> list:
     return out
 
 
+def _coerce_dangerous_permissions(raw: Any) -> list:
+    """Ensure dangerous_permissions contains structured dicts for both engine and MobSF outputs."""
+    out = []
+    for item in raw or []:
+        if isinstance(item, str):
+            short = item.split(".")[-1]
+            out.append({"permission": item, "short": short, "status": "dangerous"})
+        elif isinstance(item, dict):
+            out.append(item)
+    return out
+
+
 async def _enrich_engine_result(
     engine_result: Dict[str, Any],
     sha256_hash: str,
@@ -298,6 +310,7 @@ async def _enrich_engine_result(
     }
     result["dangerous_apis_found_raw"] = flags_dict["dangerous_apis_found"]
     result["manifest_findings"] = _coerce_manifest_findings(result.get("manifest_findings"))
+    result["dangerous_perms"] = _coerce_dangerous_permissions(result.get("dangerous_perms"))
 
     # Family classification — the engine reports one, but only the gateway has
     # the rule set that also yields `matched_rule`.
@@ -773,7 +786,7 @@ def _build_response(result: Dict[str, Any], job_id: Optional[str] = None) -> Ana
         dynamic_available=result["dynamic_available"],
         manifest_findings=result["manifest_findings"],
         code_findings=result["code_findings"],
-        dangerous_permissions=result["dangerous_perms"],
+        dangerous_permissions=_coerce_dangerous_permissions(result.get("dangerous_perms")),
         activities=result["activities"],
         services=result["services_list"],
         receivers=result["receivers"],

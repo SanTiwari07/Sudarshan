@@ -8,7 +8,7 @@ The Sudarshan platform has been refactored into a **clean 3-container microservi
 graph TD
     User([User Analyst]) -->|HTTP Port 5173| Frontend[sudarshan-frontend<br/>React 18 SPA]
     Frontend -->|REST API Port 8000| Backend[sudarshan-backend<br/>FastAPI Orchestrator Gateway]
-    Backend -->|REST API Port 8001| Engine[sudarshan-analysis-engine<br/>Ubuntu 24.04 + OpenJDK 17 + Python 3.12<br/>APKTool 2.10.0 + JADX 1.5.1 + Frida 17.16.0]
+    Backend -->|REST API Port 8001| Engine[sudarshan-analysis-engine<br/>Ubuntu 24.04 + OpenJDK 17 + Python 3.12<br/>APKTool 2.10.0 + JADX 1.5.1 + Frida 17.16.4]
 
     Backend ---|Shared Volume /app/uploads| Engine
     Engine -->|Network ADB TCP Port 5555| HostAVD[Android Studio AVD Emulator<br/>Host Machine]
@@ -21,7 +21,7 @@ graph TD
 1. **`analysis-engine` Container**:
    - Base OS: **Ubuntu 24.04**
    - Java: OpenJDK 17
-   - Python: 3.12 with PyPI verified `frida==17.16.0` and `frida-tools`
+   - Python: 3.12 with PyPI verified `frida==17.16.4` and `frida-tools`
    - Static Tools: Pinned **APKTool v2.10.0** (`/usr/local/bin/apktool`) and **JADX CLI v1.5.1** (`/usr/local/bin/jadx`)
    - Network ADB: Auto-connects to Android Studio AVD via `host.docker.internal:5555` with an idempotent 10-attempt retry loop.
    - Resource Constraints: Hard limits (`mem_limit: 4g`, `cpus: 2.0`, `no-new-privileges:true`).

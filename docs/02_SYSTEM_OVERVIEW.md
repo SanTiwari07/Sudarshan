@@ -88,7 +88,7 @@ graph TB
         MS[MobSF Container<br/>Port 8008]
         AG[Androguard Analyzer<br/>shared/sudarshan_core/analyzers/apk_analyzer.py]
         FS[Frida Sandbox Controller<br/>shared/sudarshan_core/engines/frida_sandbox.py]
-        AVD[Android Emulator AVD<br/>frida-server 17.16.0]
+        AVD[Android Emulator AVD<br/>frida-server 17.16.4]
     end
 
     subgraph Tier 4: Intelligence & Risk Core

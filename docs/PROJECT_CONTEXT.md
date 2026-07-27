@@ -57,7 +57,7 @@ move the score. See §9.
 | Persistence | SQLite (`sudarshan.db`), aiosqlite, SQLAlchemy |
 | Auth | JWT Bearer, passlib/bcrypt |
 | Static analysis | Androguard, MobSF (Port 8008), APKTool 2.10.0, JADX 1.5.1 |
-| Dynamic analysis | Frida 17.16.0 + frida-tools, ADB (`host.docker.internal:5555`), Android emulator |
+| Dynamic analysis | Frida 17.16.4 + frida-tools, ADB (`host.docker.internal:5555`), Android emulator |
 | Network Proxy | mitmproxy sidecar (`127.0.0.1:8080:8080`), HAR ingest |
 | Signatures | YARA Python 4.5.4 |
 | Threat intel | VirusTotal, AlienVault OTX, AbuseIPDB (optional correlation) |

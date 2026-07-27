@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Test Suite Pathing**: Updated all test commands to `pytest backend/tests`.
 
 ### Added
-- **Containerized Analysis Engine Microservice** (`analysis-engine/`): Created dedicated Ubuntu 24.04 microservice container housing Java 17, Python 3.12, pinned APKTool v2.10.0 (`/usr/local/bin/apktool`), pinned JADX CLI v1.5.1 (`/usr/local/bin/jadx`), PyPI verified Frida 17.16.0, Androguard, and ADB.
+- **Containerized Analysis Engine Microservice** (`analysis-engine/`): Created dedicated Ubuntu 24.04 microservice container housing Java 17, Python 3.12, pinned APKTool v2.10.0 (`/usr/local/bin/apktool`), pinned JADX CLI v1.5.1 (`/usr/local/bin/jadx`), PyPI verified Frida 17.16.4, Androguard, and ADB.
 - **Analysis Engine REST API** (`analysis-engine/app/main.py`): Exposes REST endpoints on port `8001` (`POST /api/v1/analyze`, `POST /api/v1/analyze/async`, `GET /api/v1/status/{job_id}`, `GET /health`, `GET /status`).
 - **Network ADB Connection & Retry Loop** (`entrypoint.sh`): Implemented idempotent 10-attempt connection retry loop to Android Studio AVD via `host.docker.internal:5555` with lazy runtime reconnect logic in `frida_sandbox.py`.
 - **Zero-Copy Shared Volume Architecture**: Mounted `uploads` Docker volume shared between `backend` and `analysis-engine` containers for instant, zero-network-copy file access.

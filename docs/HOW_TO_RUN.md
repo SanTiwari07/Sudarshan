@@ -125,9 +125,9 @@ docker compose logs -f backend
    adb tcpip 5555
    adb connect 127.0.0.1:5555
    ```
-3. **Deploy frida-server 17.16.0**:
+3. **Deploy frida-server 17.16.4**:
    ```bash
-   adb push frida-server-17.16.0-android-x86_64/frida-server /data/local/tmp/frida-server
+   adb push frida-server-17.16.4-android-x86_64/frida-server /data/local/tmp/frida-server
    adb shell "chmod 755 /data/local/tmp/frida-server"
    adb shell "nohup /data/local/tmp/frida-server > /dev/null 2>&1 &"
    ```

@@ -11,6 +11,18 @@ import os
 import logging
 import secrets
 
+# ─── Structured Logging Configuration ────────────────────────────────────────
+# Androguard at DEBUG level produces tens of thousands of log records per
+# analysis, each holding DEX parse-tree references that inflate memory to 2-3 GB.
+# Must be WARNING in production to prevent OOM kills (exit 137).
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+)
+for _noisy in ("androguard", "androguard.core", "androguard.core.analysis",
+               "androguard.core.bytecodes", "androguard.core.analysis.analysis"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
 
 app = FastAPI(

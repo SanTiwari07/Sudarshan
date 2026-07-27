@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## [2.3.0-STABLE] — 2026-07-27
 
+### Frida 17.16.4 Project-Wide Migration & Standardization
+- **Full Frida Upgrade (17.16.0 → 17.16.4)**: Standardized Frida client, server, and tooling across the entire repository on Frida `17.16.4`.
+- **Binary Assets & Setup Scripts**: Downloaded and verified official `frida-server-17.16.4-android-x86_64` (SHA256: `7f7b69d5e33b0a3753bbe152369c7a00173636e92d9e4351e96495c3f885d6f9`) in `frida-server-17.16.4-android-x86_64/`. Updated `scripts/setup_dynamic_analysis.py` to push Frida 17.16.4 server binary. Purged obsolete `frida-server-17.16.0-android-x86_64` assets.
+- **Python Dependencies & Docker Images**: Confirmed `frida==17.16.4` and `frida-tools==14.10.4` pinning in `backend/requirements.txt` and `analysis-engine/requirements.txt`.
+- **Documentation Alignment**: Synchronized `README.md`, `docs/PROJECT_CONTEXT.md`, `docs/MIGRATION.md`, `docs/HOW_TO_RUN.md`, `docs/DOCUMENTATION_AUDIT_REPORT.md`, and `docs/02_SYSTEM_OVERVIEW.md`.
+
 ### Documentation Synchronization & Zero-Drift Audit
 - **Full Portal Audit (`/docs`)**: Verified and updated all 24 markdown documentation files to ensure 100% synchronization with the active codebase (`SanTiwari07/Sudarshan`).
 - **Microservices Topology Alignment**: Standardized port tables across all docs (`frontend:5173`, `backend:8000`, `analysis-engine:8001`, `mobsf:8008`, `mitmproxy:8080`).
@@ -89,7 +95,7 @@ All notable changes to this project are documented in this file.
 
 #### backend/README_FRIDA.md (Updated)
 - Added Quick Start section referencing `start.ps1`.
-- Updated `frida-server` version references from `17.15.3` to `17.16.1`.
+- Updated `frida-server` version references to `17.16.4`.
 - Updated startup command from `su -c` to `nohup` method with explanation.
 - Added Known Limitations section covering emulator reboot requirements and Git file size constraints.
 - Added `start.ps1` to the Files Reference table.

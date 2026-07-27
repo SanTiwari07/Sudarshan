@@ -248,7 +248,7 @@ class AnalysisResponse(BaseModel):
     # MobSF enrichment (optional — None if Androguard mode)
     manifest_findings: List[ManifestFinding] = Field(default_factory=list)
     code_findings: List[CodeFinding] = Field(default_factory=list)
-    dangerous_permissions: List[Dict[str, Any]] = Field(default_factory=list)
+    dangerous_permissions: List[Any] = Field(default_factory=list)
     activities: List[str] = Field(default_factory=list)
     services: List[str] = Field(default_factory=list)
     receivers: List[str] = Field(default_factory=list)

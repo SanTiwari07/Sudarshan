@@ -132,11 +132,13 @@ services:
     environment:
       - MOBSF_API_KEY=sudarshan_mobsf_api_key_2026
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/api_docs || exit 1"]
-      interval: 10s
-      timeout: 5s
+      # /api_docs requires auth and may redirect (302/401), which fails curl -f.
+      # The root URL (/) always returns 200 once Django is up — use that.
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/ || exit 1"]
+      interval: 15s
+      timeout: 10s
       retries: 5
-      start_period: 30s
+      start_period: 45s
     restart: unless-stopped
 
 volumes:

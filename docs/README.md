@@ -58,7 +58,7 @@ graph TD
 
     subgraph External Devices & Network Sidecars
         ADB["ADB TCP Bridge<br/>(host.docker.internal:5555)"]
-        AVD["Android 13 AVD<br/>(frida-server 17.16.0)"]
+        AVD["Android 13 AVD<br/>(frida-server 17.16.4)"]
         MITM["mitmproxy Sidecar<br/>(Port 8080 / HAR Dump Parser)"]
         MOBSF["MobSF Engine<br/>(Port 8008 / mobsf_client.py)"]
     end

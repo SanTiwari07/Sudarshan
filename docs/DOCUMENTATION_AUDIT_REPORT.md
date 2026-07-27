@@ -54,7 +54,7 @@ A comprehensive, zero-drift documentation audit was performed across the entire 
    - `mitmproxy` (Transparent HTTPS sidecar on port 8080)
 
 2. **100% Host Binary Elimination**:
-   - APKTool v2.10.0, JADX CLI v1.5.1, OpenJDK 17, Frida 17.16.0, Androguard, ADB, and analysis scripts execute entirely inside `sudarshan-analysis-engine`.
+   - APKTool v2.10.0, JADX CLI v1.5.1, OpenJDK 17, Frida 17.16.4, Androguard, ADB, and analysis scripts execute entirely inside `sudarshan-analysis-engine`.
    - Backend container contains zero local binary dependencies.
 
 3. **Zero-Copy Shared Volume**:

@@ -25,7 +25,7 @@ function ExecutiveRiskPanel({ data }: { data: FraudCardData }) {
           <Shield className="h-4 w-4 text-blue-300" />
           <span className="text-xs font-mono text-blue-200 uppercase tracking-widest">Executive Assessment</span>
         </div>
-        <span className="text-xs text-blue-400 font-mono">SUDARSHAN ENGINE v2.1</span>
+        <span className="text-xs text-blue-400 font-mono">SUDARSHAN PLATFORM</span>
       </div>
 
       <div className="p-5">
@@ -48,7 +48,7 @@ function ExecutiveRiskPanel({ data }: { data: FraudCardData }) {
           <div className="grid grid-cols-2 gap-3">
             {[
               { label: 'Threat Level', value: data.risk_band.toUpperCase(), color: riskStyle.text },
-              { label: 'Confidence', value: `${data.confidence?.toFixed(0) || 70}%`, color: 'text-blue-700' },
+              { label: 'Confidence', value: data.confidence !== undefined && data.confidence !== null ? `${data.confidence.toFixed(0)}%` : 'MISSING BACKEND DATA', color: 'text-blue-700' },
               { label: 'AI Multiplier', value: `×${data.ai_confidence_multiplier.toFixed(2)}`, color: 'text-purple-700' },
               { label: 'Family', value: data.family_classification, color: data.family_classification !== 'Unknown' ? 'text-red-600' : 'text-slate-700' },
             ].map(m => (

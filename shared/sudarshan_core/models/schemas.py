@@ -258,6 +258,10 @@ class AnalysisResponse(BaseModel):
     appsec_score: Optional[Any] = None
     mobsf_scan_hash: Optional[str] = None
 
+    # Static Decompilation Enrichment (APKTool & JADX)
+    apktool_enrichment: Optional[Dict[str, Any]] = None
+    jadx_enrichment: Optional[Dict[str, Any]] = None
+
     # Intelligence Report (from RAG + Gemini 2.5 Flash)
     intelligence_report: Optional[IntelligenceReport] = None
 

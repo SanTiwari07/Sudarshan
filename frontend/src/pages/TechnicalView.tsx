@@ -165,6 +165,145 @@ function DangerousAPITable({ data }: { data: FraudCardData }) {
   );
 }
 
+// ─── Certificate Intelligence Panel ────────────────────────────────────────────────
+
+function CertificatePanel({ certificate }: { certificate?: Record<string, any> }) {
+  if (!certificate || Object.keys(certificate).length === 0) {
+    return (
+      <SocCard>
+        <SectionHeader icon={<Lock className="h-4 w-4" />} title="Digital Certificate & Signature" subtitle="X.509 Cryptographic Identity" />
+        <div className="p-4 text-center text-xs text-slate-400">No certificate claims exposed in current backend scan mode</div>
+      </SocCard>
+    );
+  }
+
+  const entries = Object.entries(certificate);
+
+  return (
+    <SocCard>
+      <SectionHeader icon={<Lock className="h-4 w-4" />} title="Digital Certificate & Signature" subtitle="X.509 Cryptographic Identity & Attribution" />
+      <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto text-xs">
+        {entries.map(([k, v]) => (
+          <div key={k} className="flex justify-between p-2.5 hover:bg-slate-50">
+            <span className="text-slate-500 font-mono capitalize">{k.replace(/_/g, ' ')}</span>
+            <span className="font-mono text-slate-800 break-all text-right max-w-md">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
+          </div>
+        ))}
+      </div>
+    </SocCard>
+  );
+}
+
+// ─── Network Traffic Inspector Panel ────────────────────────────────────────────────
+
+function NetworkCapturePanel({ networkLogs }: { networkLogs?: any[] }) {
+  if (!networkLogs || networkLogs.length === 0) {
+    return (
+      <SocCard>
+        <SectionHeader icon={<Package className="h-4 w-4" />} title="Network Capture & C2 Telemetry" subtitle="Runtime mitmproxy & PCAP logs" />
+        <div className="p-4 text-center text-xs text-slate-400">No dynamic network traffic captured</div>
+      </SocCard>
+    );
+  }
+
+  return (
+    <SocCard>
+      <SectionHeader icon={<Package className="h-4 w-4" />} title="Network Capture & C2 Telemetry" subtitle={`${networkLogs.length} network request(s) captured`} />
+      <div className="overflow-x-auto max-h-64">
+        <table className="w-full text-xs">
+          <thead className="bg-slate-50 border-b border-slate-200">
+            <tr>
+              <th className="px-3 py-2 text-left font-semibold text-slate-600">Method</th>
+              <th className="px-3 py-2 text-left font-semibold text-slate-600">Host / IP</th>
+              <th className="px-3 py-2 text-left font-semibold text-slate-600">URL / Endpoint</th>
+              <th className="px-3 py-2 text-left font-semibold text-slate-600">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 font-mono">
+            {networkLogs.map((req, i) => (
+              <tr key={i} className={`hover:bg-slate-50 ${req.is_suspicious ? 'bg-red-50/60' : ''}`}>
+                <td className="px-3 py-2 font-bold text-slate-800">{req.method || 'GET'}</td>
+                <td className="px-3 py-2 text-slate-700">{req.domain || req.ip || '—'}</td>
+                <td className="px-3 py-2 text-slate-600 truncate max-w-xs">{req.url || '—'}</td>
+                <td className="px-3 py-2 font-bold text-slate-800">{req.response_status || 200}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </SocCard>
+  );
+}
+
+// ─── Logcat Inspector Panel ─────────────────────────────────────────────────────────
+
+function LogcatInspectorPanel({ logcat }: { logcat?: string }) {
+  if (!logcat || !logcat.trim()) {
+    return (
+      <SocCard>
+        <SectionHeader icon={<Terminal className="h-4 w-4" />} title="Logcat System Diagnostics" subtitle="Android OS Event Stream" />
+        <div className="p-4 text-center text-xs text-slate-400">No logcat telemetry collected</div>
+      </SocCard>
+    );
+  }
+
+  return (
+    <SocCard>
+      <SectionHeader icon={<Terminal className="h-4 w-4" />} title="Logcat System Diagnostics" subtitle="Monospace Android System Log Inspector" />
+      <div className="p-3 bg-slate-950 font-mono text-[11px] text-green-400 max-h-60 overflow-y-auto rounded-b-lg whitespace-pre-wrap leading-relaxed">
+        {logcat}
+      </div>
+    </SocCard>
+  );
+}
+
+// ─── Decompilation & Static Enrichment Panel ───────────────────────────────────────
+
+function DecompilationPanel({ data }: { data: FraudCardData }) {
+  const apktool = (data as any).apktool_enrichment;
+  const jadx = (data as any).jadx_enrichment;
+
+  if (!apktool && !jadx) {
+    return (
+      <SocCard>
+        <SectionHeader icon={<Code className="h-4 w-4" />} title="Static Decompilation Intelligence" subtitle="APKTool Resources & JADX Source Pattern Scanner" />
+        <div className="p-4 text-center text-xs text-slate-400">Decompilation enrichment data unavailable for this scan</div>
+      </SocCard>
+    );
+  }
+
+  return (
+    <SocCard>
+      <SectionHeader icon={<Code className="h-4 w-4" />} title="Static Decompilation Intelligence" subtitle="APKTool Resources & JADX Java Source Hits" />
+      <div className="p-4 space-y-4 text-xs">
+        {jadx?.fraud_class_hits && jadx.fraud_class_hits.length > 0 && (
+          <div>
+            <div className="font-semibold text-slate-700 uppercase tracking-wide mb-2">JADX Fraud Class Hits:</div>
+            <div className="flex flex-wrap gap-1.5 font-mono">
+              {jadx.fraud_class_hits.map((hit: string, i: number) => (
+                <span key={i} className="px-2 py-1 bg-red-100 text-red-800 border border-red-200 rounded">
+                  {hit}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {apktool?.suspicious_resources && apktool.suspicious_resources.length > 0 && (
+          <div>
+            <div className="font-semibold text-slate-700 uppercase tracking-wide mb-2">APKTool Suspicious Resource Files:</div>
+            <div className="space-y-1 font-mono text-[11px] text-slate-600 bg-slate-50 p-2.5 rounded border border-slate-200">
+              {apktool.suspicious_resources.map((res: string, i: number) => (
+                <div key={i}>📄 {res}</div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </SocCard>
+  );
+}
+
 // ─── Dynamic Analysis Panel ────────────────────────────────────────────────────────
 
 function DynamicAnalysisPanel({ data }: { data: FraudCardData }) {
@@ -198,7 +337,6 @@ function DynamicAnalysisPanel({ data }: { data: FraudCardData }) {
                     alt={`Screen capture ${i + 1}`}
                     className="h-52 w-full object-cover"
                     onError={(e) => {
-                      // Fallback text if screenshot path fails to load
                       (e.target as HTMLElement).style.display = 'none';
                     }}
                   />
@@ -261,6 +399,16 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <PermissionTable data={data} />
         <DangerousAPITable data={data} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <CertificatePanel certificate={data.certificate} />
+        <DecompilationPanel data={data} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <NetworkCapturePanel networkLogs={data.dynamic_analysis?.network_logs} />
+        <LogcatInspectorPanel logcat={data.dynamic_analysis?.logcat} />
       </div>
 
       <DynamicAnalysisPanel data={data} />

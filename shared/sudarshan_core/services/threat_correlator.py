@@ -328,10 +328,12 @@ async def correlate(
         sources_queried.append("VirusTotal")
 
     # ── Process OTX hash ──────────────────────────────────────────────────────
-    if otx_hash.get("found") and otx_hash.get("pulse_count", 0) > 0:
-        result["available"] = True
-        result["otx_pulses"] = otx_hash.get("pulses", [])
+    if _get_otx_key():
         sources_queried.append("AlienVault OTX")
+        result["available"] = True
+
+    if otx_hash.get("found") and otx_hash.get("pulse_count", 0) > 0:
+        result["otx_pulses"] = otx_hash.get("pulses", [])
         # Extract family from pulses
         for pulse in otx_hash.get("pulses", []):
             families = pulse.get("malware_families", [])

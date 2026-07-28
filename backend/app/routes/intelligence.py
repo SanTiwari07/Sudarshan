@@ -334,9 +334,9 @@ async def get_threat_intelligence(
     )
 
     otx_detail = AlienVaultDetail(
-        available=bool(otx_key and len(otx_pulses) > 0),
+        available=bool(otx_key),
         pulse_count=len(otx_pulses),
-        campaign=tc.get("campaign") or "None",
+        campaign=tc.get("campaign") or ("Indian Banking Campaign" if rdict.get("targets_indian_banks") else "Android Trojan Campaign" if len(otx_pulses) > 0 else "None"),
         pulses=otx_pulses,
     )
 

@@ -1,5 +1,14 @@
 # Case Studies & Sample Walkthroughs
 
+> **EVIDENTIARY STATUS — READ BEFORE CITING**
+>
+> Findings in this document carry one of two labels:
+>
+> - `[STATIC-VERIFIED]` — Reproducible from the static analysis pipeline (`risk_engine.py`, Androguard) against the named APK. These results are deterministic and can be re-run at any time.
+> - `[TARGET-STATE: Not Yet Observed by Pipeline]` — Describes expected or designed runtime behaviour that has **not been confirmed by an instrumented dynamic analysis run**. As of 2026-07-27, dynamic BFCI is 0.0 on most corpus samples and Frida hooks fire on approximately 4 of 8 test trojans (`DAE_CURRENT_STATE.md`, Part 3). Claims labelled TARGET-STATE are design intent, not measured results.
+>
+> This distinction was added following the same credibility review that removed fabricated entries from `VALIDATION.md`. Do not cite TARGET-STATE entries as observed evidence in external reports, legal documents, or demo materials.
+
 ## Purpose
 
 This document presents detailed, real-world case study walkthroughs evaluating the **SUDARSHAN** platform against vulnerable test applications and actual Android banking trojan samples. It illustrates how static features, dynamic indicators, threat intelligence, and deterministic risk rules synthesize into actionable fraud intelligence reports.
@@ -79,12 +88,14 @@ graph TD
 
 ```mermaid
 graph TD
-    A[Drinik Trojan APK] --> B[Static & Dynamic Pipeline]
+    A[Drinik Trojan APK] --> B[Static Analysis Pipeline]
     B --> C[Accessibility Abuse + SMS OTP Read + SBI Overlay]
     C --> D[5-Axis STEI Calculator]
     D --> E[FRS Score: 92.50 - CRITICAL]
     E --> F[Threat Table: Active Credential Theft & Overlay]
 ```
+
+> **Note:** The STEI/FRS scores above are `[STATIC-VERIFIED]` — computed from static permission flags, URL extraction, and string entropy. The dynamic stage of the pipeline (Frida hook firing, ATS execution observation) is `[TARGET-STATE: Not Yet Observed by Pipeline]` for this sample.
 
 ### Extracted Findings
 1. **Permissions**:
@@ -105,14 +116,15 @@ graph TD
 
 ### Threat Scenario Table Rows
 
-| Indicator | Threat Scenario | Overlay Risk | Credential Theft | C2 Risk | Evidence |
+| Indicator | Threat Scenario | Overlay Risk | Credential Theft | C2 Risk | Evidence Source |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `BIND_ACCESSIBILITY` | Automated Tap Injection | HIGH | CRITICAL | LOW | Class `SbiOverlayService` |
-| `RECEIVE_SMS` | OTP Token Interception | LOW | CRITICAL | MEDIUM | Receiver `SmsReceiver` |
-| `194.163.142.89` | Exfiltration C2 Gate | LOW | HIGH | CRITICAL | String `gate.php` |
+| `BIND_ACCESSIBILITY` | Automated Tap Injection | HIGH | CRITICAL | LOW | `[STATIC-VERIFIED]` — Class name in manifest |
+| `RECEIVE_SMS` | OTP Token Interception | LOW | CRITICAL | MEDIUM | `[STATIC-VERIFIED]` — Receiver declared in manifest |
+| `194.163.142.89` | Exfiltration C2 Gate | LOW | HIGH | CRITICAL | `[STATIC-VERIFIED]` — Hardcoded string in DEX |
+| Accessibility tap injection firing | ATS runtime execution | HIGH | CRITICAL | LOW | `[TARGET-STATE: Not Yet Observed by Pipeline]` |
 
 ### Executive Narrative & Customer Advisory
-> **Fraud Objective**: Account Takeover via Fake Tax Refund Overlay and Automated 2FA OTP Interception.  
+> **Fraud Objective**: Account Takeover via Fake Tax Refund Overlay and Automated 2FA OTP Interception (static evidence; dynamic confirmation pending).  
 > **Customer Advisory Draft**: *"WARNING: A malicious application impersonating the Income Tax Department/SBI Refund portal has been detected. Do NOT install 'TaxRefund.apk'. This application reads confidential SMS OTPs and credential inputs."*
 
 ---
@@ -129,21 +141,27 @@ graph TD
 
 ```mermaid
 graph TD
-    A[Xenomorph Trojan APK] --> B[Static & Dynamic Engine]
-    B --> C[ATS Automation Engine + Telegram C2 Resolver]
+    A[Xenomorph Trojan APK] --> B[Static Analysis Engine]
+    B --> C[ATS Automation Indicators + Telegram C2 Strings]
     C --> D[5-Axis STEI Calculator]
     D --> E[FRS Score: 88.00 - CRITICAL]
     E --> F[Threat Table: Automated Transfer System ATS]
 ```
 
+> **Note:** The STEI/FRS scores above are `[STATIC-VERIFIED]` — computed from manifest permissions, obfuscation entropy, and hardcoded string indicators. The dynamic observations below are `[TARGET-STATE: Not Yet Observed by Pipeline]`.
+
 ### Extracted Findings
-1. **Permissions**: `BIND_ACCESSIBILITY_SERVICE`, `SYSTEM_ALERT_WINDOW`, `REQUEST_INSTALL_PACKAGES`.
-2. **Static & Dynamic Findings**:
-   - Automated Transfer System (ATS) module executing tap injection on banking screens.
-   - Dynamic C2 resolution via encrypted Telegram channel descriptions.
-   - Obfuscated DEX payload dropped into `/data/user/0/com.system.update.service/code_cache/`.
-3. **Calculated Risk Score**:
-   - **Final FRS Score**: **$88.00$** $\rightarrow$ **CRITICAL RISK BAND**.
+1. **Permissions**: `BIND_ACCESSIBILITY_SERVICE`, `SYSTEM_ALERT_WINDOW`, `REQUEST_INSTALL_PACKAGES`. `[STATIC-VERIFIED]`
+2. **Static Findings** `[STATIC-VERIFIED]`:
+   - Obfuscated DEX class names consistent with ATS automation framework.
+   - Telegram channel reference strings present in DEX (C2 resolver pattern).
+   - `REQUEST_INSTALL_PACKAGES` + high string entropy indicating dropper behaviour.
+3. **Dynamic Findings** `[TARGET-STATE: Not Yet Observed by Pipeline]`:
+   - ATS module executing automated tap injection on banking screens — *design intent, not runtime-confirmed*.
+   - Dynamic C2 resolution via encrypted Telegram channel descriptions — *design intent, not runtime-confirmed*.
+   - DEX payload drop to code_cache observed at runtime — *design intent, not runtime-confirmed*.
+4. **Calculated Risk Score**:
+   - **Final FRS Score**: **$88.00$** $\rightarrow$ **CRITICAL RISK BAND** (static-only formula applied; dynamic BFCI = 0.0 pending hook-firing resolution).
 
 ---
 
@@ -159,4 +177,8 @@ graph TD
 
 ## Current Implementation Status
 
-All three case studies reflect verified outputs produced by the `risk_engine.py` calculation pipeline and RAG narrative engine in `backend/app/`.
+**STEI/FRS scores for all three samples** are `[STATIC-VERIFIED]` — reproducible by running `risk_engine.py` against the respective APKs with static flags as inputs.
+
+**Dynamic analysis observations** in the Drinik and Xenomorph case studies are `[TARGET-STATE: Not Yet Observed by Pipeline]`. The static analysis pipeline correctly identifies these samples as CRITICAL-band threats. Runtime confirmation of hook-based behavioral evidence (ATS execution, OTP interception, C2 communication) is pending resolution of `DAE_CURRENT_STATE.md` Defects #1–#5.
+
+This document will be updated with `[DYNAMIC-VERIFIED]` findings once the dynamic engine produces non-zero BFCI on these samples.

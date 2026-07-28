@@ -1,15 +1,24 @@
+import os
+import logging
+import secrets
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from root .env file
+_env_path = Path(__file__).resolve().parents[2] / ".env"
+if not _env_path.exists():
+    _env_path = Path(__file__).resolve().parent / ".env"
+load_dotenv(dotenv_path=_env_path)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routes import upload, report
+from app.routes import upload, report, intelligence
 from app.routes.cases import router as cases_router
 from app.auth.auth import router as auth_router
 from app.db.database import init_db
 from app.workers.analysis_queue import start_workers, stop_workers
 from app.auth.auth import hash_password, username_exists, create_user
-import os
-import logging
-import secrets
 
 # ─── Structured Logging Configuration ────────────────────────────────────────
 # Androguard at DEBUG level produces tens of thousands of log records per
@@ -64,10 +73,11 @@ app.add_middleware(
 
 # ─── Routers ─────────────────────────────────────────────────────────────────
 
-app.include_router(auth_router,       prefix="/api/v1",         tags=["Authentication"])
-app.include_router(upload.router,     prefix="/api/v1",         tags=["Analysis"])
-app.include_router(report.router,     prefix="/api/v1",         tags=["Reports & Export"])
-app.include_router(cases_router,      prefix="/api/v1",         tags=["Case History"])
+app.include_router(auth_router,          prefix="/api/v1",         tags=["Authentication"])
+app.include_router(upload.router,        prefix="/api/v1",         tags=["Analysis"])
+app.include_router(report.router,        prefix="/api/v1",         tags=["Reports & Export"])
+app.include_router(cases_router,         prefix="/api/v1",         tags=["Case History"])
+app.include_router(intelligence.router,  prefix="/api/v1",         tags=["Threat Intelligence"])
 
 
 # ─── Startup / Shutdown ───────────────────────────────────────────────────────

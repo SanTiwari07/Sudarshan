@@ -184,6 +184,21 @@ async def analyze_with_llm(
         risk_result = {}
 
     gemini_key = os.getenv("GEMINI_API_KEY")
+    if not gemini_key:
+        try:
+            from pathlib import Path
+            from dotenv import load_dotenv
+            curr = Path(__file__).resolve().parent
+            for _ in range(5):
+                env_file = curr / ".env"
+                if env_file.exists():
+                    load_dotenv(dotenv_path=env_file, override=True)
+                    gemini_key = os.getenv("GEMINI_API_KEY")
+                    break
+                curr = curr.parent
+        except Exception:
+            pass
+
     cert_recs = get_cert_in_recommendations(family, flags)
 
     if not gemini_key:

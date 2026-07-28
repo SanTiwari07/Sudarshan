@@ -358,6 +358,8 @@ def _build_header(r: Dict, ts: str) -> str:
         ev = _get(r, "executive_view") or {}
         narrative = _esc(_get(ev, "plain_english_narrative", default=""))
 
+    narrative_html = f'<div class="verdict-narrative">{narrative}</div>' if narrative else ""
+
     return (
         f'<div class="report-header">'
         f'<div class="report-meta">'
@@ -397,7 +399,7 @@ def _build_header(r: Dict, ts: str) -> str:
         f'<div>'
         f'<div class="verdict-q">Should this application be trusted?</div>'
         f'<div class="verdict-answer">{v_answer}</div>'
-        f'{f"<div class=\"verdict-narrative\">{narrative}</div>" if narrative else ""}'
+        f'{narrative_html}'
         f'</div>'
         f'</div>'
         f'</div>'
@@ -470,6 +472,9 @@ def _build_static(r: Dict, idx: _FindingIndex) -> str:
     cert_subject = _get(cert, "subject") or _get(cert, "issuer") or ""
     cert_valid = _get(cert, "valid_from") or ""
 
+    cert_subj_html = _esc(cert_subject) if cert_subject else '<span class="no-data">Not available</span>'
+    cert_valid_html = _esc(cert_valid) if cert_valid else '<span class="no-data">Not available</span>'
+
     html += (
         f'<div class="grid-2 mt8">'
         f'<div class="info-card"><div class="info-key">Package Name</div>'
@@ -478,10 +483,10 @@ def _build_static(r: Dict, idx: _FindingIndex) -> str:
         f'<div class="info-val">{_esc(_get(r, "family_classification", default="Unknown"))}</div></div>'
         f'<div class="info-card"><div class="info-key">Certificate Subject</div>'
         f'<div class="info-val info-val-mono">'
-        f'{_esc(cert_subject) if cert_subject else "<span class=\"no-data\">Not available</span>"}</div></div>'
+        f'{cert_subj_html}</div></div>'
         f'<div class="info-card"><div class="info-key">Cert Valid From</div>'
         f'<div class="info-val">'
-        f'{_esc(cert_valid) if cert_valid else "<span class=\"no-data\">Not available</span>"}</div></div>'
+        f'{cert_valid_html}</div></div>'
         f'</div>'
     )
 
@@ -704,10 +709,11 @@ def _build_threat_intel(r: Dict, idx: _FindingIndex) -> str:
             fid = idx.next("INTEL", f"MITRE: {str(tech)[:60]}")
             url = f"https://attack.mitre.org/techniques/{tid.replace('.', '/')}/" if re.match(r"T\d{4}", tid) else ""
             link = f'<a href="{url}" target="_blank">{_esc(tid)}</a>' if url else _esc(tid)
+            tname_html = f'<div class="mitre-name">{_esc(tname)}</div>' if tname else ""
             html += (
                 f'<div class="mitre-chip">'
                 f'<div class="mitre-id">[{fid}] {link}</div>'
-                f'{f"<div class=\"mitre-name\">{_esc(tname)}</div>" if tname else ""}'
+                f'{tname_html}'
                 f'</div>'
             )
         html += '</div></div>'
@@ -794,12 +800,13 @@ def _build_dynamic(r: Dict, evidence_json: Optional[Dict], idx: _FindingIndex) -
                 sev = str(_get(rec, "severity", default="LOW"))
                 mitre = _esc(_get(rec, "mitre_technique_id", default=""))
                 mitre_str = f" &mdash; {mitre}" if mitre else ""
+                desc_html = f'<div class="tl-desc">{desc}</div>' if desc else ""
                 html += (
                     f'<div class="tl-event">'
                     f'<div class="tl-ts">[{fid_in}] {ts_str}{mitre_str} '
                     f'<span class="sev {_sev_class(sev)}">{_esc(sev)}</span></div>'
                     f'<div class="tl-api">{api}</div>'
-                    f'{f"<div class=\"tl-desc\">{desc}</div>" if desc else ""}'
+                    f'{desc_html}'
                     f'</div>'
                 )
             html += '</div>'
@@ -815,12 +822,14 @@ def _build_dynamic(r: Dict, evidence_json: Optional[Dict], idx: _FindingIndex) -
                 ev_ids = _get(stage, "evidence_ids") or []
                 fid = idx.next("EVID", f"Workflow stage: {_get(stage, 'label', default='')[:40]}")
                 ev_refs = ", ".join(ev_ids[:4]) if ev_ids else ""
+                ev_refs_str = f" | Evidence: {_esc(ev_refs)}" if ev_refs else ""
+                desc_html = f'<div class="tl-desc">{desc}</div>' if desc else ""
                 html += (
                     f'<div class="tl-event">'
                     f'<div class="tl-ts">[{fid}] {tid} &mdash; Confidence: {conf*100:.0f}%'
-                    f'{f" | Evidence: {_esc(ev_refs)}" if ev_refs else ""}</div>'
+                    f'{ev_refs_str}</div>'
                     f'<div class="tl-api">{label}</div>'
-                    f'{f"<div class=\"tl-desc\">{desc}</div>" if desc else ""}'
+                    f'{desc_html}'
                     f'</div>'
                 )
             html += '</div>'
@@ -832,13 +841,14 @@ def _build_dynamic(r: Dict, evidence_json: Optional[Dict], idx: _FindingIndex) -
             tech = _esc(_get(aa, "technique", default=str(aa)))
             desc = _esc(_get(aa, "description", default=""))
             fid = idx.next("EVID", f"Anti-analysis: {str(_get(aa, 'technique', default=''))[:50]}")
+            desc_html = f'<div class="finding-desc">{desc}</div>' if desc else ""
             html += (
                 f'<div class="finding">'
                 f'<div class="finding-id">[{fid}]</div>'
                 f'<div class="finding-body">'
                 f'<div class="finding-title">{tech}'
                 f'<span class="sev sev-high">HIGH</span></div>'
-                f'{f"<div class=\"finding-desc\">{desc}</div>" if desc else ""}'
+                f'{desc_html}'
                 f'</div></div>'
             )
 

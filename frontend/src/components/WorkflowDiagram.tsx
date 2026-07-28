@@ -154,7 +154,7 @@ function StageCard({
                 <span className="font-medium text-gray-600">Hooks fired: </span>
                 <div className="flex flex-wrap gap-1 mt-1">
                   {stage.hook_names.map((h) => (
-                    <code key={h} className="px-1.5 py-0.5 bg-gray-800 text-green-400 rounded text-xs font-mono">
+                    <code key={h} className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 text-slate-800 rounded text-xs font-mono">
                       {h}
                     </code>
                   ))}
@@ -225,7 +225,7 @@ export default function WorkflowDiagram({ workflow }: { workflow: FraudWorkflow 
             href={`https://attack.mitre.org/techniques/${tid}/`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-mono font-medium bg-gray-800 text-blue-300 rounded hover:bg-gray-700 transition-colors"
+            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-mono font-medium bg-blue-50 border border-blue-200 text-blue-700 rounded hover:bg-blue-100 transition-colors shadow-2xs"
             title={`View ${tid} on MITRE ATT&CK for Mobile`}
           >
             <GitBranch className="h-3 w-3" />

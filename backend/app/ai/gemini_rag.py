@@ -29,9 +29,24 @@ from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-# ─── Configuration ────────────────────────────────────────────────────────────
+def _get_gemini_api_key() -> str:
+    key = os.getenv("GEMINI_API_KEY", "")
+    if not key:
+        try:
+            from pathlib import Path
+            from dotenv import load_dotenv
+            curr = Path(__file__).resolve().parent
+            for _ in range(5):
+                env_file = curr / ".env"
+                if env_file.exists():
+                    load_dotenv(dotenv_path=env_file, override=True)
+                    key = os.getenv("GEMINI_API_KEY", "")
+                    break
+                curr = curr.parent
+        except Exception:
+            pass
+    return key
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 # ─── Investigation Graph (in-memory per SHA256) ───────────────────────────────
@@ -632,7 +647,8 @@ async def stream_investigation_response(
     if conversation_history is None:
         conversation_history = []
 
-    if not GEMINI_API_KEY:
+    api_key = _get_gemini_api_key()
+    if not api_key:
         yield _sse("error", "Gemini API key not configured. Set GEMINI_API_KEY in .env")
         return
 
@@ -660,7 +676,7 @@ async def stream_investigation_response(
     try:
         import google.genai as genai
 
-        client = genai.Client(api_key=GEMINI_API_KEY)
+        client = genai.Client(api_key=api_key)
 
         response = client.models.generate_content_stream(
             model=MODEL_NAME,
@@ -709,7 +725,8 @@ async def get_investigation_answer(
     if conversation_history is None:
         conversation_history = []
 
-    if not GEMINI_API_KEY:
+    api_key = _get_gemini_api_key()
+    if not api_key:
         return {
             "answer": "Gemini API key not configured. Set GEMINI_API_KEY in .env",
             "sections_used": [],
@@ -736,7 +753,7 @@ async def get_investigation_answer(
     try:
         import google.genai as genai
 
-        client = genai.Client(api_key=GEMINI_API_KEY)
+        client = genai.Client(api_key=api_key)
         response = client.models.generate_content(
             model=MODEL_NAME,
             contents=prompt,

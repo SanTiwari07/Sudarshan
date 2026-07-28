@@ -289,6 +289,27 @@ function ExportOptions({ data }: { data: FraudCardData }) {
     } setTimeout(() => setStatus(null), 3000);
   };
 
+  const exportPdfReport = async () => {
+    try {
+      setStatus('Generating Executive PDF Report...');
+      const res = await fetch(`${API_BASE}/report/pdf/${data.sha256}`, {
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        throw new Error(res.status === 401 ? 'Session expired' : `PDF export failed (${res.status})`);
+      }
+      const htmlBlob = await res.blob();
+      const blobUrl = URL.createObjectURL(htmlBlob);
+      const win = window.open(blobUrl, '_blank');
+      if (!win) {
+        await downloadAuthed(`${API_BASE}/report/html/${data.sha256}`, `sudarshan_report_${data.sha256.slice(0, 8)}.html`);
+      }
+      setStatus('PDF report ready');
+    } catch (err: unknown) {
+      setStatus(err instanceof Error ? err.message : 'PDF export failed');
+    } setTimeout(() => setStatus(null), 3000);
+  };
+
   return (
     <SocCard className="relative">
       <SectionHeader icon={<Download className="h-4 w-4" />} title="Export & SIEM Ingestion" />
@@ -316,6 +337,12 @@ function ExportOptions({ data }: { data: FraudCardData }) {
           className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors"
         >
           <Download className="h-3.5 w-3.5" /> Summary CSV
+        </button>
+        <button
+          onClick={exportPdfReport}
+          className="col-span-2 flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-semibold text-white bg-blue-700 rounded-lg hover:bg-blue-800 transition-colors shadow-sm mt-1"
+        >
+          <FileText className="h-4 w-4" /> Export Executive PDF Report
         </button>
       </div>
       {status && (

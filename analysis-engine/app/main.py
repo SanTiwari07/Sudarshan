@@ -18,6 +18,13 @@ import time
 import uuid
 from typing import Any, Dict, Optional
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from root .env file
+_env_path = Path(__file__).resolve().parents[2] / ".env"
+if not _env_path.exists():
+    _env_path = Path(__file__).resolve().parent / ".env"
+load_dotenv(dotenv_path=_env_path)
 
 from fastapi import FastAPI, File, HTTPException, UploadFile, BackgroundTasks, Query
 from pydantic import BaseModel, Field

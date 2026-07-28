@@ -24,11 +24,34 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-# ─── API Keys (from .env) ─────────────────────────────────────────────────────
+# ─── API Keys (from .env or environment) ──────────────────────────────────────
 
-VT_API_KEY = os.getenv("VIRUSTOTAL_API_KEY", "")
-OTX_API_KEY = os.getenv("OTX_API_KEY", "")
-ABUSEIPDB_API_KEY = os.getenv("ABUSEIPDB_API_KEY", "")
+def _load_env_if_needed():
+    """Ensure .env is loaded dynamically whenever API keys are requested."""
+    try:
+        from pathlib import Path
+        from dotenv import load_dotenv
+        curr = Path(__file__).resolve().parent
+        for _ in range(5):
+            env_file = curr / ".env"
+            if env_file.exists():
+                load_dotenv(dotenv_path=env_file, override=True)
+                break
+            curr = curr.parent
+    except Exception:
+        pass
+
+def _get_vt_key() -> str:
+    _load_env_if_needed()
+    return os.getenv("VIRUSTOTAL_API_KEY", "")
+
+def _get_otx_key() -> str:
+    _load_env_if_needed()
+    return os.getenv("OTX_API_KEY", "")
+
+def _get_abuseipdb_key() -> str:
+    _load_env_if_needed()
+    return os.getenv("ABUSEIPDB_API_KEY", "")
 
 # ─── Result Structure ─────────────────────────────────────────────────────────
 
@@ -56,13 +79,14 @@ def _empty_result() -> Dict[str, Any]:
 
 async def _vt_check_hash(sha256: str) -> Dict[str, Any]:
     """Query VirusTotal for a SHA256 hash."""
-    if not VT_API_KEY:
+    vt_key = _get_vt_key()
+    if not vt_key:
         return {}
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
             r = await client.get(
                 f"https://www.virustotal.com/api/v3/files/{sha256}",
-                headers={"x-apikey": VT_API_KEY},
+                headers={"x-apikey": vt_key},
             )
             if r.status_code == 404:
                 return {"found": False}
@@ -105,7 +129,8 @@ async def _vt_check_hash(sha256: str) -> Dict[str, Any]:
 
 async def _vt_check_url(url: str) -> Dict[str, Any]:
     """Query VirusTotal for a URL reputation."""
-    if not VT_API_KEY:
+    vt_key = _get_vt_key()
+    if not vt_key:
         return {}
     try:
         import base64
@@ -113,7 +138,7 @@ async def _vt_check_url(url: str) -> Dict[str, Any]:
         async with httpx.AsyncClient(timeout=15.0) as client:
             r = await client.get(
                 f"https://www.virustotal.com/api/v3/urls/{url_id}",
-                headers={"x-apikey": VT_API_KEY},
+                headers={"x-apikey": vt_key},
             )
             if r.status_code == 404:
                 return {"found": False, "url": url}
@@ -138,13 +163,14 @@ async def _vt_check_url(url: str) -> Dict[str, Any]:
 
 async def _otx_check_hash(sha256: str) -> Dict[str, Any]:
     """Query AlienVault OTX for file hash."""
-    if not OTX_API_KEY:
+    otx_key = _get_otx_key()
+    if not otx_key:
         return {}
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
             r = await client.get(
                 f"https://otx.alienvault.com/api/v1/indicators/file/{sha256}/general",
-                headers={"X-OTX-API-KEY": OTX_API_KEY},
+                headers={"X-OTX-API-KEY": otx_key},
             )
             if r.status_code == 404:
                 return {"found": False}
@@ -169,13 +195,14 @@ async def _otx_check_hash(sha256: str) -> Dict[str, Any]:
 
 async def _otx_check_domain(domain: str) -> Dict[str, Any]:
     """Query AlienVault OTX for domain reputation."""
-    if not OTX_API_KEY:
+    otx_key = _get_otx_key()
+    if not otx_key:
         return {}
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             r = await client.get(
                 f"https://otx.alienvault.com/api/v1/indicators/domain/{domain}/general",
-                headers={"X-OTX-API-KEY": OTX_API_KEY},
+                headers={"X-OTX-API-KEY": otx_key},
             )
             if r.status_code == 404:
                 return {"found": False, "domain": domain}
@@ -198,13 +225,14 @@ _IP_RE = __import__("re").compile(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
 
 async def _abuseipdb_check_ip(ip: str) -> Dict[str, Any]:
     """Query AbuseIPDB for IP address reputation."""
-    if not ABUSEIPDB_API_KEY or not _IP_RE.match(ip):
+    abuse_key = _get_abuseipdb_key()
+    if not abuse_key or not _IP_RE.match(ip):
         return {}
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             r = await client.get(
                 "https://api.abuseipdb.com/api/v2/check",
-                headers={"Key": ABUSEIPDB_API_KEY, "Accept": "application/json"},
+                headers={"Key": abuse_key, "Accept": "application/json"},
                 params={"ipAddress": ip, "maxAgeInDays": 90},
             )
             r.raise_for_status()

@@ -3,9 +3,10 @@
 Sudarshan Report Export Endpoints
 ===================================
 Provides:
+  GET /api/v1/report/html/{sha256}  — Standalone CYFIRMA-style HTML report (primary)
   GET /api/v1/report/stix/{sha256}  — STIX 2.1 JSON export
   GET /api/v1/report/iocs/{sha256}  — IOC CSV export
-  GET /api/v1/report/pdf/{sha256}   — PDF report (stub, requires pdfkit)
+  GET /api/v1/report/pdf/{sha256}   — PDF stub (use browser print on the HTML report instead)
   POST /api/v1/chat                 — AI chat endpoint (legacy, non-streaming)
   POST /api/v1/chat/stream          — Gemini RAG SSE streaming endpoint (primary)
 """
@@ -14,10 +15,11 @@ import json
 import logging
 from datetime import datetime, timezone
 from io import StringIO
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
 
 from app.auth.auth import require_analyst
@@ -37,6 +39,70 @@ def cache_report(sha256: str, report: Any) -> None:
 
 def get_cached_report(sha256: str) -> Optional[Any]:
     return _report_cache.get(sha256)
+
+
+# ─── HTML Report Export ──────────────────────────────────────────────────────
+
+@router.get("/report/html/{sha256}", response_class=HTMLResponse)
+async def export_html_report(sha256: str, user: dict = Depends(require_analyst)):
+    """
+    Export a standalone, single-file HTML malware analysis report.
+
+    The report is self-contained (inline CSS, no JS, no external CDN).
+    It includes:
+      - Executive summary with FRS score dial and verdict
+      - 5-axis STEI breakdown
+      - Threat scenario correlation table
+      - Static forensic analysis with evidence IDs [STAT-NNN]
+      - Threat intelligence & MITRE ATT&CK mapping [INTEL-NNN]
+      - Dynamic analysis section (populated timeline OR explicit
+        [DYNAMIC-STATUS: NO TELEMETRY CAPTURED] diagnostic banner)
+      - Recommendations & evidence ledger
+
+    For PDF export: open in Chrome/Edge and use Ctrl+P -> Save as PDF.
+    The @media print stylesheet provides a clean light-mode print layout.
+    """
+    report = get_cached_report(sha256)
+    if not report:
+        raise HTTPException(
+            status_code=404,
+            detail="Report not found. Analyze the APK first."
+        )
+
+    try:
+        from sudarshan_core.engines.report_generator import build_report
+    except ImportError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Report generator unavailable: {e}"
+        )
+
+    # Resolve per-sample artifact directory for evidence.json etc.
+    apk_dir: Optional[Path] = None
+    if isinstance(report, dict):
+        artifact_path = report.get("artifact_dir") or report.get("_artifact_dir")
+        if artifact_path:
+            apk_dir = Path(artifact_path)
+
+    # Normalise: Pydantic model -> dict
+    if hasattr(report, "model_dump"):
+        report_dict = report.model_dump()
+    elif hasattr(report, "dict"):
+        report_dict = report.dict()
+    elif isinstance(report, dict):
+        report_dict = report
+    else:
+        report_dict = {}
+
+    html = build_report(report_dict, apk_dir=apk_dir)
+    filename = f"sudarshan_report_{sha256[:12]}.html"
+
+    return HTMLResponse(
+        content=html,
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"',
+        },
+    )
 
 
 # ─── STIX 2.1 Export ─────────────────────────────────────────────────────────

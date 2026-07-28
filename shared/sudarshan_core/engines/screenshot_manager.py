@@ -1,22 +1,61 @@
 """
-SUDARSHAN — Screenshot Manager
-===============================
+SUDARSHAN -- Screenshot Manager
+================================
 Captures and indexes screenshots at key moments during dynamic analysis.
 Triggered either automatically by CRITICAL Frida events from the EventBus,
 or manually by the UIExplorer/PermissionOrchestrator.
+
+SCR-NNN Scheme
+--------------
+Every captured screenshot is assigned a sequential SCR-NNN identifier.
+This ID is:
+  - Embedded in the filename: 001_<ts>_<label>.png
+  - Written to screenshots/manifest.json alongside the linked EVID-NNN
+  - Set on the EvidenceRecord via evidence_store.set_screenshot_id()
+
+Gating Rule
+-----------
+Automatic event-driven screenshots ONLY capture when at least one
+EvidenceRecord already exists in the store. This prevents generating
+empty SCR entries when no dynamic telemetry was observed (no fabrication).
+Manual captures (UIExplorer, PermissionOrchestrator) are always permitted.
+
+NOTE: The screenshot path is exercised only when Frida hooks actually fire.
+      The gating logic will remain untested against real data until substrate
+      Defect #1 (hardcoded accessibility class name) is resolved.
 """
 
-import os
-import subprocess
-import time
+import json
 import logging
+import subprocess
+import threading
+import time
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Dict, Any, Optional
 from threading import Lock
+from typing import Any, Dict, List, Optional
 
 from sudarshan_core.engines.event_bus import RuntimeEventBus
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Screenshot manifest record
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ScreenshotRecord:
+    """One entry in the screenshot manifest."""
+    screenshot_id:  str         # SCR-NNN
+    filename:       str         # relative path within output_dir
+    label:          str         # trigger label (e.g. 'critical_overlay')
+    trigger_event:  str         # EVID-NNN of triggering evidence record, or ""
+    timestamp_ms:   int         # capture time Unix ms
+    category:       str         # event category that triggered capture
+    source:         str         # "auto" | "manual"
+    gated:          bool        # True if captured subject to has_evidence gate
+    extra:          dict = field(default_factory=dict)
 
 
 class ScreenshotManager:
@@ -36,68 +75,125 @@ class ScreenshotManager:
 
         self._lock = Lock()
         self._counter = 0
+        self._manifest: List[ScreenshotRecord] = []
 
         if event_bus:
             event_bus.subscribe(self._on_event)
             logger.debug("[ScreenshotManager] Subscribed to RuntimeEventBus")
 
-    def capture(self, label: str) -> Optional[str]:
+    # -- ID management --------------------------------------------------------
+
+    def _next_scr_id(self) -> str:
+        """Return the next sequential screenshot ID, e.g. SCR-001.
+        Caller must hold self._lock."""
+        self._counter += 1
+        return f"SCR-{self._counter:03d}"
+
+    # -- Core capture ---------------------------------------------------------
+
+    def capture(
+        self,
+        label: str,
+        trigger_evid: str = "",
+        category: str = "",
+        source: str = "manual",
+        gated: bool = False,
+    ) -> Optional[str]:
         """
-        Takes a screenshot on the device, pulls it to the output directory,
-        and returns the relative path (or None if failed).
+        Take a screenshot on the device, pull it locally, and record it in
+        the manifest. Returns the relative path (e.g. 'screenshots/001_...png')
+        or None if the capture fails.
+
+        Parameters
+        ----------
+        label : str
+            Short slug for the filename and manifest.
+        trigger_evid : str
+            The EVID-NNN of the evidence record that triggered this capture.
+        category : str
+            Frida event category (for manifest context).
+        source : str
+            'auto' (event-driven) or 'manual' (UIExplorer / orchestrator).
+        gated : bool
+            True if this capture was subject to the has_evidence gate.
         """
         with self._lock:
-            self._counter += 1
-            idx = f"{self._counter:03d}"
-            
-        timestamp = int(time.time() * 1000)
-        filename = f"{idx}_{timestamp}_{label}.png"
-        remote_path = f"/sdcard/screen_{timestamp}.png"
+            scr_id = self._next_scr_id()
+            idx_str = f"{self._counter:03d}"
+
+        timestamp_ms = int(time.time() * 1000)
+        safe_label = label.replace("/", "_").replace(" ", "_")[:40]
+        filename = f"{idx_str}_{timestamp_ms}_{safe_label}.png"
+        remote_path = f"/sdcard/sudarshan_screen_{timestamp_ms}.png"
         local_path = self.output_dir / filename
+        rel_path = f"screenshots/{filename}"
 
         try:
-            # Take screenshot
             subprocess.run(
-                [self.adb_path, "-s", self.device_serial, "shell", "screencap", "-p", remote_path],
+                [self.adb_path, "-s", self.device_serial, "shell",
+                 "screencap", "-p", remote_path],
                 capture_output=True, timeout=5
             )
-            # Pull to local
             res = subprocess.run(
-                [self.adb_path, "-s", self.device_serial, "pull", remote_path, str(local_path)],
+                [self.adb_path, "-s", self.device_serial, "pull",
+                 remote_path, str(local_path)],
                 capture_output=True, timeout=5
             )
-            # Cleanup remote
             subprocess.run(
                 [self.adb_path, "-s", self.device_serial, "shell", "rm", remote_path],
                 capture_output=True, timeout=2
             )
 
             if local_path.exists():
-                logger.debug(f"[ScreenshotManager] Captured: {filename}")
-                return f"screenshots/{filename}"
+                record = ScreenshotRecord(
+                    screenshot_id=scr_id,
+                    filename=rel_path,
+                    label=label,
+                    trigger_event=trigger_evid,
+                    timestamp_ms=timestamp_ms,
+                    category=category,
+                    source=source,
+                    gated=gated,
+                )
+                with self._lock:
+                    self._manifest.append(record)
+                logger.debug(
+                    "[ScreenshotManager] [%s] Captured %s (EVID: %s)",
+                    scr_id, filename, trigger_evid or "none"
+                )
+                return rel_path
             else:
-                logger.warning(f"[ScreenshotManager] Failed to pull screenshot: {res.stderr.decode()}")
+                logger.warning(
+                    "[ScreenshotManager] Failed to pull screenshot: %s",
+                    res.stderr.decode(errors="replace")
+                )
                 return None
+
         except Exception as e:
-            logger.error(f"[ScreenshotManager] Screencap failed: {e}")
+            logger.error("[ScreenshotManager] Screencap failed: %s", e)
             return None
+
+    # -- Event-driven capture -------------------------------------------------
 
     def _on_event(self, event: Dict[str, Any]) -> None:
         """
-        Listens for CRITICAL events or specific overlay detections and triggers
-        a screenshot. Links it back to the EvidenceStore if available.
+        Listens for CRITICAL events or specific overlay/anti-analysis
+        detections and triggers a screenshot.
+
+        Gating rule: only fires if the evidence_store already contains at
+        least one record (i.e., at least one hook event has been processed).
+        This prevents generating screenshot entries when there is no runtime
+        evidence to link them to (no fabrication guarantee).
         """
         data = event.get("data", {})
         severity = data.get("severity", event.get("severity", ""))
         category = event.get("category", "")
 
-        # Trigger conditions
         trigger = False
         label = "auto"
-        
         if severity == "CRITICAL":
             trigger = True
-            label = f"critical_{category}"
+            label = f"critical_{category}" if category else "critical"
         elif category == "overlay":
             trigger = True
             label = "overlay_detected"
@@ -105,12 +201,64 @@ class ScreenshotManager:
             trigger = True
             label = "anti_analysis_detected"
 
-        if trigger:
-            import threading
-            def _bg_capture():
-                ref = self.capture(label)
-                if ref and self.evidence_store:
-                    # The event just fired, so the most recent evidence record is likely the match
-                    self.evidence_store.attach_screenshot_to_latest(ref)
-            
-            threading.Thread(target=_bg_capture, daemon=True).start()
+        if not trigger:
+            return
+
+        # Gating: only capture if evidence_store has records
+        if self.evidence_store is not None and self.evidence_store.count() == 0:
+            logger.debug(
+                "[ScreenshotManager] Gate: skipping capture -- no evidence records yet"
+            )
+            return
+
+        def _bg_capture():
+            ref = self.capture(
+                label=label,
+                category=category,
+                source="auto",
+                gated=True,
+            )
+            if ref and self.evidence_store:
+                updated_id = self.evidence_store.attach_screenshot_to_latest(ref)
+                if updated_id and self._manifest:
+                    scr_id = self._manifest[-1].screenshot_id
+                    self.evidence_store.set_screenshot_id(updated_id, scr_id)
+                    self._manifest[-1].trigger_event = updated_id
+
+        threading.Thread(target=_bg_capture, daemon=True).start()
+
+    # -- Manifest persistence -------------------------------------------------
+
+    def flush_manifest(self, output_path: Optional[Path] = None) -> int:
+        """
+        Write the screenshot manifest to JSON.
+
+        If output_path is None, writes to <output_dir>/manifest.json.
+        Returns the number of screenshots recorded.
+        """
+        with self._lock:
+            snapshot = list(self._manifest)
+
+        if output_path is None:
+            output_path = self.output_dir / "manifest.json"
+
+        payload = {
+            "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "total_screenshots": len(snapshot),
+            "screenshots": [asdict(r) for r in snapshot],
+        }
+        try:
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2, ensure_ascii=False)
+            logger.info(
+                "[ScreenshotManager] Manifest flushed: %d screenshots -> %s",
+                len(snapshot), output_path
+            )
+        except Exception as e:
+            logger.error("[ScreenshotManager] Failed to write manifest: %s", e)
+        return len(snapshot)
+
+    def get_manifest(self) -> List[ScreenshotRecord]:
+        """Return a thread-safe snapshot of the screenshot manifest."""
+        with self._lock:
+            return list(self._manifest)

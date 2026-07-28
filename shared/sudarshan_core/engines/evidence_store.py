@@ -5,11 +5,15 @@ Subscribes to the RuntimeEventBus and builds rich, structured
 EvidenceRecord objects from every Frida hook event.
 
 Each record captures:
-  - timestamp, API, class, method, args, return value
-  - thread_id, stack_trace (up to 6 frames)
+  - finding_id   : sequential EVID-NNN identifier for report cross-referencing
+  - timestamp_ms : Unix milliseconds (from Frida) — used by the report renderer
+  - api, class_name, method, args, return_value
   - severity (LOW / MED / HIGH / CRITICAL)
+  - mitre_technique_id / mitre_technique_name / mitre_tactic
+    resolved at record-build time from the HOOK_TO_MITRE lookup table
   - screenshot_ref (linked by ScreenshotManager after capture)
   - runtime_context (package, pid, analysis stage)
+  - human_description : plain-English event summary for the report timeline
 
 Design rules:
   - Pure subscriber — no side effects outside this module
@@ -40,7 +44,35 @@ from sudarshan_core.engines.event_bus import RuntimeEventBus
 import logging
 logger = logging.getLogger(__name__)
 
-# ─── Severity ordering for sorting / filtering ─────────────────────────────────
+# ─── MITRE lookup (mirrors mitre_mapper.py — duplicated here so evidence_store
+# ─── has zero runtime dependency on mitre_mapper and is fully self-contained) ──
+
+HOOK_TO_MITRE: dict = {
+    "AccessibilityService.onAccessibilityEvent": ("T1417.001", "Input Capture: GUI"),
+    "AccessibilityNodeInfo.performAction":        ("T1417.002", "Input Injection"),
+    "SmsManager.sendTextMessage":                 ("T1582",     "SMS Control"),
+    "ContentResolver.query":                      ("T1636.004", "Protected Data: SMS"),
+    "WindowManager.addView":                      ("T1416",     "Overlay Attack"),
+    "DexClassLoader.<init>":                      ("T1407",     "Download New Code at Runtime"),
+    "DevicePolicyManager.isAdminActive":          ("T1626.001", "Device Admin Abuse"),
+    "DevicePolicyManager.lockNow":                ("T1626.001", "Device Admin Abuse"),
+    "URL.openConnection":                         ("T1437.001", "Web Protocols C2"),
+    "OkHttp.RealCall.execute":                    ("T1437.001", "Web Protocols C2"),
+    "KeyStore.getInstance":                       ("T1634",     "Credentials from Password Store"),
+    "SystemProperties.get":                       ("T1497.001", "Virtualization/Sandbox Evasion"),
+    "Debug.isDebuggerConnected":                  ("T1497.001", "Virtualization/Sandbox Evasion"),
+    "Build.getSerial":                            ("T1497.001", "Virtualization/Sandbox Evasion"),
+    "SharedPreferences.getString":                ("T1409",     "Stored Application Data"),
+    "SharedPreferences.Editor.putString":         ("T1409",     "Stored Application Data"),
+    "ClipboardManager.getText":                   ("T1414",     "Clipboard Data"),
+    "AudioRecord.startRecording":                 ("T1429",     "Microphone/Camera Abuse"),
+    "Camera.open":                                ("T1429",     "Microphone/Camera Abuse"),
+    "TelephonyManager.getDeviceId":               ("T1420",     "File and Directory Discovery"),
+    "TelephonyManager.getSubscriberId":           ("T1422",     "System Network Configuration Discovery"),
+    "ContactsContract.Contacts":                  ("T1636.003", "Protected Data: Contacts"),
+}
+
+# ─── Severity ordering for sorting / filtering ──────────────────────────────────
 
 SEVERITY_ORDER = {"LOW": 0, "MED": 1, "HIGH": 2, "CRITICAL": 3}
 
@@ -54,29 +86,47 @@ class EvidenceRecord:
 
     All fields map directly to the enriched payload emitted by banking_trojan.js v2.
     Fields that are unavailable in older hook payloads default gracefully.
+
+    Report-renderer contract
+    ------------------------
+    The following fields are consumed by report_generator.py's dynamic timeline:
+
+      finding_id          — EVID-NNN cross-reference label
+      timestamp_ms        — Unix ms integer (used for display timestamp)
+      api                 — Hook name shown in timeline header
+      description         — Human-readable event description
+      human_description   — Alias for description (renderer checks both)
+      severity            — LOW / MED / HIGH / CRITICAL
+      mitre_technique_id  — e.g. "T1417.001" (used for MITRE column)
+      screenshot_ref      — relative path to linked screenshot PNG
     """
 
-    id:              str           # UUID4 — unique per record
-    timestamp:       str           # ISO-8601 UTC
-    timestamp_ms:    int           # Unix milliseconds (from Frida)
-    category:        str           # accessibility / sms / overlay / ...
-    severity:        str           # LOW / MED / HIGH / CRITICAL
-    api:             str           # e.g. "AccessibilityService.onAccessibilityEvent"
-    class_name:      str           # Derived from hook name (e.g. "AccessibilityService")
-    method:          str           # Derived from hook name (e.g. "onAccessibilityEvent")
-    args:            List[str]     # Sanitized argument list from hook
-    return_value:    str           # Return value (if captured by hook)
-    thread_id:       int           # OS thread ID from Frida
-    stack_trace:     List[str]     # Up to 6 Java stack frames
-    description:     str           # Human-readable hook description
-    screenshot_ref:  str           # Populated by ScreenshotManager.attach()
-    runtime_context: Dict[str, Any]  # package, analysis_stage, pid, etc.
+    id:                   str           # UUID4 — unique per record
+    finding_id:           str           # EVID-NNN sequential cross-reference
+    timestamp:            str           # ISO-8601 UTC
+    timestamp_ms:         int           # Unix milliseconds (from Frida) — used by renderer
+    category:             str           # accessibility / sms / overlay / ...
+    severity:             str           # LOW / MED / HIGH / CRITICAL
+    api:                  str           # e.g. "AccessibilityService.onAccessibilityEvent"
+    class_name:           str           # Derived from hook name
+    method:               str           # Derived from hook name
+    args:                 list          # Sanitized argument list from hook
+    return_value:         str           # Return value (if captured by hook)
+    thread_id:            int           # OS thread ID from Frida
+    stack_trace:          list          # Up to 6 Java stack frames
+    description:          str           # Human-readable hook description
+    human_description:    str           # Alias for description — explicit for renderer
+    mitre_technique_id:   str           # e.g. "T1417.001" (empty string if unmapped)
+    mitre_technique_name: str           # e.g. "Input Capture: GUI"
+    screenshot_ref:       str           # Populated by ScreenshotManager.attach()
+    screenshot_id:        str           # SCR-NNN cross-reference (set by ScreenshotManager)
+    runtime_context:      dict          # package, analysis_stage, pid, etc.
 
     # Extra fields present on some hooks
-    extra:           Dict[str, Any] = field(default_factory=dict)
+    extra:                dict = field(default_factory=dict)
 
 
-def _parse_hook_name(hook: str) -> tuple[str, str]:
+def _parse_hook_name(hook: str) -> tuple:
     """Split 'ClassName.methodName' into (class_name, method)."""
     if "." in hook:
         parts = hook.rsplit(".", 1)
@@ -84,7 +134,28 @@ def _parse_hook_name(hook: str) -> tuple[str, str]:
     return hook, ""
 
 
-def _build_record(event: Dict[str, Any], runtime_context: Dict[str, Any]) -> EvidenceRecord:
+def _resolve_mitre(api: str) -> tuple:
+    """
+    Resolve a hook API name to a (technique_id, technique_name) pair.
+    Returns empty strings if the hook is not in the lookup table.
+    Falls back to partial matching on class name prefix.
+    """
+    # Exact match
+    if api in HOOK_TO_MITRE:
+        return HOOK_TO_MITRE[api]
+    # Prefix match on class name (e.g. 'AccessibilityService.someOtherMethod')
+    for key, val in HOOK_TO_MITRE.items():
+        klass = key.split(".")[0] if "." in key else key
+        if api.startswith(klass + "."):
+            return val
+    return ("", "")
+
+
+def _build_record(
+    event: Dict[str, Any],
+    runtime_context: Dict[str, Any],
+    finding_id: str,
+) -> "EvidenceRecord":
     """Construct an EvidenceRecord from a raw Frida event dict."""
     data       = event.get("data", {})
     hook       = data.get("hook", "unknown")
@@ -99,26 +170,38 @@ def _build_record(event: Dict[str, Any], runtime_context: Dict[str, Any]) -> Evi
         ts_ms = int(dt.timestamp() * 1000)
     iso_ts = dt.isoformat()
 
+    # MITRE resolution
+    mitre_id, mitre_name = _resolve_mitre(hook)
+
+    # Human description: prefer hook-provided, else synthesize from API name
+    raw_desc = data.get("description", "")
+    human_desc = raw_desc or f"{hook} called (category: {event.get('category', 'unknown')})"
+
     # Reserved keys that have their own top-level fields
     _reserved = {"hook", "severity", "args", "return_value", "description"}
 
     return EvidenceRecord(
-        id              = str(uuid.uuid4()),
-        timestamp       = iso_ts,
-        timestamp_ms    = ts_ms,
-        category        = event.get("category", "unknown"),
-        severity        = data.get("severity", event.get("severity", "MED")).upper(),
-        api             = hook,
-        class_name      = class_name,
-        method          = method,
-        args            = data.get("args", []),
-        return_value    = str(data.get("return_value", "")),
-        thread_id       = event.get("thread_id", 0),
-        stack_trace     = event.get("stack_trace", []),
-        description     = data.get("description", ""),
-        screenshot_ref  = "",   # filled in later by ScreenshotManager
-        runtime_context = runtime_context.copy(),
-        extra           = {k: v for k, v in data.items() if k not in _reserved},
+        id                   = str(uuid.uuid4()),
+        finding_id           = finding_id,
+        timestamp            = iso_ts,
+        timestamp_ms         = ts_ms,
+        category             = event.get("category", "unknown"),
+        severity             = data.get("severity", event.get("severity", "MED")).upper(),
+        api                  = hook,
+        class_name           = class_name,
+        method               = method,
+        args                 = data.get("args", []),
+        return_value         = str(data.get("return_value", "")),
+        thread_id            = event.get("thread_id", 0),
+        stack_trace          = event.get("stack_trace", []),
+        description          = raw_desc,
+        human_description    = human_desc,
+        mitre_technique_id   = mitre_id,
+        mitre_technique_name = mitre_name,
+        screenshot_ref       = "",   # filled in later by ScreenshotManager
+        screenshot_id        = "",   # filled in later by ScreenshotManager
+        runtime_context      = runtime_context.copy(),
+        extra                = {k: v for k, v in data.items() if k not in _reserved},
     )
 
 
@@ -148,6 +231,7 @@ class EvidenceStore:
     ):
         self._records: List[EvidenceRecord] = []
         self._lock    = threading.Lock()
+        self._evid_counter = 0          # drives EVID-NNN sequence
         self._runtime_context = {
             "package_name":   package_name,
             "analysis_stage": analysis_stage,
@@ -158,18 +242,25 @@ class EvidenceStore:
             event_bus.subscribe(self._on_event)
             logger.debug("[EvidenceStore] Subscribed to RuntimeEventBus")
 
+    def _next_evid(self) -> str:
+        """Return the next sequential finding ID, e.g. EVID-001."""
+        self._evid_counter += 1
+        return f"EVID-{self._evid_counter:03d}"
+
     # ── EventBus callback ──────────────────────────────────────────────────────
 
     def _on_event(self, event: Dict[str, Any]) -> None:
         """Called by RuntimeEventBus for every published Frida event."""
         try:
-            record = _build_record(event, self._runtime_context)
+            with self._lock:
+                finding_id = self._next_evid()
+            record = _build_record(event, self._runtime_context, finding_id)
             with self._lock:
                 self._records.append(record)
 
             if record.severity in ("HIGH", "CRITICAL"):
                 logger.info(
-                    f"[EvidenceStore] [{record.severity}] {record.api} "
+                    f"[EvidenceStore] [{record.severity}] [{record.finding_id}] {record.api} "
                     f"— {record.description[:80]}"
                 )
         except Exception as exc:
@@ -202,6 +293,17 @@ class EvidenceStore:
                 self._records[-1].screenshot_ref = screenshot_ref
                 return self._records[-1].id
         return None
+
+    def set_screenshot_id(self, record_id: str, screenshot_id: str) -> bool:
+        """
+        Set the SCR-NNN screenshot_id on an existing evidence record by ID.
+        """
+        with self._lock:
+            for rec in self._records:
+                if rec.id == record_id:
+                    rec.screenshot_id = screenshot_id
+                    return True
+        return False
 
     # ── Context updates ────────────────────────────────────────────────────────
 

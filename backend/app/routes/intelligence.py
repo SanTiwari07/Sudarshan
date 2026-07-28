@@ -229,8 +229,17 @@ async def get_threat_intelligence(
     otx_key = _get_otx_key()
     abuse_key = _get_abuseipdb_key()
 
-    # Re-run correlation if any key is set but correlation was never populated
-    if (vt_key or otx_key or abuse_key) and not tc.get("available") and not tc.get("sources_queried"):
+    queried_sources = set(tc.get("sources_queried") or [])
+
+    # Re-run correlation if new API keys are configured that were not queried yet
+    should_recorrelate = (
+        (vt_key and "VirusTotal" not in queried_sources) or
+        (otx_key and "AlienVault OTX" not in queried_sources) or
+        (abuse_key and "AbuseIPDB" not in queried_sources) or
+        (not tc.get("available") and not queried_sources)
+    )
+
+    if should_recorrelate:
         try:
             urls = rdict.get("hardcoded_urls_ips", [])
             tc = await correlate(sha256_clean, urls=urls, package_name=package_name)

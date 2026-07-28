@@ -31,13 +31,18 @@ def _load_env_if_needed():
     try:
         from pathlib import Path
         from dotenv import load_dotenv
-        curr = Path(__file__).resolve().parent
-        for _ in range(5):
-            env_file = curr / ".env"
+        candidate_paths = [
+            Path("/app/.env"),
+            Path("/opt/sudarshan-core/.env"),
+            Path.cwd() / ".env",
+            Path(__file__).resolve().parent / ".env",
+            Path(__file__).resolve().parent.parent / ".env",
+            Path(__file__).resolve().parent.parent.parent / ".env",
+        ]
+        for env_file in candidate_paths:
             if env_file.exists():
                 load_dotenv(dotenv_path=env_file, override=True)
                 break
-            curr = curr.parent
     except Exception:
         pass
 

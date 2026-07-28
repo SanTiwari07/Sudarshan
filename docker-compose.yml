@@ -37,12 +37,16 @@ services:
       - UPLOADS_DIR=/app/uploads
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+      - VIRUSTOTAL_API_KEY=${VIRUSTOTAL_API_KEY}
+      - OTX_API_KEY=${OTX_API_KEY}
+      - ABUSEIPDB_API_KEY=${ABUSEIPDB_API_KEY}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set in .env}
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
     volumes:
       - ./backend:/app
       - ./shared:/opt/sudarshan-core
+      - ./.env:/app/.env:ro
       - uploads:/app/uploads
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -77,6 +81,9 @@ services:
       # SUDARSHAN_EXPLORER_MODE=ai silently degrades to "monkey".
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+      - VIRUSTOTAL_API_KEY=${VIRUSTOTAL_API_KEY}
+      - OTX_API_KEY=${OTX_API_KEY}
+      - ABUSEIPDB_API_KEY=${ABUSEIPDB_API_KEY}
       - SUDARSHAN_EXPLORER_MODE=${SUDARSHAN_EXPLORER_MODE:-ai}
       - FRIDA_ANALYSIS_DURATION=30
       - ANALYSIS_TIMEOUT_SECONDS=600
@@ -87,6 +94,7 @@ services:
     volumes:
       - ./analysis-engine:/app
       - ./shared:/opt/sudarshan-core
+      - ./.env:/app/.env:ro
       - uploads:/app/uploads
       - ~/.android:/root/.android:ro
       - mitmproxy_har:/mitmproxy_har:ro

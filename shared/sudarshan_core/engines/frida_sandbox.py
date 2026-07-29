@@ -211,9 +211,7 @@ def get_connected_emulators() -> List[str]:
         if "\t" in line:
             serial, state = line.split("\t", 1)
             if state.strip() == "device":
-                # Accept both local emulators and TCP-connected devices
-                if "emulator" in serial or ":" in serial:
-                    devices.append(serial.strip())
+                devices.append(serial.strip())
     return devices
 
 
@@ -1659,7 +1657,7 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
             
     if ReportGenerator is not None:
         try:
-            rg = ReportGenerator(apk_dir, package_name, result)
+            rg = ReportGenerator(result, apk_dir)
             rg.render(apk_dir / "report.html")
         except Exception as e:
             logger.error(f"[Frida] Failed to generate HTML report: {e}")

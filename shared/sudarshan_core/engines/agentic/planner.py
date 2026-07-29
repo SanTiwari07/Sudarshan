@@ -690,14 +690,6 @@ class FallbackPlanner:
 
         self._last_screen_hash = obs.screen_hash
 
-        # Stopping: too many failures
-        if self._consecutive_failures >= FALLBACK_MAX_CONSECUTIVE_FAILURES:
-            logger.warning(
-                f"[FallbackPlanner] {self._consecutive_failures} consecutive failures "
-                f"with no progress — signalling stop."
-            )
-            return None
-
         # Check for loop detection (>3 visits in window of 5)
         if self.world_model.screen_graph.is_loop_detected(shash, max_visits=3, window=5):
             logger.warning(f"[FallbackPlanner] Loop detected on screen {shash[:6]} — triggering backtrack action")
@@ -709,6 +701,14 @@ class FallbackPlanner:
                 "confidence": 0.9,
                 "_source":    "loop_breaker",
             }
+
+        # Stopping: too many failures
+        if self._consecutive_failures >= FALLBACK_MAX_CONSECUTIVE_FAILURES:
+            logger.warning(
+                f"[FallbackPlanner] {self._consecutive_failures} consecutive failures "
+                f"with no progress — signalling stop."
+            )
+            return None
 
         # ── Score UI nodes using Goal Planner ─────────────────────────────────
         goals_suite = get_all_goals()

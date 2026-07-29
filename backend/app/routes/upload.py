@@ -925,7 +925,7 @@ async def job_status(job_id: str, user: dict = Depends(require_analyst)):
     return response
 
 
-# ─── Sandbox Status Endpoint ──────────────────────────────────────────────────
+# ─── Sandbox Status & Debug Endpoints ──────────────────────────────────────────
 
 @router.get("/sandbox/status")
 async def sandbox_status(user: dict = Depends(require_analyst)):
@@ -934,3 +934,14 @@ async def sandbox_status(user: dict = Depends(require_analyst)):
     Check this endpoint before running dynamic analysis.
     """
     return get_sandbox_status()
+
+
+@router.get("/sandbox/debug/{case_id}")
+async def sandbox_debug(case_id: str, user: dict = Depends(require_analyst)):
+    """
+    Returns live pipeline state machine diagnostics, telemetry, SLA budgets, and hook coverage.
+    """
+    from sudarshan_core.engines.pipeline_state import get_tracker
+    tracker = get_tracker(case_id)
+    return tracker.get_diagnostics()
+

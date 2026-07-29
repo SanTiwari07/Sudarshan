@@ -95,15 +95,25 @@ except ImportError:
 
 # ─── Configuration ─────────────────────────────────────────────────────────────
 
+from sudarshan_core.engines.pipeline_state import (
+    PipelineStage,
+    get_tracker,
+    AnalysisOutcome,
+)
+
 # Path to the Frida JS hooks script
-# Frida 17 removed the built-in `Java` global, so the classic Java.perform
-# script must be bundled with frida-java-bridge. Prefer the compiled bundle;
-# fall back to the raw source only if it is missing (frida <= 16 environments).
-# Rebuild with:  npx frida-compile agent.js -o banking_trojan.bundle.js
 _HOOKS_DIR = Path(__file__).parent / "frida_hooks"
 _HOOKS_BUNDLE = _HOOKS_DIR / "banking_trojan.bundle.js"
 _HOOKS_SOURCE = _HOOKS_DIR / "banking_trojan.js"
-_HOOKS_SCRIPT = _HOOKS_BUNDLE if _HOOKS_BUNDLE.exists() else _HOOKS_SOURCE
+
+if _HOOKS_BUNDLE.exists() and _HOOKS_SOURCE.exists():
+    if _HOOKS_SOURCE.stat().st_mtime > _HOOKS_BUNDLE.stat().st_mtime:
+        _HOOKS_SCRIPT = _HOOKS_SOURCE
+    else:
+        _HOOKS_SCRIPT = _HOOKS_BUNDLE
+else:
+    _HOOKS_SCRIPT = _HOOKS_BUNDLE if _HOOKS_BUNDLE.exists() else _HOOKS_SOURCE
+
 
 # UI Exploration Mode
 #   "ai"     : AI + Deterministic UI Explorer only
@@ -639,8 +649,15 @@ class FridaSession:
                 # Publish to Event Bus (EvidenceStore + UIExplorer subscribe here)
                 self.event_bus.publish(event)
 
+            elif msg_type == "ping":
+                self.last_heartbeat_ts = time.time()
+                tracker = get_tracker(self.package_name, self.package_name)
+                tracker.frida_running = True
+
             elif msg_type == "canary":
                 self.canary_received = True
+                tracker = get_tracker(self.package_name, self.package_name)
+                tracker.hooks_loaded = True
                 logger.info(f"[Frida Canary] Script load canary received: {payload.get('msg')}")
 
             elif msg_type == "hook_error":

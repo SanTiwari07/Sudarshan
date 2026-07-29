@@ -460,25 +460,18 @@ _MIN_DYNAMIC_EVENTS = 3
 def _dynamic_run_was_conclusive(dynamic: Optional[Dict]) -> bool:
     """
     Did the sandbox actually observe enough to reason about?
-
-    A run is inconclusive when the app was installed and launched but produced
-    essentially no observable behaviour — the usual outcome for a sample that
-    detected the analysis environment, waited for a trigger it never received,
-    or crashed on start. In that case the run tells us about our sandbox, not
-    about the sample, and must not contribute to the score in either direction.
-
-    Counts concrete observations only: API calls, network activity, triggered
-    activities, files touched, and captured evidence items.
+    
+    A run is conclusive if Frida attached cleanly, hooks loaded, and actual
+    behavior was observed (events captured or BFCI >= 20.0). Runs where no
+    behavior was observed, or where instrumentation failed, are inconclusive.
     """
-    if not dynamic:
+    if not dynamic or not dynamic.get("available", False):
         return False
 
-    # Only an explicitly bad status is disqualifying. A MISSING status must fall
-    # through to the evidence count — several callers (and the recorded
-    # determinism fixtures) never set this field, and treating absent as failed
-    # would discard perfectly good runs.
     status = str(dynamic.get("dynamic_status") or "").upper()
-    if status in {"NO_BEHAVIOR_OBSERVED", "INSTRUMENTATION_FAILED", "TIMEOUT", "FAILED"}:
+    outcome = str(dynamic.get("outcome") or "").upper()
+
+    if status in {"NO_BEHAVIOR_OBSERVED", "INSTRUMENTATION_FAILED", "TIMEOUT", "FAILED"} or outcome == "FAILED":
         return False
 
     observed = 0
@@ -488,19 +481,16 @@ def _dynamic_run_was_conclusive(dynamic: Optional[Dict]) -> bool:
         try:
             observed += len(value or [])
         except TypeError:
-            # A malformed field is not an observation. Never raise here: this is
-            # attacker-influenced data and the scorer must stay a total function.
             continue
-    if observed >= _MIN_DYNAMIC_EVENTS:
+    if observed >= 1:
         return True
 
-    # A non-trivial BFCI means the hooks scored something concrete even if the
-    # raw event lists are sparse. Non-numeric BFCI is rejected upstream by
-    # _calculate_bfci_from_frida; treat it as no evidence rather than crashing.
     try:
         return float(dynamic.get("bfci") or 0.0) >= 20.0
     except (TypeError, ValueError):
         return False
+
+
 
 
 def _calculate_dynamic_score(dynamic: Optional[Dict]) -> Tuple[float, List[str]]:

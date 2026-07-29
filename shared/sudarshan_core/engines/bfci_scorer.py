@@ -200,6 +200,12 @@ def calculate_bfci_v2(
         Tuple of:
           (bfci_score, component_scores, evidence_list, detected_sequences)
     """
+    # ── Scoring Input Pre-validation ──────────────────────────────────────────
+    if collected_events is None:
+        collected_events = {}
+    
+    assert isinstance(collected_events, dict), "collected_events must be a dict"
+
     # ── Component scores (volume-aware) ────────────────────────────────────────
     components: Dict[str, float] = {
         cat: score_component(collected_events.get(cat, []), cat)

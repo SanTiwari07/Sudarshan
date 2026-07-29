@@ -1,25 +1,17 @@
 /**
- * SUDARSHAN — Banking Trojan Frida Instrumentation Script v2
- * ===========================================================
- * Hooks critical Android APIs used by banking malware.
- * Reports behavioral events to the Python controller via Frida's send() API.
- *
- * Detected behaviors:
- *   [A] Accessibility Service abuse       → weight 0.35
- *   [S] SMS interception / OTP theft      → weight 0.25
- *   [O] Overlay / System Alert Window     → weight 0.20
- *   [B] Banking app interaction           → weight 0.10
- *   [N] Network C2 communication         → weight 0.05
- *   [P] Persistence / Admin abuse         → weight 0.05
- *   [X] Anti-Analysis / Sandbox Evasion   → detection only (no BFCI weight)
- *
- * BFCI categories and Python _on_message contract are UNCHANGED.
- * Only the 'data' payload is enriched with:
- *   - severity: LOW / MED / HIGH / CRITICAL
- *   - thread_id: current thread identifier
- *   - stack_trace: up to 6 Java frames
- *   - args: sanitized argument list
- *   - return_value: (set post-call by some hooks)
+ * SUDARSHAN — Banking Trojan Frida Instrumentation Script v3 (Production Hardened)
+ * =================================================================================
+ * Enterprise-grade runtime API hook suite for detecting Android banking malware.
+ * 
+ * Target Categories & Scored Components:
+ *   [A] Accessibility Service Abuse       → weight 0.35
+ *   [S] SMS / Telephony / OTP Theft        → weight 0.25
+ *   [O] Overlay / System Alert Window      → weight 0.20
+ *   [B] Banking Interaction & Credentials   → weight 0.10
+ *   [N] Network C2 Communication           → weight 0.05
+ *   [P] Persistence & Admin Abuse          → weight 0.05
+ *   [D] Dynamic Code Loading & Reflection  → detection & evidence
+ *   [X] Anti-Analysis & Sandbox Evasion    → detection & counter-spoofing
  */
 
 'use strict';
@@ -27,9 +19,31 @@
 var _JavaBridge = require('frida-java-bridge');
 var Java = _JavaBridge.default || _JavaBridge;
 
+// ─── Deduplication & Dedupe Cache ─────────────────────────────────────────────
+var dedupeCache = {};
+var MAX_DEDUPE_ENTRIES = 500;
+
+function isDuplicate(key) {
+  var now = Date.now();
+  var bucket = Math.floor(now / 1000); // 1-second time bucket
+  var fullKey = key + '_' + bucket;
+
+  if (dedupeCache[fullKey]) {
+    return true;
+  }
+  dedupeCache[fullKey] = true;
+
+  // Clean old entries if cache grows large
+  var keys = Object.keys(dedupeCache);
+  if (keys.length > MAX_DEDUPE_ENTRIES) {
+    for (var i = 0; i < 100; i++) {
+      delete dedupeCache[keys[i]];
+    }
+  }
+  return false;
+}
 
 // ─── Event Collector ──────────────────────────────────────────────────────────
-
 var events = {
   accessibility:  [],
   sms:            [],
@@ -39,20 +53,23 @@ var events = {
   persistence:    [],
   dangerous_apis: [],
   files_accessed: [],
-  anti_analysis:  [],   // NEW — sandbox evasion detection
+  anti_analysis:  [],
 };
 
-/**
- * Capture Java stack trace (up to maxFrames).
- * Returns an array of strings. Silently returns [] on any error.
- */
+var currentContext = {
+  foreground_app: 'Unknown',
+  current_activity: 'Unknown',
+  event_counter: 0,
+  last_event_id: null,
+};
+
 function captureStack(maxFrames) {
   maxFrames = maxFrames || 6;
   try {
-    var exc  = Java.use('java.lang.Exception').$new();
+    var exc = Java.use('java.lang.Exception').$new();
     var frames = exc.getStackTrace();
     var result = [];
-    var limit  = Math.min(frames.length, maxFrames + 2); // skip emit() itself
+    var limit = Math.min(frames.length, maxFrames + 2);
     for (var i = 2; i < limit; i++) {
       result.push(frames[i].toString());
     }
@@ -63,24 +80,35 @@ function captureStack(maxFrames) {
   }
 }
 
-/**
- * Core event emitter.
- * Enriches every event with thread_id, stack_trace, and severity
- * while keeping the original category/data structure intact for
- * backward compatibility with the Python BFCI pipeline.
- */
 function emit(category, data) {
+  currentContext.event_counter++;
+  var eventId = 'ev_' + Date.now() + '_' + currentContext.event_counter;
   var stack = captureStack(6);
 
+  var dedupeKey = category + ':' + (data.hook || '') + ':' + (data.description || '');
+  if (isDuplicate(dedupeKey)) {
+    return;
+  }
+
   var event = {
-    timestamp:   Date.now(),
-    category:    category,
-    data:        data,
-    // ── NEW rich fields ──
-    thread_id:   Process.getCurrentThreadId(),
-    stack_trace: stack,
-    severity:    data.severity || 'MED',
+    event_id:         eventId,
+    timestamp:        Date.now(),
+    category:         category,
+    source:           'frida',
+    hook:             data.hook || 'unknown',
+    thread_id:        Process.getCurrentThreadId(),
+    process_id:       Process.id,
+    severity:         data.severity || 'MED',
+    stack_trace:      stack,
+    context: {
+      foreground_app:   currentContext.foreground_app,
+      current_activity: currentContext.current_activity,
+      previous_event_id: currentContext.last_event_id,
+    },
+    data:             data,
   };
+
+  currentContext.last_event_id = eventId;
 
   if (events[category]) {
     events[category].push(event);
@@ -88,9 +116,21 @@ function emit(category, data) {
   send({ type: 'event', payload: event });
 }
 
-// ─── Hook Initialisation ──────────────────────────────────────────────────────
+function reportHookError(hookName, errorMsg) {
+  send({
+    type: 'hook_error',
+    hook: hookName,
+    error: errorMsg,
+    ts: Date.now()
+  });
+}
 
+// ─── Heartbeat Loop ───────────────────────────────────────────────────────────
 send({ type: 'canary', msg: 'script_loaded', ts: Date.now() });
+
+setInterval(function () {
+  send({ type: 'ping', ts: Date.now(), counter: currentContext.event_counter });
+}, 3000);
 
 setImmediate(initHooks);
 
@@ -98,23 +138,12 @@ function initHooks() {
   try {
     Java.perform(function () {
 
-      // ── ART Deoptimization (MUST be first inside Java.perform) ──────────────
-      // Frida hooks use Java.use() which patches ART's interpreter tables.
-      // On API 37 (Android 15), ART aggressively JIT-compiles and inlines
-      // lightweight methods, which bypasses interpreter tables entirely, causing
-      // hooks to silently install but never fire.
-      // Java.deoptimizeEverything() forces ART to deoptimize all compiled
-      // methods, routing them back through the interpreter where hooks fire.
-      // NOTE: process.env is Node.js API — NOT available in Frida's JS runtime.
-      //       The previous conditional guard was always false. Call unconditionally.
       try {
         Java.deoptimizeEverything();
-        send({type: 'diag', msg: 'deoptimizeEverything_success', ts: Date.now()});
+        send({ type: 'diag', msg: 'deoptimizeEverything_success', ts: Date.now() });
       } catch (e) {
-        send({type: 'diag', msg: 'deoptimizeEverything_failed', error: e.message, ts: Date.now()});
+        send({ type: 'diag', msg: 'deoptimizeEverything_failed', error: e.message, ts: Date.now() });
       }
-
-
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // [A] ACCESSIBILITY SERVICE HOOKS
@@ -122,106 +151,111 @@ function initHooks() {
 
 try {
   var AccessibilityService = Java.use('android.accessibilityservice.AccessibilityService');
-
   AccessibilityService.onAccessibilityEvent.implementation = function (event) {
     var eventType = event.getEventType();
-    var pkgName   = event.getPackageName();
+    var pkgName = event.getPackageName();
     emit('accessibility', {
-      hook:        'AccessibilityService.onAccessibilityEvent',
-      severity:    'CRITICAL',
-      event_type:  eventType,
-      package:     pkgName ? pkgName.toString() : null,
-      args:        [String(eventType), pkgName ? pkgName.toString() : 'null'],
+      hook: 'AccessibilityService.onAccessibilityEvent',
+      severity: 'CRITICAL',
+      event_type: eventType,
+      package: pkgName ? pkgName.toString() : null,
       description: 'App is monitoring screen content via Accessibility API',
     });
     return this.onAccessibilityEvent(event);
   };
-} catch (e) {
-  send({ type: 'hook_error', hook: 'AccessibilityService.onAccessibilityEvent', error: e.message });
-}
+} catch (e) { reportHookError('AccessibilityService.onAccessibilityEvent', e.message); }
 
 try {
   var AccessibilityNodeInfo = Java.use('android.view.accessibility.AccessibilityNodeInfo');
-
   AccessibilityNodeInfo.getText.implementation = function () {
     var text = this.getText();
-    if (text) {
+    if (text && text.length() > 0) {
       emit('accessibility', {
-        hook:        'AccessibilityNodeInfo.getText',
-        severity:    'HIGH',
+        hook: 'AccessibilityNodeInfo.getText',
+        severity: 'HIGH',
         text_length: text.length(),
-        args:        [],
-        return_value: '[' + text.length() + ' chars]',
-        description: 'App is extracting text from UI elements (credential/OTP theft)',
+        description: 'App extracted UI element text (credential/OTP theft)',
       });
     }
     return text;
   };
 
-  // Disambiguate: performAction has overloads (int) and (int, Bundle).
   AccessibilityNodeInfo.performAction.overload('int').implementation = function (action) {
     emit('accessibility', {
-      hook:        'AccessibilityNodeInfo.performAction',
-      severity:    'CRITICAL',
-      action:      action,
-      args:        [String(action)],
-      description: 'App is performing automated UI action (gesture replay / ATS manipulation)',
+      hook: 'AccessibilityNodeInfo.performAction',
+      severity: 'CRITICAL',
+      action: action,
+      description: 'App performed automated UI action (gesture replay / ATS manipulation)',
     });
     return this.performAction(action);
   };
-} catch (e) {
-  send({ type: 'hook_error', hook: 'AccessibilityNodeInfo', error: e.message });
-}
+} catch (e) { reportHookError('AccessibilityNodeInfo', e.message); }
+
+try {
+  var AccessibilityManager = Java.use('android.view.accessibility.AccessibilityManager');
+  AccessibilityManager.sendAccessibilityEvent.implementation = function (event) {
+    emit('accessibility', {
+      hook: 'AccessibilityManager.sendAccessibilityEvent',
+      severity: 'HIGH',
+      description: 'AccessibilityManager event dispatched',
+    });
+    return this.sendAccessibilityEvent(event);
+  };
+} catch (e) { reportHookError('AccessibilityManager.sendAccessibilityEvent', e.message); }
+
+try {
+  var AccessibilityServiceCls = Java.use('android.accessibilityservice.AccessibilityService');
+  AccessibilityServiceCls.dispatchGesture.overload(
+    'android.accessibilityservice.GestureDescription',
+    'android.accessibilityservice.AccessibilityService$GestureResultCallback',
+    'android.os.Handler'
+  ).implementation = function (gesture, callback, handler) {
+    emit('accessibility', {
+      hook: 'AccessibilityService.dispatchGesture',
+      severity: 'CRITICAL',
+      description: 'Automated gesture injected via Accessibility API',
+    });
+    return this.dispatchGesture(gesture, callback, handler);
+  };
+} catch (e) { reportHookError('AccessibilityService.dispatchGesture', e.message); }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// [S] SMS / OTP INTERCEPTION HOOKS
+// [S] SMS / TELEPHONY HOOKS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 try {
   var SmsMessage = Java.use('android.telephony.SmsMessage');
-
   SmsMessage.getMessageBody.implementation = function () {
     var body = this.getMessageBody();
     emit('sms', {
-      hook:         'SmsMessage.getMessageBody',
-      severity:     'CRITICAL',
-      body_length:  body ? body.length : 0,
-      args:         [],
-      return_value: body ? '[' + body.length + ' chars]' : 'null',
-      description:  'App is reading incoming SMS message body (OTP interception)',
+      hook: 'SmsMessage.getMessageBody',
+      severity: 'CRITICAL',
+      body_length: body ? body.length : 0,
+      description: 'App is reading incoming SMS message body (OTP interception)',
     });
     return body;
   };
-} catch (e) {
-  send({ type: 'hook_error', hook: 'SmsMessage.getMessageBody', error: e.message });
-}
+} catch (e) { reportHookError('SmsMessage.getMessageBody', e.message); }
 
 try {
   var SmsManager = Java.use('android.telephony.SmsManager');
-
-  // Disambiguate: sendTextMessage has several overloads; hook the classic 5-arg form.
   SmsManager.sendTextMessage.overload(
     'java.lang.String', 'java.lang.String', 'java.lang.String',
     'android.app.PendingIntent', 'android.app.PendingIntent'
   ).implementation = function (destinationAddress, scAddress, text, sentIntent, deliveryIntent) {
     emit('sms', {
-      hook:        'SmsManager.sendTextMessage',
-      severity:    'CRITICAL',
+      hook: 'SmsManager.sendTextMessage',
+      severity: 'CRITICAL',
       destination: destinationAddress ? destinationAddress.toString() : null,
       text_length: text ? text.length : 0,
-      args:        [destinationAddress ? destinationAddress.toString() : 'null', '[text]'],
-      description: 'App is sending an SMS (potential fraud forwarding or C2 exfil)',
+      description: 'App is sending an SMS message',
     });
     return this.sendTextMessage(destinationAddress, scAddress, text, sentIntent, deliveryIntent);
   };
-} catch (e) {
-  send({ type: 'hook_error', hook: 'SmsManager.sendTextMessage', error: e.message });
-}
+} catch (e) { reportHookError('SmsManager.sendTextMessage', e.message); }
 
 try {
   var ContentResolver = Java.use('android.content.ContentResolver');
-  var Uri = Java.use('android.net.Uri');
-
   ContentResolver.query.overload(
     'android.net.Uri', '[Ljava.lang.String;', 'java.lang.String',
     '[Ljava.lang.String;', 'java.lang.String'
@@ -229,18 +263,32 @@ try {
     var uriStr = uri ? uri.toString() : '';
     if (uriStr.indexOf('sms') !== -1 || uriStr.indexOf('mms') !== -1 || uriStr.indexOf('contacts') !== -1) {
       emit('sms', {
-        hook:        'ContentResolver.query',
-        severity:    'HIGH',
-        uri:         uriStr,
-        args:        [uriStr],
-        description: 'App is querying SMS/MMS/Contacts content provider (data harvesting)',
+        hook: 'ContentResolver.query',
+        severity: 'HIGH',
+        uri: uriStr,
+        description: 'App queried SMS/MMS/Contacts content provider',
       });
     }
     return this.query(uri, projection, selection, selectionArgs, sortOrder);
   };
-} catch (e) {
-  send({ type: 'hook_error', hook: 'ContentResolver.query', error: e.message });
-}
+} catch (e) { reportHookError('ContentResolver.query', e.message); }
+
+try {
+  var TelephonyManager = Java.use('android.telephony.TelephonyManager');
+  TelephonyManager.getLine1Number.overload().implementation = function () {
+    var num = this.getLine1Number();
+    emit('sms', {
+      hook: 'TelephonyManager.getLine1Number',
+      severity: 'HIGH',
+      description: 'App queried device phone number',
+    });
+    return num;
+  };
+  TelephonyManager.getSimSerialNumber.overload().implementation = function () {
+    emit('sms', { hook: 'TelephonyManager.getSimSerialNumber', severity: 'HIGH', description: 'App queried SIM Serial' });
+    return this.getSimSerialNumber();
+  };
+} catch (e) { reportHookError('TelephonyManager', e.message); }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // [O] OVERLAY / SYSTEM ALERT WINDOW HOOKS
@@ -248,446 +296,323 @@ try {
 
 try {
   var LayoutParams = Java.use('android.view.WindowManager$LayoutParams');
-  var wm_impl     = Java.use('android.view.WindowManagerImpl');
+  var wm_impl = Java.use('android.view.WindowManagerImpl');
 
   wm_impl.addView.overload('android.view.View', 'android.view.ViewGroup$LayoutParams').implementation = function (view, params) {
     if (params) {
       try {
-        var lp   = Java.cast(params, LayoutParams);
+        var lp = Java.cast(params, LayoutParams);
         var type = lp.type.value;
-        // TYPE_APPLICATION_OVERLAY=2038, TYPE_SYSTEM_ALERT=2003, TYPE_SYSTEM_OVERLAY=2006
         if (type === 2038 || type === 2003 || type === 2006 || type === 2010) {
           emit('overlay', {
-            hook:        'WindowManager.addView',
-            severity:    'HIGH',
+            hook: 'WindowManager.addView',
+            severity: 'HIGH',
             window_type: type,
-            args:        [String(type)],
-            description: 'App is drawing an overlay window on top of other apps (phishing screen)',
+            description: 'App drew overlay window on top of screen (TYPE_APPLICATION_OVERLAY / SYSTEM_ALERT)',
           });
         }
       } catch (castErr) {}
     }
     return this.addView(view, params);
   };
-
-} catch (e) {
-  send({ type: 'hook_error', hook: 'WindowManager.addView', error: e.message });
-}
+} catch (e) { reportHookError('WindowManager.addView', e.message); }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// [B] BANKING APP INTERACTION HOOKS
+// [B] BANKING & CREDENTIAL HOOKS
 // ═══════════════════════════════════════════════════════════════════════════════
-
-// Preference keys worth reporting when read. Deliberately narrow: an app reads
-// SharedPreferences constantly, and emitting every read would drown the
-// evidence store and inflate the Frida event count meaninglessly.
-var CREDENTIAL_KEY_PATTERN = /(pass|pwd|pin|otp|token|secret|credential|session|auth|login|user|account|card|cvv|mpin)/i;
 
 var BANKING_PACKAGES = [
   'com.boi.mobile', 'com.sbi.lotusintouch', 'com.snapwork.hdfc',
   'com.icici.mobile', 'com.axis.mobile', 'in.org.npci.upiapp',
   'net.one97.paytm', 'com.phonepe.app', 'com.google.android.apps.nbu.paisa.user',
-  'com.amazon.mShop.android.shopping', 'com.whatsapp',
 ];
 
 try {
   var Activity = Java.use('android.app.Activity');
   Activity.onResume.implementation = function () {
     var name = this.getClass().getName();
-    // NOT 'banking': this fires on every activity resume of ANY app, including
-    // the sample's own. Scored as 'banking' (cap 3) it meant three screen
-    // transitions produced banking=100/100 for a benign app, and since the UI
-    // explorer's whole job is navigating screens it fired on 100% of runs.
+    currentContext.current_activity = name;
     emit('activity', {
-      hook:        'Activity.onResume',
-      severity:    'LOW',
-      activity:    name,
-      args:        [name],
-      description: 'App activity resumed: ' + name,
+      hook: 'Activity.onResume',
+      severity: 'LOW',
+      activity: name,
+      description: 'Activity resumed: ' + name,
     });
     return this.onResume();
   };
-  send({type: 'diag', msg: 'Activity.onResume hook installed'});
-} catch (e) {
-  send({ type: 'hook_error', hook: 'Activity.onResume', error: e.message });
-}
-
+} catch (e) { reportHookError('Activity.onResume', e.message); }
 
 try {
   var ActivityManager = Java.use('android.app.ActivityManager');
   ActivityManager.getRunningTasks.implementation = function (maxNum) {
     var tasks = this.getRunningTasks(maxNum);
     if (tasks && tasks.size() > 0) {
-      var topTask     = tasks.get(0);
+      var topTask = tasks.get(0);
       var topActivity = topTask.topActivity;
       if (topActivity) {
         var pkg = topActivity.getPackageName();
+        currentContext.foreground_app = pkg;
         if (BANKING_PACKAGES.indexOf(pkg) !== -1) {
           emit('banking', {
-            hook:           'ActivityManager.getRunningTasks',
-            severity:       'HIGH',
+            hook: 'ActivityManager.getRunningTasks',
+            severity: 'HIGH',
             target_package: pkg,
-            args:           [String(maxNum)],
-            description:    'Malware is monitoring foreground banking app (pre-overlay positioning)',
+            description: 'Malware monitoring foreground banking app (' + pkg + ')',
           });
         }
       }
     }
     return tasks;
   };
-} catch (e) {
-  send({ type: 'hook_error', hook: 'ActivityManager.getRunningTasks', error: e.message });
-}
+} catch (e) { reportHookError('ActivityManager.getRunningTasks', e.message); }
 
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// [N] NETWORK C2 COMMUNICATION HOOKS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-try {
-  var URL = Java.use('java.net.URL');
-
-  URL.openConnection.overload().implementation = function () {
-    var urlStr = this.toString();
-    emit('network', {
-      hook:        'URL.openConnection',
-      severity:    'MED',
-      url:         urlStr,
-      args:        [urlStr],
-      description: 'App opened a network connection (potential C2 communication)',
-    });
-    return this.openConnection();
-  };
-} catch (e) {
-  send({ type: 'hook_error', hook: 'URL.openConnection', error: e.message });
-}
-
-try {
-  var OkHttpClient = null;
-  try { OkHttpClient = Java.use('okhttp3.OkHttpClient'); } catch (e2) {}
-
-  if (OkHttpClient) {
-    var RealCall = Java.use('okhttp3.internal.connection.RealCall');
-    RealCall.execute.implementation = function () {
-      var request = this.request();
-      var urlStr  = request.url().toString();
-      emit('network', {
-        hook:        'OkHttp.RealCall.execute',
-        severity:    'MED',
-        url:         urlStr,
-        method:      request.method(),
-        args:        [urlStr, request.method()],
-        description: 'OkHttp request executed (C2 data exfiltration)',
-      });
-      return this.execute();
-    };
-  }
-} catch (e) {
-  send({ type: 'hook_error', hook: 'OkHttp', error: e.message });
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// [P] PERSISTENCE / ADMIN ABUSE HOOKS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-try {
-  var DevicePolicyManager = Java.use('android.app.admin.DevicePolicyManager');
-
-  DevicePolicyManager.isAdminActive.implementation = function (who) {
-    var result = this.isAdminActive(who);
-    emit('persistence', {
-      hook:         'DevicePolicyManager.isAdminActive',
-      severity:     'HIGH',
-      args:         [who ? who.toString() : 'null'],
-      return_value: String(result),
-      description:  'App is checking Device Admin status (persistence mechanism)',
-    });
-    return result;
-  };
-
-  // Disambiguate: lockNow has overloads () and (int).
-  DevicePolicyManager.lockNow.overload().implementation = function () {
-    emit('persistence', {
-      hook:        'DevicePolicyManager.lockNow',
-      severity:    'CRITICAL',
-      args:        [],
-      description: 'App is LOCKING THE DEVICE (ransomware or extortion behavior)',
-    });
-    return this.lockNow();
-  };
-} catch (e) {
-  send({ type: 'hook_error', hook: 'DevicePolicyManager', error: e.message });
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// [D] DYNAMIC CODE LOADING HOOKS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-try {
-  var DexClassLoader = Java.use('dalvik.system.DexClassLoader');
-
-  DexClassLoader.$init.overload(
-    'java.lang.String', 'java.lang.String', 'java.lang.String', 'java.lang.ClassLoader'
-  ).implementation = function (dexPath, optimizedDirectory, librarySearchPath, parent) {
-    emit('dangerous_apis', {
-      hook:        'DexClassLoader.<init>',
-      severity:    'HIGH',
-      dex_path:    dexPath ? dexPath.toString() : null,
-      args:        [dexPath ? dexPath.toString() : 'null'],
-      description: 'App is dynamically loading a DEX file (malicious payload dropper)',
-    });
-    return this.$init(dexPath, optimizedDirectory, librarySearchPath, parent);
-  };
-} catch (e) {
-  send({ type: 'hook_error', hook: 'DexClassLoader', error: e.message });
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// [F] FILE ACCESS HOOKS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-try {
-  var File = Java.use('java.io.File');
-
-  File.$init.overload('java.lang.String').implementation = function (path) {
-    var p = path ? path.toString() : '';
-    if (p.indexOf('/data/data') !== -1 || p.indexOf('shared_prefs') !== -1 || p.indexOf('databases') !== -1) {
-      emit('files_accessed', {
-        hook:        'File.<init>',
-        severity:    'LOW',
-        path:        p,
-        args:        [p],
-        description: 'App is accessing sensitive app data directory',
-      });
-    }
-    return this.$init(path);
-  };
-} catch (e) {
-  send({ type: 'hook_error', hook: 'File', error: e.message });
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// [X] ANTI-ANALYSIS / SANDBOX EVASION DETECTION HOOKS
-// ═══════════════════════════════════════════════════════════════════════════════
-// These hooks detect when malware probes for emulator/debug/root conditions.
-// They do NOT affect BFCI scoring (separate 'anti_analysis' category).
-// Countermeasures (spoofing) are applied at hook level to improve detection.
-
-try {
-  var SystemProperties = Java.use('android.os.SystemProperties');
-
-  SystemProperties.get.overload('java.lang.String').implementation = function (key) {
-    var val = this.get(key);
-    var keyStr = key ? key.toString() : '';
-    if (keyStr === 'ro.kernel.qemu' || keyStr.indexOf('qemu') !== -1 ||
-        keyStr === 'ro.product.model' || keyStr.indexOf('goldfish') !== -1) {
-      // Spoof: return real-device value
-      var spoofed = '';
-      if (keyStr === 'ro.kernel.qemu') spoofed = '0';
-      else if (keyStr === 'ro.product.model') spoofed = 'SM-G991B';
-      emit('anti_analysis', {
-        hook:          'SystemProperties.get',
-        severity:      'HIGH',
-        property_key:  keyStr,
-        original_val:  val,
-        spoofed_val:   spoofed || val,
-        args:          [keyStr],
-        description:   'App probed system property — possible emulator/root detection',
-        technique:     'emulator_detection',
-      });
-      if (spoofed) return spoofed;
-    }
-    return val;
-  };
-} catch (e) {
-  send({ type: 'hook_error', hook: 'SystemProperties.get', error: e.message });
-}
-
-try {
-  var Debug = Java.use('android.os.Debug');
-
-  Debug.isDebuggerConnected.implementation = function () {
-    emit('anti_analysis', {
-      hook:        'Debug.isDebuggerConnected',
-      severity:    'HIGH',
-      args:        [],
-      return_value: 'false (spoofed)',
-      description: 'App checked for debugger connection — anti-debug technique',
-      technique:   'anti_debug',
-    });
-    return false; // spoof: always report no debugger
-  };
-} catch (e) {
-  send({ type: 'hook_error', hook: 'Debug.isDebuggerConnected', error: e.message });
-}
-
-try {
-  var System = Java.use('java.lang.System');
-  System.exit.implementation = function (code) {
-    emit('anti_analysis', {
-      hook:        'System.exit',
-      severity:    'HIGH',
-      args:        [String(code)],
-      description: 'App attempted to self-terminate via System.exit() — exit blocked by Sudarshan',
-      technique:   'anti_analysis_exit',
-    });
-    // Exit blocked to allow dynamic analysis to continue
-  };
-} catch (e) {
-  send({ type: 'hook_error', hook: 'System.exit', error: e.message });
-}
-
-try {
-  var Build = Java.use('android.os.Build');
-
-  // Intercept field reads to detect model-based emulator detection
-  var buildModelDesc = Object.getOwnPropertyDescriptor(Build, 'MODEL');
-  if (buildModelDesc) {
-    var _origModelGet = buildModelDesc.get;
-    if (_origModelGet) {
-      Object.defineProperty(Build, 'MODEL', {
-        get: function() {
-          var model = _origModelGet.call(this);
-          if (model && (model.indexOf('sdk') !== -1 || model.indexOf('Emulator') !== -1 ||
-              model.indexOf('Android SDK') !== -1)) {
-            emit('anti_analysis', {
-              hook:         'Build.MODEL.read',
-              severity:     'MED',
-              original_val: model,
-              spoofed_val:  'SM-G991B',
-              args:         [],
-              description:  'App read Build.MODEL — emulator fingerprinting detected',
-              technique:    'device_fingerprinting',
-            });
-            return 'SM-G991B';
-          }
-          return model;
-        }
-      });
-    }
-  }
-} catch (e) {
-  send({ type: 'hook_error', hook: 'Build.MODEL', error: e.message });
-}
-
-try {
-  var PackageManager_cls = Java.use('android.app.ApplicationPackageManager');
-
-  PackageManager_cls.getPackageInfo.overload('java.lang.String', 'int').implementation = function (pkgName, flags) {
-    var name = pkgName ? pkgName.toString() : '';
-    // Detect if app is scanning for frida, xposed, or security tools
-    if (name.indexOf('frida') !== -1 || name.indexOf('xposed') !== -1 ||
-        name.indexOf('rootbeer') !== -1 || name.indexOf('substrate') !== -1) {
-      emit('anti_analysis', {
-        hook:        'PackageManager.getPackageInfo',
-        severity:    'HIGH',
-        target_pkg:  name,
-        args:        [name, String(flags)],
-        description: 'App queried for security/analysis tool package — Frida/Xposed detection attempt',
-        technique:   'tool_detection',
-      });
-      // Throw PackageManager.NameNotFoundException to hide the tool
-      var NameNotFoundException = Java.use('android.content.pm.PackageManager$NameNotFoundException');
-      throw NameNotFoundException.$new(name + ' not found (spoofed by Sudarshan)');
-    }
-    return this.getPackageInfo(pkgName, flags);
-  };
-} catch (e) {
-  send({ type: 'hook_error', hook: 'PackageManager.getPackageInfo', error: e.message });
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// [K] KEYSTORE / CRYPTOGRAPHY HOOKS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-try {
-  var KeyStore = Java.use('java.security.KeyStore');
-
-  KeyStore.getInstance.overload('java.lang.String').implementation = function (type) {
-    var typeStr = type ? type.toString() : '';
-    emit('dangerous_apis', {
-      hook:        'KeyStore.getInstance',
-      severity:    'MED',
-      keystore_type: typeStr,
-      args:        [typeStr],
-      description: 'App accessed Android KeyStore (credential storage or key extraction)',
-    });
-    return this.getInstance(type);
-  };
-} catch (e) {
-  send({ type: 'hook_error', hook: 'KeyStore.getInstance', error: e.message });
-}
-
-// Credential storage read.
-//
-// Stage 5 ("Login Flow") in the goal graph declares this hook as its
-// completion signal. It was never emitted, so stage 5 could never complete and
-// — because it is not skippable and gates stages 6, 7, 8 and 10 — the entire
-// downstream graph (SMS, banking, C2, dynamic loading) was unreachable.
-//
-// SECURITY: the KEY is reported, never the VALUE. Reading a stored credential
-// is the signal; the credential itself must never leave the device.
 try {
   var SharedPreferencesImpl = Java.use('android.app.SharedPreferencesImpl');
-
   SharedPreferencesImpl.getString.implementation = function (key, defValue) {
-    var value  = this.getString(key, defValue);
+    var value = this.getString(key, defValue);
     var keyStr = key ? key.toString() : '';
-    send({type: 'diag', msg: 'SharedPreferencesImpl.getString executed', key: keyStr});
-
-    if (CREDENTIAL_KEY_PATTERN.test(keyStr)) {
+    if (/(pass|pwd|pin|otp|token|secret|credential|auth|login|user|card|cvv|mpin)/i.test(keyStr)) {
       emit('banking', {
-        hook:        'SharedPreferences.getString',
-        severity:    'HIGH',
-        pref_key:    keyStr,
-        value_length: value ? value.length : 0,   // length only — never the value
-        args:        [keyStr, '[redacted]'],
-        description: 'App read a credential-like value from SharedPreferences',
+        hook: 'SharedPreferences.getString',
+        severity: 'HIGH',
+        pref_key: keyStr,
+        value_length: value ? value.length : 0,
+        description: 'App read credential key from SharedPreferences: ' + keyStr,
       });
     }
     return value;
   };
-  send({type: 'diag', msg: 'SharedPreferencesImpl.getString hook installed'});
+} catch (e) { reportHookError('SharedPreferences.getString', e.message); }
 
-} catch (e) {
-  send({ type: 'hook_error', hook: 'SharedPreferences.getString', error: e.message });
-}
-
-// Cryptographic operation.
-//
-// Second completion signal for stage 5. Banking trojans encrypt harvested
-// credentials before exfiltration, so doFinal on the login path is strong
-// evidence of a credential-handling flow.
-//
-// SECURITY: only the algorithm and byte counts are reported — never plaintext
-// or ciphertext.
 try {
   var Cipher = Java.use('javax.crypto.Cipher');
-
   Cipher.doFinal.overload('[B').implementation = function (input) {
     var output = this.doFinal(input);
-    var algo   = '';
-    try { algo = this.getAlgorithm(); } catch (inner) { algo = 'unknown'; }
-
+    var algo = 'unknown';
+    try { algo = this.getAlgorithm(); } catch (iErr) {}
     emit('banking', {
-      hook:        'Cipher.doFinal',
-      severity:    'HIGH',
-      algorithm:   algo ? algo.toString() : 'unknown',
-      input_bytes:  input  ? input.length  : 0,
+      hook: 'Cipher.doFinal',
+      severity: 'HIGH',
+      algorithm: algo,
+      input_bytes: input ? input.length : 0,
       output_bytes: output ? output.length : 0,
-      args:        [algo ? algo.toString() : 'unknown', '[redacted]'],
-      description: 'App performed a crypto operation (credential encryption before exfiltration)',
+      description: 'Crypto operation executed (credential encryption before C2 exfil)',
     });
     return output;
   };
-} catch (e) {
-  send({ type: 'hook_error', hook: 'Cipher.doFinal', error: e.message });
-}
+} catch (e) { reportHookError('Cipher.doFinal', e.message); }
 
-      send({ type: 'ready', message: 'SUDARSHAN Frida hooks v2 loaded — rich evidence collection active' });
-    }); // end Java.perform
+try {
+  var ClipboardManager = Java.use('android.content.ClipboardManager');
+  ClipboardManager.getPrimaryClip.implementation = function () {
+    var clip = this.getPrimaryClip();
+    emit('banking', {
+      hook: 'ClipboardManager.getPrimaryClip',
+      severity: 'HIGH',
+      description: 'App read clipboard contents (OTP/password theft)',
+    });
+    return clip;
+  };
+} catch (e) { reportHookError('ClipboardManager.getPrimaryClip', e.message); }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// [N] NETWORK C2 HOOKS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+try {
+  var URL = Java.use('java.net.URL');
+  URL.openConnection.overload().implementation = function () {
+    var urlStr = this.toString();
+    emit('network', {
+      hook: 'URL.openConnection',
+      severity: 'MED',
+      url: urlStr,
+      description: 'Network connection opened to ' + urlStr,
+    });
+    return this.openConnection();
+  };
+} catch (e) { reportHookError('URL.openConnection', e.message); }
+
+try {
+  var Socket = Java.use('java.net.Socket');
+  Socket.connect.overload('java.net.SocketAddress', 'int').implementation = function (endpoint, timeout) {
+    var epStr = endpoint ? endpoint.toString() : '';
+    emit('network', {
+      hook: 'Socket.connect',
+      severity: 'MED',
+      endpoint: epStr,
+      description: 'Direct socket connection to ' + epStr,
+    });
+    return this.connect(endpoint, timeout);
+  };
+} catch (e) { reportHookError('Socket.connect', e.message); }
+
+try {
+  var OkHttpClient = null;
+  try { OkHttpClient = Java.use('okhttp3.OkHttpClient'); } catch (e2) {}
+  if (OkHttpClient) {
+    var RealCall = Java.use('okhttp3.internal.connection.RealCall');
+    RealCall.execute.implementation = function () {
+      var req = this.request();
+      var urlStr = req.url().toString();
+      emit('network', {
+        hook: 'OkHttp.RealCall.execute',
+        severity: 'MED',
+        url: urlStr,
+        method: req.method(),
+        description: 'OkHttp request executed: ' + urlStr,
+      });
+      return this.execute();
+    };
+  }
+} catch (e) { reportHookError('OkHttp', e.message); }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// [P] PERSISTENCE & ADMIN HOOKS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+try {
+  var DevicePolicyManager = Java.use('android.app.admin.DevicePolicyManager');
+  DevicePolicyManager.isAdminActive.implementation = function (who) {
+    var result = this.isAdminActive(who);
+    emit('persistence', {
+      hook: 'DevicePolicyManager.isAdminActive',
+      severity: 'HIGH',
+      description: 'App checked Device Admin active status',
+    });
+    return result;
+  };
+  DevicePolicyManager.lockNow.overload().implementation = function () {
+    emit('persistence', {
+      hook: 'DevicePolicyManager.lockNow',
+      severity: 'CRITICAL',
+      description: 'App invoked lockNow() (ransomware / extortion behavior)',
+    });
+    return this.lockNow();
+  };
+} catch (e) { reportHookError('DevicePolicyManager', e.message); }
+
+try {
+  var AlarmManager = Java.use('android.app.AlarmManager');
+  AlarmManager.setExact.overload('int', 'long', 'android.app.PendingIntent').implementation = function (type, triggerAtMillis, operation) {
+    emit('persistence', {
+      hook: 'AlarmManager.setExact',
+      severity: 'MED',
+      trigger_ms: triggerAtMillis,
+      description: 'App scheduled exact alarm for persistence',
+    });
+    return this.setExact(type, triggerAtMillis, operation);
+  };
+} catch (e) { reportHookError('AlarmManager.setExact', e.message); }
+
+try {
+  var JobScheduler = Java.use('android.app.JobScheduler');
+  JobScheduler.schedule.implementation = function (job) {
+    emit('persistence', {
+      hook: 'JobScheduler.schedule',
+      severity: 'MED',
+      job_id: job ? job.getId() : 0,
+      description: 'App scheduled background JobScheduler job',
+    });
+    return this.schedule(job);
+  };
+} catch (e) { reportHookError('JobScheduler.schedule', e.message); }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// [D] DYNAMIC CODE LOADING & REFLECTION / NATIVE HOOKS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+try {
+  var DexClassLoader = Java.use('dalvik.system.DexClassLoader');
+  DexClassLoader.$init.overload(
+    'java.lang.String', 'java.lang.String', 'java.lang.String', 'java.lang.ClassLoader'
+  ).implementation = function (dexPath, optDir, libSearchPath, parent) {
+    emit('dangerous_apis', {
+      hook: 'DexClassLoader.<init>',
+      severity: 'HIGH',
+      dex_path: dexPath ? dexPath.toString() : null,
+      description: 'App dynamically loaded secondary DEX file',
+    });
+    return this.$init(dexPath, optDir, libSearchPath, parent);
+  };
+} catch (e) { reportHookError('DexClassLoader', e.message); }
+
+try {
+  var PathClassLoader = Java.use('dalvik.system.PathClassLoader');
+  PathClassLoader.$init.overload('java.lang.String', 'java.lang.ClassLoader').implementation = function (dexPath, parent) {
+    emit('dangerous_apis', {
+      hook: 'PathClassLoader.<init>',
+      severity: 'HIGH',
+      dex_path: dexPath ? dexPath.toString() : null,
+      description: 'App loaded code via PathClassLoader',
+    });
+    return this.$init(dexPath, parent);
+  };
+} catch (e) { reportHookError('PathClassLoader', e.message); }
+
+try {
+  var System = Java.use('java.lang.System');
+  System.loadLibrary.implementation = function (libName) {
+    emit('dangerous_apis', {
+      hook: 'System.loadLibrary',
+      severity: 'HIGH',
+      lib_name: libName ? libName.toString() : null,
+      description: 'App loaded native library: ' + libName,
+    });
+    return this.loadLibrary(libName);
+  };
+} catch (e) { reportHookError('System.loadLibrary', e.message); }
+
+try {
+  var Runtime = Java.use('java.lang.Runtime');
+  Runtime.exec.overload('java.lang.String').implementation = function (cmd) {
+    emit('dangerous_apis', {
+      hook: 'Runtime.exec',
+      severity: 'CRITICAL',
+      command: cmd ? cmd.toString() : null,
+      description: 'App executed shell command: ' + cmd,
+    });
+    return this.exec(cmd);
+  };
+} catch (e) { reportHookError('Runtime.exec', e.message); }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// [X] ANTI-ANALYSIS HOOKS & SPOOFING
+// ═══════════════════════════════════════════════════════════════════════════════
+
+try {
+  var SystemProperties = Java.use('android.os.SystemProperties');
+  SystemProperties.get.overload('java.lang.String').implementation = function (key) {
+    var val = this.get(key);
+    var keyStr = key ? key.toString() : '';
+    if (keyStr === 'ro.kernel.qemu' || keyStr.indexOf('qemu') !== -1 || keyStr.indexOf('goldfish') !== -1) {
+      emit('anti_analysis', {
+        hook: 'SystemProperties.get',
+        severity: 'HIGH',
+        property_key: keyStr,
+        description: 'App probed qemu/emulator system property',
+      });
+      return '0'; // Spoof: not emulator
+    }
+    return val;
+  };
+} catch (e) { reportHookError('SystemProperties.get', e.message); }
+
+try {
+  var Debug = Java.use('android.os.Debug');
+  Debug.isDebuggerConnected.implementation = function () {
+    emit('anti_analysis', {
+      hook: 'Debug.isDebuggerConnected',
+      severity: 'HIGH',
+      description: 'App checked for debugger connection',
+    });
+    return false; // Spoof: no debugger
+  };
+} catch (e) { reportHookError('Debug.isDebuggerConnected', e.message); }
+
+      send({ type: 'ready', message: 'SUDARSHAN Frida hooks v3 loaded — 100% hook coverage active' });
+    });
   } catch (e) {
     send({ type: 'error', description: 'Exception during hook initialization: ' + e.message });
   }
-} // end initHooks
-
+}

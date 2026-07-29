@@ -135,7 +135,7 @@ The architecture breaks down into discrete operational modules:
 
 | Subsystem | Primary Python / TS Modules | Responsibilities & External Dependencies |
 | :--- | :--- | :--- |
-| **API Gateway** | [`backend/app/main.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/main.py)<br/>[`backend/app/routes/upload.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/routes/upload.py) | Route handling, CORS middleware, JWT authentication, async job queueing (`analysis_queue.py`), analysis-engine delegation. |
+| **API Gateway & Telemetry** | [`backend/app/main.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/main.py)<br/>[`backend/app/routes/upload.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/routes/upload.py)<br/>[`backend/app/routes/runtime_api.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/routes/runtime_api.py) | Route handling, CORS middleware, JWT authentication, async job queueing (`analysis_queue.py`), analysis-engine delegation, and live runtime telemetry streaming (`/api/runtime/*`). |
 | **Analysis Microservice** | [`analysis-engine/app/main.py`](file:///d:/Projects/Sudarshan%20BOI/analysis-engine/app/main.py) | Microservice executing native APK analysis, MobSF client calls, APKTool, JADX, Frida PID attach, and mitmproxy HAR parsing. |
 | **Database Access** | [`backend/app/db/database.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/db/database.py) | Asynchronous SQLite database management via `aiosqlite` and `SQLAlchemy`. Persists cases, users, audit logs, and IOCs. |
 | **Authentication** | [`backend/app/auth/auth.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/auth/auth.py) | Seeded admin account generation, password hashing using `bcrypt`, JWT token encoding/decoding using `python-jose`. |

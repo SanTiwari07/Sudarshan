@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
+## [2.4.0-STABLE] — 2026-07-29
+
+### Runtime Telemetry API & Frida 17 Banking Malware Instrumentation Suite
+- **Runtime Telemetry REST Endpoints**: Implemented `/api/runtime/*` route suite (`backend/app/routes/runtime_api.py`) exposing live pipeline health, Frida hook inventory/metrics, ring-buffered telemetry stream (max 500 events), pipeline state machine status, and evidence snapshots.
+- **Frida 17 Banking Malware Instrumentation**: Upgraded dynamic instrumentation hooks suite (`shared/sudarshan_core/engines/frida_hooks/banking_trojan.js`) targeting overlay attacks, SMS interception, keylogging, accessibility abuse, C2 communications, and system anti-analysis evasion bypasses.
+- **Agentic UI Exploration Engine**: Enhanced Gemini-driven UI navigation planner (`shared/sudarshan_core/engines/agentic_explorer.py`, `planner.py`) with activity trigger testing, launch ladder execution, and automated goal progression.
+- **APK Manifest Repair Engine**: Implemented `shared/sudarshan_core/engines/apk_repair.py` for automated AXML manifest repair, zipalign recovery, and re-signing of corrupt or protected banking APKs.
+- **FraudCard Executive Dashboard Component**: Built `frontend/src/pages/FraudCard.tsx` providing executive threat visualization, 5-axis STEI threat scoring breakdown, FRS metrics, and actionable risk highlights.
+- **Runtime Verification Test Suite**: Added `scripts/verify_runtime_pipeline.py` and `tests/unit/test_frida_pipeline_full.py` to continuously validate live telemetry endpoints, Frida session lifecycle, and event bus message passing.
+- **Comprehensive Documentation Audit**: Completed full 24-document zero-drift documentation audit across `/docs` and root project files.
+
+---
+
 ## [2.3.0-STABLE] — 2026-07-29
 
 ### Enterprise Documentation Portal Zero-Drift Audit & Release Synchronization

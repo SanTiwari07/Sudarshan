@@ -2,16 +2,18 @@
 
 ```yaml
 Module Title:        Dynamic Analysis Engine (DAE) & Agentic Explorer
-Version:             2.3.0-STABLE
+Version:             2.4.0-STABLE
 Primary Files:       analysis-engine/app/main.py
+                     backend/app/routes/runtime_api.py
                      shared/sudarshan_core/engines/frida_sandbox.py
                      shared/sudarshan_core/engines/agentic_explorer.py
+                     shared/sudarshan_core/engines/apk_repair.py
                      shared/sudarshan_core/engines/network_capture.py
                      shared/sudarshan_core/engines/bfci_scorer.py
                      shared/sudarshan_core/engines/workflow_reconstructor.py
                      shared/sudarshan_core/engines/frida_hooks/banking_trojan.js
                      frontend/src/components/WorkflowDiagram.tsx
-Test Suite:          backend/tests/test_analysis_client.py, backend/tests/test_remaining_features.py, backend/tests/test_agentic_explorer.py
+Test Suite:          tests/unit/test_frida_pipeline_full.py, scripts/verify_runtime_pipeline.py, backend/tests/test_analysis_client.py, backend/tests/test_agentic_explorer.py
 ```
 
 ---
@@ -70,6 +72,19 @@ adb -s <serial> shell setenforce 0
 ```
 
 **Why this is not optional.** SELinux is Enforcing by default on Android 13+ and denies the `ptrace` that Frida injection requires, *even for uid 0*. Without this step every attach fails with `PermissionDeniedError: unable to access process with pid <n>` while `frida-server` reports healthy.
+
+---
+
+## 2b. Live Runtime Telemetry Streaming (`runtime_api.py`)
+
+The DAE exposes real-time telemetry, hook execution statistics, and evidence snapshots via [`backend/app/routes/runtime_api.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/routes/runtime_api.py):
+
+- **`/api/runtime/status`**: Returns high-level pipeline health summary and active `PipelineTracker` states across analysis jobs.
+- **`/api/runtime/hooks`**: Tracks Frida hook installation status, hit counters, and runtime error rates per hook.
+- **`/api/runtime/events`**: Exposes a ring buffer of recent telemetry events (max 500 events) for real-time analyst streaming.
+- **`/api/runtime/pipeline`**: Reports state machine transitions across `INIT`, `DECOMPILING`, `SANDBOXING`, `CORRELATING`, `SCORING`, `RAG_INDEXING`, and `COMPLETED` stages.
+- **`/api/runtime/metrics`**: Calculates rolling event processing rate (events/sec), dropped event metrics, and error totals.
+- **`/api/runtime/evidence`**: Provides snapshots of `evidence.json` generated during dynamic analysis runs.
 
 ---
 

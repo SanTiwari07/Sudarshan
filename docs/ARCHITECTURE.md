@@ -2,7 +2,7 @@
 
 ```yaml
 Document Title:      Sudarshan Platform Architectural Specification
-Version:             2.3.0-STABLE
+Version:             2.4.0-STABLE
 Last Revision:       2026-07-29
 Repository Scope:    SanTiwari07/Sudarshan (d:/Projects/Sudarshan BOI)
 Target Audience:     Enterprise Security Engineers, SOC Analysts, System Architects
@@ -275,6 +275,14 @@ The React 18 SPA frontend provides three primary analytical views:
 - **Request**: `multipart/form-data` with `file` (`.apk` binary).
 - **Header**: `Authorization: Bearer <jwt_token>`
 - **Response**: `AnalysisResponse` JSON object containing `sha256`, `case_id`, `family_classification`, `final_risk_score`, `risk_band`, `frs_breakdown`, `threat_scenario_table`, `fraud_workflow`, `intelligence_report`, `executive_view`, and `technical_view`.
+
+### GET `/api/runtime/*` (Runtime Telemetry API Suite)
+- **`/api/runtime/status`**: Pipeline health summary and active `PipelineTracker` registry states.
+- **`/api/runtime/hooks`**: Installed Frida hooks inventory, trigger counts, and error metrics.
+- **`/api/runtime/events`**: Ring-buffered stream of recent runtime telemetry events (max 500 events).
+- **`/api/runtime/pipeline`**: Full pipeline stage machine status (`PipelineStage` tracking).
+- **`/api/runtime/metrics`**: Telemetry event processing rate (events/sec), dropped event count, and error totals.
+- **`/api/runtime/evidence`**: Snapshot of the `EvidenceStore` artifact state.
 
 ---
 

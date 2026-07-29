@@ -2,7 +2,7 @@
 
 ```yaml
 Document Title:      Sudarshan Installation & Execution Manual
-Version:             2.3.0-STABLE
+Version:             2.4.0-STABLE
 Last Revision:       2026-07-29
 Target OS:           Windows 10/11, Linux (Ubuntu 22.04+), macOS 13+
 ```
@@ -143,6 +143,7 @@ Verify all microservice endpoints:
 | :--- | :--- | :--- |
 | **Analyst Dashboard** | `http://localhost:5173` | React SPA Login / Upload Page |
 | **API Health Check** | `http://localhost:8000/health` | `{"status": "ok"}` |
+| **Runtime Telemetry** | `http://localhost:8000/api/runtime/status` | `{"status": "ok", "active_sessions": 0, ...}` |
 | **API Interactive Docs** | `http://localhost:8000/docs` | Swagger UI documentation |
 | **Analysis Engine Health** | `http://analysis-engine:8001/health` (internal) | `{"status": "ok", "service": "analysis-engine"}` |
 | **MobSF Engine** | `http://localhost:8008` | MobSF Static Analyzer UI |
@@ -150,12 +151,17 @@ Verify all microservice endpoints:
 
 Run system health diagnostic script:
 ```powershell
-backend\.venv\Scripts\python.exe scripts/health_check.py
+$env:PYTHONPATH="backend;shared"; backend\.venv\Scripts\python.exe scripts/health_check.py
 ```
 
-Run the backend unit test suite (**388 tests passing**):
+Run runtime pipeline telemetry verification script:
 ```powershell
-$env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest backend/tests
+$env:PYTHONPATH="backend;shared"; backend\.venv\Scripts\python.exe scripts/verify_runtime_pipeline.py
+```
+
+Run full unit and integration test suite:
+```powershell
+$env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests
 ```
 
 ---

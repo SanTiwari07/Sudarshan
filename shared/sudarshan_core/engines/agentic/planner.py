@@ -752,10 +752,11 @@ class FallbackPlanner:
         # ── Score UI nodes against keyword map (legacy fallback) ─────────────
         best_node = None
         best_score = -1
+        destructive_keywords = {"close app", "force stop", "uninstall", "app info", "clear data"}
 
         for node in obs.ui_nodes:
             content = (node.text + " " + node.desc).lower().strip()
-            if not content:
+            if not content or any(dkw in content for dkw in destructive_keywords):
                 continue
             for keyword, tool, priority in GOAL_KEYWORD_MAP:
                 if keyword in content:

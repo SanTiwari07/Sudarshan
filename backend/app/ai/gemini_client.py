@@ -118,15 +118,26 @@ def _build_evidence_dict(
     return evidence
 
 
+def _to_str_list(val: Any) -> List[str]:
+    if isinstance(val, list):
+        return [str(x) for x in val if x is not None]
+    if isinstance(val, str) and val.strip():
+        return [val.strip()]
+    return []
+
+
 def _validate_report_json(parsed: Dict[str, Any], cert_recs: List[str]) -> Dict[str, Any]:
     """Validate and sanitize JSON output from Gemini."""
     if not isinstance(parsed, dict) or not parsed.get("plain_english_narrative"):
         raise ValueError("Invalid report structure — missing plain_english_narrative")
 
-    if not parsed.get("cert_in_recommendations"):
+    for field in ("affected_banking_apps", "mitre_techniques_used", "cert_in_recommendations", "recommended_actions"):
+        parsed[field] = _to_str_list(parsed.get(field))
+
+    if not parsed["cert_in_recommendations"]:
         parsed["cert_in_recommendations"] = cert_recs
 
-    if not parsed.get("recommended_actions"):
+    if not parsed["recommended_actions"]:
         parsed["recommended_actions"] = [
             "Isolate the device from the network immediately",
             "Review all flagged permissions and API calls",

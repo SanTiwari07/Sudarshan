@@ -137,6 +137,13 @@ class RuntimeEventBus:
                     all_subs = list(self._subscribers)
                     typed_subs = list(self._typed_subscribers.get(etype, []))
 
+                # Auto-forward to in-process telemetry ring buffer
+                try:
+                    from app.routes.runtime_api import record_event
+                    record_event(event)
+                except Exception:
+                    pass
+
                 # Notify general subscribers
                 for cb in all_subs:
                     try:

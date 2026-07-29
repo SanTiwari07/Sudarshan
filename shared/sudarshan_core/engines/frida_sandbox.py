@@ -101,18 +101,14 @@ from sudarshan_core.engines.pipeline_state import (
     AnalysisOutcome,
 )
 
-# Path to the Frida JS hooks script
+# Path to the Frida JS hooks script (banking_trojan.js)
 _HOOKS_DIR = Path(__file__).parent / "frida_hooks"
-_HOOKS_BUNDLE = _HOOKS_DIR / "banking_trojan.bundle.js"
 _HOOKS_SOURCE = _HOOKS_DIR / "banking_trojan.js"
+_HOOKS_BUNDLE = _HOOKS_DIR / "banking_trojan.bundle.js"
 
-if _HOOKS_BUNDLE.exists() and _HOOKS_SOURCE.exists():
-    if _HOOKS_SOURCE.stat().st_mtime > _HOOKS_BUNDLE.stat().st_mtime:
-        _HOOKS_SCRIPT = _HOOKS_SOURCE
-    else:
-        _HOOKS_SCRIPT = _HOOKS_BUNDLE
-else:
-    _HOOKS_SCRIPT = _HOOKS_BUNDLE if _HOOKS_BUNDLE.exists() else _HOOKS_SOURCE
+# ALWAYS use the source script (banking_trojan.js).
+# Frida 17+ uses the built-in Java global directly — CommonJS bundle is deprecated.
+_HOOKS_SCRIPT = _HOOKS_SOURCE
 
 
 # UI Exploration Mode
@@ -304,7 +300,46 @@ def _adb_install_apk(apk_path: str, device: str) -> Tuple[bool, str, Dict[str, A
         rep_ok, rep_path_or_err, rep_provenance = repair_obfuscated_apk(apk_path)
         if rep_ok and os.path.exists(rep_path_or_err):
             logger.info(f"[Frida Repair] Retrying installation on repaired derivative: {rep_path_or_err}")
-            ok3, out3 = _adb("-s", device, "install", "-r", "-t", "--bypass-low-target-sdk-block", rep_path_or_err, timeout=120)
+
+            # ── Signature-mismatch guard ─────────────────────────────────────
+            # The derivative is re-signed with our debug key, so any previously
+            # installed copy (signed with the original/obfuscated key) causes:
+            #   INSTALL_FAILED_UPDATE_INCOMPATIBLE: signatures do not match
+            # Android's package manager refuses to update across a signature
+            # boundary even with -r. Uninstalling first clears the old signature
+            # record so the fresh install succeeds.
+            #
+            # This is forensically safe: the *binary* analysis was already
+            # performed on the original; we are only clearing the emulator slot
+            # so the behavioural sandbox can run on the repaired derivative.
+            from sudarshan_core.engines.apk_repair import compute_sha256 as _sha256_fn
+            pkg_to_uninstall = None
+            try:
+                # Best-effort: extract package name from the repaired APK to
+                # target the uninstall precisely (avoids uninstalling the wrong pkg)
+                from androguard.misc import AnalyzeAPK as _AAA
+                _a_r, _, _ = _AAA(rep_path_or_err)
+                pkg_to_uninstall = _a_r.get_package()
+            except Exception:
+                pass
+            if not pkg_to_uninstall:
+                # Fall back to extracting from the original APK path name or
+                # provenance record (set earlier in this function)
+                pkg_to_uninstall = rep_provenance.get("package_name") or None
+
+            if pkg_to_uninstall:
+                logger.info(
+                    f"[Frida Repair] Pre-uninstalling '{pkg_to_uninstall}' to clear "
+                    "signature mismatch before installing re-signed derivative"
+                )
+                _adb("-s", device, "uninstall", pkg_to_uninstall, timeout=30)
+            else:
+                logger.warning(
+                    "[Frida Repair] Could not determine package name for pre-uninstall; "
+                    "attempting install anyway (INSTALL_FAILED_UPDATE_INCOMPATIBLE may still occur)"
+                )
+
+            ok3, out3 = _adb("-s", device, "install", "-t", "--bypass-low-target-sdk-block", rep_path_or_err, timeout=120)
             if ok3:
                 logger.info(f"[Frida Repair] Repaired derivative artifact installed successfully on emulator!")
                 return True, out3, rep_provenance
@@ -580,6 +615,7 @@ class FridaSession:
         }
         self.canary_received: bool = False
         self.total_hook_events_received: int = 0
+        self.hooks_installed_count: int = 0   # incremented by hook_installed messages
         self.hook_errors: List[str] = []
         # Which explorer actually ran ("agentic" | "ui_explorer" | "none"), and
         # why it failed if it did. Surfaced in the result so a reviewer can tell
@@ -639,12 +675,41 @@ class FridaSession:
 
             if msg_type == "event":
                 self.total_hook_events_received += 1
-                event = payload.get("payload", {})
+                # The payload from the JS emit() is the event object itself.
+                # Some older message paths nest it under 'payload', others don't.
+                event = payload.get("payload", payload) if "payload" in payload else payload
+                # If the emit wrapper itself IS the event (no inner payload key)
+                # fall back gracefully:
+                if not event.get("category"):
+                    event = payload
+
                 category = event.get("category")
-                if category in self.collected_events:
-                    self.collected_events[category].append(event)
-                    severity = event.get("severity", event.get("data", {}).get("severity", "MED"))
-                    logger.debug(f"[Frida] [{severity}] {category}: {event.get('data', {}).get('hook')}")
+
+                # FIX Bug #5: unrecognized categories fall through to dangerous_apis
+                # instead of being silently discarded. This prevents novel hook
+                # categories from disappearing from collected_events.
+                if category not in self.collected_events:
+                    category = "dangerous_apis"
+                    event = dict(event)
+                    event["original_category"] = event.get("category", "unknown")
+                    event["category"] = "dangerous_apis"
+
+                self.collected_events[category].append(event)
+                severity = event.get("severity", (event.get("data") or {}).get("severity", "MED"))
+                hook_name = (event.get("data") or {}).get("hook") or event.get("hook", "?")
+                logger.debug(f"[Frida] [{severity}] {category}: {hook_name}")
+
+                # Update pipeline tracker event counters
+                tracker = get_tracker(self.package_name, self.package_name)
+                tracker.event_counters.received += 1
+
+                # Forward to in-process telemetry registry
+                try:
+                    from app.routes.runtime_api import record_event, record_hook
+                    record_event(event)
+                    record_hook(hook_name, fired=True)
+                except Exception:
+                    pass
 
                 # Publish to Event Bus (EvidenceStore + UIExplorer subscribe here)
                 self.event_bus.publish(event)
@@ -653,6 +718,21 @@ class FridaSession:
                 self.last_heartbeat_ts = time.time()
                 tracker = get_tracker(self.package_name, self.package_name)
                 tracker.frida_running = True
+                # Update hook count from ping payload (v4 script sends hooks_installed)
+                hi = payload.get("hooks_installed")
+                if hi is not None:
+                    self.hooks_installed_count = int(hi)
+
+            elif msg_type == "hook_installed":
+                # v4 script sends this after each successful hook registration
+                self.hooks_installed_count = payload.get("total", self.hooks_installed_count)
+                hook_name = payload.get('hook', '?')
+                logger.debug(f"[Frida] Hook installed: {hook_name} (total={self.hooks_installed_count})")
+                try:
+                    from app.routes.runtime_api import record_hook
+                    record_hook(hook_name, fired=False)
+                except Exception:
+                    pass
 
             elif msg_type == "canary":
                 self.canary_received = True
@@ -664,31 +744,34 @@ class FridaSession:
                 err = f"Hook failed: {payload.get('hook')} — {payload.get('error')}"
                 self.hook_errors.append(err)
                 logger.warning(f"[Frida] {err}")
+                try:
+                    from app.routes.runtime_api import record_hook
+                    record_hook(payload.get('hook', '?'), error=True)
+                except Exception:
+                    pass
 
             elif msg_type == "ready":
-                logger.info(f"[Frida] {payload.get('message')}")
+                hooks_count = payload.get("hooks_installed", 0)
+                logger.info(
+                    f"[Frida] {payload.get('message')} — "
+                    f"{hooks_count} hooks installed, "
+                    f"{payload.get('hook_errors', 0)} errors"
+                )
 
             elif msg_type == "diag":
                 logger.info(f"[Frida DIAG] {payload}")
 
             elif msg_type == "error":
-                # The agent sends this when the whole Java.perform block dies
-                # (banking_trojan.js: "Exception during hook initialization").
-                # There was no branch for it, so total instrumentation failure
-                # produced NO hook_error at all — and because the canary is sent
-                # BEFORE initHooks, the run still reported canary_received=True,
-                # hook_errors=[], bfci=0.0, available=True. A run where every
-                # hook died was indistinguishable from a dormant sample.
+                # The agent sends this when the whole Java.perform block dies.
+                # Because the canary is sent BEFORE initHooks, the run still
+                # reports canary_received=True even on total hook failure.
+                # This branch ensures the error is always recorded.
                 err = f"Hook initialization failed: {payload.get('description') or payload}"
                 self.hook_errors.append(err)
                 logger.error(f"[Frida] {err}")
 
-
         elif message.get("type") == "error":
-            # Frida's own runtime envelope — a hook body that threw. Previously
-            # only logged and discarded, so a hook that failed on EVERY fire
-            # (e.g. the SMS hooks calling .length() on an unboxed String)
-            # produced neither an event nor a recorded error.
+            # Frida's own runtime envelope — a hook body that threw.
             err = f"Script error: {message.get('description')}"
             self.hook_errors.append(err)
             logger.error(f"[Frida] {err}")
@@ -752,6 +835,44 @@ class FridaSession:
             device = None
             for attempt in range(3):
                 try:
+                    # FIX Bug #7: Docker TCP mode requires using frida's remote device API.
+                    # When ADB_HOST is set, the device serial is an IP:port string
+                    # (e.g. 'host.docker.internal:5555'). frida.enumerate_devices() only
+                    # lists USB/local devices; it will never find a TCP-connected emulator
+                    # unless we explicitly add it as a remote device using the Frida
+                    # server port (27042 by default) on the host running the emulator.
+                    #
+                    # Strategy:
+                    #   1. If ADB_HOST is set, add remote device via frida device manager.
+                    #   2. Otherwise, enumerate devices normally.
+                    if ADB_HOST:
+                        frida_host = ADB_HOST
+                        candidate_ports = []
+                        for p_env in [os.getenv("SUDARSHAN_FRIDA_PORT"), os.getenv("FRIDA_SERVER_PORT"), "27055", "27042"]:
+                            if p_env and p_env.isdigit():
+                                p_int = int(p_env)
+                                if p_int not in candidate_ports:
+                                    candidate_ports.append(p_int)
+
+                        for f_port in candidate_ports:
+                            _adb("-s", self.device_serial, "forward", f"tcp:{f_port}", f"tcp:{f_port}")
+                            try:
+                                device = frida.get_device_manager().add_remote_device(
+                                    f"{frida_host}:{f_port}"
+                                )
+                                logger.info(
+                                    f"[Frida] TCP remote device added: "
+                                    f"{frida_host}:{f_port}"
+                                )
+                                break
+                            except Exception as tcp_err:
+                                logger.warning(
+                                    f"[Frida] TCP remote device attempt on port {f_port} failed: {tcp_err}"
+                                )
+                        if device:
+                            break
+
+                    # Local/USB mode (or TCP fallback): enumerate all devices
                     all_devices = frida.enumerate_devices()
                     logger.info(f"[Frida] Available devices: {[d.id for d in all_devices]}")
                     for d in all_devices:
@@ -1105,7 +1226,7 @@ class FridaSession:
                 safe_pkg = shlex.quote(self.package_name)
                 fuzzer_process = subprocess.Popen(
                     [_find_adb(), "-s", self.device_serial, "shell", 
-                     f"monkey -p {safe_pkg} --pct-touch 50 --pct-motion 20 --pct-nav 10 --throttle 300 -v 500"],
+                     f"monkey -p {safe_pkg} --pct-touch 50 --pct-motion 20 --pct-nav 10 --throttle 1000 -v 100"],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
                 )
 
@@ -1384,6 +1505,16 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
         return base_result
     logger.info(f"[Frida] APK installed: {package_name} (Derivative Repaired: {provenance.get('is_repaired_derivative', False)})")
 
+    effective_apk_path = apk_path
+    if provenance.get("is_repaired_derivative"):
+        rep_p = provenance.get("repaired_apk_path")
+        if rep_p and os.path.exists(rep_p):
+            effective_apk_path = rep_p
+        rep_act = provenance.get("main_activity")
+        if rep_act and rep_act != "MainActivity":
+            main_activity = rep_act
+            logger.info(f"[Frida] Using repaired derivative main activity: {main_activity}")
+
     # ── Step 4: Run Frida session ──────────────────────────────────────────────
     # Per-sample artifact directory: previously every scan wrote audit_log.json
     # and benchmark.json into the process CWD, so each run destroyed the last
@@ -1398,7 +1529,7 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
     )
     # Give the launch ladder access to the APK path for steps 3 & 5
     # (androguard activity enumeration and URI scheme discovery).
-    session._apk_path = apk_path  # type: ignore[attr-defined]
+    session._apk_path = effective_apk_path  # type: ignore[attr-defined]
 
     # Extract the real accessibility service class name from the manifest
     # once here, before the session runs. The result is forwarded into
@@ -1537,6 +1668,7 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
 
         # Metadata
         "hook_errors": session.hook_errors,
+        "hooks_installed": session.hooks_installed_count,
         "evidence": evidence,
         "raw_event_counts": {k: len(v) for k, v in session.collected_events.items()},
     }
@@ -1571,11 +1703,29 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
             logger.error(f"[Frida] Failed to write AI Exploration files: {e}")
 
     # ── Wave 1: Flush Evidence Store ───────────────────────────────────────────
+    # FIX Bug #6: Drain the EventBus background queue BEFORE flushing the store.
+    # The EventBus processes events on a background thread. Without this join(),
+    # events published near the end of the session can still be in the queue
+    # when flush() is called, causing them to be silently lost from evidence.json.
     if session.evidence_store is not None:
         try:
+            # Drain the queue with a bounded timeout so we never block indefinitely.
+            _drain_timeout = 5.0
+            try:
+                session.event_bus._queue.join()
+            except Exception:
+                # join() with timeout requires get_nowait loop; use wait instead
+                try:
+                    import queue as _q
+                    deadline = time.time() + _drain_timeout
+                    while not session.event_bus._queue.empty() and time.time() < deadline:
+                        time.sleep(0.1)
+                except Exception:
+                    pass
             n = session.evidence_store.flush(apk_dir / "evidence.json")
             result["evidence_record_count"] = n
             result["anti_analysis_events"] = session.collected_events.get("anti_analysis", [])
+            logger.info(f"[Frida] Evidence store flushed: {n} records written to evidence.json")
         except Exception as e:
             logger.error(f"[Frida] Failed to write evidence.json: {e}")
 

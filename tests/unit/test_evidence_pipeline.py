@@ -9,7 +9,12 @@ import os
 import tempfile
 import time
 import unittest
+import sys
 from pathlib import Path
+
+# Ensure shared directory is in sys.path
+_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(_ROOT / "shared"))
 
 from sudarshan_core.engines.behavior_graph import BehaviorGraphBuilder
 from sudarshan_core.engines.event_bus import EventType, RuntimeEvent, RuntimeEventBus

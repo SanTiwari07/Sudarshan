@@ -88,10 +88,14 @@ if ($hasDevice) {
     & $adb shell "nohup $fridaRemotePath -l 0.0.0.0:$fridaPort > /dev/null 2>&1 &" | Out-Null
     Start-Sleep -Seconds 2
 
+    # Forward Frida server ports so host and Docker containers can reach frida-server
+    & $adb forward tcp:27055 tcp:$fridaPort 2>$null | Out-Null
+    & $adb forward tcp:27042 tcp:$fridaPort 2>$null | Out-Null
+
     # Verify
     $fridaCheck = & $adb shell "ps -A" 2>&1 | Select-String -Pattern "$fridaBinName|frida-server"
     if ($fridaCheck) {
-        Write-Host "      OK Frida agent server ($fridaBinName) is RUNNING on port $fridaPort" -ForegroundColor Green
+        Write-Host "      OK Frida agent server ($fridaBinName) is RUNNING on port $fridaPort (forwarded to host ports 27055 & 27042)" -ForegroundColor Green
     } else {
         Write-Host "      X  Frida agent server did NOT start - dynamic analysis will be skipped" -ForegroundColor Red
         Write-Host "         Make sure the binary exists at $fridaRemotePath on the emulator." -ForegroundColor DarkYellow

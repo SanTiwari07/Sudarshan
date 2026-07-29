@@ -19,7 +19,7 @@ import tempfile
 from pathlib import Path
 import asyncio
 import httpx
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
@@ -692,6 +692,14 @@ async def _run_analysis_pipeline(
     return result
 
 
+def _to_str_list(val: Any) -> List[str]:
+    if isinstance(val, list):
+        return [str(x) for x in val if x is not None]
+    if isinstance(val, str) and val.strip():
+        return [val.strip()]
+    return []
+
+
 def _build_response(result: Dict[str, Any], job_id: Optional[str] = None) -> AnalysisResponse:
     """Convert raw pipeline result dict into AnalysisResponse Pydantic model."""
     llm_response = result["intelligence_report"]
@@ -699,7 +707,7 @@ def _build_response(result: Dict[str, Any], job_id: Optional[str] = None) -> Ana
     executive_view = FraudCardExecutiveView(
         risk_badge=result["risk_band"],
         plain_english_narrative=llm_response.get("plain_english_narrative", "Analysis unavailable."),
-        recommended_actions=llm_response.get("recommended_actions", []),
+        recommended_actions=_to_str_list(llm_response.get("recommended_actions")),
         customer_advisory_draft=llm_response.get("customer_advisory_draft", "No advisory available."),
     )
 
@@ -718,11 +726,11 @@ def _build_response(result: Dict[str, Any], job_id: Optional[str] = None) -> Ana
     intel_report = IntelligenceReport(
         plain_english_narrative=llm_response.get("plain_english_narrative", ""),
         fraud_objective=llm_response.get("fraud_objective"),
-        affected_banking_apps=llm_response.get("affected_banking_apps", []),
-        mitre_techniques_used=llm_response.get("mitre_techniques_used", []),
+        affected_banking_apps=_to_str_list(llm_response.get("affected_banking_apps")),
+        mitre_techniques_used=_to_str_list(llm_response.get("mitre_techniques_used")),
         banking_impact_assessment=llm_response.get("banking_impact_assessment"),
-        cert_in_recommendations=llm_response.get("cert_in_recommendations", []),
-        recommended_actions=llm_response.get("recommended_actions", []),
+        cert_in_recommendations=_to_str_list(llm_response.get("cert_in_recommendations")),
+        recommended_actions=_to_str_list(llm_response.get("recommended_actions")),
         customer_advisory_draft=llm_response.get("customer_advisory_draft", ""),
         confidence=llm_response.get("confidence", "Medium"),
         analysis_note=llm_response.get("analysis_note"),

@@ -328,11 +328,19 @@ class AgenticExplorer:
                         )
                         break
 
-                # SC5: Crash detection
+                # SC5: Crash detection & auto-recovery
                 if self._is_crash_screen(obs.activity):
-                    logger.warning(f"[AgenticExplorer] SC5: App crash detected ({obs.activity})")
-                    self.audit_log.record_system_event("stop_crash_detected", obs.activity)
-                    break
+                    logger.warning(f"[AgenticExplorer] SC5: App crash/ANR screen detected ({obs.activity}) — attempting relaunch and recovery")
+                    self.audit_log.record_system_event("crash_detected_relaunching", obs.activity)
+                    try:
+                        if self.main_activity:
+                            await self.executor.execute({"tool": "am_start", "activity": self.main_activity})
+                        else:
+                            await self.executor.execute({"tool": "press_home"})
+                    except Exception as _r_err:
+                        logger.warning(f"[AgenticExplorer] Relaunch attempt warning: {_r_err}")
+                    await asyncio.sleep(1.5)
+                    continue
 
                 # ── THINK ─────────────────────────────────────────────────────
                 next_goal = self.goals.next_priority_goal()

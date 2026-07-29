@@ -7,6 +7,12 @@ CoverageTracker, and FallbackPlanner loop-prevention / action ranking logic.
 
 import time
 import unittest
+import sys
+from pathlib import Path
+
+# Ensure shared directory is in sys.path
+_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(_ROOT / "shared"))
 
 from sudarshan_core.engines.agentic.coverage_tracker import CoverageTracker
 from sudarshan_core.engines.agentic.goal_planner import (

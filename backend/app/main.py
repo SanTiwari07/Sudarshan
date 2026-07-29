@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routes import upload, report, intelligence
+from app.routes.runtime_api import router as runtime_router
 from app.routes.cases import router as cases_router
 from app.auth.auth import router as auth_router
 from app.db.database import init_db
@@ -78,6 +79,7 @@ app.include_router(upload.router,        prefix="/api/v1",         tags=["Analys
 app.include_router(report.router,        prefix="/api/v1",         tags=["Reports & Export"])
 app.include_router(cases_router,         prefix="/api/v1",         tags=["Case History"])
 app.include_router(intelligence.router,  prefix="/api/v1",         tags=["Threat Intelligence"])
+app.include_router(runtime_router,       prefix="/api",            tags=["Runtime Telemetry"])
 
 
 # ─── Startup / Shutdown ───────────────────────────────────────────────────────

@@ -18,6 +18,118 @@ from sudarshan_core.engines.event_bus import RuntimeEventBus
 
 logger = logging.getLogger(__name__)
 
+
+def extract_accessibility_service_class(
+    apk_path: str,
+    package_name: str,
+) -> Optional[str]:
+    """
+    Return the real accessibility service class name declared in this APK's
+    manifest, or None if no accessibility service is declared.
+
+    Reuses the already-imported Androguard analyzer (same dependency used in
+    apk_analyzer.py) — does NOT re-parse if the caller already has an `apk`
+    object, but we cannot assume that here because the orchestrator is called
+    from a different module boundary. Parsing is cheap compared to ADB round
+    trips; the result should be cached by the caller if called in a tight loop.
+
+    We look for a <service> element that simultaneously:
+      1. Declares android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+      2. Has an <intent-filter> with action
+         "android.accessibilityservice.AccessibilityService"
+
+    If no such element is found we return None — this is itself a finding
+    (the sample does not use accessibility abuse via a declared service).
+
+    Never raises: any parse failure degrades to None.
+    """
+    try:
+        from androguard.misc import AnalyzeAPK
+        try:
+            import loguru
+            loguru.logger.disable("androguard")
+        except ImportError:
+            pass
+        a, _, _ = AnalyzeAPK(apk_path)
+    except Exception as exc:
+        logger.warning(
+            f"[PermissionOrchestrator] Could not parse APK manifest for "
+            f"accessibility service class ({type(exc).__name__}: {exc})"
+        )
+        return None
+
+    try:
+        services = a.get_services() or []
+    except Exception:
+        services = []
+
+    for svc_name in services:
+        # Check guard permission attribute
+        has_bind_perm = False
+        try:
+            perm_attr = a.get_element("service", "permission", name=svc_name) or ""
+            if "BIND_ACCESSIBILITY_SERVICE" in str(perm_attr).upper():
+                has_bind_perm = True
+        except Exception:
+            pass
+
+        if not has_bind_perm:
+            # Try via raw manifest substring for this service node
+            try:
+                xml = a.get_android_manifest_axml().get_xml().decode(
+                    "utf-8", errors="replace"
+                )
+                # A simple heuristic: if the service class appears in the xml
+                # adjacent to the BIND_ACCESSIBILITY_SERVICE text
+                short = svc_name.split(".")[-1]
+                if (short in xml and "BIND_ACCESSIBILITY_SERVICE" in xml
+                        and "accessibilityservice" in xml.lower()):
+                    has_bind_perm = True
+            except Exception:
+                pass
+
+        if not has_bind_perm:
+            continue
+
+        # Check intent-filter action
+        has_accessibility_action = False
+        try:
+            filters = a.get_intent_filters("service", svc_name)
+            for action in filters.get("action", []):
+                if "accessibilityservice" in action.lower():
+                    has_accessibility_action = True
+                    break
+        except Exception:
+            pass
+
+        if has_accessibility_action:
+            # Resolve the class name: may be fully-qualified or relative
+            if svc_name.startswith(package_name):
+                # Fully qualified — convert to relative (.ClassName)
+                class_name = svc_name[len(package_name):]
+                if not class_name.startswith("."):
+                    class_name = "." + class_name.lstrip(".")
+            elif svc_name.startswith("."):
+                class_name = svc_name
+            else:
+                # Unknown package prefix — use as-is
+                class_name = svc_name
+
+            logger.info(
+                f"[PermissionOrchestrator] Found real accessibility service class: "
+                f"'{class_name}' (declared in manifest for {package_name})"
+            )
+            return class_name
+
+    # No qualifying service found
+    logger.info(
+        f"[PermissionOrchestrator] No accessibility service declared in "
+        f"'{package_name}' manifest — this sample does not use accessibility abuse "
+        f"via a bound service."
+    )
+    return None
+
+
 class PermissionOrchestrator:
     def __init__(
         self,
@@ -63,31 +175,77 @@ class PermissionOrchestrator:
             logger.error(f"[PermissionOrchestrator] ADB error: {e}")
             return ""
 
-    def grant_accessibility(self, package_name: str, app_name: str) -> bool:
+    def grant_accessibility(
+        self,
+        package_name: str,
+        app_name: str,
+        service_class: Optional[str] = None,
+    ) -> bool:
         """
-        Navigates to Accessibility settings and attempts to enable the service for the app.
-        Since UI varies by Android version, this is a best-effort using UI Automator intents
-        and basic tab/enter commands.
+        Grant accessibility service for the given package.
+
+        Parameters
+        ----------
+        package_name : str
+            The APK's package name (e.g. ``com.example.app``).
+        app_name : str
+            Human-readable app name, used for UI hierarchy search.
+        service_class : Optional[str]
+            The *real* accessibility service class name as declared in the
+            manifest, e.g. ``".zWPzgfI"`` for Cerberus.  When ``None`` the
+            orchestrator checks whether a service is even declared before
+            attempting to enable it.  Passing the pre-parsed class avoids a
+            redundant Androguard parse on the hot path.
+
+            Use :func:`extract_accessibility_service_class` to obtain this
+            value ahead of time from the APK manifest.
         """
-        logger.info(f"[PermissionOrchestrator] Attempting to grant Accessibility for {package_name}")
-        
+        logger.info(
+            f"[PermissionOrchestrator] Attempting to grant Accessibility for {package_name}"
+        )
+
+        # If no class was provided by the caller, check that a service
+        # actually exists before writing to settings — writing a non-existent
+        # component name silently fails and wastes the 0.35-weight BFCI slot.
+        if service_class is None:
+            logger.info(
+                f"[PermissionOrchestrator] No service_class provided; "
+                f"skipping settings put — caller should pass the manifest-parsed "
+                f"class name via extract_accessibility_service_class()."
+            )
+            self._log_action("accessibility", "grant", False)
+            return False
+
         # Open Accessibility Settings
         self._adb("shell", "am", "start", "-a", "android.settings.ACCESSIBILITY_SETTINGS")
         time.sleep(2)
-        
-        # A robust enterprise orchestrator would parse the UI hierarchy XML here,
-        # find the app_name, click it, and toggle the switch.
-        # For this implementation, we will log the intent and simulate success if we can find the package in the list.
-        
+
+        # Check UI hierarchy to detect whether the service is visible in the list
         ui_dump = self._adb("shell", "uiautomator", "dump", "/dev/stdout")
-        success = package_name in ui_dump or app_name in ui_dump
-        
-        # We can also attempt to grant it directly via ADB (requires root, but we are on an emulator)
-        root_grant_out = self._adb("shell", "settings", "put", "secure", "enabled_accessibility_services", f"{package_name}/.AccessibilityService")
-        
-        success = True # Assume success if root command was sent without exception
+        visible_in_ui = package_name in ui_dump or app_name in ui_dump
+
+        # Build the fully-qualified component name the settings command expects
+        if service_class.startswith("."):
+            component = f"{package_name}{service_class}"
+        else:
+            component = service_class  # already fully qualified
+
+        logger.info(
+            f"[PermissionOrchestrator] Enabling accessibility service component: "
+            f"'{component}' (ui_visible={visible_in_ui})"
+        )
+
+        # Grant via ADB (requires root, but we are on a rooted emulator)
+        self._adb(
+            "shell", "settings", "put", "secure",
+            "enabled_accessibility_services",
+            component,
+        )
+        self._adb("shell", "settings", "put", "secure", "accessibility_enabled", "1")
+
+        success = True
         self._log_action("accessibility", "grant", success)
-        
+
         # Return to home
         self._adb("shell", "input", "keyevent", "3")
         return success

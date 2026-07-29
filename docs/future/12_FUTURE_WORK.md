@@ -9,7 +9,7 @@ This document details the planned research roadmap, architectural refinements, a
 ## Responsibilities
 
 This document is responsible for:
-1. **Documenting Future Roadmap Initiatives**: Articulating documented technical enhancements across telemetry, queueing, containerization, and vector search.
+1. **Documenting Future Roadmap Initiatives**: Articulating technical enhancements across telemetry, queueing, containerization, and vector search.
 2. **Architectural Specification**: Providing technical design blueprints for eBPF kernel monitoring, Celery worker migration, and Cuttlefish AVD orchestration.
 3. **Research Guidance**: Guiding future contributors and maintainers on approved architectural directions.
 
@@ -21,10 +21,10 @@ Future development focuses on advancing from user-space application hooking to u
 
 ```text
 [ Current Baseline Platform ]
-- User-Space Frida Instrumentation
-- In-Memory Python Async Queue
-- Local Android Studio AVD
-- In-Memory RAG Evidence Index
+- User-Space Frida Instrumentation (Java.deoptimizeEverything)
+- In-Memory Python Async Queue (analysis_queue.py)
+- Local Android Studio AVD (ADB TCP Port 5555)
+- In-Memory Gemini RAG Evidence Index
                  │
                  ▼
 [ Target Future Platform Architecture ]
@@ -65,35 +65,16 @@ Future development focuses on advancing from user-space application hooking to u
 
 ---
 
-### 2. Distributed Celery + Redis Worker Cluster
+## 2. Distributed Celery + Redis Worker Cluster
 *Refinement for Queue Scalability*
-- **Problem**: The current `analysis_queue.py` operates within FastAPI process memory, restricting worker execution to a single node instance.
+- **Problem**: The current `analysis_queue.py` ([`analysis_queue.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/workers/analysis_queue.py)) operates within FastAPI process memory, restricting worker execution to a single node instance.
 - **Solution Blueprint**: Migrate job dispatching to a Redis-backed Celery distributed task queue.
-- **Architecture**:
-  ```mermaid
-  graph TD
-      API[FastAPI Gateway Node] --> REDIS[(Redis Task Broker)]
-      REDIS --> W1[Worker Node 1]
-      REDIS --> W2[Worker Node 2]
-      REDIS --> W3[Worker Node N]
-
-      W1 --> DB[(PostgreSQL Store)]
-      W2 --> DB
-      W3 --> DB
-  ```
 
 ---
 
-### 3. Cuttlefish AVD Fleet in Kubernetes
-*Refinement for Cloud-Native Dynamic Sandboxing*
-- **Problem**: Local Android Studio AVDs require GUI environments and dedicated host GPU pass-through, hindering headless cloud deployment.
-- **Solution Blueprint**: Deploy Google Cuttlefish Android instances inside Kubernetes pods using nested virtualization (`/dev/kvm`).
-
----
-
-### 4. Persistent Vector Database RAG Integration
+## 3. Persistent Vector Database RAG Integration
 *Refinement for Multi-Case Campaign Discovery*
-- **Problem**: In-memory `_investigation_index` (`gemini_rag.py`) clears upon backend restart and supports single-case query context only.
+- **Problem**: In-memory `_investigation_index` ([`gemini_rag.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/ai/gemini_rag.py)) clears upon backend restart and supports single-case query context only.
 - **Solution Blueprint**: Integrate a local vector database (ChromaDB or FAISS) to persist chunk embeddings across all historical cases, enabling cross-case campaign queries (e.g., *"Which other cases shared this C2 IP address?"*).
 
 ---
@@ -112,4 +93,4 @@ Future development focuses on advancing from user-space application hooking to u
 
 ## Current Implementation Status
 
-All roadmap initiatives detailed in this document represent **Planned** enhancements. Current operational state remains accurately documented in `docs/README.md` and `docs/DAE_CURRENT_STATE.md`.
+All roadmap initiatives detailed in this document represent **Planned** enhancements. Current operational state remains accurately documented in [`docs/README.md`](file:///d:/Projects/Sudarshan%20BOI/docs/README.md) and [`docs/DAE_CURRENT_STATE.md`](file:///d:/Projects/Sudarshan%20BOI/docs/DAE_CURRENT_STATE.md).

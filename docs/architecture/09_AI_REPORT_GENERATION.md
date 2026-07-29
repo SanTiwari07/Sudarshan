@@ -1,11 +1,11 @@
 # 09 — AI Report Generation & Export Specification
 
 ```yaml
-Module Title:        AI Report Generation & STIX 2.1 Exporter
+Module Title:        AI Report Generation & Export Engine
 Version:             2.3.0-STABLE
 Primary Files:       shared/sudarshan_core/engines/report_generator.py
                      backend/app/routes/report.py
-Test Suite:          backend/tests/test_artifact_persistence.py
+Test Suite:          backend/tests/test_report_generator.py, backend/tests/test_artifact_persistence.py
 ```
 
 ---
@@ -13,55 +13,43 @@ Test Suite:          backend/tests/test_artifact_persistence.py
 ## Table of Contents
 - [1. Executive Overview](#1-executive-overview)
 - [2. Report Cache & Persistence (`report.py`)](#2-report-cache--persistence-reportpy)
-- [3. STIX 2.1 JSON Export](#3-stix-21-json-export)
-- [4. CSV IOC Export](#4-csv-ioc-export)
-- [5. HTML Security Report Generation](#5-html-security-report-generation)
+- [3. PDF & JSON Report Export](#3-pdf--json-report-export)
+- [4. HTML Security Report Generation](#4-html-security-report-generation)
 
 ---
 
 ## 1. Executive Overview
 
-The **AI Report Generation Engine** exports structured case findings into standardized security formats: STIX 2.1 JSON bundles for SIEM/SOAR ingestion, CSV IOC feeds for firewall/gateway blocking, and standalone HTML executive security reports.
+The **AI Report Generation Engine** exports structured case findings into standardized security formats: PDF executive security reports for CISO/SOC briefing, JSON report feeds for API integrations, and HTML executive security reports ([`report_generator.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/report_generator.py)).
 
 ---
 
 ## 2. Report Cache & Persistence (`report.py`)
 
-Case reports are cached in memory and SQLite upon analysis completion:
+Case reports are queried and served via [`report.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/routes/report.py):
 
-- `GET /api/v1/report/stix/{sha256}`: Returns STIX 2.1 JSON bundle. Requires Bearer auth.
-- `GET /api/v1/report/iocs/{sha256}`: Returns CSV IOC feed (`type,indicator,reputation,source,context`). Requires Bearer auth.
-
----
-
-## 3. STIX 2.1 JSON Export
-
-Generates STIX 2.1 `bundle` objects containing:
-- `malware` SDOs with family classification.
-- `indicator` SDOs for extracted C2 URLs, IP addresses, and domain names.
-- `relationship` SDOs linking indicators to malware families (`indicates`).
-- `attack-pattern` SDOs for matched MITRE ATT&CK for Mobile technique IDs.
+- `GET /api/v1/report/pdf/{sha256}`: Exports full PDF report. Requires Bearer auth.
+- `GET /api/v1/report/json/{sha256}`: Exports complete JSON analysis payload. Requires Bearer auth.
+- `POST /api/v1/report/chat`: Interacts with RAG-grounded AI copilot for case inquiry.
 
 ---
 
-## 4. CSV IOC Export
+## 3. PDF & JSON Report Export
 
-Formatted for direct ingestion into Palo Alto, Fortinet, or Cisco firewalls:
-
-```csv
-indicator,type,severity,description
-https://c2-server.top/gate.php,URL,CRITICAL,Extracted C2 Endpoint
-192.168.1.100,IP,HIGH,Hardcoded Socket Host
-com.sbi.lotus.fake,PACKAGE,CRITICAL,Malicious Target App
-```
-
----
-
-## 5. HTML Security Report Generation
-
-`report_generator.py` uses Jinja2 templates to compile:
+Generates comprehensive reports containing:
 - Executive Fraud Card & FRS breakdown meter.
 - 5-axis STEI scores and BFCI v2 behavioral timeline.
+- Dynamic Frida hook event summary and network traffic breakdown.
+- Threat Scenario correlation matrix.
+- CERT-In regulatory advisory drafts.
+
+---
+
+## 4. HTML Security Report Generation
+
+[`report_generator.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/report_generator.py) compiles:
+- Executive Risk Summary.
+- Technical SOC Evidence Tables.
 - Interactive Causal Fraud Workflow stages.
 - Threat Scenario correlation matrix.
 - CERT-In regulatory advisory drafts.

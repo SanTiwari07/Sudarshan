@@ -111,6 +111,7 @@ class AgenticExplorer:
         event_bus:     Optional[RuntimeEventBus] = None,
         mode:          str              = "ai",
         static_findings: Optional[Dict[str, Any]] = None,
+        accessibility_service_class: Optional[str] = None,
     ) -> None:
         self.device_serial   = device_serial
         self.adb_path        = adb_path
@@ -133,6 +134,9 @@ class AgenticExplorer:
             device_serial=device_serial,
             package_name=package_name,
             adb_path=adb_path,
+            # Forward the manifest-parsed accessibility service class so that
+            # _grant_accessibility uses the real name, not a hardcoded guess.
+            accessibility_service_class=accessibility_service_class,
         )
         self.planner    = AgentPlanner(
             api_key=GEMINI_API_KEY,

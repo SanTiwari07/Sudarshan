@@ -28,7 +28,7 @@ This latency exists not because of a lack of technical malware detection tools, 
 [ Raw APK File / Technical Artifacts ]
                  │
                  ▼
- [ Reverse Engineering Tools (JADX, MobSF, Frida) ]
+ [ Reverse Engineering Tools (JADX, MobSF, Frida, APKTool) ]
                  │
                  ▼
  [ 500-Page Technical Log Reports (Smali, Memory Dumps, PCAPs) ]
@@ -46,7 +46,7 @@ Existing mobile security frameworks produce dense, highly technical logs designe
 - *Does the binary possess overlay drawing capabilities targeting financial login screens?*
 - *What is the mathematical risk exposure to bank accounts, and what immediate mitigation step must be taken?*
 
-Sudarshan solves the Intelligence Translation Problem by ingesting raw APK binaries and automatically translating 10,000+ low-level static and dynamic signals into a single, analyst-ready fraud intelligence package in under **5 minutes**.
+Sudarshan solves the Intelligence Translation Problem by ingesting raw APK binaries and automatically translating low-level static and dynamic signals into a single, analyst-ready fraud intelligence package in under **5 minutes**.
 
 ---
 
@@ -99,7 +99,7 @@ Sudarshan's operational model is built on three core design principles inspired 
 ### 1. Deterministic Detection, Explainable Intelligence
 *Inspired by PayPal & Reserve Bank of India (RBI) Fraud Governance Guidelines.*
 - **Principle**: Artificial Intelligence should explain decisions, not make them.
-- **Implementation**: Every alert, risk score, or mitigation recommendation is derived from a transparent, weighted mathematical formula based on observable threat behaviors. Generative AI models operate strictly downstream of the deterministic risk engine, constrained to summarizing verified evidence stored in the RAG index (`gemini_rag.py`). No LLM is permitted to mutate or compute risk scores.
+- **Implementation**: Every alert, risk score, or mitigation recommendation is derived from a transparent, weighted mathematical formula based on observable threat behaviors. Generative AI models operate strictly downstream of the deterministic risk engine, constrained to summarizing verified evidence stored in the RAG index ([`gemini_rag.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/ai/gemini_rag.py)). No LLM is permitted to mutate or compute risk scores.
 
 ### 2. Human Judgment, Machine Scale
 *Inspired by Palantir & Enterprise SOC Operations.*
@@ -141,24 +141,10 @@ sequenceDiagram
 ```
 
 1. **Ingestion**: Ingest raw APK files via REST API or React Dashboard.
-2. **Feature Extraction**: Extract 10,000+ static signals and 2,000+ dynamic signals.
+2. **Feature Extraction**: Extract static and dynamic signals.
 3. **Deterministic Evaluation**: Compute 5-axis $STEI$, $BFCI$, and $FRS$ scores.
 4. **Contextual Explanation**: Generate plain-English narratives using RAG-grounded LLM prompts.
 5. **Actionable Response**: Present recommended SOC actions (e.g., `IMMEDIATE BLOCK`, `QUARANTINE`, `MONITOR`).
-
----
-
-## Data Flow
-
-Data flows through three distinct domain boundaries:
-
-$$\text{External Binary Inputs (APK / SHA256 / Device Feeds)}$$
-$$\Downarrow$$
-$$\text{Domain Layer 1: Raw Signals (Manifest, Permissions, Smali, API Call Hooks)}$$
-$$\Downarrow$$
-$$\text{Domain Layer 2: Deterministic Metrics (STEI, BFCI, FRS Score, Severity Band)}$$
-$$\Downarrow$$
-$$\text{Domain Layer 3: Actionable Intelligence (Narrative, Mitigation, STIX 2.1, HTML Report)}$$
 
 ---
 
@@ -168,13 +154,13 @@ The introduction establishes the core mathematical formulation governing the pla
 
 ### Fraud Risk Score ($FRS$) Formulation
 ```text
-FRS = 0.25 × (Static Exposure) + 0.35 × (Dynamic Behavior) + 0.20 × (Correlation) + 0.20 × (Banking Impact)
+FRS = 0.40 × STEI + 0.30 × BFCI + 0.15 × ThreatCorrelation + 0.15 × BankingImpact
 ```
 
 Where:
 - **Static Exposure ($STEI$)**: Weighted sum across Credential Theft ($0.60$), Banking Targeting ($0.20$), Permission Risk ($0.10$), Obfuscation ($0.05$), and Infrastructure Risk ($0.05$).
 - **Dynamic Behavior ($BFCI$)**: Weighted sum across Accessibility ($0.35$), SMS ($0.25$), Overlay ($0.20$), Banking Interaction ($0.10$), Network C2 ($0.05$), and Persistence ($0.05$).
-- **Correlation**: VirusTotal / AlienVault OTX / AbuseIPDB reputation ratio ($0.0 - 100.0$).
+- **Threat Correlation**: VirusTotal / AlienVault OTX / AbuseIPDB reputation ratio ($0.0 - 100.0$).
 - **Banking Impact**: Severity weight of matched malware family and regulatory risk indicators.
 
 ---
@@ -200,9 +186,9 @@ Sudarshan integrates into enterprise banking environments through standard proto
 +-----------------------------------------------------------------------+
 ```
 
-- **REST API Gateway**: Exposes `/api/v1/analyze`, `/api/v1/status/{job_id}`, `/api/v1/report/stix/{sha256}`.
+- **REST API Gateway**: Exposes `/api/v1/upload`, `/api/v1/cases`, `/api/v1/intelligence/feed`.
 - **SIEM / SOAR Export**: Emits standard STIX 2.1 JSON bundles and CSV IOC feeds.
-- **Core Banking System**: Triggers API-based account quarantine and token revocation when $FRS \ge 90.0$ (`Critical`).
+- **Core Banking System**: Triggers API-based account quarantine and token revocation when $FRS \ge 80.0$ (`CRITICAL`).
 
 ---
 
@@ -215,58 +201,11 @@ docs/
 ├── README.md               <- Master Documentation Portal Index
 ├── 01_INTRODUCTION.md      <- Problem Statement, Principles, Target Audience (This File)
 ├── 02_SYSTEM_OVERVIEW.md   <- High-Level System Architecture & Microservices Layout
+├── ARCHITECTURE.md         <- System Architectural Specification
 ├── PROJECT_CONTEXT.md      <- Comprehensive Technical System Context
 ├── HOW_TO_RUN.md           <- Deployment & Execution Guide
 └── CHANGELOG.md            <- Version History
 ```
-
----
-
-## API Reference
-
-The primary ingestion endpoints relevant to introducing the platform workflow are:
-
-### Synchronous Analysis Endpoint
-- **HTTP Method**: `POST`
-- **Path**: `/api/v1/analyze`
-- **Request**: `multipart/form-data` with `file` (`.apk` binary)
-- **Headers**: `Authorization: Bearer <JWT_TOKEN>`
-- **Response**: `AnalysisResponse` JSON object containing complete static, dynamic, risk, and AI report findings.
-
-### Asynchronous Analysis Endpoint
-- **HTTP Method**: `POST`
-- **Path**: `/api/v1/analyze/async`
-- **Request**: `multipart/form-data` with `file` (`.apk` binary)
-- **Response**:
-  ```json
-  {
-    "job_id": "c3f8a12e-9d21-4a1b-8e10-1a2b3c4d5e6f",
-    "status": "queued",
-    "message": "Analysis job queued. Poll /api/v1/status/{job_id} for result."
-  }
-  ```
-
----
-
-## Configuration
-
-Core environment options defined in `.env`:
-
-| Variable | Default Value | Description |
-| :--- | :--- | :--- |
-| `SUDARSHAN_EXPLORER_MODE` | `ai` | Mode for dynamic exploration (`ai`, `monkey`, `hybrid`). |
-| `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model variant for RAG intelligence summaries. |
-| `OLLAMA_HOST` | `http://localhost:11434` | Endpoint for local air-gapped LLM processing. |
-| `ADMIN_USERNAME` | `admin` | Default seeded administrator username. |
-| `ADMIN_PASSWORD` | `sudarshan_admin_2024` | Default seeded administrator password. |
-
----
-
-## Error Handling
-
-1. **Unsupported File Ingestion**: Uploading non-APK files triggers an immediate HTTP `400 Bad Request` (`Invalid file type. Only .apk files are allowed.`).
-2. **Analysis Pipeline Exception**: Unhandled pipeline exceptions catch gracefully, log full stack traces internally via Python `logging`, and return HTTP `500 Internal Server Error` with detailed error messages.
-3. **Queue Processing Failures**: If an async job fails during execution, `analysis_queue.py` marks `status = "failed"` and records the `error` string in memory for polling retrieval.
 
 ---
 
@@ -275,21 +214,6 @@ Core environment options defined in `.env`:
 | Capability / Module | Status | Rationale & Code Location |
 | :--- | :--- | :--- |
 | **Intelligence Problem Framing** | **Implemented** | Reflected across dashboard layout, risk engine outputs, and report templates. |
-| **Deterministic Risk Rules** | **Implemented** | $STEI$, $BFCI$, and $FRS$ formulas implemented in `shared/sudarshan_core/engines/risk_engine.py`. |
-| **JWT Authentication** | **Implemented** | Implemented in `backend/app/auth/auth.py` with seeded admin setup on startup. |
-| **Async Worker Queue** | **Implemented** | In-memory asyncio queue worker pool implemented in `backend/app/workers/analysis_queue.py`. |
-| **Air-Gapped Deployment Support** | **Implemented** | Local Ollama fallback supported in `backend/app/ai/ollama_client.py`. |
-
----
-
-## Current Limitations
-
-1. **In-Memory Job Store**: The async job queue (`analysis_queue.py`) tracks active job states in a Python dictionary. Server restarts will clear active job states (completed cases remain persisted in SQLite `sudarshan.db`).
-2. **Single-Node Queue**: The async queue uses Python `asyncio.Queue` rather than Redis/Celery, limiting queue worker scaling to a single process instance.
-
----
-
-## Future Improvements
-
-1. **Redis / Celery Queue Migration**: Transition `analysis_queue.py` to Redis-backed Celery workers for multi-node horizontal scaling.
-2. **Webhook Notifications**: Implement outbound webhook callbacks (`POST /api/v1/webhooks/case-complete`) when an asynchronous analysis job completes.
+| **Deterministic Risk Rules** | **Implemented** | $STEI$, $BFCI$, and $FRS$ formulas implemented in [`shared/sudarshan_core/engines/risk_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/risk_engine.py). |
+| **JWT Authentication** | **Implemented** | Implemented in [`backend/app/auth/auth.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/auth/auth.py) with seeded admin setup on startup. |
+| **Async Worker Queue** | **Implemented** | In-memory asyncio queue worker pool implemented in [`backend/app/workers/analysis_queue.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/workers/analysis_queue.py). |

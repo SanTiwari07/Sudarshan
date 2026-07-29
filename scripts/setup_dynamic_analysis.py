@@ -218,14 +218,17 @@ def setup_device(serial: str, push_server: bool = True) -> bool:
         ok(f"SELinux: {out.strip()}")
 
     # Push frida-server
-    if push_server:
-        step(5, "Push frida-server to device")
-        remote_path = "/data/local/tmp/frida-server"
+    frida_bin_name = os.environ.get("SUDARSHAN_FRIDA_BIN", "sudarshan_agent_srv")
+    frida_port = os.environ.get("SUDARSHAN_FRIDA_PORT", "27055")
+    remote_path = f"/data/local/tmp/{frida_bin_name}"
 
-        # Check if already there with correct version
+    if push_server:
+        step(5, f"Push Frida agent server ({frida_bin_name}) to device")
+
+        # Check if already there
         ok_f, out = _adb_s(serial, "shell", f"ls -la {remote_path} 2>/dev/null")
-        if ok_f and "frida-server" in out:
-            info(f"frida-server already on device: {out}")
+        if ok_f and frida_bin_name in out:
+            info(f"Agent server already on device: {out}")
         else:
             info(f"Pushing {FRIDA_SERVER_BIN} → {remote_path}")
             ok_f, out = _adb_s(serial, "push", str(FRIDA_SERVER_BIN), remote_path, timeout=120)
@@ -240,25 +243,26 @@ def setup_device(serial: str, push_server: bool = True) -> bool:
         ok(f"chmod 755: {out or 'OK'}")
 
     # Start frida-server
-    step(6, "Start frida-server")
-    ok_f, out = _adb_s(serial, "shell", "ps -A | grep frida-server")
-    if "frida-server" in out:
-        ok("frida-server already running")
+    step(6, f"Start Frida agent server ({frida_bin_name}) on port {frida_port}")
+    ok_f, out = _adb_s(serial, "shell", f"ps -A | grep -E '{frida_bin_name}|frida-server'")
+    if frida_bin_name in out:
+        ok(f"Agent server {frida_bin_name} already running")
     else:
         # Kill any stale instance
-        _adb_s(serial, "shell", "pkill frida-server 2>/dev/null", timeout=5)
-        # Start in background
+        _adb_s(serial, "shell", f"pkill -f {frida_bin_name} 2>/dev/null", timeout=5)
+        _adb_s(serial, "shell", "pkill -f frida-server 2>/dev/null", timeout=5)
+        # Start in background on custom port
         ok_f, out = _adb_s(
             serial, "shell",
-            "nohup /data/local/tmp/frida-server > /dev/null 2>&1 &",
+            f"nohup {remote_path} -l 0.0.0.0:{frida_port} > /dev/null 2>&1 &",
             timeout=10
         )
         time.sleep(2)
-        ok_f2, out2 = _adb_s(serial, "shell", "ps -A | grep frida-server")
-        if "frida-server" in out2:
-            ok("frida-server started")
+        ok_f2, out2 = _adb_s(serial, "shell", f"ps -A | grep -E '{frida_bin_name}|frida-server'")
+        if frida_bin_name in out2 or "frida-server" in out2:
+            ok(f"Frida agent server ({frida_bin_name}) started on port {frida_port}")
         else:
-            err("frida-server failed to start. Check binary architecture matches device.")
+            err(f"{frida_bin_name} failed to start. Check binary architecture matches device.")
             err("frida-server must be x86_64 for x86_64 emulator, x86 for x86.")
 
     # ADB TCP

@@ -41,6 +41,8 @@ graph TD
     MODEL --> RISK[Fraud Risk Engine Inputs]
 ```
 
+Implemented in [`threat_correlator.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/services/threat_correlator.py).
+
 ---
 
 ## 3. External Threat Intel Providers
@@ -55,7 +57,7 @@ If external APIs fail or are unconfigured, `threat_correlator.py` degrades grace
 
 ## 4. Deterministic Malware Family Classification (`classification_engine.py`)
 
-Classes binaries into target banking trojan families based on rule signatures:
+Classifies binaries into target banking trojan families based on rule signatures in [`classification_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/classification_engine.py):
 
 ```python
 FAMILY_RULES = {

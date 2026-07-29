@@ -23,7 +23,7 @@ Test Suite:          backend/tests/test_risk_engine.py, backend/tests/test_bfci_
 
 ## 1. Executive Overview
 
-The **Deterministic Risk Engine** (`risk_engine.py`) provides the core mathematical risk scoring logic of the Sudarshan platform. To maintain regulatory compliance and auditability, numerical risk scores ($0.0 - 100.0$) are derived strictly from mathematical formulas and observable evidence—never from LLM predictions.
+The **Deterministic Risk Engine** ([`risk_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/risk_engine.py)) provides the core mathematical risk scoring logic of the Sudarshan platform. To maintain regulatory compliance and auditability, numerical risk scores ($0.0 - 100.0$) are derived strictly from mathematical formulas and observable evidence—never from LLM predictions.
 
 ---
 
@@ -36,10 +36,10 @@ graph TD
     INTEL[VirusTotal / OTX] --> CORR_CALC[Threat Correlation Score]
     BANKS[Target Packages] --> BANK_CALC[Banking Impact Score]
 
-    STEI_CALC -->|Weight 0.25| FRS_ENG[Fraud Risk Engine]
-    BFCI_CALC -->|Weight 0.35| FRS_ENG
-    CORR_CALC -->|Weight 0.20| FRS_ENG
-    BANK_CALC -->|Weight 0.20| FRS_ENG
+    STEI_CALC -->|Weight 0.40| FRS_ENG[Fraud Risk Engine]
+    BFCI_CALC -->|Weight 0.30| FRS_ENG
+    CORR_CALC -->|Weight 0.15| FRS_ENG
+    BANK_CALC -->|Weight 0.15| FRS_ENG
 
     FRS_ENG --> FRS[Fraud Risk Score: 0.0 - 100.0]
 ```
@@ -60,25 +60,26 @@ $$STEI = 0.60 \times CT + 0.20 \times BT + 0.10 \times PR + 0.05 \times OB + 0.0
 
 ## 4. Behavioral Fraud Confidence Index (BFCI v2)
 
-Calculated in `bfci_scorer.py` using logarithmic volume scaling and temporal sequence bonuses:
+Calculated in [`bfci_scorer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/bfci_scorer.py) using logarithmic volume scaling and temporal sequence bonuses:
 
 $$BFCI_{\text{v2}} = \min\left(100.0, \sum_{c} W_c \cdot \min\left(1.0, \frac{\ln(1 + N_c)}{\ln(1 + M_c)}\right) \times 100 + S_{\text{sequence}}\right)$$
 
-- **Category Weights ($W_c$)**: Accessibility (0.30), SMS (0.25), Overlay (0.20), Banking (0.10), Network (0.10), Persistence (0.05).
+- **Category Weights ($W_c$)**: Accessibility (0.35), SMS (0.25), Overlay (0.20), Banking (0.10), Network (0.05), Persistence (0.05).
 - **Sequence Bonus ($S_{\text{sequence}}$)**: $+15.0$ points when a causal sequence (e.g., Overlay $\rightarrow$ SMS Intercept) executes within 30 seconds.
 
 ---
 
 ## 5. Fraud Risk Score (FRS)
 
-$$FRS = 0.25 \times STEI + 0.35 \times BFCI_{\text{v2}} + 0.20 \times \text{ThreatCorrelation} + 0.20 \times \text{BankingImpact}$$
+$$FRS = \text{clamp}(0.40 \times STEI + 0.30 \times BFCI_{\text{v2}} + 0.15 \times \text{ThreatCorrelation} + 0.15 \times \text{BankingImpact}, 0.0, 100.0)$$
 
 | FRS Range | Risk Band | Recommended Action |
 | :--- | :--- | :--- |
 | **80.0 – 100.0** | `CRITICAL` | Immediate App Block & CERT-In Incident Report. |
 | **60.0 – 79.9** | `HIGH` | Step-up Auth Enforcement & Account Monitoring. |
-| **30.0 – 59.9** | `MEDIUM` | Flag for Analyst Manual Review. |
-| **0.0 – 29.9** | `LOW` | Benign Application — Pass. |
+| **40.0 – 59.9** | `MEDIUM` | Flag for Analyst Manual Review. |
+| **20.0 – 39.9** | `LOW` | Low risk activity — step-up monitoring. |
+| **0.0 – 19.9** | `SAFE` | Benign Application — Pass. |
 
 ---
 
@@ -86,7 +87,7 @@ $$FRS = 0.25 \times STEI + 0.35 \times BFCI_{\text{v2}} + 0.20 \times \text{Thre
 
 When dynamic sandbox execution fails or produces 0 events (`dynamic_available = False`), the engine automatically switches to the **Static Fallback Risk Engine**:
 
-$$\text{FRS}_{\text{static}} = 0.60 \times STEI + 0.20 \times \text{ThreatCorrelation} + 0.20 \times \text{BankingImpact}$$
+$$\text{FRS}_{\text{static}} = \text{clamp}(0.50 \times STEI + 0.25 \times \text{ThreatCorrelation} + 0.25 \times \text{BankingImpact}, 0.0, 100.0)$$
 
 ---
 

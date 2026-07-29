@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 # ─── Configuration ───────────────────────────────────────────────────────────
 
 MOBSF_HOST = (os.getenv("MOBSF_HOST") or "http://mobsf:8000").strip()
-MOBSF_API_KEY = (os.getenv("MOBSF_API_KEY") or "sudarshan_mobsf_api_key_2026").strip()
+MOBSF_API_KEY = (os.getenv("MOBSF_API_KEY") or "").strip()
 
 _HEADERS = {"Authorization": MOBSF_API_KEY}
 

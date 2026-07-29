@@ -111,10 +111,14 @@ class ToolExecutor:
         device_serial: str,
         package_name: str,
         adb_path: str = "adb",
+        accessibility_service_class: Optional[str] = None,
     ) -> None:
-        self.device_serial   = device_serial
-        self.package_name    = package_name
-        self.adb_path        = adb_path
+        self.device_serial              = device_serial
+        self.package_name               = package_name
+        self.adb_path                   = adb_path
+        # Real accessibility service class name extracted from the APK manifest
+        # (e.g. ".zWPzgfI" for Cerberus). None means unknown — do not guess.
+        self.accessibility_service_class: Optional[str] = accessibility_service_class
 
     @property
     def screen_size(self) -> tuple[int, int]:
@@ -404,11 +408,37 @@ class ToolExecutor:
             )
 
     async def _grant_accessibility(self) -> str:
-        """Grant accessibility via settings secure and return output."""
+        """
+        Grant accessibility service via settings secure.
+
+        Uses the manifest-parsed service class stored in
+        ``self.accessibility_service_class`` (set by the caller from
+        :func:`permission_orchestrator.extract_accessibility_service_class`).
+        If no class is known we log a warning and skip the command rather than
+        writing a fabricated component name that Android will silently ignore.
+        """
+        svc_class = self.accessibility_service_class
+        if svc_class is None:
+            logger.warning(
+                "[ToolExecutor] accessibility_service_class is not set — "
+                "cannot grant accessibility without a manifest-parsed class name. "
+                "This sample may not declare an accessibility service."
+            )
+            return "SKIPPED: no accessibility_service_class set"
+
+        # Build the fully-qualified component name
+        if svc_class.startswith("."):
+            component = f"{self.package_name}{svc_class}"
+        else:
+            component = svc_class
+
+        logger.info(
+            f"[ToolExecutor] Granting accessibility for component: {component}"
+        )
         _, out1 = await self._adb(
             "shell", "settings", "put", "secure",
             "enabled_accessibility_services",
-            f"{self.package_name}/.AccessibilityService:{self.package_name}/.service.AccessibilityService"
+            component,
         )
         _, out2 = await self._adb(
             "shell", "settings", "put", "secure",

@@ -262,15 +262,36 @@ def _adb_install_apk(apk_path: str, device: str) -> Tuple[bool, str, Dict[str, A
             out = out2
 
         last_out = out
-        if "INSTALL_PARSE_FAILED" in out or "Corrupt XML binary file" in out:
+        if any(m in out for m in (
+            "INSTALL_PARSE_FAILED",
+            "Corrupt XML binary file",
+            "INSTALL_PARSE_FAILED_UNEXPECTED_EXCEPTION",
+        )):
             break
         time.sleep(1)
 
-    # ── Stage 3: Conditional Derivative Repair (ZIP/AXML Header Corruption) ──
-    if "INSTALL_PARSE_FAILED" in last_out or "Corrupt XML binary file" in last_out:
+    # ── Stage 3: Conditional Derivative Repair (ZIP/AXML/Manifest corruption) ──
+    # Teabot and similar samples deliberately malform their manifest to evade
+    # static scanners (INSTALL_PARSE_FAILED_UNEXPECTED_EXCEPTION).  We detect
+    # this, repair the derivative copy, re-sign, and retry.  The repair step
+    # is logged prominently in both the console and the provenance record —
+    # this is a disclosed methodological step, not evidence tampering.
+    _PARSE_FAIL_MARKERS = (
+        "INSTALL_PARSE_FAILED",
+        "Corrupt XML binary file",
+        "INSTALL_PARSE_FAILED_UNEXPECTED_EXCEPTION",
+    )
+    if any(m in last_out for m in _PARSE_FAIL_MARKERS):
         logger.warning(
-            f"[Frida Repair] Original APK install failed due to parse error ({last_out.strip()}). "
-            f"Preserving original binary and creating isolated derivative..."
+            "\n" + "="*70 + "\n"
+            "[Frida Repair] MANIFEST REPAIR REQUIRED\n"
+            f"  Sample   : {os.path.basename(apk_path)}\n"
+            f"  Reason   : {last_out.strip()}\n"
+            "  Action   : Decompiling with APKTool, patching malformed manifest,\n"
+            "             recompiling and re-signing a derivative artifact.\n"
+            "  NOTE     : Original binary is preserved unchanged. This step is\n"
+            "             disclosed methodology, NOT evidence manipulation.\n"
+            + "="*70
         )
         rep_ok, rep_path_or_err, rep_provenance = repair_obfuscated_apk(apk_path)
         if rep_ok and os.path.exists(rep_path_or_err):
@@ -389,7 +410,77 @@ def _launch_app(device: str, package_name: str) -> bool:
     )
     return ok
 
-# ─── BFCI Score Calculation ────────────────────────────────────────────────────
+
+def _collect_observed_activities(session: "FridaSession") -> List[str]:
+    """
+    Collect the real set of activity class names observed during the session.
+
+    Source of truth (in priority order):
+      1. ``session.reports["agent_memory"]["visited_screens"]`` — the
+         AgenticExplorer's perception layer records the foreground activity
+         name on every Observe cycle.  These are real dumpsys values,
+         never synthesised.
+      2. Any ``category="activity"`` events on the EventBus runtime log
+         (set by the perception pipeline's ``update_from_foreground`` call).
+      3. Empty list — explicitly NOT ``[session.package_name]``, which was
+         the previous fabricated placeholder.
+
+    This function never raises and never invents data: on any parse error
+    it returns ``[]`` rather than a guess.
+    """
+    try:
+        # Source 1: agentic explorer memory
+        reports = getattr(session, "reports", {}) or {}
+        mem_summary = reports.get("agent_memory") or {}
+        visited = mem_summary.get("visited_screens") or {}
+
+        activities: List[str] = []
+        if isinstance(visited, dict):
+            # visited_screens is {screen_hash: {"activity": str, ...}, ...}
+            for screen_data in visited.values():
+                act = None
+                if isinstance(screen_data, dict):
+                    act = screen_data.get("activity")
+                elif isinstance(screen_data, str):
+                    act = screen_data
+                if act and isinstance(act, str) and act not in activities:
+                    activities.append(act)
+        elif isinstance(visited, list):
+            # If memory returns a list of screen records
+            for item in visited:
+                act = item.get("activity") if isinstance(item, dict) else str(item)
+                if act and act not in activities:
+                    activities.append(act)
+
+        if activities:
+            logger.debug(
+                f"[Frida] _collect_observed_activities: "
+                f"{len(activities)} unique activities from explorer memory"
+            )
+            return activities
+
+        # Source 2: EventBus activity events (collected via attack_timeline)
+        timeline = reports.get("attack_timeline") or []
+        for entry in timeline:
+            if entry.get("category") == "activity":
+                act = (entry.get("data") or {}).get("activity")
+                if act and act not in activities:
+                    activities.append(act)
+        if activities:
+            logger.debug(
+                f"[Frida] _collect_observed_activities: "
+                f"{len(activities)} activities from attack_timeline"
+            )
+            return activities
+
+    except Exception as exc:
+        logger.warning(
+            f"[Frida] _collect_observed_activities failed gracefully: {exc}"
+        )
+
+    # Source 3: empty list — no observed activities, do not fabricate
+    return []
+
 
 def calculate_bfci(
     collected_events: Dict[str, List[Dict]],
@@ -487,6 +578,13 @@ class FridaSession:
         # AI exploration from a rollback without reading the logs.
         self.explorer_used: str = "none"
         self.explorer_error: Optional[str] = None
+        # Which of the 5-step launch ladder succeeded for this sample.
+        # None means we haven't attempted launch yet; "failed" means all 5 failed.
+        self.launch_method_used: Optional[str] = None
+        # Real accessibility service class extracted from the APK manifest.
+        # Passed through to AgenticExplorer → ToolExecutor so the correct
+        # component name is used in 'settings put secure enabled_accessibility_services'.
+        self.accessibility_service_class: Optional[str] = None
         # Set by stop() to cut an in-flight analysis short instead of sleeping
         # out the full window.
         self._stop_event = threading.Event()
@@ -665,26 +763,216 @@ class FridaSession:
 
             import shlex
             safe_pkg = shlex.quote(self.package_name)
-            
-            # ── Strategy 1: Launch & Attach ──
+
+            # ── 5-step launch fallback ladder ────────────────────────────────
+            # Each step is tried in order; the first that results in a running
+            # process sets self.launch_method_used and breaks the loop.
+            # If all 5 fail we mark the run INSTRUMENTATION_FAILED immediately
+            # rather than allowing a silent proceed with nothing running.
+            #
+            # Step 1: am start with manifest-declared launcher activity
+            # Step 2: monkey -c LAUNCHER
+            # Step 3: enumerate all exported activities and try each
+            # Step 4: BOOT_COMPLETED + PACKAGE_ADDED broadcasts (packed samples)
+            # Step 5: deep link via declared URI scheme (if any)
+            #
+            # "required non-standard launch method" is itself a weak
+            # anti-analysis signal worth recording in launch_method_used.
+
+            def _check_running() -> bool:
+                """Return True if the target process is now running."""
+                return self._resolve_pid() is not None
+
+            def _am_start(activity_component: str) -> bool:
+                ok, out = _adb(
+                    "-s", self.device_serial, "shell",
+                    f"am start -n {activity_component}",
+                    timeout=15,
+                )
+                return ok
+
+            launched = False
+
+            # Step 1 — manifest-declared launcher activity
             if self.main_activity:
                 safe_act = shlex.quote(self.main_activity)
-                logger.info(f"[Frida] Launching {self.package_name}/{self.main_activity} via am start")
-                _adb(
-                    "-s", self.device_serial, "shell",
-                    f"am start -n {safe_pkg}/{safe_act}",
-                    timeout=15
+                logger.info(
+                    f"[Frida] Launch step 1: am start -n "
+                    f"{self.package_name}/{self.main_activity}"
                 )
-            else:
-                logger.info(f"[Frida] Launching {self.package_name} via monkey")
+                _am_start(f"{safe_pkg}/{safe_act}")
+                time.sleep(3)
+                if _check_running():
+                    self.launch_method_used = "am_start_main_activity"
+                    launched = True
+                    logger.info(
+                        f"[Frida] Launch step 1 succeeded: am_start_main_activity"
+                    )
+
+            # Step 2 — monkey LAUNCHER intent
+            if not launched:
+                logger.info(
+                    f"[Frida] Launch step 2: monkey -c LAUNCHER for {self.package_name}"
+                )
                 _adb(
                     "-s", self.device_serial, "shell",
                     f"monkey -p {safe_pkg} -c android.intent.category.LAUNCHER 1",
-                    timeout=15
+                    timeout=15,
                 )
+                time.sleep(3)
+                if _check_running():
+                    self.launch_method_used = "monkey_launcher"
+                    launched = True
+                    logger.info("[Frida] Launch step 2 succeeded: monkey_launcher")
 
-            # Give the app time to start up
-            time.sleep(3)
+            # Step 3 — enumerate all exported activities from manifest
+            if not launched:
+                logger.info(
+                    f"[Frida] Launch step 3: trying all exported activities for "
+                    f"{self.package_name}"
+                )
+                exported_activities: List[str] = []
+                try:
+                    from androguard.misc import AnalyzeAPK
+                    _a, _, _ = AnalyzeAPK(getattr(self, '_apk_path', "") or "")
+                    exported_activities = [
+                        act for act in (_a.get_activities() or [])
+                        if act and act != self.main_activity
+                    ]
+                except Exception:
+                    pass
+                # Also try pm dump to list exported activities at runtime
+                if not exported_activities:
+                    ok, dump_out = _adb(
+                        "-s", self.device_serial, "shell",
+                        f"pm dump {safe_pkg}",
+                        timeout=15,
+                    )
+                    if ok:
+                        for line in dump_out.splitlines():
+                            line = line.strip()
+                            if "Activity{" in line or ("android.intent.action.MAIN" in line
+                                                        and self.package_name in line):
+                                import re as _re
+                                m = _re.search(
+                                    rf"{re.escape(self.package_name)}(/\.?[\w.]+)",
+                                    line,
+                                )
+                                if m:
+                                    exported_activities.append(
+                                        self.package_name + m.group(1)
+                                    )
+
+                for act in exported_activities[:8]:  # cap at 8 to bound time
+                    safe_act = shlex.quote(act)
+                    logger.info(
+                        f"[Frida] Launch step 3: trying exported activity {act}"
+                    )
+                    _am_start(f"{safe_pkg}/{safe_act}")
+                    time.sleep(2)
+                    if _check_running():
+                        self.launch_method_used = f"exported_activity:{act}"
+                        launched = True
+                        logger.info(
+                            f"[Frida] Launch step 3 succeeded via exported "
+                            f"activity: {act}"
+                        )
+                        break
+
+            # Step 4 — BOOT_COMPLETED + PACKAGE_ADDED broadcasts
+            # Cerberus / Drinik activate their payload only after the device
+            # boots or a new package is added, so no launcher activity exists.
+            if not launched:
+                logger.info(
+                    f"[Frida] Launch step 4: simulating boot/install broadcasts "
+                    f"for {self.package_name}"
+                )
+                _adb(
+                    "-s", self.device_serial, "shell",
+                    f"am broadcast -a android.intent.action.BOOT_COMPLETED "
+                    f"-p {safe_pkg}",
+                    timeout=10,
+                )
+                time.sleep(1)
+                _adb(
+                    "-s", self.device_serial, "shell",
+                    f"am broadcast -a android.intent.action.PACKAGE_ADDED "
+                    f"-p {safe_pkg}",
+                    timeout=10,
+                )
+                time.sleep(3)
+                if _check_running():
+                    self.launch_method_used = "boot_broadcast"
+                    launched = True
+                    logger.info(
+                        "[Frida] Launch step 4 succeeded: boot_broadcast "
+                        "(packed sample)"
+                    )
+
+            # Step 5 — deep link via URI scheme declared in manifest
+            if not launched:
+                logger.info(
+                    f"[Frida] Launch step 5: attempting URI scheme deep link "
+                    f"for {self.package_name}"
+                )
+                uri_scheme: Optional[str] = None
+                try:
+                    from androguard.misc import AnalyzeAPK
+                    _a2, _, _ = AnalyzeAPK(getattr(self, '_apk_path', "") or "")
+                    for act in (_a2.get_activities() or []):
+                        try:
+                            filters = _a2.get_intent_filters("activity", act)
+                            for scheme in filters.get("scheme", []):
+                                if scheme and scheme not in (
+                                    "http", "https", "market", "intent",
+                                ):
+                                    uri_scheme = scheme
+                                    break
+                        except Exception:
+                            pass
+                        if uri_scheme:
+                            break
+                except Exception:
+                    pass
+
+                if uri_scheme:
+                    safe_scheme = shlex.quote(f"{uri_scheme}://")
+                    logger.info(
+                        f"[Frida] Launch step 5: deep link "
+                        f"am start -a VIEW -d {uri_scheme}://"
+                    )
+                    _adb(
+                        "-s", self.device_serial, "shell",
+                        f"am start -a android.intent.action.VIEW "
+                        f"-d {safe_scheme}",
+                        timeout=15,
+                    )
+                    time.sleep(3)
+                    if _check_running():
+                        self.launch_method_used = f"deep_link:{uri_scheme}"
+                        launched = True
+                        logger.info(
+                            f"[Frida] Launch step 5 succeeded: "
+                            f"deep_link:{uri_scheme}"
+                        )
+
+            if not launched:
+                self.launch_method_used = "failed"
+                self.last_error = (
+                    f"LAUNCH_FAILED: All 5 launch methods failed for "
+                    f"{self.package_name}. "
+                    "Steps tried: am_start_main_activity, monkey_launcher, "
+                    "exported_activity, boot_broadcast, deep_link. "
+                    "This sample may require manual launch or has no runnable "
+                    "entry point in the current environment."
+                )
+                logger.error(f"[Frida] {self.last_error}")
+                return False
+
+            logger.info(
+                f"[Frida] App launched successfully via "
+                f"'{self.launch_method_used}'"
+            )
 
             self._session = None
             for attempt in range(ATTACH_MAX_ATTEMPTS):
@@ -816,6 +1104,9 @@ class FridaSession:
                         package_name=self.package_name,
                         event_bus=self.event_bus,
                         mode=EXPLORER_MODE,
+                        # Forward the manifest-parsed accessibility service class
+                        # so ToolExecutor uses the real obfuscated class name.
+                        accessibility_service_class=self.accessibility_service_class,
                     )
                     self.explorer_used = "agentic"
                     logger.info("[Frida] AgenticExplorer selected.")
@@ -1090,6 +1381,24 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
         main_activity=main_activity,
         artifact_dir=apk_dir,
     )
+    # Give the launch ladder access to the APK path for steps 3 & 5
+    # (androguard activity enumeration and URI scheme discovery).
+    session._apk_path = apk_path  # type: ignore[attr-defined]
+
+    # Extract the real accessibility service class name from the manifest
+    # once here, before the session runs. The result is forwarded into
+    # AgenticExplorer → ToolExecutor so it reaches the settings put command.
+    try:
+        from sudarshan_core.engines.permission_orchestrator import (
+            extract_accessibility_service_class,
+        )
+        session.accessibility_service_class = extract_accessibility_service_class(
+            apk_path, package_name
+        )
+    except Exception as _exc:
+        logger.warning(
+            f"[Frida] Could not extract accessibility service class: {_exc}"
+        )
     
     # ── Wave 2: Initialize Intelligence Collectors ─────────────────────────────
     if ScreenshotManager is not None:
@@ -1185,9 +1494,13 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
         # Exploration provenance — additive fields so a reviewer can tell which
         # explorer produced this evidence, and whether it crashed part-way.
         # Deliberately NOT consumed by risk_engine: provenance never scores.
-        "explorer_used":  session.explorer_used,
-        "explorer_error": session.explorer_error,
-        "artifact_dir":   str(apk_dir),
+        "explorer_used":       session.explorer_used,
+        "explorer_error":      session.explorer_error,
+        "artifact_dir":        str(apk_dir),
+        # Which of the 5-step launch ladder succeeded (or "failed" if none did).
+        # Presence of non-standard launch method is itself a weak signal of
+        # anti-analysis hardening. NOT consumed by risk_engine.
+        "launch_method_used":  session.launch_method_used,
 
         # BFCI result (new fields for the updated risk_engine)
         "bfci": bfci,
@@ -1200,7 +1513,12 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
         "network_logs": network_logs[:20],
         "files_accessed": list(set(files_accessed))[:20],
         "screenshots": [],  # Not implemented in static sandbox
-        "activities_triggered": [package_name],
+        # Real activities observed during the session, derived from the
+        # agentic explorer's visited-screen memory. If no explorer ran, or
+        # if the memory contains no activity data, this is an empty list —
+        # never [package_name], which was a fabricated placeholder that
+        # incorrectly counted toward _dynamic_run_was_conclusive.
+        "activities_triggered": _collect_observed_activities(session),
 
         # Metadata
         "hook_errors": session.hook_errors,

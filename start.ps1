@@ -72,21 +72,29 @@ if ($hasDevice) {
 # -- Step 4: Start frida-server on emulator -----------------------------------
 Write-Host "[4/6] Starting frida-server on emulator..." -ForegroundColor Yellow
 if ($hasDevice) {
+    $fridaBinName = if ($env:SUDARSHAN_FRIDA_BIN) { $env:SUDARSHAN_FRIDA_BIN } else { "sudarshan_agent_srv" }
+    $fridaPort = if ($env:SUDARSHAN_FRIDA_PORT) { $env:SUDARSHAN_FRIDA_PORT } else { "27055" }
+    $fridaRemotePath = "/data/local/tmp/$fridaBinName"
+
     # Kill any stale instance first
     & $adb shell "pkill -f frida-server" 2>$null | Out-Null
+    & $adb shell "pkill -f $fridaBinName" 2>$null | Out-Null
     Start-Sleep -Seconds 1
 
-    # Launch fresh in background
-    & $adb shell "nohup /data/local/tmp/frida-server > /dev/null 2>&1 &" | Out-Null
+    # Push if default frida-server exists but randomized binary does not
+    & $adb shell "if [ -f /data/local/tmp/frida-server ] && [ ! -f $fridaRemotePath ]; then cp /data/local/tmp/frida-server $fridaRemotePath && chmod 755 $fridaRemotePath; fi" 2>$null | Out-Null
+
+    # Launch fresh in background on non-default port
+    & $adb shell "nohup $fridaRemotePath -l 0.0.0.0:$fridaPort > /dev/null 2>&1 &" | Out-Null
     Start-Sleep -Seconds 2
 
     # Verify
-    $fridaCheck = & $adb shell "ps -A" 2>&1 | Select-String "frida-server"
+    $fridaCheck = & $adb shell "ps -A" 2>&1 | Select-String -Pattern "$fridaBinName|frida-server"
     if ($fridaCheck) {
-        Write-Host "      OK frida-server is RUNNING" -ForegroundColor Green
+        Write-Host "      OK Frida agent server ($fridaBinName) is RUNNING on port $fridaPort" -ForegroundColor Green
     } else {
-        Write-Host "      X  frida-server did NOT start - dynamic analysis will be skipped" -ForegroundColor Red
-        Write-Host "         Make sure the binary exists at /data/local/tmp/frida-server on the emulator." -ForegroundColor DarkYellow
+        Write-Host "      X  Frida agent server did NOT start - dynamic analysis will be skipped" -ForegroundColor Red
+        Write-Host "         Make sure the binary exists at $fridaRemotePath on the emulator." -ForegroundColor DarkYellow
     }
 } else {
     Write-Host "      !  No active emulator connected (skipping frida-server launch)" -ForegroundColor DarkYellow

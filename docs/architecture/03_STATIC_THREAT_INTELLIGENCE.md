@@ -20,7 +20,7 @@ Test Suite:          backend/tests/test_analysis_client.py, backend/tests/test_r
 - [2. Multi-Engine Decompilation Strategy](#2-multi-engine-decompilation-strategy)
 - [3. APKTool Engine Integration](#3-apktool-engine-integration)
 - [4. JADX Engine Integration](#4-jadx-engine-integration)
-- [5. MobSF & Androguard Analysis](#5-mobsf--androguard-analysis)
+- [5. MobSF & Native APK Analysis](#5-mobsf--native-apk-analysis)
 - [6. Investigation Manifest Generation](#6-investigation-manifest-generation)
 - [7. Static Threat Exposure Index (STEI) Formula](#7-static-threat-exposure-index-stei-formula)
 
@@ -28,9 +28,9 @@ Test Suite:          backend/tests/test_analysis_client.py, backend/tests/test_r
 
 ## 1. Executive Overview
 
-The **Static Threat Intelligence Engine** performs pre-execution binary analysis on uploaded Android APKs. Rather than relying on a single analyzer, Sudarshan deploys a four-layered defense-in-depth static extraction pipeline (**MobSF**, **Androguard**, **APKTool**, and **JADX**) to extract permissions, components, API calls, hardcoded secrets, obfuscation signals, and banking app targets.
+The **Static Threat Intelligence Engine** performs pre-execution binary analysis on uploaded Android APKs. Rather than relying on a single analyzer, Sudarshan deploys a four-layered defense-in-depth static extraction pipeline (**MobSF**, native [`apk_analyzer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/analyzers/apk_analyzer.py), **APKTool**, and **JADX**) to extract permissions, components, API calls, hardcoded secrets, obfuscation signals, and banking app targets.
 
-Findings are normalized via `upload.py` and compiled into a pre-sandbox **Investigation Manifest** (`manifest.json`), which configures dynamic sandbox hooks and goal priorities.
+Findings are normalized via [`upload.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/routes/upload.py) and compiled into a pre-sandbox **Investigation Manifest** (`manifest.json`), which configures dynamic sandbox hooks and goal priorities.
 
 ---
 
@@ -41,7 +41,7 @@ graph TD
     APK[Target APK Upload] --> SPLIT{Analysis Dispatcher}
 
     SPLIT -->|REST API Port 8008| MobSF[MobSF Container]
-    SPLIT -->|Native Python| Andro[Androguard Analyzer]
+    SPLIT -->|Native Python| Andro[Native APK Analyzer]
     SPLIT -->|CLI Subprocess| APKT[APKTool Engine]
     SPLIT -->|CLI Subprocess| JADX[JADX Source Scanner]
 
@@ -55,8 +55,8 @@ graph TD
 ```
 
 ### Why Both APKTool and JADX Are Used
-- **APKTool (`apktool_engine.py`)**: Specializes in decompiling raw Android binary XML files (`AndroidManifest.xml`), layout resources (`res/layout/`), and string tables (`res/values/strings.xml`). It detects obfuscated single-character resource names and resource-embedded URLs.
-- **JADX (`jadx_engine.py`)**: Specializes in decompiling DEX bytecode to readable Java source code. It scans method bodies for complex fraud logic patterns (`DexClassLoader`, `SmsManager.sendTextMessage`, `AccessibilityService`, `WindowManager.addView`) that raw resource tools cannot parse.
+- **APKTool ([`apktool_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/apktool_engine.py))**: Specializes in decompiling raw Android binary XML files (`AndroidManifest.xml`), layout resources (`res/layout/`), and string tables (`res/values/strings.xml`). It detects obfuscated single-character resource names and resource-embedded URLs.
+- **JADX ([`jadx_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/jadx_engine.py))**: Specializes in decompiling DEX bytecode to readable Java source code. It scans method bodies for complex fraud logic patterns (`DexClassLoader`, `SmsManager.sendTextMessage`, `AccessibilityService`, `WindowManager.addView`) that raw resource tools cannot parse.
 
 Together, APKTool provides structural & asset visibility while JADX provides behavioral source code visibility.
 
@@ -69,7 +69,7 @@ Wraps the APKTool CLI to decompile resources and extract decoded XML files when 
 - **Decoded Manifest Extraction**: Reads `AndroidManifest.xml` in human-readable text format.
 - **Obfuscation Detection**: Counts single-character resource files (e.g., `a.xml`, `b.png`) to measure resource obfuscation entropy.
 - **Suspicious Resource Scanning**: Scans text resource files for embedded IP addresses, C2 URLs, and permission strings.
-- **Graceful Fallback**: If `apktool` is not in PATH, analysis logs a warning and continues cleanly using Androguard/JADX.
+- **Graceful Fallback**: If `apktool` is not in PATH, analysis logs a warning and continues cleanly using native parser/JADX.
 
 ---
 
@@ -92,11 +92,10 @@ Wraps the JADX CLI to decompile `.dex` bytecode into Java source code files:
 
 ---
 
-## 5. MobSF & Androguard Analysis
+## 5. MobSF & Native APK Analysis
 
-- **MobSF Engine (`mobsf_client.py`)**: Interfaces with the OpenSecurity MobSF container (Port 8008). Extracts security scores, manifest vulnerability findings, dangerous permissions, code analysis findings, hardcoded secrets, and certificate metadata.
-- **Androguard Fallback (`apk_analyzer.py`)**: Native fallback when MobSF is unavailable. Parses `AndroidManifest.xml` via `androguard.misc.AnalyzeAPK` to extract package details, permissions, activities, services, receivers, and bytecode strings.
-
+- **MobSF Engine ([`mobsf_client.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/services/mobsf_client.py))**: Interfaces with the OpenSecurity MobSF container (Port 8008). Extracts security scores, manifest vulnerability findings, dangerous permissions, code analysis findings, hardcoded secrets, and certificate metadata.
+- **Native APK Analyzer ([`apk_analyzer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/analyzers/apk_analyzer.py))**: Native fallback when MobSF is unavailable. Parses `AndroidManifest.xml` via `androguard` to extract package details, permissions, activities, services, receivers, and bytecode strings.
 
 ---
 
@@ -131,7 +130,7 @@ Static analysis results are compiled into a formal pre-sandbox data contract: `I
 
 ## 7. Static Threat Exposure Index (STEI) Formula
 
-The **STEI** score ($0.0 - 100.0$) is computed via a 5-axis mathematical model in `risk_engine.py`:
+The **STEI** score ($0.0 - 100.0$) is computed via a 5-axis mathematical model in [`risk_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/risk_engine.py):
 
 $$STEI = 0.60 \times CT + 0.20 \times BT + 0.10 \times PR + 0.05 \times OB + 0.05 \times IR$$
 

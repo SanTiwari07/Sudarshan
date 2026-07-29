@@ -2,13 +2,15 @@
 
 ## Architecture Overview
 
-The Sudarshan platform has been refactored into a **clean 3-container microservice architecture**. All heavy reverse-engineering binaries (APKTool, JADX, Java 17, Frida 17, Androguard, and ADB) have been moved into a dedicated `analysis-engine` microservice container.
+The Sudarshan platform has been refactored into a **5-container microservice architecture**. All heavy reverse-engineering binaries (APKTool, JADX, Java 17, Frida 17, Androguard, and ADB) have been moved into a dedicated `analysis-engine` microservice container.
 
 ```mermaid
 graph TD
     User([User Analyst]) -->|HTTP Port 5173| Frontend[sudarshan-frontend<br/>React 18 SPA]
     Frontend -->|REST API Port 8000| Backend[sudarshan-backend<br/>FastAPI Orchestrator Gateway]
     Backend -->|REST API Port 8001| Engine[sudarshan-analysis-engine<br/>Ubuntu 24.04 + OpenJDK 17 + Python 3.12<br/>APKTool 2.10.0 + JADX 1.5.1 + Frida 17.16.4]
+    Backend -->|REST API Port 8008| MobSF[sudarshan-mobsf<br/>Mobile Security Framework]
+    Engine ---|Shared Volume mitmproxy_har| Mitmproxy[sudarshan-mitmproxy<br/>Transparent HTTPS Sidecar]
 
     Backend ---|Shared Volume /app/uploads| Engine
     Engine -->|Network ADB TCP Port 5555| HostAVD[Android Studio AVD Emulator<br/>Host Machine]
@@ -22,6 +24,7 @@ graph TD
    - Base OS: **Ubuntu 24.04**
    - Java: OpenJDK 17
    - Python: 3.12 with PyPI verified `frida==17.16.4` and `frida-tools`
+   - Shared Library: [`shared/sudarshan_core/`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/) mounted at `/opt/sudarshan-core`
    - Static Tools: Pinned **APKTool v2.10.0** (`/usr/local/bin/apktool`) and **JADX CLI v1.5.1** (`/usr/local/bin/jadx`)
    - Network ADB: Auto-connects to Android Studio AVD via `host.docker.internal:5555` with an idempotent 10-attempt retry loop.
    - Resource Constraints: Hard limits (`mem_limit: 4g`, `cpus: 2.0`, `no-new-privileges:true`).
@@ -46,8 +49,11 @@ graph TD
 On your host Windows machine:
 ```powershell
 # 1. Launch your Android Studio AVD Emulator
-# 2. Enable ADB TCP Port 5555:
+# 2. Enable ADB TCP Port 5555, root, and SELinux permissive mode:
 adb tcpip 5555
+adb connect 127.0.0.1:5555
+adb root
+adb shell "setenforce 0"
 ```
 
 ### Step 2: Build & Boot Docker Microservices Stack
@@ -73,8 +79,6 @@ Services running:
 
 Execute unit test suite against the backend orchestrator:
 ```powershell
-cd backend
-pytest tests/
+$env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest backend/tests
 ```
-Result: **Automated test suite passing clean**.
-
+Result: **388 / 388 automated tests passing clean**.

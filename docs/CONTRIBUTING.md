@@ -2,7 +2,8 @@
 
 ```yaml
 Document Title:      Sudarshan Developer & Contribution Guide
-Version:             2.2.0-STABLE
+Version:             2.3.0-STABLE
+Last Revision:       2026-07-29
 Target Audience:     Core Contributors, Module Developers, Security Researchers
 ```
 
@@ -20,11 +21,11 @@ Target Audience:     Core Contributors, Module Developers, Security Researchers
 ## 1. Code Standards & Guidelines
 
 ### Python (Backend & Shared Core)
-- **Runtime**: Python 3.12+
-- **Shared Library**: Core logic, models, and engines belong in `shared/sudarshan_core/` so both gateway and analysis engine can consume them.
+- **Runtime**: Python 3.12+ / 3.13+
+- **Shared Package**: Core logic, models, services, and engines belong in [`shared/sudarshan_core/`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/) so both backend gateway and analysis engine can consume them cleanly.
 - **Type Hints**: Mandatory for all function signatures.
 - **Formatting**: PEP-8 compliant.
-- **Validation**: Use Pydantic v2 schemas (`BaseModel`) for all API parameters and internal domain contracts.
+- **Validation**: Use Pydantic v2 schemas (`BaseModel`) for all API parameters and internal domain contracts ([`schemas.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/models/schemas.py)).
 
 ### TypeScript / React (Frontend)
 - **Framework**: React 18 with TypeScript and Vite.
@@ -44,29 +45,32 @@ Target Audience:     Core Contributors, Module Developers, Security Researchers
 2. **Environment Setup**:
    - Install backend dependencies (`pip install -r backend/requirements.txt`).
    - Install frontend dependencies (`cd frontend && npm install`).
-3. **Local Hot-Reload Execution**:
-   - Backend Gateway: `uvicorn backend.app.main:app --reload --port 8000`
-   - Frontend: `cd frontend && npm run dev`
+3. **Local Execution**:
+   - Launch full container stack: `docker compose up --build -d` (or `.\start.ps1`)
+   - Or run locally:
+     - Backend Gateway: `python -m uvicorn app.main:app --reload --port 8000` (from `backend/`)
+     - Frontend: `npm run dev` (from `frontend/`)
 
 ---
 
 ## 3. Testing & Determinism Baselines
 
-All PRs must maintain 100% test suite compliance. Never break existing test assertions or compromise the **Determinism Invariant**.
+All PRs must maintain 100% test suite compliance (**388 / 388 tests passing**). Never break existing test assertions or compromise the **Determinism Invariant**.
 
 ### Running Automated Tests
-```bash
-cd backend
-pytest tests/
+```powershell
+$env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest backend/tests
 ```
 
-### Key Test File Inventory (in `backend/tests/`)
+### Key Test File Inventory (in [`backend/tests/`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/))
 - `tests/test_remaining_features.py`: Tests `InvestigationManifest`, `ApktoolEngine`, `JadxEngine`, and `mitmproxy` HAR parsing.
 - `tests/test_bfci_scorer.py`: Tests logarithmic volume scoring and sequence bonuses.
 - `tests/test_workflow_reconstructor.py`: Tests causal chain workflow reconstruction.
 - `tests/test_risk_engine.py`: Tests 5-axis STEI, static fallback, and 4-axis FRS formula.
 - `tests/test_prompt_injection.py`: Tests input sanitization against prompt injection attacks.
 - `tests/test_determinism_replay.py`: Validates byte-for-byte verdict stability against pre-refactor recorded baselines.
+- `tests/test_detection_regressions.py`: Tests detection regression assertions across malware patterns.
+- `tests/test_frida_preflight.py`: Verifies Frida attach SELinux preflight execution.
 
 ---
 
@@ -82,6 +86,5 @@ pytest tests/
 ## 5. Submitting Pull Requests
 
 1. Run formatting and lint checks.
-2. Ensure all automated pytest test cases pass (`cd backend && pytest tests/`).
+2. Ensure all automated pytest test cases pass (`388 tests passing`).
 3. Push to your branch and submit a Pull Request against `main`. Include a clear summary of changes and reference updated documentation.
-

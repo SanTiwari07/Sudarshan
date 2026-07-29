@@ -52,12 +52,14 @@ graph TD
     LLM --> RESP[Grounded Investigation Response]
 ```
 
+Implemented in [`gemini_rag.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/ai/gemini_rag.py).
+
 ---
 
 ## 3. Gemini 2.5 Flash Standardization
 
 - **Primary Cloud Model**: **Gemini 2.5 Flash** (`gemini-2.5-flash`) via official Google GenAI SDK.
-- **Direct Investigation Client**: Structured JSON prompts with exponential backoff retries in `gemini_client.py`.
+- **Direct Investigation Client**: Structured JSON prompts with exponential backoff retries in [`gemini_client.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/ai/gemini_client.py).
 - **Output Contracts**: Standardized Pydantic `IntelligenceReport` model:
   - `plain_english_narrative`
   - `fraud_objective`
@@ -70,7 +72,7 @@ graph TD
 
 ## 4. Prompt Injection Sanitization Guard (`sanitizer.py`)
 
-All strings extracted from un-trusted APK binaries (class names, method strings, layout text, UI labels) are sanitized prior to prompt assembly:
+All strings extracted from untrusted APK binaries (class names, method strings, layout text, UI labels) are sanitized prior to prompt assembly in [`sanitizer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/agentic/sanitizer.py):
 
 ```python
 def sanitize_input(text: str) -> str:
@@ -80,7 +82,7 @@ def sanitize_input(text: str) -> str:
     return text[:2000]
 ```
 
-Tested against 64 adversarial injection payloads (`test_prompt_injection.py`).
+Tested against 64 adversarial injection payloads ([`test_prompt_injection.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_prompt_injection.py)).
 
 ---
 

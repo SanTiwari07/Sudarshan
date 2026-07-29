@@ -135,9 +135,41 @@ def repair_obfuscated_apk(original_apk_path: str) -> Tuple[bool, str, Dict]:
     if not axml_data:
         return False, f"Failed to compile clean binary AXML for derivative: {package_name}", {}
 
+def validate_zip_entry_path(target_dir: str, entry_filename: str) -> str:
+    """
+    Validates that a zip entry path resolves strictly inside target_dir (prevents Zip-Slip).
+    Raises ValueError if path traversal is detected.
+    """
+    target_dir_abs = os.path.abspath(target_dir)
+    resolved_path = os.path.abspath(os.path.join(target_dir_abs, entry_filename))
+    if not (resolved_path == target_dir_abs or resolved_path.startswith(target_dir_abs + os.sep)):
+        raise ValueError(f"Zip-Slip path traversal attack detected: '{entry_filename}' escapes target '{target_dir}'")
+    return resolved_path
+
+
+def sanitize_extracted_directory(target_dir: str) -> None:
+    """
+    Post-extraction path validation sweep: removes any files/symlinks that resolve
+    outside of target_dir.
+    """
+    target_dir_abs = os.path.abspath(target_dir)
+    for root, dirs, files in os.walk(target_dir_abs, topdown=False):
+        for name in files + dirs:
+            full_path = os.path.abspath(os.path.join(root, name))
+            if not (full_path == target_dir_abs or full_path.startswith(target_dir_abs + os.sep)):
+                try:
+                    if os.path.islink(full_path) or os.path.isfile(full_path):
+                        os.remove(full_path)
+                    elif os.path.isdir(full_path):
+                        shutil.rmtree(full_path, ignore_errors=True)
+                except Exception:
+                    pass
+
+
     # Step 5: Extract raw files via apkInspector & inject compiled AXML
     out_dir = f"/tmp/raw_{original_sha256[:8]}"
     shutil.rmtree(out_dir, ignore_errors=True)
+    os.makedirs(out_dir, exist_ok=True)
     try:
         from apkInspector.extract import extract_all_files_from_central_directory
         from apkInspector.headers import ZipEntry
@@ -145,6 +177,7 @@ def repair_obfuscated_apk(original_apk_path: str) -> Tuple[bool, str, Dict]:
             zip_e = ZipEntry.parse(f_apk)
             zdict = zip_e.to_dict()
             extract_all_files_from_central_directory(f_apk, zdict['central_directory'], zdict['local_headers'], out_dir)
+            sanitize_extracted_directory(out_dir)
     except Exception as e:
         logger.warning(f"[APKRepair] apkInspector raw extraction warning: {e}")
         os.makedirs(out_dir, exist_ok=True)

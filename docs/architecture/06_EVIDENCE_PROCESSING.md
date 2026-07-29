@@ -28,7 +28,7 @@ The **Evidence Processing Engine** provides event ingestion, structured persiste
 
 ## 2. Runtime Event Bus (`event_bus.py`)
 
-The `RuntimeEventBus` acts as an in-memory publish-subscribe broker for real-time sandbox events:
+The `RuntimeEventBus` ([`event_bus.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/event_bus.py)) acts as an in-memory publish-subscribe broker for real-time sandbox events:
 
 ```python
 class RuntimeEventBus:
@@ -42,7 +42,7 @@ Event categories include: `frida_hook`, `network`, `ui_action`, `logcat`, and `c
 
 ## 3. Evidence Store (`evidence_store.py`)
 
-Stores structured `EvidenceRecord` items in per-sample JSON persistence stores:
+Stores structured `EvidenceRecord` items in per-sample JSON persistence stores ([`evidence_store.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/evidence_store.py)):
 
 ```json
 {
@@ -62,7 +62,7 @@ Stores structured `EvidenceRecord` items in per-sample JSON persistence stores:
 
 ## 4. Fraud Workflow Reconstructor (`workflow_reconstructor.py`)
 
-The `WorkflowReconstructor` processes raw evidence records to construct causal temporal chains representing higher-level fraud campaigns:
+The `WorkflowReconstructor` ([`workflow_reconstructor.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/workflow_reconstructor.py)) processes raw evidence records to construct causal temporal chains representing higher-level fraud campaigns:
 
 ```mermaid
 graph LR

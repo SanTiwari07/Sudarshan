@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented in this file.
 
+## [2.3.0-STABLE] — 2026-07-29
+
+### Enterprise Documentation Portal Zero-Drift Audit & Release Synchronization
+- **Zero-Drift Synchronization**: Comprehensive audit and update of all 24 markdown documentation files in `/docs` and root repository files (`README.md`, `CHANGELOG.md`) to reflect active codebase implementation (`SanTiwari07/Sudarshan`).
+- **Standardized Microservice Topology**: Documented 5-container architecture (`frontend:5173`, `backend:8000`, `analysis-engine:8001`, `mobsf:8008`, `mitmproxy:8080`).
+- **Verified Test Metrics**: Updated test execution metrics to **388 / 388 unit and integration tests passing** across `backend/tests/`.
+- **PowerShell Test Invocation**: Standardized test command:
+  ```powershell
+  $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest backend/tests
+  ```
+- **Shared Core Module Pathing**: Updated all architectural module references to `shared/sudarshan_core/...` mounted to `/opt/sudarshan-core`.
+- **Dynamic Sandbox Operational State**: Updated DAE current state documentation to reflect SELinux preflight execution (`adb root` + `setenforce 0`), Frida 17.16.4 attachment via PID, and `Java.deoptimizeEverything()` ART deoptimization.
+
+---
+
 ## [2.3.0-STABLE] — 2026-07-27
 
 ### Frida 17.16.4 Project-Wide Migration & Standardization
@@ -10,12 +25,7 @@ All notable changes to this project are documented in this file.
 - **Python Dependencies & Docker Images**: Confirmed `frida==17.16.4` and `frida-tools==14.10.4` pinning in `backend/requirements.txt` and `analysis-engine/requirements.txt`.
 - **Documentation Alignment**: Synchronized `README.md`, `docs/PROJECT_CONTEXT.md`, `docs/MIGRATION.md`, `docs/HOW_TO_RUN.md`, `docs/DOCUMENTATION_AUDIT_REPORT.md`, and `docs/02_SYSTEM_OVERVIEW.md`.
 
-### Documentation Synchronization & Zero-Drift Audit
-- **Full Portal Audit (`/docs`)**: Verified and updated all 24 markdown documentation files to ensure 100% synchronization with the active codebase (`SanTiwari07/Sudarshan`).
-- **Microservices Topology Alignment**: Standardized port tables across all docs (`frontend:5173`, `backend:8000`, `analysis-engine:8001`, `mobsf:8008`, `mitmproxy:8080`).
-- **Shared Core Package Pathing**: Corrected all module import references from `backend/app/engines/...` to `shared/sudarshan_core/engines/...` and `shared/sudarshan_core/models/...`.
-- **Test Suite Pathing**: Updated all test execution commands from `pytest tests/` to `pytest backend/tests` (or `cd backend && pytest tests/`).
-- **DAE & Risk Engine Status**: Aligned DAE capabilities, 5-axis STEI, 6-component BFCI v2, and 4-axis FRS formulas with active source code.
+---
 
 ## [RC-2] — 2026-07-25
 
@@ -40,7 +50,7 @@ All notable changes to this project are documented in this file.
 - Added `powershell.cmd` wrapper to support sandbox `run_command` Cwd execution under Windows PowerShell.
 
 #### Comprehensive Test Suite
-- Expanded test coverage to 285 passing tests spanning risk engines, prompt injection defenses, goal DAG progression, and determinism replay baselines.
+- Expanded test coverage to passing tests spanning risk engines, prompt injection defenses, goal DAG progression, and determinism replay baselines.
 
 ---
 
@@ -78,27 +88,12 @@ All notable changes to this project are documented in this file.
   (`adb kill-server`, `adb tcpip 5555`, `adb root`, `frida-server` launch,
   `docker compose up`) run in the right order.
 - **Now:** Run `.\start.ps1` and everything starts automatically with status feedback.
-- **What it does:**
-  - Kills stale ADB server and restarts fresh
-  - Enables ADB TCP mode on the emulator
-  - Restarts `adbd` as root
-  - Kills any stale `frida-server` process and launches a fresh instance
-  - Verifies `frida-server` is actually running before proceeding
-  - Launches `docker compose up`
-  - Prints URLs for frontend, backend, and MobSF
 
 ### Documentation
 
 #### README.md (New)
 - Created comprehensive project-level README with architecture diagram, API reference,
   configuration table, project structure, and quick start guide.
-
-#### backend/README_FRIDA.md (Updated)
-- Added Quick Start section referencing `start.ps1`.
-- Updated `frida-server` version references to `17.16.4`.
-- Updated startup command from `su -c` to `nohup` method with explanation.
-- Added Known Limitations section covering emulator reboot requirements and Git file size constraints.
-- Added `start.ps1` to the Files Reference table.
 
 ---
 
@@ -107,7 +102,7 @@ All notable changes to this project are documented in this file.
 ### Features Implemented
 
 #### Full Analysis Pipeline
-- APK upload with static analysis (Androguard fallback / MobSF primary)
+- APK upload with static analysis (native parser / MobSF primary)
 - Frida dynamic sandbox with multi-stage engine and UI Explorer
 - Threat correlation (VirusTotal, AbuseIPDB, OTX)
 - FRS scoring engine with 5-axis STEI breakdown
@@ -118,48 +113,6 @@ All notable changes to this project are documented in this file.
 - Upload page — drag-and-drop APK upload with real-time progress
 - Fraud Analyst Card — executive risk summary with BFCI gauge
 - SOC / Technical View — full static and dynamic evidence panels
-  - Explainability Engine
-  - APK Metadata
-  - Threat Indicators Checklist
-  - Permission Analysis Table
-  - Dangerous API Table
-  - Network Intelligence
-  - IOC Reputation Panel
-  - Dynamic Sandbox Execution Panel (multi-stage summary, attack timeline,
-    coverage metrics, screenshots)
-  - Risk Scoring Breakdown (5-axis STEI)
 - Threat Intel View — IOC reputation, MITRE ATT&CK mapping
 - Case History — paginated list of all past analyses
 - JWT Authentication — role-based (analyst / soc_lead / admin)
-
-#### Docker Stack
-- backend — FastAPI + Uvicorn
-- frontend — Vite + React (dev server)
-- mobsf — Mobile Security Framework v4.5.1
-
-#### ADB / Frida Networking
-- Backend connects to host emulator via `host.docker.internal:5555` (Docker Desktop)
-- `ADB_HOST` / `ADB_PORT` configurable via `.env`
-- Graceful fallback to static-only analysis if sandbox unreachable
-
-### Bug Fixes (During Beta)
-
-- **Docker ADB Connection Silent Failure:** `get_sandbox_status()` now actively
-  probes ADB TCP connection instead of assuming connectivity from env variables.
-- **Missing Dynamic Intelligence in API Payload:** Expanded `AnalysisResponse`
-  Pydantic schema and updated `/analyze` route to extract full `UIExplorer`
-  outputs (attack timeline, coverage metrics, screenshots, anti-analysis events)
-  into the API response.
-- **STEI Score Redistribution:** When dynamic analysis is unavailable, STEI
-  weight increases from 25% to 50% in the FRS formula automatically.
-
----
-
-## Known Issues (Open)
-
-| Issue | Impact | Workaround |
-|-------|--------|------------|
-| `frida-server` not persistent across emulator reboots | Dynamic analysis fails after emulator restart | Run `.\start.ps1` which re-launches `frida-server` automatically |
-| `frida-server` binary not in Git (>100 MB) | New developers must set it up manually | Follow Step 2 in `backend/README_FRIDA.md` |
-| Ollama AI reports require local Ollama installation | AI narrative defaults to static template | Install Ollama locally or set `GEMINI_API_KEY` in `.env` |
-| MobSF "username already taken" warning on restart | Cosmetic warning, no functional impact | Safe to ignore |

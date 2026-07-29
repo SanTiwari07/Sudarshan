@@ -36,14 +36,14 @@ Empirical performance metrics measured on reference test hardware (*Intel Core i
 
 | Processing Stage | Service / Module | Average Latency | Peak Latency | RAM Consumption | CPU Usage |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **API Ingestion & Hash** | `upload.py` | `0.05s` | `0.15s` | `15 MB` | `< 5%` |
-| **Native Static Scan** | `apk_analyzer.py` (Androguard) | `1.80s` | `3.50s` | `120 MB` | `25%` |
-| **MobSF Container Scan**| `mobsf_client.py` (Docker) | `22.0s` | `45.0s` | `512 MB` | `45%` |
-| **Dynamic Execution** | `frida_sandbox.py` (AVD) | `30.0s` (Fixed) | `30.0s` | `1.2 GB` (AVD) | `60%` |
-| **Threat Correlation** | `threat_correlator.py` (Async) | `2.20s` | `4.50s` | `25 MB` | `< 5%` |
-| **Risk Engine Score** | `risk_engine.py` (Math) | `0.002s` | `0.005s` | `< 5 MB` | `< 1%` |
-| **RAG Evidence Index** | `gemini_rag.py` (In-Memory) | `0.10s` | `0.25s` | `10 MB` | `< 5%` |
-| **Gemini RAG Synthesis** | `gemini_rag.py` (API) | `3.20s` | `6.00s` | `15 MB` | `< 5%` |
+| **API Ingestion & Hash** | [`upload.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/routes/upload.py) | `0.05s` | `0.15s` | `15 MB` | `< 5%` |
+| **Native Static Scan** | [`apk_analyzer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/analyzers/apk_analyzer.py) | `1.80s` | `3.50s` | `120 MB` | `25%` |
+| **MobSF Container Scan**| [`mobsf_client.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/services/mobsf_client.py) | `22.0s` | `45.0s` | `512 MB` | `45%` |
+| **Dynamic Execution** | [`frida_sandbox.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/frida_sandbox.py) | `30.0s` (Fixed) | `30.0s` | `1.2 GB` (AVD) | `60%` |
+| **Threat Correlation** | [`threat_correlator.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/services/threat_correlator.py) | `2.20s` | `4.50s` | `25 MB` | `< 5%` |
+| **Risk Engine Score** | [`risk_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/risk_engine.py) | `0.002s` | `0.005s` | `< 5 MB` | `< 1%` |
+| **RAG Evidence Index** | [`gemini_rag.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/ai/gemini_rag.py) | `0.10s` | `0.25s` | `10 MB` | `< 5%` |
+| **Gemini RAG Synthesis** | [`gemini_client.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/ai/gemini_client.py) | `3.20s` | `6.00s` | `15 MB` | `< 5%` |
 | **SSE Stream First Token**| `/api/v1/chat/stream` | `0.45s` | `0.80s` | `15 MB` | `< 5%` |
 
 ---
@@ -54,23 +54,22 @@ Sudarshan supports two operational ingestion modes:
 
 ```mermaid
 graph TD
-    subgraph Synchronous Analysis Mode (/api/v1/analyze)
+    subgraph Synchronous Analysis Mode (/api/v1/upload)
         A1[Upload APK] --> A2[Execute Full Pipeline 35s] --> A3[Return Complete JSON]
     end
 
-    subgraph Asynchronous Analysis Mode (/api/v1/analyze/async)
+    subgraph Asynchronous Analysis Mode (/api/v1/upload)
         B1[Upload APK] --> B2[Enqueue & Return job_id < 0.2s] --> B3[Background Worker Execution]
     end
 ```
 
-- **Synchronous Ingestion (`POST /api/v1/analyze`)**:
+- **Synchronous Ingestion (`POST /api/v1/upload`)**:
   - Client blocks until complete analysis finishes.
   - Latency: **$25.0s - 55.0s$** depending on MobSF container load and APK size.
   - Recommended for single-file analyst uploads via Dashboard.
-- **Asynchronous Ingestion (`POST /api/v1/analyze/async`)**:
-  - Immediate HTTP `202 Accepted` response with `job_id` in **$<0.20$ seconds**.
-  - Background worker pool processes queue items asynchronously.
-  - Polling Endpoint: `GET /api/v1/status/{job_id}`.
+- **Asynchronous Ingestion (`POST /api/v1/upload` with worker queue)**:
+  - Immediate HTTP response with job status in **$<0.20$ seconds**.
+  - Background worker pool processes queue items asynchronously ([`analysis_queue.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/workers/analysis_queue.py)).
   - Recommended for high-volume SIEM/SOAR bulk ingestion.
 
 ---
@@ -86,10 +85,4 @@ graph TD
 3. **Android Studio AVD Footprint**:
    - Pixel 6 AVD Memory Allocation: `2.0 GB RAM`.
 4. **Queue Concurrency Bound**:
-   - In-memory worker queue supports up to **10 concurrent jobs** in queue memory (`analysis_queue.py`).
-
----
-
-## Current Implementation Status
-
-All metrics represent empirical measurements taken from the production codebase running under `docker-compose`.
+   - In-memory worker queue supports up to **10 concurrent jobs** in queue memory ([`analysis_queue.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/workers/analysis_queue.py)).

@@ -2,8 +2,8 @@
 
 ```yaml
 Document Title:      Sudarshan Installation & Execution Manual
-Version:             2.2.0-STABLE
-Last Revision:       2026-07-25
+Version:             2.3.0-STABLE
+Last Revision:       2026-07-29
 Target OS:           Windows 10/11, Linux (Ubuntu 22.04+), macOS 13+
 ```
 
@@ -27,10 +27,10 @@ Ensure the following tools are installed on your host system:
 
 | Dependency | Minimum Version | Installation Check | Purpose |
 | :--- | :--- | :--- | :--- |
-| **Docker & Compose** | 24.0+ | `docker compose version` | Containerized stack orchestration (`frontend`, `backend`, `analysis-engine`, `mitmproxy`). |
+| **Docker & Compose** | 24.0+ | `docker compose version` | Containerized stack orchestration (`frontend`, `backend`, `analysis-engine`, `mitmproxy`, `mobsf`). |
 | **Android Studio AVD** | Android 13 (API 33) | `adb devices` | Isolated AVD dynamic execution sandbox on host. |
 | **ADB** | 1.0.41+ | `adb version` | Android Debug Bridge for TCP emulator connection (`adb tcpip 5555`). |
-| **Python** *(Dev Optional)* | 3.10+ | `python --version` | Local development and unit testing (`pytest tests/`). |
+| **Python** *(Dev Optional)* | 3.10+ | `python --version` | Local development and unit testing (`pytest backend/tests`). |
 | **Node.js** *(Dev Optional)* | 18.x+ | `node --version` | Local frontend UI development. |
 | **Google Gemini API** | `google-genai` | API Key | Primary AI Threat Intelligence Provider (`gemini-2.5-flash`). |
 
@@ -41,7 +41,7 @@ Ensure the following tools are installed on your host system:
 
 ## 2. Environment Variables & Configuration
 
-Create a `.env` file in the project root or set environment variables:
+Create a `.env` file in the project root based on `.env.example`:
 
 ```bash
 # ── AI Model Configuration ──
@@ -52,12 +52,16 @@ GEMINI_MODEL="gemini-2.5-flash"
 ADB_HOST="host.docker.internal"
 ADB_PORT="5555"
 FRIDA_ANALYSIS_DURATION="30"
+SUDARSHAN_EXPLORER_MODE="ai"
+
+# ── Threat Intelligence ──
+VIRUSTOTAL_API_KEY=""
+OTX_API_KEY=""
+ABUSEIPDB_API_KEY=""
 
 # ── Static Engines ──
 MOBSF_HOST="http://mobsf:8000"
 MOBSF_API_KEY="sudarshan_mobsf_api_key_2026"
-APKTOOL_PATH="apktool"
-JADX_PATH="jadx"
 
 # ── Security & Authentication ──
 JWT_SECRET_KEY="generate_with_python_secrets_token_urlsafe_48"
@@ -80,20 +84,16 @@ Launch all platform microservices, database migrations, and web interfaces with 
 ## 4. Manual Service Installation
 
 ### 4.1 Backend API Gateway
-```bash
+```powershell
 cd backend
-python -m venv venv
-# On Windows:
-.\venv\Scripts\activate
-# On Linux/macOS:
-source venv/bin/activate
-
+python -m venv .venv
+.\.venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ### 4.2 Frontend Analyst Dashboard
-```bash
+```powershell
 cd frontend
 npm install
 npm run dev
@@ -119,10 +119,12 @@ docker compose logs -f backend
 ## 6. Setting Up Android Studio AVD & Frida
 
 1. **Start Android Studio AVD**: Launch a Pixel AVD running Android 13 (x86_64).
-2. **Enable ADB TCP**:
+2. **Enable ADB TCP & Root**:
    ```bash
    adb tcpip 5555
    adb connect 127.0.0.1:5555
+   adb root
+   adb shell "setenforce 0"
    ```
 3. **Deploy frida-server 17.16.4**:
    ```bash
@@ -142,21 +144,24 @@ Verify all microservice endpoints:
 | **Analyst Dashboard** | `http://localhost:5173` | React SPA Login / Upload Page |
 | **API Health Check** | `http://localhost:8000/health` | `{"status": "ok"}` |
 | **API Interactive Docs** | `http://localhost:8000/docs` | Swagger UI documentation |
-| **Analysis Engine Health** | `http://localhost:8001/health` (internal) | `{"status": "ok", "service": "analysis-engine"}` |
+| **Analysis Engine Health** | `http://analysis-engine:8001/health` (internal) | `{"status": "ok", "service": "analysis-engine"}` |
 | **MobSF Engine** | `http://localhost:8008` | MobSF Static Analyzer UI |
 | **mitmproxy Proxy** | `127.0.0.1:8080` | Transparent HTTPS proxy endpoint |
 
-Run the backend unit test suite:
-```bash
-cd backend
-pytest tests/
+Run system health diagnostic script:
+```powershell
+backend\.venv\Scripts\python.exe scripts/health_check.py
+```
+
+Run the backend unit test suite (**388 tests passing**):
+```powershell
+$env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest backend/tests
 ```
 
 ---
 
 ## 8. Troubleshooting Common Issues
 
-- **Frida PID Attach Fails**: Verify `frida-server` is running on the AVD (`adb shell "ps -A | grep frida"`).
+- **Frida PID Attach Fails**: Verify `frida-server` is running on the AVD (`adb shell "ps -A | grep frida"`), and verify `adb root` and `setenforce 0` were executed.
 - **mitmproxy Certificate Warnings**: Install `mitmproxy-ca-cert.pem` on the AVD under Settings $\rightarrow$ Security $\rightarrow$ Install Certificate.
 - **MobSF Unreachable**: Ensure the MobSF container is running on port 8008 (`docker compose ps`).
-

@@ -34,6 +34,9 @@ import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+import pytest
+import requests
+
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "shared"))
@@ -56,6 +59,29 @@ FAIL_COUNT = 0
 SKIP_COUNT = 0
 
 
+# ─── Pytest Fixtures ─────────────────────────────────────────────────────────
+
+@pytest.fixture(scope="module")
+def apk_path() -> str:
+    """Fixture supplying path to a test APK."""
+    candidates = [
+        TEST_APK,
+        str(ROOT / "backend" / "test_sample.apk"),
+        str(ROOT / "backend" / "UnCrackable-Level1.apk"),
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return os.path.abspath(c)
+    pytest.skip("No valid test APK found on disk")
+
+
+@pytest.fixture(scope="module")
+def androguard_result(apk_path: str):
+    """Fixture supplying Androguard analysis output."""
+    from sudarshan_core.analyzers.apk_analyzer import analyze_apk
+    return analyze_apk(apk_path)
+
+
 def _assert(condition: bool, test_name: str, detail: str = "", fatal: bool = False):
     global PASS_COUNT, FAIL_COUNT
     if condition:
@@ -71,7 +97,8 @@ def _assert(condition: bool, test_name: str, detail: str = "", fatal: bool = Fal
         FAIL_COUNT += 1
         if fatal:
             print(f"\n[FATAL] Cannot continue without: {test_name}")
-            sys.exit(1)
+            assert False, f"Fatal test failure: {test_name} ({detail})"
+        assert False, f"Test failed: {test_name} ({detail})"
         return False
 
 
@@ -89,12 +116,13 @@ def test_mobsf(apk_path: str):
 
     headers = {"Authorization": MOBSF_API_KEY}
 
-    # Health
+    # Check if MobSF is running
     try:
-        r = requests.get(f"{MOBSF_HOST}/", headers=headers, timeout=5)
-        _assert(r.status_code == 200, "MobSF reachable", f"HTTP {r.status_code}", fatal=True)
-    except Exception as e:
-        _assert(False, "MobSF reachable", str(e), fatal=True)
+        r = requests.get(f"{MOBSF_HOST}/", headers=headers, timeout=2)
+        if r.status_code != 200:
+            pytest.skip(f"MobSF not running at {MOBSF_HOST}")
+    except Exception:
+        pytest.skip(f"MobSF host unreachable at {MOBSF_HOST}")
 
     # Upload
     with open(apk_path, "rb") as f:
@@ -147,8 +175,6 @@ def test_mobsf(apk_path: str):
         sc = r.json()
         _assert("security_score" in sc, "Scorecard has security_score", f"score={sc.get('security_score')}")
 
-    return scan_hash, report
-
 
 def test_androguard(apk_path: str):
     """Test Androguard static analysis."""
@@ -167,7 +193,6 @@ def test_androguard(apk_path: str):
         _assert(isinstance(result.flags.obfuscation_score, float), "obfuscation_score is float",
                 f"{result.flags.obfuscation_score:.4f}")
 
-        return result
     except Exception as e:
         _assert(False, "Androguard analysis", str(e), fatal=True)
 
@@ -182,7 +207,7 @@ def test_apktool(apk_path: str):
 
         if not engine.is_available():
             _skip("APKTool analyze", "apktool not in PATH (not installed locally — runs in container)")
-            return None
+            return
 
         result = engine.analyze(apk_path)
         _assert(result.available, "APKTool decompilation succeeded")
@@ -190,11 +215,9 @@ def test_apktool(apk_path: str):
                 f"{len(result.decoded_manifest_xml)} chars")
         _assert("<?xml" in result.decoded_manifest_xml or "<manifest" in result.decoded_manifest_xml,
                 "Valid XML manifest content")
-        return result
 
     except Exception as e:
         _assert(False, "APKTool analysis", str(e))
-        return None
 
 
 def test_jadx(apk_path: str):
@@ -207,17 +230,15 @@ def test_jadx(apk_path: str):
 
         if not engine.is_available():
             _skip("JADX analyze", "jadx not in PATH (not installed locally — runs in container)")
-            return None
+            return
 
         result = engine.analyze(apk_path)
         _assert(result.available, "JADX decompilation succeeded")
         _assert(result.decompiled_class_count > 0, "Classes decompiled",
                 f"{result.decompiled_class_count} classes")
-        return result
 
     except Exception as e:
         _assert(False, "JADX analysis", str(e))
-        return None
 
 
 def test_risk_engine(androguard_result, dynamic_result=None):
@@ -242,8 +263,6 @@ def test_risk_engine(androguard_result, dynamic_result=None):
         _assert("frs_breakdown" in result, "Has frs_breakdown")
         _assert(0 <= result["final_risk_score"] <= 100, "Score in [0, 100]")
         _assert(result["risk_band"] in ("Safe", "Suspicious", "Malicious", "Critical"), "Valid risk band")
-
-        return result
 
     except Exception as e:
         _assert(False, "Risk engine scoring", str(e), fatal=True)
@@ -276,8 +295,6 @@ def test_workflow_reconstructor():
         _assert("fraud_sequence_detected" in wf_dict, "Has fraud_sequence_detected")
         _assert("sequence_label" in wf_dict, "Has sequence_label", wf_dict.get("sequence_label"))
         _assert("chain_confidence" in wf_dict, "Has chain_confidence", f"{wf_dict.get('chain_confidence'):.2f}")
-
-        return wf_dict
 
     except Exception as e:
         _assert(False, "Workflow reconstructor", str(e))
@@ -323,8 +340,6 @@ def test_bfci_scorer():
         print(f"     BFCI={bfci:.1f}, accessibility={components.get('accessibility', 0):.1f}, sms={components.get('sms', 0):.1f}")
         print(f"     Detected sequences: {sequences}")
 
-        return bfci, components
-
     except Exception as e:
         _assert(False, "BFCI v2 scorer", str(e))
 
@@ -333,12 +348,13 @@ def test_backend_api(apk_path: str):
     """Test Backend API endpoints."""
     print("\n[TEST GROUP] Backend API")
 
-    # Health
+    # Health check
     try:
-        r = requests.get(f"{BACKEND_HOST}/health", timeout=5)
-        _assert(r.status_code == 200, "Backend health", f"HTTP {r.status_code}", fatal=True)
-    except Exception as e:
-        _assert(False, "Backend health", str(e), fatal=True)
+        r = requests.get(f"{BACKEND_HOST}/health", timeout=2)
+        if r.status_code != 200:
+            pytest.skip(f"Backend API not running at {BACKEND_HOST}")
+    except Exception:
+        pytest.skip(f"Backend host unreachable at {BACKEND_HOST}")
 
     # Login
     try:
@@ -370,8 +386,6 @@ def test_backend_api(apk_path: str):
     except Exception as e:
         _assert(False, "Unauthenticated upload check", str(e))
 
-    return token
-
 
 def test_dynamic_analysis(apk_path: str):
     """Test dynamic analysis pipeline (Frida + ADB)."""
@@ -395,7 +409,7 @@ def test_dynamic_analysis(apk_path: str):
             _skip("Frida attach", "No emulator")
             _skip("Hook events", "No emulator")
             _skip("Evidence store population", "No emulator")
-            return None
+            return
 
         _assert(True, "ADB emulator connected", f"Devices: {emulators}")
         device = emulators[0]
@@ -420,11 +434,8 @@ def test_dynamic_analysis(apk_path: str):
             _assert(result.get("dynamic_status") in ("EVENTS_CAPTURED", "NO_BEHAVIOR_OBSERVED"),
                     "Dynamic status is valid", result.get("dynamic_status"))
 
-        return result
-
     except Exception as e:
         _assert(False, "Dynamic analysis pipeline", str(e))
-        return None
 
 
 def test_evidence_store():
@@ -489,11 +500,8 @@ def test_evidence_store():
             _assert(isinstance(data, (list, dict)), "Flush output is valid JSON")
             path.unlink()
 
-        return True
-
     except Exception as e:
         _assert(False, "Evidence Store", str(e))
-        return False
 
 
 def test_threat_correlator():
@@ -518,8 +526,6 @@ def test_threat_correlator():
 
         if not result.get("available"):
             print("     (No threat intel API keys configured — graceful degradation ✅)")
-
-        return result
 
     except Exception as e:
         _assert(False, "Threat correlator", str(e))
@@ -546,7 +552,9 @@ def main():
     print("=" * 70)
 
     # Core tests (always run)
-    androguard_result = test_androguard(apk_path)
+    from sudarshan_core.analyzers.apk_analyzer import analyze_apk
+    androguard_res = analyze_apk(apk_path)
+    test_androguard(apk_path)
     test_apktool(apk_path)
     test_jadx(apk_path)
     test_bfci_scorer()
@@ -554,8 +562,8 @@ def main():
     test_evidence_store()
     test_threat_correlator()
 
-    if androguard_result:
-        test_risk_engine(androguard_result)
+    if androguard_res:
+        test_risk_engine(androguard_res)
 
     if not args.skip_mobsf:
         test_mobsf(apk_path)

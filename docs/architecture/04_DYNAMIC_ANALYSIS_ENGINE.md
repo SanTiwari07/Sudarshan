@@ -31,7 +31,7 @@ Test Suite:          backend/tests/test_analysis_client.py, backend/tests/test_r
 
 ## 1. Executive Overview
 
-The **Dynamic Analysis Engine (DAE)** executes suspicious Android applications inside an isolated Android Virtual Device (x86_64, 16 KB page size; verified against Android 17 / `sdk_gphone16k_x86_64`). Combining Frida 17 binary instrumentation, `mitmproxy` transparent HTTPS decryption, an autonomous LLM UI explorer (`AgenticExplorer`), and a causal workflow reconstructor, the DAE captures real-time behavioral evidence of mobile banking fraud.
+The **Dynamic Analysis Engine (DAE)** executes suspicious Android applications inside an isolated Android Virtual Device (x86_64, 16 KB page size; verified against Android 13 / `google_apis_ps16k`). Combining Frida 17 binary instrumentation, `mitmproxy` transparent HTTPS decryption, an autonomous LLM UI explorer ([`agentic_explorer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/agentic_explorer.py)), and a causal workflow reconstructor ([`workflow_reconstructor.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/workflow_reconstructor.py)), the DAE captures real-time behavioral evidence of mobile banking fraud.
 
 ---
 
@@ -63,31 +63,20 @@ graph TD
 
 Before `frida-server` is checked, `run_frida_analysis` performs:
 
-```
+```powershell
 adb -s <serial> root
 adb -s <serial> shell getenforce      # if "Enforcing":
 adb -s <serial> shell setenforce 0
 ```
 
-**Why this is not optional.** SELinux is Enforcing by default on Android 15+ and denies the
-`ptrace` that Frida injection requires, *even for uid 0*. Without this step every attach fails
-with `PermissionDeniedError: unable to access process with pid <n>` while `frida-server` reports
-healthy — a failure mode that previously produced the misleading error
-"Frida attach failed. Ensure frida-server is running on emulator."
-
-The AVD is a disposable analysis device and the command is scoped to `-s <device_serial>`; it
-never touches the host. It does materially weaken isolation on the machine executing live
-malware — run the emulator on a dedicated host and wipe it between samples.
-
-Failures now propagate the real cause (SELinux state, and whether the process was running) via
-`FridaSession.last_error` instead of a fixed string.
+**Why this is not optional.** SELinux is Enforcing by default on Android 13+ and denies the `ptrace` that Frida injection requires, *even for uid 0*. Without this step every attach fails with `PermissionDeniedError: unable to access process with pid <n>` while `frida-server` reports healthy.
 
 ---
 
 ## 3. Frida 17 Runtime & ART Deoptimization
 
 - **PID Attachment**: Resolves running application process ID via `adb shell pidof <package>`, avoiding package label retries.
-- **Unconditional ART Deoptimization (`banking_trojan.js`)**:
+- **Unconditional ART Deoptimization ([`banking_trojan.js`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/frida_hooks/banking_trojan.js))**:
   ```javascript
   if (Java.available) {
     Java.perform(function () {
@@ -99,7 +88,7 @@ Failures now propagate the real cause (SELinux state, and whether the process wa
   }
   ```
   Forces Android Runtime (ART) into interpreter mode, eliminating JIT inlining silent hook suppression.
-- **Fail-Loud Canary**: Emits a `canary` event at load time. If unreceived, `frida_sandbox.py` flags `INSTRUMENTATION_FAILED`, invoking the **Static Fallback Risk Engine**.
+- **Fail-Loud Canary**: Emits a `canary` event at load time. If unreceived, [`frida_sandbox.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/frida_sandbox.py) flags `INSTRUMENTATION_FAILED`, invoking the **Static Fallback Risk Engine**.
 
 ---
 
@@ -122,7 +111,7 @@ The DAE injects modular hook profiles selected by the `InvestigationManifest`:
 
 ## 5. mitmproxy Sidecar & Network Interception
 
-`network_capture.py` combines two network evidence streams:
+[`network_capture.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/network_capture.py) combines two network evidence streams:
 1. **Frida Socket Hooks**: Intercepts HTTP/HTTPS connections at call time.
 2. **mitmproxy Sidecar Container**: Intercepts transparent proxy traffic via port 8080. Parses HAR dumps (`dump.har`) written to shared volumes to extract full decrypted HTTP request/response headers, status codes, and body sizes.
 
@@ -149,7 +138,7 @@ graph TD
 ```
 
 - **Loop Detection**: Maintains screen view hashes to break out of redundant navigation loops.
-- **Input Sanitization**: Prevents prompt injection attacks via `sanitizer.py`.
+- **Input Sanitization**: Prevents prompt injection attacks via [`sanitizer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/agentic/sanitizer.py).
 
 ---
 
@@ -169,13 +158,13 @@ graph TD
 
 $$BFCI_{\text{v2}} = \min\left(100.0, \sum_{c} W_c \cdot \min\left(1.0, \frac{\ln(1 + N_c)}{\ln(1 + M_c)}\right) \times 100 + S_{\text{sequence}}\right)$$
 
-Where $W_c$ is category weight, $N_c$ is event count, $M_c$ is saturation threshold, and $S_{\text{sequence}} = +15$ when a temporal causal chain completes within 30 seconds.
+Where $W_c$ is category weight, $N_c$ is event count, $M_c$ is saturation threshold, and $S_{\text{sequence}} = +15$ when a temporal causal chain completes within 30 seconds. Implemented in [`bfci_scorer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/bfci_scorer.py).
 
 ---
 
 ## 9. Fraud Workflow Reconstruction
 
-`workflow_reconstructor.py` maps raw Frida events into MITRE ATT&CK causal stages:
+[`workflow_reconstructor.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/workflow_reconstructor.py) maps raw Frida events into MITRE ATT&CK causal stages:
 - **Full Account Takeover**: Accessibility Enable $\rightarrow$ Overlay Phishing $\rightarrow$ SMS Intercept $\rightarrow$ C2 Exfiltration.
 - **OTP Theft Chain**: SMS Intercept $\rightarrow$ C2 POST.
-- **Interactive UI Timeline**: Rendered in the frontend via `WorkflowDiagram.tsx`.
+- **Interactive UI Timeline**: Rendered in the frontend via [`WorkflowDiagram.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/components/WorkflowDiagram.tsx).

@@ -185,6 +185,16 @@ a{color:var(--blue);text-decoration:none}
 .mb8{margin-bottom:8px}
 .no-data{color:var(--text3);font-style:italic;font-size:.82rem;padding:8px 0}
 
+/* Visual Gallery */
+.gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:12px}
+.gallery-card{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);overflow:hidden;display:flex;flex-direction:column}
+.scr-header{padding:8px 12px;background:var(--bg4);border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;font-size:.78rem}
+.scr-id{font-family:var(--font-mono);font-weight:700;color:var(--blue)}
+.scr-label{color:var(--text2);font-weight:600}
+.scr-body{padding:10px;display:flex;align-items:center;justify-content:center;background:#000;min-height:160px}
+.scr-img{max-width:100%;max-height:320px;object-fit:contain;border-radius:4px;border:1px solid var(--border)}
+.scr-meta{padding:8px 12px;background:var(--bg3);border-top:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;font-size:.72rem;color:var(--text3)}
+
 /* Footer */
 .report-footer{text-align:center;padding:20px;font-size:.75rem;color:var(--text3);border-top:1px solid var(--border);margin-top:8px}
 
@@ -856,6 +866,134 @@ def _build_dynamic(r: Dict, evidence_json: Optional[Dict], idx: _FindingIndex) -
     return html
 
 
+def _build_visual_gallery(apk_dir: Optional[Path], idx: _FindingIndex) -> str:
+    """
+    Renders the Visual UI & Dynamic Evidence Gallery section.
+    Loads screenshots/manifest.json from apk_dir, reads screenshot PNG files,
+    encodes them as Base64 data URIs, and renders responsive cards.
+    """
+    if not apk_dir:
+        return ""
+
+    manifest_path = apk_dir / "screenshots" / "manifest.json"
+    if not manifest_path.exists():
+        manifest_path = apk_dir / "manifest.json"
+    if not manifest_path.exists():
+        return ""
+
+    try:
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        screenshots = data.get("screenshots", [])
+    except Exception as e:
+        logger.warning("[ReportGen] Failed to load screenshot manifest: %s", e)
+        return ""
+
+    if not screenshots:
+        return ""
+
+    html = (
+        f'<div class="section">'
+        + _section_header("&#x1F4F8;", "rgba(88,166,255,.15)", "Visual UI &amp; Dynamic Evidence Gallery", f"{len(screenshots)} screenshots captured")
+        + '<div class="gallery-grid">'
+    )
+
+    import base64
+    for scr in screenshots:
+        scr_id = _esc(scr.get("screenshot_id", "SCR-???"))
+        label = _esc(scr.get("label", "ui_capture"))
+        trigger_evid = _esc(scr.get("trigger_event", ""))
+        category = _esc(scr.get("category", "ui"))
+        source = _esc(scr.get("source", "manual"))
+        rel_fn = scr.get("filename", "")
+
+        # Resolve file path
+        img_path = apk_dir / rel_fn
+        if not img_path.exists():
+            img_path = apk_dir / "screenshots" / Path(rel_fn).name
+
+        b64_uri = ""
+        if img_path.exists():
+            try:
+                img_bytes = img_path.read_bytes()
+                b64_str = base64.b64encode(img_bytes).decode("utf-8")
+                b64_uri = f"data:image/png;base64,{b64_str}"
+            except Exception as e:
+                logger.warning("[ReportGen] Failed to encode %s: %s", img_path, e)
+
+        fid = idx.next("SCR", f"Screenshot {scr_id}: {label}")
+        evid_badge = f'<span class="perm-tag perm-danger">Ref: [{trigger_evid}]</span>' if trigger_evid else ""
+        src_badge = f'<span class="perm-tag perm-normal">{source}</span>'
+
+        img_html = (
+            f'<img src="{b64_uri}" alt="{scr_id}" class="scr-img" loading="lazy" />'
+            if b64_uri else '<div class="no-data">Image payload unavailable</div>'
+        )
+
+        html += (
+            f'<div class="gallery-card">'
+            f'<div class="scr-header">'
+            f'<span class="scr-id">[{fid}] {scr_id}</span>'
+            f'<span class="scr-label">{label}</span>'
+            f'</div>'
+            f'<div class="scr-body">{img_html}</div>'
+            f'<div class="scr-meta">'
+            f'<span>Cat: {category}</span>'
+            f'<div>{src_badge}{evid_badge}</div>'
+            f'</div>'
+            f'</div>'
+        )
+
+    html += '</div></div>'
+    return html
+
+
+def _build_exploration_coverage(r: Dict, apk_dir: Optional[Path], idx: _FindingIndex) -> str:
+    """
+    Renders the Autonomous UI Exploration & Coverage Metrics section.
+    Reads coverage metrics and screen graph from apk_dir if present.
+    """
+    dyn = _get(r, "dynamic_analysis") or {}
+    cov = _get(dyn, "coverage_metrics") or {}
+
+    sg_data = None
+    if apk_dir:
+        sg_path = apk_dir / "screen_graph.json"
+        if sg_path.exists():
+            try:
+                sg_data = json.loads(sg_path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+    total_screens = _get(cov, "total_screens_discovered", default=_get(sg_data or {}, "total_unique_screens", default=0))
+    visited_screens = _get(cov, "unique_screens_visited", default=total_screens)
+    cov_pct = _get(cov, "exploration_coverage_percent", default=100.0 if visited_screens > 0 else 0.0)
+    nodes_interacted = _get(cov, "nodes_interacted", default=0)
+    loops_broken = _get(cov, "loops_detected_and_broken", default=0)
+    perms_granted = _get(cov, "permissions_granted", default=0)
+
+    if not total_screens and not sg_data and not cov:
+        return ""
+
+    fid = idx.next("INTEL", "UI Exploration Coverage Summary")
+
+    html = (
+        f'<div class="section">'
+        + _section_header("&#x1F9E0;", "rgba(139,148,158,.15)", "Autonomous UI Exploration &amp; Coverage Metrics", f"[{fid}]")
+        + '<div class="grid-3 mb8">'
+        + f'<div class="intel-stat"><div class="intel-num">{visited_screens}/{total_screens}</div><div class="intel-sub">Screens Visited</div></div>'
+        + f'<div class="intel-stat"><div class="intel-num">{cov_pct:.1f}%</div><div class="intel-sub">Coverage Score</div></div>'
+        + f'<div class="intel-stat"><div class="intel-num">{nodes_interacted}</div><div class="intel-sub">Nodes Interacted</div></div>'
+        + '</div>'
+        + '<div class="grid-2 mt12">'
+        + f'<div class="info-card"><div class="info-key">Permissions Granted</div><div class="info-val">{perms_granted}</div></div>'
+        + f'<div class="info-card"><div class="info-key">Loops Broken</div><div class="info-val">{loops_broken}</div></div>'
+        + '</div></div>'
+    )
+    return html
+
+
+
+
 def _build_recommendations(r: Dict) -> str:
     intel = _get(r, "intelligence_report") or {}
     actions = _get(intel, "recommended_actions") or []
@@ -1034,6 +1172,8 @@ class ReportGenerator:
             + _build_static(self.r, idx)
             + _build_threat_intel(self.r, idx)
             + _build_dynamic(self.r, evidence_json, idx)
+            + _build_visual_gallery(self.apk_dir, idx)
+            + _build_exploration_coverage(self.r, self.apk_dir, idx)
             + _build_recommendations(self.r)
             + _build_ledger(idx)
             + _build_footer(self.r)

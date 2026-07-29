@@ -77,6 +77,7 @@ class ScreenshotManager:
         self._counter = 0
         self._manifest: List[ScreenshotRecord] = []
 
+        self.event_bus = event_bus
         if event_bus:
             event_bus.subscribe(self._on_event)
             logger.debug("[ScreenshotManager] Subscribed to RuntimeEventBus")
@@ -161,6 +162,20 @@ class ScreenshotManager:
                     "[ScreenshotManager] [%s] Captured %s (EVID: %s)",
                     scr_id, filename, trigger_evid or "none"
                 )
+                if self.event_bus:
+                    from sudarshan_core.engines.event_bus import EventType, RuntimeEvent
+                    self.event_bus.publish(RuntimeEvent(
+                        event_type=EventType.SCREENSHOT_CAPTURED,
+                        timestamp=timestamp_ms / 1000.0,
+                        payload={
+                            "screenshot_id": scr_id,
+                            "filename": rel_path,
+                            "label": label,
+                            "category": category,
+                            "source": source,
+                            "trigger_event": trigger_evid,
+                        }
+                    ))
                 return rel_path
             else:
                 logger.warning(
@@ -262,3 +277,28 @@ class ScreenshotManager:
         """Return a thread-safe snapshot of the screenshot manifest."""
         with self._lock:
             return list(self._manifest)
+
+    def get_manifest_with_base64(self) -> List[Dict[str, Any]]:
+        """
+        Return the screenshot manifest with base64 data URIs embedded
+        for single-file HTML report rendering.
+        """
+        import base64
+        with self._lock:
+            snapshot = list(self._manifest)
+
+        records = []
+        for r in snapshot:
+            d = asdict(r)
+            local_file = self.output_dir / Path(r.filename).name
+            d["base64_data_uri"] = ""
+            if local_file.exists():
+                try:
+                    data = local_file.read_bytes()
+                    b64 = base64.b64encode(data).decode("utf-8")
+                    d["base64_data_uri"] = f"data:image/png;base64,{b64}"
+                except Exception as e:
+                    logger.warning("[ScreenshotManager] Failed to encode %s: %s", local_file, e)
+            records.append(d)
+        return records
+

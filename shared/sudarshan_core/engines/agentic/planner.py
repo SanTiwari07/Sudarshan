@@ -654,6 +654,29 @@ class FallbackPlanner:
         next_goal = goals.next_priority_goal()
         goal_name = next_goal.name if next_goal else "general"
 
+        # ── Integration with WorldModel & Loop Detection ─────────────────────
+        from sudarshan_core.engines.agentic.world_model import WorldModel
+        from sudarshan_core.engines.agentic.screen_graph import ScreenGraphBuilder, compute_screen_hash
+        from sudarshan_core.engines.agentic.goal_planner import get_all_goals, ActionCandidate
+        from sudarshan_core.engines.agentic.coverage_tracker import CoverageTracker
+        from sudarshan_core.engines.agentic.screen_classifier import classify_screen
+
+        if not hasattr(self, "world_model"):
+            self.world_model = WorldModel(package_name=obs.activity.split("/")[0] if "/" in obs.activity else "")
+        if not hasattr(self, "coverage_tracker"):
+            self.coverage_tracker = CoverageTracker()
+
+        # Update World Model with current observation
+        screen_node = self.world_model.update_observation(obs.activity, self.world_model.package_name, obs.ui_nodes)
+        shash = screen_node.screen_hash
+
+        # Update coverage
+        self.coverage_tracker.update_screens(
+            self.world_model.screen_graph.to_dict()["total_unique_screens"],
+            len([n for n in self.world_model.screen_graph.get_nodes() if n.visit_count > 0])
+        )
+        self.coverage_tracker.record_node_found(len(obs.ui_nodes))
+
         # Check if we are making progress (new screen or new Frida events)
         if obs.screen_hash != self._last_screen_hash:
             self._consecutive_failures = 0
@@ -675,7 +698,58 @@ class FallbackPlanner:
             )
             return None
 
-        # ── Score UI nodes ─────────────────────────────────────────────────────
+        # Check for loop detection (>3 visits in window of 5)
+        if self.world_model.screen_graph.is_loop_detected(shash, max_visits=3, window=5):
+            logger.warning(f"[FallbackPlanner] Loop detected on screen {shash[:6]} — triggering backtrack action")
+            self.coverage_tracker.record_loop_broken()
+            return {
+                "tool":       "press_back",
+                "goal":       "LOOP_RECOVERY",
+                "reasoning":  f"Loop detected: screen {shash[:6]} visited >3 times in recent steps. Backtracking.",
+                "confidence": 0.9,
+                "_source":    "loop_breaker",
+            }
+
+        # ── Score UI nodes using Goal Planner ─────────────────────────────────
+        goals_suite = get_all_goals()
+        highest_candidate: Optional[ActionCandidate] = None
+
+        for goal in goals_suite:
+            candidates = goal.candidate_actions(self.world_model, screen_node, obs.ui_nodes)
+            for cand in candidates:
+                # Skip previously failed actions on this screen
+                if self.world_model.is_action_failed(shash, cand.target_node_id):
+                    continue
+                if highest_candidate is None or cand.priority > highest_candidate.priority:
+                    highest_candidate = cand
+
+        if highest_candidate:
+            # Find node coordinates
+            matching_node = next((n for idx, n in enumerate(obs.ui_nodes) if getattr(n, "node_id", f"n{idx}") == highest_candidate.target_node_id), None)
+            x = getattr(matching_node, "center_x", 540) if matching_node else 540
+            y = getattr(matching_node, "center_y", 960) if matching_node else 960
+
+            tool_name = "click"
+            if highest_candidate.action_type == "input":
+                tool_name = "input_text"
+
+            logger.info(f"[FallbackPlanner] Goal-driven action: {highest_candidate.reason} (priority={highest_candidate.priority})")
+            
+            action_dict = {
+                "tool":       tool_name,
+                "text":       highest_candidate.input_text or highest_candidate.target_label,
+                "x":          x,
+                "y":          y,
+                "goal":       goal_name,
+                "reasoning":  highest_candidate.reason,
+                "confidence": round(highest_candidate.priority / 100.0, 2),
+                "_source":    "goal_planner",
+            }
+
+            self.coverage_tracker.record_action_executed(highest_candidate.target_node_id, success=True)
+            return action_dict
+
+        # ── Score UI nodes against keyword map (legacy fallback) ─────────────
         best_node = None
         best_score = -1
 
@@ -728,3 +802,4 @@ class FallbackPlanner:
             "confidence": 0.2,
             "_source":    "fallback",
         }
+

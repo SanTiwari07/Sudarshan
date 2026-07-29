@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -238,6 +239,7 @@ class EvidenceStore:
             "pid":            0,   # updated externally if needed
         }
 
+        self.event_bus = event_bus
         if event_bus is not None:
             event_bus.subscribe(self._on_event)
             logger.debug("[EvidenceStore] Subscribed to RuntimeEventBus")
@@ -250,13 +252,106 @@ class EvidenceStore:
     # ── EventBus callback ──────────────────────────────────────────────────────
 
     def _on_event(self, event: Dict[str, Any]) -> None:
-        """Called by RuntimeEventBus for every published Frida event."""
+        """Called by RuntimeEventBus for published events."""
+        etype = event.get("event_type", event.get("type", ""))
+        if etype == "EVIDENCE_CREATED":
+            return  # Prevent recursive loop
+
         try:
             with self._lock:
                 finding_id = self._next_evid()
-            record = _build_record(event, self._runtime_context, finding_id)
+
+            payload = event.get("payload", event.get("data", {}))
+            if etype == "SCREENSHOT_CAPTURED":
+                ts_ms = int(event.get("timestamp", time.time()) * 1000)
+                record = EvidenceRecord(
+                    id=str(uuid.uuid4()),
+                    finding_id=finding_id,
+                    timestamp=datetime.fromtimestamp(ts_ms / 1000.0, tz=timezone.utc).isoformat(),
+                    timestamp_ms=ts_ms,
+                    category="SCREENSHOT",
+                    severity="INFO",
+                    api="ScreenshotManager.capture",
+                    class_name="ScreenshotManager",
+                    method="capture",
+                    args=[],
+                    return_value=str(payload.get("filename", "")),
+                    thread_id=0,
+                    stack_trace=[],
+                    description=f"Screenshot captured ({payload.get('label', 'ui')})",
+                    human_description=f"Screenshot captured: {payload.get('filename', '')}",
+                    mitre_technique_id="",
+                    mitre_technique_name="",
+                    screenshot_ref=str(payload.get("filename", "")),
+                    screenshot_id=str(payload.get("screenshot_id", "")),
+                    runtime_context=self._runtime_context.copy(),
+                    extra=payload if isinstance(payload, dict) else {},
+                )
+            elif etype == "NETWORK_EVENT":
+                ts_ms = int(event.get("timestamp", time.time()) * 1000)
+                url = payload.get("url", "network_traffic")
+                record = EvidenceRecord(
+                    id=str(uuid.uuid4()),
+                    finding_id=finding_id,
+                    timestamp=datetime.fromtimestamp(ts_ms / 1000.0, tz=timezone.utc).isoformat(),
+                    timestamp_ms=ts_ms,
+                    category="NETWORK",
+                    severity=event.get("severity", "MED"),
+                    api="NetworkCapture",
+                    class_name="NetworkCapture",
+                    method="request",
+                    args=[url],
+                    return_value=str(payload.get("status", "")),
+                    thread_id=0,
+                    stack_trace=[],
+                    description=f"Network request to {url}",
+                    human_description=f"Network request: {url}",
+                    mitre_technique_id="T1437.001",
+                    mitre_technique_name="Web Protocols C2",
+                    screenshot_ref="",
+                    screenshot_id="",
+                    runtime_context=self._runtime_context.copy(),
+                    extra=payload if isinstance(payload, dict) else {},
+                )
+            elif etype == "THREAT_DETECTED":
+                ts_ms = int(event.get("timestamp", time.time()) * 1000)
+                indicator = payload.get("indicator", "IOC")
+                record = EvidenceRecord(
+                    id=str(uuid.uuid4()),
+                    finding_id=finding_id,
+                    timestamp=datetime.fromtimestamp(ts_ms / 1000.0, tz=timezone.utc).isoformat(),
+                    timestamp_ms=ts_ms,
+                    category="THREAT_INTEL",
+                    severity=payload.get("severity", "HIGH"),
+                    api="ThreatCorrelator",
+                    class_name="ThreatCorrelator",
+                    method="correlate",
+                    args=[indicator],
+                    return_value=str(payload.get("reputation", "")),
+                    thread_id=0,
+                    stack_trace=[],
+                    description=f"Threat detected for {indicator}",
+                    human_description=f"Threat correlate match: {indicator} ({payload.get('source', '')})",
+                    mitre_technique_id="",
+                    mitre_technique_name="",
+                    screenshot_ref="",
+                    screenshot_id="",
+                    runtime_context=self._runtime_context.copy(),
+                    extra=payload if isinstance(payload, dict) else {},
+                )
+            else:
+                record = _build_record(event, self._runtime_context, finding_id)
+
             with self._lock:
                 self._records.append(record)
+
+            if self.event_bus:
+                from sudarshan_core.engines.event_bus import EventType, RuntimeEvent
+                self.event_bus.publish(RuntimeEvent(
+                    event_type=EventType.EVIDENCE_CREATED,
+                    timestamp=record.timestamp_ms / 1000.0,
+                    payload={"evidence_id": record.finding_id, "id": record.id, "category": record.category, "severity": record.severity}
+                ))
 
             if record.severity in ("HIGH", "CRITICAL"):
                 logger.info(

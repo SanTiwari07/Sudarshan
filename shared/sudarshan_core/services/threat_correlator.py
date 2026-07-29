@@ -263,24 +263,33 @@ async def correlate(
     sha256: str,
     urls: List[str],
     package_name: str = "",
+    dynamic_urls: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """
-    Run parallel threat correlation queries.
+    Run parallel threat correlation queries for static and live dynamic IOCs.
 
     Args:
         sha256: APK SHA256 hash
         urls: List of hardcoded URLs/IPs from static analysis
         package_name: APK package name for context
+        dynamic_urls: Optional list of runtime-observed C2 URLs/IPs
 
     Returns:
         Normalized correlation result dict
     """
     result = _empty_result()
 
+    # Combine static and dynamic URLs, tracking origin
+    all_urls = list(urls)
+    dyn_set = set(dynamic_urls or [])
+    for d_url in dyn_set:
+        if d_url not in all_urls:
+            all_urls.append(d_url)
+
     # Extract domains and IPs from URLs
     domains: List[str] = []
     ips: List[str] = []
-    for url in urls[:10]:  # Cap to avoid rate limit
+    for url in all_urls[:12]:  # Cap to avoid rate limit
         try:
             from urllib.parse import urlparse
             parsed = urlparse(url if url.startswith("http") else f"http://{url}")
@@ -419,3 +428,61 @@ async def correlate(
         f"sources={result['sources_queried']} family={result['known_family']}"
     )
     return result
+
+
+class ThreatCorrelatorListener:
+    """
+    Subscribes to NETWORK_EVENT on RuntimeEventBus and correlates runtime URLs,
+    publishing THREAT_DETECTED events back to the EventBus.
+    """
+
+    def __init__(self, event_bus: Any, package_name: str = "") -> None:
+        self.event_bus = event_bus
+        self.package_name = package_name
+        self.seen_urls: set = set()
+        if self.event_bus:
+            self.event_bus.subscribe(self._on_event)
+            logger.debug("[ThreatCorrelatorListener] Subscribed to RuntimeEventBus")
+
+    def _on_event(self, event: Dict[str, Any]) -> None:
+        etype = event.get("event_type", event.get("type", ""))
+        if etype != "NETWORK_EVENT":
+            return
+
+        payload = event.get("payload", event.get("data", {}))
+        url = payload.get("url") or payload.get("indicator")
+        if not url or url in self.seen_urls:
+            return
+
+        self.seen_urls.add(url)
+
+        def _bg_correlate():
+            import time
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                res = loop.run_until_complete(
+                    correlate(sha256="", urls=[url], package_name=self.package_name, dynamic_urls=[url])
+                )
+                loop.close()
+
+                if res and (res.get("threat_score", 0) > 0 or res.get("suspicious_domains") or res.get("malicious_ips")):
+                    from sudarshan_core.engines.event_bus import EventType, RuntimeEvent
+                    self.event_bus.publish(RuntimeEvent(
+                        event_type=EventType.THREAT_DETECTED,
+                        timestamp=time.time(),
+                        payload={
+                            "indicator": url,
+                            "threat_score": res.get("threat_score", 0),
+                            "reputation": "malicious" if res.get("threat_score", 0) > 40 else "suspicious",
+                            "source": ", ".join(res.get("sources_queried", ["ThreatIntel"])),
+                            "family": res.get("known_family"),
+                            "severity": "HIGH" if res.get("threat_score", 0) > 40 else "MED",
+                        }
+                    ))
+            except Exception as e:
+                logger.error("[ThreatCorrelatorListener] Background correlation failed for %s: %s", url, e)
+
+        import threading
+        threading.Thread(target=_bg_correlate, daemon=True).start()
+

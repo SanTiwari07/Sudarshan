@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import {
   Shield, Download, MessageSquare, BarChart2,
-  FileText, Target, Database, Globe
+  FileText, Target, Database, Globe, X, StickyNote
 } from 'lucide-react';
 import type { FraudCardData } from '../App';
 import { exportJSON, exportCSV } from '../utils/derive';
@@ -352,9 +352,10 @@ function ExportOptions({ data }: { data: FraudCardData }) {
   );
 }
 
-// ─── Persistent Analyst Notes ────────────────────────────────────────────────────
+// ─── Persistent Analyst Notes (Floating Drawer) ──────────────────────────────
 
-function AnalystNotes({ sha256 }: { sha256: string }) {
+function AnalystNotesDrawer({ sha256 }: { sha256: string }) {
+  const [isOpen, setIsOpen] = useState(false);
   const [notes, setNotes] = useState('');
   const [savedNotes, setSavedNotes] = useState<Array<{ id: number; text: string; author: string; created_at: string }>>([]);
   const [loading, setLoading] = useState(false);
@@ -371,9 +372,10 @@ function AnalystNotes({ sha256 }: { sha256: string }) {
     }
   };
 
+  // Load notes when drawer is first opened
   useEffect(() => {
-    fetchNotes();
-  }, [sha256]);
+    if (isOpen) fetchNotes();
+  }, [isOpen, sha256]);
 
   const save = async () => {
     if (!notes.trim()) return;
@@ -396,38 +398,101 @@ function AnalystNotes({ sha256 }: { sha256: string }) {
   };
 
   return (
-    <SocCard className="flex flex-col">
-      <SectionHeader icon={<FileText className="h-4 w-4" />} title="Analyst Notes" subtitle="Persisted to case file in database" />
-      <div className="p-4 space-y-3 flex-1">
-        <textarea
-          value={notes}
-          onChange={e => setNotes(e.target.value)}
-          placeholder="Add investigation notes, findings, or escalation context…"
-          className="w-full text-xs border border-slate-200 rounded-lg p-2.5 h-24 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <button
-          onClick={save}
-          disabled={!notes.trim() || loading}
-          className="w-full py-2 text-xs font-medium bg-blue-700 text-white rounded-lg hover:bg-blue-800 disabled:opacity-50 transition-colors"
-        >
-          {loading ? 'Saving…' : 'Save Note to Case'}
-        </button>
-
+    <>
+      {/* Floating Toggle Button — bottom right */}
+      <button
+        onClick={() => setIsOpen(true)}
+        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 px-4 py-3 bg-[#0F172A] hover:bg-slate-800 text-white text-xs font-semibold rounded-full shadow-xl border border-slate-700 transition-all hover:scale-105"
+        title="Open Investigation Notes"
+      >
+        <StickyNote className="h-4 w-4 text-blue-400" />
+        <span>Analyst Notes</span>
         {savedNotes.length > 0 && (
-          <div className="space-y-2 max-h-48 overflow-y-auto pt-2 border-t border-slate-100">
-            {savedNotes.map((n) => (
-              <div key={n.id} className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
-                <div className="flex justify-between text-xs text-slate-400 mb-1">
-                  <span className="font-semibold text-slate-700">{n.author}</span>
-                  <span>{new Date(n.created_at).toLocaleString()}</span>
-                </div>
-                <p className="text-xs text-slate-700 leading-relaxed">{n.text}</p>
-              </div>
-            ))}
-          </div>
+          <span className="ml-0.5 w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">
+            {savedNotes.length}
+          </span>
         )}
-      </div>
-    </SocCard>
+      </button>
+
+      {/* Backdrop + Slide-over Drawer */}
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-slate-900/40"
+            onClick={() => setIsOpen(false)}
+          />
+
+          {/* Drawer panel */}
+          <div className="relative w-96 bg-white h-full shadow-2xl border-l border-slate-200 flex flex-col">
+            {/* Drawer header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center">
+                  <StickyNote className="h-3.5 w-3.5 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Analyst Notes</h3>
+                  <p className="text-[10px] text-slate-400">Persisted to case file in database</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Drawer body */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              {/* Note input */}
+              <div className="space-y-2">
+                <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                  New Entry
+                </label>
+                <textarea
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  placeholder="Add investigation notes, findings, or escalation context…"
+                  className="w-full text-xs border border-slate-200 rounded-lg p-3 h-28 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-400"
+                />
+                <button
+                  onClick={save}
+                  disabled={!notes.trim() || loading}
+                  className="w-full py-2.5 text-xs font-semibold bg-blue-700 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {loading ? 'Saving…' : 'Save Note to Case'}
+                </button>
+              </div>
+
+              {/* Saved notes log */}
+              {savedNotes.length > 0 ? (
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                    Logged Entries ({savedNotes.length})
+                  </span>
+                  {savedNotes.map((n) => (
+                    <div key={n.id} className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                      <div className="flex justify-between text-[10px] text-slate-400 mb-1.5 font-mono">
+                        <span className="font-semibold text-slate-700">{n.author}</span>
+                        <span>{new Date(n.created_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                      </div>
+                      <p className="text-xs text-slate-800 leading-relaxed">{n.text}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-slate-400">
+                  <StickyNote className="h-8 w-8 mx-auto mb-2 text-slate-300" />
+                  <p className="text-xs">No notes logged yet for this case.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -470,9 +535,10 @@ export default function FraudCard({ data }: { data: FraudCardData | null }) {
         <div className="space-y-5">
           <RiskBreakdownSidebar data={data} />
           <ExportOptions data={data} />
-          <AnalystNotes sha256={data.sha256} />
         </div>
       </div>
+      {/* Floating Analyst Notes Drawer */}
+      <AnalystNotesDrawer sha256={data.sha256} />
     </div>
   );
 }

@@ -7,7 +7,8 @@
     "watch": "frida-compile banking_trojan.js -o banking_trojan.bundle.js -w"
   },
   "devDependencies": {
-    "frida-compile": "^16.0.0"
+    "@types/frida-gum": "^19.10.0",
+    "frida-compile": "^16.4.2"
   },
   "dependencies": {
     "frida-java-bridge": "^7.0.13"

@@ -127,21 +127,33 @@ _MIN_BUNDLE_BYTES = 50_000   # a real bundle is ~540 KB; the old stub was 168 B
 
 
 def _select_hooks_script() -> Path:
-    """Bundle if it has actually been built, else source (with a loud warning)."""
+    """
+    Return the compiled bundle. There is no usable fallback.
+
+    banking_trojan.js is an ES module — it `import`s frida-java-bridge, which is
+    the only way the bundler will keep the dependency (a dynamic require inside
+    a try/catch got tree-shaken out, producing a bundle that loaded but had no
+    Java bridge at all). So the raw source is NOT a valid classic script:
+    handing it to create_script raises a SyntaxError.
+
+    Falling back to it would therefore turn "hooks are missing" into "the whole
+    session dies with a confusing parse error". Returning the bundle path even
+    when absent produces a clear "hooks script not found" from run(), which is
+    the honest failure.
+    """
     try:
         if _HOOKS_BUNDLE.exists() and _HOOKS_BUNDLE.stat().st_size >= _MIN_BUNDLE_BYTES:
             return _HOOKS_BUNDLE
     except OSError:
         pass
-    logger.warning(
-        "[Frida] Compiled hook bundle missing or stub-sized at %s — falling back to "
-        "raw source. On Frida 17 the Java bridge is NOT available to an unbundled "
-        "script, so ALL Java hooks (accessibility, SMS, overlay, banking) will fail "
-        "to install and dynamic scoring will be static-only. Build it with: "
-        "cd %s && npm install && npm run build",
+    logger.error(
+        "[Frida] Compiled hook bundle missing or stub-sized at %s. Dynamic "
+        "analysis CANNOT run without it — the raw source is an ES module and is "
+        "not loadable as a Frida script. Build it with:  cd %s && npm install "
+        "&& npm run build",
         _HOOKS_BUNDLE, _HOOKS_DIR,
     )
-    return _HOOKS_SOURCE
+    return _HOOKS_BUNDLE
 
 
 _HOOKS_SCRIPT = _select_hooks_script()

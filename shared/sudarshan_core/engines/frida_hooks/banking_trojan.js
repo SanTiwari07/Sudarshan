@@ -48,33 +48,40 @@
 // "must be bundled with frida-java-bridge via frida-compile". Bundling is now
 // wired up (see frida_hooks/package.json and build_bundle in frida_sandbox.py);
 // this resolves the bridge whichever way the script is loaded.
-// NOTE ON ORDER: require() is tried FIRST, and the global is only a fallback.
-// The obvious way round — check for a global, else require — does not work,
-// because in a raw Frida script a top-level `var Java` becomes a property of
-// globalThis. By the time the check ran, globalThis.Java was already this very
-// binding (null), `typeof null` is "object", and the check happily concluded a
-// Java global existed and adopted null. Trying require() first sidesteps the
-// self-shadowing entirely.
+// STATIC import, deliberately — not a dynamic require().
+//
+// This file is compiled with frida-compile, which bundles as ESM and
+// tree-shakes. A dynamic bridge require buried inside a try/catch is
+// invisible to static analysis, so once the TypeScript types resolved the
+// bundler eliminated the module entirely: the bundle shrank from 542 KB to
+// 176 KB, dropped the bridge, and failed at runtime with
+// "require-failed: 'require' is not defined". A static import is the only form
+// the bundler is guaranteed to keep.
+//
+// Consequence: THIS FILE IS ESM AND MUST BE COMPILED. It is no longer valid as
+// a classic script, which is correct — an unbundled script has no Java bridge
+// on Frida 17 and could never have installed a Java hook anyway. See
+// _select_hooks_script() in frida_sandbox.py, which refuses to load raw source.
+import JavaBridgeModule from 'frida-java-bridge';
+
+// The package is published as an ES module, so the real API can sit on
+// `.default` through interop — measured on device:
+//   Object.keys(mod)      -> ["default"]
+//   typeof mod.available  -> "undefined"
+//   mod.default.available -> true
+// Taking the namespace object directly yields available===undefined, which
+// reads as "no Java" and silently disables every Java hook.
 var JAVA_BRIDGE_SOURCE = 'none';
 var Java = (function resolveJavaBridge() {
   try {
-    var mod = require('frida-java-bridge');      // Frida >= 17 (bundled)
-    // frida-java-bridge is published as an ES module, so through the CommonJS
-    // interop the real API sits on `.default` — measured on device:
-    //   Object.keys(mod)      -> ["default"]
-    //   typeof mod.available  -> "undefined"
-    //   mod.default.available -> true
-    // Using the namespace object directly yields available===undefined, which
-    // reads as "no Java" and silently disables every Java hook.
+    var mod = JavaBridgeModule;
     var bridge = (mod && mod.default) ? mod.default : mod;
     if (bridge) {
       JAVA_BRIDGE_SOURCE = 'frida-java-bridge' + ((mod && mod.default) ? ' (.default)' : '');
       return bridge;
     }
   } catch (e) {
-    // `require` is undefined in an unbundled script — expected when the raw
-    // source is loaded directly. Fall through to the legacy global.
-    JAVA_BRIDGE_SOURCE = 'require-failed: ' + (e && e.message ? e.message : String(e));
+    JAVA_BRIDGE_SOURCE = 'import-failed: ' + (e && e.message ? e.message : String(e));
   }
   try {
     if (typeof globalThis !== 'undefined' && globalThis.Java) {

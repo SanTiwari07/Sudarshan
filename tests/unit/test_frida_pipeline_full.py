@@ -36,7 +36,14 @@ if not os.environ.get("JWT_SECRET_KEY"):
 from sudarshan_core.engines.bfci_scorer import calculate_bfci_v2, BFCI_WEIGHTS
 from sudarshan_core.engines.event_bus import EventType, RuntimeEvent, RuntimeEventBus
 from sudarshan_core.engines.evidence_store import EvidenceStore, EvidenceRecord
-from sudarshan_core.engines.frida_sandbox import FridaSession, calculate_bfci, _HOOKS_SCRIPT
+from sudarshan_core.engines.frida_sandbox import (
+    FridaSession,
+    calculate_bfci,
+    _HOOKS_SCRIPT,
+    _HOOKS_SOURCE,
+    _HOOKS_BUNDLE,
+    _MIN_BUNDLE_BYTES,
+)
 from sudarshan_core.engines.risk_engine import calculate_risk_score
 from sudarshan_core.engines.report_generator import ReportGenerator
 from sudarshan_core.services.threat_correlator import correlate
@@ -44,22 +51,51 @@ from app.routes.runtime_api import record_event, record_hook
 
 
 class TestFridaHooksScript(unittest.TestCase):
-    def test_hooks_script_exists_and_uses_frida17_global(self):
-        """Verify banking_trojan.js exists and does NOT use require('frida-java-bridge')."""
-        self.assertTrue(_HOOKS_SCRIPT.exists(), f"Hooks script not found at {_HOOKS_SCRIPT}")
-        content = _HOOKS_SCRIPT.read_text(encoding="utf-8")
-        
-        # Fatal Bug #1 check: must not require frida-java-bridge
-        self.assertNotIn("require('frida-java-bridge')", content)
-        self.assertNotIn('require("frida-java-bridge")', content)
-        
-        # Must contain canary and Frida 17 Java built-in check
-        self.assertIn("canary", content)
-        self.assertIn("Java.deoptimizeEverything", content)
-        self.assertIn("Java.deoptimizeBootImage", content)
+    def test_source_imports_bridge_and_is_a_module(self):
+        """
+        Frida 17 removed the global `Java` object — it lives in the external
+        `frida-java-bridge` module. Verified on-device: `typeof Java` is
+        `undefined` in an unbundled Frida 17 script, so the source MUST pull the
+        bridge in as an ES module `import` (a bare classic-script
+        `require('frida-java-bridge')` throws "'require' is not defined", and a
+        dynamic require inside a try/catch gets tree-shaken out entirely).
+        """
+        self.assertTrue(_HOOKS_SOURCE.exists(), f"Source not found at {_HOOKS_SOURCE}")
+        src = _HOOKS_SOURCE.read_text(encoding="utf-8")
+
+        # Must import the bridge as an ES module (this is what survives bundling).
+        self.assertIn("import JavaBridgeModule from 'frida-java-bridge'", src)
+        # Must NOT ship a runtime require() — that was the original Fatal Bug #1.
+        self.assertNotIn("require('frida-java-bridge')", src)
+        self.assertNotIn('require("frida-java-bridge")', src)
+
+        # Canary + boot-image deoptimisation must still be present.
+        self.assertIn("canary", src)
+        self.assertIn("Java.deoptimizeEverything", src)
+        self.assertIn("Java.deoptimizeBootImage", src)
+
+    def test_bundle_is_built_and_inlines_the_bridge(self):
+        """
+        `_HOOKS_SCRIPT` (what actually gets loaded on-device) must be the
+        frida-compile bundle, not the raw ES-module source — create_script can
+        only run a bundled classic script. The bundle must be real (hundreds of
+        KB, not a stub) and must contain the inlined bridge, proven by an ART
+        internal string that only exists inside frida-java-bridge's android.js.
+        """
+        self.assertEqual(_HOOKS_SCRIPT, _HOOKS_BUNDLE,
+                         "Loader must resolve to the compiled bundle, not the source")
+        self.assertTrue(_HOOKS_BUNDLE.exists(), f"Bundle not built at {_HOOKS_BUNDLE}")
+        size = _HOOKS_BUNDLE.stat().st_size
+        self.assertGreaterEqual(size, _MIN_BUNDLE_BYTES,
+                                f"Bundle is stub-sized ({size} B) — run `npm run build`")
+        bundle = _HOOKS_BUNDLE.read_text(encoding="utf-8")
+        # Inlined frida-java-bridge marker (ART method-copy heuristic string).
+        self.assertIn("Unable to find copied methods", bundle,
+                      "frida-java-bridge was not inlined into the bundle")
+        self.assertIn("Java.deoptimizeEverything", bundle)
 
     def test_script_has_native_hooks(self):
-        """Verify Phase 4 native libc/libart hooks exist in JS script."""
+        """Verify Phase 4 native libc/libart hooks exist in the loaded bundle."""
         content = _HOOKS_SCRIPT.read_text(encoding="utf-8")
         self.assertIn("SSL_write", content)
         self.assertIn("SSL_read", content)

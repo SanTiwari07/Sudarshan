@@ -37,11 +37,10 @@ FORM_VALUES = {
 }
 
 class UIExplorer:
-    def __init__(self, device_serial: str, adb_path: str = "adb", event_bus: Optional[RuntimeEventBus] = None, mode: str = "ai"):
+    def __init__(self, device_serial: str, adb_path: str = "adb", event_bus: Optional[RuntimeEventBus] = None):
         self.device_serial = device_serial
         self.adb_path = adb_path
         self.event_bus = event_bus
-        self.mode = mode
         self._is_running = False
         self._cancel_task = False
         self.start_time = 0
@@ -374,7 +373,7 @@ Return valid JSON matching this schema:
         
         self.attack_timeline.append({
             "timestamp": self._get_timestamp(),
-            "source": "AI" if self.mode == "ai" else "Hybrid_AI",
+            "source": "AI",
             "action": atype,
             "target": action["target_id"],
             "details": msg
@@ -411,7 +410,7 @@ Return valid JSON matching this schema:
             "timestamp": "00:00",
             "source": "System",
             "action": "Analysis Started",
-            "details": f"Explorer Mode: {self.mode}"
+            "details": "Explorer: goal-driven AI"
         })
         
         last_hash = None
@@ -514,7 +513,6 @@ Return valid JSON matching this schema:
             self.coverage_metrics["coverage_percent"] = min(100, pct)
             
         summary = {
-            "mode": self.mode,
             "duration_seconds": self.duration_seconds,
             "screens_visited": self.coverage_metrics["screens"],
             "buttons_clicked": self.coverage_metrics["buttons_clicked"],

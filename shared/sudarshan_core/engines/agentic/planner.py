@@ -140,6 +140,11 @@ GOAL_KEYWORD_MAP: List[Tuple[str, str, int]] = [
 # Maximum consecutive FallbackPlanner failures before it signals stop.
 FALLBACK_MAX_CONSECUTIVE_FAILURES: int = 3
 
+# How many backtrack attempts the loop-breaker gets on a stuck screen before the
+# consecutive-failure stop takes over. Without a bound, loop recovery preempted
+# the stop condition indefinitely — see decide().
+MAX_LOOP_BREAK_ATTEMPTS: int = 2
+
 
 # ─── Planner Output Schema ────────────────────────────────────────────────────
 
@@ -640,6 +645,9 @@ class FallbackPlanner:
     def __init__(self) -> None:
         self._consecutive_failures: int = 0
         self._scroll_attempts:      int = 0
+        # Backtrack attempts spent on the current stuck screen. Bounded so loop
+        # recovery cannot preempt the stop condition forever — see decide().
+        self._loop_break_attempts:  int = 0
         self._last_screen_hash:     str = ""
 
     def decide(
@@ -680,19 +688,43 @@ class FallbackPlanner:
         # Check if we are making progress (new screen or new Frida events)
         if obs.screen_hash != self._last_screen_hash:
             self._consecutive_failures = 0
+            self._loop_break_attempts = 0
             self._scroll_attempts      = 0
         else:
             has_new_evidence = len(obs.frida_events) > 0
             if not has_new_evidence:
                 self._consecutive_failures += 1
             else:
+                # New Frida evidence on the same screen is still progress.
                 self._consecutive_failures = 0
+                self._loop_break_attempts = 0
 
         self._last_screen_hash = obs.screen_hash
 
-        # Check for loop detection (>3 visits in window of 5)
-        if self.world_model.screen_graph.is_loop_detected(shash, max_visits=3, window=5):
-            logger.warning(f"[FallbackPlanner] Loop detected on screen {shash[:6]} — triggering backtrack action")
+        # Loop recovery, then stop — in that order, but BOUNDED.
+        #
+        # These two conditions co-occur by construction: being stuck on one
+        # screen is what produces consecutive failures. The loop-breaker used to
+        # return unconditionally and came first, so it emitted press_back
+        # forever and the stop below was unreachable in exactly the state it
+        # exists for — the agent spent its whole action budget backtracking on a
+        # screen it could not escape instead of signalling "no progress
+        # possible" and letting the run wrap up.
+        #
+        # Backtracking is a legitimate recovery, so it still gets to run — but
+        # only MAX_LOOP_BREAK_ATTEMPTS times per stuck screen. Once backtracking
+        # has demonstrably not worked, the stop wins.
+        looping = self.world_model.screen_graph.is_loop_detected(
+            shash, max_visits=3, window=5
+        )
+
+        if looping and self._loop_break_attempts < MAX_LOOP_BREAK_ATTEMPTS:
+            self._loop_break_attempts += 1
+            logger.warning(
+                f"[FallbackPlanner] Loop detected on screen {shash[:6]} — "
+                f"triggering backtrack action "
+                f"({self._loop_break_attempts}/{MAX_LOOP_BREAK_ATTEMPTS})"
+            )
             self.coverage_tracker.record_loop_broken()
             return {
                 "tool":       "press_back",
@@ -702,11 +734,12 @@ class FallbackPlanner:
                 "_source":    "loop_breaker",
             }
 
-        # Stopping: too many failures
+        # Stopping: too many failures, or backtracking exhausted.
         if self._consecutive_failures >= FALLBACK_MAX_CONSECUTIVE_FAILURES:
             logger.warning(
                 f"[FallbackPlanner] {self._consecutive_failures} consecutive failures "
-                f"with no progress — signalling stop."
+                f"with no progress ({self._loop_break_attempts} backtrack attempt(s) "
+                f"made) — signalling stop."
             )
             return None
 

@@ -161,7 +161,7 @@ graph TD
 
 | Feature Dimension | Traditional Scripted Frida | Sudarshan Agentic Dynamic Analysis |
 | :--- | :--- | :--- |
-| **Navigation Model** | Hardcoded UI clicks / Static monkey | Autonomous LLM + 15-stage Goal DAG |
+| **Navigation Model** | Hardcoded UI clicks / random input fuzzing | Autonomous LLM + 15-stage Goal DAG |
 | **Hook Activation** | Monolithic static script load | Dynamic profile loading via `manifest.json` |
 | **JIT Bypass** | Prone to silent inline suppression | Unconditional `Java.deoptimizeEverything()` |
 | **Network Visibility** | Host socket URLs only | Frida hooks + mitmproxy HAR decrypted bodies |

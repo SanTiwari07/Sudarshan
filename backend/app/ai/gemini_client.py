@@ -8,15 +8,37 @@ Flow:
   Static / Dynamic / Threat Intel / Risk Engine → RAG → Gemini 2.5 Flash API
 """
 
+import asyncio
 import json
 import logging
 import os
-import time
 from typing import Any, Dict, List, Optional
 
 from app.rag.knowledge_base import build_rag_context, get_cert_in_recommendations
 
 logger = logging.getLogger(__name__)
+
+
+# Substrings that mark a failure as transient. Anything else — a bad key, a
+# revoked project, a malformed request — will fail identically on every retry,
+# so retrying only adds latency to a call that cannot succeed.
+_RETRYABLE_MARKERS = (
+    "timeout", "timed out", "deadline",
+    "429", "rate limit", "resource exhausted", "quota",
+    "500", "502", "503", "504",
+    "unavailable", "internal error", "connection", "temporarily",
+)
+
+
+def _is_retryable(exc: Exception) -> bool:
+    """True when another attempt could plausibly succeed."""
+    if isinstance(exc, (TimeoutError, ConnectionError, asyncio.TimeoutError)):
+        return True
+    if isinstance(exc, (json.JSONDecodeError, ValueError)):
+        # Malformed / non-conforming model output — a resample may well fix it.
+        return True
+    text = f"{type(exc).__name__}: {exc}".lower()
+    return any(marker in text for marker in _RETRYABLE_MARKERS)
 
 # ─── RAG-Grounded Prompt Template ─────────────────────────────────────────────
 
@@ -231,20 +253,35 @@ async def analyze_with_llm(
     )
 
     # ── Execute Gemini API call with exponential retries ──────────────────────
+    #
+    # BOTH the SDK call and the backoff must be awaited, not blocked on.
+    # `client.models.generate_content` is the SYNCHRONOUS surface of google-genai
+    # (`client.aio.models` is the async one), and `time.sleep` blocks outright.
+    # Called directly from this `async def` they pinned the event loop for the
+    # whole round trip plus up to 0.5+1.0+2.0 = 3.5 s of backoff, during which
+    # the gateway served nothing — not /health, not another analyst's request.
+    # This is called on both pipeline paths (delegated and local).
+    #
+    # The engine already does this correctly for every blocking step it has;
+    # see analysis-engine/app/main.py and its comment about /health going quiet
+    # mid-analysis. Same hazard, same fix.
     model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    last_error: Optional[str] = None
+
     for attempt in range(max_retries):
         try:
             from google import genai
             from google.genai import types
 
             client = genai.Client(api_key=gemini_key)
-            response = client.models.generate_content(
+            response = await asyncio.to_thread(
+                client.models.generate_content,
                 model=model_name,
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
                     temperature=0.2,
-                )
+                ),
             )
 
             if response and response.text:
@@ -252,10 +289,25 @@ async def analyze_with_llm(
                 validated = _validate_report_json(parsed, cert_recs)
                 logger.info(f"[Gemini] RAG threat report generated successfully via {model_name} (Attempt {attempt+1})")
                 return validated
+
+            last_error = "empty response"
+            logger.warning(f"[Gemini] Attempt {attempt+1}/{max_retries} returned no text.")
+
         except Exception as e:
+            last_error = f"{type(e).__name__}: {e}"
+
+            # Retrying a 401/403 is 3.5 s of latency for a call that cannot
+            # succeed. Only transient classes are worth another attempt.
+            if not _is_retryable(e):
+                logger.error(f"[Gemini] Non-retryable failure ({last_error}); using fallback template.")
+                return _get_fallback_template(cert_recs, last_error)
+
+            logger.warning(f"[Gemini] Attempt {attempt+1}/{max_retries} failed ({last_error}).")
+
+        if attempt < max_retries - 1:
             backoff = (2 ** attempt) * 0.5
-            logger.warning(f"[Gemini] Attempt {attempt+1}/{max_retries} failed ({e}). Retrying in {backoff:.1f}s...")
-            time.sleep(backoff)
+            logger.info(f"[Gemini] Retrying in {backoff:.1f}s...")
+            await asyncio.sleep(backoff)
 
     logger.error("[Gemini] All Gemini Flash API retries exhausted. Returning fallback template.")
-    return _get_fallback_template(cert_recs, "Gemini Flash API retries exhausted")
+    return _get_fallback_template(cert_recs, f"Gemini retries exhausted ({last_error})")

@@ -19,7 +19,9 @@ Results are held in memory _jobs dict AND persisted to SQLite via save_case().
 import asyncio
 import logging
 import os
+import time
 import uuid
+from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -28,13 +30,43 @@ logger = logging.getLogger(__name__)
 ANALYSIS_WORKERS = int(os.getenv("ANALYSIS_WORKERS", "2"))
 
 # ─── In-Memory Job Store ──────────────────────────────────────────────────────
-
-_jobs: Dict[str, Dict[str, Any]] = {}
+#
+# BOUNDED by TTL and count. This previously grew for the whole process lifetime,
+# and each finished entry holds a full AnalysisResponse.model_dump() — which
+# embeds dynamic_analysis.logcat (an unbounded string), the attack timeline and
+# every API call. A few hundred analyses was a multi-hundred-megabyte resident
+# set that nothing ever released.
+#
+# The analysis-engine already solved exactly this (_evict_finished_jobs, with a
+# comment saying "It also used to grow without bound"); the fix was never
+# brought back to the gateway. This is that fix.
+_jobs: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
 _queue: asyncio.Queue = asyncio.Queue()
+
+JOB_RETENTION_SECONDS = int(os.getenv("JOB_RETENTION_SECONDS", "3600"))
+MAX_RETAINED_JOBS = int(os.getenv("MAX_RETAINED_JOBS", "200"))
+
+
+def _evict_finished_jobs() -> None:
+    """Drop finished jobs past their TTL, then cap total retained jobs."""
+    now = time.monotonic()
+    for jid in [
+        jid for jid, j in _jobs.items()
+        if j.get("_finished_at") and now - j["_finished_at"] > JOB_RETENTION_SECONDS
+    ]:
+        _jobs.pop(jid, None)
+
+    # Over the cap: drop finished jobs oldest-first. An in-flight job is never
+    # evicted — losing its result would be worse than the memory it holds.
+    if len(_jobs) > MAX_RETAINED_JOBS:
+        finished = [jid for jid, j in _jobs.items() if j.get("_finished_at")]
+        for jid in finished[: len(_jobs) - MAX_RETAINED_JOBS]:
+            _jobs.pop(jid, None)
 
 
 def create_job() -> str:
     """Allocate a new job ID and register it as queued."""
+    _evict_finished_jobs()
     job_id = str(uuid.uuid4())
     _jobs[job_id] = {
         "job_id": job_id,
@@ -63,6 +95,7 @@ def _set_done(job_id: str, result: Dict[str, Any]) -> None:
         _jobs[job_id]["status"] = "done"
         _jobs[job_id]["result"] = result
         _jobs[job_id]["completed_at"] = datetime.now(timezone.utc).isoformat()
+        _jobs[job_id]["_finished_at"] = time.monotonic()
 
 
 def _set_failed(job_id: str, error: str) -> None:
@@ -70,6 +103,7 @@ def _set_failed(job_id: str, error: str) -> None:
         _jobs[job_id]["status"] = "failed"
         _jobs[job_id]["error"] = error
         _jobs[job_id]["completed_at"] = datetime.now(timezone.utc).isoformat()
+        _jobs[job_id]["_finished_at"] = time.monotonic()
 
 
 # ─── Queue Interface ──────────────────────────────────────────────────────────
@@ -98,17 +132,10 @@ async def _worker(worker_id: int) -> None:
     import tempfile
     import os as _os
 
-    from app.ai.gemini_client import analyze_with_llm
-    from sudarshan_core.analyzers.apk_analyzer import analyze_apk
-    from sudarshan_core.engines.classification_engine import classify_family
-    from sudarshan_core.engines.risk_engine import calculate_risk_score, build_threat_scenario_table
-    from sudarshan_core.engines.frida_sandbox import run_frida_analysis, get_sandbox_status
-    from sudarshan_core.models.schemas import StaticAnalysisFlags
-    from sudarshan_core.services.threat_correlator import correlate
-    from sudarshan_core.services.mobsf_client import MobSFClient, MobSFAnalysisError, MobSFNotAvailable
-    from app.db.database import save_case
-
-    mobsf = MobSFClient()
+    # The pipeline lives in routes/upload.py and is imported lazily below, at
+    # the call site. Every analysis import that used to be here was dead — the
+    # worker delegates entirely — and MobSFClient() was constructed once per
+    # worker and never referenced.
     logger.info(f"[Queue] Worker {worker_id} started")
 
     while True:

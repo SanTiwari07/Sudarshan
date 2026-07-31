@@ -28,7 +28,105 @@
 
 'use strict';
 
-// DO NOT add: var Java = require(...); Java is injected by Frida 17+ automatically.
+// ─── Java bridge ──────────────────────────────────────────────────────────────
+//
+// MEASURED on frida 17.16.4 against a live emulator:
+//
+//     typeof Java  ->  "undefined"
+//
+// Frida 17 REMOVED the built-in `Java` global; the Android bridge became the
+// external `frida-java-bridge` module. The previous header here asserted the
+// opposite ("Java is injected by Frida 17+ automatically") and initHooks was
+// guarded by `if (typeof Java === 'undefined') return`, so on Frida 17 EVERY
+// Java hook — accessibility, SMS, overlay, banking, persistence, dangerous
+// APIs, anti-analysis, ~40 in total — silently failed to install. The canary is
+// emitted before initHooks, so the session still reported "loaded" and the run
+// came back NO_BEHAVIOR_OBSERVED with BFCI 0.0. That is the real reason every
+// BFCI component reads 0.0 on every sample.
+//
+// backend/requirements.txt already documented the correct answer: the script
+// "must be bundled with frida-java-bridge via frida-compile". Bundling is now
+// wired up (see frida_hooks/package.json and build_bundle in frida_sandbox.py);
+// this resolves the bridge whichever way the script is loaded.
+// NOTE ON ORDER: require() is tried FIRST, and the global is only a fallback.
+// The obvious way round — check for a global, else require — does not work,
+// because in a raw Frida script a top-level `var Java` becomes a property of
+// globalThis. By the time the check ran, globalThis.Java was already this very
+// binding (null), `typeof null` is "object", and the check happily concluded a
+// Java global existed and adopted null. Trying require() first sidesteps the
+// self-shadowing entirely.
+var JAVA_BRIDGE_SOURCE = 'none';
+var Java = (function resolveJavaBridge() {
+  try {
+    var mod = require('frida-java-bridge');      // Frida >= 17 (bundled)
+    // frida-java-bridge is published as an ES module, so through the CommonJS
+    // interop the real API sits on `.default` — measured on device:
+    //   Object.keys(mod)      -> ["default"]
+    //   typeof mod.available  -> "undefined"
+    //   mod.default.available -> true
+    // Using the namespace object directly yields available===undefined, which
+    // reads as "no Java" and silently disables every Java hook.
+    var bridge = (mod && mod.default) ? mod.default : mod;
+    if (bridge) {
+      JAVA_BRIDGE_SOURCE = 'frida-java-bridge' + ((mod && mod.default) ? ' (.default)' : '');
+      return bridge;
+    }
+  } catch (e) {
+    // `require` is undefined in an unbundled script — expected when the raw
+    // source is loaded directly. Fall through to the legacy global.
+    JAVA_BRIDGE_SOURCE = 'require-failed: ' + (e && e.message ? e.message : String(e));
+  }
+  try {
+    if (typeof globalThis !== 'undefined' && globalThis.Java) {
+      JAVA_BRIDGE_SOURCE = 'global';           // Frida <= 16
+      return globalThis.Java;
+    }
+  } catch (e) { /* ignore */ }
+  return null;
+})();
+
+// ─── Native export resolution ─────────────────────────────────────────────────
+//
+// MEASURED on frida 17.16.4:
+//
+//     typeof Module.findExportByName        ->  "undefined"   (REMOVED)
+//     typeof Module.findGlobalExportByName  ->  "function"
+//     typeof Process.findModuleByName       ->  "function"
+//
+// Every native hook called the removed static form and failed with
+// "not a function" — SSL_write, SSL_read, connect, execve, ptrace, open,
+// RegisterNatives, and the dlopen watchers. This resolves a symbol across both
+// API generations, preferring a module-scoped lookup and falling back to the
+// global export table.
+function resolveExport(moduleName, symbol) {
+  // Frida >= 17: module-scoped
+  try {
+    if (typeof Process.findModuleByName === 'function') {
+      var m = Process.findModuleByName(moduleName);
+      if (m && typeof m.findExportByName === 'function') {
+        var addr = m.findExportByName(symbol);
+        if (addr) return addr;
+      }
+    }
+  } catch (e) { /* fall through */ }
+
+  // Frida >= 17: global export table (works for libc/libdl symbols)
+  try {
+    if (typeof Module.findGlobalExportByName === 'function') {
+      var g = Module.findGlobalExportByName(symbol);
+      if (g) return g;
+    }
+  } catch (e) { /* fall through */ }
+
+  // Frida <= 16: the removed static form
+  try {
+    if (typeof Module.findExportByName === 'function') {
+      return Module.findExportByName(moduleName, symbol);
+    }
+  } catch (e) { /* fall through */ }
+
+  return null;
+}
 
 // ─── Deduplication & Event Cache ─────────────────────────────────────────────
 var dedupeCache = {};
@@ -68,17 +166,81 @@ var runtimeContext = {
 };
 
 // ─── Event Collector (mirrors Python collected_events keys exactly) ───────────
-var events = {
-  accessibility:  [],
-  sms:            [],
-  overlay:        [],
-  banking:        [],
-  network:        [],
-  persistence:    [],
-  dangerous_apis: [],
-  files_accessed: [],
-  anti_analysis:  [],
+//
+// SCORED categories (present in bfci_scorer.BFCI_WEIGHTS) must contain ONLY
+// events that are evidence of the behaviour the category names. The caps in
+// bfci_scorer are 2-3 events with logarithmic scaling, so a SINGLE mis-filed
+// event scores 50-63/100 for that component. A category that also catches
+// ordinary application behaviour is not a weak signal — it is a constant.
+//
+// UNSCORED categories are collected as evidence and reported, but contribute
+// nothing to BFCI. calculate_bfci_v2 iterates `for cat in BFCI_WEIGHTS`, so a
+// category simply absent from that dict is inert by construction.
+// Per-category COUNTERS only. The event objects themselves are streamed to
+// Python, which owns collected_events; keeping copies here served no purpose
+// and grew without bound inside the target process for the whole session.
+var eventCounts = {
+  // ── Scored ───────────────────────────────────────────────────────────────
+  accessibility:  0,
+  sms:            0,   // actual SMS read / write / send / delete ONLY
+  overlay:        0,   // window-type-VERIFIED overlay operations ONLY
+  banking:        0,   // banking-app targeting + high-confidence credential access
+  network:        0,
+  persistence:    0,
+  // ── Unscored: evidence only ──────────────────────────────────────────────
+  dangerous_apis:     0,
+  files_accessed:     0,
+  anti_analysis:      0,
+  device_fingerprint: 0,   // IMEI / IMSI / ICCID / MSISDN, app + account enumeration
+  app_telemetry:      0,   // ordinary app behaviour: activity lifecycle, keyboard,
+                           // generic crypto/keystore/prefs access, non-overlay windows
+  notification:       0,   // notification interception (see NOTE at the hook)
 };
+
+// ─── Overlay window tracking ──────────────────────────────────────────────────
+// addView carries LayoutParams and can be type-checked. updateViewLayout and
+// removeView cannot be trusted on their own: every AlertDialog, Toast,
+// PopupWindow, spinner dropdown and soft-keyboard resize goes through them. We
+// therefore remember which View handles were added AS an overlay, and only
+// treat later operations on those handles as overlay evidence.
+var OVERLAY_WINDOW_TYPES = [
+  2038,  // TYPE_APPLICATION_OVERLAY
+  2003,  // TYPE_SYSTEM_ALERT
+  2006,  // TYPE_SYSTEM_OVERLAY
+  2010,  // TYPE_SYSTEM_ERROR
+];
+var overlayViewKeys = {};
+var overlayViewCount = 0;
+var MAX_TRACKED_OVERLAY_VIEWS = 256;
+
+function viewKey(view) {
+  try {
+    return view === null ? null : String(view.hashCode());
+  } catch (e) {
+    return null;
+  }
+}
+
+function markOverlayView(view) {
+  var k = viewKey(view);
+  if (k === null || overlayViewKeys[k]) return;
+  if (overlayViewCount >= MAX_TRACKED_OVERLAY_VIEWS) return;  // bounded
+  overlayViewKeys[k] = true;
+  overlayViewCount++;
+}
+
+function isTrackedOverlayView(view) {
+  var k = viewKey(view);
+  return k !== null && overlayViewKeys[k] === true;
+}
+
+function forgetOverlayView(view) {
+  var k = viewKey(view);
+  if (k !== null && overlayViewKeys[k]) {
+    delete overlayViewKeys[k];
+    overlayViewCount--;
+  }
+}
 
 // ─── Stack Capture ─────────────────────────────────────────────────────────────
 function captureStack(maxFrames) {
@@ -106,7 +268,21 @@ function emit(category, data) {
   runtimeContext.event_counter++;
   var eventId = 'ev_' + Date.now() + '_' + runtimeContext.event_counter;
 
-  var dedupeKey = category + ':' + (data.hook || '') + ':' + (data.description || '').substring(0, 50);
+  // Dedup key.
+  //
+  // This used to be description.substring(0, 50). For network hooks the
+  // description begins with a ~30-character fixed prefix ("Network connection
+  // opened to: "), leaving under 20 characters of URL to discriminate — so two
+  // DISTINCT C2 endpoints sharing a domain prefix collapsed to one key and the
+  // second was silently dropped. Losing a C2 indicator to a display-string
+  // truncation is not acceptable for IOC collection.
+  //
+  // Key on the identifying VALUE where the event carries one (url / ioc /
+  // endpoint / path / property_key), and fall back to the description
+  // otherwise.
+  var dedupeIdentity = data.ioc || data.url || data.endpoint || data.path ||
+                       data.property_key || (data.description || '').substring(0, 120);
+  var dedupeKey = category + ':' + (data.hook || '') + ':' + dedupeIdentity;
   if (isDuplicate(dedupeKey)) {
     return;
   }
@@ -151,8 +327,12 @@ function emit(category, data) {
 
   runtimeContext.last_event_id = eventId;
 
-  if (events[category]) {
-    events[category].push(event);
+  // Count only. The full event objects used to be accumulated in `events[...]`
+  // and NEVER read or cleared by anything — Python maintains its own
+  // collected_events from the message channel — so this was a pure memory leak
+  // growing inside the malware's own process for the whole session.
+  if (typeof eventCounts[category] === 'number') {
+    eventCounts[category]++;
   }
 
   // Send to Python _on_message handler
@@ -197,10 +377,22 @@ setImmediate(initHooks);
 // ─── Main Hook Initialization ─────────────────────────────────────────────────
 function initHooks() {
   // Java is a Frida 17 built-in global — no require() needed
-  if (typeof Java === 'undefined' || !Java.available) {
-    send({ type: 'error', description: 'Java runtime not available in this process. Is this an Android app?' });
+  if (!Java || !Java.available) {
+    // Loud and specific. This used to say "Is this an Android app?", which sent
+    // every reader chasing the wrong problem: the app was fine, the BRIDGE was
+    // missing because the script was loaded unbundled on Frida 17.
+    send({
+      type: 'error',
+      description:
+        'Java bridge unavailable (' + JAVA_BRIDGE_SOURCE + '). On Frida 17+ the ' +
+        'Java global was removed; this script must be bundled with ' +
+        'frida-java-bridge via frida-compile. NO Java hooks were installed.',
+      java_bridge_source: JAVA_BRIDGE_SOURCE,
+      fatal: true,
+    });
     return;
   }
+  send({ type: 'diag', msg: 'java_bridge_ready', source: JAVA_BRIDGE_SOURCE });
 
   try {
     Java.perform(function () {
@@ -257,6 +449,11 @@ function initHooks() {
             package: pkgName,
             description: 'App is monitoring screen content via Accessibility API (ATS pattern)',
           });
+          // Accessibility events carry the package of the app being observed.
+          // This is the working replacement for getRunningTasks(), which is
+          // restricted on API 22+ — and it is exactly how an ATS trojan knows a
+          // banking app came to the foreground.
+          _noteForegroundPackage(pkgName, 'AccessibilityService.onAccessibilityEvent');
           return this.onAccessibilityEvent(event);
         };
         registerHook('AccessibilityService.onAccessibilityEvent');
@@ -480,15 +677,22 @@ function initHooks() {
         registerHook('ContentResolver.delete');
       } catch (e) { reportHookError('ContentResolver', e.message); }
 
+      // NOTE ON CATEGORY: these four hooks read device/subscriber IDENTITY. None
+      // of them reads, intercepts, sends or deletes an SMS. They previously
+      // emitted to 'sms' — weight 0.25, cap 2 — so any app calling getDeviceId()
+      // and getSubscriberId() scored sms=100 and contributed 25 points of BFCI
+      // with no SMS involvement at all. That is thousands of ordinary analytics
+      // SDKs. They now emit to the unscored 'device_fingerprint' category:
+      // still collected, still reported, no longer scored as OTP theft.
       try {
         var TelephonyManager = Java.use('android.telephony.TelephonyManager');
         TelephonyManager.getLine1Number.overload().implementation = function () {
           var num = this.getLine1Number();
-          emit('sms', {
+          emit('device_fingerprint', {
             hook: 'TelephonyManager.getLine1Number',
             class_name: 'android.telephony.TelephonyManager',
-            severity: 'HIGH',
-            description: 'App queried device phone number (MSISDN exfil)',
+            severity: 'MED',
+            description: 'App queried device phone number (MSISDN — device identity)',
           });
           return num;
         };
@@ -496,11 +700,11 @@ function initHooks() {
 
         TelephonyManager.getSimSerialNumber.overload().implementation = function () {
           var serial = this.getSimSerialNumber();
-          emit('sms', {
+          emit('device_fingerprint', {
             hook: 'TelephonyManager.getSimSerialNumber',
             class_name: 'android.telephony.TelephonyManager',
-            severity: 'HIGH',
-            description: 'App queried SIM Serial Number (device fingerprinting)',
+            severity: 'MED',
+            description: 'App queried SIM Serial Number (ICCID — device fingerprinting)',
           });
           return serial;
         };
@@ -508,10 +712,10 @@ function initHooks() {
 
         TelephonyManager.getDeviceId.overload().implementation = function () {
           var id = this.getDeviceId();
-          emit('sms', {
+          emit('device_fingerprint', {
             hook: 'TelephonyManager.getDeviceId',
             class_name: 'android.telephony.TelephonyManager',
-            severity: 'HIGH',
+            severity: 'MED',
             description: 'App queried IMEI/Device ID (device fingerprinting)',
           });
           return id;
@@ -520,11 +724,11 @@ function initHooks() {
 
         TelephonyManager.getSubscriberId.overload().implementation = function () {
           var id = this.getSubscriberId();
-          emit('sms', {
+          emit('device_fingerprint', {
             hook: 'TelephonyManager.getSubscriberId',
             class_name: 'android.telephony.TelephonyManager',
-            severity: 'HIGH',
-            description: 'App queried IMSI subscriber ID (identity exfil)',
+            severity: 'MED',
+            description: 'App queried IMSI subscriber ID (device fingerprinting)',
           });
           return id;
         };
@@ -539,58 +743,104 @@ function initHooks() {
         var LayoutParams = Java.use('android.view.WindowManager$LayoutParams');
         var wm_impl = Java.use('android.view.WindowManagerImpl');
 
+        // Returns the window type, or -1 when it cannot be determined.
+        var windowTypeOf = function (params) {
+          if (!params) return -1;
+          try {
+            return Java.cast(params, LayoutParams).type.value;
+          } catch (castErr) {
+            return -1;
+          }
+        };
+
         wm_impl.addView.overload('android.view.View', 'android.view.ViewGroup$LayoutParams').implementation = function (view, params) {
-          if (params) {
-            try {
-              var lp = Java.cast(params, LayoutParams);
-              var type = lp.type.value;
-              // TYPE_APPLICATION_OVERLAY=2038, TYPE_SYSTEM_ALERT=2003,
-              // TYPE_SYSTEM_OVERLAY=2006, TYPE_SYSTEM_ERROR=2010
-              if (type === 2038 || type === 2003 || type === 2006 || type === 2010) {
-                emit('overlay', {
-                  hook: 'WindowManager.addView',
-                  class_name: 'android.view.WindowManagerImpl',
-                  severity: 'HIGH',
-                  window_type: type,
-                  description: 'App drew overlay window on top of screen (TYPE=' + type + '). Phishing overlay.',
-                });
-              }
-            } catch (castErr) {}
+          var type = windowTypeOf(params);
+          if (OVERLAY_WINDOW_TYPES.indexOf(type) !== -1) {
+            markOverlayView(view);
+            emit('overlay', {
+              hook: 'WindowManager.addView',
+              class_name: 'android.view.WindowManagerImpl',
+              severity: 'HIGH',
+              window_type: type,
+              description: 'App drew overlay window on top of screen (TYPE=' + type + '). Phishing overlay.',
+            });
           }
           return this.addView(view, params);
         };
         registerHook('WindowManager.addView');
 
+        // CATEGORY NOTE: updateViewLayout and removeView are on the path of every
+        // AlertDialog, Toast, PopupWindow, spinner dropdown and soft-keyboard
+        // resize. They previously emitted to 'overlay' unconditionally — weight
+        // 0.20, cap 2 — so ANY app that showed and dismissed a dialog scored
+        // overlay=100 and contributed 20 points of BFCI. Only operations on a
+        // view we ourselves saw added AS an overlay are overlay evidence; the
+        // rest is ordinary UI and goes to the unscored 'app_telemetry'.
         wm_impl.updateViewLayout.overload('android.view.View', 'android.view.ViewGroup$LayoutParams').implementation = function (view, params) {
-          emit('overlay', {
-            hook: 'WindowManager.updateViewLayout',
-            class_name: 'android.view.WindowManagerImpl',
-            severity: 'MED',
-            description: 'App updated overlay window layout (repositioning phishing screen)',
-          });
+          var type = windowTypeOf(params);
+          var isOverlayNow = OVERLAY_WINDOW_TYPES.indexOf(type) !== -1;
+
+          // A view promoted to an overlay type via update is still an overlay.
+          if (isOverlayNow) markOverlayView(view);
+
+          if (isOverlayNow || isTrackedOverlayView(view)) {
+            emit('overlay', {
+              hook: 'WindowManager.updateViewLayout',
+              class_name: 'android.view.WindowManagerImpl',
+              severity: 'MED',
+              window_type: type,
+              description: 'App repositioned an active overlay window (TYPE=' + type + ')',
+            });
+          } else {
+            emit('app_telemetry', {
+              hook: 'WindowManager.updateViewLayout',
+              class_name: 'android.view.WindowManagerImpl',
+              severity: 'LOW',
+              window_type: type,
+              description: 'Ordinary window layout update (non-overlay type=' + type + ')',
+            });
+          }
           return this.updateViewLayout(view, params);
         };
         registerHook('WindowManager.updateViewLayout');
 
         wm_impl.removeView.overload('android.view.View').implementation = function (view) {
-          emit('overlay', {
-            hook: 'WindowManager.removeView',
-            class_name: 'android.view.WindowManagerImpl',
-            severity: 'LOW',
-            description: 'App removed overlay window',
-          });
+          if (isTrackedOverlayView(view)) {
+            emit('overlay', {
+              hook: 'WindowManager.removeView',
+              class_name: 'android.view.WindowManagerImpl',
+              severity: 'LOW',
+              description: 'App removed a previously-observed overlay window',
+            });
+            forgetOverlayView(view);
+          } else {
+            emit('app_telemetry', {
+              hook: 'WindowManager.removeView',
+              class_name: 'android.view.WindowManagerImpl',
+              severity: 'LOW',
+              description: 'Ordinary window removed (never observed as an overlay)',
+            });
+          }
           return this.removeView(view);
         };
         registerHook('WindowManager.removeView');
       } catch (e) { reportHookError('WindowManager', e.message); }
 
-      // NotificationListenerService hooking
+      // NotificationListenerService hooking.
+      //
+      // CATEGORY NOTE: this is notification interception, not an overlay, and it
+      // was saturating the overlay component. It is a genuinely strong OTP-theft
+      // signal — binding a NotificationListenerService requires an explicit user
+      // grant of Notification Access, which few benign apps hold — so it is a
+      // CANDIDATE for its own BFCI weight. It is deliberately left UNSCORED here
+      // rather than moved into 'sms', because adding weight is a model change and
+      // this fix must not raise any existing verdict. See audit/12 §11.
       try {
         var NLS = Java.use('android.service.notification.NotificationListenerService');
         NLS.onNotificationPosted.overload('android.service.notification.StatusBarNotification').implementation = function (sbn) {
           var pkg = null;
           try { pkg = sbn.getPackageName(); } catch (e2) {}
-          emit('overlay', {
+          emit('notification', {
             hook: 'NotificationListenerService.onNotificationPosted',
             class_name: 'android.service.notification.NotificationListenerService',
             severity: 'HIGH',
@@ -614,13 +864,22 @@ function initHooks() {
         'com.kotak.mobile', 'com.idbi', 'com.pnb.lotusmobile',
       ];
 
-      // Activity monitoring — FIX: emit to 'banking', not 'activity' (which doesn't exist)
+      // Activity monitoring.
+      //
+      // CATEGORY NOTE: this fires on EVERY screen transition, including those
+      // driven by our own agentic explorer. It was emitting to 'banking'
+      // (weight 0.10, cap 3) — the previous comment here read "FIX: emit to
+      // 'banking', not 'activity' (which doesn't exist)", i.e. it was filed
+      // there because no suitable category existed, not because an activity
+      // resume is banking evidence. Three screen transitions saturated the
+      // component. It is context for the timeline, so it now goes to the
+      // unscored 'app_telemetry'.
       try {
         var Activity = Java.use('android.app.Activity');
         Activity.onResume.implementation = function () {
           var name = this.getClass().getName();
           runtimeContext.current_activity = name;
-          emit('banking', {
+          emit('app_telemetry', {
             hook: 'Activity.onResume',
             class_name: name,
             severity: 'LOW',
@@ -632,26 +891,51 @@ function initHooks() {
         registerHook('Activity.onResume');
       } catch (e) { reportHookError('Activity.onResume', e.message); }
 
+      // Foreground banking-app detection.
+      //
+      // getRunningTasks() was the ONLY hook establishing real banking
+      // targeting, and it cannot fire on this platform: deprecated in API 21
+      // and restricted in API 22+ to return only the CALLER'S own tasks. On the
+      // API 35 target the guarded emit below was unreachable, foreground_app
+      // stayed 'Unknown' for the whole session, and the banking component was
+      // left composed entirely of generic hooks.
+      //
+      // It is retained (a sample calling it is still worth recording) but the
+      // real detection now comes from the accessibility event stream and from
+      // UsageStatsManager, both of which do work on modern Android.
+      function _noteForegroundPackage(pkg, hookName) {
+        if (!pkg) return;
+        runtimeContext.foreground_app = pkg;
+        if (BANKING_PACKAGES.indexOf(pkg) !== -1) {
+          emit('banking', {
+            hook: hookName,
+            class_name: 'foreground-detection',
+            severity: 'HIGH',
+            target_package: pkg,
+            description: 'App observed a banking application in the foreground: ' + pkg,
+          });
+        }
+      }
+
       try {
         var ActivityManager = Java.use('android.app.ActivityManager');
         ActivityManager.getRunningTasks.implementation = function (maxNum) {
           var tasks = this.getRunningTasks(maxNum);
+          emit('device_fingerprint', {
+            hook: 'ActivityManager.getRunningTasks',
+            class_name: 'android.app.ActivityManager',
+            severity: 'MED',
+            description: 'App called getRunningTasks() (restricted since API 22 — '
+                         + 'returns only the caller\'s own tasks)',
+          });
           if (tasks && tasks.size() > 0) {
             try {
-              var topTask = tasks.get(0);
-              var topActivity = topTask.topActivity;
+              var topActivity = tasks.get(0).topActivity;
               if (topActivity) {
-                var pkg = topActivity.getPackageName().toString();
-                runtimeContext.foreground_app = pkg;
-                if (BANKING_PACKAGES.indexOf(pkg) !== -1) {
-                  emit('banking', {
-                    hook: 'ActivityManager.getRunningTasks',
-                    class_name: 'android.app.ActivityManager',
-                    severity: 'HIGH',
-                    target_package: pkg,
-                    description: 'Malware monitoring foreground banking app: ' + pkg,
-                  });
-                }
+                _noteForegroundPackage(
+                  topActivity.getPackageName().toString(),
+                  'ActivityManager.getRunningTasks'
+                );
               }
             } catch (e2) {}
           }
@@ -660,19 +944,56 @@ function initHooks() {
         registerHook('ActivityManager.getRunningTasks');
       } catch (e) { reportHookError('ActivityManager.getRunningTasks', e.message); }
 
+      // UsageStatsManager.queryEvents — the modern way to learn what is in the
+      // foreground, and what malware actually uses now that getRunningTasks is
+      // restricted. Requires PACKAGE_USAGE_STATS, so a call is itself notable.
+      try {
+        var UsageStatsManager = Java.use('android.app.usage.UsageStatsManager');
+        UsageStatsManager.queryEvents.implementation = function (begin, end) {
+          emit('device_fingerprint', {
+            hook: 'UsageStatsManager.queryEvents',
+            class_name: 'android.app.usage.UsageStatsManager',
+            severity: 'HIGH',
+            description: 'App queried usage-stats events to determine the foreground '
+                         + 'application (requires PACKAGE_USAGE_STATS)',
+          });
+          return this.queryEvents(begin, end);
+        };
+        registerHook('UsageStatsManager.queryEvents');
+      } catch (e) { reportHookError('UsageStatsManager.queryEvents', e.message); }
+
+      // SharedPreferences key classification.
+      //
+      // CATEGORY NOTE: the previous single regex matched `user|login|auth|token|
+      // account|balance`, which hits ordinary preference keys in almost every
+      // app, and filed all of them under 'banking'. The key set is now split:
+      // only high-confidence credential material scores; generic session keys
+      // are recorded as unscored context.
+      var CREDENTIAL_KEY_RE = /(otp|mpin|cvv|cvc|passw|pwd|secret|credential|cardnum|card_num|pin_?code|_pin\b|^pin\b)/i;
+      var SESSION_KEY_RE    = /(token|auth|login|user|account|balance|card)/i;
+
       try {
         var SharedPreferencesImpl = Java.use('android.app.SharedPreferencesImpl');
         SharedPreferencesImpl.getString.implementation = function (key, defValue) {
           var value = this.getString(key, defValue);
           var keyStr = key ? key.toString() : '';
-          if (/(pass|pwd|pin|otp|token|secret|credential|auth|login|user|card|cvv|mpin|account|balance)/i.test(keyStr)) {
+          if (CREDENTIAL_KEY_RE.test(keyStr)) {
             emit('banking', {
               hook: 'SharedPreferences.getString',
               class_name: 'android.app.SharedPreferencesImpl',
               severity: 'HIGH',
               pref_key: keyStr,
               value_length: value ? value.length : 0,
-              description: 'App read sensitive key from SharedPreferences: ' + keyStr,
+              description: 'App read credential material from SharedPreferences: ' + keyStr,
+            });
+          } else if (SESSION_KEY_RE.test(keyStr)) {
+            emit('app_telemetry', {
+              hook: 'SharedPreferences.getString',
+              class_name: 'android.app.SharedPreferencesImpl',
+              severity: 'LOW',
+              pref_key: keyStr,
+              value_length: value ? value.length : 0,
+              description: 'App read session/identity key from SharedPreferences: ' + keyStr,
             });
           }
           return value;
@@ -680,20 +1001,25 @@ function initHooks() {
         registerHook('SharedPreferences.getString');
       } catch (e) { reportHookError('SharedPreferences.getString', e.message); }
 
+      // CATEGORY NOTE: Cipher.doFinal fires on ANY encryption — every HTTPS-
+      // adjacent operation, every EncryptedSharedPreferences read. It is not
+      // evidence of banking-credential theft on its own and was saturating the
+      // banking component. Retained as unscored context; the WHAT is carried by
+      // the network and credential hooks, this only says crypto happened.
       try {
         var Cipher = Java.use('javax.crypto.Cipher');
         Cipher.doFinal.overload('[B').implementation = function (input) {
           var output = this.doFinal(input);
           var algo = 'unknown';
           try { algo = this.getAlgorithm(); } catch (e2) {}
-          emit('banking', {
+          emit('app_telemetry', {
             hook: 'Cipher.doFinal',
             class_name: 'javax.crypto.Cipher',
-            severity: 'HIGH',
+            severity: 'LOW',
             algorithm: algo,
             input_bytes: input ? input.length : 0,
             output_bytes: output ? output.length : 0,
-            description: 'Crypto operation (likely credential encryption before C2 exfil): algo=' + algo,
+            description: 'Crypto operation performed: algo=' + algo,
           });
           return output;
         };
@@ -715,32 +1041,39 @@ function initHooks() {
         registerHook('ClipboardManager.getPrimaryClip');
       } catch (e) { reportHookError('ClipboardManager.getPrimaryClip', e.message); }
 
-      // KeyStore — credential storage access
+      // KeyStore.
+      //
+      // CATEGORY NOTE: getInstance() fires for any app using the Android
+      // Keystore — including every app that pins a certificate or uses
+      // EncryptedSharedPreferences. Obtaining a KeyStore handle is not credential
+      // theft. Unscored context.
       try {
         var KeyStore = Java.use('java.security.KeyStore');
         KeyStore.getInstance.overload('java.lang.String').implementation = function (type) {
           var ks = this.getInstance(type);
-          emit('banking', {
+          emit('app_telemetry', {
             hook: 'KeyStore.getInstance',
             class_name: 'java.security.KeyStore',
-            severity: 'HIGH',
+            severity: 'LOW',
             keystore_type: type ? type.toString() : null,
-            description: 'App accessed KeyStore (credential / certificate retrieval): type=' + type,
+            description: 'App obtained a KeyStore handle: type=' + type,
           });
           return ks;
         };
         registerHook('KeyStore.getInstance');
       } catch (e) { reportHookError('KeyStore.getInstance', e.message); }
 
-      // AccountManager — account credential theft
+      // AccountManager — device account enumeration.
+      // CATEGORY NOTE: reconnaissance, not banking targeting. Every
+      // Google-account-aware app does this. Moved to device_fingerprint.
       try {
         var AccountManager = Java.use('android.accounts.AccountManager');
         AccountManager.getAccountsByType.implementation = function (type) {
           var accounts = this.getAccountsByType(type);
-          emit('banking', {
+          emit('device_fingerprint', {
             hook: 'AccountManager.getAccountsByType',
             class_name: 'android.accounts.AccountManager',
-            severity: 'HIGH',
+            severity: 'MED',
             account_type: type ? type.toString() : null,
             count: accounts ? accounts.length : 0,
             description: 'App enumerated device accounts: type=' + type,
@@ -750,17 +1083,27 @@ function initHooks() {
         registerHook('AccountManager.getAccountsByType');
       } catch (e) { reportHookError('AccountManager.getAccountsByType', e.message); }
 
-      // PackageManager — installed apps enumeration (ATS target reconnaissance)
+      // PackageManager — installed apps enumeration.
+      //
+      // CATEGORY NOTE: this IS ATS target reconnaissance when malware does it —
+      // but launchers, app stores, antivirus and many analytics SDKs do it too,
+      // and it was scoring 'banking' on its own. Enumeration alone does not
+      // establish banking targeting; the ActivityManager hook below does, by
+      // matching an actual banking package. Moved to device_fingerprint.
+      //
+      // Note the workflow reconstructor still raises a "Banking App Detection"
+      // stage from these hook NAMES (it matches on hook, not category), so the
+      // narrative evidence is preserved.
       try {
         var PackageManager = Java.use('android.content.pm.PackageManager');
         PackageManager.getInstalledApplications.implementation = function (flags) {
           var apps = this.getInstalledApplications(flags);
-          emit('banking', {
+          emit('device_fingerprint', {
             hook: 'PackageManager.getInstalledApplications',
             class_name: 'android.content.pm.PackageManager',
-            severity: 'HIGH',
+            severity: 'MED',
             app_count: apps ? apps.size() : 0,
-            description: 'App enumerated all installed applications (banking app target lookup)',
+            description: 'App enumerated all installed applications (target reconnaissance)',
           });
           return apps;
         };
@@ -768,27 +1111,28 @@ function initHooks() {
 
         PackageManager.getInstalledPackages.implementation = function (flags) {
           var pkgs = this.getInstalledPackages(flags);
-          emit('banking', {
+          emit('device_fingerprint', {
             hook: 'PackageManager.getInstalledPackages',
             class_name: 'android.content.pm.PackageManager',
-            severity: 'HIGH',
+            severity: 'MED',
             pkg_count: pkgs ? pkgs.size() : 0,
-            description: 'App enumerated all installed packages (banking target reconnaissance)',
+            description: 'App enumerated all installed packages (target reconnaissance)',
           });
           return pkgs;
         };
         registerHook('PackageManager.getInstalledPackages');
       } catch (e) { reportHookError('PackageManager', e.message); }
 
-      // InputMethodManager — keyboard/IME monitoring
+      // InputMethodManager.
+      // CATEGORY NOTE: fires whenever ANY keyboard appears. Unscored context.
       try {
         var InputMethodManager = Java.use('android.view.inputmethod.InputMethodManager');
         InputMethodManager.showSoftInput.overload('android.view.View', 'int').implementation = function (view, flags) {
-          emit('banking', {
+          emit('app_telemetry', {
             hook: 'InputMethodManager.showSoftInput',
             class_name: 'android.view.inputmethod.InputMethodManager',
-            severity: 'MED',
-            description: 'Keyboard shown (credential input field activated)',
+            severity: 'LOW',
+            description: 'Soft keyboard shown (text input field focused)',
           });
           return this.showSoftInput(view, flags);
         };
@@ -825,6 +1169,10 @@ function initHooks() {
             class_name: 'java.net.Socket',
             severity: 'MED',
             endpoint: epStr,
+            // `url` is the key frida_sandbox reads to build network_logs.
+            // Without it, raw-socket C2 — one of the two paths malware uses
+            // specifically to avoid Java HTTP hooks — produced no IOC at all.
+            url: epStr,
             ioc: epStr,
             description: 'Direct socket connection to: ' + epStr,
           });
@@ -1084,7 +1432,18 @@ function initHooks() {
         registerHook('Runtime.exec');
 
         Runtime.exec.overload('[Ljava.lang.String;').implementation = function (cmds) {
-          var cmdStr = cmds ? Java.array('java.lang.String', cmds).join(' ') : null;
+          // `cmds` is ALREADY a Java array here. The previous code called
+          // Java.array('java.lang.String', cmds), which CONSTRUCTS an array
+          // from a JS array — passing a Java array to it throws, and a throw
+          // inside a hook implementation propagates into the target method, so
+          // a sample using the (very common) array form of exec() had the call
+          // fail. Frida marshals a String[] to a JS array already; join it.
+          var cmdStr = null;
+          try {
+            cmdStr = cmds ? Array.prototype.join.call(cmds, ' ') : null;
+          } catch (joinErr) {
+            cmdStr = String(cmds);
+          }
           emit('dangerous_apis', {
             hook: 'Runtime.exec[]',
             class_name: 'java.lang.Runtime',
@@ -1141,27 +1500,118 @@ function initHooks() {
 // [X] ANTI-ANALYSIS HOOKS & SPOOFING
 // ═══════════════════════════════════════════════════════════════════════════════
 
+      // Emulator-detection spoofing.
+      //
+      // The previous filter tested whether the KEY contained 'qemu' /
+      // 'goldfish' / 'genymotion'. The checks that actually matter read keys
+      // whose names contain none of those — it is the VALUE that gives the
+      // emulator away:
+      //
+      //   ro.hardware          -> goldfish / ranchu
+      //   ro.product.model     -> sdk_gphone64_x86_64
+      //   ro.build.fingerprint -> ...generic...
+      //   ro.product.device    -> emu64xa
+      //
+      // So the spoofing defeated essentially no real check. Both the key set
+      // and the value set are now matched, plausible values are substituted
+      // rather than a blanket '0' (returning '0' for ro.hardware is itself
+      // anomalous), and the two-argument overload — the more common form — is
+      // hooked as well.
+      var EMULATOR_VALUE_MARKERS = /(goldfish|ranchu|qemu|genymotion|vbox|sdk_gphone|generic|emu64|android_x86)/i;
+      var SPOOFED_PROPERTIES = {
+        'ro.kernel.qemu':          '0',
+        'ro.hardware':             'qcom',
+        'ro.product.model':        'Pixel 7',
+        'ro.product.device':       'panther',
+        'ro.product.name':         'panther',
+        'ro.product.manufacturer': 'Google',
+        'ro.product.brand':        'google',
+        'ro.build.product':        'panther',
+        'ro.build.fingerprint':    'google/panther/panther:13/TQ3A.230805.001/10316531:user/release-keys',
+        'ro.bootloader':           'slider-1.0-9012530',
+        'ro.boot.hardware':        'qcom',
+      };
+
+      function _spoofProperty(keyStr, val) {
+        // Returns the replacement value, or null to pass through unchanged.
+        var valStr = val ? String(val) : '';
+        var keyHit = Object.prototype.hasOwnProperty.call(SPOOFED_PROPERTIES, keyStr);
+        var valHit = EMULATOR_VALUE_MARKERS.test(valStr);
+        if (!keyHit && !valHit) return null;
+
+        var replacement = keyHit ? SPOOFED_PROPERTIES[keyStr] : 'unknown';
+        emit('anti_analysis', {
+          hook: 'SystemProperties.get',
+          class_name: 'android.os.SystemProperties',
+          severity: 'HIGH',
+          property_key: keyStr,
+          original_value: valStr,
+          spoofed_value: replacement,
+          matched_on: keyHit ? 'key' : 'value',
+          description: 'App probed emulator system property: ' + keyStr +
+                       ' (was "' + valStr + '", spoofed to "' + replacement + '")',
+        });
+        return replacement;
+      }
+
       try {
         var SystemProperties = Java.use('android.os.SystemProperties');
+
         SystemProperties.get.overload('java.lang.String').implementation = function (key) {
           var val = this.get(key);
-          var keyStr = key ? key.toString() : '';
-          if (keyStr === 'ro.kernel.qemu' || keyStr.indexOf('qemu') !== -1 || keyStr.indexOf('goldfish') !== -1 || keyStr.indexOf('genymotion') !== -1) {
-            emit('anti_analysis', {
-              hook: 'SystemProperties.get',
-              class_name: 'android.os.SystemProperties',
-              severity: 'HIGH',
-              property_key: keyStr,
-              original_value: val,
-              spoofed_value: '0',
-              description: 'App probed emulator system property: ' + keyStr + ' (spoofed to 0)',
-            });
-            return '0'; // Spoof: appear as real device
-          }
-          return val;
+          var spoofed = _spoofProperty(key ? key.toString() : '', val);
+          return spoofed !== null ? spoofed : val;
         };
         registerHook('SystemProperties.get');
+
+        // The (key, default) overload — more common than the single-arg form
+        // and previously not hooked at all.
+        SystemProperties.get.overload('java.lang.String', 'java.lang.String')
+          .implementation = function (key, def) {
+            var val = this.get(key, def);
+            var spoofed = _spoofProperty(key ? key.toString() : '', val);
+            return spoofed !== null ? spoofed : val;
+          };
+        registerHook('SystemProperties.get(default)');
       } catch (e) { reportHookError('SystemProperties.get', e.message); }
+
+      // android.os.Build static fields — the single most common emulator check,
+      // and previously not touched at all. These are static String fields, so
+      // they are patched once rather than hooked per call.
+      try {
+        var Build = Java.use('android.os.Build');
+        var BUILD_SPOOF = {
+          FINGERPRINT:  'google/panther/panther:13/TQ3A.230805.001/10316531:user/release-keys',
+          MODEL:        'Pixel 7',
+          MANUFACTURER: 'Google',
+          BRAND:        'google',
+          DEVICE:       'panther',
+          PRODUCT:      'panther',
+          HARDWARE:     'qcom',
+          BOOTLOADER:   'slider-1.0-9012530',
+        };
+        var spoofedFields = [];
+        for (var field in BUILD_SPOOF) {
+          if (!Object.prototype.hasOwnProperty.call(BUILD_SPOOF, field)) continue;
+          try {
+            var current = Build[field].value;
+            if (current && EMULATOR_VALUE_MARKERS.test(String(current))) {
+              Build[field].value = BUILD_SPOOF[field];
+              spoofedFields.push(field + '="' + current + '"');
+            }
+          } catch (fieldErr) { /* field absent on this API level */ }
+        }
+        if (spoofedFields.length > 0) {
+          emit('anti_analysis', {
+            hook: 'Build.<static fields>',
+            class_name: 'android.os.Build',
+            severity: 'HIGH',
+            spoofed_fields: spoofedFields,
+            description: 'Emulator-identifying Build fields replaced: ' + spoofedFields.join(', '),
+          });
+        }
+        registerHook('Build.staticFields');
+      } catch (e) { reportHookError('Build.staticFields', e.message); }
 
       try {
         var Debug = Java.use('android.os.Debug');
@@ -1179,18 +1629,38 @@ function initHooks() {
 
       // ── Frida detection spoofing ──────────────────────────────────────────────
       // Some samples scan /proc/self/maps for frida-agent or check port 27042.
+      // Anti-Frida line suppression.
+      //
+      // Returning null here USED to mean "skip this line" — but null from
+      // readLine() is end-of-stream. A sample looping
+      // `while ((line = br.readLine()) != null)` over /proc/self/maps therefore
+      // stopped reading at the first frida line instead of skipping it, leaving
+      // a truncated maps view that is itself anomalous and detectable.
+      //
+      // Now it advances to the next non-matching line, so the read continues
+      // and simply does not contain the frida entries. Bounded so a file made
+      // entirely of matching lines cannot spin.
+      var MAX_SUPPRESSED_LINES = 200;
       try {
         var BufferedReader = Java.use('java.io.BufferedReader');
         BufferedReader.readLine.implementation = function () {
           var line = this.readLine();
-          if (line && (line.indexOf('frida') !== -1 || line.indexOf('gum-js') !== -1)) {
+          var suppressed = 0;
+          while (line !== null &&
+                 (line.indexOf('frida') !== -1 || line.indexOf('gum-js') !== -1) &&
+                 suppressed < MAX_SUPPRESSED_LINES) {
+            suppressed++;
+            line = this.readLine();   // skip it, keep the stream alive
+          }
+          if (suppressed > 0) {
             emit('anti_analysis', {
               hook: 'BufferedReader.readLine',
               class_name: 'java.io.BufferedReader',
               severity: 'HIGH',
-              description: 'App scanning /proc/maps for Frida (anti-Frida detection attempt) — line suppressed',
+              suppressed_lines: suppressed,
+              description: 'App scanned a stream for Frida artifacts (anti-Frida detection attempt) — '
+                           + suppressed + ' matching line(s) skipped, stream kept open',
             });
-            return null; // Suppress frida-related /proc/maps lines
           }
           return line;
         };
@@ -1282,13 +1752,17 @@ function initHooks() {
 // Intercepts SSL/TLS, socket ops, process execution at native layer.
 // Runs OUTSIDE Java.perform — purely native Frida Interceptor.
 // ═══════════════════════════════════════════════════════════════════════════════
-(function installNativeHooks() {
+// Guard so re-invocation after a late dlopen cannot double-attach a hook.
+var _nativeHooksInstalled = { libssl: false, libc: false, libart: false };
+
+function installNativeHooks() {
   try {
     var libssl = Process.findModuleByName('libssl.so');
-    if (libssl) {
+    if (libssl && !_nativeHooksInstalled.libssl) {
+      _nativeHooksInstalled.libssl = true;
       // SSL_write — capture plaintext before encryption
       try {
-        var SSL_write = Module.findExportByName('libssl.so', 'SSL_write');
+        var SSL_write = resolveExport('libssl.so', 'SSL_write');
         if (SSL_write) {
           Interceptor.attach(SSL_write, {
             onEnter: function (args) {
@@ -1323,17 +1797,28 @@ function initHooks() {
         }
       } catch (e) { reportHookError('native:SSL_write', e.message); }
 
-      // SSL_read — capture incoming TLS data
+      // SSL_read — capture incoming TLS data.
+      //
+      // The buffer pointer MUST be captured in onEnter. This previously read
+      // `this.context.x1` in onLeave, but x1 is a caller-saved argument
+      // register on ARM64: by the time SSL_read returns it has almost certainly
+      // been clobbered by the function body. Every `preview` was therefore
+      // garbage, and readUtf8String() on an arbitrary pointer can fault the
+      // target process — a native segfault that the surrounding try/catch
+      // cannot catch, killing the analysis outright.
       try {
-        var SSL_read = Module.findExportByName('libssl.so', 'SSL_read');
+        var SSL_read = resolveExport('libssl.so', 'SSL_read');
         if (SSL_read) {
           Interceptor.attach(SSL_read, {
+            onEnter: function (args) {
+              this.sslReadBuf = args[1];
+            },
             onLeave: function (retval) {
               var num = retval.toInt32();
               if (num > 0 && num < 4096) {
                 try {
-                  var buf = this.context.x1 || this.context.r1; // ARM64 / ARM32
-                  if (buf) {
+                  var buf = this.sslReadBuf;
+                  if (buf && !buf.isNull()) {
                     var data = buf.readUtf8String(num);
                     if (data && data.length > 0) {
                       send({
@@ -1364,10 +1849,11 @@ function initHooks() {
 
     // libc.so — connect(), send(), recv(), execve()
     var libc = Process.findModuleByName('libc.so');
-    if (libc) {
+    if (libc && !_nativeHooksInstalled.libc) {
+      _nativeHooksInstalled.libc = true;
       // connect() — socket connections
       try {
-        var connect = Module.findExportByName('libc.so', 'connect');
+        var connect = resolveExport('libc.so', 'connect');
         if (connect) {
           Interceptor.attach(connect, {
             onEnter: function (args) {
@@ -1390,7 +1876,10 @@ function initHooks() {
                       port: port,
                       ioc: ip + ':' + port,
                       description: 'Native connect() to ' + ip + ':' + port,
-                      data: { hook: 'libc.connect', ip: ip, port: port },
+                      // `url` is the key frida_sandbox reads for network_logs;
+                      // without it native-layer connections produced no IOC.
+                      data: { hook: 'libc.connect', ip: ip, port: port,
+                              url: ip + ':' + port },
                     }
                   });
                 }
@@ -1403,7 +1892,7 @@ function initHooks() {
 
       // execve() — process execution
       try {
-        var execve = Module.findExportByName('libc.so', 'execve');
+        var execve = resolveExport('libc.so', 'execve');
         if (execve) {
           Interceptor.attach(execve, {
             onEnter: function (args) {
@@ -1432,7 +1921,7 @@ function initHooks() {
 
       // ptrace() — anti-debug self-check detection
       try {
-        var ptrace = Module.findExportByName('libc.so', 'ptrace');
+        var ptrace = resolveExport('libc.so', 'ptrace');
         if (ptrace) {
           Interceptor.attach(ptrace, {
             onEnter: function (args) {
@@ -1461,7 +1950,7 @@ function initHooks() {
 
       // open() — sensitive file access at native level
       try {
-        var open = Module.findExportByName('libc.so', 'open');
+        var open = resolveExport('libc.so', 'open');
         if (open) {
           Interceptor.attach(open, {
             onEnter: function (args) {
@@ -1499,10 +1988,11 @@ function initHooks() {
     // libart.so — RegisterNatives monitoring (JNI hooking detection)
     try {
       var libart = Process.findModuleByName('libart.so');
-      if (libart) {
-        var RegisterNatives = Module.findExportByName('libart.so', 'art::JNI<false>::RegisterNatives');
+      if (libart && !_nativeHooksInstalled.libart) {
+        _nativeHooksInstalled.libart = true;
+        var RegisterNatives = resolveExport('libart.so', 'art::JNI<false>::RegisterNatives');
         if (!RegisterNatives) {
-          RegisterNatives = Module.findExportByName('libart.so', '_ZN3art3JNIILb0EE15RegisterNativesEP7_JNIEnvP7_jclassPK15JNINativeMethodi');
+          RegisterNatives = resolveExport('libart.so', '_ZN3art3JNIILb0EE15RegisterNativesEP7_JNIEnvP7_jclassPK15JNINativeMethodi');
         }
         if (RegisterNatives) {
           Interceptor.attach(RegisterNatives, {
@@ -1534,4 +2024,55 @@ function initHooks() {
   } catch (outerErr) {
     send({ type: 'diag', msg: 'native_hooks_outer_error', error: outerErr.message });
   }
+}
+
+// Install now for libraries already mapped at attach time.
+installNativeHooks();
+
+// ─── Late-load coverage ───────────────────────────────────────────────────────
+//
+// installNativeHooks() used to run ONCE, as an IIFE at script load. For a packed
+// dropper — the primary target — the payload's native libraries are loaded
+// AFTER attach, so findModuleByName() returned null, the entire native block was
+// skipped, and nothing was instrumented at the native layer for exactly the
+// samples that matter most.
+//
+// Hooking the loader lets us re-run installation whenever a new library appears.
+// The per-module guards above make re-invocation idempotent.
+(function watchForLateLibraries() {
+  var LOADER_SYMBOLS = ['android_dlopen_ext', 'dlopen'];
+  var INTERESTING = /lib(ssl|crypto|c|art)\.so/;
+
+  LOADER_SYMBOLS.forEach(function (symbol) {
+    try {
+      var addr = resolveExport('libc.so', symbol);
+      if (!addr) return;
+      Interceptor.attach(addr, {
+        onEnter: function (args) {
+          try {
+            this.loadedPath = args[0].readCString();
+          } catch (e) { this.loadedPath = null; }
+        },
+        onLeave: function (retval) {
+          if (!this.loadedPath || retval.isNull()) return;
+          if (!INTERESTING.test(this.loadedPath)) return;
+          send({
+            type: 'diag',
+            msg: 'late_library_loaded',
+            path: this.loadedPath,
+            via: symbol,
+          });
+          try {
+            installNativeHooks();
+          } catch (e) {
+            reportHookError('native:reinstall_after_dlopen', e.message);
+          }
+        },
+      });
+      send({ type: 'hook_installed', hook: 'native:' + symbol,
+             total: ++runtimeContext.hooks_installed });
+    } catch (e) {
+      reportHookError('native:' + symbol, e.message);
+    }
+  });
 })();

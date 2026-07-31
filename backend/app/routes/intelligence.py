@@ -336,7 +336,10 @@ async def get_threat_intelligence(
     otx_detail = AlienVaultDetail(
         available=bool(otx_key),
         pulse_count=len(otx_pulses),
-        campaign=tc.get("campaign") or ("Indian Banking Campaign" if rdict.get("targets_indian_banks") else "Android Trojan Campaign" if len(otx_pulses) > 0 else "None"),
+        # Only a campaign the correlator actually attributed. This previously
+        # invented "Indian Banking Campaign" from a static bank-package flag,
+        # or "Android Trojan Campaign" from the mere existence of OTX pulses.
+        campaign=tc.get("campaign") or "Not attributed",
         pulses=otx_pulses,
     )
 
@@ -391,17 +394,50 @@ async def get_threat_intelligence(
     ]
 
     # 8. AI Summary Narrative
+    # AI summary.
+    #
+    # The fallback here used to ASSERT A VERDICT that no engine had reached:
+    #
+    #   "Sample X exhibits {family_name} banking trojan characteristics ...
+    #    Recommended immediate SOC quarantine."
+    #
+    # For a benign sample with no family match that rendered as "exhibits
+    # Unknown banking trojan characteristics ... Recommended immediate SOC
+    # quarantine" — an invented conclusion, in a field named `ai_summary`, with
+    # nothing marking it as a template. The rest of this codebase is careful
+    # about exactly this (the engine explicitly removed a fabricated
+    # appsec_score; _collect_observed_activities returns [] rather than a
+    # placeholder). This was the exception, and the one an executive reads.
+    #
+    # The replacement states only what was measured, and says plainly when the
+    # narrative is unavailable.
     intel_report = rdict.get("intelligence_report") or {}
-    ai_summary = ""
     if isinstance(intel_report, dict) and intel_report.get("plain_english_narrative"):
-        ai_summary = intel_report.get("plain_english_narrative")
+        ai_summary = intel_report["plain_english_narrative"]
     else:
-        ai_summary = (
-            f"Sample {package_name} (SHA256: {sha256_clean[:12]}...) exhibits {family_name} banking trojan characteristics. "
-            f"VirusTotal detected {vt_detections}/{vt_total} malicious engine hits ({vt_ratio:.0%}). "
-            f"Static and dynamic sweeps identified {len(iocs)} indicators of compromise. "
-            f"Recommended immediate SOC quarantine."
+        facts = [
+            f"Package {package_name} (SHA-256 {sha256_clean[:12]}…).",
+            f"Deterministic risk score {rdict.get('final_risk_score', 0):.1f}/100"
+            f" — {rdict.get('risk_band') or 'not scored'}.",
+        ]
+        if vt_key and vt_total > 0:
+            facts.append(f"VirusTotal: {vt_detections}/{vt_total} engines flagged this file.")
+        elif vt_key:
+            facts.append("VirusTotal: no detections recorded for this hash.")
+        else:
+            facts.append("VirusTotal: not queried (no API key configured).")
+
+        if family_name and family_name != "Unknown":
+            facts.append(f"Matched family signature: {family_name}.")
+        else:
+            facts.append("No known malware family signature matched.")
+
+        facts.append(f"{len(iocs)} indicator(s) of compromise extracted.")
+        facts.append(
+            "AI narrative generation was unavailable for this case; the figures "
+            "above are the deterministic engine's own output."
         )
+        ai_summary = " ".join(facts)
 
     threat_score = float(tc.get("threat_score") or rdict.get("final_risk_score") or 0.0)
 
@@ -414,9 +450,14 @@ async def get_threat_intelligence(
         threat_score=round(threat_score, 1),
         malware_family=family_name,
         family_rule_matched=family_rule,
-        campaign=tc.get("campaign") or ("Indian Banking Campaign" if rdict.get("targets_indian_banks") else "Android Trojan Campaign"),
-        confidence=float(rdict.get("confidence") or 85.0),
-        risk_band=rdict.get("risk_band") or "SUSPICIOUS",
+        # No invented campaign attribution. These defaulted to "Indian Banking
+        # Campaign" / "Android Trojan Campaign" whenever no campaign had been
+        # attributed, presenting a guess as intelligence. Likewise `confidence`
+        # defaulted to 85.0 for a case that carried no confidence at all, and
+        # `risk_band` to "SUSPICIOUS" for a case that had not been banded.
+        campaign=tc.get("campaign") or "Not attributed",
+        confidence=float(rdict.get("confidence") or 0.0),
+        risk_band=rdict.get("risk_band") or "Not scored",
         sources=active_sources,
         sources_status=sources_status,
         virus_total=vt_detail,

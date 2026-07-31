@@ -15,15 +15,30 @@ import inspect
 from sudarshan_core.engines import frida_sandbox
 
 
+def _preflight_source() -> str:
+    """
+    Source of the device-session preflight.
+
+    run_frida_analysis was split: it now acquires the per-device lock and
+    delegates the install/instrument/close cycle to _run_device_session, which
+    is where the SELinux and adb-root preflight lives. Inspect both so the
+    assertions below track the behaviour rather than one function name.
+    """
+    return (
+        inspect.getsource(frida_sandbox.run_frida_analysis)
+        + inspect.getsource(frida_sandbox._run_device_session)
+    )
+
+
 def test_sandbox_makes_selinux_permissive_before_attaching():
     """The preflight must detect Enforcing and drop to Permissive."""
-    src = inspect.getsource(frida_sandbox.run_frida_analysis)
+    src = _preflight_source()
     assert "getenforce" in src, "sandbox must check SELinux mode"
     assert "setenforce 0" in src, "sandbox must set the analysis AVD permissive"
 
 
 def test_sandbox_requests_adb_root_before_attaching():
-    src = inspect.getsource(frida_sandbox.run_frida_analysis)
+    src = _preflight_source()
     assert '"root"' in src, "adbd must be root for frida to inject"
 
 
@@ -47,7 +62,7 @@ def test_selinux_preflight_runs_before_frida_server_check():
     produces a healthy-looking server and a failing attach, which is exactly the
     misdiagnosis this fix removes.
     """
-    src = inspect.getsource(frida_sandbox.run_frida_analysis)
+    src = _preflight_source()
     assert src.index("getenforce") < src.index("Checking frida-server status"), (
         "SELinux preflight must precede the frida-server check"
     )

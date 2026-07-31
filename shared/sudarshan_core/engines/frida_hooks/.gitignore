@@ -1,0 +1,4 @@
+# Build inputs for the Frida agent bundle. The BUNDLE ITSELF IS COMMITTED —
+# frida_sandbox.py loads it at runtime and dynamic analysis is dead without it,
+# so it must ship with the package (see pyproject.toml package-data).
+node_modules/

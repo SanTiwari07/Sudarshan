@@ -116,7 +116,34 @@ async def startup():
         else:
             logger.info(f"[Startup] Seeded admin user: {admin_user}")
 
-    # 3. Start async analysis worker pool
+    # 3. Install the persistent IOC reputation cache.
+    #    The ioc_cache table and its 24h-TTL accessors already existed and were
+    #    never called, so every analysis re-queried VirusTotal / OTX / AbuseIPDB
+    #    from scratch — up to 14 requests against a 4-req/min free tier.
+    #    sudarshan_core cannot import app.db (the analysis engine has no such
+    #    package), so the accessors are injected here instead.
+    try:
+        from sudarshan_core.services.threat_correlator import configure_ioc_cache
+        from app.db.database import get_cached_ioc, save_ioc_cache
+        configure_ioc_cache(get_cached_ioc, save_ioc_cache)
+        logger.info("[Startup] IOC reputation cache wired (24h TTL)")
+    except Exception as e:
+        logger.warning(f"[Startup] IOC cache not wired ({e}); correlation will run uncached")
+
+    # 4. Register the runtime-telemetry sink on the shared event bus.
+    #    sudarshan_core used to import this module directly, which fails in the
+    #    analysis engine (no app package) and was swallowed — so all hook and
+    #    event telemetry from the delegated path went nowhere. Registering a
+    #    sink keeps the dependency pointing downward.
+    try:
+        from sudarshan_core.engines.event_bus import register_telemetry_sink
+        from app.routes.runtime_api import record_event
+        register_telemetry_sink(record_event)
+        logger.info("[Startup] Runtime telemetry sink registered")
+    except Exception as e:
+        logger.warning(f"[Startup] Telemetry sink not registered ({e})")
+
+    # 5. Start async analysis worker pool
     await start_workers()
     logger.info("[Startup] Analysis worker pool started")
 

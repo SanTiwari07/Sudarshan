@@ -1,3 +1,4 @@
+import logging
 import math
 import os
 import zipfile
@@ -12,6 +13,8 @@ except ImportError:
 
 from sudarshan_core.models.schemas import AndroguardOutput, StaticAnalysisFlags
 
+logger = logging.getLogger(__name__)
+
 INDIAN_BANK_PACKAGES = [
     "com.boi", "com.sbi", "com.icici", "com.hdfc", "com.axis",
     "com.pnb", "com.kotak", "com.canara", "com.unionbank", "com.bankofindia",
@@ -20,6 +23,18 @@ INDIAN_BANK_PACKAGES = [
     "com.npci", "com.bhimupi", "in.org.npci.upiapp",
 ]
 
+# Dangerous API detection — REPORTED names.
+#
+# These were previously matched with `if name in method.get_name()`, against a
+# method name, which never contains a dot. So "Runtime.exec",
+# "ProcessBuilder.start" and "System.loadLibrary" could not match anything: half
+# this list was dead, and it is consumed by the scoring engine
+# (risk_engine._axis_ob checks for "System.loadLibrary", classification_engine
+# checks for "Runtime.exec" and "DexClassLoader").
+#
+# Detection now matches the bare method name AND its defining class — see
+# analyze_apk. The names below are the labels the rest of the system expects and
+# must not be renamed.
 DANGEROUS_APIS = [
     "addJavascriptInterface", "Runtime.exec", "ProcessBuilder.start",
     "DexClassLoader", "PathClassLoader", "System.loadLibrary",
@@ -36,6 +51,36 @@ IP_REGEX  = re.compile(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b')
 
 
 # ─── Shannon Entropy ──────────────────────────────────────────────────────────
+
+def _matches_package(haystack: str, package: str) -> bool:
+    """
+    True when `haystack` references `package` as a package name, not merely as
+    a substring.
+
+    A package reference must end at a component boundary: end-of-string, a '/'
+    (as in a component name "com.sbi.app/.MainActivity"), or a character that
+    cannot continue an identifier. Without this, "com.sbi" matched
+    "com.sbidiagnostics" and "in.example.com.sbin" — false Banking-Targeting
+    hits that carry 20% of STEI plus a +20 regulatory bonus.
+    """
+    idx = 0
+    plen = len(package)
+    while True:
+        idx = haystack.find(package, idx)
+        if idx == -1:
+            return False
+        after = haystack[idx + plen] if idx + plen < len(haystack) else ""
+        before = haystack[idx - 1] if idx > 0 else ""
+        # The char after must not continue the identifier. A following '.' IS
+        # allowed (com.sbi.lotusintouch is a real match for com.sbi).
+        after_ok = (after == "" or after == "." or not (after.isalnum() or after == "_"))
+        # The char before must not be an identifier char either, so
+        # "mycom.sbi" does not match "com.sbi".
+        before_ok = (before == "" or not (before.isalnum() or before == "_" or before == "."))
+        if after_ok and before_ok:
+            return True
+        idx += 1
+
 
 def _shannon_entropy(s: str) -> float:
     """Compute Shannon entropy of a string (0.0 low, 1.0 high uniformity)."""
@@ -192,8 +237,24 @@ def _detect_concealed_payload(apk_path: str) -> Tuple[bool, List[str]]:
                         f"Encrypted blob '{name}' ({info.file_size // 1024} KB, entropy {ent:.2f}) "
                         f"vs {primary // 1024} KB classes.dex — payload likely unpacked at runtime"
                     )
-    except Exception:
-        return False, []
+    except Exception as exc:
+        # A malformed archive is NOT evidence of safety.
+        #
+        # This used to return (False, []) — "no concealment detected" — for any
+        # exception, including the one that matters most: a deliberately
+        # corrupted ZIP. Samples malform their own archive precisely to break
+        # static parsers, so the parse failure IS the signal. Reporting it as
+        # "clean" inverted the meaning of the strongest concealment indicator.
+        logger.warning(
+            "[APKAnalyzer] Archive could not be parsed for concealment analysis "
+            "(%s: %s) — treating the parse failure itself as a concealment signal.",
+            type(exc).__name__, exc,
+        )
+        return True, [
+            f"Archive structure could not be parsed ({type(exc).__name__}) — "
+            f"malformed or deliberately corrupted ZIP, which defeats static "
+            f"inspection of the payload"
+        ]
 
     return bool(evidence), evidence[:5]
 
@@ -250,6 +311,7 @@ def analyze_apk(apk_path: str) -> AndroguardOutput:
     # ── 2. String & Constant Analysis ─────────────────────────────────────────
     strings_fired: List[str] = []
     all_strings:   List[str] = []
+    seen_urls:     set       = set()
 
     if d:
         for dex_obj in d:
@@ -259,16 +321,27 @@ def analyze_apk(apk_path: str) -> AndroguardOutput:
                 s = string_data.decode("utf-8", errors="ignore") if isinstance(string_data, bytes) else str(string_data)
                 all_strings.append(s)
 
-                # URL / IP detection
+                # URL / IP detection.
+                # Deduplicated: the Infrastructure Risk axis scores
+                # `len(hardcoded_urls_ips) * 10`, so the same C2 string
+                # appearing ten times in the string pool used to score
+                # identically to ten DISTINCT endpoints.
                 if URL_REGEX.search(s) or IP_REGEX.search(s):
-                    if len(s) < 256:
+                    if len(s) < 256 and s not in seen_urls:
+                        seen_urls.add(s)
                         flags.hardcoded_urls_ips.append(s)
                         if s not in strings_fired:
                             strings_fired.append(s)
 
-                # Indian bank package detection
+                # Indian bank package detection.
+                # Matched on a package-name BOUNDARY, not as a bare substring:
+                # "com.sbi" previously matched "com.sbidiagnostics",
+                # "example.com.sbin" and any string that merely contained it.
+                # This feeds the BT axis (20% of STEI) and gates a +20
+                # regulatory bonus in banking impact, so a false hit is
+                # expensive.
                 for bank_pkg in INDIAN_BANK_PACKAGES:
-                    if bank_pkg in s:
+                    if _matches_package(s, bank_pkg):
                         flags.targets_indian_banks = True
                         if bank_pkg not in flags.indian_bank_packages_found:
                             flags.indian_bank_packages_found.append(bank_pkg)
@@ -290,14 +363,36 @@ def analyze_apk(apk_path: str) -> AndroguardOutput:
 
     # ── 4. API & Reflection Analysis ──────────────────────────────────────────
     if dx:
-        for method in dx.get_methods():
-            method_name = method.get_method().get_name()
+        # Match on the DEFINING CLASS as well as the method name where the class
+        # is what disambiguates. `exec` and `start` are common method names; only
+        # java.lang.Runtime.exec and java.lang.ProcessBuilder.start are the APIs
+        # we mean, and matching the bare name alone would flag every app with a
+        # method called start().
+        _CLASS_QUALIFIED = {
+            "Runtime.exec":         ("Ljava/lang/Runtime;", "exec"),
+            "ProcessBuilder.start": ("Ljava/lang/ProcessBuilder;", "start"),
+            "System.loadLibrary":   ("Ljava/lang/System;", "loadLibrary"),
+        }
 
-            # Dangerous API detection
-            for dangerous_api in DANGEROUS_APIS:
-                if dangerous_api in method_name:
-                    if dangerous_api not in flags.dangerous_apis_found:
-                        flags.dangerous_apis_found.append(dangerous_api)
+        found = set(flags.dangerous_apis_found)
+        for method in dx.get_methods():
+            m = method.get_method()
+            try:
+                method_name = m.get_name()
+                class_name = m.get_class_name()
+            except Exception:
+                continue
+
+            for reported, (want_class, want_method) in _CLASS_QUALIFIED.items():
+                if reported in found:
+                    continue
+                if method_name == want_method and want_class in class_name:
+                    found.add(reported)
+
+            # Name-only matchers (unambiguous identifiers).
+            for reported in ("addJavascriptInterface", "DexClassLoader", "PathClassLoader"):
+                if reported not in found and reported in method_name:
+                    found.add(reported)
 
             # Reflection detection
             if not flags.has_reflection:
@@ -305,6 +400,30 @@ def analyze_apk(apk_path: str) -> AndroguardOutput:
                     if ref_api in method_name:
                         flags.has_reflection = True
                         break
+
+        # Cross-reference scan: an app CALLING Runtime.exec does not necessarily
+        # DEFINE a method named exec, so the loop above (which walks defined
+        # methods) can miss real usage. Androguard exposes the external methods
+        # a DEX references — that is where an invoked platform API shows up.
+        try:
+            for ext in dx.get_external_classes():
+                cls = ext.get_vm_class().get_name() if hasattr(ext, "get_vm_class") else str(ext)
+                for meth in ext.get_methods():
+                    try:
+                        name = meth.get_name()
+                    except Exception:
+                        continue
+                    for reported, (want_class, want_method) in _CLASS_QUALIFIED.items():
+                        if name == want_method and want_class in str(cls):
+                            found.add(reported)
+                    for reported in ("addJavascriptInterface", "DexClassLoader", "PathClassLoader"):
+                        if reported in name or reported in str(cls):
+                            found.add(reported)
+        except Exception as exc:
+            # Never fail the analysis over an optional enrichment pass.
+            pass
+
+        flags.dangerous_apis_found = sorted(found)
 
     return AndroguardOutput(
         package_name=package_name if package_name else "Unknown",

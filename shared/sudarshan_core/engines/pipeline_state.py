@@ -9,7 +9,9 @@ import enum
 import hashlib
 import json
 import logging
+import os
 import time
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -232,14 +234,44 @@ class PipelineTracker:
         }
 
 
-# Global registry for active pipeline trackers
-_ACTIVE_TRACKERS: Dict[str, PipelineTracker] = {}
+# Global registry for active pipeline trackers.
+#
+# This is process-lifetime state with no natural end point: nothing called
+# remove_tracker(), so the dict only ever grew. It is now bounded by insertion
+# order — oldest evicted first — so a long-running process cannot leak, and a
+# caller that can reach get_tracker() cannot exhaust memory.
+#
+# The read-only accessor peek_tracker() exists because the HTTP diagnostics
+# route must NOT be able to mint entries; see routes/upload.py::sandbox_debug.
+_ACTIVE_TRACKERS: "OrderedDict[str, PipelineTracker]" = OrderedDict()
+
+# One tracker holds stage history plus hook-exception records for a single
+# analysis. A few hundred concurrent-ish sessions is far beyond real use.
+MAX_ACTIVE_TRACKERS: int = int(os.getenv("SUDARSHAN_MAX_TRACKERS", "256"))
 
 
 def get_tracker(case_id: str, package_name: str = "Unknown") -> PipelineTracker:
-    if case_id not in _ACTIVE_TRACKERS:
-        _ACTIVE_TRACKERS[case_id] = PipelineTracker(case_id, package_name)
-    return _ACTIVE_TRACKERS[case_id]
+    """Return the tracker for `case_id`, creating it if absent. Bounded."""
+    tracker = _ACTIVE_TRACKERS.get(case_id)
+    if tracker is not None:
+        _ACTIVE_TRACKERS.move_to_end(case_id)
+        return tracker
+
+    while len(_ACTIVE_TRACKERS) >= MAX_ACTIVE_TRACKERS:
+        evicted_id, _ = _ACTIVE_TRACKERS.popitem(last=False)
+        logger.warning(
+            "[PipelineState] Tracker registry full (%d); evicted oldest case %r",
+            MAX_ACTIVE_TRACKERS, evicted_id,
+        )
+
+    tracker = PipelineTracker(case_id, package_name)
+    _ACTIVE_TRACKERS[case_id] = tracker
+    return tracker
+
+
+def peek_tracker(case_id: str) -> Optional[PipelineTracker]:
+    """Return the tracker for `case_id`, or None. Never creates one."""
+    return _ACTIVE_TRACKERS.get(case_id)
 
 
 def remove_tracker(case_id: str) -> None:

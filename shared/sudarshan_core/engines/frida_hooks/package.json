@@ -1,4 +1,14 @@
 {
+  "name": "sudarshan-frida-hooks",
+  "private": true,
+  "description": "Frida agent for Sudarshan. MUST be compiled: on Frida 17 the Java global was removed, so frida-java-bridge has to be linked in at build time.",
+  "scripts": {
+    "build": "frida-compile banking_trojan.js -o banking_trojan.bundle.js",
+    "watch": "frida-compile banking_trojan.js -o banking_trojan.bundle.js -w"
+  },
+  "devDependencies": {
+    "frida-compile": "^16.0.0"
+  },
   "dependencies": {
     "frida-java-bridge": "^7.0.13"
   }

@@ -1,7 +1,7 @@
 """
 SUDARSHAN — Agentic Dynamic Analysis Package
 =============================================
-Goal-driven AI exploration engine that replaces Monkey-based random exploration
+Goal-driven AI exploration engine
 with structured, evidence-maximizing agent behaviour.
 
 Architecture principle: AI controls navigation. Deterministic engines control verdict.

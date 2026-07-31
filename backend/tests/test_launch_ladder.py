@@ -2,7 +2,7 @@
 Regression tests for Task 2:
   The 5-step launch fallback ladder must:
     - Try am_start_main_activity first when main_activity is set
-    - Fall through to monkey_launcher on step 1 failure
+    - Fall through to resolved_launcher_activity on step 1 failure
     - Fall through to exported_activity enumeration on step 2 failure
     - Fall through to boot_broadcast on step 3 failure
     - Set launch_method_used to "failed" and return False when all 5 fail
@@ -106,12 +106,12 @@ def test_launch_step1_am_start_succeeds(monkeypatch):
     assert session.launch_method_used == "am_start_main_activity"
 
 
-# ── Test 2: step 1 fails, step 2 (monkey) succeeds ───────────────────────────
+# ── Test 2: step 1 fails, step 2 (resolved launcher) succeeds ────────────────
 
 def test_launch_step2_monkey_fallback(monkeypatch):
     """
     When am start returns but the process is not running, the ladder must fall
-    through to monkey and succeed there.
+    through to the resolved launcher activity and succeed there.
     """
     call_count = [0]
 
@@ -129,14 +129,14 @@ def test_launch_step2_monkey_fallback(monkeypatch):
             session.launch_method_used = "am_start_main_activity"
             launched = True
 
-    # Step 2: monkey attempted, process is running now
+    # Step 2: launcher activity resolved and started, process is running now
     if not launched:
         if _check_running():
-            session.launch_method_used = "monkey_launcher"
+            session.launch_method_used = "resolved_launcher_activity"
             launched = True
 
     assert launched
-    assert session.launch_method_used == "monkey_launcher"
+    assert session.launch_method_used == "resolved_launcher_activity"
 
 
 # ── Test 3: all 5 steps fail → launch_method_used="failed", returns False ─────

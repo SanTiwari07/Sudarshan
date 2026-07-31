@@ -52,6 +52,21 @@ CREATE TABLE IF NOT EXISTS cases (
     intelligence_report TEXT,    -- JSON
     analyst_id          INTEGER,
     created_at          TEXT    NOT NULL,
+    -- Full analysis result as JSON.
+    --
+    -- The 15 typed columns above are a SUMMARY: they are what /cases needs to
+    -- render a list. Everything else the pipeline computed — permissions, IOCs,
+    -- manifest and code findings, components, certificate, dynamic result,
+    -- fraud workflow, enrichment — was discarded at save time. Three visible
+    -- consequences: reopening a case rendered a different, emptier case than
+    -- the one just analysed; the export endpoints could not be rebuilt from the
+    -- database and 404'd after any restart; and the RAG chat index could not be
+    -- reconstructed, so the AI assistant only worked for cases analysed since
+    -- the last boot.
+    --
+    -- The typed columns stay (they are indexed and queried). This is the
+    -- complete record they summarise.
+    raw_result          TEXT,
     FOREIGN KEY (analyst_id) REFERENCES users(id)
 );
 """
@@ -112,8 +127,32 @@ async def _connect() -> AsyncIterator[aiosqlite.Connection]:
         yield db
 
 
+# ─── Additive migrations ──────────────────────────────────────────────────────
+#
+# `CREATE TABLE IF NOT EXISTS` is a no-op on an existing table, so it cannot add
+# a column — a schema change would silently not apply to any database that
+# already existed, and the first INSERT naming the new column would fail.
+#
+# This handles the only migration shape SQLite makes safe and idempotent:
+# ALTER TABLE ... ADD COLUMN. Anything beyond that (type changes, constraints,
+# backfills) needs a real migration tool; this is not a substitute for one, it
+# is the minimum that stops additive changes from breaking existing installs.
+_MIGRATIONS: tuple = (
+    ("cases", "raw_result", "ALTER TABLE cases ADD COLUMN raw_result TEXT"),
+)
+
+
+async def _apply_migrations(db: aiosqlite.Connection) -> None:
+    for table, column, stmt in _MIGRATIONS:
+        async with db.execute(f"PRAGMA table_info({table})") as cur:
+            cols = {row[1] for row in await cur.fetchall()}
+        if column not in cols:
+            await db.execute(stmt)
+            logger.info(f"[DB] Migration applied: {table}.{column} added")
+
+
 async def init_db() -> None:
-    """Create all tables and indexes if they don't exist."""
+    """Create all tables and indexes if they don't exist, then migrate."""
     async with _connect() as db:
         await db.execute(_CREATE_USERS)
         await db.execute(_CREATE_CASES)
@@ -121,6 +160,7 @@ async def init_db() -> None:
         await db.execute(_CREATE_NOTES)
         for stmt in _CREATE_INDEXES:
             await db.execute(stmt)
+        await _apply_migrations(db)
         await db.commit()
     logger.info(f"[DB] Initialized SQLite at {DB_PATH} (WAL, FK enforced, indexed)")
 
@@ -135,6 +175,18 @@ async def save_case(sha256: str, result: Dict[str, Any], analyst_id: Optional[in
     scenario_json = json.dumps(result.get("threat_scenario_table", []))
     intel_json = json.dumps(result.get("intelligence_report") or {})
 
+    # Full record. Serialised defensively: a value that will not serialise must
+    # not take the whole save down — a case row with a summary is far better
+    # than no case row at all.
+    try:
+        raw_json = json.dumps(result, default=str)
+    except Exception as exc:
+        logger.warning(
+            f"[DB] Could not serialise full result for {sha256[:12]}… "
+            f"({type(exc).__name__}: {exc}); storing summary only."
+        )
+        raw_json = None
+
     async with _connect() as db:
         await db.execute(
             """
@@ -142,8 +194,9 @@ async def save_case(sha256: str, result: Dict[str, Any], analyst_id: Optional[in
               (sha256, package_name, app_name, analysis_mode, family_classification,
                final_risk_score, risk_band, confidence, dynamic_available,
                obfuscation_score, has_reflection, frs_breakdown,
-               threat_scenario_table, intelligence_report, analyst_id, created_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+               threat_scenario_table, intelligence_report, analyst_id, created_at,
+               raw_result)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 sha256,
@@ -162,6 +215,7 @@ async def save_case(sha256: str, result: Dict[str, Any], analyst_id: Optional[in
                 intel_json,
                 analyst_id,
                 now,
+                raw_json,
             ),
         )
         await db.commit()
@@ -202,16 +256,46 @@ async def count_cases() -> int:
 
 
 def _row_to_case(row: Dict) -> Dict[str, Any]:
-    """Deserialize JSON fields from SQLite row."""
+    """
+    Deserialize a SQLite row into the full analysis result.
+
+    When `raw_result` is present it is expanded and the typed summary columns
+    are layered ON TOP — the columns are authoritative for the fields they
+    cover (they are what queries filter and sort on), while raw_result supplies
+    everything the summary omits. That makes a restored case identical to the
+    one originally returned, which is what the export endpoints, the RAG index
+    and the technical view all need.
+    """
+    raw: Dict[str, Any] = {}
+    if row.get("raw_result"):
+        try:
+            parsed = json.loads(row["raw_result"])
+            if isinstance(parsed, dict):
+                raw = parsed
+        except Exception as exc:
+            logger.warning(
+                f"[DB] raw_result for {str(row.get('sha256'))[:12]}… is not valid "
+                f"JSON ({type(exc).__name__}); falling back to summary columns."
+            )
+    row.pop("raw_result", None)
+
     for field in ("frs_breakdown", "threat_scenario_table", "intelligence_report"):
         if row.get(field):
             try:
                 row[field] = json.loads(row[field])
             except Exception:
                 row[field] = {}
+
     row["dynamic_available"] = bool(row.get("dynamic_available"))
     row["has_reflection"] = bool(row.get("has_reflection"))
-    return row
+
+    if not raw:
+        return row
+
+    merged = dict(raw)
+    # Summary columns win: they are the indexed, queryable truth.
+    merged.update({k: v for k, v in row.items() if v is not None})
+    return merged
 
 
 # ─── IOC Cache ────────────────────────────────────────────────────────────────

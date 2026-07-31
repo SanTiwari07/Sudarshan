@@ -13,6 +13,10 @@ Provides:
 
 import json
 import logging
+import os
+import re
+import uuid
+from collections import OrderedDict
 from datetime import datetime, timezone
 from io import StringIO
 from pathlib import Path
@@ -27,18 +31,54 @@ from app.auth.auth import require_analyst
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# In-memory report cache keyed by sha256
-# In production this would be Redis or a DB
-_report_cache: Dict[str, Any] = {}
+# In-memory hot cache keyed by sha256.
+#
+# BOUNDED: this previously grew for the process lifetime, holding a full report
+# per analysed sample.
+_REPORT_CACHE_MAX = int(os.getenv("SUDARSHAN_REPORT_CACHE_MAX", "128"))
+_report_cache: "OrderedDict[str, Any]" = OrderedDict()
 
 
 def cache_report(sha256: str, report: Any) -> None:
-    """Store analysis result for later export."""
+    """Store analysis result in the hot cache for later export."""
+    if sha256 in _report_cache:
+        _report_cache.move_to_end(sha256)
     _report_cache[sha256] = report
+    while len(_report_cache) > _REPORT_CACHE_MAX:
+        _report_cache.popitem(last=False)
 
 
 def get_cached_report(sha256: str) -> Optional[Any]:
     return _report_cache.get(sha256)
+
+
+async def load_report(sha256: str) -> Optional[Any]:
+    """
+    Resolve a report: hot cache first, then the database.
+
+    Every export endpoint used to consult ONLY the in-memory cache and return
+    404 "Report not found. Analyze the APK first." on a miss. So after any
+    restart — or once the cache evicted — every historical case became
+    permanently non-exportable, while GET /api/v1/cases/{sha} happily returned
+    it. The error told the analyst to re-run an analysis that had already been
+    run and was still on disk.
+
+    intelligence.py already had this cache-then-DB shape; report.py never got it.
+    """
+    report = get_cached_report(sha256)
+    if report is not None:
+        return report
+
+    from app.db.database import get_case
+    row = await get_case(sha256)
+    if row is None:
+        return None
+
+    # Re-populate the hot cache so repeat exports (HTML, then STIX, then IOCs)
+    # do not each pay a database round trip.
+    cache_report(sha256, row)
+    logger.info(f"[Report] Rehydrated {sha256[:12]}… from the database")
+    return row
 
 
 # ─── HTML Report Export ──────────────────────────────────────────────────────
@@ -62,7 +102,7 @@ async def export_html_report(sha256: str, user: dict = Depends(require_analyst))
     For PDF export: open in Chrome/Edge and use Ctrl+P -> Save as PDF.
     The @media print stylesheet provides a clean light-mode print layout.
     """
-    report = get_cached_report(sha256)
+    report = await load_report(sha256)
     if not report:
         raise HTTPException(
             status_code=404,
@@ -115,7 +155,7 @@ async def export_pdf_report(sha256: str, user: dict = Depends(require_analyst)):
     Returns standalone single-file HTML with an embedded auto-print handler
     that immediately opens the browser's native print-to-PDF dialog.
     """
-    report = get_cached_report(sha256)
+    report = await load_report(sha256)
     if not report:
         raise HTTPException(
             status_code=404,
@@ -164,6 +204,29 @@ async def export_pdf_report(sha256: str, user: dict = Depends(require_analyst)):
     )
 
 
+# ─── STIX identifiers ─────────────────────────────────────────────────────────
+
+_STIX_NAMESPACE = uuid.UUID("d1a4f1b2-0000-4000-8000-5544332211aa")
+
+
+def _stix_id(obj_type: str, *parts: Any) -> str:
+    """
+    Build a spec-compliant, DETERMINISTIC STIX 2.1 identifier.
+
+    The previous IDs were hand-assembled from slices of the sha256 and, worse,
+    from `hash(url)` / `hash(campaign)` — and Python's hash() is SALTED PER
+    PROCESS (PYTHONHASHSEED randomisation). So the same sample exported twice
+    across a restart produced different indicator / attack-pattern /
+    threat-actor IDs, and a TAXII consumer saw them as distinct objects rather
+    than updates. The hand-assembled forms were not valid UUIDs either.
+
+    uuid5 over a fixed namespace is stable across processes, restarts and hosts,
+    and is exactly what STIX 2.1 recommends for deterministic identifiers.
+    """
+    name = "|".join(str(p) for p in parts)
+    return f"{obj_type}--{uuid.uuid5(_STIX_NAMESPACE, name)}"
+
+
 # ─── STIX 2.1 Export ─────────────────────────────────────────────────────────
 
 def _build_stix_bundle(report: Dict[str, Any]) -> Dict:
@@ -181,7 +244,7 @@ def _build_stix_bundle(report: Dict[str, Any]) -> Dict:
     malware_obj = {
         "type": "malware",
         "spec_version": "2.1",
-        "id": f"malware--{sha256[:8]}-0000-0000-0000-{sha256[8:20]}",
+        "id": _stix_id("malware", sha256, family),
         "created": now,
         "modified": now,
         "name": family if family != "Unknown" else f"Suspicious APK ({package})",
@@ -201,7 +264,7 @@ def _build_stix_bundle(report: Dict[str, Any]) -> Dict:
     file_indicator = {
         "type": "indicator",
         "spec_version": "2.1",
-        "id": f"indicator--{sha256[:8]}-0001-0000-0000-{sha256[8:20]}",
+        "id": _stix_id("indicator", "file", sha256),
         "created": now,
         "modified": now,
         "name": f"SHA256: {sha256}",
@@ -219,7 +282,7 @@ def _build_stix_bundle(report: Dict[str, Any]) -> Dict:
             url_ind = {
                 "type": "indicator",
                 "spec_version": "2.1",
-                "id": f"indicator--{hash(url) & 0xFFFFFFFF:08x}-0002-0000-0000-{sha256[8:20]}",
+                "id": _stix_id("indicator", "url", url),
                 "created": now,
                 "modified": now,
                 "name": f"URL: {url[:80]}",
@@ -238,7 +301,7 @@ def _build_stix_bundle(report: Dict[str, Any]) -> Dict:
         ap = {
             "type": "attack-pattern",
             "spec_version": "2.1",
-            "id": f"attack-pattern--{hash(tech_id) & 0xFFFFFFFF:08x}-0003-0000-0000-{sha256[8:20]}",
+            "id": _stix_id("attack-pattern", tech_id),
             "created": now,
             "modified": now,
             "name": tech,
@@ -259,7 +322,7 @@ def _build_stix_bundle(report: Dict[str, Any]) -> Dict:
         ta = {
             "type": "threat-actor",
             "spec_version": "2.1",
-            "id": f"threat-actor--{hash(campaign) & 0xFFFFFFFF:08x}-0004-0000-0000-{sha256[8:20]}",
+            "id": _stix_id("threat-actor", campaign),
             "created": now,
             "modified": now,
             "name": campaign,
@@ -270,7 +333,7 @@ def _build_stix_bundle(report: Dict[str, Any]) -> Dict:
 
     return {
         "type": "bundle",
-        "id": f"bundle--{sha256[:8]}-ffff-0000-0000-{sha256[8:20]}",
+        "id": _stix_id("bundle", sha256),
         "spec_version": "2.1",
         "objects": objects,
     }
@@ -279,7 +342,7 @@ def _build_stix_bundle(report: Dict[str, Any]) -> Dict:
 @router.get("/report/stix/{sha256}")
 async def export_stix(sha256: str, user: dict = Depends(require_analyst)):
     """Export analysis as STIX 2.1 JSON bundle."""
-    report = get_cached_report(sha256)
+    report = await load_report(sha256)
     if not report:
         raise HTTPException(status_code=404, detail="Report not found. Analyze the APK first.")
     bundle = _build_stix_bundle(report)
@@ -291,7 +354,7 @@ async def export_stix(sha256: str, user: dict = Depends(require_analyst)):
 @router.get("/report/iocs/{sha256}", response_class=PlainTextResponse)
 async def export_iocs_csv(sha256: str, user: dict = Depends(require_analyst)):
     """Export IOCs as CSV for SIEM ingestion."""
-    report = get_cached_report(sha256)
+    report = await load_report(sha256)
     if not report:
         raise HTTPException(status_code=404, detail="Report not found. Analyze the APK first.")
 
@@ -336,7 +399,7 @@ async def export_iocs_csv(sha256: str, user: dict = Depends(require_analyst)):
 @router.get("/report/iocs-txt/{sha256}")
 async def export_iocs_txt(sha256: str, user: dict = Depends(require_analyst)):
     """Export raw text list of IOC indicators (one per line)."""
-    report = get_cached_report(sha256)
+    report = await load_report(sha256)
     if not report:
         raise HTTPException(status_code=404, detail="Report not found.")
 
@@ -354,21 +417,57 @@ async def export_iocs_txt(sha256: str, user: dict = Depends(require_analyst)):
 @router.get("/report/yara/{sha256}")
 async def export_yara_rule(sha256: str, user: dict = Depends(require_analyst)):
     """Export dynamically generated YARA rule for this sample."""
-    report = get_cached_report(sha256)
+    report = await load_report(sha256)
     if not report:
         raise HTTPException(status_code=404, detail="Report not found.")
 
-    pkg = report.get("package_name", "unknown").replace(".", "_")
-    urls = report.get("hardcoded_urls_ips", [])[:5]
-    strings_block = "\n        ".join([f'$url{i} = "{u}"' for i, u in enumerate(urls)]) or '$str1 = "Android"'
+    # Both the rule NAME and the string VALUES come from the APK, so both must
+    # be sanitised. Previously the package name only had '.' replaced (a hyphen
+    # or any other non-identifier character produced an invalid YARA rule name),
+    # and URL values were interpolated raw — a single '"' or '\' in a hardcoded
+    # URL broke the rule, and a non-ASCII byte broke it differently. Nothing
+    # validated the output, so the endpoint happily served rules that will not
+    # compile.
+    raw_pkg = report.get("package_name") or "unknown"
+    pkg = re.sub(r"[^A-Za-z0-9_]", "_", raw_pkg)[:64] or "unknown"
+    if not pkg[0].isalpha() and pkg[0] != "_":
+        pkg = f"pkg_{pkg}"
+
+    def _yara_string(value: str) -> str:
+        """Escape a value for a YARA double-quoted text string."""
+        out = []
+        for ch in str(value):
+            if ch == "\\":
+                out.append("\\\\")
+            elif ch == '"':
+                out.append('\\"')
+            elif ch == "\t":
+                out.append("\\t")
+            elif ch in ("\n", "\r"):
+                out.append("\\n")
+            elif 0x20 <= ord(ch) <= 0x7E:
+                out.append(ch)
+            else:
+                # YARA text strings are byte strings; emit a hex escape.
+                for b in ch.encode("utf-8"):
+                    out.append(f"\\x{b:02x}")
+        return "".join(out)
+
+    urls = [u for u in (report.get("hardcoded_urls_ips") or [])[:5] if u]
+    if urls:
+        strings_block = "\n        ".join(
+            f'$url{i} = "{_yara_string(u)}"' for i, u in enumerate(urls)
+        )
+    else:
+        strings_block = '$str1 = "Android"'
 
     yara_content = f"""rule Sudarshan_{pkg}_{sha256[:8]} {{
     meta:
         description = "Autogenerated YARA rule from Sudarshan Threat Intelligence Platform"
         sha256 = "{sha256}"
-        package_name = "{report.get('package_name', '')}"
+        package_name = "{_yara_string(report.get("package_name") or "")}"
         risk_score = "{report.get('final_risk_score', 0)}"
-        family = "{report.get('family_classification', 'Unknown')}"
+        family = "{_yara_string(report.get("family_classification") or "Unknown")}"
         date = "{datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
     strings:
         {strings_block}
@@ -386,7 +485,7 @@ async def export_yara_rule(sha256: str, user: dict = Depends(require_analyst)):
 @router.get("/report/mitre/{sha256}")
 async def export_mitre_mapping(sha256: str, user: dict = Depends(require_analyst)):
     """Export MITRE ATT&CK Mobile mapping for this sample as JSON."""
-    report = get_cached_report(sha256)
+    report = await load_report(sha256)
     if not report:
         raise HTTPException(status_code=404, detail="Report not found.")
 
@@ -481,9 +580,11 @@ async def analyst_chat(req: ChatRequest, user: dict = Depends(require_analyst)):
     from app.ai.gemini_rag import get_investigation_answer, is_indexed, build_investigation_index
     from app.ai.gemini_rag import _investigation_index
 
-    # Auto-index from cache if not yet indexed
+    # Auto-index if not yet indexed. Resolves from the database as well as the
+    # hot cache, so the assistant works for historical cases rather than only
+    # those analysed since the last restart.
     if not is_indexed(req.sha256):
-        report = get_cached_report(req.sha256)
+        report = await load_report(req.sha256)
         if report:
             build_investigation_index(req.sha256, report)
         else:

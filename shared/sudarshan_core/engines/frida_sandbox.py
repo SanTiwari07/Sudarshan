@@ -106,23 +106,69 @@ _HOOKS_DIR = Path(__file__).parent / "frida_hooks"
 _HOOKS_SOURCE = _HOOKS_DIR / "banking_trojan.js"
 _HOOKS_BUNDLE = _HOOKS_DIR / "banking_trojan.bundle.js"
 
-# ALWAYS use the source script (banking_trojan.js).
-# Frida 17+ uses the built-in Java global directly — CommonJS bundle is deprecated.
-_HOOKS_SCRIPT = _HOOKS_SOURCE
+# Prefer the COMPILED BUNDLE.
+#
+# The previous line here was `_HOOKS_SCRIPT = _HOOKS_SOURCE`, justified as
+# "Frida 17+ uses the built-in Java global directly — CommonJS bundle is
+# deprecated". That is backwards, and measured on frida 17.16.4 against a live
+# device:
+#
+#     typeof Java              ->  "undefined"
+#     Java.perform             ->  ReferenceError: 'Java' is not defined
+#
+# Frida 17 REMOVED the Java global; the bridge is the external
+# `frida-java-bridge` module and must be linked in at build time.
+# backend/requirements.txt says exactly this. Loading the raw source therefore
+# meant EVERY Java hook failed the availability guard and silently installed
+# nothing — which is why every BFCI component reads 0.0 on every sample.
+#
+# Build the bundle with:   cd frida_hooks && npm install && npm run build
+_MIN_BUNDLE_BYTES = 50_000   # a real bundle is ~540 KB; the old stub was 168 B
 
 
-# UI Exploration Mode
-#   "ai"     : AI + Deterministic UI Explorer only
-#   "monkey" : Dumb fuzzer only (legacy)
-#   "hybrid" : AI Explorer + Monkey running simultaneously
-EXPLORER_MODE = os.environ.get("SUDARSHAN_EXPLORER_MODE", "ai")
+def _select_hooks_script() -> Path:
+    """Bundle if it has actually been built, else source (with a loud warning)."""
+    try:
+        if _HOOKS_BUNDLE.exists() and _HOOKS_BUNDLE.stat().st_size >= _MIN_BUNDLE_BYTES:
+            return _HOOKS_BUNDLE
+    except OSError:
+        pass
+    logger.warning(
+        "[Frida] Compiled hook bundle missing or stub-sized at %s — falling back to "
+        "raw source. On Frida 17 the Java bridge is NOT available to an unbundled "
+        "script, so ALL Java hooks (accessibility, SMS, overlay, banking) will fail "
+        "to install and dynamic scoring will be static-only. Build it with: "
+        "cd %s && npm install && npm run build",
+        _HOOKS_BUNDLE, _HOOKS_DIR,
+    )
+    return _HOOKS_SOURCE
 
+
+_HOOKS_SCRIPT = _select_hooks_script()
+
+
+# UI exploration is goal-driven only.
+#
+# The random input fuzzer, and the hybrid mode that ran it alongside the agent,
+# have both been REMOVED. Reasons, in order of weight:
+#
+#   1. It corrupted evidence — random taps produced UI events indistinguishable
+#      in the timeline from behaviour the SAMPLE chose to perform.
+#   2. It contended with the agent for the single ADB socket.
+#   3. Its device-side process outlived the session and could inject input into
+#      the NEXT sample's analysis window.
+#   4. It crashed the app under analysis, and a harness-induced crash is
+#      indistinguishable in the report from a sample that did nothing.
+#
+# AgenticExplorer is the primary explorer; UIExplorer remains as a deterministic
+# rollback if the agentic stack cannot be constructed.
 try:
     from sudarshan_core.engines.ui_explorer import UIExplorer
 except ImportError:
     UIExplorer = None
-    logger.warning("[Frida] ui_explorer module not found. Falling back to monkey mode.")
-    EXPLORER_MODE = "monkey"
+    logger.warning(
+        "[Frida] ui_explorer module not found — AgenticExplorer has no rollback target."
+    )
 
 # ADB executable — tries PATH first, then common Android Studio locations
 _ADB_CANDIDATES = [
@@ -133,6 +179,17 @@ _ADB_CANDIDATES = [
 
 # Default analysis duration in seconds
 ANALYSIS_DURATION_SECONDS = int(os.getenv("FRIDA_ANALYSIS_DURATION", "30"))
+
+# ── Session lifecycle pacing ──────────────────────────────────────────────────
+# The session is OPEN -> ANALYSE -> CLOSE. Nothing may touch the UI until the
+# app has finished starting: a cold Activity start on an emulator is routinely
+# 2-4 s, and driving input into a half-started process is what crashed the app
+# under analysis. Raise these on a slow or contended emulator.
+APP_OPEN_SETTLE_SECONDS: float = float(os.getenv("SUDARSHAN_APP_OPEN_SETTLE", "8.0"))
+APP_SETTLE_POLL_SECONDS: float = float(os.getenv("SUDARSHAN_APP_SETTLE_POLL", "0.5"))
+
+# One lock per device serial. See run_frida_analysis for why.
+_DEVICE_LOCKS: Dict[str, "asyncio.Lock"] = {}
 
 # Time allowed for the explorer to finish AFTER being asked to stop. Must
 # comfortably exceed one in-flight LLM round trip, otherwise artifacts are
@@ -444,12 +501,54 @@ def _extract_apk_info(apk_path: str) -> Tuple[Optional[str], Optional[str]]:
 
 
 
+def _resolve_launcher_activity(device: str, package_name: str) -> Optional[str]:
+    """
+    Return the package's launcher activity as 'pkg/.Activity', or None.
+
+    Uses the platform's own intent resolver, which is what the launcher itself
+    Replaces the previous `-c LAUNCHER` random-input trick, which delivered the
+    intent only as a side effect of starting a fuzzing session and so injected
+    stray input events into the app before analysis had begun.
+    """
+    import shlex as _shlex
+    safe_pkg = _shlex.quote(package_name)
+
+    # `cmd package resolve-activity --brief` prints the component on the last
+    # non-empty line. Available on API 24+.
+    ok, out = _adb(
+        "-s", device, "shell",
+        f"cmd package resolve-activity --brief {safe_pkg}",
+        timeout=15,
+    )
+    if ok and out:
+        for line in reversed([l.strip() for l in out.splitlines() if l.strip()]):
+            if "/" in line and not line.lower().startswith("priority"):
+                return line
+
+    # Fallback: parse the LAUNCHER intent filter out of `pm dump`.
+    ok, out = _adb(
+        "-s", device, "shell",
+        f"pm dump {safe_pkg} | grep -A 2 'android.intent.category.LAUNCHER'",
+        timeout=15,
+    )
+    if ok and out:
+        m = re.search(rf"({re.escape(package_name)}/[\w.$]+)", out)
+        if m:
+            return m.group(1)
+
+    return None
+
+
 def _launch_app(device: str, package_name: str) -> bool:
-    """Launch the app's main activity via monkey."""
+    """Launch the app's declared launcher activity via an explicit intent."""
+    component = _resolve_launcher_activity(device, package_name)
+    if not component:
+        return False
+    import shlex as _shlex
     ok, _ = _adb(
         "-s", device, "shell",
-        f"monkey -p {package_name} -c android.intent.category.LAUNCHER 1",
-        timeout=15
+        f"am start -W -n {_shlex.quote(component)}",
+        timeout=20,
     )
     return ok
 
@@ -523,6 +622,26 @@ def _collect_observed_activities(session: "FridaSession") -> List[str]:
 
     # Source 3: empty list — no observed activities, do not fabricate
     return []
+
+
+def _collect_screenshots(session: "FridaSession") -> List[str]:
+    """
+    Return the relative paths of every screenshot captured this session.
+
+    Never raises and never invents entries: a session with no ScreenshotManager,
+    or one where every capture failed, yields [].
+    """
+    mgr = getattr(session, "screenshot_manager", None)
+    if mgr is None:
+        return []
+    try:
+        return [
+            rec.filename for rec in mgr.get_manifest()
+            if getattr(rec, "filename", None)
+        ]
+    except Exception as exc:
+        logger.warning(f"[Frida] Could not read screenshot manifest: {exc}")
+        return []
 
 
 def calculate_bfci(
@@ -607,16 +726,39 @@ class FridaSession:
         # constructor usable in tests without touching the filesystem.
         self.artifact_dir: Path = Path(artifact_dir) if artifact_dir else Path(".")
         self.event_bus = RuntimeEventBus()
+        # Keys MUST mirror the `events` object in frida_hooks/banking_trojan.js.
+        # An unrecognised category is remapped to "dangerous_apis" by
+        # _on_message, so a category present in the agent but missing here is
+        # silently misfiled rather than dropped.
+        #
+        # Only the first six are scored — see bfci_scorer.BFCI_WEIGHTS. The rest
+        # are collected as evidence and contribute nothing to BFCI, which is what
+        # keeps ordinary application behaviour out of the fraud score.
         self.collected_events: Dict[str, List[Dict]] = {
+            # ── Scored ────────────────────────────────────────────────────────
             "accessibility": [], "sms": [], "overlay": [],
             "banking": [], "network": [], "persistence": [],
+            # ── Unscored: evidence only ───────────────────────────────────────
             "dangerous_apis": [], "files_accessed": [],
-            "anti_analysis": [],  # NEW: sandbox evasion events
+            "anti_analysis": [],        # sandbox evasion / anti-instrumentation
+            "device_fingerprint": [],   # IMEI/IMSI/ICCID/MSISDN, app + account enumeration
+            "app_telemetry": [],        # activity lifecycle, keyboard, generic crypto/prefs
+            "notification": [],         # notification interception
         }
         self.canary_received: bool = False
         self.total_hook_events_received: int = 0
         self.hooks_installed_count: int = 0   # incremented by hook_installed messages
         self.hook_errors: List[str] = []
+        # True when the Frida agent could not obtain a working Java bridge, so
+        # none of the ~40 Java hooks installed. Distinguishes a harness fault
+        # from a sample that genuinely did nothing.
+        self.java_bridge_failed: bool = False
+        self.java_bridge_source: Optional[str] = None
+        self.java_hooks_installed: int = 0
+        self.native_hooks_installed: int = 0
+        # Per-hook fire / error counts, owned by this process. See _on_message.
+        self.hook_fire_counts: Dict[str, int] = {}
+        self.hook_error_counts: Dict[str, int] = {}
         # Which explorer actually ran ("agentic" | "ui_explorer" | "none"), and
         # why it failed if it did. Surfaced in the result so a reviewer can tell
         # AI exploration from a rollback without reading the logs.
@@ -629,6 +771,10 @@ class FridaSession:
         # Passed through to AgenticExplorer → ToolExecutor so the correct
         # component name is used in 'settings put secure enabled_accessibility_services'.
         self.accessibility_service_class: Optional[str] = None
+        # True when the package was still alive after `am force-stop` at the end
+        # of the session — a persistence signal (watchdog service, restart
+        # receiver), surfaced in the result rather than swallowed.
+        self.survived_force_stop: bool = False
         # Set by stop() to cut an in-flight analysis short instead of sleeping
         # out the full window.
         self._stop_event = threading.Event()
@@ -703,13 +849,14 @@ class FridaSession:
                 tracker = get_tracker(self.package_name, self.package_name)
                 tracker.event_counters.received += 1
 
-                # Forward to in-process telemetry registry
-                try:
-                    from app.routes.runtime_api import record_event, record_hook
-                    record_event(event)
-                    record_hook(hook_name, fired=True)
-                except Exception:
-                    pass
+                # Hook telemetry. This previously imported
+                # app.routes.runtime_api — from sudarshan_core UP into the
+                # backend — inside a bare `except: pass`. The analysis engine
+                # has no such package, so on the primary (delegated) path every
+                # one of these raised and was swallowed, and the hook counters
+                # the dashboard reads stayed at zero while instrumentation was
+                # working fine. Counted locally now, and surfaced in the result.
+                self.hook_fire_counts[hook_name] = self.hook_fire_counts.get(hook_name, 0) + 1
 
                 # Publish to Event Bus (EvidenceStore + UIExplorer subscribe here)
                 self.event_bus.publish(event)
@@ -727,12 +874,17 @@ class FridaSession:
                 # v4 script sends this after each successful hook registration
                 self.hooks_installed_count = payload.get("total", self.hooks_installed_count)
                 hook_name = payload.get('hook', '?')
+                # Track Java vs native separately. "Java hooks installed" is the
+                # only reliable signal that the bridge really worked: the agent
+                # can fail at the availability guard, inside Java.perform, or
+                # part-way through, and each path reports a different message.
+                # Counting outcomes beats matching error strings.
+                if str(hook_name).startswith("native:"):
+                    self.native_hooks_installed += 1
+                else:
+                    self.java_hooks_installed += 1
                 logger.debug(f"[Frida] Hook installed: {hook_name} (total={self.hooks_installed_count})")
-                try:
-                    from app.routes.runtime_api import record_hook
-                    record_hook(hook_name, fired=False)
-                except Exception:
-                    pass
+                self.hook_fire_counts.setdefault(hook_name, 0)
 
             elif msg_type == "canary":
                 self.canary_received = True
@@ -744,11 +896,9 @@ class FridaSession:
                 err = f"Hook failed: {payload.get('hook')} — {payload.get('error')}"
                 self.hook_errors.append(err)
                 logger.warning(f"[Frida] {err}")
-                try:
-                    from app.routes.runtime_api import record_hook
-                    record_hook(payload.get('hook', '?'), error=True)
-                except Exception:
-                    pass
+                self.hook_error_counts[payload.get('hook', '?')] = (
+                    self.hook_error_counts.get(payload.get('hook', '?'), 0) + 1
+                )
 
             elif msg_type == "ready":
                 hooks_count = payload.get("hooks_installed", 0)
@@ -762,6 +912,13 @@ class FridaSession:
                 logger.info(f"[Frida DIAG] {payload}")
 
             elif msg_type == "error":
+                # A Java-bridge failure means NO Java hooks installed. That is an
+                # instrumentation fault, not evidence about the sample, and must
+                # not be reported as NO_BEHAVIOR_OBSERVED.
+                _desc = str(payload.get("description", ""))
+                if payload.get("java_bridge_source") or "Java bridge unavailable" in _desc or "Java.perform" in _desc:
+                    self.java_bridge_failed = True
+                    self.java_bridge_source = payload.get("java_bridge_source") or _desc[:160]
                 # The agent sends this when the whole Java.perform block dies.
                 # Because the canary is sent BEFORE initHooks, the run still
                 # reports canary_received=True even on total hook failure.
@@ -775,6 +932,105 @@ class FridaSession:
             err = f"Script error: {message.get('description')}"
             self.hook_errors.append(err)
             logger.error(f"[Frida] {err}")
+
+    # ── Session lifecycle helpers ─────────────────────────────────────────────
+
+    def _wait_for_app_settled(self, timeout: float) -> bool:
+        """
+        Block until the target app's window stops changing, or `timeout`.
+
+        Polls mCurrentFocus and requires two consecutive identical samples.
+        Returns True if the UI was seen to settle. Never raises — a settling
+        wait that can fail the run would be worse than the crash it prevents.
+        """
+        deadline = time.monotonic() + timeout
+        last_sig = None
+        stable = 0
+
+        while time.monotonic() < deadline:
+            ok, out = _adb(
+                "-s", self.device_serial, "shell",
+                "dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'",
+                timeout=10,
+            )
+            if not ok or not out:
+                time.sleep(APP_SETTLE_POLL_SECONDS)
+                continue
+
+            sig = " ".join(out.split())
+            if sig == last_sig:
+                stable += 1
+                if stable >= 2:
+                    logger.info("[Frida] App window settled.")
+                    return True
+            else:
+                stable = 0
+                last_sig = sig
+            time.sleep(APP_SETTLE_POLL_SECONDS)
+
+        logger.warning(
+            "[Frida] App did not settle within %.1fs — continuing anyway.", timeout
+        )
+        return False
+
+    def _capture_screenshot(self, label: str, category: str) -> None:
+        """
+        Take a lifecycle screenshot, if a ScreenshotManager is attached.
+
+        The manager's own event-driven captures are gated on evidence existing,
+        which is correct for evidence-linked shots but means a run that produces
+        no hook events produces no images at all. The three lifecycle captures
+        (opened / explored / final) are ungated: they document what the analyst
+        would have seen, and are labelled `source='lifecycle'` so they are never
+        mistaken for evidence of a detected behaviour.
+        """
+        if self.screenshot_manager is None:
+            return
+        try:
+            ref = self.screenshot_manager.capture(
+                label=label, category=category, source="lifecycle",
+            )
+            if ref:
+                logger.info(f"[Frida] Screenshot captured: {label}")
+        except Exception as exc:
+            logger.warning(
+                f"[Frida] Lifecycle screenshot '{label}' failed "
+                f"({type(exc).__name__}: {exc}) — continuing."
+            )
+
+    def _close_app(self) -> None:
+        """
+        Stop the app cleanly at the end of the session.
+
+        Previously nothing closed it: the sample was left running on the device
+        after the window ended, so it kept executing (and kept its overlays,
+        services and alarms alive) into the NEXT sample's analysis. Any
+        behaviour it produced then was attributed to the wrong APK.
+
+        Best-effort — a sample that resists force-stop is itself worth noting,
+        but it must not fail the run.
+        """
+        import shlex as _shlex
+        safe_pkg = _shlex.quote(self.package_name)
+        logger.info(f"[Frida] CLOSE: force-stopping {self.package_name}")
+        ok, out = _adb(
+            "-s", self.device_serial, "shell", f"am force-stop {safe_pkg}", timeout=20
+        )
+        if not ok:
+            logger.warning(f"[Frida] force-stop failed: {out}")
+            return
+
+        # Confirm it actually died. A process that survives force-stop is a
+        # persistence signal worth recording rather than assuming success.
+        time.sleep(1.0)
+        if self._resolve_pid() is not None:
+            logger.warning(
+                f"[Frida] {self.package_name} still running after force-stop — "
+                f"possible persistence mechanism (watchdog service / restart receiver)."
+            )
+            self.survived_force_stop = True
+        else:
+            logger.info(f"[Frida] {self.package_name} stopped.")
 
     def _resolve_pid(self) -> Optional[int]:
         """
@@ -812,7 +1068,7 @@ class FridaSession:
         Attach Frida to the target app and collect events for `duration_seconds`.
 
         Strategy (Android 15 / API 37 compatible):
-          1. Launch app via `am start` (if main_activity known) or `monkey`
+          1. Launch app via `am start` (manifest or resolved launcher activity)
           2. Wait for process to appear
           3. Attach Frida by package name
           4. Load hooks, collect events
@@ -846,7 +1102,6 @@ class FridaSession:
                     #   1. If ADB_HOST is set, add remote device via frida device manager.
                     #   2. Otherwise, enumerate devices normally.
                     if ADB_HOST:
-                        frida_host = ADB_HOST
                         candidate_ports = []
                         for p_env in [os.getenv("SUDARSHAN_FRIDA_PORT"), os.getenv("FRIDA_SERVER_PORT"), "27055", "27042"]:
                             if p_env and p_env.isdigit():
@@ -854,21 +1109,66 @@ class FridaSession:
                                 if p_int not in candidate_ports:
                                     candidate_ports.append(p_int)
 
+                        # WHERE the forward actually lands.
+                        #
+                        # `adb forward` binds the local port on the machine running
+                        # the ADB CLIENT — which, in Docker mode, is THIS CONTAINER.
+                        # The previous code forwarded inside the container and then
+                        # connected to `{ADB_HOST}:{port}`, i.e. the HOST, which has
+                        # no such forward unless an operator created one by hand.
+                        # Result: frida-server was running fine on the emulator and
+                        # every attach failed with
+                        #     ServerNotRunningError: unable to connect to remote frida-server
+                        # while the app itself launched correctly (ADB works, so the
+                        # process and pid resolved) — which made it look like an
+                        # injection/permission fault rather than a plumbing one.
+                        #
+                        # frida-server also binds device-local loopback
+                        # (127.0.0.1:27042), so it is ONLY reachable through a
+                        # forward. Try the container's own forwarded port first, and
+                        # keep ADB_HOST as a fallback for setups where the operator
+                        # forwarded on the host instead.
                         for f_port in candidate_ports:
-                            _adb("-s", self.device_serial, "forward", f"tcp:{f_port}", f"tcp:{f_port}")
-                            try:
-                                device = frida.get_device_manager().add_remote_device(
-                                    f"{frida_host}:{f_port}"
+                            fwd_ok, fwd_out = _adb(
+                                "-s", self.device_serial, "forward",
+                                f"tcp:{f_port}", f"tcp:{f_port}", timeout=10,
+                            )
+                            if not fwd_ok:
+                                logger.debug(
+                                    f"[Frida] adb forward tcp:{f_port} failed: {fwd_out}"
                                 )
-                                logger.info(
-                                    f"[Frida] TCP remote device added: "
-                                    f"{frida_host}:{f_port}"
-                                )
+
+                            for frida_host in ("127.0.0.1", ADB_HOST):
+                                try:
+                                    device = frida.get_device_manager().add_remote_device(
+                                        f"{frida_host}:{f_port}"
+                                    )
+                                    # add_remote_device is lazy — it can return a
+                                    # device object that fails on first real use.
+                                    # Force a round trip so a dead endpoint is
+                                    # rejected here rather than at attach time.
+                                    device.enumerate_processes()
+                                    logger.info(
+                                        f"[Frida] TCP remote device connected: "
+                                        f"{frida_host}:{f_port}"
+                                    )
+                                    break
+                                except Exception as tcp_err:
+                                    device = None
+                                    logger.debug(
+                                        f"[Frida] remote device {frida_host}:{f_port} "
+                                        f"unusable: {type(tcp_err).__name__}: {tcp_err}"
+                                    )
+                            if device:
                                 break
-                            except Exception as tcp_err:
-                                logger.warning(
-                                    f"[Frida] TCP remote device attempt on port {f_port} failed: {tcp_err}"
-                                )
+
+                        if not device:
+                            logger.warning(
+                                "[Frida] No reachable frida-server on %s via ports %s. "
+                                "Check that frida-server is running on the device and "
+                                "that its port matches SUDARSHAN_FRIDA_PORT.",
+                                self.device_serial, candidate_ports,
+                            )
                         if device:
                             break
 
@@ -907,7 +1207,7 @@ class FridaSession:
             # rather than allowing a silent proceed with nothing running.
             #
             # Step 1: am start with manifest-declared launcher activity
-            # Step 2: monkey -c LAUNCHER
+            # Step 2: resolved LAUNCHER activity
             # Step 3: enumerate all exported activities and try each
             # Step 4: BOOT_COMPLETED + PACKAGE_ADDED broadcasts (packed samples)
             # Step 5: deep link via declared URI scheme (if any)
@@ -945,21 +1245,32 @@ class FridaSession:
                         f"[Frida] Launch step 1 succeeded: am_start_main_activity"
                     )
 
-            # Step 2 — monkey LAUNCHER intent
+            # Step 2 — resolved LAUNCHER activity via an explicit intent.
+            # The platform's own resolver gives us the component directly,
+            # with no stray input events.
             if not launched:
                 logger.info(
-                    f"[Frida] Launch step 2: monkey -c LAUNCHER for {self.package_name}"
+                    f"[Frida] Launch step 2: resolve LAUNCHER activity for "
+                    f"{self.package_name}"
                 )
-                _adb(
-                    "-s", self.device_serial, "shell",
-                    f"monkey -p {safe_pkg} -c android.intent.category.LAUNCHER 1",
-                    timeout=15,
+                component = _resolve_launcher_activity(
+                    self.device_serial, self.package_name
                 )
-                time.sleep(3)
-                if _check_running():
-                    self.launch_method_used = "monkey_launcher"
-                    launched = True
-                    logger.info("[Frida] Launch step 2 succeeded: monkey_launcher")
+                if component:
+                    logger.info(f"[Frida] Resolved launcher activity: {component}")
+                    _am_start(shlex.quote(component))
+                    time.sleep(3)
+                    if _check_running():
+                        self.launch_method_used = "resolved_launcher_activity"
+                        launched = True
+                        logger.info(
+                            "[Frida] Launch step 2 succeeded: resolved_launcher_activity"
+                        )
+                else:
+                    logger.info(
+                        "[Frida] Launch step 2: no LAUNCHER activity declared "
+                        "(expected for packed droppers)"
+                    )
 
             # Step 3 — enumerate all exported activities from manifest
             if not launched:
@@ -1097,7 +1408,7 @@ class FridaSession:
                 self.last_error = (
                     f"LAUNCH_FAILED: All 5 launch methods failed for "
                     f"{self.package_name}. "
-                    "Steps tried: am_start_main_activity, monkey_launcher, "
+                    "Steps tried: am_start_main_activity, resolved_launcher_activity, "
                     "exported_activity, boot_broadcast, deep_link. "
                     "This sample may require manual launch or has no runnable "
                     "entry point in the current environment."
@@ -1150,7 +1461,7 @@ class FridaSession:
 
             is_spawned = False
             if not self._session:
-                logger.info("[Frida] monkey-attach failed, falling back to device.spawn()")
+                logger.info("[Frida] Attach-by-pid failed, falling back to device.spawn()")
                 pid = None
                 spawn_errors: List[str] = []
                 for attempt in range(3):
@@ -1209,110 +1520,127 @@ class FridaSession:
                     safe_act = shlex.quote(self.main_activity)
                     _adb("-s", self.device_serial, "shell", f"am start -n {safe_pkg}/{safe_act}")
                 else:
-                    _adb("-s", self.device_serial, "shell", f"monkey -p {safe_pkg} -c android.intent.category.LAUNCHER 1")
+                    component = _resolve_launcher_activity(
+                        self.device_serial, self.package_name
+                    )
+                    if component:
+                        _adb("-s", self.device_serial, "shell",
+                             f"am start -n {shlex.quote(component)}")
                 time.sleep(2)
 
 
-            logger.info(f"[Frida] Monitoring {self.package_name} for {duration_seconds}s...")
-            
-            # ── Auto-Interaction Fuzzer ─────────────────────────────────────────────────
-            logger.info(f"[Frida] Starting automated UI fuzzer (Mode: {EXPLORER_MODE}) in background...")
-            fuzzer_process = None
+            # ══════════════════════════════════════════════════════════════════
+            # PHASE 2 of 3 — ANALYSE
+            #
+            # The session runs as three explicit phases:
+            #
+            #   OPEN     launch the app, let it settle, capture the entry screen
+            #   ANALYSE  goal-driven exploration under instrumentation, with
+            #            screenshots taken at each observed screen
+            #   CLOSE    capture the exit screen, then force-stop the package
+            #
+            # The random fuzzer that used to run here is gone; see the comment
+            # on the explorer import at the top of this module.
+            # ══════════════════════════════════════════════════════════════════
+
+            # ── OPEN: let the app finish starting before anything touches it ──
+            # A cold start on an emulator is routinely 2-4 s. Driving input into
+            # a process that is still inflating its first Activity is what
+            # crashed the app under analysis, and a harness-induced crash reads
+            # in the report exactly like a sample that chose to do nothing.
+            logger.info(
+                f"[Frida] OPEN: waiting up to {APP_OPEN_SETTLE_SECONDS:.0f}s for "
+                f"{self.package_name} to finish starting..."
+            )
+            self._wait_for_app_settled(APP_OPEN_SETTLE_SECONDS)
+            self._capture_screenshot("01_app_opened", "lifecycle")
+
+            logger.info(f"[Frida] ANALYSE: monitoring {self.package_name} for {duration_seconds}s...")
             explorer = None
             explorer_thread = None
 
-            if EXPLORER_MODE in ["monkey", "hybrid"]:
-                import shlex
-                safe_pkg = shlex.quote(self.package_name)
-                fuzzer_process = subprocess.Popen(
-                    [_find_adb(), "-s", self.device_serial, "shell", 
-                     f"monkey -p {safe_pkg} --pct-touch 50 --pct-motion 20 --pct-nav 10 --throttle 1000 -v 100"],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            # ── Agentic Explorer (primary) — falls back to UIExplorer on error ──
+            try:
+                from sudarshan_core.engines.agentic_explorer import AgenticExplorer
+                explorer = AgenticExplorer(
+                    device_serial=self.device_serial,
+                    adb_path=_find_adb(),
+                    package_name=self.package_name,
+                    event_bus=self.event_bus,
+                    # Forward the manifest-parsed accessibility service class
+                    # so ToolExecutor uses the real obfuscated class name.
+                    accessibility_service_class=self.accessibility_service_class,
+                    screenshot_manager=self.screenshot_manager,
                 )
-
-            if EXPLORER_MODE in ["ai", "hybrid"]:
-                # ── Agentic Explorer (primary) — falls back to UIExplorer on import error ──
-                try:
-                    from sudarshan_core.engines.agentic_explorer import AgenticExplorer
-                    explorer = AgenticExplorer(
-                        device_serial=self.device_serial,
-                        adb_path=_find_adb(),
-                        package_name=self.package_name,
-                        event_bus=self.event_bus,
-                        mode=EXPLORER_MODE,
-                        # Forward the manifest-parsed accessibility service class
-                        # so ToolExecutor uses the real obfuscated class name.
-                        accessibility_service_class=self.accessibility_service_class,
-                    )
-                    self.explorer_used = "agentic"
-                    logger.info("[Frida] AgenticExplorer selected.")
-                except Exception as exc:
-                    # Rollback covers ANY construction failure, not just
-                    # ImportError: a missing dependency, a bad device serial or
-                    # a constructor raising must all degrade to the legacy
-                    # explorer rather than abandoning exploration entirely.
-                    logger.error(
-                        f"[Frida] AgenticExplorer unavailable "
-                        f"({type(exc).__name__}: {exc}) — attempting rollback",
-                        exc_info=True,
-                    )
-                    if UIExplorer is not None:
-                        try:
-                            explorer = UIExplorer(
-                                self.device_serial, _find_adb(),
-                                event_bus=self.event_bus, mode=EXPLORER_MODE
-                            )
-                            self.explorer_used = "ui_explorer"
-                            logger.warning("[Frida] Rolled back to UIExplorer.")
-                        except Exception as ui_exc:
-                            explorer = None
-                            self.explorer_used = "none"
-                            logger.error(
-                                f"[Frida] UIExplorer rollback also failed "
-                                f"({type(ui_exc).__name__}: {ui_exc})",
-                                exc_info=True,
-                            )
-                    else:
+                self.explorer_used = "agentic"
+                logger.info("[Frida] AgenticExplorer selected.")
+            except Exception as exc:
+                # Rollback covers ANY construction failure, not just
+                # ImportError: a missing dependency, a bad device serial or
+                # a constructor raising must all degrade to the legacy
+                # explorer rather than abandoning exploration entirely.
+                logger.error(
+                    f"[Frida] AgenticExplorer unavailable "
+                    f"({type(exc).__name__}: {exc}) — attempting rollback",
+                    exc_info=True,
+                )
+                if UIExplorer is not None:
+                    try:
+                        explorer = UIExplorer(
+                            self.device_serial, _find_adb(),
+                            event_bus=self.event_bus,
+                        )
+                        self.explorer_used = "ui_explorer"
+                        logger.warning("[Frida] Rolled back to UIExplorer.")
+                    except Exception as ui_exc:
                         explorer = None
                         self.explorer_used = "none"
-                        logger.error("[Frida] Both AgenticExplorer and UIExplorer unavailable.")
+                        logger.error(
+                            f"[Frida] UIExplorer rollback also failed "
+                            f"({type(ui_exc).__name__}: {ui_exc})",
+                            exc_info=True,
+                        )
+                else:
+                    explorer = None
+                    self.explorer_used = "none"
+                    logger.error("[Frida] Both AgenticExplorer and UIExplorer unavailable.")
 
-                if explorer is not None:
-                    def _run_explorer():
-                        """
-                        Explorer thread body.
+            if explorer is not None:
+                def _run_explorer():
+                    """
+                    Explorer thread body.
 
-                        This previously had NO exception handling: any error
-                        inside the agent loop killed the thread silently, the
-                        analysis still slept out its full window, and the run
-                        reported success with zero exploration performed. A
-                        failure here must be recorded, never swallowed.
-                        """
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
+                    This previously had NO exception handling: any error
+                    inside the agent loop killed the thread silently, the
+                    analysis still slept out its full window, and the run
+                    reported success with zero exploration performed. A
+                    failure here must be recorded, never swallowed.
+                    """
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        loop.run_until_complete(explorer.start(duration_seconds))
+                    except Exception as exc:
+                        self.explorer_error = f"{type(exc).__name__}: {exc}"
+                        logger.error(
+                            f"[Frida] Explorer thread crashed: {self.explorer_error}",
+                            exc_info=True,
+                        )
+                        # Nothing further can be explored — release the main
+                        # wait immediately instead of idling for the rest of
+                        # the window.
+                        self._stop_event.set()
+                    finally:
                         try:
-                            loop.run_until_complete(explorer.start(duration_seconds))
-                        except Exception as exc:
-                            self.explorer_error = f"{type(exc).__name__}: {exc}"
-                            logger.error(
-                                f"[Frida] Explorer thread crashed: {self.explorer_error}",
-                                exc_info=True,
+                            loop.close()
+                        except Exception as close_exc:
+                            logger.warning(
+                                f"[Frida] Explorer event loop close failed: "
+                                f"{type(close_exc).__name__}: {close_exc}"
                             )
-                            # Nothing further can be explored — release the main
-                            # wait immediately instead of idling for the rest of
-                            # the window.
-                            self._stop_event.set()
-                        finally:
-                            try:
-                                loop.close()
-                            except Exception as close_exc:
-                                logger.warning(
-                                    f"[Frida] Explorer event loop close failed: "
-                                    f"{type(close_exc).__name__}: {close_exc}"
-                                )
 
-                    explorer_thread = threading.Thread(target=_run_explorer, daemon=True)
-                    explorer_thread.start()
+                explorer_thread = threading.Thread(target=_run_explorer, daemon=True)
+                explorer_thread.start()
 
             # NOTE: run() is synchronous and is dispatched via
             # loop.run_in_executor(), so waiting here occupies a worker thread,
@@ -1336,6 +1664,13 @@ class FridaSession:
                         f"{EXPLORER_JOIN_GRACE_SECONDS}s of being asked to stop "
                         f"— artifacts may be incomplete"
                     )
+
+            # ── CLOSE: final screen, then stop the app ────────────────────────
+            # Capture BEFORE stopping: the last screen is often the most
+            # interesting one (an overlay left up, a phishing form mid-fill),
+            # and force-stopping destroys it.
+            self._capture_screenshot("99_final_screen", "lifecycle")
+            self._close_app()
             return True
 
         except Exception as e:
@@ -1348,10 +1683,7 @@ class FridaSession:
             return False
 
         finally:
-            # Cleanup fuzzer if it's still running
-            if 'fuzzer_process' in locals() and fuzzer_process and fuzzer_process.poll() is None:
-                fuzzer_process.terminate()
-                
+            # No fuzzer to reap any more.
             if 'explorer' in locals() and explorer:
                 try:
                     explorer.stop()
@@ -1433,6 +1765,43 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
     device_serial = emulators[0]
     logger.info(f"[Frida] Using emulator: {device_serial}")
 
+    # ── Serialise access to the device ────────────────────────────────────────
+    # There is exactly ONE emulator and it was taken with no lock, while the
+    # engine allows MAX_CONCURRENT_ANALYSES=2. Two dynamic runs could therefore
+    # interleave `adb install`, `am start`, `pidof` and Frida attach against the
+    # same device — and _adb_install_apk performs an `adb uninstall` on the
+    # signature-mismatch path, which could uninstall the package another run was
+    # actively instrumenting. That is a correctness hazard, not a throughput
+    # limit: whichever run lost the race reported behaviour that never happened.
+    #
+    # Held for the whole install → instrument → close cycle.
+    async with _device_lock_for(device_serial):
+        return await _run_device_session(
+            apk_path=apk_path,
+            package_name=package_name,
+            device_serial=device_serial,
+            base_result=base_result,
+        )
+
+
+def _device_lock_for(device_serial: str) -> asyncio.Lock:
+    """Return the process-wide lock guarding one device."""
+    lock = _DEVICE_LOCKS.get(device_serial)
+    if lock is None:
+        lock = asyncio.Lock()
+        _DEVICE_LOCKS[device_serial] = lock
+    return lock
+
+
+async def _run_device_session(
+    apk_path: str,
+    package_name: Optional[str],
+    device_serial: str,
+    base_result: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Install, instrument and close one sample. Caller holds the device lock."""
+    loop = asyncio.get_event_loop()
+
     # ── Step 1a: adbd must be root, and SELinux must be permissive ─────────────
     #
     # Without this, frida-server runs happily and every attach still fails with
@@ -1444,7 +1813,6 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
     #
     # This is an analysis sandbox: the AVD is disposable and exists to be
     # instrumented. It is never applied to anything but the attached emulator.
-    loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, _adb, "-s", device_serial, "root")
     await asyncio.sleep(1)
 
@@ -1484,7 +1852,6 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
         await asyncio.sleep(2) # Give it time to start up
 
     # ── Step 2: Extract package name ───────────────────────────────────────────
-    loop = asyncio.get_event_loop()
     main_activity = None
     if not package_name or package_name in ("Failed", "Unknown", "None"):
         package_name, main_activity = await loop.run_in_executor(None, _extract_apk_info, apk_path)
@@ -1550,6 +1917,7 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
     if ScreenshotManager is not None:
         session.screenshot_manager = ScreenshotManager(
             device_serial=device_serial,
+            adb_path=_find_adb() or "adb",
             output_dir=apk_dir,
             event_bus=session.event_bus,
             evidence_store=session.evidence_store
@@ -1579,9 +1947,29 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
     if AntiAnalysisDetector is not None:
         session.anti_analysis_detector = AntiAnalysisDetector(event_bus=session.event_bus)
     if YARAScanner is not None:
-        # Assuming YARA rules are placed in backend/yara_rules
-        rules_dir = Path("yara_rules")
-        session.yara_scanner = YARAScanner(rules_dir=rules_dir, event_bus=session.event_bus)
+        # YARA rules directory.
+        #
+        # This was Path("yara_rules") — RELATIVE, so it resolved against the
+        # process working directory, which differs between the gateway and the
+        # analysis engine. No directory of that name exists anywhere in the
+        # repository, so the scanner had nothing to load and YARA scanning was
+        # a silent no-op in both services.
+        #
+        # Resolved absolutely, with the location overridable, and the outcome
+        # logged either way so "no YARA matches" can be distinguished from
+        # "YARA never ran".
+        rules_dir = Path(
+            os.getenv("SUDARSHAN_YARA_RULES_DIR", str(Path(__file__).parent / "yara_rules"))
+        ).resolve()
+        if rules_dir.is_dir() and any(rules_dir.glob("*.yar*")):
+            session.yara_scanner = YARAScanner(rules_dir=rules_dir, event_bus=session.event_bus)
+            logger.info(f"[Frida] YARA rules loaded from {rules_dir}")
+        else:
+            session.yara_scanner = None
+            logger.warning(
+                f"[Frida] YARA scanning DISABLED — no .yar/.yara rules found in "
+                f"{rules_dir}. Set SUDARSHAN_YARA_RULES_DIR to enable it."
+            )
 
     def _run_sync():
         return session.run(duration_seconds=ANALYSIS_DURATION_SECONDS)
@@ -1600,6 +1988,20 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
 
     if not session.canary_received:
         dynamic_status = "INSTRUMENTATION_FAILED"
+    elif session.java_bridge_failed or session.java_hooks_installed == 0:
+        # The script loaded and native hooks installed, but the Java bridge did
+        # not, so accessibility / SMS / overlay / banking could never fire.
+        # Calling that NO_BEHAVIOR_OBSERVED would blame the sample for a
+        # harness fault, and risk_engine would treat it as a real observation.
+        dynamic_status = "INSTRUMENTATION_FAILED"
+        logger.error(
+            "[Frida] NO Java hooks installed (%d native only; bridge: %s). "
+            "Accessibility, SMS, overlay and banking hooks could never fire, so "
+            "this run is INSTRUMENTATION_FAILED, not 'no behaviour observed' — "
+            "the sample is not being credited with doing nothing.",
+            session.native_hooks_installed,
+            session.java_bridge_source or "unknown",
+        )
     elif session.total_hook_events_received == 0:
         dynamic_status = "NO_BEHAVIOR_OBSERVED"
     else:
@@ -1607,9 +2009,17 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
 
     # ── Step 6: Build structured result ───────────────────────────────────────
     # Flatten API calls for risk_engine.py compatibility
+    # Flattened view of every hook that fired. This is a REPORTING surface, not a
+    # scoring one — risk_engine only consumes it on the MobSF path, and
+    # _dynamic_run_was_conclusive counts it to decide whether the sandbox saw
+    # anything at all. It therefore spans scored AND unscored categories: an event
+    # that is excluded from BFCI (a device-identity read, say) is still real
+    # observed behaviour and must not vanish from the analyst's view.
     api_calls = [
-        e["data"].get("hook", "")
-        for category in ["accessibility", "sms", "overlay", "dangerous_apis"]
+        e.get("data", {}).get("hook", "")
+        for category in ["accessibility", "sms", "overlay", "banking",
+                         "persistence", "dangerous_apis",
+                         "device_fingerprint", "app_telemetry", "notification"]
         for e in session.collected_events.get(category, [])
     ]
 
@@ -1658,7 +2068,14 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
         "api_calls": list(set(api_calls))[:30],
         "network_logs": network_logs[:20],
         "files_accessed": list(set(files_accessed))[:20],
-        "screenshots": [],  # Not implemented in static sandbox
+        # Screenshots WERE being captured — the ScreenshotManager subscribes to
+        # the event bus and fires on CRITICAL/overlay/anti_analysis events — but
+        # this field was hardcoded to [] with a "not implemented" comment, so
+        # every captured image was invisible to the API, the report and the
+        # analyst. The manifest is now surfaced here and flushed to disk below.
+        "screenshots": _collect_screenshots(session),
+        # Package still alive after force-stop at session end.
+        "survived_force_stop": session.survived_force_stop,
         # Real activities observed during the session, derived from the
         # agentic explorer's visited-screen memory. If no explorer ran, or
         # if the memory contains no activity data, this is an empty list —
@@ -1669,6 +2086,12 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
         # Metadata
         "hook_errors": session.hook_errors,
         "hooks_installed": session.hooks_installed_count,
+        "java_bridge_failed": session.java_bridge_failed,
+        "java_hooks_installed": session.java_hooks_installed,
+        "native_hooks_installed": session.native_hooks_installed,
+        "java_bridge_source": session.java_bridge_source,
+        "hook_fire_counts": dict(session.hook_fire_counts),
+        "hook_error_counts": dict(session.hook_error_counts),
         "evidence": evidence,
         "raw_event_counts": {k: len(v) for k, v in session.collected_events.items()},
     }
@@ -1780,6 +2203,16 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
         except Exception as e:
             logger.error(f"[Frida] Failed to write mitre.json: {e}")
 
+    # The screenshot manifest was never flushed: images landed on disk but the
+    # index describing them (label, trigger evidence id, category, source) was
+    # discarded, so report_generator's gallery had nothing to enumerate.
+    if hasattr(session, "screenshot_manager") and session.screenshot_manager is not None:
+        try:
+            n = session.screenshot_manager.flush_manifest(apk_dir / "screenshots.json")
+            logger.info(f"[Frida] Screenshot manifest flushed: {n} image(s)")
+        except Exception as e:
+            logger.error(f"[Frida] Failed to write screenshots.json: {e}")
+
     # ── Wave 3: Flush Navigator Upgrades ───────────────────────────────────────
     if hasattr(session, "permission_orchestrator") and session.permission_orchestrator is not None:
         try:
@@ -1818,7 +2251,7 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
     if AnalysisHistory is not None:
         try:
             history = AnalysisHistory()
-            history.save_run(result, apk_sha256="unknown", stage_name="single", explorer_mode=EXPLORER_MODE)
+            history.save_run(result, apk_sha256="unknown", stage_name="single")
         except Exception as e:
             logger.error(f"[Frida] Failed to save analysis history: {e}")
             

@@ -95,6 +95,58 @@ def extract_activities_from_dex_files(out_dir: str, package_name: str) -> List[s
     return extracted_classes
 
 
+_PERMISSION_RE = re.compile(
+    r'<uses-permission[^>]+android:name="([^"]+)"', re.IGNORECASE
+)
+# Binary AXML keeps permission names as UTF-16 or UTF-8 strings in the string
+# pool even when the structure around them is corrupt, so a regex over the raw
+# bytes recovers them when XML parsing cannot.
+_PERMISSION_BYTES_RE = re.compile(rb"android\.permission\.[A-Z_0-9]{3,}")
+
+
+def _extract_declared_permissions(manifest_xml: str, out_dir: str) -> List[str]:
+    """
+    Recover the permissions the ORIGINAL sample declared.
+
+    Two passes, because the reason we are here is that the manifest is damaged:
+      1. the decoded manifest text, if APKTool produced one
+      2. a byte-level scan of the raw AndroidManifest.xml string pool
+
+    Returns a de-duplicated, order-stable list. Never raises — an empty list
+    means "could not recover", and the caller must NOT substitute a guess.
+    """
+    found: List[str] = []
+
+    def _add(perm: str) -> None:
+        if perm and perm not in found:
+            found.append(perm)
+
+    if manifest_xml:
+        for perm in _PERMISSION_RE.findall(manifest_xml):
+            _add(perm)
+
+    if not found:
+        raw_manifest = os.path.join(out_dir, "AndroidManifest.xml")
+        try:
+            if os.path.exists(raw_manifest):
+                with open(raw_manifest, "rb") as fh:
+                    blob = fh.read()
+                # Strip UTF-16 NULs so both encodings match the same pattern.
+                for match in _PERMISSION_BYTES_RE.findall(blob.replace(b"\x00", b"")):
+                    _add(match.decode("ascii", errors="ignore"))
+        except Exception as exc:
+            logger.warning(
+                "[APKRepair] Byte-level permission recovery failed (%s: %s)",
+                type(exc).__name__, exc,
+            )
+
+    logger.info(
+        "[APKRepair] Recovered %d declared permission(s) from the original manifest",
+        len(found),
+    )
+    return found
+
+
 def repair_obfuscated_apk(original_apk_path: str) -> Tuple[bool, str, Dict]:
     """
     Generate an isolated repaired derivative copy for sandbox installation.
@@ -248,19 +300,60 @@ def repair_obfuscated_apk(original_apk_path: str) -> Tuple[bool, str, Dict]:
 
     receiver_xml_str = "\n".join(receiver_blocks)
 
-    # Step 4: Build clean synthetic manifest XML string
+    # Step 4: Build the repaired manifest.
+    #
+    # ─────────────────────────────────────────────────────────────────────────
+    # EVIDENTIARY INTEGRITY — read before changing this block.
+    #
+    # This manifest previously GRANTED a fixed permission set regardless of what
+    # the sample declared:
+    #
+    #     SYSTEM_ALERT_WINDOW · BIND_ACCESSIBILITY_SERVICE
+    #     READ_SMS · RECEIVE_SMS · SEND_SMS
+    #
+    # Those are precisely the five signals the scoring model weights most
+    # heavily (CT axis +40/+35/+25; BFCI accessibility 0.35, sms 0.25, overlay
+    # 0.20). The repaired derivative is what gets INSTALLED and DYNAMICALLY
+    # ANALYSED — so a dynamic finding of "SMS interception observed" could be an
+    # observation of a capability WE added, on an artifact the sample never
+    # asked for. Combined with android:debuggable="true" and
+    # usesCleartextTraffic="true", the runtime behaviour being measured was not
+    # the sample's own.
+    #
+    # The repair now carries over ONLY what the original manifest declared. If a
+    # permission cannot be recovered from a corrupted manifest it is not
+    # invented; the sample simply runs without it, and the run is honest about
+    # what it could not restore.
+    # ─────────────────────────────────────────────────────────────────────────
+    recovered_permissions = _extract_declared_permissions(manifest_xml, out_dir)
+
+    # INTERNET / ACCESS_NETWORK_STATE are the only additions, and only so the
+    # sandbox can observe network behaviour at all. Both are normal-protection
+    # permissions granted at install to essentially every app, and NEITHER is
+    # scored by any axis — so adding them cannot move a verdict.
+    _SANDBOX_REQUIRED = [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+    ]
+    added_for_sandbox = [p for p in _SANDBOX_REQUIRED if p not in recovered_permissions]
+    effective_permissions = list(recovered_permissions) + added_for_sandbox
+
+    permission_xml_str = "\n".join(
+        f'    <uses-permission android:name="{p}"/>' for p in effective_permissions
+    )
+
+    logger.warning(
+        "[APKRepair] Manifest rebuilt with %d permission(s) recovered from the "
+        "original%s. Scored capabilities are NOT synthesised.",
+        len(recovered_permissions),
+        f" plus {added_for_sandbox} for sandbox networking" if added_for_sandbox else "",
+    )
+
     synthetic_xml = f"""<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{package_name}">
     <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="30"/>
-    <uses-permission android:name="android.permission.INTERNET"/>
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
-    <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE"/>
-    <uses-permission android:name="android.permission.READ_SMS"/>
-    <uses-permission android:name="android.permission.RECEIVE_SMS"/>
-    <uses-permission android:name="android.permission.SEND_SMS"/>
-    <application android:label="SudarshanRepairedApp" android:debuggable="true" android:usesCleartextTraffic="true">
+{permission_xml_str}
+    <application android:label="SudarshanRepairedApp" android:usesCleartextTraffic="true">
 {activity_xml_str}
 {service_xml_str}
 {receiver_xml_str}
@@ -396,6 +489,8 @@ packageInfo:
         "repaired_apk_path": repaired_apk_path,
         "repair_tool": "apkInspector v1.2.8 + AAPT Sanitizer",
         "repair_reason": "Corrupt AXML string table / ZIP header tampering (INSTALL_PARSE_FAILED_UNEXPECTED_EXCEPTION)",
+        "permissions_recovered_from_original": recovered_permissions,
+        "permissions_added_for_sandbox": added_for_sandbox,
         "modifications_performed": [
             "Extracted raw assets via apkInspector central directory header bypass",
             "Compiled clean AXML binary with AAPT framework resources",

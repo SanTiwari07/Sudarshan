@@ -181,7 +181,11 @@ def _build_default_goals() -> List[FraudGoal]:
                 "and password fields. Submit credentials. Reach the authenticated state. "
                 "If no login UI is present after 8 actions, this stage is auto-skipped."
             ),
-            frida_categories=["banking", "dangerous_apis"],
+            # app_telemetry carries Cipher.doFinal and Activity.onResume, which
+            # moved out of 'banking' when the BFCI categories were de-contaminated.
+            # Goal COMPLETION is hook-driven and unaffected; this keeps the
+            # IN_PROGRESS transition firing as it did before.
+            frida_categories=["banking", "dangerous_apis", "app_telemetry"],
             frida_hooks=[
                 "SharedPreferences.getString",
                 "Cipher.doFinal",
@@ -224,7 +228,11 @@ def _build_default_goals() -> List[FraudGoal]:
                 "Trigger `getInstalledPackages()` or `queryIntentActivities()` hooks. "
                 "Look for list screens showing bank names or payment apps."
             ),
-            frida_categories=["banking"],
+            # PackageManager enumeration moved to device_fingerprint when the
+            # BFCI categories were de-contaminated — enumeration alone is
+            # reconnaissance, not proof of banking targeting. Completion is still
+            # hook-driven; this preserves the IN_PROGRESS transition.
+            frida_categories=["banking", "device_fingerprint"],
             frida_hooks=[
                 "PackageManager.getInstalledPackages",
                 "PackageManager.getInstalledApplications",

@@ -86,28 +86,64 @@ def record_hook(name: str, fired: bool = False, error: bool = False) -> None:
 
 # ─── Helper: load evidence.json from artifact directory ──────────────────────
 
-def _load_evidence_from_artifacts() -> List[Dict]:
-    """Find the most recent evidence.json file in the sudarshan_artifacts tree."""
-    artifact_roots = [
-        Path("/app/uploads"),
-        Path("sudarshan_artifacts"),
-        Path("backend/sudarshan_artifacts"),
-    ]
-    best_path: Optional[Path] = None
-    best_mtime: float = 0.0
+_ARTIFACT_ROOTS = (
+    Path("/app/uploads"),
+    Path("sudarshan_artifacts"),
+    Path("backend/sudarshan_artifacts"),
+)
 
-    for root in artifact_roots:
+# Cache the rglob result briefly. This walks the ENTIRE artifact tree and stats
+# every hit, on the two endpoints a dashboard polls — and artifact directories
+# are never removed, so the cost grows with every sample ever analysed.
+_evidence_scan_cache: Dict[str, Any] = {"at": 0.0, "paths": []}
+_EVIDENCE_SCAN_TTL = float(os.getenv("SUDARSHAN_EVIDENCE_SCAN_TTL", "10.0"))
+
+
+def _scan_evidence_files() -> List[Path]:
+    """Return every evidence.json under the artifact roots, newest first."""
+    now = time.time()
+    if now - _evidence_scan_cache["at"] < _EVIDENCE_SCAN_TTL:
+        return _evidence_scan_cache["paths"]
+
+    found: List[tuple] = []
+    for root in _ARTIFACT_ROOTS:
         if not root.exists():
             continue
         for ev_file in root.rglob("evidence.json"):
             try:
-                mtime = ev_file.stat().st_mtime
-                if mtime > best_mtime:
-                    best_mtime = mtime
-                    best_path = ev_file
+                found.append((ev_file.stat().st_mtime, ev_file))
             except OSError:
                 continue
 
+    paths = [p for _, p in sorted(found, key=lambda t: t[0], reverse=True)]
+    _evidence_scan_cache["at"] = now
+    _evidence_scan_cache["paths"] = paths
+    return paths
+
+
+def _load_evidence_from_artifacts(case_id: Optional[str] = None) -> List[Dict]:
+    """
+    Load evidence records for a specific case, or the most recent one.
+
+    `case_id` is matched against the artifact directory name, which
+    frida_sandbox.artifact_dir_for builds as "<sample-stem>_<digest>".
+
+    Without it this returned whichever sample finished LAST, globally — so an
+    analyst looking at case A was shown case B's evidence whenever B completed
+    more recently, and any authenticated caller could read evidence from cases
+    they never submitted. The sibling routes already accept case_id; this one
+    did not.
+    """
+    candidates = _scan_evidence_files()
+
+    if case_id:
+        needle = case_id.lower()
+        candidates = [
+            p for p in candidates
+            if needle in p.parent.name.lower() or needle in str(p.parent).lower()
+        ]
+
+    best_path = candidates[0] if candidates else None
     if best_path is None:
         return []
 
@@ -125,10 +161,16 @@ def _load_evidence_from_artifacts() -> List[Dict]:
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
 @router.get("/runtime/health")
-async def runtime_health():
+async def runtime_health(current_user: dict = Depends(get_current_user)):
     """
     Comprehensive diagnostics endpoint returning pipeline status across all stages.
-    Returns: ADB, Device, Frida, Server, Hooks Installed, Events Received, Evidence Count, Risk Score, Subscribers, Errors.
+
+    AUTHENTICATED. This was the only route in this module without a dependency,
+    and it discloses the host ADB path, the connection mode, emulator serials,
+    the exact Frida version, hook/event/evidence counts and per-hook error
+    strings — host layout and analysis state, to anyone who could reach the
+    gateway. The equivalent leak on /sandbox/status was closed previously; this
+    endpoint reintroduced a subset of it.
     """
     from sudarshan_core.engines.frida_sandbox import get_sandbox_status
 
@@ -141,16 +183,19 @@ async def runtime_health():
     total_installed = sum(t.hook_coverage.total_installed for t in active_trackers) or len(_hook_registry)
     total_events = sum(t.event_counters.received for t in active_trackers) or _pipeline_metrics["events_total"]
 
-    # Calculate latest risk score from evidence records
-    latest_risk_score = 0.0
-    if evidence_records:
-        cats = set(r.get("category", "") for r in evidence_records)
-        if "accessibility" in cats: latest_risk_score += 35.0
-        if "sms" in cats: latest_risk_score += 25.0
-        if "overlay" in cats: latest_risk_score += 20.0
-        if "banking" in cats: latest_risk_score += 10.0
-        if "network" in cats: latest_risk_score += 5.0
-        if "persistence" in cats: latest_risk_score += 5.0
+    # Behaviour categories observed, NOT a score.
+    #
+    # This used to sum weights (35/25/20/10/5/5) over evidence categories and
+    # report the total as "Risk Score" — a FOURTH scoring formula, matching
+    # neither the FRS in risk_engine nor the BFCI in bfci_scorer, under a name
+    # an analyst reads as the verdict. Two different numbers called the same
+    # thing in one product is worse than one imperfect number.
+    #
+    # Scoring belongs to the risk engine. This endpoint reports what was
+    # observed and leaves the verdict to the thing that owns it.
+    observed_categories = sorted(
+        {r.get("category", "") for r in evidence_records if r.get("category")}
+    )
 
     errors_list = []
     for h_name, h_info in _hook_registry.items():
@@ -181,7 +226,9 @@ async def runtime_health():
         "Hooks Installed": total_installed,
         "Events Received": total_events,
         "Evidence Count": len(evidence_records),
-        "Risk Score": round(latest_risk_score, 2),
+        # Deliberately NOT a score — see above. Risk is owned by risk_engine and
+        # is served by /api/v1/cases/{sha256}.
+        "Observed Categories": observed_categories,
         "Subscribers": len(active_trackers) + 1,
         "Errors": errors_list,
     }
@@ -387,12 +434,18 @@ async def runtime_evidence(
     current_user: dict = Depends(get_current_user),
     limit: int = Query(100, ge=1, le=1000, description="Max evidence records"),
     severity: Optional[str] = Query(None, description="Filter by severity"),
+    case_id: Optional[str] = Query(
+        None, description="Scope to one case (artifact directory name / sample stem)"
+    ),
 ):
     """
-    Evidence store snapshot — reads from the most recent evidence.json artifact.
-    Returns structured EvidenceRecord objects.
+    Evidence store snapshot for a case.
+
+    Pass `case_id` to scope the read. Without it this returns the most recently
+    completed analysis, which is a convenience for a live dashboard and NOT a
+    safe default when several analysts are working concurrently.
     """
-    records = _load_evidence_from_artifacts()
+    records = _load_evidence_from_artifacts(case_id)
 
     if severity:
         records = [r for r in records if r.get("severity") == severity.upper()]

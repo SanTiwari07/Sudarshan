@@ -25,6 +25,7 @@ import logging
 import os
 import re
 import asyncio
+from collections import OrderedDict
 from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -51,7 +52,13 @@ MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 # ─── Investigation Graph (in-memory per SHA256) ───────────────────────────────
 # Structure: { sha256: { section_name: [chunk_str, ...] } }
-_investigation_index: Dict[str, Dict[str, List[str]]] = {}
+#
+# BOUNDED (LRU). This grew for the process lifetime — one entry per analysed
+# sample, each holding ~20 sections of formatted evidence chunks — with nothing
+# ever evicting. An index that falls out is rebuilt on demand from the database
+# by the /chat endpoint, so eviction costs a rebuild, not the conversation.
+_INDEX_MAX_ENTRIES = int(os.getenv("SUDARSHAN_RAG_INDEX_MAX", "128"))
+_investigation_index: "OrderedDict[str, Dict[str, List[str]]]" = OrderedDict()
 
 
 # ─── Section Definitions ──────────────────────────────────────────────────────
@@ -392,8 +399,13 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
     if action:
         idx["recommendations"].append(f"Deterministic Recommendation: {action}")
 
-    # Store index
+    # Store index (LRU-bounded)
+    if sha256 in _investigation_index:
+        _investigation_index.move_to_end(sha256)
     _investigation_index[sha256] = idx
+    while len(_investigation_index) > _INDEX_MAX_ENTRIES:
+        evicted, _ = _investigation_index.popitem(last=False)
+        logger.debug(f"[RAG] Evicted investigation index for {evicted[:12]}…")
     logger.info(
         f"[RAG] Investigation index built for {sha256} — "
         f"{sum(len(v) for v in idx.values())} evidence chunks across {len(idx)} sections"
@@ -477,6 +489,7 @@ def retrieve_evidence(
     if sha256 not in _investigation_index:
         return ["No investigation data found for this SHA256. Please analyze the APK first."], []
 
+    _investigation_index.move_to_end(sha256)
     idx = _investigation_index[sha256]
     intent = detect_intent(question)
     target_sections = INTENT_SECTION_MAP.get(intent, INTENT_SECTION_MAP["default"])

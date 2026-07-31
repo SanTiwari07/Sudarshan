@@ -46,17 +46,82 @@ def _load_env_if_needed():
     except Exception:
         pass
 
+# The .env walk-up stats up to six paths and may re-parse the file with
+# override=True. These getters are called INSIDE the per-URL, per-domain and
+# per-IP task bodies, so a sample with a dozen extracted URLs performed dozens
+# of redundant filesystem probes and environment mutations per analysis.
+# Resolve once per process; an operator changing a key restarts the service.
+_KEY_CACHE: Dict[str, str] = {}
+
+
+def _cached_key(env_name: str) -> str:
+    if env_name not in _KEY_CACHE:
+        _load_env_if_needed()
+        _KEY_CACHE[env_name] = os.getenv(env_name, "")
+    return _KEY_CACHE[env_name]
+
+
 def _get_vt_key() -> str:
-    _load_env_if_needed()
-    return os.getenv("VIRUSTOTAL_API_KEY", "")
+    return _cached_key("VIRUSTOTAL_API_KEY")
 
 def _get_otx_key() -> str:
-    _load_env_if_needed()
-    return os.getenv("OTX_API_KEY", "")
+    return _cached_key("OTX_API_KEY")
 
 def _get_abuseipdb_key() -> str:
-    _load_env_if_needed()
-    return os.getenv("ABUSEIPDB_API_KEY", "")
+    return _cached_key("ABUSEIPDB_API_KEY")
+
+
+# ─── IOC reputation cache ─────────────────────────────────────────────────────
+#
+# The `ioc_cache` table exists, is indexed (idx_ioc_expires) and has correct
+# 24-hour TTL accessors in app.db.database — and NOTHING ever called them.
+# Meanwhile this module issued up to 14 uncached outbound requests per analysis
+# (1 VT hash + 1 OTX hash + 3 VT URLs + 5 OTX domains + 5 AbuseIPDB IPs) against
+# a VirusTotal free tier of 4 requests/minute. A single analysis exceeded the
+# quota, and GET /intelligence/{sha} re-fired the whole set on every request.
+#
+# The cache lives in the backend (app.db), which sudarshan_core must not import
+# — the analysis engine has no such package. So it is injected: the backend
+# passes its accessors in, and when they are absent (engine-side) correlation
+# simply runs uncached exactly as before.
+_cache_get = None   # async (indicator, ioc_type) -> Optional[dict]
+_cache_put = None   # async (indicator, ioc_type, reputation, source, score, raw, ttl_hours)
+
+
+def configure_ioc_cache(getter, setter) -> None:
+    """Install the persistent IOC reputation cache. Called by the backend."""
+    global _cache_get, _cache_put
+    _cache_get, _cache_put = getter, setter
+    logger.info("[Correlator] Persistent IOC cache enabled")
+
+
+async def _cached_lookup(indicator: str, ioc_type: str):
+    if _cache_get is None or not indicator:
+        return None
+    try:
+        row = await _cache_get(indicator, ioc_type)
+        if row:
+            logger.debug(f"[Correlator] Cache hit: {ioc_type} {indicator[:60]}")
+            return row.get("raw_data")
+    except Exception as exc:
+        logger.warning(f"[Correlator] IOC cache read failed: {exc}")
+    return None
+
+
+async def _cache_store(indicator: str, ioc_type: str, payload: Dict[str, Any]) -> None:
+    if _cache_put is None or not indicator or not payload:
+        return
+    try:
+        await _cache_put(
+            indicator, ioc_type,
+            payload.get("reputation", "unknown"),
+            payload.get("source", ioc_type),
+            float(payload.get("threat_score", 0.0) or 0.0),
+            payload,
+            24,
+        )
+    except Exception as exc:
+        logger.warning(f"[Correlator] IOC cache write failed: {exc}")
 
 # ─── Result Structure ─────────────────────────────────────────────────────────
 
@@ -83,10 +148,13 @@ def _empty_result() -> Dict[str, Any]:
 # ─── VirusTotal ───────────────────────────────────────────────────────────────
 
 async def _vt_check_hash(sha256: str) -> Dict[str, Any]:
-    """Query VirusTotal for a SHA256 hash."""
+    """Query VirusTotal for a SHA256 hash (24h cached)."""
     vt_key = _get_vt_key()
     if not vt_key:
         return {}
+    cached = await _cached_lookup(sha256, "vt_hash")
+    if cached is not None:
+        return cached
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
             r = await client.get(
@@ -109,17 +177,30 @@ async def _vt_check_hash(sha256: str) -> Dict[str, Any]:
             total = sum(stats.values()) or 1
             malicious = stats.get("malicious", 0)
 
-            # Extract suggested family name
-            family = attrs.get("popular_threat_classification", {}).get("suggested_threat_label")
-            if not family:
-                # Try extracting from names
-                names = list(attrs.get("names", []))
-                for name in names:
-                    if "android" in name.lower():
-                        family = name
-                        break
+            # Malware family — VirusTotal's OWN classification, or nothing.
+            #
+            # There used to be a fallback here that scanned attrs["names"] — the
+            # list of FILENAMES other people have submitted this file under — for
+            # one containing "android", and used that string as the malware
+            # family. `names` is uploader-supplied metadata, not analysis output.
+            #
+            # Observed live on a benign sample: Amaze File Manager is known to VT
+            # with 0/75 detections, so it has no threat label, and the fallback
+            # assigned it the family "Amaze File Manager 3.11.2 (Android 5.0+).apk".
+            # That is not cosmetic — routes/upload.py adopts a correlation-derived
+            # family when static classification says Unknown AND raises
+            # ai_confidence to 1.15, a 15% multiplier on the final score. A clean
+            # file manager was inflated because of a filename, and the report told
+            # the analyst it belonged to a malware family.
+            #
+            # No label means no known family. Absence of classification is not a
+            # classification.
+            family = (
+                attrs.get("popular_threat_classification", {})
+                .get("suggested_threat_label")
+            )
 
-            return {
+            result = {
                 "found": True,
                 "malicious": malicious,
                 "total": total,
@@ -128,15 +209,20 @@ async def _vt_check_hash(sha256: str) -> Dict[str, Any]:
                 "malicious_vendors": malicious_vendors[:5],
                 "reputation": attrs.get("reputation", 0),
             }
+            await _cache_store(sha256, "vt_hash", result)
+            return result
     except Exception as e:
         logger.warning(f"VirusTotal hash query failed: {e}")
         return {}
 
 async def _vt_check_url(url: str) -> Dict[str, Any]:
-    """Query VirusTotal for a URL reputation."""
+    """Query VirusTotal for a URL reputation (24h cached)."""
     vt_key = _get_vt_key()
     if not vt_key:
         return {}
+    cached = await _cached_lookup(url, "vt_url")
+    if cached is not None:
+        return cached
     try:
         import base64
         url_id = base64.urlsafe_b64encode(url.encode()).decode().rstrip("=")
@@ -152,7 +238,7 @@ async def _vt_check_url(url: str) -> Dict[str, Any]:
             stats = attrs.get("last_analysis_stats", {})
             total = sum(stats.values()) or 1
             malicious = stats.get("malicious", 0)
-            return {
+            result = {
                 "found": True,
                 "url": url,
                 "malicious": malicious,
@@ -160,6 +246,8 @@ async def _vt_check_url(url: str) -> Dict[str, Any]:
                 "ratio": malicious / total,
                 "reputation": "malicious" if malicious > 2 else "suspicious" if malicious > 0 else "clean",
             }
+            await _cache_store(url, "vt_url", result)
+            return result
     except Exception as e:
         logger.warning(f"VirusTotal URL query failed for {url[:50]}: {e}")
         return {"found": False, "url": url}
@@ -199,10 +287,13 @@ async def _otx_check_hash(sha256: str) -> Dict[str, Any]:
         return {}
 
 async def _otx_check_domain(domain: str) -> Dict[str, Any]:
-    """Query AlienVault OTX for domain reputation."""
+    """Query AlienVault OTX for domain reputation (24h cached)."""
     otx_key = _get_otx_key()
     if not otx_key:
         return {}
+    cached = await _cached_lookup(domain, "otx_domain")
+    if cached is not None:
+        return cached
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             r = await client.get(
@@ -214,12 +305,14 @@ async def _otx_check_domain(domain: str) -> Dict[str, Any]:
             r.raise_for_status()
             data = r.json()
             pulses = data.get("pulse_info", {}).get("pulses", [])
-            return {
+            result = {
                 "found": True,
                 "domain": domain,
                 "pulse_count": len(pulses),
                 "reputation": "malicious" if len(pulses) > 3 else "suspicious" if pulses else "unknown",
             }
+            await _cache_store(domain, "otx_domain", result)
+            return result
     except Exception as e:
         logger.warning(f"OTX domain query failed for {domain}: {e}")
         return {"found": False, "domain": domain}
@@ -229,10 +322,13 @@ async def _otx_check_domain(domain: str) -> Dict[str, Any]:
 _IP_RE = __import__("re").compile(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
 
 async def _abuseipdb_check_ip(ip: str) -> Dict[str, Any]:
-    """Query AbuseIPDB for IP address reputation."""
+    """Query AbuseIPDB for IP address reputation (24h cached)."""
     abuse_key = _get_abuseipdb_key()
     if not abuse_key or not _IP_RE.match(ip):
         return {}
+    cached = await _cached_lookup(ip, "abuseipdb_ip")
+    if cached is not None:
+        return cached
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             r = await client.get(
@@ -243,7 +339,7 @@ async def _abuseipdb_check_ip(ip: str) -> Dict[str, Any]:
             r.raise_for_status()
             d = r.json().get("data", {})
             score = d.get("abuseConfidenceScore", 0)
-            return {
+            result = {
                 "ip": ip,
                 "found": True,
                 "abuse_score": score,
@@ -253,6 +349,8 @@ async def _abuseipdb_check_ip(ip: str) -> Dict[str, Any]:
                 "isp": d.get("isp", ""),
                 "usage_type": d.get("usageType", ""),
             }
+            await _cache_store(ip, "abuseipdb_ip", result)
+            return result
     except Exception as e:
         logger.warning(f"AbuseIPDB query failed for {ip}: {e}")
         return {}

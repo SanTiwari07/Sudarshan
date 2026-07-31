@@ -474,15 +474,33 @@ def _dynamic_run_was_conclusive(dynamic: Optional[Dict]) -> bool:
     if status in {"NO_BEHAVIOR_OBSERVED", "INSTRUMENTATION_FAILED", "TIMEOUT", "FAILED"} or outcome == "FAILED":
         return False
 
+    # Count only fields that record what the SAMPLE did.
+    #
+    # Two defects lived here, and together they made evasion pay:
+    #
+    #   1. `evidence` was counted. That field carries harness commentary
+    #      ("process started"), not sample behaviour — so a trojan that
+    #      detected Frida and deliberately did nothing still produced one
+    #      "observed" item and was rated CONCLUSIVE.
+    #   2. The threshold was `>= 1`, while _MIN_DYNAMIC_EVENTS (=3) sat
+    #      directly above this function, unused. The declared policy and the
+    #      implemented policy disagreed.
+    #
+    # Consequence: a dormant sample took the dynamic axis — the LARGEST weight
+    # at 0.35 — at a near-zero value, diluting strong static evidence. Measured
+    # on the regression fixture, a trojan scoring 42.22 static-only dropped to
+    # 23.75 after a sandbox run that observed nothing. The better a sample's
+    # evasion, the safer this engine rated it, which is precisely the regression
+    # the surrounding comment says was fixed.
     observed = 0
     for field in ("api_calls", "network_logs", "activities_triggered",
-                  "files_accessed", "evidence"):
+                  "files_accessed"):
         value = dynamic.get(field)
         try:
             observed += len(value or [])
         except TypeError:
             continue
-    if observed >= 1:
+    if observed >= _MIN_DYNAMIC_EVENTS:
         return True
 
     try:

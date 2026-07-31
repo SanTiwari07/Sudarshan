@@ -1,8 +1,7 @@
 """
 SUDARSHAN — Agentic Benchmark Collector
 =========================================
-Collects metrics during Agentic Explorer runs for comparison against the
-existing Monkey Explorer.
+Collects metrics during Agentic Explorer runs.
 
 IMPORTANT — Benchmark Framework Scope:
   This module performs DATA COLLECTION only.
@@ -12,7 +11,7 @@ IMPORTANT — Benchmark Framework Scope:
   packer / obfuscated malware categories with false positive/negative tracking)
   is a SEPARATE follow-up phase that requires:
     1. A labeled APK corpus to be assembled.
-    2. Both MONKEY and AI_EXPLORER modes run on every sample.
+    2. The explorer run on every sample.
     3. Results from benchmark.json files compared offline.
 
   This PR implements the metric infrastructure only. The corpus evaluation
@@ -34,7 +33,7 @@ Metrics collected:
 
 Usage::
 
-    bm = BenchmarkCollector(explorer_mode="ai", package_name="com.example.app")
+    bm = BenchmarkCollector(package_name="com.example.app")
     bm.record_action(screen_hash="abc", tool="tap", target="n3", redundant=False)
     bm.record_frida_event(category="accessibility", hook="onAccessibilityEvent")
     bm.record_llm_call()
@@ -61,8 +60,7 @@ class BenchmarkCollector:
     Thread-safe metrics accumulator for one analysis session.
     """
 
-    def __init__(self, explorer_mode: str, package_name: str) -> None:
-        self.explorer_mode = explorer_mode
+    def __init__(self, package_name: str) -> None:
         self.package_name  = package_name
         self._start_time   = time.monotonic()
         self._lock         = threading.Lock()
@@ -162,7 +160,6 @@ class BenchmarkCollector:
             return {
                 "benchmark_version":       "1.0",
                 "generated_at":            datetime.now(tz=timezone.utc).isoformat(),
-                "explorer_mode":           self.explorer_mode,
                 "package_name":            self.package_name,
                 "total_elapsed_seconds":   round(elapsed, 1),
 

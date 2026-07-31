@@ -44,6 +44,36 @@ BFCI_WEIGHTS: Dict[str, float] = {
     "persistence":   0.05,   # wp — device admin / lockdown
 }
 
+# ─── Unscored categories — collected as evidence, never scored ────────────────
+#
+# Membership of a SCORED category is a strong claim. The caps below are 2-3
+# events with logarithmic scaling, so ONE event scores 50-63/100 for its
+# component. A scored category that also catches ordinary application behaviour
+# is not a weak signal — it is a constant, and it inflates every verdict equally.
+#
+# These categories exist so that behaviour which is worth RECORDING but is not
+# by itself evidence of fraud has somewhere to go. calculate_bfci_v2 iterates
+# `for cat in BFCI_WEIGHTS`, and detect_fraud_sequences skips anything not in
+# it, so a category listed here is inert by construction. This tuple is
+# documentation and a test anchor — nothing reads it to make a decision.
+#
+# Reviewer note: `device_fingerprint`, `notification` and `dangerous_apis` all
+# carry real evidential value and are candidates for their own weights. Adding
+# one is a MODEL CHANGE — it raises existing verdicts — and must be done against
+# the labelled corpus, not by intuition. See audit/12_Frida_Agent_Audit.md §7.
+UNSCORED_CATEGORIES: tuple = (
+    "dangerous_apis",       # DexClassLoader, Runtime.exec, InMemoryDexClassLoader, execve
+    "files_accessed",
+    "anti_analysis",
+    "device_fingerprint",   # IMEI / IMSI / ICCID / MSISDN, app + account enumeration
+    "app_telemetry",        # activity lifecycle, keyboard, generic crypto / prefs / windows
+    "notification",         # notification interception
+)
+
+assert not (set(UNSCORED_CATEGORIES) & set(BFCI_WEIGHTS)), (
+    "A category cannot be both scored and unscored"
+)
+
 # ─── Scoring parameters ────────────────────────────────────────────────────────
 
 # Per-category event count cap. Beyond this the component score is 100.0.

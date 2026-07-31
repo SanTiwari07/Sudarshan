@@ -16,9 +16,8 @@ requests>=2.31.0
 # wrapped in try/except ImportError guards, so the service starts healthy and
 # quietly runs with the feature switched off. Observed before this fix:
 #
-#   SUDARSHAN_EXPLORER_MODE=ai  ->  EXPLORER_MODE effective: "monkey"
 #       ui_explorer could not import (no google-genai), so AI-driven UI
-#       exploration silently downgraded to random monkey fuzzing.
+#       exploration silently downgraded to the deterministic fallback planner.
 #   "[YARAScanner] yara-python not installed. YARA scanning disabled."
 #
 google-genai        # engines/ui_explorer.py — AI-driven UI exploration

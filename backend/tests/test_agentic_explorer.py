@@ -89,7 +89,7 @@ class TestImports(unittest.TestCase):
     def test_agentic_explorer_imports(self):
         from sudarshan_core.engines.agentic_explorer import (
             AgenticExplorer, ACTION_BUDGET, FRIDA_SILENCE_THRESHOLD,
-            HYBRID_JITTER_MIN, HYBRID_JITTER_MAX
+            MAX_CONSECUTIVE_CRASHES, CRASH_RECOVERY_BASE_SECONDS,
         )
         self.assertTrue(True)
 
@@ -801,7 +801,6 @@ class TestAgenticExplorerInterface(unittest.TestCase):
         explorer = AgenticExplorer(
             device_serial="emulator-5554",
             package_name="com.test",
-            mode="ai",
         )
         reports = explorer.get_reports()
         # Keys that frida_sandbox.py / run_frida_analysis reads
@@ -811,13 +810,25 @@ class TestAgenticExplorerInterface(unittest.TestCase):
         for key in ["audit_log", "benchmark", "goal_summary", "agent_memory"]:
             self.assertIn(key, reports, f"Agentic key '{key}' missing from get_reports()")
 
-    def test_hybrid_jitter_constants_consistent(self):
-        """Verify jitter values in code match documentation (100–300ms)."""
-        from sudarshan_core.engines.agentic_explorer import HYBRID_JITTER_MIN, HYBRID_JITTER_MAX
-        self.assertAlmostEqual(HYBRID_JITTER_MIN, 0.1, places=3,
-                               msg="HYBRID_JITTER_MIN should be 0.1s (100ms)")
-        self.assertAlmostEqual(HYBRID_JITTER_MAX, 0.3, places=3,
-                               msg="HYBRID_JITTER_MAX should be 0.3s (300ms)")
+    def test_crash_recovery_constants_sane(self):
+        """
+        Replaces the old HYBRID_JITTER assertions. That jitter existed only to
+        reduce ADB contention with the random fuzzer running alongside the
+        agent; both the fuzzer and the hybrid mode were removed. What governs
+        pacing now is crash-recovery backoff and the action-delay scale.
+        """
+        from sudarshan_core.engines.agentic_explorer import (
+            CRASH_RECOVERY_BASE_SECONDS, CRASH_RECOVERY_MAX_SECONDS,
+            MAX_CONSECUTIVE_CRASHES,
+        )
+        from sudarshan_core.engines.agentic.tool_executor import (
+            ACTION_DELAY_SCALE, POST_INPUT_SETTLE_SECONDS,
+        )
+        self.assertGreater(CRASH_RECOVERY_BASE_SECONDS, 0)
+        self.assertGreaterEqual(CRASH_RECOVERY_MAX_SECONDS, CRASH_RECOVERY_BASE_SECONDS)
+        self.assertGreaterEqual(MAX_CONSECUTIVE_CRASHES, 1)
+        self.assertGreater(ACTION_DELAY_SCALE, 0)
+        self.assertGreater(POST_INPUT_SETTLE_SECONDS, 0)
 
 
 # ==============================================================================
@@ -828,7 +839,7 @@ class TestBenchmarkCollector(unittest.TestCase):
 
     def setUp(self):
         from sudarshan_core.engines.agentic.benchmark import BenchmarkCollector
-        self.bm = BenchmarkCollector(explorer_mode="ai", package_name="com.test")
+        self.bm = BenchmarkCollector(package_name="com.test")
 
     def test_unique_screen_count(self):
         self.bm.record_screen("s1")
@@ -881,8 +892,11 @@ class TestBenchmarkCollector(unittest.TestCase):
             self.assertTrue(out.exists())
             with open(out) as f:
                 data = json.load(f)
-            self.assertIn("explorer_mode", data)
-            self.assertEqual(data["explorer_mode"], "ai")
+            # explorer_mode is gone: there is only one explorer now, so the
+            # field recorded a constant. package_name is what actually
+            # identifies the run.
+            self.assertNotIn("explorer_mode", data)
+            self.assertIn("package_name", data)
 
 
 # ==============================================================================

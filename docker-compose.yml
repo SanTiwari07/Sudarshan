@@ -77,15 +77,17 @@ services:
       - MOBSF_API_KEY=sudarshan_mobsf_api_key_2026
       # The engine now performs the analysis, so it needs the same AI
       # credentials the backend has. Without them ui_explorer and the agentic
-      # planner import successfully but disable themselves, and
-      # SUDARSHAN_EXPLORER_MODE=ai silently degrades to "monkey".
+      # planner import successfully but disable themselves, and exploration
+      # silently degrades to the deterministic fallback planner.
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
       - VIRUSTOTAL_API_KEY=${VIRUSTOTAL_API_KEY}
       - OTX_API_KEY=${OTX_API_KEY}
       - ABUSEIPDB_API_KEY=${ABUSEIPDB_API_KEY}
-      - SUDARSHAN_EXPLORER_MODE=${SUDARSHAN_EXPLORER_MODE:-ai}
-      - FRIDA_ANALYSIS_DURATION=30
+      - FRIDA_ANALYSIS_DURATION=${FRIDA_ANALYSIS_DURATION:-30}
+      # Raise on a slow emulator: scales every UI action delay.
+      - SUDARSHAN_ACTION_DELAY_SCALE=${SUDARSHAN_ACTION_DELAY_SCALE:-1.0}
+      - SUDARSHAN_APP_OPEN_SETTLE=${SUDARSHAN_APP_OPEN_SETTLE:-8.0}
       - SUDARSHAN_FRIDA_PORT=${SUDARSHAN_FRIDA_PORT:-27055}
       - FRIDA_SERVER_PORT=${FRIDA_SERVER_PORT:-27055}
       - ANALYSIS_TIMEOUT_SECONDS=600

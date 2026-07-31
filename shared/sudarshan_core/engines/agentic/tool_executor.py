@@ -67,6 +67,55 @@ DEFAULT_SCROLL_AMOUNT: int = 600
 DEFAULT_SWIPE_DURATION_MS: int = 300
 
 
+# ─── Action pacing ────────────────────────────────────────────────────────────
+#
+# The agent used to drive the device as fast as ADB would accept input: each
+# tool slept a fixed 0.4-1.0 s and the explorer loop went straight from ACT back
+# to OBSERVE. With the deterministic FallbackPlanner there is no LLM round trip
+# either, so taps landed back-to-back THROUGH activity transitions — tapping a
+# view that was already being torn down, and running `uiautomator dump` while
+# the window was still animating. On a slower emulator that reliably crashed or
+# ANR'd the app under analysis, which then reads as "no behaviour observed"
+# rather than as a harness fault.
+#
+# Two changes: every delay is now scaled by one env-tunable factor, and
+# navigational actions wait for the window to actually settle instead of
+# guessing a constant. Raise the scale on a slow or contended emulator:
+#
+#   SUDARSHAN_ACTION_DELAY_SCALE=2.0   docker compose up
+#
+ACTION_DELAY_SCALE: float = max(0.1, float(os.getenv("SUDARSHAN_ACTION_DELAY_SCALE", "1.0")))
+
+# Floor applied after any input event, before we even begin polling for idle.
+# Input dispatch is asynchronous: `input tap` returns as soon as the event is
+# queued, not when the app has handled it.
+POST_INPUT_SETTLE_SECONDS: float = float(os.getenv("SUDARSHAN_POST_INPUT_SETTLE", "0.6"))
+
+# Upper bound on waiting for the window to stop changing. A cold Activity start
+# on an emulator is routinely 2-4 s.
+IDLE_WAIT_TIMEOUT_SECONDS: float = float(os.getenv("SUDARSHAN_IDLE_WAIT_TIMEOUT", "6.0"))
+
+# How often to sample window focus while waiting.
+IDLE_POLL_INTERVAL_SECONDS: float = 0.35
+
+# Consecutive identical focus samples required to call the UI settled.
+IDLE_STABLE_SAMPLES: int = 2
+
+
+def _paced(seconds: float) -> float:
+    """Apply the global pacing scale to a delay."""
+    return seconds * ACTION_DELAY_SCALE
+
+
+# Tools that can change what is on screen. Only these need an idle wait; making
+# a screenshot or a logcat read pay for one would waste most of the time budget.
+NAVIGATIONAL_TOOLS: frozenset = frozenset({
+    "tap", "click_text", "swipe", "scroll", "long_press",
+    "press_back", "press_home", "press_enter",
+    "am_start", "open_notifications", "grant_permission",
+})
+
+
 # ─── Result type ──────────────────────────────────────────────────────────────
 
 @dataclass
@@ -223,12 +272,82 @@ class ToolExecutor:
         except Exception as exc:
             return False, str(exc)
 
+    # ── Device settling ────────────────────────────────────────────────────────
+
+    async def _focus_signature(self) -> Optional[str]:
+        """
+        Cheap proxy for 'what is on screen right now'.
+
+        mCurrentFocus / mFocusedApp change the moment a transition starts and
+        stop changing once it completes, so comparing consecutive samples tells
+        us whether the window is still moving. Returns None if the probe fails,
+        which the caller treats as 'cannot tell' rather than 'settled'.
+        """
+        ok, out = await self._adb(
+            "shell", "dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'"
+        )
+        if not ok or not out:
+            return None
+        return " ".join(out.split())
+
+    async def wait_for_idle(
+        self,
+        timeout: Optional[float] = None,
+        stable_samples: int = IDLE_STABLE_SAMPLES,
+    ) -> bool:
+        """
+        Block until the window stops changing, or `timeout` elapses.
+
+        Returns True if the UI was observed to settle, False on timeout or if
+        the device could not be probed. NEVER raises and never waits forever —
+        a settling wait that can hang would be worse than the crash it prevents.
+
+        This replaces the guesswork of a fixed post-action sleep. A fixed sleep
+        is simultaneously too long for a no-op tap and far too short for a cold
+        Activity start, which is exactly how the agent ended up driving input
+        into an app that was still starting.
+        """
+        # Input dispatch is async — `input tap` returns when the event is queued.
+        # Poll only after giving the app a chance to begin reacting, otherwise
+        # the first two samples match trivially and we declare victory early.
+        await asyncio.sleep(_paced(POST_INPUT_SETTLE_SECONDS))
+
+        deadline = time.monotonic() + (
+            timeout if timeout is not None else _paced(IDLE_WAIT_TIMEOUT_SECONDS)
+        )
+        last_sig: Optional[str] = None
+        stable = 0
+
+        while time.monotonic() < deadline:
+            sig = await self._focus_signature()
+            if sig is None:
+                # Probe failed (device busy, dumpsys slow). Fall back to a plain
+                # delay rather than spinning on a broken signal.
+                await asyncio.sleep(_paced(0.5))
+                return False
+
+            if sig == last_sig:
+                stable += 1
+                if stable >= stable_samples:
+                    return True
+            else:
+                stable = 0
+                last_sig = sig
+
+            await asyncio.sleep(IDLE_POLL_INTERVAL_SECONDS)
+
+        logger.debug(
+            "[ToolExecutor] wait_for_idle timed out after %.1fs — UI still changing",
+            (timeout if timeout is not None else _paced(IDLE_WAIT_TIMEOUT_SECONDS)),
+        )
+        return False
+
     # ── Tool Implementations ───────────────────────────────────────────────────
 
     async def _tool_tap(self, action: Dict) -> ToolResult:
         x, y = int(action["x"]), int(action["y"])
         ok, out = await self._adb("shell", "input", "tap", str(x), str(y))
-        await asyncio.sleep(0.8)
+        await asyncio.sleep(_paced(0.8))
         return ToolResult(success=ok, tool="tap", output=out,
                           error=out if not ok else None)
 
@@ -267,7 +386,7 @@ class ToolExecutor:
                     x = (int(m.group(1)) + int(m.group(3))) // 2
                     y = (int(m.group(2)) + int(m.group(4))) // 2
                     ok, out = await self._adb("shell", "input", "tap", str(x), str(y))
-                    await asyncio.sleep(0.8)
+                    await asyncio.sleep(_paced(0.8))
                     return ToolResult(success=ok, tool="click_text", output=out,
                                       data={"matched_text": text, "x": x, "y": y},
                                       error=out if not ok else None)
@@ -278,7 +397,7 @@ class ToolExecutor:
                 x, y = int(x_param), int(y_param)
                 if 0 <= x <= self.screen_size[0] and 0 <= y <= self.screen_size[1]:
                     ok, out = await self._adb("shell", "input", "tap", str(x), str(y))
-                    await asyncio.sleep(0.8)
+                    await asyncio.sleep(_paced(0.8))
                     return ToolResult(
                         success=ok, tool="click_text", output=out,
                         data={"fallback_coord_used": True, "x": x, "y": y, "target_text": text},
@@ -300,7 +419,7 @@ class ToolExecutor:
             "shell", "input", "swipe",
             str(x1), str(y1), str(x2), str(y2), str(dur)
         )
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(_paced(0.5))
         return ToolResult(success=ok, tool="swipe", output=out,
                           error=out if not ok else None)
 
@@ -317,19 +436,19 @@ class ToolExecutor:
             "shell", "input", "swipe",
             str(cx), str(y1), str(cx), str(y2), "300"
         )
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(_paced(0.5))
         return ToolResult(success=ok, tool="scroll", output=out,
                           error=out if not ok else None)
 
     async def _tool_press_back(self, action: Dict) -> ToolResult:
         ok, out = await self._adb("shell", "input", "keyevent", "4")
-        await asyncio.sleep(0.6)
+        await asyncio.sleep(_paced(0.6))
         return ToolResult(success=ok, tool="press_back", output=out,
                           error=out if not ok else None)
 
     async def _tool_press_home(self, action: Dict) -> ToolResult:
         ok, out = await self._adb("shell", "input", "keyevent", "3")
-        await asyncio.sleep(1.0)
+        await asyncio.sleep(_paced(1.0))
         return ToolResult(success=ok, tool="press_home", output=out,
                           error=out if not ok else None)
 
@@ -351,12 +470,12 @@ class ToolExecutor:
 
         # Tap the field first to focus it
         await self._adb("shell", "input", "tap", str(x), str(y))
-        await asyncio.sleep(0.4)
+        await asyncio.sleep(_paced(0.4))
         # Clear existing content
         await self._adb("shell", "input", "keyevent", "KEYCODE_CTRL_A")
-        await asyncio.sleep(0.2)
+        await asyncio.sleep(_paced(0.2))
         ok, out = await self._adb("shell", "input", "text", shlex.quote(safe_text))
-        await asyncio.sleep(0.6)
+        await asyncio.sleep(_paced(0.6))
 
         return ToolResult(
             success=ok,
@@ -458,7 +577,7 @@ class ToolExecutor:
                     x = (int(m.group(1)) + int(m.group(3))) // 2
                     y = (int(m.group(2)) + int(m.group(4))) // 2
                     tap_ok, tap_out = await self._adb("shell", "input", "tap", str(x), str(y))
-                    await asyncio.sleep(0.6)
+                    await asyncio.sleep(_paced(0.6))
                     return ToolResult(success=tap_ok, tool="deny_permission", output=tap_out)
         return ToolResult(success=False, tool="deny_permission",
                           error="No deny button found in UI")
@@ -519,7 +638,7 @@ class ToolExecutor:
             cmd_parts += ["-d", shlex.quote(data_uri)]
 
         ok, out = await self._adb(*cmd_parts)
-        await asyncio.sleep(1.5)
+        await asyncio.sleep(_paced(1.5))
         return ToolResult(success=ok, tool="start_activity", output=out,
                           error=out if not ok else None)
 
@@ -532,7 +651,7 @@ class ToolExecutor:
             cmd_parts += ["-n", shlex.quote(component)]
 
         ok, out = await self._adb(*cmd_parts)
-        await asyncio.sleep(0.8)
+        await asyncio.sleep(_paced(0.8))
         return ToolResult(success=ok, tool="broadcast_intent", output=out,
                           error=out if not ok else None)
 
@@ -555,24 +674,24 @@ class ToolExecutor:
     async def _tool_clear_app_data(self, action: Dict) -> ToolResult:
         pkg = action.get("package_name", self.package_name)
         ok, out = await self._adb("shell", "pm", "clear", pkg)
-        await asyncio.sleep(1.0)
+        await asyncio.sleep(_paced(1.0))
         return ToolResult(success=ok, tool="clear_app_data", output=out,
                           error=out if not ok else None)
 
     async def _tool_enable_wifi(self, action: Dict) -> ToolResult:
         ok, out = await self._adb("shell", "svc", "wifi", "enable")
-        await asyncio.sleep(1.0)
+        await asyncio.sleep(_paced(1.0))
         return ToolResult(success=ok, tool="enable_wifi", output=out,
                           error=out if not ok else None)
 
     async def _tool_disable_wifi(self, action: Dict) -> ToolResult:
         ok, out = await self._adb("shell", "svc", "wifi", "disable")
-        await asyncio.sleep(1.0)
+        await asyncio.sleep(_paced(1.0))
         return ToolResult(success=ok, tool="disable_wifi", output=out,
                           error=out if not ok else None)
 
     async def _tool_enable_mobile_data(self, action: Dict) -> ToolResult:
         ok, out = await self._adb("shell", "svc", "data", "enable")
-        await asyncio.sleep(1.0)
+        await asyncio.sleep(_paced(1.0))
         return ToolResult(success=ok, tool="enable_mobile_data", output=out,
                           error=out if not ok else None)

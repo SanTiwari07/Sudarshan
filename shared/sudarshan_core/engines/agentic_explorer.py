@@ -22,20 +22,6 @@ Architecture principle:
     It ONLY explores the application and collects Frida evidence.
     All verdict logic remains in the existing deterministic pipeline.
 
-Hybrid mode (SUDARSHAN_EXPLORER_MODE=hybrid):
-    AgenticExplorer and Monkey run simultaneously on the same device.
-    ADB calls are sequential (not truly parallel) because ADB itself is a
-    serial protocol over a single socket. A random 100–300ms jitter
-    (HYBRID_JITTER_MIN=0.1s, HYBRID_JITTER_MAX=0.3s) is added to
-    AgenticExplorer actions in hybrid mode to reduce race conditions with
-    the Monkey process on shared ADB socket access. Both explorers collect
-    independently; results are merged by frida_sandbox.py.
-
-Feature flags (via SUDARSHAN_EXPLORER_MODE env var):
-    "ai"     — AgenticExplorer only (this class)
-    "monkey" — Monkey subprocess only (existing, unchanged)
-    "hybrid" — Both run concurrently
-
 Usage (same interface as UIExplorer)::
 
     explorer = AgenticExplorer(
@@ -43,7 +29,6 @@ Usage (same interface as UIExplorer)::
         adb_path="adb",
         package_name="com.example.app",
         event_bus=event_bus,
-        mode="ai",
     )
     await explorer.start(duration_seconds=60)
     reports = explorer.get_reports()
@@ -54,7 +39,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import random
 import threading
 import time
 from datetime import datetime, timezone
@@ -67,7 +51,10 @@ from sudarshan_core.engines.agentic.benchmark import BenchmarkCollector
 from sudarshan_core.engines.agentic.goal_tracker import GoalStatus, GoalTracker
 from sudarshan_core.engines.agentic.perception import PerceptionPipeline, package_of
 from sudarshan_core.engines.agentic.planner import AgentPlanner
-from sudarshan_core.engines.agentic.tool_executor import ToolExecutor
+from sudarshan_core.engines.agentic.tool_executor import (
+    NAVIGATIONAL_TOOLS,
+    ToolExecutor,
+)
 from sudarshan_core.engines.event_bus import RuntimeEventBus
 
 logger = logging.getLogger(__name__)
@@ -86,10 +73,25 @@ FRIDA_SILENCE_THRESHOLD: int = int(os.getenv("SUDARSHAN_AGENT_SILENCE_THRESHOLD"
 # This activates mark_failed → retry branch in next_priority_goal().
 MAX_ATTEMPTS_PER_GOAL: int = int(os.getenv("SUDARSHAN_MAX_ATTEMPTS_PER_GOAL", "8"))
 
-# In hybrid mode: random jitter range (seconds) added before each ADB action
-# to reduce contention with concurrent Monkey process on the shared ADB socket.
-HYBRID_JITTER_MIN: float = 0.1
-HYBRID_JITTER_MAX: float = 0.3
+
+# ─── Crash recovery pacing ────────────────────────────────────────────────────
+# A crash screen used to be followed by a flat 1.5 s sleep and an immediate
+# re-observe, which frequently caught the app still starting, produced another
+# crash screen, and burned the entire action budget in a relaunch loop.
+CRASH_RECOVERY_TIMEOUT_SECONDS: float = float(
+    os.getenv("SUDARSHAN_CRASH_RECOVERY_TIMEOUT", "10.0")
+)
+CRASH_RECOVERY_BASE_SECONDS: float = float(
+    os.getenv("SUDARSHAN_CRASH_RECOVERY_BASE", "2.0")
+)
+CRASH_RECOVERY_MAX_SECONDS: float = float(
+    os.getenv("SUDARSHAN_CRASH_RECOVERY_MAX", "8.0")
+)
+# An app that dies this many times running is not going to be explored. Stop and
+# keep what was collected rather than spending the budget on relaunches.
+MAX_CONSECUTIVE_CRASHES: int = int(
+    os.getenv("SUDARSHAN_MAX_CONSECUTIVE_CRASHES", "3")
+)
 
 # Gemini API key
 GEMINI_API_KEY: Optional[str] = os.environ.get("GEMINI_API_KEY")
@@ -109,7 +111,7 @@ class AgenticExplorer:
         adb_path:      str              = "adb",
         package_name:  str              = "",
         event_bus:     Optional[RuntimeEventBus] = None,
-        mode:          str              = "ai",
+        screenshot_manager: Optional[Any] = None,
         static_findings: Optional[Dict[str, Any]] = None,
         accessibility_service_class: Optional[str] = None,
     ) -> None:
@@ -117,14 +119,14 @@ class AgenticExplorer:
         self.adb_path        = adb_path
         self.package_name    = package_name
         self.event_bus       = event_bus
-        self.mode            = mode
+        self.screenshot_manager = screenshot_manager
         self.static_findings = static_findings or {}
 
         # Subsystems
         self.goals      = GoalTracker()
         self.memory     = AgentMemory()
         self.audit_log  = AuditLog()
-        self.benchmark  = BenchmarkCollector(explorer_mode=mode, package_name=package_name)
+        self.benchmark  = BenchmarkCollector(package_name=package_name)
         self.perception = PerceptionPipeline(
             device_serial=device_serial,
             package_name=package_name,
@@ -219,20 +221,21 @@ class AgenticExplorer:
 
         self.audit_log.record_system_event(
             "exploration_start",
-            f"AgenticExplorer started. Mode={self.mode}, Budget={ACTION_BUDGET}, "
+            f"AgenticExplorer started. Budget={ACTION_BUDGET}, "
             f"Duration={duration_seconds}s, Package={self.package_name}"
         )
         self.attack_timeline.append({
             "timestamp": "00:00",
             "source":    "System",
             "action":    "AgenticExplorer Started",
-            "details":   f"Mode={self.mode}, ActionBudget={ACTION_BUDGET}",
+            "details":   f"ActionBudget={ACTION_BUDGET}",
         })
 
         actions_taken         = 0
         frida_silence_streak  = 0
         last_action_failed    = False
         last_screen_hash      = ""
+        consecutive_crashes   = 0
 
         # ── Mark Stage 1 goal in-progress immediately ─────────────────────────
         self.goals.mark_in_progress("Launch Application")
@@ -339,8 +342,41 @@ class AgenticExplorer:
                             await self.executor.execute({"tool": "press_home"})
                     except Exception as _r_err:
                         logger.warning(f"[AgenticExplorer] Relaunch attempt warning: {_r_err}")
-                    await asyncio.sleep(1.5)
+
+                    # A cold Activity start on an emulator is routinely 2-4 s.
+                    # The old flat 1.5 s meant the very next OBSERVE ran against
+                    # a half-started process, which frequently produced a second
+                    # crash screen and a relaunch loop that burned the whole
+                    # action budget without exploring anything.
+                    consecutive_crashes += 1
+                    await self.executor.wait_for_idle(
+                        timeout=CRASH_RECOVERY_TIMEOUT_SECONDS
+                    )
+                    # Back off further each time: a sample that crashes
+                    # repeatedly will not be fixed by retrying faster.
+                    await asyncio.sleep(
+                        min(CRASH_RECOVERY_BASE_SECONDS * consecutive_crashes,
+                            CRASH_RECOVERY_MAX_SECONDS)
+                    )
+
+                    if consecutive_crashes >= MAX_CONSECUTIVE_CRASHES:
+                        logger.error(
+                            "[AgenticExplorer] App crashed %d times in a row — "
+                            "stopping exploration. Evidence collected so far is "
+                            "retained; the run is NOT reported as clean.",
+                            consecutive_crashes,
+                        )
+                        self.audit_log.record_system_event(
+                            "stop_repeated_crashes",
+                            f"consecutive_crashes={consecutive_crashes}",
+                        )
+                        break
                     continue
+
+                # Reached a normal screen — the app recovered, so the crash
+                # streak must not carry over and trip MAX_CONSECUTIVE_CRASHES
+                # later in the run.
+                consecutive_crashes = 0
 
                 # ── THINK ─────────────────────────────────────────────────────
                 next_goal = self.goals.next_priority_goal()
@@ -384,15 +420,34 @@ class AgenticExplorer:
                 # request site — a schema retry issues a second API call that is
                 # invisible from here.
 
-                # ── In hybrid mode: add jitter to reduce ADB socket contention ──
-                if self.mode == "hybrid":
-                    jitter = random.uniform(HYBRID_JITTER_MIN, HYBRID_JITTER_MAX)
-                    await asyncio.sleep(jitter)
 
                 # ── ACT ───────────────────────────────────────────────────────
                 result = await self.executor.execute(action)
                 last_action_failed = not result.success
                 actions_taken += 1
+
+                # ── SETTLE ────────────────────────────────────────────────────
+                # Nothing used to happen here: the loop went straight back to
+                # OBSERVE, so the only gap between one action and reading the
+                # next screen was the tool's own fixed sleep. With the
+                # deterministic FallbackPlanner there is no LLM round trip to
+                # absorb the difference either, so input was dispatched into
+                # activity transitions — tapping views mid-teardown and running
+                # `uiautomator dump` against a window that was still animating.
+                # On a slower emulator that crashed the app under analysis, and
+                # a harness-induced crash is indistinguishable in the report
+                # from a sample that genuinely did nothing.
+                #
+                # Waiting for the window to stop moving is bounded (see
+                # wait_for_idle) and only applied to actions that can actually
+                # change the screen.
+                if action.get("tool", "") in NAVIGATIONAL_TOOLS:
+                    settled = await self.executor.wait_for_idle()
+                    if not settled:
+                        logger.debug(
+                            "[AgenticExplorer] UI did not settle after '%s' — "
+                            "observing anyway", action.get("tool", "")
+                        )
 
                 # A cached choice that failed must not be replayed on this
                 # screen — drop it so the next visit re-plans from scratch.
@@ -562,7 +617,6 @@ class AgenticExplorer:
         goal_summary = self.goals.completion_summary()
 
         exploration_summary = {
-            "mode":                self.mode,
             "duration_seconds":    self._duration,
             "screens_visited":     self.coverage_metrics["screens"],
             "buttons_clicked":     self.coverage_metrics["buttons_clicked"],

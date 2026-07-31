@@ -147,11 +147,28 @@ _UPLOADS_DIR = Path(os.getenv("UPLOADS_DIR", "/app/uploads"))
 _UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 
+# Must EXCEED the engine's own ANALYSIS_TIMEOUT_SECONDS (600 s in
+# docker-compose.yml), plus headroom for request/response transfer.
+#
+# When this was 310 s and the engine budget was 600 s, any analysis that
+# legitimately ran longer than 310 s made httpx give up, _call_analysis_engine
+# return None, and the gateway silently re-run the WHOLE pipeline locally — in
+# the unhardened container, while the engine was still running the first one.
+# Two concurrent analyses of one sample, both contending for the single
+# emulator, and only the second reported. With MobSF configured (300 s) plus
+# APKTool (120 s) plus JADX (180 s), exceeding 310 s was the expected path, not
+# a corner case.
+_ENGINE_TIMEOUT_SECONDS: float = float(
+    os.getenv("ANALYSIS_ENGINE_TIMEOUT_SECONDS",
+              str(int(os.getenv("ANALYSIS_TIMEOUT_SECONDS", "600")) + 60))
+)
+
+
 async def _call_analysis_engine(temp_path: str, sha256_hash: str) -> Optional[Dict[str, Any]]:
     """Call containerized analysis-engine microservice via REST over Docker network."""
     url = f"{ANALYSIS_ENGINE_URL}/api/v1/analyze"
     try:
-        async with httpx.AsyncClient(timeout=310.0) as client:
+        async with httpx.AsyncClient(timeout=_ENGINE_TIMEOUT_SECONDS) as client:
             resp = await client.post(url, json={"file_path": temp_path, "sha256": sha256_hash})
             if resp.status_code == 200:
                 logger.info(f"[Orchestrator] Analysis engine microservice returned 200 OK for {sha256_hash}")
@@ -159,7 +176,14 @@ async def _call_analysis_engine(temp_path: str, sha256_hash: str) -> Optional[Di
             else:
                 logger.warning(f"[Orchestrator] Analysis engine returned status {resp.status_code}: {resp.text}")
     except Exception as e:
-        logger.info(f"[Orchestrator] Containerized analysis engine unavailable ({e}); executing fallback pipeline locally.")
+        # WARNING, not INFO: the fallback runs the pipeline in the gateway, which
+        # has no APKTool/JADX, no memory or CPU cap and no no-new-privileges. A
+        # permanent degradation to that path must not look like a healthy run in
+        # the logs.
+        logger.warning(
+            f"[Orchestrator] Analysis engine unavailable ({type(e).__name__}: {e}); "
+            f"falling back to the LOCAL pipeline — no APKTool/JADX, no container limits."
+        )
     return None
 
 
@@ -700,6 +724,91 @@ def _to_str_list(val: Any) -> List[str]:
     return []
 
 
+# ─── Upload intake ────────────────────────────────────────────────────────────
+
+# Real banking APKs top out around 150 MB. Mirrors MAX_UPLOAD_BYTES in the
+# analysis engine — the engine enforced this on ITS upload endpoint, which the
+# gateway never calls (it posts a path), so the limit did not apply to the path
+# users actually hit.
+MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(200 * 1024 * 1024)))
+_UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024
+
+# Every APK is a ZIP. An extension check alone accepts any content.
+_ZIP_MAGIC = (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08")
+
+
+async def _receive_apk(file: UploadFile) -> tuple[str, str]:
+    """
+    Stream an uploaded APK to the shared volume and return (temp_path, sha256).
+
+    Replaces two near-identical inline blocks that shared three defects:
+
+      1. `file.filename.endswith(...)` raised AttributeError -> unhandled 500
+         when a multipart part carried no filename. The engine guarded this
+         (`if not filename or not ...`); the gateway did not.
+      2. No size limit, so a single request could fill the volume that is the
+         ONLY channel between the gateway and the engine — taking analysis down
+         for everyone, not just the caller.
+      3. No magic-byte check, so arbitrary content reached androguard, APKTool,
+         JADX and zipfile.
+
+    The partial file is always removed on rejection; previously a rejected
+    upload could leave bytes on the volume.
+    """
+    filename = file.filename or ""
+    if not filename.lower().endswith(".apk"):
+        raise HTTPException(status_code=400, detail="Invalid file type. Only .apk files are allowed.")
+
+    hasher = hashlib.sha256()
+    total = 0
+    temp_path: Optional[str] = None
+
+    try:
+        # Written to the volume SHARED with analysis-engine so delegation can
+        # resolve it. Previously this was the container-private /tmp, so every
+        # delegation attempt 400d and the gateway silently ran the pipeline
+        # itself — without APKTool/JADX and without the engine's limits.
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".apk", dir=_UPLOADS_DIR) as tmp:
+            temp_path = tmp.name
+            first = True
+            while True:
+                chunk = await file.read(_UPLOAD_CHUNK_BYTES)
+                if not chunk:
+                    break
+                if first:
+                    # Validate before a single byte is committed to the volume.
+                    if not chunk.startswith(_ZIP_MAGIC):
+                        raise HTTPException(
+                            status_code=400,
+                            detail="File is not a valid APK (missing ZIP archive signature).",
+                        )
+                    first = False
+
+                total += len(chunk)
+                if total > MAX_UPLOAD_BYTES:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"APK exceeds the {MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit.",
+                    )
+
+                hasher.update(chunk)
+                # Blocking write — must not run on the event loop.
+                await asyncio.to_thread(tmp.write, chunk)
+
+            if first:
+                raise HTTPException(status_code=400, detail="Empty upload.")
+
+        return temp_path, hasher.hexdigest()
+
+    except Exception:
+        if temp_path:
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+        raise
+
+
 def _build_response(result: Dict[str, Any], job_id: Optional[str] = None) -> AnalysisResponse:
     """Convert raw pipeline result dict into AnalysisResponse Pydantic model."""
     llm_response = result["intelligence_report"]
@@ -823,25 +932,7 @@ async def analyze_upload(
     Synchronous APK analysis — waits for full result before returning.
     Requires JWT Bearer token (any analyst role).
     """
-    if not file.filename.endswith(".apk"):
-        raise HTTPException(status_code=400, detail="Invalid file type. Only .apk files are allowed.")
-
-    hasher = hashlib.sha256()
-    # Written to the volume SHARED with analysis-engine so delegation can
-    # resolve it. Previously this was the container-private /tmp, so every
-    # delegation attempt 400d and the gateway silently ran the pipeline
-    # itself — without APKTool/JADX (engine-only) and without any of the
-    # engine's resource limits. See _enrich_engine_result.
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".apk", dir=_UPLOADS_DIR) as tmp:
-        while True:
-            chunk = await file.read(1024 * 1024 * 8) # 8MB chunks
-            if not chunk:
-                break
-            hasher.update(chunk)
-            tmp.write(chunk)
-        temp_path = tmp.name
-
-    sha256_hash = hasher.hexdigest()
+    temp_path, sha256_hash = await _receive_apk(file)
 
     try:
         result = await _run_analysis_pipeline(
@@ -880,25 +971,7 @@ async def analyze_upload_async(
     Asynchronous APK analysis — returns job_id immediately.
     Poll GET /api/v1/status/{job_id} to get result.
     """
-    if not file.filename.endswith(".apk"):
-        raise HTTPException(status_code=400, detail="Invalid file type. Only .apk files are allowed.")
-
-    hasher = hashlib.sha256()
-    # Written to the volume SHARED with analysis-engine so delegation can
-    # resolve it. Previously this was the container-private /tmp, so every
-    # delegation attempt 400d and the gateway silently ran the pipeline
-    # itself — without APKTool/JADX (engine-only) and without any of the
-    # engine's resource limits. See _enrich_engine_result.
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".apk", dir=_UPLOADS_DIR) as tmp:
-        while True:
-            chunk = await file.read(1024 * 1024 * 8)
-            if not chunk:
-                break
-            hasher.update(chunk)
-            tmp.write(chunk)
-        temp_path = tmp.name
-        
-    sha256_hash = hasher.hexdigest()
+    temp_path, sha256_hash = await _receive_apk(file)
 
     job_id = create_job()
     await enqueue(job_id, temp_path, file.filename, sha256_hash, analyst_id=user.get("id"))
@@ -948,8 +1021,19 @@ async def sandbox_status(user: dict = Depends(require_analyst)):
 async def sandbox_debug(case_id: str, user: dict = Depends(require_analyst)):
     """
     Returns live pipeline state machine diagnostics, telemetry, SLA budgets, and hook coverage.
+
+    READ-ONLY. This previously called `get_tracker(case_id)`, which CREATES and
+    stores a PipelineTracker when the key is absent — in a module-global dict
+    whose eviction helper had no callers. So `GET /sandbox/debug/<random>` in a
+    loop grew that dict by one tracker per request until the process OOMed,
+    reachable with any analyst token. Look the tracker up; do not mint one.
     """
-    from sudarshan_core.engines.pipeline_state import get_tracker
-    tracker = get_tracker(case_id)
+    from sudarshan_core.engines.pipeline_state import peek_tracker
+    tracker = peek_tracker(case_id)
+    if tracker is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No active analysis session for case '{case_id}'.",
+        )
     return tracker.get_diagnostics()
 

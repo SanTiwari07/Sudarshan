@@ -27,6 +27,28 @@ from typing import Any, Callable, Dict, List, Optional, Union
 logger = logging.getLogger(__name__)
 
 
+# ─── Telemetry sinks ──────────────────────────────────────────────────────────
+#
+# Process-wide callbacks invoked for every event, regardless of which bus
+# instance published it. This exists so an outer layer (the API gateway) can
+# observe runtime telemetry WITHOUT sudarshan_core importing that layer — the
+# dependency runs downward only, which is what lets the same package run in a
+# service that has no such layer at all.
+_TELEMETRY_SINKS: List[Callable[[Dict[str, Any]], None]] = []
+
+
+def register_telemetry_sink(sink: Callable[[Dict[str, Any]], None]) -> None:
+    """Register a callback invoked for every event published on any bus."""
+    if sink not in _TELEMETRY_SINKS:
+        _TELEMETRY_SINKS.append(sink)
+        logger.info("[EventBus] Telemetry sink registered (%d active)", len(_TELEMETRY_SINKS))
+
+
+def clear_telemetry_sinks() -> None:
+    """Remove all sinks. Used by tests."""
+    _TELEMETRY_SINKS.clear()
+
+
 class EventType:
     SESSION_STARTED     = "SESSION_STARTED"
     SESSION_FINISHED    = "SESSION_FINISHED"
@@ -137,12 +159,25 @@ class RuntimeEventBus:
                     all_subs = list(self._subscribers)
                     typed_subs = list(self._typed_subscribers.get(etype, []))
 
-                # Auto-forward to in-process telemetry ring buffer
-                try:
-                    from app.routes.runtime_api import record_event
-                    record_event(event)
-                except Exception:
-                    pass
+                # Auto-forward to any registered telemetry sink.
+                #
+                # This used to import the gateway's runtime-telemetry module
+                # directly — an import from sudarshan_core UP into the
+                # backend, inside a bare `except: pass`. The analysis engine has
+                # no `app.routes` package, so in the process that actually runs
+                # the instrumentation the import raised ModuleNotFoundError on
+                # EVERY event and was silently swallowed. Since delegation is
+                # the primary path, that meant all hook and event telemetry from
+                # real analyses was discarded, and the dashboard read counters
+                # from a process that never saw them.
+                #
+                # The bus already had the right mechanism — subscribers. The
+                # gateway registers itself; the engine simply has no sink.
+                for sink in list(_TELEMETRY_SINKS):
+                    try:
+                        sink(event)
+                    except Exception as e:
+                        logger.error("[EventBus] Telemetry sink error: %s", e)
 
                 # Notify general subscribers
                 for cb in all_subs:

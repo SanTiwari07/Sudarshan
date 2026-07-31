@@ -52,7 +52,6 @@ GEMINI_MODEL="gemini-2.5-flash"
 ADB_HOST="host.docker.internal"
 ADB_PORT="5555"
 FRIDA_ANALYSIS_DURATION="30"
-SUDARSHAN_EXPLORER_MODE="ai"
 
 # ── Threat Intelligence ──
 VIRUSTOTAL_API_KEY=""

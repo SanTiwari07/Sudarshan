@@ -31,6 +31,7 @@ import json
 import logging
 import os
 import re
+import time
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -43,6 +44,16 @@ MOBSF_HOST = (os.getenv("MOBSF_HOST") or "http://mobsf:8000").strip()
 MOBSF_API_KEY = (os.getenv("MOBSF_API_KEY") or "").strip()
 
 _HEADERS = {"Authorization": MOBSF_API_KEY}
+
+# ─── Health-probe policy ──────────────────────────────────────────────────────
+# One probe, short timeout, cached verdict. See MobSFClient.is_available for
+# what this replaced and why.
+HEALTH_TIMEOUT_SECONDS: float = float(os.getenv("MOBSF_HEALTH_TIMEOUT", "2.0"))
+# MobSF was up: re-check soon, it could go down mid-session.
+HEALTH_CACHE_TTL_UP: float = float(os.getenv("MOBSF_HEALTH_TTL_UP", "60"))
+# MobSF was down: circuit breaker. Do not pay a round trip per analysis to
+# rediscover that a service which is not deployed is still not deployed.
+HEALTH_CACHE_TTL_DOWN: float = float(os.getenv("MOBSF_HEALTH_TTL_DOWN", "300"))
 
 # ─── Exceptions ───────────────────────────────────────────────────────────────
 
@@ -100,28 +111,78 @@ def _empty_report() -> Dict[str, Any]:
 class MobSFClient:
     """REST client for MobSF Docker instance."""
 
+    # host -> (available, checked_at_monotonic). Class-level: the analysis
+    # engine builds a fresh client per request, so a per-instance cache would
+    # never be hit there.
+    _availability_cache: Dict[str, tuple] = {}
+
     def __init__(self, host: Optional[str] = None, api_key: Optional[str] = None):
+        # Whether a host was passed explicitly, as opposed to falling back to
+        # the compose-network default. Used by is_available() to avoid probing
+        # an address nobody configured.
+        self._host_explicit = bool(host)
         self.host = (host or os.getenv("MOBSF_HOST") or "http://mobsf:8000").rstrip("/")
         self.api_key = (api_key or os.getenv("MOBSF_API_KEY") or "sudarshan_mobsf_api_key_2026").strip()
         self.headers = {"Authorization": self.api_key} if self.api_key else {}
 
     async def is_available(self) -> bool:
-        """Quick health check — returns True if MobSF responds. Includes retries."""
-        for attempt in range(5):
-            try:
-                async with httpx.AsyncClient(timeout=5.0) as client:
-                    r = await client.get(f"{self.host}/api_docs", headers=self.headers)
-                    if r.status_code in (200, 302, 401, 403):
-                        return True
-                    logger.warning(f"MobSF health check unexpected status: {r.status_code}")
-            except Exception as e:
-                logger.warning(f"MobSF health check attempt {attempt + 1} failed: {e}")
-            
-            if attempt < 4:
-                await asyncio.sleep(3)
-        
-        logger.error("MobSF is completely unavailable after retries.")
-        return False
+        """
+        Is MobSF reachable right now? Single probe, result cached.
+
+        This used to make FIVE attempts with a 5 s timeout and `sleep(3)`
+        between them — up to 37 s added to EVERY analysis whenever MobSF was
+        unreachable, just to re-confirm an answer that had not changed. Measured
+        against an unresolvable host it cost ~28 s per analysis.
+
+        Retrying a health check defeats its purpose. The question is "is it up
+        now?", and "no" is a perfectly good answer: the pipeline falls back to
+        Androguard, which is the designed behaviour. So: one attempt, short
+        timeout, and the verdict is cached — briefly when up (it may go down),
+        for longer when down (a circuit breaker, so a dead MobSF is not
+        re-probed on every single upload).
+
+        The cache is CLASS-level because the analysis engine constructs a fresh
+        MobSFClient per request; a per-instance cache would never hit there.
+        """
+        # Not configured is not a failure, and must not cost a network round
+        # trip. The constructor defaults host to http://mobsf:8000, so an
+        # unconfigured gateway would otherwise probe a name that cannot resolve
+        # on every analysis. The engine already guards on MOBSF_HOST; the
+        # gateway did not.
+        if not (os.getenv("MOBSF_HOST") or self._host_explicit):
+            logger.debug("[MobSF] MOBSF_HOST not configured — skipping probe.")
+            return False
+
+        now = time.monotonic()
+        cached = MobSFClient._availability_cache.get(self.host)
+        if cached is not None:
+            verdict, checked_at = cached
+            ttl = HEALTH_CACHE_TTL_UP if verdict else HEALTH_CACHE_TTL_DOWN
+            if now - checked_at < ttl:
+                return verdict
+
+        available = False
+        try:
+            async with httpx.AsyncClient(timeout=HEALTH_TIMEOUT_SECONDS) as client:
+                r = await client.get(f"{self.host}/api_docs", headers=self.headers)
+                # 302/401/403 all mean "MobSF is up and answering" — /api_docs
+                # requires auth and may redirect.
+                available = r.status_code in (200, 302, 401, 403)
+                if not available:
+                    logger.warning(f"[MobSF] Health check unexpected status: {r.status_code}")
+        except Exception as e:
+            logger.info(
+                f"[MobSF] Not reachable at {self.host} ({type(e).__name__}: {e}) — "
+                f"falling back to Androguard. Re-probing in {HEALTH_CACHE_TTL_DOWN:.0f}s."
+            )
+
+        MobSFClient._availability_cache[self.host] = (available, now)
+        return available
+
+    @classmethod
+    def reset_availability_cache(cls) -> None:
+        """Forget cached health verdicts. For tests and for config reloads."""
+        cls._availability_cache.clear()
 
     async def upload(self, apk_path: str) -> str:
         """

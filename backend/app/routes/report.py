@@ -549,7 +549,13 @@ async def analyst_chat_stream(req: ChatRequest, user: dict = Depends(require_ana
       done     — end of stream
       error    — error message
     """
-    from app.ai.gemini_rag import stream_investigation_response
+    from app.ai.gemini_rag import stream_investigation_response, is_indexed, build_investigation_index
+
+    # Auto-index if not yet indexed in memory (e.g. backend restarted or historical case)
+    if not is_indexed(req.sha256):
+        report = await load_report(req.sha256)
+        if report:
+            build_investigation_index(req.sha256, report)
 
     async def event_generator():
         async for chunk in stream_investigation_response(

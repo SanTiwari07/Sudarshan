@@ -31,25 +31,6 @@ const QUICK_QUESTIONS = [
   { icon: <HelpCircle className="h-3.5 w-3.5" />, label: "Show network indicators" },
 ];
 
-// Keywords to automatically bold/highlight in investigation markdown text
-const HIGHLIGHT_KEYWORDS = [
-  'Risk Score', 'Package', 'Malware Family', 'MITRE', 'Dynamic Analysis',
-  'Static Analysis', 'Recommendation', 'IOC', 'SHA256', 'Permissions',
-  'Threat Intelligence', 'Evidence', 'Verdict', 'Confidence', 'Severity'
-];
-
-function highlightKeywords(text: string): React.ReactNode[] {
-  if (!text) return [];
-  const regex = new RegExp(`\\b(${HIGHLIGHT_KEYWORDS.join('|')})\\b`, 'gi');
-  const parts = text.split(regex);
-  return parts.map((part, i) => {
-    if (HIGHLIGHT_KEYWORDS.some(k => k.toLowerCase() === part.toLowerCase())) {
-      return <strong key={i} className="font-bold text-slate-900 bg-amber-100/60 px-1 py-0.5 rounded">{part}</strong>;
-    }
-    return part;
-  });
-}
-
 // ─── Component 1: PackageCard ──────────────────────────────────────────────────
 
 function PackageCard({ packageName }: { packageName: string }) {
@@ -218,16 +199,132 @@ function TableRenderer({ headers, rows }: { headers: string[]; rows: string[][] 
 
 // ─── Component 6: MarkdownRenderer ─────────────────────────────────────────────
 
+// ─── Formatting Helpers ────────────────────────────────────────────────────────
+
+function autoFormatInvestigationText(text: string): string {
+  if (!text) return text;
+
+  // 1. Preserve code blocks and embedded cards
+  const codeBlockMatches: string[] = [];
+  let processed = text.replace(/```[\s\S]*?```/g, match => {
+    codeBlockMatches.push(match);
+    return `__CODE_BLOCK_${codeBlockMatches.length - 1}__`;
+  });
+
+  // 2. Automatically detect section titles and convert to H2 headings
+  const sectionKeywords = [
+    'Investigation Summary', 'Executive Summary', 'Direct Answer',
+    'Risk Scores', 'Risk Assessment', 'Key Decision Evidence',
+    'Static Analysis Findings', 'Static Analysis',
+    'Dynamic Analysis Findings', 'Dynamic Analysis',
+    'Network Behaviour', 'Network Indicators', 'Network & C2',
+    'Threat Intelligence', 'MITRE ATT&CK Mapping', 'MITRE Mapping',
+    'Recommendation', 'Recommended Action', 'Conclusion',
+    'Suggested Follow-up Questions', 'Suggested Questions'
+  ];
+
+  sectionKeywords.forEach(kw => {
+    const regex = new RegExp(`(?:^|\\n)(?:---)?\\s*(${kw})\\s*:?\\s*(?:---)?(?=\\n|$)`, 'gi');
+    processed = processed.replace(regex, `\n\n## $1\n\n`);
+  });
+
+  // 3. Convert inline comma lists into bullet lists if line matches item,item,item
+  processed = processed.split('\n').map(line => {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('*') && !trimmed.startsWith('-') && !trimmed.startsWith('•') && !trimmed.startsWith('#')) {
+      if (trimmed.includes(',') && trimmed.split(',').length >= 3 && trimmed.length < 150) {
+        const items = trimmed.split(',').map(i => i.trim()).filter(Boolean);
+        return items.map(item => `• ${item}`).join('\n');
+      }
+    }
+    return line;
+  }).join('\n');
+
+  // 4. Auto-split long paragraphs (> 220 characters without line breaks)
+  const paragraphs = processed.split(/\n\s*\n/);
+  const formattedParagraphs = paragraphs.map(para => {
+    const trimmed = para.trim();
+    if (
+      trimmed.includes('__CODE_BLOCK_') ||
+      trimmed.startsWith('#') ||
+      trimmed.startsWith('*') ||
+      trimmed.startsWith('-') ||
+      trimmed.startsWith('•') ||
+      trimmed.startsWith('|') ||
+      trimmed.startsWith('>') ||
+      trimmed.startsWith('__PACKAGE_CARD') ||
+      trimmed.startsWith('__RISK_CARD')
+    ) {
+      return para;
+    }
+
+    if (trimmed.length > 220) {
+      const sentences = trimmed.match(/[^.!?]+[.!?]+(?:\s+|$)/g) || [trimmed];
+      const chunks: string[] = [];
+      let current = '';
+
+      sentences.forEach(sentence => {
+        if ((current + sentence).length > 200 && current.length > 0) {
+          chunks.push(current.trim());
+          current = sentence;
+        } else {
+          current += sentence;
+        }
+      });
+      if (current.trim()) {
+        chunks.push(current.trim());
+      }
+      return chunks.join('\n\n');
+    }
+
+    return para;
+  });
+
+  processed = formattedParagraphs.join('\n\n');
+
+  // 5. Restore code blocks
+  codeBlockMatches.forEach((code, idx) => {
+    processed = processed.replace(`__CODE_BLOCK_${idx}__`, code);
+  });
+
+  return processed;
+}
+
+const HIGHLIGHT_PATTERNS = /\b(?:\d{1,3}\.\d{1,2}\s*\/\s*100|\d{1,3}\.\d{1,2}%?|\d{1,3}%|T\d{4}(?:\.\d{3})?|READ_SMS|SYSTEM_ALERT_WINDOW|ACCESSIBILITY_SERVICE|BIND_ACCESSIBILITY_SERVICE|RECORD_AUDIO|RECEIVE_SMS|CAMERA|READ_CONTACTS|Critical|High|Moderate|Low|Suspicious|Anatsa|Hook|Hydra|Teabot|Sudarshan|Cerberus|Alien|Vultun)\b/gi;
+
+function highlightKeywords(text: string): React.ReactNode[] {
+  if (!text) return [];
+
+  const parts = text.split(HIGHLIGHT_PATTERNS);
+  const matches = text.match(HIGHLIGHT_PATTERNS) || [];
+
+  const result: React.ReactNode[] = [];
+  parts.forEach((part, i) => {
+    result.push(part);
+    if (i < matches.length) {
+      const match = matches[i];
+      result.push(
+        <strong key={i} className="font-bold text-slate-950 bg-amber-100/70 px-1 py-0.5 rounded shadow-2xs">
+          {match}
+        </strong>
+      );
+    }
+  });
+
+  return result;
+}
+
+// ─── Component 6: MarkdownRenderer ─────────────────────────────────────────────
+
 function MarkdownRenderer({ content, isStreaming }: { content: string; isStreaming?: boolean }) {
   if (!content) return null;
 
-  // Split content by code blocks first
-  const blocks = content.split(/(```[\s\S]*?```)/g);
+  const formattedContent = autoFormatInvestigationText(content);
+  const blocks = formattedContent.split(/(```[\s\S]*?```)/g);
 
   return (
-    <div className="space-y-4 text-slate-800 text-sm leading-[1.8] font-sans">
+    <div className="space-y-4 text-slate-800 text-[15px] leading-[1.85] font-sans max-w-[880px]">
       {blocks.map((block, bIdx) => {
-        // Fenced Code Block
         if (block.startsWith('```') && block.endsWith('```')) {
           const match = block.match(/^```(\w+)?\n([\s\S]*?)```$/);
           const lang = match ? match[1] : 'code';
@@ -235,7 +332,6 @@ function MarkdownRenderer({ content, isStreaming }: { content: string; isStreami
           return <CodeBlock key={bIdx} code={code.trim()} language={lang} />;
         }
 
-        // Parse inline lines
         const lines = block.split('\n');
         const elements: React.ReactNode[] = [];
         let inTable = false;
@@ -256,7 +352,7 @@ function MarkdownRenderer({ content, isStreaming }: { content: string; isStreami
         const flushList = (key: string) => {
           if (inList && listItems.length > 0) {
             elements.push(
-              <ul key={key} className="my-3 pl-5 space-y-2 list-disc text-slate-800 font-normal leading-relaxed">
+              <ul key={key} className="my-4 pl-5 space-y-2 list-disc text-slate-800 font-normal leading-relaxed">
                 {listItems}
               </ul>
             );
@@ -268,29 +364,22 @@ function MarkdownRenderer({ content, isStreaming }: { content: string; isStreami
         lines.forEach((line, lIdx) => {
           const trimmed = line.trim();
 
-          // Embedded Package Card
           if (trimmed.startsWith('__PACKAGE_CARD__:')) {
             const pkg = trimmed.replace('__PACKAGE_CARD__:', '').replace('__', '');
             elements.push(<PackageCard key={`pkg-${lIdx}`} packageName={pkg} />);
             return;
           }
 
-          // Embedded Risk Card
           if (trimmed.startsWith('__RISK_CARD__:')) {
             const parts = trimmed.replace('__RISK_CARD__:', '').replace('__', '').split(':');
             elements.push(<RiskCard key={`risk-${lIdx}`} score={parseFloat(parts[0]) || 0} band={parts[1] || 'Suspicious'} />);
             return;
           }
 
-          // Table Detection
           if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
             flushList(`list-before-table-${lIdx}`);
             const cols = trimmed.split('|').slice(1, -1).map(c => c.trim());
-
-            if (cols.every(c => /^[-:]+$/.test(c))) {
-              // Header separator line, ignore
-              return;
-            }
+            if (cols.every(c => /^[-:]+$/.test(c))) return;
 
             if (!inTable) {
               inTable = true;
@@ -303,13 +392,12 @@ function MarkdownRenderer({ content, isStreaming }: { content: string; isStreami
             flushTable(`table-${lIdx}`);
           }
 
-          // List Detection
           if (trimmed.startsWith('* ') || trimmed.startsWith('- ') || trimmed.startsWith('• ')) {
             flushTable(`table-before-list-${lIdx}`);
             inList = true;
             const itemText = trimmed.replace(/^[*•-]\s*/, '');
             listItems.push(
-              <li key={`li-${lIdx}`} className="leading-relaxed">
+              <li key={`li-${lIdx}`} className="leading-relaxed my-1">
                 {renderFormattedInline(itemText)}
               </li>
             );
@@ -324,21 +412,50 @@ function MarkdownRenderer({ content, isStreaming }: { content: string; isStreami
             return;
           }
 
-          // Headings
-          if (trimmed.startsWith('# ')) {
-            elements.push(<h1 key={lIdx} className="text-xl font-bold text-slate-900 mt-5 mb-2.5">{renderFormattedInline(trimmed.slice(2))}</h1>);
-            return;
-          }
-          if (trimmed.startsWith('## ')) {
-            elements.push(<h2 key={lIdx} className="text-lg font-bold text-slate-900 mt-4 mb-2">{renderFormattedInline(trimmed.slice(3))}</h2>);
-            return;
-          }
-          if (trimmed.startsWith('### ')) {
-            elements.push(<h3 key={lIdx} className="text-base font-semibold text-slate-900 mt-3 mb-1.5">{renderFormattedInline(trimmed.slice(4))}</h3>);
+          // Automatic Warning Callout Detection
+          if (
+            trimmed.toLowerCase().includes('no runtime events') ||
+            trimmed.toLowerCase().includes('no malicious activity was observed') ||
+            trimmed.toLowerCase().includes('anti-analysis detected') ||
+            trimmed.toLowerCase().includes('instrumentation failed') ||
+            trimmed.toLowerCase().includes('application crashed')
+          ) {
+            elements.push(
+              <Callout key={lIdx} type="warning" title="Analysis Warning">
+                {renderFormattedInline(trimmed)}
+              </Callout>
+            );
             return;
           }
 
-          // Callout Detection
+          // Headings
+          if (trimmed.startsWith('# ')) {
+            elements.push(<h1 key={lIdx} className="text-xl font-black text-slate-900 mt-6 mb-3 border-b pb-2">{renderFormattedInline(trimmed.slice(2))}</h1>);
+            return;
+          }
+          if (trimmed.startsWith('## ') || trimmed.startsWith('### ')) {
+            const headingTitle = trimmed.replace(/^#{2,3}\s*/, '');
+            const isDirectAnswer = headingTitle.toLowerCase().includes('direct answer') || headingTitle.toLowerCase().includes('summary');
+            const isAction = headingTitle.toLowerCase().includes('recommend');
+
+            elements.push(
+              <div
+                key={lIdx}
+                className={`mt-6 mb-3.5 px-4 py-2.5 rounded-xl border flex items-center gap-2.5 font-bold text-sm shadow-2xs ${
+                  isDirectAnswer
+                    ? 'bg-blue-50/90 border-blue-200 text-blue-900'
+                    : isAction
+                    ? 'bg-amber-50/90 border-amber-200 text-amber-900'
+                    : 'bg-slate-100/80 border-slate-200 text-slate-800'
+                }`}
+              >
+                <Shield className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                <span>{renderFormattedInline(headingTitle)}</span>
+              </div>
+            );
+            return;
+          }
+
           if (trimmed.startsWith('> [!NOTE]') || trimmed.startsWith('> [!INFO]')) {
             elements.push(<Callout key={lIdx} type="info" title="Information">{renderFormattedInline(trimmed.replace(/^>\s*\[!(NOTE|INFO)\]\s*/, ''))}</Callout>);
             return;
@@ -352,15 +469,14 @@ function MarkdownRenderer({ content, isStreaming }: { content: string; isStreami
             return;
           }
 
-          // Horizontal rule
           if (trimmed === '---' || trimmed === '***' || trimmed === '___') {
-            elements.push(<hr key={lIdx} className="my-5 border-slate-200" />);
+            elements.push(<hr key={lIdx} className="my-6 border-slate-200" />);
             return;
           }
 
-          // Regular Paragraph
+          // Regular Paragraph with clean spacing
           elements.push(
-            <p key={lIdx} className="my-2 leading-relaxed text-slate-800">
+            <p key={lIdx} className="my-4 leading-[1.85] text-slate-800 font-normal">
               {renderFormattedInline(trimmed)}
             </p>
           );
@@ -372,7 +488,6 @@ function MarkdownRenderer({ content, isStreaming }: { content: string; isStreami
         return <div key={bIdx}>{elements}</div>;
       })}
 
-      {/* Typing cursor during streaming */}
       {isStreaming && (
         <span className="inline-block w-2 h-4 bg-blue-600 ml-1 animate-pulse font-mono font-bold">▋</span>
       )}
@@ -381,7 +496,6 @@ function MarkdownRenderer({ content, isStreaming }: { content: string; isStreami
 }
 
 function renderFormattedInline(text: string): React.ReactNode {
-  // Parse inline code `code`
   const parts = text.split(/(`[^`]+`)/g);
 
   return parts.map((part, i) => {
@@ -394,12 +508,11 @@ function renderFormattedInline(text: string): React.ReactNode {
       );
     }
 
-    // Parse **bold**
     const boldParts = part.split(/(\*\*[^*]+\*\*)/g);
     return boldParts.map((bPart, j) => {
       if (bPart.startsWith('**') && bPart.endsWith('**')) {
         const boldVal = bPart.slice(2, -2);
-        return <strong key={j} className="font-bold text-slate-900">{boldVal}</strong>;
+        return <strong key={j} className="font-bold text-slate-950">{boldVal}</strong>;
       }
       return <span key={j}>{highlightKeywords(bPart)}</span>;
     });
@@ -443,6 +556,77 @@ function SectionChips({ sections }: { sections: string[] }) {
           {SECTION_LABELS[s] || s}
         </span>
       ))}
+    </div>
+  );
+}
+
+// ─── Component 8: Structured Investigation Response Renderer ──────────────────
+
+function InvestigationResponseRenderer({
+  content,
+  isStreaming,
+  onSendMessage,
+}: {
+  content: string;
+  isStreaming?: boolean;
+  onSendMessage: (q: string) => void;
+}) {
+  if (!content) return null;
+
+  const followUpPattern = /(?:#{2,3}\s*(?:Suggested\s*)?(?:Follow-up\s*)?Questions|---FOLLOW-UP QUESTIONS---)([\s\S]*)/i;
+  const match = content.match(followUpPattern);
+
+  let bodyContent = content;
+  let followUps: string[] = [];
+
+  if (match) {
+    bodyContent = content.slice(0, match.index).trim();
+    const rawFollow = match[1].trim();
+
+    try {
+      const matchJson = rawFollow.match(/\[[\s\S]*\]/);
+      if (matchJson) {
+        const parsed = JSON.parse(matchJson[0]);
+        if (Array.isArray(parsed)) {
+          followUps = parsed.map(q => String(q).trim()).filter(Boolean);
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    if (followUps.length === 0) {
+      followUps = rawFollow
+        .split('\n')
+        .map(l => l.replace(/^[*•-]\s*/, '').replace(/^\d+\.\s*/, '').replace(/^"\s*/, '').replace(/"\s*$/, '').trim())
+        .filter(l => l.length > 5 && (l.endsWith('?') || l.includes('?')));
+    }
+  }
+
+  return (
+    <div className="space-y-4 max-w-[880px]">
+      <MarkdownRenderer content={bodyContent} isStreaming={isStreaming} />
+
+      {followUps.length > 0 && (
+        <div className="mt-6 pt-4 border-t border-slate-200/80 space-y-2.5">
+          <div className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+            <HelpCircle className="h-4 w-4 text-blue-600" /> Suggested Follow-up Questions
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {followUps.map((q, idx) => (
+              <button
+                key={idx}
+                onClick={() => onSendMessage(q)}
+                disabled={isStreaming}
+                className="text-xs bg-white border border-slate-200 hover:border-blue-400 hover:bg-blue-50/80 text-slate-800 font-medium px-3.5 py-2 rounded-xl transition-all text-left shadow-2xs disabled:opacity-50 flex items-center gap-1.5"
+              >
+                <span className="text-blue-600 font-bold">•</span>
+                <span>{q}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -547,6 +731,7 @@ Everything is grounded strictly in investigation evidence.`,
 
       const reader = res.body?.getReader();
       const decoder = new TextDecoder('utf-8');
+      let currentEvent = 'token';
       let accumulated = '';
       let sectionsUsed: string[] = [];
 
@@ -564,26 +749,57 @@ Everything is grounded strictly in investigation evidence.`,
         for (const line of lines) {
           if (!line.trim() || line.startsWith(':')) continue;
 
-          if (line.startsWith('data: ')) {
-            const dataStr = line.slice(6).trim();
-            if (dataStr === '[DONE]') break;
+          if (line.startsWith('event: ')) {
+            currentEvent = line.slice(7).trim();
+            continue;
+          }
 
+          if (line.startsWith('data: ')) {
+            const rawData = line.slice(6);
+            if (rawData.trim() === '[DONE]') break;
+
+            let dataStr = rawData;
             try {
-              const event = JSON.parse(dataStr);
-              if (event.event === 'sections') {
-                sectionsUsed = event.data || [];
-              } else if (event.event === 'token') {
-                accumulated += event.data || '';
-                setMessages(prev =>
-                  prev.map(m =>
-                    m.id === assistantId
-                      ? { ...m, content: accumulated, sectionsUsed }
-                      : m
-                  )
-                );
-              }
+              const parsed = JSON.parse(rawData);
+              dataStr = typeof parsed === 'string' ? parsed : rawData;
             } catch {
-              // ignore parse errors
+              dataStr = rawData;
+            }
+
+            if (currentEvent === 'sections') {
+              try {
+                const parsed = JSON.parse(rawData.trim());
+                sectionsUsed = Array.isArray(parsed) ? parsed : (parsed.data || []);
+              } catch {
+                // ignore
+              }
+            } else if (currentEvent === 'token') {
+              accumulated += dataStr;
+              setMessages(prev =>
+                prev.map(m =>
+                  m.id === assistantId
+                    ? { ...m, content: accumulated, sectionsUsed }
+                    : m
+                )
+              );
+            } else if (currentEvent === 'error') {
+              accumulated += (accumulated ? '\n\n' : '') + `> [!CRITICAL]\n> ${dataStr.trim()}`;
+              setMessages(prev =>
+                prev.map(m =>
+                  m.id === assistantId
+                    ? { ...m, content: accumulated, sectionsUsed }
+                    : m
+                )
+              );
+            } else {
+              accumulated += dataStr;
+              setMessages(prev =>
+                prev.map(m =>
+                  m.id === assistantId
+                    ? { ...m, content: accumulated, sectionsUsed }
+                    : m
+                )
+              );
             }
           }
         }
@@ -672,7 +888,7 @@ Everything is grounded strictly in investigation evidence.`,
                   : 'bg-white border border-slate-200/90 p-5 shadow-sm text-slate-800 w-full'
               }`}>
                 {msg.role === 'assistant' ? (
-                  <MarkdownRenderer content={msg.content} isStreaming={msg.streaming} />
+                  <InvestigationResponseRenderer content={msg.content} isStreaming={msg.streaming} onSendMessage={sendMessage} />
                 ) : (
                   <p className="text-xs font-medium leading-relaxed">{msg.content}</p>
                 )}

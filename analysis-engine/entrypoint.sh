@@ -18,14 +18,24 @@ adb start-server || true
 
 echo "[Analysis Engine] Attempting ADB connection to ${ADB_HOST}:${ADB_PORT}..."
 (
+    _connected=0
     for i in {1..10}; do
         if adb connect "${ADB_HOST}:${ADB_PORT}" | grep -E "connected|already"; then
             echo "[Analysis Engine] ADB connection established to ${ADB_HOST}:${ADB_PORT}"
+            _connected=1
             break
         fi
-        echo "[Analysis Engine] ADB target ${ADB_HOST}:${ADB_PORT} not ready (attempt $i/10). Retrying in 3s..."
-        sleep 3
+        echo "[Analysis Engine] ADB target ${ADB_HOST}:${ADB_PORT} not ready (attempt $i/10)."
+        # Do not sleep after the last attempt — no emulator is a normal operating
+        # mode for static-only analysis; the extra delay just makes cold-start noisy.
+        if [ "$i" -lt 10 ]; then
+            sleep 3
+        fi
     done
+    # Only print when all retries were exhausted — not on a successful connect.
+    if [ "$_connected" -eq 0 ]; then
+        echo "[Analysis Engine] No emulator reachable at ${ADB_HOST}:${ADB_PORT} — static analysis only."
+    fi
 ) &
 
 # Launch FastAPI Uvicorn Server on 0.0.0.0:8001

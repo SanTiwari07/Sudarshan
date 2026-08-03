@@ -9,6 +9,12 @@ services:
       - "5173:5173"
     environment:
       - VITE_API_URL=http://localhost:8000/api/v1
+      # Force chokidar (Vite's file watcher) into polling mode on Windows/WSL2
+      # bind-mount volumes. Without this, inotify events fail with EIO when
+      # the /app bind-mount path becomes momentarily unavailable and crash the
+      # entire Vite dev server process (Node.js uncaught FSWatcher error).
+      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_INTERVAL=300
     depends_on:
       - backend
     volumes:

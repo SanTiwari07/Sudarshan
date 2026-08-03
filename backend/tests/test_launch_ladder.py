@@ -108,7 +108,7 @@ def test_launch_step1_am_start_succeeds(monkeypatch):
 
 # ── Test 2: step 1 fails, step 2 (resolved launcher) succeeds ────────────────
 
-def test_launch_step2_monkey_fallback(monkeypatch):
+def test_launch_step2_resolved_launcher(monkeypatch):
     """
     When am start returns but the process is not running, the ladder must fall
     through to the resolved launcher activity and succeed there.

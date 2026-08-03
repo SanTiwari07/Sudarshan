@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document outlines the evaluation methodology, verification protocols, test suite architecture, and audit scorecards for the **SUDARSHAN** platform. It documents how the system asserts mathematical determinism, prompt injection resilience, pipeline robustness, and accuracy across **388 automated unit, integration, and replay tests**.
+This document outlines the evaluation methodology, verification protocols, test suite architecture, and audit scorecards for the **SUDARSHAN** platform. It documents how the system asserts mathematical determinism, prompt injection resilience, pipeline robustness, and accuracy across **421 automated unit, integration, and replay tests**.
 
 ---
 
@@ -18,7 +18,7 @@ The evaluation framework is responsible for:
 
 ## High-Level Overview
 
-Sudarshan enforces a rigorous quality gate prior to deployment. The automated test suite consists of **388 passing pytest test cases** located in [`backend/tests/`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/).
+Sudarshan enforces a rigorous quality gate prior to deployment. The automated test suite consists of **421 passing pytest test cases** located in [`tests/`](file:///d:/Projects/Sudarshan%20BOI/tests/) and [`backend/tests/`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/).
 
 ```text
 [ Test Suite Execution (pytest) ]
@@ -43,7 +43,7 @@ graph TD
         RUNNER[pytest Engine]
     end
 
-    subgraph Test Modules (backend/tests/)
+    subgraph Test Modules (tests/ & backend/tests/)
         DET[Determinism Replay / test_determinism_replay.py]
         SAN[Sanitizer Suite / test_prompt_injection.py]
         RISK[Risk Formula Suite / test_risk_engine.py]
@@ -51,6 +51,7 @@ graph TD
         WORK_T[Workflow Reconstructor / test_workflow_reconstructor.py]
         AGENT_T[Agentic Explorer / test_agentic_explorer.py]
         REM[Remaining Features / test_remaining_features.py]
+        MAN_REP[Manifest Repair / test_manifest_repair.py]
     end
 
     subgraph Ground Truth Baselines
@@ -64,6 +65,7 @@ graph TD
     RUNNER --> WORK_T
     RUNNER --> AGENT_T
     RUNNER --> REM
+    RUNNER --> MAN_REP
 
     DET --> BASE
 ```

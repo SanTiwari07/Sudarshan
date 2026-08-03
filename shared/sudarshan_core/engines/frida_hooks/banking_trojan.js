@@ -378,8 +378,22 @@ setInterval(function () {
   });
 }, 3000);
 
-// ─── Schedule hook initialization after current tick ─────────────────────────
-setImmediate(initHooks);
+// Call synchronously — do NOT use setImmediate() here.
+//
+// setImmediate() defers Java.perform() to the next GumJS event-loop tick,
+// which executes on a Frida fiber that needs a fresh JNI thread attachment.
+// That attachment triggers frida-java-bridge's internal:
+//
+//   factory.use("android.app.ActivityThread")
+//     -> getArtClassSpec("java/lang/Thread")
+//       -> ART struct field lookup CRASH on Android 17 / API 37
+//
+// Calling initHooks() directly here runs Java.perform() on the same thread
+// that is already executing the script load, which already has a valid JNI
+// env. This is identical to how the working minimal probe loads — no deferred
+// path, no fresh thread attachment, no getArtClassSpec() crash.
+initHooks();
+
 
 // ─── Main Hook Initialization ─────────────────────────────────────────────────
 function initHooks() {
@@ -396,6 +410,7 @@ function initHooks() {
         'frida-java-bridge via frida-compile. NO Java hooks were installed.',
       java_bridge_source: JAVA_BRIDGE_SOURCE,
       fatal: true,
+      java_bridge_failed: true,
     });
     return;
   }
@@ -403,6 +418,22 @@ function initHooks() {
 
   try {
     Java.perform(function () {
+
+      // ── Mandatory Self-Test Gate ─────────────────────────────────────────────
+      try {
+        Java.use('java.lang.String');
+        Java.use('java.lang.Thread');
+      } catch (stErr) {
+        send({
+          type: 'error',
+          description: 'Java self-test failed: ' + (stErr.stack || stErr.toString()),
+          java_bridge_source: JAVA_BRIDGE_SOURCE,
+          fatal: true,
+          java_bridge_failed: true,
+        });
+        return;
+      }
+      send({ type: 'diag', msg: 'java_gate_passed', ts: Date.now() });
 
       // ── Deoptimize ART for hook reliability ──────────────────────────────────
       // Without this, ART may inline virtual dispatch, making method hooks unreachable.
@@ -466,34 +497,43 @@ function initHooks() {
         registerHook('AccessibilityService.onAccessibilityEvent');
 
         // Dynamic subclass hook for malware custom AccessibilityService subclasses
-        Java.enumerateLoadedClasses({
-          onMatch: function(className) {
-            if (className.indexOf('android.') === -1 && className.indexOf('java.') === -1 && className.indexOf('dalvik.') === -1) {
+        // Defer non-critical class enumeration so script load completes instantly without locking UI thread / Frida transport
+        try {
+          setTimeout(function () {
+            Java.perform(function () {
               try {
-                var targetCls = Java.use(className);
-                if (targetCls.onAccessibilityEvent) {
-                  targetCls.onAccessibilityEvent.implementation = function(event) {
-                    var eventType = -1;
-                    var pkgName = null;
-                    try { eventType = event.getEventType(); } catch (e) {}
-                    try { var pn = event.getPackageName(); pkgName = pn ? pn.toString() : null; } catch (e) {}
-                    emit('accessibility', {
-                      hook: className + '.onAccessibilityEvent',
-                      class_name: className,
-                      severity: 'CRITICAL',
-                      event_type: eventType,
-                      package: pkgName,
-                      description: 'Accessibility event handled by custom service subclass: ' + className,
-                    });
-                    return this.onAccessibilityEvent(event);
-                  };
-                  registerHook(className + '.onAccessibilityEvent');
-                }
-              } catch(e) {}
-            }
-          },
-          onComplete: function() {}
-        });
+                Java.enumerateLoadedClasses({
+                  onMatch: function(className) {
+                    if (className && className.indexOf('android.') === -1 && className.indexOf('java.') === -1 && className.indexOf('dalvik.') === -1 && className.indexOf('$') === -1) {
+                      try {
+                        var targetCls = Java.use(className);
+                        if (targetCls && targetCls.onAccessibilityEvent) {
+                          targetCls.onAccessibilityEvent.implementation = function(event) {
+                            var eventType = -1;
+                            var pkgName = null;
+                            try { eventType = event.getEventType(); } catch (e) {}
+                            try { var pn = event.getPackageName(); pkgName = pn ? pn.toString() : null; } catch (e) {}
+                            emit('accessibility', {
+                              hook: className + '.onAccessibilityEvent',
+                              class_name: className,
+                              severity: 'CRITICAL',
+                              event_type: eventType,
+                              package: pkgName,
+                              description: 'Accessibility event handled by custom service subclass: ' + className,
+                            });
+                            return this.onAccessibilityEvent(event);
+                          };
+                          registerHook(className + '.onAccessibilityEvent');
+                        }
+                      } catch(e) {}
+                    }
+                  },
+                  onComplete: function() {}
+                });
+              } catch (e) {}
+            });
+          }, 1000);
+        } catch (e) {}
       } catch (e) { reportHookError('AccessibilityService.onAccessibilityEvent', e.message); }
 
       try {
@@ -956,7 +996,7 @@ function initHooks() {
       // restricted. Requires PACKAGE_USAGE_STATS, so a call is itself notable.
       try {
         var UsageStatsManager = Java.use('android.app.usage.UsageStatsManager');
-        UsageStatsManager.queryEvents.implementation = function (begin, end) {
+        UsageStatsManager.queryEvents.overload('long', 'long').implementation = function (begin, end) {
           emit('device_fingerprint', {
             hook: 'UsageStatsManager.queryEvents',
             class_name: 'android.app.usage.UsageStatsManager',
@@ -1103,7 +1143,7 @@ function initHooks() {
       // narrative evidence is preserved.
       try {
         var PackageManager = Java.use('android.content.pm.PackageManager');
-        PackageManager.getInstalledApplications.implementation = function (flags) {
+        PackageManager.getInstalledApplications.overload('int').implementation = function (flags) {
           var apps = this.getInstalledApplications(flags);
           emit('device_fingerprint', {
             hook: 'PackageManager.getInstalledApplications',
@@ -1116,7 +1156,7 @@ function initHooks() {
         };
         registerHook('PackageManager.getInstalledApplications');
 
-        PackageManager.getInstalledPackages.implementation = function (flags) {
+        PackageManager.getInstalledPackages.overload('int').implementation = function (flags) {
           var pkgs = this.getInstalledPackages(flags);
           emit('device_fingerprint', {
             hook: 'PackageManager.getInstalledPackages',
@@ -1650,7 +1690,7 @@ function initHooks() {
       var MAX_SUPPRESSED_LINES = 200;
       try {
         var BufferedReader = Java.use('java.io.BufferedReader');
-        BufferedReader.readLine.implementation = function () {
+        BufferedReader.readLine.overload().implementation = function () {
           var line = this.readLine();
           var suppressed = 0;
           while (line !== null &&
@@ -1748,9 +1788,12 @@ function initHooks() {
   } catch (e) {
     send({
       type: 'error',
-      description: 'Java.perform() failed: ' + e.message,
-      stack: e.stack || '',
+      description: 'Java.perform() failed: ' + (e.stack || e.toString()),
+      java_bridge_source: JAVA_BRIDGE_SOURCE,
+      fatal: true,
+      java_bridge_failed: true,
     });
+    return;
   }
 } // end initHooks
 

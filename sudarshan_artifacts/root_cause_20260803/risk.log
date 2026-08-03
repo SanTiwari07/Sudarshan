@@ -1,0 +1,2 @@
+2026-08-03T18:38:17.068+05:30 NOT RUN: Risk Engine was not evaluated as a valid dynamic-analysis stage.
+Reason: upstream Java-hook initialization failed; dynamic_status=INSTRUMENTATION_FAILED; BFCI=0.0 is invalid instrumentation output, not a risk observation.

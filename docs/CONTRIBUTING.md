@@ -2,8 +2,8 @@
 
 ```yaml
 Document Title:      Sudarshan Developer & Contribution Guide
-Version:             2.3.0-STABLE
-Last Revision:       2026-07-29
+Version:             2.5.0-STABLE
+Last Revision:       2026-08-03
 Target Audience:     Core Contributors, Module Developers, Security Researchers
 ```
 
@@ -55,18 +55,19 @@ Target Audience:     Core Contributors, Module Developers, Security Researchers
 
 ## 3. Testing & Determinism Baselines
 
-All PRs must maintain 100% test suite compliance (**388 / 388 tests passing**). Never break existing test assertions or compromise the **Determinism Invariant**.
+All PRs must maintain 100% test suite compliance (**421 / 421 tests passing**). Never break existing test assertions or compromise the **Determinism Invariant**.
 
 ### Running Automated Tests
 ```powershell
-$env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest backend/tests
+$env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests
 ```
 
-### Key Test File Inventory (in [`backend/tests/`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/))
+### Key Test File Inventory (in [`tests/`](file:///d:/Projects/Sudarshan%20BOI/tests/) and [`backend/tests/`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/))
 - `tests/test_remaining_features.py`: Tests `InvestigationManifest`, `ApktoolEngine`, `JadxEngine`, and `mitmproxy` HAR parsing.
 - `tests/test_bfci_scorer.py`: Tests logarithmic volume scoring and sequence bonuses.
 - `tests/test_workflow_reconstructor.py`: Tests causal chain workflow reconstruction.
 - `tests/test_risk_engine.py`: Tests 5-axis STEI, static fallback, and 4-axis FRS formula.
+- `tests/test_manifest_repair.py`: Tests automated AXML manifest repair and fallback XML decoding.
 - `tests/test_prompt_injection.py`: Tests input sanitization against prompt injection attacks.
 - `tests/test_determinism_replay.py`: Validates byte-for-byte verdict stability against pre-refactor recorded baselines.
 - `tests/test_detection_regressions.py`: Tests detection regression assertions across malware patterns.
@@ -86,5 +87,5 @@ $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytes
 ## 5. Submitting Pull Requests
 
 1. Run formatting and lint checks.
-2. Ensure all automated pytest test cases pass (`388 tests passing`).
+2. Ensure all automated pytest test cases pass (`421 tests passing`).
 3. Push to your branch and submit a Pull Request against `main`. Include a clear summary of changes and reference updated documentation.

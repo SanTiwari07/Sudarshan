@@ -2,9 +2,11 @@
 
 ```yaml
 Module Title:        Threat Intelligence Correlation & Family Classification
-Version:             2.3.0-STABLE
+Version:             2.5.0-STABLE
 Primary Files:       shared/sudarshan_core/services/threat_correlator.py
                      shared/sudarshan_core/engines/classification_engine.py
+                     backend/app/main.py
+                     backend/app/db/database.py
 Test Suite:          backend/tests/test_risk_engine.py
 ```
 
@@ -50,6 +52,9 @@ Implemented in [`threat_correlator.py`](file:///d:/Projects/Sudarshan%20BOI/shar
 1. **VirusTotal API**: Queries file SHA-256 hashes and domain IOCs to compute detection ratios (`sha256_detections` / `sha256_total`) and vendor malicious labels.
 2. **AlienVault OTX**: Queries pulses and threat campaigns associated with extracted C2 IPs.
 3. **AbuseIPDB**: Queries IP abuse confidence scores ($0 - 100$) and country location metadata.
+
+### 3.1 Persistent IOC Reputation Cache (24h TTL)
+To prevent API rate-limit exhaustion against VirusTotal, OTX, and AbuseIPDB free tier endpoints (max 4 req/min), the system wires a 24-hour TTL SQLite cache during startup (`backend/app/main.py` calling `configure_ioc_cache`). Lookups check `ioc_cache` table in `sudarshan.db` prior to dispatching outbound HTTP requests.
 
 If external APIs fail or are unconfigured, `threat_correlator.py` degrades gracefully and returns a clean `available: false` correlation payload.
 

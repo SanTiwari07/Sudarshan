@@ -172,7 +172,9 @@ def repair_obfuscated_apk(original_apk_path: str) -> Tuple[bool, str, Dict]:
     logger.info(f"[APKRepair] Attempting derivative repair for {os.path.basename(original_apk_path)} (SHA: {original_sha256[:12]}...)")
 
     # Step 1: Extract raw files via apkInspector (bypasses corrupted ZIP CRC headers)
-    out_dir = f"/tmp/raw_{original_sha256[:8]}"
+    import tempfile
+    out_dir = os.path.join(tempfile.gettempdir(), f"raw_{original_sha256[:8]}")
+
     shutil.rmtree(out_dir, ignore_errors=True)
     try:
         from apkInspector.extract import extract_all_files_from_central_directory

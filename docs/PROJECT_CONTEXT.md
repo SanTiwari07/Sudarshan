@@ -34,7 +34,7 @@ Do not cite **[CLAIMED]** items as fact. Several are recorded here precisely bec
 > AI may **not** decide malware verdicts.
 > Only deterministic evidence contributes to risk scoring.
 
-**[VERIFIED]** This invariant currently holds at the scoring layer. Identical recorded evidence produces a byte-identical verdict, and LLM-authored fields merged into the dynamic payload do not move the score. Verified across **388 / 388 passing tests** (`pytest backend/tests`).
+**[VERIFIED]** This invariant currently holds at the scoring layer. Identical recorded evidence produces a byte-identical verdict, and LLM-authored fields merged into the dynamic payload do not move the score. Verified across **421 / 421 passing tests** (`pytest tests/ backend/tests`).
 
 ---
 
@@ -42,18 +42,18 @@ Do not cite **[CLAIMED]** items as fact. Several are recorded here precisely bec
 
 | Layer | Technology |
 |---|---|
-| Frontend | React 18, TypeScript, Vite 5 (Port 5173) |
+| Frontend | React 18, TypeScript, Vite 5 (Port 5173, Polling file-watcher mode) |
 | Gateway Backend | Python 3.12/3.13, FastAPI, Uvicorn (Port 8000) |
 | Analysis Engine | Containerized Python 3.12 + Java 17 + Ubuntu 24.04 (Internal Port 8001) |
 | Shared Core | `sudarshan_core` python package mounted as `/opt/sudarshan-core` |
-| Persistence | SQLite (`sudarshan.db`), aiosqlite, SQLAlchemy |
+| Persistence | SQLite (`sudarshan.db`), aiosqlite, SQLAlchemy, 24h IOC reputation cache |
 | Auth | JWT Bearer, passlib/bcrypt |
-| Static analysis | Androguard, MobSF (Port 8008), APKTool 2.10.0, JADX 1.5.1, YARA Scanner |
-| Dynamic analysis | Frida 17.16.4 + frida-tools, ADB (`host.docker.internal:5555`), Android emulator |
+| Static analysis | Androguard, MobSF (Port 8008), `apk_repair.py` AXML recovery, APKTool 2.10.0, JADX 1.5.1, YARA Scanner |
+| Dynamic analysis | Frida 17.16.4 + frida-tools, Java bridge sub-probes, ADB (`host.docker.internal:5555`), Android emulator |
 | Network Proxy | mitmproxy sidecar (`127.0.0.1:8080:8080`), HAR ingest |
 | Signatures | YARA Python |
-| Threat intel | VirusTotal, AlienVault OTX, AbuseIPDB (optional correlation) |
-| LLM | Google Gemini via `google-genai` (`gemini-2.5-flash`), Ollama |
+| Threat intel | VirusTotal, AlienVault OTX, AbuseIPDB (24h TTL SQLite cached correlation) |
+| LLM | Google Gemini via `google-genai` (`gemini-2.5-flash` / `gemini-3.6-flash`), Ollama |
 | Orchestration | Docker Compose (frontend, backend, analysis-engine, mitmproxy, mobsf) |
 
 ---
@@ -69,32 +69,34 @@ Sudarshan BOI/
 │   └── sudarshan_core/             Core shared library (mounted to /opt/sudarshan-core)
 │       ├── analyzers/              apk_analyzer.py (Native APK analyzer engine)
 │       ├── models/                 manifest.py (InvestigationManifest), schemas.py
-│       ├── services/               mobsf_client.py, threat_correlator.py
+│       ├── services/               mobsf_client.py, threat_correlator.py (24h IOC cache)
 │       └── engines/                
 │           ├── risk_engine.py      5-axis STEI + 4-axis FRS deterministic scoring
 │           ├── bfci_scorer.py      BFCI v2 logarithmic behavioral scorer
 │           ├── frida_sandbox.py    Frida PID attach & sandbox controller
+│           ├── apk_repair.py       Automated AXML manifest repair & re-signing
 │           ├── apktool_engine.py   APKTool resource decompilation engine
 │           ├── jadx_engine.py      JADX Java source decompilation & signature engine
 │           ├── network_capture.py  mitmproxy HAR dump ingest
 │           ├── workflow_reconstructor.py Causal chain temporal reconstruction
 │           ├── agentic_explorer.py Agentic UI exploration orchestrator
-│           ├── frida_hooks/        banking_trojan.js & banking_trojan.bundle.js
+│           ├── frida_hooks/        banking_trojan.js, java_probe.js, bisect_sec.js
 │           └── agentic/            planner.py, perception.py, goal_tracker.py, sanitizer.py, etc.
 ├── backend/
 │   ├── Dockerfile                  Python 3.12 gateway container definition
 │   ├── requirements.txt            Gateway dependencies
 │   ├── app/
 │   │   ├── main.py                 FastAPI Gateway entrypoint & lifecycle hooks
-│   │   ├── routes/                 upload.py (orchestrator), cases.py, report.py, intelligence.py
+│   │   ├── routes/                 upload.py, cases.py, report.py, intelligence.py, runtime_api.py
 │   │   ├── auth/                   auth.py (JWT authentication & RBAC)
-│   │   ├── db/                     database.py (SQLite case store & audit persistence)
+│   │   ├── db/                     database.py (SQLite case store & IOC cache persistence)
 │   │   ├── ai/                     gemini_rag.py (RAG indexer), gemini_client.py
 │   │   └── workers/                analysis_queue.py (async worker pool)
-│   └── tests/                      388 automated unit & integration tests
+│   └── tests/                      Automated unit & regression tests
+├── tests/                          Integration test suite
 ├── analysis-engine/
 │   ├── Dockerfile                  Ubuntu 24.04 + Java 17 + Python 3.12 microservice
-│   ├── entrypoint.sh               Uvicorn launcher
+│   ├── entrypoint.sh               Uvicorn launcher with health check
 │   └── app/
 │       └── main.py                 REST microservice endpoints (/api/v1/analyze, /status, etc.)
 ├── frontend/
@@ -163,11 +165,11 @@ static only:        FRS = clamp(0.50·STEI + 0.25·Correlation + 0.25·BankingIm
 
 ## 5. Verification & Test Suite
 
-**[VERIFIED]** **388 / 388 tests passing clean**.
+**[VERIFIED]** **421 / 421 tests passing clean**.
 
 Execution command:
 ```powershell
-$env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest backend/tests
+$env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests
 ```
 
 All static analysis, dynamic sandbox, threat correlation, and risk scoring assertions are fully validated against empirical baselines.

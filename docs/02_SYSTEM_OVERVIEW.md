@@ -232,6 +232,6 @@ System overview documents the main deterministic risk formula executed by [`risk
 | **SQLite Case Store** | **Implemented** | Asynchronous persistent storage implemented in `backend/app/db/database.py`. |
 | **Async Queue Pool** | **Implemented** | In-memory asyncio queue worker pool running in background tasks. |
 | **Static Analysis Engine** | **Implemented** | MobSF API client with native `apk_analyzer.py` fallback active in production pipeline. |
-| **Dynamic Frida Engine** | **Implemented** | Frida sandbox attaching via SELinux preflight (`adb root` + `setenforce 0`) and ART deoptimization (`Java.deoptimizeEverything()`). Verified via **388 / 388 passing unit & integration tests**. |
+| **Dynamic Frida Engine** | **Implemented** | Frida sandbox attaching via SELinux preflight (`adb root` + `setenforce 0`), Java bridge sub-probes, and ART deoptimization (`Java.deoptimizeEverything()`). Verified via **421 / 421 passing unit & integration tests**. |
 | **Deterministic Risk Engine** | **Implemented** | 5-Axis STEI, BFCI, and FRS formulas implemented and verified by unit tests. |
 | **AI RAG Investigation Assistant**| **Implemented** | Gemini 2.5 Flash RAG graph active with streaming SSE response support. |

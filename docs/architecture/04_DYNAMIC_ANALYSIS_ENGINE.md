@@ -2,7 +2,7 @@
 
 ```yaml
 Module Title:        Dynamic Analysis Engine (DAE) & Agentic Explorer
-Version:             2.4.0-STABLE
+Version:             2.5.0-STABLE
 Primary Files:       analysis-engine/app/main.py
                      backend/app/routes/runtime_api.py
                      shared/sudarshan_core/engines/frida_sandbox.py
@@ -12,8 +12,10 @@ Primary Files:       analysis-engine/app/main.py
                      shared/sudarshan_core/engines/bfci_scorer.py
                      shared/sudarshan_core/engines/workflow_reconstructor.py
                      shared/sudarshan_core/engines/frida_hooks/banking_trojan.js
+                     shared/sudarshan_core/engines/frida_hooks/java_probe.js
+                     shared/sudarshan_core/engines/frida_hooks/bisect_sec.js
                      frontend/src/components/WorkflowDiagram.tsx
-Test Suite:          tests/unit/test_frida_pipeline_full.py, scripts/verify_runtime_pipeline.py, backend/tests/test_analysis_client.py, backend/tests/test_agentic_explorer.py
+Test Suite:          tests/unit/test_frida_pipeline_full.py, scripts/verify_runtime_pipeline.py, backend/tests/test_analysis_client.py, backend/tests/test_agentic_explorer.py, backend/tests/test_frida_preflight.py
 ```
 
 ---

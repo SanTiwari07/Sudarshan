@@ -2,6 +2,25 @@
 
 All notable changes to this project are documented in this file.
 
+## [2.5.0-STABLE] — 2026-08-03
+
+### Added
+- **Persistent IOC Reputation Cache (24h TTL)**: SQLite-backed caching (`ioc_cache` table) in `backend/app/main.py` and `shared/sudarshan_core/services/threat_correlator.py` preventing API rate limit exhaustion across VirusTotal, OTX, and AbuseIPDB.
+- **Frida 17 Java-Bridge Sub-Probes**: Added `bisect_sec`, `bisect_temp`, and `java_probe` preflight hooks (`shared/sudarshan_core/engines/frida_hooks/`) for deep ART deoptimization and Java bridge validation.
+
+### Changed
+- **Automated Test Suite Expansion**: Expanded verified automated test suite from 388 to **421 passing tests** across `tests/` and `backend/tests/`.
+- **Analysis Engine Container Entrypoint**: Refactored `analysis-engine/entrypoint.sh` and Docker compose healthcheck to validate Java 17, ADB host connectivity, and Frida server port binding (`SUDARSHAN_FRIDA_PORT=27055`).
+- **Frontend Vite File Watching Stability**: Configured `CHOKIDAR_USEPOLLING=true` and `CHOKIDAR_INTERVAL=300` in `docker-compose.yml` for Windows bind mount file watcher stability.
+
+### Fixed
+- **Admin Password Seeding**: Updated `backend/app/main.py` startup handler to generate a secure random password if `ADMIN_PASSWORD` is unconfigured, avoiding published default credentials.
+
+### Documentation
+- **Zero-Drift Master Audit**: Updated all 24 portal documentation files in `/docs`, root `README.md`, `CHANGELOG.md`, and `DOCUMENTATION_AUDIT_REPORT.md` to achieve 100% synchronization with codebase.
+
+---
+
 ## [2.4.0-STABLE] — 2026-07-29
 
 ### Runtime Telemetry API & Frida 17 Banking Malware Instrumentation Suite

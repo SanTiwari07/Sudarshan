@@ -79,6 +79,6 @@ Services running:
 
 Execute unit test suite against the backend orchestrator:
 ```powershell
-$env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest backend/tests
+$env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests
 ```
-Result: **388 / 388 automated tests passing clean**.
+Result: **421 / 421 automated tests passing clean**.

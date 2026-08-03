@@ -2,7 +2,7 @@
 
 ```yaml
 Module Title:        AI Investigation Engine & RAG Core
-Version:             2.3.0-STABLE
+Version:             2.5.0-STABLE
 Primary Files:       backend/app/ai/gemini_rag.py
                      backend/app/ai/gemini_client.py
                      shared/sudarshan_core/engines/agentic/sanitizer.py

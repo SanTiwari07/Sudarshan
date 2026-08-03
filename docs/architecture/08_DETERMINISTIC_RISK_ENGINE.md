@@ -2,7 +2,7 @@
 
 ```yaml
 Module Title:        Deterministic Risk Engine & Mathematical Models
-Version:             2.3.0-STABLE
+Version:             2.5.0-STABLE
 Primary Files:       shared/sudarshan_core/engines/risk_engine.py
                      shared/sudarshan_core/engines/bfci_scorer.py
 Test Suite:          backend/tests/test_risk_engine.py, backend/tests/test_bfci_scorer.py

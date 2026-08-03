@@ -5,7 +5,7 @@
   <p><i>Prepared and Submitted for Bank of India and IIT Hyderabad under the BOI Hackathon 2026</i></p>
   
   <p>
-    <b>388</b> Passing Unit Tests &nbsp;&nbsp;|&nbsp;&nbsp;
+    <b>421</b> Passing Unit & Integration Tests &nbsp;&nbsp;|&nbsp;&nbsp;
     <b>Deterministic Fraud Scoring</b> &nbsp;&nbsp;|&nbsp;&nbsp;
     <b>Containerized Microservice Architecture</b>
   </p>

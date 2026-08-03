@@ -1,0 +1,7 @@
+2026-08-03T18:38:00.916+05:30 PASS native hook installation: 16 native hooks installed.
+2026-08-03T18:38:00.917+05:30 PASS Frida canary received before Java initialization.
+2026-08-03T18:38:00.986+05:30 FAIL Java hook initialization.
+Exception: Java.perform() failed: Unable to find fields in java/lang/Thread; please file a bug
+Source: frida-java-bridge 7.0.13, invoked at shared/sudarshan_core/engines/frida_hooks/banking_trojan.js:405.
+Result: java_hooks_installed=0; accessibility/SMS/overlay/banking Java hooks were not installed.
+No individual Java hook verification was run after this mandatory initialization failure.

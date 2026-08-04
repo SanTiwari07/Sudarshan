@@ -96,6 +96,11 @@ export type CodeFinding = {
   title: string;
   description: string;
   files: string[];
+  // MobSF compliance mappings
+  rule_id?: string;
+  masvs?: string;
+  cwe?: string;
+  owasp?: string;
 };
 
 export type DynamicAnalysis = {
@@ -177,6 +182,29 @@ export type FraudCardData = {
   hardcoded_secrets: string[];
   appsec_score?: string | number;
   mobsf_scan_hash?: string;
+  // MobSF enrichment fields (optional — populated only in MobSF mode)
+  providers?: string[];
+  exported_activities?: string[];
+  exported_services?: string[];
+  exported_receivers?: string[];
+  binary_analysis?: Array<{
+    name: string;
+    nx?: string;
+    stack_canary?: string;
+    relro?: string;
+    rpath?: string;
+    runpath?: string;
+    fortify?: string;
+    stripped?: string;
+    symbols?: string[];
+  }>;
+  network_security?: Record<string, unknown>;
+  trackers?: Array<{
+    name: string;
+    categories: string[];
+    website: string;
+  }>;
+  emails?: string[];
   intelligence_report?: IntelligenceReport;
   fraud_workflow?: FraudWorkflow;
   dynamic_result?: any;

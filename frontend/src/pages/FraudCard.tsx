@@ -496,6 +496,108 @@ function AnalystNotesDrawer({ sha256 }: { sha256: string }) {
   );
 }
 
+// ─── Static Risk Highlights (MobSF Enrichment Summary) ──────────────────────────
+
+function StaticRiskHighlights({ data }: { data: FraudCardData }) {
+  // Only render if MobSF enrichment data is present
+  const hasEnrichment = (
+    (data.binary_analysis?.length ?? 0) > 0 ||
+    (data.trackers?.length ?? 0) > 0 ||
+    (data.exported_activities?.length ?? 0) > 0 ||
+    data.network_security != null
+  );
+
+  if (!hasEnrichment) return null;
+
+  // Binary hardening score (% of SO files with NX + canary)
+  const bins = data.binary_analysis || [];
+  const hardenedCount = bins.filter(b => String(b.nx).toLowerCase() === 'true' && String(b.stack_canary).toLowerCase() === 'true').length;
+  const binaryScore = bins.length > 0 ? Math.round((hardenedCount / bins.length) * 100) : null;
+
+  // Certificate risk — check if cert data has risky algorithms
+  const certStr = JSON.stringify(data.certificate || '').toLowerCase();
+  const certRisky = certStr.includes('sha1') || certStr.includes('md5') || certStr.includes('v1');
+
+  // Trackers
+  const trackerCount = data.trackers?.length ?? 0;
+
+  // Network security risk
+  const nscStr = JSON.stringify(data.network_security || '').toLowerCase();
+  const cleartext = nscStr.includes('cleartexttraffic') && nscStr.includes('true');
+  const pinning = nscStr.includes('pinning') || nscStr.includes('pin');
+
+  // Exported components
+  const exportedCount = (data.exported_activities?.length ?? 0) + (data.exported_services?.length ?? 0) + (data.exported_receivers?.length ?? 0);
+
+  const highlights = [
+    binaryScore !== null ? {
+      label: 'Binary Hardening',
+      value: `${binaryScore}%`,
+      sub: `${hardenedCount}/${bins.length} SO files (NX+Canary)`,
+      risk: binaryScore < 50,
+    } : null,
+    certRisky ? {
+      label: 'Certificate Risk',
+      value: 'WEAK',
+      sub: 'Legacy SHA-1/MD5 or v1 signature',
+      risk: true,
+    } : {
+      label: 'Certificate',
+      value: 'OK',
+      sub: 'No weak algorithms detected',
+      risk: false,
+    },
+    trackerCount > 0 ? {
+      label: 'Third-Party SDKs',
+      value: `${trackerCount}`,
+      sub: 'Tracker fingerprints found',
+      risk: trackerCount > 5,
+    } : null,
+    exportedCount > 0 ? {
+      label: 'Exported Components',
+      value: `${exportedCount}`,
+      sub: 'Attack surface entry points',
+      risk: exportedCount > 5,
+    } : null,
+    cleartext ? {
+      label: 'Network Security',
+      value: 'CLEARTEXT',
+      sub: 'Plaintext HTTP traffic allowed',
+      risk: true,
+    } : pinning ? {
+      label: 'Network Security',
+      value: 'PINNED',
+      sub: 'Certificate pinning configured',
+      risk: false,
+    } : null,
+  ].filter(Boolean) as Array<{ label: string; value: string; sub: string; risk: boolean }>;
+
+  if (highlights.length === 0) return null;
+
+  return (
+    <SocCard>
+      <SectionHeader
+        icon={<FileText className="h-4 w-4" />}
+        title="Static Analysis Highlights"
+        subtitle="Key security properties from MobSF static scan"
+      />
+      <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {highlights.map((h, i) => (
+          <div key={i} className={`p-3 rounded-lg border text-xs ${
+            h.risk
+              ? 'bg-red-50 border-red-200'
+              : 'bg-emerald-50 border-emerald-200'
+          }`}>
+            <div className="text-slate-500 text-[10px] uppercase font-semibold tracking-wide mb-1">{h.label}</div>
+            <div className={`text-base font-black ${h.risk ? 'text-red-700' : 'text-emerald-700'}`}>{h.value}</div>
+            <div className="text-slate-500 text-[10px] mt-0.5">{h.sub}</div>
+          </div>
+        ))}
+      </div>
+    </SocCard>
+  );
+}
+
 // ─── Main FraudCard Page ─────────────────────────────────────────────────────────
 
 export default function FraudCard({ data }: { data: FraudCardData | null }) {
@@ -524,6 +626,9 @@ export default function FraudCard({ data }: { data: FraudCardData | null }) {
 
       {/* Executive Risk Panel */}
       <ExecutiveRiskPanel data={data} />
+
+      {/* Static Risk Highlights (MobSF enrichment — only shown when data present) */}
+      <StaticRiskHighlights data={data} />
 
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">

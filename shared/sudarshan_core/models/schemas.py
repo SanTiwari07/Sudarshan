@@ -198,6 +198,11 @@ class CodeFinding(BaseModel):
     title: str
     description: str
     files: List[str] = Field(default_factory=list)
+    # MobSF enrichment — compliance mappings and rule identity
+    rule_id: str = ""
+    masvs: str = ""     # e.g. "MSTG-NETWORK-3"
+    cwe: str = ""       # e.g. "CWE-295"
+    owasp: str = ""     # e.g. "M3: Insecure Communication"
 
 
 # ─── Full Analysis Response ───────────────────────────────────────────────────
@@ -257,6 +262,20 @@ class AnalysisResponse(BaseModel):
     hardcoded_secrets: List[str] = Field(default_factory=list)
     appsec_score: Optional[Any] = None
     mobsf_scan_hash: Optional[str] = None
+
+    # MobSF enrichment — previously discarded fields
+    providers: List[str] = Field(default_factory=list)
+    exported_activities: List[str] = Field(default_factory=list)
+    exported_services: List[str] = Field(default_factory=list)
+    exported_receivers: List[str] = Field(default_factory=list)
+    # Native binary security properties per SO file
+    binary_analysis: List[Dict[str, Any]] = Field(default_factory=list)
+    # Parsed Network Security Config (cleartext domains, pinning, trust anchors)
+    network_security: Dict[str, Any] = Field(default_factory=dict)
+    # Third-party SDK / tracker fingerprints (Firebase, Facebook, AppsFlyer, etc.)
+    trackers: List[Dict[str, Any]] = Field(default_factory=list)
+    # Email addresses / PII found in APK strings
+    emails: List[str] = Field(default_factory=list)
 
     # Static Decompilation Enrichment (APKTool & JADX)
     apktool_enrichment: Optional[Dict[str, Any]] = None

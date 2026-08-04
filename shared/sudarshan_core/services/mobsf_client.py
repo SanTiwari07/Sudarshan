@@ -91,6 +91,7 @@ def _empty_report() -> Dict[str, Any]:
         "providers": [],
         "exported_activities": [],
         "exported_services": [],
+        "exported_receivers": [],
         "urls": [],
         "domains": {},
         "emails": [],
@@ -101,6 +102,7 @@ def _empty_report() -> Dict[str, Any]:
         "binary_analysis": [],
         "code_analysis": {},
         "network_security": {},
+        "trackers": [],
         "dynamic": None,
         "appsec_score": None,
         "security_score": None,
@@ -323,19 +325,45 @@ class MobSFClient:
         report["receivers"] = raw.get("receivers", [])
         report["providers"] = raw.get("providers", [])
 
-        # Exported components (attack surface)
-        exported_acts = []
-        for act in raw.get("browsable_activities", {}).get("browsable", []):
-            exported_acts.append(act)
+        # Exported components — full attack surface extraction
+        # MobSF stores exported=true in browsable_activities and in component dicts
+        exported_acts: List[str] = []
+        browsable = raw.get("browsable_activities", {})
+        if isinstance(browsable, dict):
+            for act in browsable.get("browsable", []):
+                if isinstance(act, str) and act not in exported_acts:
+                    exported_acts.append(act)
+            for act in browsable.get("activities", []):
+                if isinstance(act, str) and act not in exported_acts:
+                    exported_acts.append(act)
+        # Also pick up components with explicit exported=true in the raw manifest
+        for act in raw.get("activities", []):
+            if isinstance(act, dict) and act.get("exported") in (True, "true", "True"):
+                name = act.get("name", "")
+                if name and name not in exported_acts:
+                    exported_acts.append(name)
         report["exported_activities"] = exported_acts
 
-        exported_svcs = []
-        for svc in report["services"]:
-            if isinstance(svc, str) and "exported" in svc.lower():
+        exported_svcs: List[str] = []
+        for svc in raw.get("services", []):
+            if isinstance(svc, dict):
+                if svc.get("exported") in (True, "true", "True"):
+                    name = svc.get("name", "")
+                    if name:
+                        exported_svcs.append(name)
+            elif isinstance(svc, str) and "exported" in svc.lower():
                 exported_svcs.append(svc)
         report["exported_services"] = exported_svcs
 
-        # ── Network Indicators ──────────────────────────────────────────────────
+        exported_rcvs: List[str] = []
+        for rcv in raw.get("receivers", []):
+            if isinstance(rcv, dict):
+                if rcv.get("exported") in (True, "true", "True"):
+                    name = rcv.get("name", "")
+                    if name:
+                        exported_rcvs.append(name)
+        report["exported_receivers"] = exported_rcvs
+
         report["urls"] = raw.get("urls", [])
         report["domains"] = raw.get("domains", {})
         report["emails"] = raw.get("emails", [])
@@ -348,7 +376,7 @@ class MobSFClient:
                 secrets.append(item)
             elif isinstance(item, dict):
                 secrets.append(item.get("secret", str(item)))
-        report["hardcoded_secrets"] = secrets[:20]
+        report["hardcoded_secrets"] = secrets[:100]  # raised from 20 — full exposure list
 
         # ── Certificate ─────────────────────────────────────────────────────────
         report["certificate"] = raw.get("certificate_analysis", {})
@@ -387,10 +415,25 @@ class MobSFClient:
         elif isinstance(manifest_analysis, list):
             report["manifest_analysis"] = manifest_analysis
 
-        # ── Binary Analysis ─────────────────────────────────────────────────────
-        binary = raw.get("binary_analysis", [])
-        if isinstance(binary, list):
-            report["binary_analysis"] = binary
+        # ── Binary Analysis ─────────────────────────────────────────────────
+        # Normalize MobSF binary_analysis list — each item is a native SO file record
+        binary_raw = raw.get("binary_analysis", [])
+        binary_normalized: list = []
+        if isinstance(binary_raw, list):
+            for item in binary_raw:
+                if isinstance(item, dict):
+                    binary_normalized.append({
+                        "name": item.get("name", ""),
+                        "nx": item.get("nx") or item.get("NX"),
+                        "stack_canary": item.get("stack_canary") or item.get("Stack Canary"),
+                        "relro": item.get("relro") or item.get("RELRO"),
+                        "rpath": item.get("rpath") or item.get("RPATH"),
+                        "runpath": item.get("runpath") or item.get("RUNPATH"),
+                        "fortify": item.get("fortify"),
+                        "stripped": item.get("stripped"),
+                        "symbols": item.get("symbols", [])[:10],
+                    })
+        report["binary_analysis"] = binary_normalized
 
         # ── Code Analysis (security findings from source) ───────────────────────
         code_analysis = raw.get("code_analysis", {})
@@ -410,6 +453,7 @@ class MobSFClient:
                             "description": meta.get("description", ""),
                             "masvs": meta.get("masvs", ""),
                             "cwe": meta.get("cwe", ""),
+                            "owasp": meta.get("owasp-mobile", meta.get("owasp", "")),
                             "files": file_list
                         })
             elif isinstance(findings_dict, list):
@@ -429,7 +473,39 @@ class MobSFClient:
         report["code_analysis"] = {"findings": code_findings}
 
         # ── Network Security ────────────────────────────────────────────────────
-        report["network_security"] = raw.get("network_security", {})
+        # ── Network Security Config ─────────────────────────────────────────────
+        netsec_raw = raw.get("network_security", {})
+        if isinstance(netsec_raw, dict):
+            report["network_security"] = netsec_raw
+        else:
+            report["network_security"] = {}
+
+        # ── Trackers / Third-party SDKs ───────────────────────────────────────
+        # MobSF's /api/v1/report_json includes a trackers field
+        trackers_raw = raw.get("trackers", {})
+        trackers_list: list = []
+        if isinstance(trackers_raw, dict):
+            # Format: {"tracker_name": {"categories": [], "website": ""}}
+            for name, info in trackers_raw.items():
+                if isinstance(info, dict):
+                    trackers_list.append({
+                        "name": name,
+                        "categories": info.get("categories", []),
+                        "website": info.get("website", ""),
+                    })
+                else:
+                    trackers_list.append({"name": name, "categories": [], "website": ""})
+        elif isinstance(trackers_raw, list):
+            for item in trackers_raw:
+                if isinstance(item, dict):
+                    trackers_list.append({
+                        "name": item.get("name", item.get("tracker_name", str(item))),
+                        "categories": item.get("categories", []),
+                        "website": item.get("website", ""),
+                    })
+                elif isinstance(item, str):
+                    trackers_list.append({"name": item, "categories": [], "website": ""})
+        report["trackers"] = trackers_list
 
         # ── AppSec Score ────────────────────────────────────────────────────────
         sec_score = None

@@ -69,6 +69,10 @@ SECTION_NAMES = [
     "runtime_events", "timeline", "network", "files", "apis",
     "mitre", "malware_family", "threat_intelligence", "risk_engine",
     "recommendations", "verdict", "fraud_workflow",
+    # MobSF enrichment sections
+    "binary_analysis", "crypto_findings", "webview_findings",
+    "ssl_findings", "anti_analysis", "secrets", "trackers",
+    "exported_components", "network_security",
 ]
 
 # Intent → relevant sections mapping
@@ -80,10 +84,10 @@ INTENT_SECTION_MAP: Dict[str, List[str]] = {
     "accessibility":     ["dynamic_findings", "runtime_events", "static_findings", "permissions"],
     "overlay":           ["dynamic_findings", "runtime_events", "permissions", "static_findings"],
     "permissions":       ["permissions", "static_findings", "manifest"],
-    "network":           ["network", "threat_intelligence", "dynamic_findings", "static_findings"],
+    "network":           ["network", "threat_intelligence", "dynamic_findings", "static_findings", "network_security"],
     "mitre":             ["mitre", "static_findings", "dynamic_findings"],
     "malware":           ["malware_family", "threat_intelligence", "static_findings"],
-    "manifest":          ["manifest", "components", "activities", "services", "receivers"],
+    "manifest":          ["manifest", "components", "activities", "services", "receivers", "exported_components"],
     "certificate":       ["metadata", "static_findings"],
     "virustotal":        ["threat_intelligence"],
     "dynamic":           ["dynamic_findings", "runtime_events", "timeline", "network", "files"],
@@ -95,6 +99,16 @@ INTENT_SECTION_MAP: Dict[str, List[str]] = {
     "workflow":          ["fraud_workflow", "dynamic_findings", "runtime_events", "timeline"],
     "chain":             ["fraud_workflow", "dynamic_findings", "runtime_events"],
     "sequence":          ["fraud_workflow", "dynamic_findings", "runtime_events"],
+    # New intents for enriched MobSF data
+    "crypto":            ["crypto_findings", "static_findings", "ssl_findings"],
+    "webview":           ["webview_findings", "static_findings", "network"],
+    "ssl":               ["ssl_findings", "network_security", "static_findings", "network"],
+    "secrets":           ["secrets", "static_findings", "threat_intelligence"],
+    "obfuscation":       ["static_findings", "anti_analysis", "risk_engine"],
+    "native":            ["binary_analysis", "static_findings"],
+    "sdk":               ["trackers", "static_findings"],
+    "exported":          ["exported_components", "manifest", "components"],
+    "anti":              ["anti_analysis", "static_findings", "dynamic_findings"],
     "default":           ["verdict", "risk_engine", "fraud_workflow", "static_findings", "dynamic_findings", "threat_intelligence"],
 }
 
@@ -399,6 +413,131 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
     if action:
         idx["recommendations"].append(f"Deterministic Recommendation: {action}")
 
+    # ── Exported Components ───────────────────────────────────────────────────
+    exported_acts = report.get("exported_activities", [])
+    exported_svcs = report.get("exported_services", [])
+    exported_rcvs = report.get("exported_receivers", [])
+    idx["exported_components"] = []
+    for a in exported_acts[:20]:
+        idx["exported_components"].append(f"Exported Activity: {a}")
+    for s in exported_svcs[:10]:
+        idx["exported_components"].append(f"Exported Service: {s}")
+    for r_ in exported_rcvs[:10]:
+        idx["exported_components"].append(f"Exported Receiver: {r_}")
+    if not idx["exported_components"]:
+        idx["exported_components"] = ["No exported components detected in this APK."]
+
+    # ── Binary Analysis (native SO security) ──────────────────────────────────
+    bin_analysis = report.get("binary_analysis", [])
+    idx["binary_analysis"] = []
+    for so in bin_analysis[:15]:
+        if isinstance(so, dict):
+            name = so.get("name", "unknown.so")
+            flags = []
+            if so.get("nx") == "True":  flags.append("NX=enabled")
+            elif so.get("nx"):          flags.append(f"NX={so['nx']}")
+            if so.get("stack_canary") == "True":  flags.append("StackCanary=enabled")
+            elif so.get("stack_canary"): flags.append(f"StackCanary={so['stack_canary']}")
+            if so.get("relro"):         flags.append(f"RELRO={so['relro']}")
+            if so.get("rpath") not in (None, "False", ""):
+                flags.append(f"RPATH={so['rpath']} (dangerous)")
+            idx["binary_analysis"].append(
+                f"Native Library: {name} — {', '.join(flags) if flags else 'no security flags'}"
+            )
+    if not idx["binary_analysis"]:
+        idx["binary_analysis"] = ["No native binary analysis data available (MobSF mode required)."]
+
+    # ── Code Findings — categorized by topic ──────────────────────────────────
+    all_code_findings = report.get("code_findings", [])
+    # We need the raw dicts for categorization — handle both ManifestFinding objs and dicts
+    code_finding_dicts = []
+    for f_ in all_code_findings:
+        if isinstance(f_, dict):
+            code_finding_dicts.append(f_)
+        elif hasattr(f_, "model_dump"):
+            code_finding_dicts.append(f_.model_dump())
+        elif hasattr(f_, "dict"):
+            code_finding_dicts.append(f_.dict())
+
+    _CRYPTO_KEYWORDS = {"crypto", "cipher", "des", "md5", "sha1", "ecb", "aes", "rsa", "rc4",
+                        "weakkey", "hardcoded_key", "encryption", "digest", "random", "prng"}
+    _WEBVIEW_KEYWORDS = {"webview", "javascript", "addjavascriptinterface", "loadurl",
+                         "evaluatejavascript", "setjavascrip", "allowfileaccess"}
+    _SSL_KEYWORDS = {"ssl", "tls", "trustmanager", "hostname", "pinning", "hostnamevalidator",
+                     "x509", "certificate", "cleartext", "http_"}
+    _ANTI_KEYWORDS = {"root", "debug", "frida", "emulator", "hooking", "antidebug",
+                      "isdebugg", "systemproperties", "buildtags", "emulat", "genymotion"}
+
+    idx["crypto_findings"] = []
+    idx["webview_findings"] = []
+    idx["ssl_findings"] = []
+    idx["anti_analysis"] = []
+
+    for f_ in code_finding_dicts:
+        title_lower = (f_.get("title", "") + " " + f_.get("description", "")).lower()
+        rule_id_lower = f_.get("rule_id", "").lower()
+        combined = title_lower + " " + rule_id_lower
+        sev = f_.get("severity", "info")
+        masvs = f_.get("masvs", "")
+        cwe = f_.get("cwe", "")
+        owasp = f_.get("owasp", "")
+        line = (f"[{sev.upper()}] {f_.get('title', 'Unknown finding')}"
+                f"{' (MASVS: ' + masvs + ')' if masvs else ''}"
+                f"{' (CWE: ' + cwe + ')' if cwe else ''}"
+                f"{' (OWASP: ' + owasp + ')' if owasp else ''}")
+        if any(k in combined for k in _CRYPTO_KEYWORDS):
+            idx["crypto_findings"].append(f"Crypto: {line}")
+        if any(k in combined for k in _WEBVIEW_KEYWORDS):
+            idx["webview_findings"].append(f"WebView: {line}")
+        if any(k in combined for k in _SSL_KEYWORDS):
+            idx["ssl_findings"].append(f"SSL/TLS: {line}")
+        if any(k in combined for k in _ANTI_KEYWORDS):
+            idx["anti_analysis"].append(f"Anti-Analysis: {line}")
+
+    if not idx["crypto_findings"]:
+        idx["crypto_findings"] = ["No specific cryptographic weaknesses were identified in static code findings."]
+    if not idx["webview_findings"]:
+        idx["webview_findings"] = ["No WebView security issues were identified in static code findings."]
+    if not idx["ssl_findings"]:
+        idx["ssl_findings"] = ["No SSL/TLS weaknesses were identified in static code findings."]
+    if not idx["anti_analysis"]:
+        idx["anti_analysis"] = ["No anti-analysis techniques were identified in static code findings."]
+
+    # ── Secrets ───────────────────────────────────────────────────────────────
+    secrets_list = report.get("hardcoded_secrets", [])
+    idx["secrets"] = [f"Hardcoded Secret: {s[:120]}" for s in secrets_list[:30]]
+    if not idx["secrets"]:
+        idx["secrets"] = ["No hardcoded secrets were detected."]
+    idx["secrets"].append(f"Total hardcoded secrets found: {len(secrets_list)}")
+
+    # ── Trackers / Third-party SDKs ───────────────────────────────────────────
+    trackers = report.get("trackers", [])
+    idx["trackers"] = []
+    for t in trackers[:20]:
+        if isinstance(t, dict):
+            cats = ", ".join(t.get("categories", [])) if t.get("categories") else "Unknown category"
+            idx["trackers"].append(f"Third-party SDK/Tracker: {t.get('name', 'Unknown')} — {cats}")
+    if not idx["trackers"]:
+        idx["trackers"] = ["No third-party tracker fingerprints detected (requires MobSF analysis mode)."]
+    idx["trackers"].append(f"Total SDKs/trackers detected: {len(trackers)}")
+
+    # ── Network Security Config ───────────────────────────────────────────────
+    netsec = report.get("network_security", {}) or {}
+    idx["network_security"] = []
+    if netsec:
+        # MobSF network_security can have cleartext_traffic, certificate_pinning, trust_anchors
+        for key, val in netsec.items():
+            if isinstance(val, (str, bool, int)):
+                idx["network_security"].append(f"NSC {key.replace('_', ' ').title()}: {val}")
+            elif isinstance(val, list) and val:
+                idx["network_security"].append(f"NSC {key}: {', '.join(str(v) for v in val[:5])}")
+            elif isinstance(val, dict):
+                idx["network_security"].append(f"NSC {key}: {json.dumps(val)[:200]}")
+    if not idx["network_security"]:
+        idx["network_security"] = ["Network Security Config data not available for this APK."]
+
+
+
     # Store index (LRU-bounded)
     if sha256 in _investigation_index:
         _investigation_index.move_to_end(sha256)
@@ -458,6 +597,23 @@ def detect_intent(question: str) -> str:
         return "compare"
     if any(w in q for w in ["executive", "non-technical", "customer", "bank employee", "manager"]):
         return "executive"
+    # New intents for enriched MobSF data
+    if any(w in q for w in ["crypto", "encryption", "weak algo", "des", "md5", "sha1", "ecb", "aes", "hardcoded key", "hardcoded secret"]):
+        return "crypto"
+    if any(w in q for w in ["webview", "javascript interface", "addjavascriptinterface", "loadurl", "evaluatejavascript"]):
+        return "webview"
+    if any(w in q for w in ["ssl", "tls", "trustmanager", "hostnamevalidator", "pinning", "certificate pinning", "cleartext"]):
+        return "ssl"
+    if any(w in q for w in ["secret", "token", "api key", "password", "credential", "firebase", "jwt"]):
+        return "secrets"
+    if any(w in q for w in ["sdk", "tracker", "analytics", "facebook", "appsflyer", "crashlytics", "onesignal", "third party"]):
+        return "sdk"
+    if any(w in q for w in ["native", "so file", "jni", "loadlibrary", "binary", "nx bit", "canary", "relro"]):
+        return "native"
+    if any(w in q for w in ["anti-debug", "anti-root", "anti-frida", "anti-vm", "anti-emulator", "anti analysis", "evasion", "detection"]):
+        return "anti"
+    if any(w in q for w in ["exported", "attack surface", "exposed component"]):
+        return "exported"
 
     return "default"
 

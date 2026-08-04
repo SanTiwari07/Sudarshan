@@ -227,6 +227,15 @@ _RESPONSE_DEFAULTS: Dict[str, Any] = {
     "hardcoded_secrets": [],
     "appsec_score": None,
     "mobsf_scan_hash": None,
+    # MobSF enrichment fields
+    "providers": [],
+    "exported_activities": [],
+    "exported_services": [],
+    "exported_receivers": [],
+    "binary_analysis": [],
+    "network_security": {},
+    "trackers": [],
+    "emails": [],
     "suspicious_strings": [],
     "dangerous_apis_found_raw": [],
     "matched_rule": "None",
@@ -439,6 +448,15 @@ async def _run_analysis_pipeline(
     appsec_score = None
     mobsf_scan_hash: Optional[str] = None
     suspicious_strings: list = []
+    # MobSF enrichment — initialized to safe defaults (Androguard fallback leaves empty)
+    providers: list = []
+    exported_activities: list = []
+    exported_services: list = []
+    exported_receivers: list = []
+    binary_analysis_data: list = []
+    network_security_data: dict = {}
+    trackers_data: list = []
+    emails_data: list = []
 
     mobsf_available = await _mobsf.is_available()
 
@@ -460,6 +478,16 @@ async def _run_analysis_pipeline(
             hardcoded_secrets = mobsf_report.get("hardcoded_secrets", [])
             appsec_score = mobsf_report.get("appsec_score")
             mobsf_scan_hash = mobsf_report.get("scan_hash")
+
+            # ── MobSF enrichment fields — previously discarded ──────────────────
+            providers = mobsf_report.get("providers", [])[:20]
+            exported_activities = mobsf_report.get("exported_activities", [])
+            exported_services = mobsf_report.get("exported_services", [])
+            exported_receivers = mobsf_report.get("exported_receivers", [])
+            binary_analysis_data = mobsf_report.get("binary_analysis", [])
+            network_security_data = mobsf_report.get("network_security", {})
+            trackers_data = mobsf_report.get("trackers", [])
+            emails_data = mobsf_report.get("emails", [])[:50]
 
             for mf in mobsf_report.get("manifest_analysis", []):
                 try:
@@ -669,6 +697,15 @@ async def _run_analysis_pipeline(
         "suspicious_strings": suspicious_strings,
         "intelligence_report": llm_response,
         "matched_rule": matched_rule,
+        # ── MobSF enrichment fields ────────────────────────────────────────────
+        "providers": providers,
+        "exported_activities": exported_activities,
+        "exported_services": exported_services,
+        "exported_receivers": exported_receivers,
+        "binary_analysis": binary_analysis_data,
+        "network_security": network_security_data,
+        "trackers": trackers_data,
+        "emails": emails_data,
         # ── Static enrichment results ──────────────────────────────────────────
         "investigation_manifest": manifest.model_dump() if manifest else None,
         "apktool_enrichment": {
@@ -914,6 +951,15 @@ def _build_response(result: Dict[str, Any], job_id: Optional[str] = None) -> Ana
         mobsf_scan_hash=result.get("mobsf_scan_hash"),
         apktool_enrichment=result.get("apktool_enrichment"),
         jadx_enrichment=result.get("jadx_enrichment"),
+        # MobSF enrichment fields
+        providers=result.get("providers", []),
+        exported_activities=result.get("exported_activities", []),
+        exported_services=result.get("exported_services", []),
+        exported_receivers=result.get("exported_receivers", []),
+        binary_analysis=result.get("binary_analysis", []),
+        network_security=result.get("network_security", {}),
+        trackers=result.get("trackers", []),
+        emails=result.get("emails", []),
         intelligence_report=intel_report,
         fraud_workflow=_build_fraud_workflow(result.get("fraud_workflow")),
         executive_view=executive_view,

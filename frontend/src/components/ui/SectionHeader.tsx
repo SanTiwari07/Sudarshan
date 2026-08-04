@@ -5,10 +5,11 @@ interface SectionHeaderProps {
   title: string;
   subtitle?: string;
   badge?: React.ReactNode;
+  action?: React.ReactNode; // alias for badge, used by collapsible panels
   className?: string;
 }
 
-export default function SectionHeader({ icon, title, subtitle, badge, className = '' }: SectionHeaderProps) {
+export default function SectionHeader({ icon, title, subtitle, badge, action, className = '' }: SectionHeaderProps) {
   return (
     <div className={`flex items-center justify-between px-5 py-3 bg-slate-50 border-b border-slate-200 ${className}`}>
       <div className="flex items-center gap-2">
@@ -18,7 +19,7 @@ export default function SectionHeader({ icon, title, subtitle, badge, className 
           {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
         </div>
       </div>
-      {badge}
+      {badge ?? action}
     </div>
   );
 }

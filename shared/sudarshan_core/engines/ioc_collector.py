@@ -23,7 +23,7 @@ class IOCCollector:
         self,
         event_bus: Optional[RuntimeEventBus] = None,
         apk_path: Optional[str] = None,
-        device_serial: str = "emulator-5554",
+        device_serial: str = "",
         package_name: str = "",
         adb_path: str = "adb"
     ):

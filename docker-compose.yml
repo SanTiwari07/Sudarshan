@@ -38,8 +38,15 @@ services:
       - ANALYSIS_ENGINE_URL=http://analysis-engine:8001
       - MOBSF_HOST=http://mobsf:8000
       - MOBSF_API_KEY=sudarshan_mobsf_api_key_2026
-      - ADB_HOST=host.docker.internal
-      - ADB_PORT=5555
+      - SANDBOX_PROVIDER=${SANDBOX_PROVIDER:-genymotion}
+      # Genymotion exposes each VM at its own TCP endpoint on the host-only
+      # network; it is not the Docker host's port 5555.
+      - ADB_HOST=${ADB_HOST:-}
+      - ADB_PORT=${ADB_PORT:-5555}
+      - DEVICE_SERIAL=${DEVICE_SERIAL:-}
+      - FRIDA_PORT=${FRIDA_PORT:-27055}
+      - AUTO_CONNECT=${AUTO_CONNECT:-true}
+      - ROOT_REQUIRED=${ROOT_REQUIRED:-true}
       - UPLOADS_DIR=/app/uploads
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
@@ -77,8 +84,14 @@ services:
       - "8001"
     environment:
       - PYTHONPATH=/app:/opt/sudarshan-core
-      - ADB_HOST=host.docker.internal
-      - ADB_PORT=5555
+      - SANDBOX_PROVIDER=${SANDBOX_PROVIDER:-genymotion}
+      # Preserve the configurable Genymotion endpoint from .env.
+      - ADB_HOST=${ADB_HOST:-}
+      - ADB_PORT=${ADB_PORT:-5555}
+      - DEVICE_SERIAL=${DEVICE_SERIAL:-}
+      - FRIDA_PORT=${FRIDA_PORT:-27055}
+      - AUTO_CONNECT=${AUTO_CONNECT:-true}
+      - ROOT_REQUIRED=${ROOT_REQUIRED:-true}
       - MOBSF_HOST=http://mobsf:8000
       - MOBSF_API_KEY=sudarshan_mobsf_api_key_2026
       # The engine now performs the analysis, so it needs the same AI
@@ -91,7 +104,7 @@ services:
       - OTX_API_KEY=${OTX_API_KEY}
       - ABUSEIPDB_API_KEY=${ABUSEIPDB_API_KEY}
       - FRIDA_ANALYSIS_DURATION=${FRIDA_ANALYSIS_DURATION:-30}
-      # Raise on a slow emulator: scales every UI action delay.
+      # Raise on a slow sandbox: scales every UI action delay.
       - SUDARSHAN_ACTION_DELAY_SCALE=${SUDARSHAN_ACTION_DELAY_SCALE:-1.0}
       - SUDARSHAN_APP_OPEN_SETTLE=${SUDARSHAN_APP_OPEN_SETTLE:-8.0}
       - SUDARSHAN_FRIDA_PORT=${SUDARSHAN_FRIDA_PORT:-27055}
@@ -128,10 +141,10 @@ services:
     image: mitmproxy/mitmproxy:latest
     container_name: sudarshan-mitmproxy
     user: root
-    # Publish only if an external AVD must reach the proxy. Prefer binding to
+    # Publish only if an external sandbox must reach the proxy. Prefer binding to
     # loopback so it is not exposed on the LAN.
     ports:
-      - "127.0.0.1:8080:8080"    # Proxy port — point AVD to this
+      - "127.0.0.1:8080:8080"    # Proxy port — point Genymotion/AVD to this
     command: >
       mitmdump
       --listen-host 0.0.0.0

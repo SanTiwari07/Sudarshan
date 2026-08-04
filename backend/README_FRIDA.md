@@ -8,7 +8,7 @@ This document explains how to set up the Frida-based dynamic behavioral analysis
 |---|---|---|
 | `frida` (Python) | In `requirements.txt` (`17.16.4`) | Auto-installed via `pip` / Docker build |
 | `adb` | In `Dockerfile` | `android-sdk-platform-tools` installed in container |
-| Android Studio (AVD) | On your HOST machine | Runs Pixel 6 AVD (Android 13+ / 16 KB pages) |
+| Android Sandbox (Genymotion Desktop default) | On your HOST machine | Rooted Android 10/11 x86_64; optional Android Studio AVD via `SANDBOX_PROVIDER=android_studio` |
 | `frida-server` | One-time emulator setup | Downloaded matching version `17.16.4` |
 
 ---
@@ -38,23 +38,27 @@ This script automatically:
 ## Running with Docker
 
 The backend Docker container has `adb` and `frida`/`frida-tools` pre-installed.
-The Android emulator runs on your **host machine** (via Android Studio AVD).
-The container reaches the emulator over **ADB TCP** using `host.docker.internal`.
+The Android sandbox runs on your **host machine** (Genymotion Desktop by default).
+The container reaches it over **ADB TCP** using `host.docker.internal`.
 
 ### One-time host setup (run on your host machine, NOT inside Docker)
 
 ```powershell
-# 1. Start your Pixel 6 AVD emulator in Android Studio
+# 1. Start Genymotion Desktop (rooted Android 10/11 x86_64)
+#    Or: set SANDBOX_PROVIDER=android_studio and start an AVD
 
-# 2. Add ADB to PATH:
-#    C:\Users\<YourUser>\AppData\Local\Android\Sdk\platform-tools\
+# 2. Ensure ADB is on PATH (or Genymotion\tools\adb.exe)
 
-# 3. Switch the emulator's ADB to TCP mode:
+# 3. Switch ADB to TCP mode:
 adb tcpip 5555
 
-# 4. Verify:
+# 4. Verify (set DEVICE_SERIAL if multiple devices):
 adb devices
-# Should show: emulator-5554   device
+# Genymotion example: 192.168.56.101:5555   device
+# AVD example:        emulator-5554         device
+
+# 5. Optional automated setup:
+python scripts/setup_dynamic_analysis.py
 ```
 
 ### Start the full stack:

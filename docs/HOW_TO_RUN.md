@@ -15,7 +15,7 @@ Target OS:           Windows 10/11, Linux (Ubuntu 22.04+), macOS 13+
 - [3. Quick Start (Single Command)](#3-quick-start-single-command)
 - [4. Manual Service Installation](#4-manual-service-installation)
 - [5. Running with Docker Compose](#5-running-with-docker-compose)
-- [6. Setting Up Android Studio AVD & Frida](#6-setting-up-android-studio-avd--frida)
+- [6. Setting Up Genymotion Desktop & Frida](#6-setting-up-genymotion-desktop--frida)
 - [7. Verification & Health Checks](#7-verification--health-checks)
 - [8. Troubleshooting Common Issues](#8-troubleshooting-common-issues)
 
@@ -28,7 +28,7 @@ Ensure the following tools are installed on your host system:
 | Dependency | Minimum Version | Installation Check | Purpose |
 | :--- | :--- | :--- | :--- |
 | **Docker & Compose** | 24.0+ | `docker compose version` | Containerized stack orchestration (`frontend`, `backend`, `analysis-engine`, `mitmproxy`, `mobsf`). |
-| **Android Studio AVD** | Android 13 (API 33) | `adb devices` | Isolated AVD dynamic execution sandbox on host. |
+| **Genymotion Desktop** *(or Android Studio AVD)* | Android 10/11 (API 29/30), x86 / x86_64 | `adb devices` | Isolated dynamic execution sandbox on host (`SANDBOX_PROVIDER`). |
 | **ADB** | 1.0.41+ | `adb version` | Android Debug Bridge for TCP emulator connection (`adb tcpip 5555`). |
 | **Python** *(Dev Optional)* | 3.10+ | `python --version` | Local development and unit testing (`pytest backend/tests`). |
 | **Node.js** *(Dev Optional)* | 18.x+ | `node --version` | Local frontend UI development. |
@@ -49,8 +49,13 @@ GEMINI_API_KEY="your_api_key_here"
 GEMINI_MODEL="gemini-2.5-flash"
 
 # ── Dynamic Sandbox & ADB ──
+SANDBOX_PROVIDER="genymotion"
 ADB_HOST="host.docker.internal"
 ADB_PORT="5555"
+DEVICE_SERIAL=""
+FRIDA_PORT="27055"
+AUTO_CONNECT="true"
+ROOT_REQUIRED="true"
 FRIDA_ANALYSIS_DURATION="30"
 
 # ── Threat Intelligence ──
@@ -115,22 +120,36 @@ docker compose logs -f backend
 
 ---
 
-## 6. Setting Up Android Studio AVD & Frida
+## 6. Setting Up Genymotion Desktop & Frida
 
-1. **Start Android Studio AVD**: Launch a Pixel AVD running Android 13 (x86_64).
-2. **Enable ADB TCP & Root**:
+### 6.1 Genymotion (default — `SANDBOX_PROVIDER=genymotion`)
+
+1. **Install Genymotion Desktop** and create a rooted virtual device (Android 10/11, x86_64 recommended).
+2. **Start the device** from the Genymotion UI and confirm ADB can see it:
    ```bash
-   adb tcpip 5555
-   adb connect 127.0.0.1:5555
-   adb root
-   adb shell "setenforce 0"
+   adb devices
+   # Example: 192.168.56.101:5555    device
    ```
-3. **Deploy frida-server 17.16.4**:
+3. **Pin the serial** (recommended when multiple devices are online):
    ```bash
-   adb push frida-server-17.16.4-android-x86_64/frida-server /data/local/tmp/frida-server
-   adb shell "chmod 755 /data/local/tmp/frida-server"
-   adb shell "nohup /data/local/tmp/frida-server > /dev/null 2>&1 &"
+   # In .env
+   DEVICE_SERIAL=192.168.56.101:5555
    ```
+4. **Enable ADB TCP, root, SELinux, Frida** (or use the setup script):
+   ```bash
+   adb -s $DEVICE_SERIAL tcpip 5555
+   adb -s $DEVICE_SERIAL root
+   adb -s $DEVICE_SERIAL shell "whoami"   # must print: root
+   adb -s $DEVICE_SERIAL shell "setenforce 0"
+   python scripts/setup_dynamic_analysis.py --serial $DEVICE_SERIAL
+   ```
+5. Point Genymotion HTTP proxy at `127.0.0.1:8080` if using mitmproxy network capture.
+
+### 6.2 Android Studio AVD (optional — `SANDBOX_PROVIDER=android_studio`)
+
+1. Set `SANDBOX_PROVIDER=android_studio` in `.env`.
+2. Launch an AVD (Android 10/11+, x86_64).
+3. Run the same ADB/root/Frida steps as above (serial is typically `emulator-5554`).
 
 ---
 

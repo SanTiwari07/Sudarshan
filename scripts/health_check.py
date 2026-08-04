@@ -256,23 +256,29 @@ def check_adb():
     if devices:
         _check("ADB devices", PASS, f"{len(devices)} device(s): {', '.join(d.split()[0] for d in devices)}")
     else:
-        _check("ADB devices", WARN, "No emulators connected. Start an AVD in Android Studio.")
+        _check("ADB devices", WARN, "No sandbox devices connected. Start Genymotion Desktop (or an Android Studio AVD).")
 
     return devices
 
 
 def check_emulator(devices: List[str]):
-    print("\n[Android Emulator]")
+    print("\n[Android Sandbox]")
+    provider = os.environ.get("SANDBOX_PROVIDER", "genymotion")
+    preferred = os.environ.get("DEVICE_SERIAL", "").strip()
     if not devices:
-        _check("Emulator running", WARN, "No emulator connected — start an AVD with API 34+")
+        _check("Sandbox running", WARN, f"No device connected — start {provider} (Android 10/11+, x86_64)")
         _check("Boot completed", SKIP, "No device")
         _check("ADB root", SKIP, "No device")
         _check("SELinux mode", SKIP, "No device")
         _check("frida-server on device", SKIP, "No device")
         return
 
-    device = devices[0].split()[0]
-    _check("Emulator connected", PASS, f"Serial: {device}")
+    serials = [d.split()[0] for d in devices]
+    if preferred and preferred in serials:
+        device = preferred
+    else:
+        device = serials[0]
+    _check("Sandbox connected", PASS, f"Provider={provider} Serial={device}")
 
     # Boot completed
     ok, out = _run([ADB_BIN, "-s", device, "shell", "getprop", "sys.boot_completed"])

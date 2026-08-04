@@ -269,7 +269,7 @@ Failed --> Dashboard
 | **Storage & Queue** | Persistent Case Store | SQLite (`sudarshan.db`), Async Worker Pool, File Artifact Store |
 | **Shared Package** | Sudarshan Core | [`shared/sudarshan_core/`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/) mounted via `PYTHONPATH=/app:/opt/sudarshan-core` |
 | **Static Analysis** | Decompilation Engines | MobSF Docker (Port 8008), Native `apk_analyzer.py`, APKTool CLI, JADX CLI, YARA Scanner |
-| **Dynamic Sandbox** | Execution Environment | Android Studio AVD (Android 13, x86_64), ADB TCP (Port 5555), Frida 17.16.4 |
+| **Dynamic Sandbox** | Execution Environment | Genymotion Desktop (default) or Android Studio AVD via `SandboxProvider`, ADB TCP (Port 5555), Frida 17.16.4 |
 | **Network Intercept**| Transparent Proxy | mitmproxy Docker Sidecar (Port 8080), HAR Dump Parser |
 | **Risk & Scoring** | Math Scoring Engine | 5-Axis STEI, Volume Logarithmic BFCI v2, 4-Axis FRS, Threat Scenario Matrix |
 | **AI Intelligence** | RAG & LLM Engine | Gemini 2.5 Flash, Ollama, Vector RAG Knowledge Base |
@@ -356,8 +356,8 @@ The FastAPI backend exposes versioned REST API endpoints (`/api/v1`):
 
 ### Prerequisites
 - **Docker**: Docker Desktop with Docker Compose
-- **Android Emulator (AVD)**: Running Android Studio AVD (Android 13, x86_64)
-- **ADB**: Installed and added to system PATH (`adb tcpip 5555`)
+- **Android Sandbox**: Genymotion Desktop (default) with a rooted Android 10/11 (API 29/30) x86/x86_64 image — or optionally an Android Studio AVD (`SANDBOX_PROVIDER=android_studio`)
+- **ADB**: Installed and on PATH, or Genymotion's bundled tools (`adb tcpip 5555`)
 - **Python** *(Optional for dev/tests)*: Version 3.10+ (`pytest backend/tests`)
 - **Node.js** *(Optional for UI dev)*: Version 18.x or higher & `npm`
 

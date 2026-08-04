@@ -289,6 +289,6 @@ The React 18 SPA frontend provides three primary analytical views:
 
 ## 12. Storage, Security & Isolation Architecture
 
-- **Sandbox Isolation**: Target APKs run strictly inside the isolated Android Studio AVD. Net traffic is routed through the `mitmproxy` container.
+- **Sandbox Isolation**: Target APKs run inside the configured host sandbox (Genymotion Desktop by default, or Android Studio AVD via `SANDBOX_PROVIDER`). Net traffic is routed through the `mitmproxy` container.
 - **Process & Storage Isolation**: Uploaded files buffer in temporary directories and clean up automatically after analysis. Case data persists in SQLite (`sudarshan.db`).
 - **Authentication**: All non-public API endpoints require valid JWT Bearer tokens signed with `JWT_SECRET_KEY`.

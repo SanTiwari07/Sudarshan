@@ -48,13 +48,20 @@ class DynamicAnalysisSession:
         self,
         session_id: str,
         package_name: str,
-        device_serial: str = "emulator-5554",
+        device_serial: str = "",
         output_dir: Optional[Path] = None,
         adb_path: str = "adb",
         timeout_seconds: int = 180,
     ) -> None:
         self.session_id = session_id
         self.package_name = package_name
+        # Empty serial → resolve via SandboxProvider at first use if needed
+        if not device_serial:
+            try:
+                from sudarshan_core.sandbox import get_sandbox_provider
+                device_serial = get_sandbox_provider().select_device().serial
+            except Exception:
+                device_serial = ""
         self.device_serial = device_serial
         self.output_dir = Path(output_dir) if output_dir else Path(f"/tmp/sudarshan_{session_id}")
         self.output_dir.mkdir(parents=True, exist_ok=True)

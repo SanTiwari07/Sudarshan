@@ -2,17 +2,22 @@
 """
 SUDARSHAN — Frida Dynamic Analysis Sandbox Controller
 ======================================================
-Drives an Android emulator (AVD via Android Studio) to perform
-runtime behavioral analysis of a suspicious APK using Frida hooks.
+Drives an Android sandbox (via SandboxProvider) to perform runtime
+behavioral analysis of a suspicious APK using Frida hooks.
+
+The emulator backend is abstracted: Genymotion Desktop is the default
+provider; Android Studio AVD remains optional via SANDBOX_PROVIDER.
+This module talks only to SandboxProvider for device/ADB/root/Frida
+lifecycle — analysis logic (install, launch, hooks, explorer) is unchanged.
 
 Prerequisites:
-  1. Android Studio installed with an AVD (Emulator) created.
-  2. frida-server deployed on the emulator (see README_FRIDA.md).
-  3. ADB available in PATH (comes with Android Studio).
+  1. Sandbox running (Genymotion Desktop by default, or Android Studio AVD).
+  2. frida-server deployed on the device (see README_FRIDA.md / HOW_TO_RUN.md).
+  3. ADB available in PATH (or provider-specific tools path).
   4. pip install frida frida-tools  (already done)
 
 Pipeline:
-  APK → ADB install → Launch target package → Frida attach → 
+  APK → SandboxProvider.connect → ADB install → Launch → Frida attach →
   Hook APIs → Collect events (30s) → Compute BFCI → Return result
 
 BFCI Formula (from Sudarshan proposal):
@@ -183,13 +188,6 @@ except ImportError:
         "[Frida] ui_explorer module not found — AgenticExplorer has no rollback target."
     )
 
-# ADB executable — tries PATH first, then common Android Studio locations
-_ADB_CANDIDATES = [
-    "adb",
-    r"C:\Users\{user}\AppData\Local\Android\Sdk\platform-tools\adb.exe",
-    r"C:\Program Files\Android\Android Studio\sdk\platform-tools\adb.exe",
-]
-
 # Default analysis duration in seconds
 ANALYSIS_DURATION_SECONDS = int(os.getenv("FRIDA_ANALYSIS_DURATION", "30"))
 
@@ -227,12 +225,22 @@ EXPLORER_JOIN_GRACE_SECONDS: float = 20.0
 ATTACH_MAX_ATTEMPTS: int = 10
 ATTACH_RETRY_DELAY_SECONDS: float = 1.5
 
-# ── Docker / TCP ADB support ───────────────────────────────────────────────────
-# When running in Docker, the Android emulator is on the HOST machine.
-# Set ADB_HOST=host.docker.internal and ADB_PORT=5555 in docker-compose.yml.
-# The backend will automatically run: adb connect <ADB_HOST>:<ADB_PORT>
+# ── Docker / TCP ADB support (via SandboxProvider config) ──────────────────────
+# When running in Docker, ADB_HOST is the Genymotion VM endpoint visible from
+# the container, obtained from `adb devices -l`, not the Docker host alias.
+# SANDBOX_PROVIDER selects Genymotion (default) or android_studio.
+# DEVICE_SERIAL pins a device when multiple are online.
+def _sandbox_env():
+    from sudarshan_core.sandbox import load_sandbox_config
+    return load_sandbox_config()
+
+
+# Module-level mirrors kept for backwards-compatible imports / status APIs.
+# Re-read on each call site that needs freshness via _sandbox_env().
 ADB_HOST = os.getenv("ADB_HOST", "")   # e.g. host.docker.internal
 ADB_PORT = os.getenv("ADB_PORT", "5555")
+DEVICE_SERIAL = os.getenv("DEVICE_SERIAL", "")
+SANDBOX_PROVIDER_NAME = os.getenv("SANDBOX_PROVIDER", "genymotion")
 
 # BFCI_WEIGHTS is now imported from bfci_scorer — kept as a re-export for
 # callers that import it directly from this module (backwards compatibility).
@@ -326,68 +334,34 @@ def _timeline_to_seconds(tl: LaunchTimeline) -> Dict[str, Optional[float]]:
             out[k] = round(v, 3)
     return out
 
-# ─── ADB Helpers ──────────────────────────────────────────────────────────────
+# ─── ADB Helpers (delegated to SandboxProvider) ───────────────────────────────
+
+def _get_provider():
+    """Return the configured SandboxProvider (cached)."""
+    from sudarshan_core.sandbox import get_sandbox_provider
+    return get_sandbox_provider()
+
 
 def _find_adb() -> Optional[str]:
-    """Find the adb executable on this system."""
-    import shutil
-    # Try PATH first
-    adb = shutil.which("adb")
-    if adb:
-        return adb
-    # Try common Android Studio paths
-    user = os.environ.get("USERNAME", "user")
-    for candidate in _ADB_CANDIDATES[1:]:
-        path = candidate.replace("{user}", user)
-        if os.path.exists(path):
-            return path
-    return None
+    """Find the adb executable via the active SandboxProvider."""
+    return _get_provider().find_adb()
 
 
 def _adb(*args: str, timeout: int = 30) -> Tuple[bool, str]:
     """Run an adb command. Returns (success, output)."""
-    adb = _find_adb()
-    if not adb:
-        return False, "adb not found"
-    try:
-        result = subprocess.run(
-            [adb] + list(args),
-            capture_output=True, text=True, timeout=timeout
-        )
-        output = result.stdout + result.stderr
-        return result.returncode == 0, output.strip()
-    except subprocess.TimeoutExpired:
-        return False, "adb command timed out"
-    except Exception as e:
-        return False, str(e)
+    return _get_provider().adb(*args, timeout=timeout)
 
 
 def get_connected_emulators() -> List[str]:
     """
-    Return list of connected emulator/device serials.
+    Return list of connected sandbox device serials.
 
-    Docker mode: if ADB_HOST env var is set, automatically connects to
-    the host-machine emulator via ADB TCP before listing devices.
+    Delegates to SandboxProvider.list_devices() which:
+      - auto-connects via ADB_HOST:ADB_PORT when AUTO_CONNECT=true
+      - parses `adb devices` for state=device
     """
-    # ── Docker TCP mode: auto-connect to host emulator ─────────────────────────
-    if ADB_HOST:
-        tcp_target = f"{ADB_HOST}:{ADB_PORT}"
-        ok, out = _adb("connect", tcp_target, timeout=10)
-        if ok:
-            logger.info(f"[Frida] ADB TCP connected to host emulator: {tcp_target}")
-        else:
-            logger.warning(f"[Frida] ADB TCP connect failed ({tcp_target}): {out}")
-
-    ok, output = _adb("devices")
-    if not ok:
-        return []
-    devices = []
-    for line in output.splitlines()[1:]:
-        if "\t" in line:
-            serial, state = line.split("\t", 1)
-            if state.strip() == "device":
-                devices.append(serial.strip())
-    return devices
+    devices = _get_provider().list_devices()
+    return [d.serial for d in devices]
 
 
 def _adb_install_apk(apk_path: str, device: str) -> Tuple[bool, str, Dict[str, Any]]:
@@ -1729,7 +1703,8 @@ class FridaSession:
                     # Strategy:
                     #   1. If ADB_HOST is set, add remote device via frida device manager.
                     #   2. Otherwise, enumerate devices normally.
-                    if ADB_HOST:
+                    device_ip = self.device_serial.split(":")[0] if ":" in self.device_serial or "." in self.device_serial else ""
+                    if ADB_HOST or device_ip:
                         candidate_ports = []
                         for p_env in [os.getenv("SUDARSHAN_FRIDA_PORT"), os.getenv("FRIDA_SERVER_PORT"), "27055", "27042"]:
                             if p_env and p_env.isdigit():
@@ -1737,19 +1712,6 @@ class FridaSession:
                                 if p_int not in candidate_ports:
                                     candidate_ports.append(p_int)
 
-                        # WHERE the forward actually lands.
-                        #
-                        # `adb forward` binds the local port on the machine running
-                        # the ADB CLIENT — which, in Docker mode, is THIS CONTAINER.
-                        # The previous code forwarded inside the container and then
-                        # connected to `{ADB_HOST}:{port}`, i.e. the HOST, which has
-                        # no such forward unless an operator created one by hand.
-                        # Result: frida-server was running fine on the emulator and
-                        # every attach failed with
-                        #     ServerNotRunningError: unable to connect to remote frida-server
-                        # while the app itself launched correctly (ADB works, so the
-                        # process and pid resolved) — which made it look like an
-                        # injection/permission fault rather than a plumbing one.
                         #
                         # frida-server also binds device-local loopback
                         # (127.0.0.1:27042), so it is ONLY reachable through a
@@ -2494,22 +2456,55 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
     }
 
 
-    # ── Step 1: Find emulator ──────────────────────────────────────────────────
-    emulators = []
+    # ── Step 1: Connect sandbox via SandboxProvider ────────────────────────────
+    # Device detection, ADB, root, and Frida verification are owned by the
+    # sandbox abstraction. Analysis logic below is unchanged.
+    provider = _get_provider()
+    connection = None
+    device_serial = None
+
     for attempt in range(3):
-        emulators = get_connected_emulators()
-        if emulators:
+        connection = provider.connect()
+        if connection.ok and connection.device:
+            device_serial = connection.device.serial
             break
-        logger.warning(f"[Frida] No emulators found, attempt {attempt+1}. Retrying in 2s...")
+        logger.warning(
+            "[Frida] Sandbox connect attempt %s failed: %s (%s). Retrying in 2s...",
+            attempt + 1,
+            connection.error_code if connection else "unknown",
+            connection.error_message if connection else "no result",
+        )
         await asyncio.sleep(2)
-        
-    if not emulators:
-        logger.warning("[Frida] No Android emulators connected. Start an AVD in Android Studio.")
-        base_result["error"] = "No emulator connected. Start an AVD in Android Studio."
+
+    if not device_serial or not connection or not connection.ok:
+        err_code = (connection.error_code if connection else "SANDBOX_OFFLINE") or "SANDBOX_OFFLINE"
+        err_msg = (
+            (connection.error_message if connection else None)
+            or (
+                "No sandbox device connected. Start Genymotion Desktop "
+                "(or set SANDBOX_PROVIDER=android_studio and start an AVD)."
+            )
+        )
+        logger.warning("[Frida] %s: %s", err_code, err_msg)
+        base_result["error"] = err_msg
+        base_result["error_code"] = err_code
+        if connection:
+            base_result["sandbox_connection"] = connection.to_dict()
         return base_result
 
-    device_serial = emulators[0]
-    logger.info(f"[Frida] Using emulator: {device_serial}")
+    logger.info(
+        "[Frida] Using sandbox provider=%s serial=%s android=%s abi=%s "
+        "root=%s frida=%s connect_ms=%.1f",
+        provider.name,
+        device_serial,
+        connection.device.android_version if connection.device else "?",
+        connection.device.abi if connection.device else "?",
+        connection.device.rooted if connection.device else "?",
+        connection.device.frida_running if connection.device else "?",
+        connection.connection_time_ms,
+    )
+    base_result["sandbox_connection"] = connection.to_dict()
+    base_result["sandbox_provider"] = provider.name
 
     # ── Serialise access to the device ────────────────────────────────────────
     # There is exactly ONE emulator and it was taken with no lock, while the
@@ -2644,17 +2639,12 @@ async def _run_device_session(
     logger.info("[Frida] SELinux mode: %s", (enforce or "unknown").strip())
 
     # ── Step 1b: Automatically start frida-server if dead ──────────────────────
-    logger.info("[Frida] Checking frida-server status...")
-    ok, out = await loop.run_in_executor(
-        None, _adb, "-s", device_serial, "shell", "ps -A | grep frida-server"
-    )
-    if "frida-server" not in out:
-        logger.info("[Frida] frida-server not running, starting it automatically...")
-        # Since adb is running as root, we can run it directly and background it
-        await loop.run_in_executor(
-            None, _adb, "-s", device_serial, "shell", "nohup /data/local/tmp/frida-server > /dev/null 2>&1 &"
-        )
-        await asyncio.sleep(2) # Give it time to start up
+    # Frida lifecycle is owned by SandboxProvider.connect(). Do not duplicate
+    # it here with a hard-coded legacy `/data/local/tmp/frida-server` probe:
+    # Genymotion deployments may run a deliberately named agent binary and a
+    # non-default port. The provider validates the configured agent before this
+    # session starts; FridaSession then performs the authoritative attach/canary.
+    logger.info("[Frida] Configured Frida agent verified by SandboxProvider.")
 
     # ── Step 2: Extract package name ───────────────────────────────────────────
     main_activity = None
@@ -3144,33 +3134,41 @@ def get_sandbox_status() -> Dict[str, Any]:
 
     ready = frida_available and adb_path is not None and len(emulators) > 0 and hooks_ok
 
-    # Determine connection mode
+    # Determine connection mode from sandbox config
+    cfg = _sandbox_env()
     tcp_error = None
-    if ADB_HOST:
+    if cfg.adb_host:
         mode = "docker-tcp"
         connection_info = (
-            f"Docker mode: connecting to Android emulator at {ADB_HOST}:{ADB_PORT} via ADB TCP. "
-            f"Ensure: (1) Emulator is running on host, (2) 'adb tcpip 5555' was run on host."
+            f"Docker mode: connecting to {cfg.provider} sandbox at "
+            f"{cfg.adb_host}:{cfg.adb_port} via ADB TCP. "
+            f"Ensure: (1) Sandbox is running on host, (2) 'adb tcpip {cfg.adb_port}' "
+            f"was run on host (or Genymotion ADB is reachable)."
         )
         if adb_path and len(emulators) == 0:
-            ok, out = _adb("connect", f"{ADB_HOST}:{ADB_PORT}", timeout=5)
+            ok, out = _adb("connect", f"{cfg.adb_host}:{cfg.adb_port}", timeout=5)
             if not ok or "cannot connect" in out.lower() or "failed to connect" in out.lower():
                 tcp_error = out.strip()
                 connection_info += f" [ERROR: {tcp_error}]"
     else:
         mode = "local"
-        connection_info = "Local mode: looking for USB/AVD emulator connected via adb devices."
+        connection_info = (
+            f"Local mode ({cfg.provider}): looking for devices via `adb devices`. "
+            f"Set DEVICE_SERIAL if multiple devices are online."
+        )
 
     return {
         "ready": ready,
         "mode": mode,
+        "sandbox_provider": cfg.provider,
+        "device_serial_configured": cfg.device_serial or None,
         "connection_info": connection_info,
         "frida_available": frida_available,
         "frida_version": frida_version,
         "adb_found": adb_path is not None,
         "adb_path": adb_path,
-        "adb_host": ADB_HOST or None,
-        "adb_port": ADB_PORT if ADB_HOST else None,
+        "adb_host": cfg.adb_host or None,
+        "adb_port": cfg.adb_port if cfg.adb_host else None,
         "emulators_connected": emulators,
         "hooks_script_present": hooks_ok,
         "hooks_script_path": str(_HOOKS_SCRIPT),

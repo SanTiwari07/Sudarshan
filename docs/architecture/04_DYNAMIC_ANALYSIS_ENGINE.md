@@ -35,7 +35,9 @@ Test Suite:          tests/unit/test_frida_pipeline_full.py, scripts/verify_runt
 
 ## 1. Executive Overview
 
-The **Dynamic Analysis Engine (DAE)** executes suspicious Android applications inside an isolated Android Virtual Device (x86_64, 16 KB page size; verified against Android 13 / `google_apis_ps16k`). Combining Frida 17 binary instrumentation, `mitmproxy` transparent HTTPS decryption, an autonomous LLM UI explorer ([`agentic_explorer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/agentic_explorer.py)), and a causal workflow reconstructor ([`workflow_reconstructor.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/workflow_reconstructor.py)), the DAE captures real-time behavioral evidence of mobile banking fraud.
+The **Dynamic Analysis Engine (DAE)** executes suspicious Android applications inside an isolated host sandbox selected via `SandboxProvider` (default: **Genymotion Desktop**; optional: Android Studio AVD). Compatible with Android 10/11 (API 29/30), x86 / x86_64. Combining Frida 17 binary instrumentation, `mitmproxy` transparent HTTPS decryption, an autonomous LLM UI explorer ([`agentic_explorer.py`](../../shared/sudarshan_core/engines/agentic_explorer.py)), and a causal workflow reconstructor ([`workflow_reconstructor.py`](../../shared/sudarshan_core/engines/workflow_reconstructor.py)), the DAE captures real-time behavioral evidence of mobile banking fraud.
+
+The DAE communicates with the emulator **only** through `sudarshan_core.sandbox.SandboxProvider`. Install, launch, Frida hooks, Agentic Explorer, Risk Engine, and MobSF integration are unchanged.
 
 ---
 

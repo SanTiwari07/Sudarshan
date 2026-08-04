@@ -20,11 +20,16 @@ logger = logging.getLogger(__name__)
 class MultiStageEngine:
     def __init__(self, apk_path: str, device_serial: Optional[str] = None, package_name: Optional[str] = None):
         if not device_serial:
-            emulators = get_connected_emulators()
-            if emulators:
-                device_serial = emulators[0]
-            else:
-                logger.warning("[MultiStage] No emulators connected. Multi-stage will likely fail.")
+            try:
+                from sudarshan_core.sandbox import get_sandbox_provider
+                device_serial = get_sandbox_provider().select_device().serial
+            except Exception:
+                emulators = get_connected_emulators()
+                if emulators:
+                    device_serial = emulators[0]
+                else:
+                    logger.warning("[MultiStage] No sandbox devices connected. Multi-stage will likely fail.")
+                    device_serial = None
         self.device_serial = device_serial
         self.apk_path = apk_path
         self.package_name = package_name
@@ -34,7 +39,7 @@ class MultiStageEngine:
             {"name": "banking_apps", "profile": "banking_apps"},
             {"name": "rebooted", "profile": "reboot"}
         ]
-        self.simulator = DeviceStateSimulator(device_serial)
+        self.simulator = DeviceStateSimulator(device_serial or "")
 
     async def run_all_stages(self) -> Dict[str, Any]:
         logger.info(f"[MultiStage] Starting multi-stage analysis for {self.apk_path}")

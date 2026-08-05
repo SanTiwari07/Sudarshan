@@ -49,9 +49,11 @@ shared/sudarshan_core/sandbox/
 
 ```bash
 SANDBOX_PROVIDER=genymotion   # or android_studio | corellium | waydroid | physical
-ADB_HOST=host.docker.internal
+# Genymotion: set ADB_HOST to the VM IP from `adb devices` (e.g. 192.168.56.101), not host.docker.internal.
+# Android Studio AVD from Docker: ADB_HOST=host.docker.internal is common.
+ADB_HOST=
 ADB_PORT=5555
-DEVICE_SERIAL=                # e.g. 192.168.56.101:5555
+DEVICE_SERIAL=                # e.g. 192.168.56.101:5555 — recommended when multiple devices are online
 FRIDA_PORT=27055
 AUTO_CONNECT=true
 ROOT_REQUIRED=true
@@ -102,7 +104,7 @@ MobSF remains static-only (`androguard` / `androguard+mobsf`). No MobSF dynamic 
    - Java: OpenJDK 17
    - Python: 3.12 with PyPI verified `frida==17.16.4` and `frida-tools`
    - Shared Library: [`shared/sudarshan_core/`](../shared/sudarshan_core/) mounted at `/opt/sudarshan-core`
-   - Network ADB: Auto-connects to host sandbox via `host.docker.internal:5555` (`AUTO_CONNECT=true`)
+   - Network ADB: `SandboxProvider` connects using `ADB_HOST`, `ADB_PORT`, and optional `DEVICE_SERIAL` from `.env` (`AUTO_CONNECT=true`). Genymotion uses the VM endpoint visible to the host; Android Studio AVDs often use `host.docker.internal:5555` from inside containers.
    - Resource Constraints: Hard limits (`mem_limit: 4g`, `cpus: 2.0`, `no-new-privileges:true`).
 
 2. **Backend Orchestrator**:

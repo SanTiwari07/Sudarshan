@@ -186,7 +186,7 @@ Sudarshan integrates into enterprise banking environments through standard proto
 +-----------------------------------------------------------------------+
 ```
 
-- **REST API Gateway**: Exposes `/api/v1/upload`, `/api/v1/cases`, `/api/v1/intelligence/feed`.
+- **REST API Gateway**: Exposes `/api/v1/analyze`, `/api/v1/cases`, `/api/v1/intelligence/{sha256}`, `/api/v1/report/*`, and `/api/runtime/*`.
 - **SIEM / SOAR Export**: Emits standard STIX 2.1 JSON bundles and CSV IOC feeds.
 - **Core Banking System**: Triggers API-based account quarantine and token revocation when $FRS \ge 80.0$ (`CRITICAL`).
 

@@ -28,6 +28,11 @@
 8. **Static Analysis Pipeline**: [`apktool_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/apktool_engine.py) and [`jadx_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/jadx_engine.py) provide standalone resource decompilation and DEX-to-Java source scanning.
 9. **Network Interception**: Sidecar container runs `mitmproxy`, with [`network_capture.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/network_capture.py) parsing HAR dumps and merging full HTTPS headers/responses with Frida socket hooks.
 10. **Analyst Dashboard**: [`WorkflowDiagram.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/components/WorkflowDiagram.tsx) and [`FraudCard.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/pages/FraudCard.tsx) render interactive causal workflow chains and executive risk views directly in the React frontend.
+11. **Sandbox Provider Abstraction**: [`shared/sudarshan_core/sandbox/`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/sandbox/) (`get_sandbox_provider()`, Genymotion default, Android Studio optional) is the only supported path from DAE to ADB/install/launch.
+12. **Dynamic Validation Framework**: [`validate_dynamic_pipeline.py`](file:///d:/Projects/Sudarshan%20BOI/validate_dynamic_pipeline.py) and [`shared/sudarshan_core/validation/`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/validation/) run corpus APKs, stress/recovery suites, and engineering reports under `tests/apks/validation_runs/`.
+
+### Known limitations (documented gaps, not hidden)
+- **Technical View screenshot gallery**: [`TechnicalView.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/pages/TechnicalView.tsx) requests `GET /api/v1/screenshots/{file}` but the gateway has **no** static artifact route; screenshots are persisted in case JSON and HTML reports until a dedicated download endpoint ships.
 
 ---
 
@@ -77,6 +82,9 @@ $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytes
 
 # Run live runtime pipeline verification
 $env:PYTHONPATH="backend;shared"; backend\.venv\Scripts\python.exe scripts/verify_runtime_pipeline.py
+
+# Run dynamic APK corpus validation (live sandbox; see docs/VALIDATION.md)
+$env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="validation"; python validate_dynamic_pipeline.py
 ```
 
 All automated unit & integration test modules pass clean across static analysis, dynamic sandbox, threat correlation, and deterministic risk scoring engines.

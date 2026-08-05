@@ -31,7 +31,7 @@
 
 A malicious Android application can execute account takeover (ATO), OTP theft, or overlay phishing within **90 seconds** of installation. Conversely, a financial fraud analyst typically begins an investigation days later. **Sudarshan** bridges this critical time gap by delivering an end-to-end autonomous mobile threat intelligence platform specifically tailored for banking fraud operations.
 
-Rather than producing generic static vulnerability summaries, Sudarshan performs deep static code decompilation (via **MobSF**, **Androguard**, **APKTool**, and **JADX**), autonomous dynamic runtime sandbox execution (via **Frida 17** with ART deoptimization and **mitmproxy** transparent HTTPS decryption), deterministic multi-axis risk scoring ($STEI$, $BFCI\text{ v2}$, $FRS$), and causal workflow reconstruction. Structured findings are indexed into an evidence-constrained Large Language Model (**Gemini 2.5 Flash** / **Ollama**) to generate analyst-actionable threat intelligence cards, MITRE ATT&CK mappings, regulatory customer advisories, and STIX 2.1 feeds.
+Rather than producing generic static vulnerability summaries, Sudarshan performs deep static code decompilation (via **MobSF**, **Androguard**, **APKTool**, and **JADX**), autonomous dynamic runtime sandbox execution (via **Frida 17** with ART deoptimization and **mitmproxy** transparent HTTPS decryption), deterministic multi-axis risk scoring ($STEI$, $BFCI\text{ v2}$, $FRS$), and causal workflow reconstruction. Structured findings are indexed into an evidence-constrained **Gemini 2.5 Flash** RAG pipeline to generate analyst-actionable threat intelligence cards, MITRE ATT&CK mappings, regulatory customer advisories, and STIX 2.1 feeds.
 
 ---
 
@@ -256,7 +256,7 @@ Failed --> Dashboard
 - **Behavioral Fraud Confidence Index (BFCI v2)**: Calculates volume-aware logarithmic event scoring with a 30-second temporal sequence bonus.
 - **Causal Workflow Reconstructor (`workflow_reconstructor.py`)**: Reconstructs temporal causal chains (e.g., Overlay Phishing $\rightarrow$ SMS Theft $\rightarrow$ Account Takeover) mapped directly to MITRE ATT&CK for Mobile techniques.
 - **Interactive UI Workflow Timeline (`WorkflowDiagram.tsx`)**: Displays expandable causal chain stages, confidence levels, hook badges, and MITRE technique links in the Analyst Dashboard.
-- **Evidence-Constrained RAG Core**: Gemini 2.5 Flash / Ollama integration guarded by input sanitization (`sanitizer.py`) preventing prompt injection and hallucinated verdicts.
+- **Evidence-Constrained RAG Core**: Gemini 2.5 Flash integration guarded by input sanitization (`sanitizer.py`) preventing prompt injection and hallucinated verdicts.
 
 ---
 
@@ -272,7 +272,7 @@ Failed --> Dashboard
 | **Dynamic Sandbox** | Execution Environment | Genymotion Desktop (default) or Android Studio AVD via `SandboxProvider`, ADB TCP (Port 5555), Frida 17.16.4 |
 | **Network Intercept**| Transparent Proxy | mitmproxy Docker Sidecar (Port 8080), HAR Dump Parser |
 | **Risk & Scoring** | Math Scoring Engine | 5-Axis STEI, Volume Logarithmic BFCI v2, 4-Axis FRS, Threat Scenario Matrix |
-| **AI Intelligence** | RAG & LLM Engine | Gemini 2.5 Flash, Ollama, Vector RAG Knowledge Base |
+| **AI Intelligence** | RAG & LLM Engine | Gemini 2.5 Flash, in-memory RAG knowledge base |
 
 ---
 
@@ -289,7 +289,7 @@ Sudarshan BOI/
 │   │   ├── rag/                     # Knowledge base & financial fraud indexer
 │   │   ├── routes/                  # FastAPI endpoints (upload, report, cases, intelligence)
 │   │   └── workers/                 # Async analysis queue dispatcher & worker pool
-│   ├── tests/                       # 388 automated unit & integration tests
+│   ├── tests/                       # Gateway-focused pytest modules (see also `tests/` at repo root)
 │   ├── Dockerfile                   # FastAPI backend container configuration
 │   └── requirements.txt             # Backend Python dependencies
 ├── shared/
@@ -306,6 +306,8 @@ Sudarshan BOI/
 │   │   └── main.tsx                 # React entry point
 │   ├── Dockerfile                   # Nginx frontend container configuration
 │   └── package.json                 # Node.js dependencies
+├── tests/                           # Root pytest suite + APK validation corpus (`tests/apks/`)
+├── validate_dynamic_pipeline.py     # Live sandbox corpus validation CLI
 ├── docs/                            # Enterprise documentation portal
 ├── docker-compose.yml               # Multi-container orchestration (Frontend, Backend, Engine, MobSF, mitmproxy)
 └── start.ps1                        # One-command bootstrapper script
@@ -341,13 +343,14 @@ The FastAPI backend exposes versioned REST API endpoints (`/api/v1`):
 | Method | Endpoint | Authorization | Description |
 | :--- | :--- | :--- | :--- |
 | `POST` | `/api/v1/auth/login` | None | Authenticate user & issue JWT Access Token. |
-| `POST` | `/api/v1/upload` | Bearer Token | Upload APK, validate manifest, dispatch analysis job. |
+| `POST` | `/api/v1/analyze` | Bearer Token | Upload APK, validate manifest, dispatch synchronous analysis. |
+| `POST` | `/api/v1/analyze/async` | Bearer Token | Enqueue analysis job; poll `GET /api/v1/status/{job_id}`. |
 | `GET` | `/api/v1/cases` | Bearer Token | Retrieve paginated historical analysis cases from SQLite. |
 | `GET` | `/api/v1/cases/{sha256}` | Bearer Token | Retrieve a single stored case by hash. |
-| `GET` | `/api/v1/intelligence/feed` | Bearer Token | Retrieve threat intelligence feeds & IOC correlations. |
-| `GET` | `/api/v1/report/pdf/{sha256}` | Bearer Token | Export complete PDF report artifact. |
-| `GET` | `/api/v1/report/json/{sha256}` | Bearer Token | Export complete JSON report artifact. |
-| `POST` | `/api/v1/report/chat` | Bearer Token | RAG-grounded AI investigator query interface. |
+| `GET` | `/api/v1/intelligence/{sha256}` | Bearer Token | Threat intelligence correlation for a case hash. |
+| `GET` | `/api/v1/report/html/{sha256}` | Bearer Token | Export standalone HTML security report. |
+| `GET` | `/api/v1/report/pdf/{sha256}` | Bearer Token | PDF export (HTML report is primary). |
+| `POST` | `/api/v1/chat/stream` | Bearer Token | RAG-grounded AI investigator (SSE streaming). |
 | `GET` | `/api/v1/auth/me` | Bearer Token | Return the authenticated user's profile. |
 
 ---
@@ -396,13 +399,13 @@ The detailed documentation portal is available under [`docs/`](file:///d:/Projec
 | [**02 — System Overview**](docs/02_SYSTEM_OVERVIEW.md) | Platform architecture, microservices layout, container topology. |
 | [**03 — Static Threat Intelligence**](docs/architecture/03_STATIC_THREAT_INTELLIGENCE.md) | APKTool, JADX, MobSF, Androguard, Manifest serialization, STEI formula. |
 | [**04 — Dynamic Analysis Engine**](docs/architecture/04_DYNAMIC_ANALYSIS_ENGINE.md) | Frida 17 PID attach, ART deopt, mitmproxy HAR, Agentic Explorer 15-stage DAG. |
-| [**05 — AI Investigation Engine**](docs/architecture/05_AI_INVESTIGATION_ENGINE.md) | RAG graph index, Gemini 2.5 Flash, Ollama, prompt sanitization. |
+| [**05 — AI Investigation Engine**](docs/architecture/05_AI_INVESTIGATION_ENGINE.md) | RAG graph index, Gemini 2.5 Flash, prompt sanitization. |
 | [**06 — Evidence Processing**](docs/architecture/06_EVIDENCE_PROCESSING.md) | EventBus, EvidenceStore, WorkflowReconstructor causal chain engine. |
 | [**07 — Fraud Intelligence Engine**](docs/architecture/07_FRAUD_INTELLIGENCE_ENGINE.md) | Threat correlation (VirusTotal/OTX/AbuseIPDB) & family classifier. |
 | [**08 — Deterministic Risk Engine**](docs/architecture/08_DETERMINISTIC_RISK_ENGINE.md) | Math formulas for 5-axis STEI, BFCI v2, FRS, Threat Scenario Matrix. |
 | [**09 — AI Report Generation**](docs/architecture/09_AI_REPORT_GENERATION.md) | HTML security reports, PDF report exporter, JSON report feed. |
 | [**10 — Analyst Dashboard**](docs/dashboard/10_DASHBOARD.md) | React 18 SPA workflow, Executive Fraud Card, Technical View, Workflow UI. |
-| [**11 — Evaluation Strategy**](docs/evaluation/11_EVALUATION.md) | Automated testing suite (`pytest backend/tests`), benchmarks, determinism baselines. |
+| [**11 — Evaluation Strategy**](docs/evaluation/11_EVALUATION.md) | Automated testing suite (`pytest tests/ backend/tests`), benchmarks, determinism baselines. |
 | [**How to Run Guide**](docs/HOW_TO_RUN.md) | Comprehensive installation, configuration, and execution guide. |
 | [**DAE Current State**](docs/DAE_CURRENT_STATE.md) | Complete resolution audit and technical current state document. |
 | [**Documentation Audit Report**](docs/DOCUMENTATION_AUDIT_REPORT.md) | Formal documentation audit, file mapping, and verification report. |

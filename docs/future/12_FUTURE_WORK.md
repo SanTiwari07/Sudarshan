@@ -23,7 +23,7 @@ Future development focuses on advancing from user-space application hooking to u
 [ Current Baseline Platform ]
 - User-Space Frida Instrumentation (Java.deoptimizeEverything)
 - In-Memory Python Async Queue (analysis_queue.py)
-- Local Android Studio AVD (ADB TCP Port 5555)
+- Host sandbox via SandboxProvider (Genymotion Desktop default; Android Studio AVD optional)
 - In-Memory Gemini RAG Evidence Index
                  │
                  ▼

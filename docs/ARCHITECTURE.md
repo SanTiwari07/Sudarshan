@@ -272,10 +272,12 @@ The React 18 SPA frontend provides three primary analytical views:
 
 ## 11. API Specifications & Data Contracts
 
-### POST `/api/v1/upload` (Upload & Analyze)
+### POST `/api/v1/analyze` (Upload & Analyze)
 - **Request**: `multipart/form-data` with `file` (`.apk` binary).
 - **Header**: `Authorization: Bearer <jwt_token>`
 - **Response**: `AnalysisResponse` JSON object containing `sha256`, `case_id`, `family_classification`, `final_risk_score`, `risk_band`, `frs_breakdown`, `threat_scenario_table`, `fraud_workflow`, `intelligence_report`, `executive_view`, and `technical_view`.
+
+Related gateway routes (same `/api/v1` prefix): `POST /analyze/async`, `GET /status/{job_id}`, `GET /sandbox/status`, `GET /intelligence/{sha256}`, `GET /report/html/{sha256}`, `POST /chat/stream`.
 
 ### GET `/api/runtime/*` (Runtime Telemetry API Suite)
 - **`/api/runtime/status`**: Pipeline health summary and active `PipelineTracker` registry states.

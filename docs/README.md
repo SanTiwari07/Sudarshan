@@ -16,7 +16,7 @@ All documentation herein is strictly derived from and cross-verified against the
 | [**MIGRATION.md**](MIGRATION.md) | Microservice Migration Guide | Architectural specification of `analysis-engine` microservice container, REST APIs, zero-copy shared volume, and entrypoint healthchecks. |
 | [**03 — Static Threat Intelligence**](architecture/03_STATIC_THREAT_INTELLIGENCE.md) | Static Analysis & Decompilation | Containerized static engine, MobSF, native `apk_analyzer.py`, `apk_repair.py` AXML recovery, APKTool 2.10.0, JADX 1.5.1, `manifest.py` Investigation Manifest, STEI formula. |
 | [**04 — Dynamic Analysis Engine**](architecture/04_DYNAMIC_ANALYSIS_ENGINE.md) | Dynamic Sandbox & Agentic Explorer | Containerized Frida 17 PID attach, Java-bridge probing (`java_probe.js`), ART deoptimization, Network ADB (`host.docker.internal:5555`), mitmproxy HAR, Agentic Explorer 15-stage DAG. |
-| [**05 — AI Investigation Engine**](architecture/05_AI_INVESTIGATION_ENGINE.md) | AI Core, RAG & Prompt Safety | Gemini 2.5 Flash / Gemini 3.6 Flash, Ollama, vector RAG index (`gemini_rag.py`), prompt sanitizer. |
+| [**05 — AI Investigation Engine**](architecture/05_AI_INVESTIGATION_ENGINE.md) | AI Core, RAG & Prompt Safety | Gemini 2.5 Flash (`GEMINI_MODEL`), vector RAG index (`gemini_rag.py`), prompt sanitizer. |
 | [**06 — Evidence Processing**](architecture/06_EVIDENCE_PROCESSING.md) | Event Bus & Workflow Engine | `EventBus`, `EvidenceStore`, `WorkflowReconstructor` causal chain engine, runtime telemetry sink (`runtime_api.py`). |
 | [**07 — Fraud Intelligence Engine**](architecture/07_FRAUD_INTELLIGENCE_ENGINE.md) | Threat Correlation & Attribution | VirusTotal, AlienVault OTX, AbuseIPDB lookup, 24h TTL SQLite IOC reputation cache, deterministic family classifier. |
 | [**08 — Deterministic Risk Engine**](architecture/08_DETERMINISTIC_RISK_ENGINE.md) | Risk Scoring & Math Formulas | 5-axis STEI, logarithmic volume-aware BFCI v2, 4-axis FRS formula, static fallback. |
@@ -24,6 +24,7 @@ All documentation herein is strictly derived from and cross-verified against the
 | [**10 — Analyst Dashboard**](dashboard/10_DASHBOARD.md) | Analyst UI & Visual Workflows | React 18 SPA, Executive View (`FraudCard.tsx`), Technical SOC View, `WorkflowDiagram.tsx` timeline. |
 | [**11 — Evaluation Strategy**](evaluation/11_EVALUATION.md) | Verification & Testing | Automated test suite in `tests/` & `backend/tests/` (**457 collected & verified tests**), benchmarks, determinism baselines. |
 | [**HOW_TO_RUN.md**](HOW_TO_RUN.md) | Installation & Operations | Prerequisites, Docker Compose setup, single-command `start.ps1`, Vite polling mode, environment variables. |
+| [**VALIDATION.md**](VALIDATION.md) | Validation Protocols | Determinism replay, ground-truth matrix, pytest suite (**457**), dynamic APK corpus (`validate_dynamic_pipeline.py`). |
 | [**DAE_CURRENT_STATE.md**](DAE_CURRENT_STATE.md) | Technical Resolution Audit | Resolution state of containerization, Frida 17 Java bridge, ART JIT deopt, PID attach, BFCI v2, manifest, and HAR merger. |
 | [**CONTRIBUTING.md**](CONTRIBUTING.md) | Developer Guidelines | Code standards, PEP-8/ESLint style, pytest testing workflows, pull request process. |
 | [**CHANGELOG.md**](CHANGELOG.md) | Release Notes & Version History | Version history (`v2.5.0-STABLE`), release highlights, and commit traceability. |
@@ -70,7 +71,7 @@ graph TD
         WORKFLOW["Workflow Reconstructor<br/>(shared/sudarshan_core/engines/workflow_reconstructor.py)"]
         CORR["Threat Correlator (24h Cache)<br/>(shared/sudarshan_core/services/threat_correlator.py)"]
         RISK["Deterministic Risk Engine<br/>(shared/sudarshan_core/engines/risk_engine.py)"]
-        RAG["Gemini 2.5/3.6 RAG Core<br/>(backend/app/ai/gemini_rag.py)"]
+        RAG["Gemini 2.5 RAG Core<br/>(backend/app/ai/gemini_rag.py)"]
     end
 
     UI -->|HTTPS REST| API

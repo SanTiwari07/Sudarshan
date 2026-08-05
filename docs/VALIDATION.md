@@ -28,7 +28,7 @@ Validation in Sudarshan is divided into three verification domains:
   ▼              ▼              ▼
 [ Determinism ] [ Ground-Truth] [ Security ]
 Score Replay   Sample Matrix  Prompt Sanitizer
-Verification   (TP/TN Audits) (421 Tests Total)
+Verification   (TP/TN Audits) (457 Tests Total)
 ```
 
 1. **Determinism Verification**: Replays pinned baseline feature vectors against [`risk_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/risk_engine.py) to assert that zero score drift occurs across codebase updates.
@@ -68,6 +68,29 @@ To run the full suite (**457 tests collected & verified**):
 ```powershell
 $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests
 ```
+
+---
+
+## Dynamic APK Corpus Validation (Live Sandbox)
+
+For end-to-end dynamic validation against the APK corpus (requires a connected sandbox and Frida), use the root CLI and shared validation package:
+
+| Artifact | Path |
+| :--- | :--- |
+| Entry CLI | [`validate_dynamic_pipeline.py`](file:///d:/Projects/Sudarshan%20BOI/validate_dynamic_pipeline.py) |
+| Corpus manifest | [`tests/apks/corpus.manifest.json`](file:///d:/Projects/Sudarshan%20BOI/tests/apks/corpus.manifest.json) |
+| Runner / reports | [`shared/sudarshan_core/validation/`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/validation/) |
+| Corpus README | [`tests/apks/README.md`](file:///d:/Projects/Sudarshan%20BOI/tests/apks/README.md) |
+
+```powershell
+$env:PYTHONPATH = "backend;shared"
+$env:JWT_SECRET_KEY = "validation"
+python validate_dynamic_pipeline.py              # all corpus APKs
+python validate_dynamic_pipeline.py --fetch      # download OSS samples first
+python validate_dynamic_pipeline.py --stress 10,20 --recovery --force
+```
+
+Each run writes `preflight.txt`, per-APK JSON under `tests/apks/validation_runs/<UTC timestamp>/apk_runs/`, and optional `engineering_report.html` / `.json`. Preflight invokes [`scripts/verify_runtime_pipeline.py`](file:///d:/Projects/Sudarshan%20BOI/scripts/verify_runtime_pipeline.py).
 
 ---
 

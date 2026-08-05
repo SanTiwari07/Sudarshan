@@ -1,0 +1,349 @@
+{
+  "generated_at": "2026-08-05T12:06:14.729817+00:00",
+  "package_name": "com.android.insecurebankv2",
+  "summary": {
+    "total": 9,
+    "by_severity": {
+      "HIGH": 4,
+      "INFO": 5
+    },
+    "by_category": {
+      "anti_analysis": 1,
+      "SCREENSHOT": 5,
+      "accessibility": 3
+    },
+    "critical": 0,
+    "high": 4
+  },
+  "records": [
+    {
+      "id": "906b76f2-2cee-4471-96ed-20c1720ebd39",
+      "finding_id": "EVID-001",
+      "timestamp": "2026-08-05T12:05:48.144000+00:00",
+      "timestamp_ms": 1785931548144,
+      "category": "anti_analysis",
+      "severity": "HIGH",
+      "api": "Build.<static fields>",
+      "class_name": "Build",
+      "method": "<static fields>",
+      "args": [],
+      "return_value": "",
+      "thread_id": 6911,
+      "stack_trace": [],
+      "description": "Emulator-identifying Build fields replaced: FINGERPRINT=\"google/vbox86p/vbox86p:11/RQ1A.210105.003/857:userdebug/test-keys\", BRAND=\"Genymotion\", DEVICE=\"vbox86p\", PRODUCT=\"vbox86p\", HARDWARE=\"vbox86\"",
+      "human_description": "Emulator-identifying Build fields replaced: FINGERPRINT=\"google/vbox86p/vbox86p:11/RQ1A.210105.003/857:userdebug/test-keys\", BRAND=\"Genymotion\", DEVICE=\"vbox86p\", PRODUCT=\"vbox86p\", HARDWARE=\"vbox86\"",
+      "mitre_technique_id": "T1497.001",
+      "mitre_technique_name": "Virtualization/Sandbox Evasion",
+      "screenshot_ref": "screenshots/001_1785931539504_anti_analysis_detected.png",
+      "screenshot_id": "SCR-001",
+      "runtime_context": {
+        "package_name": "com.android.insecurebankv2",
+        "analysis_stage": "single",
+        "pid": 0
+      },
+      "extra": {
+        "class_name": "android.os.Build",
+        "spoofed_fields": [
+          "FINGERPRINT=\"google/vbox86p/vbox86p:11/RQ1A.210105.003/857:userdebug/test-keys\"",
+          "BRAND=\"Genymotion\"",
+          "DEVICE=\"vbox86p\"",
+          "PRODUCT=\"vbox86p\"",
+          "HARDWARE=\"vbox86\""
+        ]
+      }
+    },
+    {
+      "id": "6b06085a-8c79-4685-83ae-1cf9a45ecf50",
+      "finding_id": "EVID-002",
+      "timestamp": "2026-08-05T12:05:39.504000+00:00",
+      "timestamp_ms": 1785931539504,
+      "category": "SCREENSHOT",
+      "severity": "INFO",
+      "api": "ScreenshotManager.capture",
+      "class_name": "ScreenshotManager",
+      "method": "capture",
+      "args": [],
+      "return_value": "screenshots/001_1785931539504_anti_analysis_detected.png",
+      "thread_id": 0,
+      "stack_trace": [],
+      "description": "Screenshot captured (anti_analysis_detected)",
+      "human_description": "Screenshot captured: screenshots/001_1785931539504_anti_analysis_detected.png",
+      "mitre_technique_id": "",
+      "mitre_technique_name": "",
+      "screenshot_ref": "screenshots/001_1785931539504_anti_analysis_detected.png",
+      "screenshot_id": "SCR-001",
+      "runtime_context": {
+        "package_name": "com.android.insecurebankv2",
+        "analysis_stage": "single",
+        "pid": 0
+      },
+      "extra": {
+        "screenshot_id": "SCR-001",
+        "screenshot_uuid": "2b0cd7ce-25ec-4ff1-a6c7-a7011a718bb6",
+        "filename": "screenshots/001_1785931539504_anti_analysis_detected.png",
+        "label": "anti_analysis_detected",
+        "category": "anti_analysis",
+        "source": "auto",
+        "trigger_event": "",
+        "reason": "ROOT_DETECTION",
+        "screen_hash": "65ad7b038a2ebd8f"
+      }
+    },
+    {
+      "id": "dba52585-c20c-491c-a644-529b0c8472c3",
+      "finding_id": "EVID-003",
+      "timestamp": "2026-08-05T12:05:40.813000+00:00",
+      "timestamp_ms": 1785931540813,
+      "category": "SCREENSHOT",
+      "severity": "INFO",
+      "api": "ScreenshotManager.capture",
+      "class_name": "ScreenshotManager",
+      "method": "capture",
+      "args": [],
+      "return_value": "screenshots/002_1785931540813_01_app_opened.png",
+      "thread_id": 0,
+      "stack_trace": [],
+      "description": "Screenshot captured (01_app_opened)",
+      "human_description": "Screenshot captured: screenshots/002_1785931540813_01_app_opened.png",
+      "mitre_technique_id": "",
+      "mitre_technique_name": "",
+      "screenshot_ref": "screenshots/002_1785931540813_01_app_opened.png",
+      "screenshot_id": "SCR-002",
+      "runtime_context": {
+        "package_name": "com.android.insecurebankv2",
+        "analysis_stage": "single",
+        "pid": 0
+      },
+      "extra": {
+        "screenshot_id": "SCR-002",
+        "screenshot_uuid": "8af5ccfa-d9cc-4992-9a3b-11d899c4a5df",
+        "filename": "screenshots/002_1785931540813_01_app_opened.png",
+        "label": "01_app_opened",
+        "category": "lifecycle",
+        "source": "lifecycle",
+        "trigger_event": "",
+        "reason": "LIFECYCLE",
+        "screen_hash": "5d18ba1d93f9eb93"
+      }
+    },
+    {
+      "id": "b4084927-e3ba-48dd-88f6-56390709b421",
+      "finding_id": "EVID-004",
+      "timestamp": "2026-08-05T12:05:50.274000+00:00",
+      "timestamp_ms": 1785931550274,
+      "category": "accessibility",
+      "severity": "HIGH",
+      "api": "AccessibilityManager.sendAccessibilityEvent",
+      "class_name": "AccessibilityManager",
+      "method": "sendAccessibilityEvent",
+      "args": [],
+      "return_value": "",
+      "thread_id": 6778,
+      "stack_trace": [
+        "android.view.View.requestParentSendAccessibilityEvent(View.java:8333)",
+        "android.view.View.sendAccessibilityEventUncheckedInternal(View.java:8326)",
+        "android.view.View.sendAccessibilityEventUnchecked(View.java:8297)",
+        "android.view.View.sendAccessibilityEventInternal(View.java:8274)",
+        "android.view.View.sendAccessibilityEvent(View.java:8238)",
+        "com.android.internal.policy.DecorView.sendAccessibilityEvent(DecorView.java:624)"
+      ],
+      "description": "AccessibilityManager event dispatched (possible ATS relay)",
+      "human_description": "AccessibilityManager event dispatched (possible ATS relay)",
+      "mitre_technique_id": "",
+      "mitre_technique_name": "",
+      "screenshot_ref": "",
+      "screenshot_id": "",
+      "runtime_context": {
+        "package_name": "com.android.insecurebankv2",
+        "analysis_stage": "single",
+        "pid": 0
+      },
+      "extra": {
+        "class_name": "android.view.accessibility.AccessibilityManager"
+      }
+    },
+    {
+      "id": "6a024118-6feb-44ef-b88d-50e735110f55",
+      "finding_id": "EVID-005",
+      "timestamp": "2026-08-05T12:05:52.152000+00:00",
+      "timestamp_ms": 1785931552152,
+      "category": "accessibility",
+      "severity": "HIGH",
+      "api": "AccessibilityManager.sendAccessibilityEvent",
+      "class_name": "AccessibilityManager",
+      "method": "sendAccessibilityEvent",
+      "args": [],
+      "return_value": "",
+      "thread_id": 6778,
+      "stack_trace": [
+        "android.view.View.requestParentSendAccessibilityEvent(View.java:8333)",
+        "android.view.View.sendAccessibilityEventUncheckedInternal(View.java:8326)",
+        "android.view.View.sendAccessibilityEventUnchecked(View.java:8297)",
+        "android.view.View.sendAccessibilityEventInternal(View.java:8274)",
+        "android.view.View.sendAccessibilityEvent(View.java:8238)",
+        "com.android.internal.policy.DecorView.sendAccessibilityEvent(DecorView.java:624)"
+      ],
+      "description": "AccessibilityManager event dispatched (possible ATS relay)",
+      "human_description": "AccessibilityManager event dispatched (possible ATS relay)",
+      "mitre_technique_id": "",
+      "mitre_technique_name": "",
+      "screenshot_ref": "",
+      "screenshot_id": "",
+      "runtime_context": {
+        "package_name": "com.android.insecurebankv2",
+        "analysis_stage": "single",
+        "pid": 0
+      },
+      "extra": {
+        "class_name": "android.view.accessibility.AccessibilityManager"
+      }
+    },
+    {
+      "id": "b525680e-c814-425c-a166-93a9389b680e",
+      "finding_id": "EVID-006",
+      "timestamp": "2026-08-05T12:05:54.460000+00:00",
+      "timestamp_ms": 1785931554460,
+      "category": "accessibility",
+      "severity": "HIGH",
+      "api": "AccessibilityManager.sendAccessibilityEvent",
+      "class_name": "AccessibilityManager",
+      "method": "sendAccessibilityEvent",
+      "args": [],
+      "return_value": "",
+      "thread_id": 6778,
+      "stack_trace": [
+        "android.view.View.requestParentSendAccessibilityEvent(View.java:8333)",
+        "android.view.View.sendAccessibilityEventUncheckedInternal(View.java:8326)",
+        "android.view.View.sendAccessibilityEventUnchecked(View.java:8297)",
+        "android.view.View.sendAccessibilityEventInternal(View.java:8274)",
+        "android.view.View.sendAccessibilityEvent(View.java:8238)",
+        "com.android.internal.policy.DecorView.sendAccessibilityEvent(DecorView.java:624)"
+      ],
+      "description": "AccessibilityManager event dispatched (possible ATS relay)",
+      "human_description": "AccessibilityManager event dispatched (possible ATS relay)",
+      "mitre_technique_id": "",
+      "mitre_technique_name": "",
+      "screenshot_ref": "",
+      "screenshot_id": "",
+      "runtime_context": {
+        "package_name": "com.android.insecurebankv2",
+        "analysis_stage": "single",
+        "pid": 0
+      },
+      "extra": {
+        "class_name": "android.view.accessibility.AccessibilityManager"
+      }
+    },
+    {
+      "id": "efb27218-c557-45dd-837c-35acc20f5221",
+      "finding_id": "EVID-007",
+      "timestamp": "2026-08-05T12:05:54.208000+00:00",
+      "timestamp_ms": 1785931554208,
+      "category": "SCREENSHOT",
+      "severity": "INFO",
+      "api": "ScreenshotManager.capture",
+      "class_name": "ScreenshotManager",
+      "method": "capture",
+      "args": [],
+      "return_value": "screenshots/003_1785931554208_perception_vision.png",
+      "thread_id": 0,
+      "stack_trace": [],
+      "description": "Screenshot captured (perception_vision)",
+      "human_description": "Screenshot captured: screenshots/003_1785931554208_perception_vision.png",
+      "mitre_technique_id": "",
+      "mitre_technique_name": "",
+      "screenshot_ref": "screenshots/003_1785931554208_perception_vision.png",
+      "screenshot_id": "SCR-003",
+      "runtime_context": {
+        "package_name": "com.android.insecurebankv2",
+        "analysis_stage": "single",
+        "pid": 0
+      },
+      "extra": {
+        "screenshot_id": "SCR-003",
+        "screenshot_uuid": "cfa5cc51-1c5c-4889-9045-3ac907e7f3f6",
+        "filename": "screenshots/003_1785931554208_perception_vision.png",
+        "label": "perception_vision",
+        "category": "ui",
+        "source": "explorer",
+        "trigger_event": "",
+        "reason": "SUSPICIOUS_UI",
+        "screen_hash": "3c2421b49f32b19c"
+      }
+    },
+    {
+      "id": "7d0a8586-5005-4979-acde-ea96fab54683",
+      "finding_id": "EVID-008",
+      "timestamp": "2026-08-05T12:06:07.931000+00:00",
+      "timestamp_ms": 1785931567931,
+      "category": "SCREENSHOT",
+      "severity": "INFO",
+      "api": "ScreenshotManager.capture",
+      "class_name": "ScreenshotManager",
+      "method": "capture",
+      "args": [],
+      "return_value": "screenshots/004_1785931567931_perception_vision.png",
+      "thread_id": 0,
+      "stack_trace": [],
+      "description": "Screenshot captured (perception_vision)",
+      "human_description": "Screenshot captured: screenshots/004_1785931567931_perception_vision.png",
+      "mitre_technique_id": "",
+      "mitre_technique_name": "",
+      "screenshot_ref": "screenshots/004_1785931567931_perception_vision.png",
+      "screenshot_id": "SCR-004",
+      "runtime_context": {
+        "package_name": "com.android.insecurebankv2",
+        "analysis_stage": "single",
+        "pid": 0
+      },
+      "extra": {
+        "screenshot_id": "SCR-004",
+        "screenshot_uuid": "c639b2b3-f49f-4b35-bf63-ff08109f2fd9",
+        "filename": "screenshots/004_1785931567931_perception_vision.png",
+        "label": "perception_vision",
+        "category": "ui",
+        "source": "explorer",
+        "trigger_event": "",
+        "reason": "SUSPICIOUS_UI",
+        "screen_hash": "82fdc2e21171140e"
+      }
+    },
+    {
+      "id": "dc7f67f2-adb9-450e-a73e-9bf29635aec8",
+      "finding_id": "EVID-009",
+      "timestamp": "2026-08-05T12:06:13.003000+00:00",
+      "timestamp_ms": 1785931573003,
+      "category": "SCREENSHOT",
+      "severity": "INFO",
+      "api": "ScreenshotManager.capture",
+      "class_name": "ScreenshotManager",
+      "method": "capture",
+      "args": [],
+      "return_value": "screenshots/005_1785931573003_99_final_screen.png",
+      "thread_id": 0,
+      "stack_trace": [],
+      "description": "Screenshot captured (99_final_screen)",
+      "human_description": "Screenshot captured: screenshots/005_1785931573003_99_final_screen.png",
+      "mitre_technique_id": "",
+      "mitre_technique_name": "",
+      "screenshot_ref": "screenshots/005_1785931573003_99_final_screen.png",
+      "screenshot_id": "SCR-005",
+      "runtime_context": {
+        "package_name": "com.android.insecurebankv2",
+        "analysis_stage": "single",
+        "pid": 0
+      },
+      "extra": {
+        "screenshot_id": "SCR-005",
+        "screenshot_uuid": "6e5cd317-b72d-4248-96b7-7e35396084e1",
+        "filename": "screenshots/005_1785931573003_99_final_screen.png",
+        "label": "99_final_screen",
+        "category": "lifecycle",
+        "source": "lifecycle",
+        "trigger_event": "",
+        "reason": "LIFECYCLE",
+        "screen_hash": "82fdc2e21171140e"
+      }
+    }
+  ]
+}

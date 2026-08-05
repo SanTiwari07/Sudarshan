@@ -1,0 +1,8 @@
+{
+    "stages": [],
+    "fraud_sequence_detected": false,
+    "sequence_label": "NONE",
+    "chain_confidence": 0.0,
+    "total_events_analyzed": 4,
+    "stage_count": 0
+}

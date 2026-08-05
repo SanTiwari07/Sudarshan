@@ -1,0 +1,925 @@
+{
+  "log_version": "1.0",
+  "generated_at": "2026-08-05T12:06:14.718209+00:00",
+  "total_entries": 13,
+  "entries": [
+    {
+      "type": "system_event",
+      "timestamp": "2026-08-05T12:05:41.343010+00:00",
+      "event": "exploration_start",
+      "detail": "AgenticExplorer started. Budget=25, Duration=30s, Package=com.android.insecurebankv2"
+    },
+    {
+      "iteration": 1,
+      "timestamp": "2026-08-05T12:05:43.231176+00:00",
+      "source": "goal_planner",
+      "observation": {
+        "activity": "com.android.insecurebankv2/.LoginActivity",
+        "screen_hash": "ce3f3c124c6de9f3",
+        "ui_node_count": 6,
+        "frida_events_count": 0,
+        "screenshot_taken": false,
+        "vision_reason": ""
+      },
+      "goal": {
+        "current": "Launch Application",
+        "stage": 1,
+        "status": "IN_PROGRESS"
+      },
+      "reasoning": "Enable Accessibility Service for malware execution",
+      "action": {
+        "tool": "click",
+        "text": "More options",
+        "x": 531,
+        "y": 66,
+        "goal": "Launch Application",
+        "reasoning": "Enable Accessibility Service for malware execution",
+        "confidence": 0.95,
+        "_source": "goal_planner"
+      },
+      "execution_result": {
+        "success": false,
+        "duration": 0.0,
+        "retries": 0,
+        "error": "Tool 'click' is not registered in TOOL_REGISTRY."
+      },
+      "frida_events": [],
+      "network_events": [],
+      "goal_status_snapshot": {
+        "Launch Application": "IN_PROGRESS",
+        "Grant Runtime Permissions": "PENDING",
+        "Accessibility Abuse": "PENDING",
+        "Overlay Detection": "PENDING",
+        "Login Flow": "PENDING",
+        "SMS / OTP Interception": "PENDING",
+        "Banking Application Detection": "PENDING",
+        "Network / C2 Communication": "PENDING",
+        "Persistence Mechanisms": "PENDING",
+        "Dynamic Code Loading": "PENDING",
+        "Runtime Reflection": "PENDING",
+        "Deep Links": "PENDING",
+        "Broadcast Receivers": "PENDING",
+        "Exported Components": "PENDING",
+        "Background Services": "PENDING"
+      },
+      "stopping_conditions": {
+        "action_budget_used": 1,
+        "action_budget_max": 25,
+        "empty_action_streak": 1,
+        "time_elapsed_s": 1.9
+      }
+    },
+    {
+      "iteration": 2,
+      "timestamp": "2026-08-05T12:05:45.527098+00:00",
+      "source": "goal_planner",
+      "observation": {
+        "activity": "com.android.insecurebankv2/.LoginActivity",
+        "screen_hash": "ce3f3c124c6de9f3",
+        "ui_node_count": 6,
+        "frida_events_count": 2,
+        "screenshot_taken": false,
+        "vision_reason": "previous_action_failed"
+      },
+      "goal": {
+        "current": "Grant Runtime Permissions",
+        "stage": 2,
+        "status": "IN_PROGRESS"
+      },
+      "reasoning": "Enable Accessibility Service for malware execution",
+      "action": {
+        "tool": "click",
+        "text": "More options",
+        "x": 531,
+        "y": 66,
+        "goal": "Grant Runtime Permissions",
+        "reasoning": "Enable Accessibility Service for malware execution",
+        "confidence": 0.95,
+        "_source": "goal_planner"
+      },
+      "execution_result": {
+        "success": false,
+        "duration": 0.0,
+        "retries": 0,
+        "error": "Tool 'click' is not registered in TOOL_REGISTRY."
+      },
+      "frida_events": [
+        {
+          "event_id": "ev_1785931550269_2",
+          "timestamp": 1785931550274,
+          "process": "com.android.insecurebankv2",
+          "thread": 6778,
+          "package": "com.android.insecurebankv2",
+          "pid": 6778,
+          "event_type": "FRIDA_HOOK",
+          "category": "accessibility",
+          "severity": "HIGH",
+          "method": "AccessibilityManager.sendAccessibilityEvent",
+          "class": "android.view.accessibility.AccessibilityManager",
+          "arguments": [],
+          "return_value": null,
+          "stacktrace": [
+            "android.view.View.requestParentSendAccessibilityEvent(View.java:8333)",
+            "android.view.View.sendAccessibilityEventUncheckedInternal(View.java:8326)",
+            "android.view.View.sendAccessibilityEventUnchecked(View.java:8297)",
+            "android.view.View.sendAccessibilityEventInternal(View.java:8274)",
+            "android.view.View.sendAccessibilityEvent(View.java:8238)",
+            "com.android.internal.policy.DecorView.sendAccessibilityEvent(DecorView.java:624)"
+          ],
+          "evidence": "AccessibilityManager event dispatched (possible ATS relay)",
+          "ioc": null,
+          "risk_vector": "accessibility",
+          "source": "frida",
+          "hook": "AccessibilityManager.sendAccessibilityEvent",
+          "thread_id": 6778,
+          "process_id": 6778,
+          "stack_trace": [
+            "android.view.View.requestParentSendAccessibilityEvent(View.java:8333)",
+            "android.view.View.sendAccessibilityEventUncheckedInternal(View.java:8326)",
+            "android.view.View.sendAccessibilityEventUnchecked(View.java:8297)",
+            "android.view.View.sendAccessibilityEventInternal(View.java:8274)",
+            "android.view.View.sendAccessibilityEvent(View.java:8238)",
+            "com.android.internal.policy.DecorView.sendAccessibilityEvent(DecorView.java:624)"
+          ],
+          "context": {
+            "foreground_app": "Unknown",
+            "current_activity": "Unknown",
+            "previous_event_id": "ev_1785931548142_1"
+          },
+          "data": {
+            "hook": "AccessibilityManager.sendAccessibilityEvent",
+            "class_name": "android.view.accessibility.AccessibilityManager",
+            "severity": "HIGH",
+            "description": "AccessibilityManager event dispatched (possible ATS relay)"
+          }
+        },
+        {
+          "event_type": "EVIDENCE_CREATED",
+          "timestamp": 1785931550.274,
+          "session_id": "",
+          "payload": {
+            "evidence_id": "EVID-004",
+            "id": "b4084927-e3ba-48dd-88f6-56390709b421",
+            "category": "accessibility",
+            "severity": "HIGH"
+          },
+          "category": "general",
+          "severity": "INFO",
+          "data": {
+            "evidence_id": "EVID-004",
+            "id": "b4084927-e3ba-48dd-88f6-56390709b421",
+            "category": "accessibility",
+            "severity": "HIGH"
+          },
+          "type": "EVIDENCE_CREATED"
+        }
+      ],
+      "network_events": [],
+      "goal_status_snapshot": {
+        "Launch Application": "COMPLETED",
+        "Grant Runtime Permissions": "IN_PROGRESS",
+        "Accessibility Abuse": "IN_PROGRESS",
+        "Overlay Detection": "PENDING",
+        "Login Flow": "PENDING",
+        "SMS / OTP Interception": "PENDING",
+        "Banking Application Detection": "PENDING",
+        "Network / C2 Communication": "PENDING",
+        "Persistence Mechanisms": "PENDING",
+        "Dynamic Code Loading": "PENDING",
+        "Runtime Reflection": "PENDING",
+        "Deep Links": "PENDING",
+        "Broadcast Receivers": "PENDING",
+        "Exported Components": "PENDING",
+        "Background Services": "IN_PROGRESS"
+      },
+      "stopping_conditions": {
+        "action_budget_used": 2,
+        "action_budget_max": 25,
+        "empty_action_streak": 0,
+        "time_elapsed_s": 4.2
+      }
+    },
+    {
+      "iteration": 3,
+      "timestamp": "2026-08-05T12:05:50.381261+00:00",
+      "source": "loop_breaker",
+      "observation": {
+        "activity": "com.android.insecurebankv2/.LoginActivity",
+        "screen_hash": "ce3f3c124c6de9f3",
+        "ui_node_count": 6,
+        "frida_events_count": 2,
+        "screenshot_taken": false,
+        "vision_reason": ""
+      },
+      "goal": {
+        "current": "LOOP_RECOVERY",
+        "stage": 2,
+        "status": "IN_PROGRESS"
+      },
+      "reasoning": "Loop detected: screen b9479e visited >3 times in recent steps. Backtracking.",
+      "action": {
+        "tool": "press_back",
+        "goal": "LOOP_RECOVERY",
+        "reasoning": "Loop detected: screen b9479e visited >3 times in recent steps. Backtracking.",
+        "confidence": 0.9,
+        "_source": "loop_breaker"
+      },
+      "execution_result": {
+        "success": true,
+        "duration": 1.368,
+        "retries": 0,
+        "error": null
+      },
+      "frida_events": [
+        {
+          "event_id": "ev_1785931552148_4",
+          "timestamp": 1785931552152,
+          "process": "com.android.insecurebankv2",
+          "thread": 6778,
+          "package": "com.android.insecurebankv2",
+          "pid": 6778,
+          "event_type": "FRIDA_HOOK",
+          "category": "accessibility",
+          "severity": "HIGH",
+          "method": "AccessibilityManager.sendAccessibilityEvent",
+          "class": "android.view.accessibility.AccessibilityManager",
+          "arguments": [],
+          "return_value": null,
+          "stacktrace": [
+            "android.view.View.requestParentSendAccessibilityEvent(View.java:8333)",
+            "android.view.View.sendAccessibilityEventUncheckedInternal(View.java:8326)",
+            "android.view.View.sendAccessibilityEventUnchecked(View.java:8297)",
+            "android.view.View.sendAccessibilityEventInternal(View.java:8274)",
+            "android.view.View.sendAccessibilityEvent(View.java:8238)",
+            "com.android.internal.policy.DecorView.sendAccessibilityEvent(DecorView.java:624)"
+          ],
+          "evidence": "AccessibilityManager event dispatched (possible ATS relay)",
+          "ioc": null,
+          "risk_vector": "accessibility",
+          "source": "frida",
+          "hook": "AccessibilityManager.sendAccessibilityEvent",
+          "thread_id": 6778,
+          "process_id": 6778,
+          "stack_trace": [
+            "android.view.View.requestParentSendAccessibilityEvent(View.java:8333)",
+            "android.view.View.sendAccessibilityEventUncheckedInternal(View.java:8326)",
+            "android.view.View.sendAccessibilityEventUnchecked(View.java:8297)",
+            "android.view.View.sendAccessibilityEventInternal(View.java:8274)",
+            "android.view.View.sendAccessibilityEvent(View.java:8238)",
+            "com.android.internal.policy.DecorView.sendAccessibilityEvent(DecorView.java:624)"
+          ],
+          "context": {
+            "foreground_app": "Unknown",
+            "current_activity": "Unknown",
+            "previous_event_id": "ev_1785931550269_2"
+          },
+          "data": {
+            "hook": "AccessibilityManager.sendAccessibilityEvent",
+            "class_name": "android.view.accessibility.AccessibilityManager",
+            "severity": "HIGH",
+            "description": "AccessibilityManager event dispatched (possible ATS relay)"
+          }
+        },
+        {
+          "event_type": "EVIDENCE_CREATED",
+          "timestamp": 1785931552.152,
+          "session_id": "",
+          "payload": {
+            "evidence_id": "EVID-005",
+            "id": "6a024118-6feb-44ef-b88d-50e735110f55",
+            "category": "accessibility",
+            "severity": "HIGH"
+          },
+          "category": "general",
+          "severity": "INFO",
+          "data": {
+            "evidence_id": "EVID-005",
+            "id": "6a024118-6feb-44ef-b88d-50e735110f55",
+            "category": "accessibility",
+            "severity": "HIGH"
+          },
+          "type": "EVIDENCE_CREATED"
+        }
+      ],
+      "network_events": [],
+      "goal_status_snapshot": {
+        "Launch Application": "COMPLETED",
+        "Grant Runtime Permissions": "IN_PROGRESS",
+        "Accessibility Abuse": "IN_PROGRESS",
+        "Overlay Detection": "PENDING",
+        "Login Flow": "PENDING",
+        "SMS / OTP Interception": "PENDING",
+        "Banking Application Detection": "PENDING",
+        "Network / C2 Communication": "PENDING",
+        "Persistence Mechanisms": "PENDING",
+        "Dynamic Code Loading": "PENDING",
+        "Runtime Reflection": "PENDING",
+        "Deep Links": "PENDING",
+        "Broadcast Receivers": "PENDING",
+        "Exported Components": "PENDING",
+        "Background Services": "IN_PROGRESS"
+      },
+      "stopping_conditions": {
+        "action_budget_used": 3,
+        "action_budget_max": 25,
+        "empty_action_streak": 0,
+        "time_elapsed_s": 9.0
+      }
+    },
+    {
+      "iteration": 4,
+      "timestamp": "2026-08-05T12:05:52.277116+00:00",
+      "source": "goal_planner",
+      "observation": {
+        "activity": "com.android.permissioncontroller/.permission.ui.ReviewPermissionsActivity",
+        "screen_hash": "5b45c96f77036705",
+        "ui_node_count": 14,
+        "frida_events_count": 2,
+        "screenshot_taken": false,
+        "vision_reason": ""
+      },
+      "goal": {
+        "current": "Grant Runtime Permissions",
+        "stage": 2,
+        "status": "IN_PROGRESS"
+      },
+      "reasoning": "Enable Accessibility Service for malware execution",
+      "action": {
+        "tool": "click",
+        "text": "CONTINUE",
+        "x": 507,
+        "y": 1127,
+        "goal": "Grant Runtime Permissions",
+        "reasoning": "Enable Accessibility Service for malware execution",
+        "confidence": 0.95,
+        "_source": "goal_planner"
+      },
+      "execution_result": {
+        "success": false,
+        "duration": 0.0,
+        "retries": 0,
+        "error": "Tool 'click' is not registered in TOOL_REGISTRY."
+      },
+      "frida_events": [
+        {
+          "event_id": "ev_1785931554458_6",
+          "timestamp": 1785931554460,
+          "process": "com.android.insecurebankv2",
+          "thread": 6778,
+          "package": "com.android.insecurebankv2",
+          "pid": 6778,
+          "event_type": "FRIDA_HOOK",
+          "category": "accessibility",
+          "severity": "HIGH",
+          "method": "AccessibilityManager.sendAccessibilityEvent",
+          "class": "android.view.accessibility.AccessibilityManager",
+          "arguments": [],
+          "return_value": null,
+          "stacktrace": [
+            "android.view.View.requestParentSendAccessibilityEvent(View.java:8333)",
+            "android.view.View.sendAccessibilityEventUncheckedInternal(View.java:8326)",
+            "android.view.View.sendAccessibilityEventUnchecked(View.java:8297)",
+            "android.view.View.sendAccessibilityEventInternal(View.java:8274)",
+            "android.view.View.sendAccessibilityEvent(View.java:8238)",
+            "com.android.internal.policy.DecorView.sendAccessibilityEvent(DecorView.java:624)"
+          ],
+          "evidence": "AccessibilityManager event dispatched (possible ATS relay)",
+          "ioc": null,
+          "risk_vector": "accessibility",
+          "source": "frida",
+          "hook": "AccessibilityManager.sendAccessibilityEvent",
+          "thread_id": 6778,
+          "process_id": 6778,
+          "stack_trace": [
+            "android.view.View.requestParentSendAccessibilityEvent(View.java:8333)",
+            "android.view.View.sendAccessibilityEventUncheckedInternal(View.java:8326)",
+            "android.view.View.sendAccessibilityEventUnchecked(View.java:8297)",
+            "android.view.View.sendAccessibilityEventInternal(View.java:8274)",
+            "android.view.View.sendAccessibilityEvent(View.java:8238)",
+            "com.android.internal.policy.DecorView.sendAccessibilityEvent(DecorView.java:624)"
+          ],
+          "context": {
+            "foreground_app": "Unknown",
+            "current_activity": "Unknown",
+            "previous_event_id": "ev_1785931552148_4"
+          },
+          "data": {
+            "hook": "AccessibilityManager.sendAccessibilityEvent",
+            "class_name": "android.view.accessibility.AccessibilityManager",
+            "severity": "HIGH",
+            "description": "AccessibilityManager event dispatched (possible ATS relay)"
+          }
+        },
+        {
+          "event_type": "EVIDENCE_CREATED",
+          "timestamp": 1785931554.46,
+          "session_id": "",
+          "payload": {
+            "evidence_id": "EVID-006",
+            "id": "b525680e-c814-425c-a166-93a9389b680e",
+            "category": "accessibility",
+            "severity": "HIGH"
+          },
+          "category": "general",
+          "severity": "INFO",
+          "data": {
+            "evidence_id": "EVID-006",
+            "id": "b525680e-c814-425c-a166-93a9389b680e",
+            "category": "accessibility",
+            "severity": "HIGH"
+          },
+          "type": "EVIDENCE_CREATED"
+        }
+      ],
+      "network_events": [],
+      "goal_status_snapshot": {
+        "Launch Application": "COMPLETED",
+        "Grant Runtime Permissions": "IN_PROGRESS",
+        "Accessibility Abuse": "IN_PROGRESS",
+        "Overlay Detection": "PENDING",
+        "Login Flow": "PENDING",
+        "SMS / OTP Interception": "PENDING",
+        "Banking Application Detection": "PENDING",
+        "Network / C2 Communication": "PENDING",
+        "Persistence Mechanisms": "PENDING",
+        "Dynamic Code Loading": "PENDING",
+        "Runtime Reflection": "PENDING",
+        "Deep Links": "PENDING",
+        "Broadcast Receivers": "PENDING",
+        "Exported Components": "PENDING",
+        "Background Services": "IN_PROGRESS"
+      },
+      "stopping_conditions": {
+        "action_budget_used": 4,
+        "action_budget_max": 25,
+        "empty_action_streak": 0,
+        "time_elapsed_s": 10.9
+      }
+    },
+    {
+      "iteration": 5,
+      "timestamp": "2026-08-05T12:05:54.535902+00:00",
+      "source": "goal_planner",
+      "observation": {
+        "activity": "com.android.permissioncontroller/.permission.ui.ReviewPermissionsActivity",
+        "screen_hash": "5b45c96f77036705",
+        "ui_node_count": 14,
+        "frida_events_count": 0,
+        "screenshot_taken": true,
+        "vision_reason": "previous_action_failed"
+      },
+      "goal": {
+        "current": "Grant Runtime Permissions",
+        "stage": 2,
+        "status": "IN_PROGRESS"
+      },
+      "reasoning": "Enable Accessibility Service for malware execution",
+      "action": {
+        "tool": "click",
+        "text": "CONTINUE",
+        "x": 507,
+        "y": 1127,
+        "goal": "Grant Runtime Permissions",
+        "reasoning": "Enable Accessibility Service for malware execution",
+        "confidence": 0.95,
+        "_source": "goal_planner"
+      },
+      "execution_result": {
+        "success": false,
+        "duration": 0.0,
+        "retries": 0,
+        "error": "Tool 'click' is not registered in TOOL_REGISTRY."
+      },
+      "frida_events": [],
+      "network_events": [],
+      "goal_status_snapshot": {
+        "Launch Application": "COMPLETED",
+        "Grant Runtime Permissions": "IN_PROGRESS",
+        "Accessibility Abuse": "IN_PROGRESS",
+        "Overlay Detection": "PENDING",
+        "Login Flow": "PENDING",
+        "SMS / OTP Interception": "PENDING",
+        "Banking Application Detection": "PENDING",
+        "Network / C2 Communication": "PENDING",
+        "Persistence Mechanisms": "PENDING",
+        "Dynamic Code Loading": "PENDING",
+        "Runtime Reflection": "PENDING",
+        "Deep Links": "PENDING",
+        "Broadcast Receivers": "PENDING",
+        "Exported Components": "PENDING",
+        "Background Services": "IN_PROGRESS"
+      },
+      "stopping_conditions": {
+        "action_budget_used": 5,
+        "action_budget_max": 25,
+        "empty_action_streak": 1,
+        "time_elapsed_s": 13.2
+      }
+    },
+    {
+      "iteration": 6,
+      "timestamp": "2026-08-05T12:05:59.200960+00:00",
+      "source": "loop_breaker",
+      "observation": {
+        "activity": "com.android.permissioncontroller/.permission.ui.ReviewPermissionsActivity",
+        "screen_hash": "5b45c96f77036705",
+        "ui_node_count": 14,
+        "frida_events_count": 2,
+        "screenshot_taken": false,
+        "vision_reason": ""
+      },
+      "goal": {
+        "current": "LOOP_RECOVERY",
+        "stage": 2,
+        "status": "IN_PROGRESS"
+      },
+      "reasoning": "Loop detected: screen 784fee visited >3 times in recent steps. Backtracking.",
+      "action": {
+        "tool": "press_back",
+        "goal": "LOOP_RECOVERY",
+        "reasoning": "Loop detected: screen 784fee visited >3 times in recent steps. Backtracking.",
+        "confidence": 0.9,
+        "_source": "loop_breaker"
+      },
+      "execution_result": {
+        "success": true,
+        "duration": 1.245,
+        "retries": 0,
+        "error": null
+      },
+      "frida_events": [
+        {
+          "event_type": "SCREENSHOT_CAPTURED",
+          "timestamp": 1785931554.208,
+          "session_id": "",
+          "payload": {
+            "screenshot_id": "SCR-003",
+            "screenshot_uuid": "cfa5cc51-1c5c-4889-9045-3ac907e7f3f6",
+            "filename": "screenshots/003_1785931554208_perception_vision.png",
+            "label": "perception_vision",
+            "category": "ui",
+            "source": "explorer",
+            "trigger_event": "",
+            "reason": "SUSPICIOUS_UI",
+            "screen_hash": "3c2421b49f32b19c"
+          },
+          "category": "general",
+          "severity": "INFO",
+          "data": {
+            "screenshot_id": "SCR-003",
+            "screenshot_uuid": "cfa5cc51-1c5c-4889-9045-3ac907e7f3f6",
+            "filename": "screenshots/003_1785931554208_perception_vision.png",
+            "label": "perception_vision",
+            "category": "ui",
+            "source": "explorer",
+            "trigger_event": "",
+            "reason": "SUSPICIOUS_UI",
+            "screen_hash": "3c2421b49f32b19c"
+          },
+          "type": "SCREENSHOT_CAPTURED"
+        },
+        {
+          "event_type": "EVIDENCE_CREATED",
+          "timestamp": 1785931554.208,
+          "session_id": "",
+          "payload": {
+            "evidence_id": "EVID-007",
+            "id": "efb27218-c557-45dd-837c-35acc20f5221",
+            "category": "SCREENSHOT",
+            "severity": "INFO"
+          },
+          "category": "general",
+          "severity": "INFO",
+          "data": {
+            "evidence_id": "EVID-007",
+            "id": "efb27218-c557-45dd-837c-35acc20f5221",
+            "category": "SCREENSHOT",
+            "severity": "INFO"
+          },
+          "type": "EVIDENCE_CREATED"
+        }
+      ],
+      "network_events": [],
+      "goal_status_snapshot": {
+        "Launch Application": "COMPLETED",
+        "Grant Runtime Permissions": "IN_PROGRESS",
+        "Accessibility Abuse": "IN_PROGRESS",
+        "Overlay Detection": "PENDING",
+        "Login Flow": "PENDING",
+        "SMS / OTP Interception": "PENDING",
+        "Banking Application Detection": "PENDING",
+        "Network / C2 Communication": "PENDING",
+        "Persistence Mechanisms": "PENDING",
+        "Dynamic Code Loading": "PENDING",
+        "Runtime Reflection": "PENDING",
+        "Deep Links": "PENDING",
+        "Broadcast Receivers": "PENDING",
+        "Exported Components": "PENDING",
+        "Background Services": "IN_PROGRESS"
+      },
+      "stopping_conditions": {
+        "action_budget_used": 6,
+        "action_budget_max": 25,
+        "empty_action_streak": 0,
+        "time_elapsed_s": 17.9
+      }
+    },
+    {
+      "iteration": 7,
+      "timestamp": "2026-08-05T12:06:03.886775+00:00",
+      "source": "loop_breaker",
+      "observation": {
+        "activity": "com.android.permissioncontroller/.permission.ui.ReviewPermissionsActivity",
+        "screen_hash": "5b45c96f77036705",
+        "ui_node_count": 14,
+        "frida_events_count": 0,
+        "screenshot_taken": false,
+        "vision_reason": ""
+      },
+      "goal": {
+        "current": "LOOP_RECOVERY",
+        "stage": 2,
+        "status": "IN_PROGRESS"
+      },
+      "reasoning": "Loop detected: screen 784fee visited >3 times in recent steps. Backtracking.",
+      "action": {
+        "tool": "press_back",
+        "goal": "LOOP_RECOVERY",
+        "reasoning": "Loop detected: screen 784fee visited >3 times in recent steps. Backtracking.",
+        "confidence": 0.9,
+        "_source": "loop_breaker"
+      },
+      "execution_result": {
+        "success": true,
+        "duration": 1.282,
+        "retries": 0,
+        "error": null
+      },
+      "frida_events": [],
+      "network_events": [],
+      "goal_status_snapshot": {
+        "Launch Application": "COMPLETED",
+        "Grant Runtime Permissions": "IN_PROGRESS",
+        "Accessibility Abuse": "IN_PROGRESS",
+        "Overlay Detection": "PENDING",
+        "Login Flow": "PENDING",
+        "SMS / OTP Interception": "PENDING",
+        "Banking Application Detection": "PENDING",
+        "Network / C2 Communication": "PENDING",
+        "Persistence Mechanisms": "PENDING",
+        "Dynamic Code Loading": "PENDING",
+        "Runtime Reflection": "PENDING",
+        "Deep Links": "PENDING",
+        "Broadcast Receivers": "PENDING",
+        "Exported Components": "PENDING",
+        "Background Services": "IN_PROGRESS"
+      },
+      "stopping_conditions": {
+        "action_budget_used": 7,
+        "action_budget_max": 25,
+        "empty_action_streak": 1,
+        "time_elapsed_s": 22.5
+      }
+    },
+    {
+      "iteration": 8,
+      "timestamp": "2026-08-05T12:06:05.717540+00:00",
+      "source": "goal_planner",
+      "observation": {
+        "activity": "com.android.launcher3/.uioverrides.QuickstepLauncher",
+        "screen_hash": "80b2104b028bfd54",
+        "ui_node_count": 9,
+        "frida_events_count": 0,
+        "screenshot_taken": false,
+        "vision_reason": ""
+      },
+      "goal": {
+        "current": "Grant Runtime Permissions",
+        "stage": 2,
+        "status": "IN_PROGRESS"
+      },
+      "reasoning": "Enable Accessibility Service for malware execution",
+      "action": {
+        "tool": "click",
+        "text": "Phone",
+        "x": 73,
+        "y": 1042,
+        "goal": "Grant Runtime Permissions",
+        "reasoning": "Enable Accessibility Service for malware execution",
+        "confidence": 0.95,
+        "_source": "goal_planner"
+      },
+      "execution_result": {
+        "success": false,
+        "duration": 0.0,
+        "retries": 0,
+        "error": "Tool 'click' is not registered in TOOL_REGISTRY."
+      },
+      "frida_events": [],
+      "network_events": [],
+      "goal_status_snapshot": {
+        "Launch Application": "COMPLETED",
+        "Grant Runtime Permissions": "IN_PROGRESS",
+        "Accessibility Abuse": "IN_PROGRESS",
+        "Overlay Detection": "PENDING",
+        "Login Flow": "PENDING",
+        "SMS / OTP Interception": "PENDING",
+        "Banking Application Detection": "PENDING",
+        "Network / C2 Communication": "PENDING",
+        "Persistence Mechanisms": "PENDING",
+        "Dynamic Code Loading": "PENDING",
+        "Runtime Reflection": "PENDING",
+        "Deep Links": "PENDING",
+        "Broadcast Receivers": "PENDING",
+        "Exported Components": "PENDING",
+        "Background Services": "IN_PROGRESS"
+      },
+      "stopping_conditions": {
+        "action_budget_used": 8,
+        "action_budget_max": 25,
+        "empty_action_streak": 2,
+        "time_elapsed_s": 24.4
+      }
+    },
+    {
+      "type": "system_event",
+      "timestamp": "2026-08-05T12:06:08.332626+00:00",
+      "event": "goal_max_attempts",
+      "detail": "Grant Runtime Permissions: 8/8"
+    },
+    {
+      "iteration": 9,
+      "timestamp": "2026-08-05T12:06:08.333025+00:00",
+      "source": "goal_planner",
+      "observation": {
+        "activity": "com.android.launcher3/.uioverrides.QuickstepLauncher",
+        "screen_hash": "80b2104b028bfd54",
+        "ui_node_count": 9,
+        "frida_events_count": 0,
+        "screenshot_taken": true,
+        "vision_reason": "previous_action_failed"
+      },
+      "goal": {
+        "current": "Deep Links",
+        "stage": 12,
+        "status": "PENDING"
+      },
+      "reasoning": "Enable Accessibility Service for malware execution",
+      "action": {
+        "tool": "click",
+        "text": "Phone",
+        "x": 73,
+        "y": 1042,
+        "goal": "Deep Links",
+        "reasoning": "Enable Accessibility Service for malware execution",
+        "confidence": 0.95,
+        "_source": "goal_planner"
+      },
+      "execution_result": {
+        "success": false,
+        "duration": 0.0,
+        "retries": 0,
+        "error": "Tool 'click' is not registered in TOOL_REGISTRY."
+      },
+      "frida_events": [],
+      "network_events": [],
+      "goal_status_snapshot": {
+        "Launch Application": "COMPLETED",
+        "Grant Runtime Permissions": "FAILED",
+        "Accessibility Abuse": "IN_PROGRESS",
+        "Overlay Detection": "PENDING",
+        "Login Flow": "PENDING",
+        "SMS / OTP Interception": "PENDING",
+        "Banking Application Detection": "PENDING",
+        "Network / C2 Communication": "PENDING",
+        "Persistence Mechanisms": "PENDING",
+        "Dynamic Code Loading": "PENDING",
+        "Runtime Reflection": "PENDING",
+        "Deep Links": "PENDING",
+        "Broadcast Receivers": "PENDING",
+        "Exported Components": "PENDING",
+        "Background Services": "IN_PROGRESS"
+      },
+      "stopping_conditions": {
+        "action_budget_used": 9,
+        "action_budget_max": 25,
+        "empty_action_streak": 3,
+        "time_elapsed_s": 27.0
+      }
+    },
+    {
+      "iteration": 10,
+      "timestamp": "2026-08-05T12:06:13.002592+00:00",
+      "source": "loop_breaker",
+      "observation": {
+        "activity": "com.android.launcher3/.uioverrides.QuickstepLauncher",
+        "screen_hash": "80b2104b028bfd54",
+        "ui_node_count": 9,
+        "frida_events_count": 2,
+        "screenshot_taken": false,
+        "vision_reason": ""
+      },
+      "goal": {
+        "current": "LOOP_RECOVERY",
+        "stage": 12,
+        "status": "IN_PROGRESS"
+      },
+      "reasoning": "Loop detected: screen 4fb2c4 visited >3 times in recent steps. Backtracking.",
+      "action": {
+        "tool": "press_back",
+        "goal": "LOOP_RECOVERY",
+        "reasoning": "Loop detected: screen 4fb2c4 visited >3 times in recent steps. Backtracking.",
+        "confidence": 0.9,
+        "_source": "loop_breaker"
+      },
+      "execution_result": {
+        "success": true,
+        "duration": 1.257,
+        "retries": 0,
+        "error": null
+      },
+      "frida_events": [
+        {
+          "event_type": "SCREENSHOT_CAPTURED",
+          "timestamp": 1785931567.931,
+          "session_id": "",
+          "payload": {
+            "screenshot_id": "SCR-004",
+            "screenshot_uuid": "c639b2b3-f49f-4b35-bf63-ff08109f2fd9",
+            "filename": "screenshots/004_1785931567931_perception_vision.png",
+            "label": "perception_vision",
+            "category": "ui",
+            "source": "explorer",
+            "trigger_event": "",
+            "reason": "SUSPICIOUS_UI",
+            "screen_hash": "82fdc2e21171140e"
+          },
+          "category": "general",
+          "severity": "INFO",
+          "data": {
+            "screenshot_id": "SCR-004",
+            "screenshot_uuid": "c639b2b3-f49f-4b35-bf63-ff08109f2fd9",
+            "filename": "screenshots/004_1785931567931_perception_vision.png",
+            "label": "perception_vision",
+            "category": "ui",
+            "source": "explorer",
+            "trigger_event": "",
+            "reason": "SUSPICIOUS_UI",
+            "screen_hash": "82fdc2e21171140e"
+          },
+          "type": "SCREENSHOT_CAPTURED"
+        },
+        {
+          "event_type": "EVIDENCE_CREATED",
+          "timestamp": 1785931567.931,
+          "session_id": "",
+          "payload": {
+            "evidence_id": "EVID-008",
+            "id": "7d0a8586-5005-4979-acde-ea96fab54683",
+            "category": "SCREENSHOT",
+            "severity": "INFO"
+          },
+          "category": "general",
+          "severity": "INFO",
+          "data": {
+            "evidence_id": "EVID-008",
+            "id": "7d0a8586-5005-4979-acde-ea96fab54683",
+            "category": "SCREENSHOT",
+            "severity": "INFO"
+          },
+          "type": "EVIDENCE_CREATED"
+        }
+      ],
+      "network_events": [],
+      "goal_status_snapshot": {
+        "Launch Application": "COMPLETED",
+        "Grant Runtime Permissions": "FAILED",
+        "Accessibility Abuse": "IN_PROGRESS",
+        "Overlay Detection": "PENDING",
+        "Login Flow": "PENDING",
+        "SMS / OTP Interception": "PENDING",
+        "Banking Application Detection": "PENDING",
+        "Network / C2 Communication": "PENDING",
+        "Persistence Mechanisms": "PENDING",
+        "Dynamic Code Loading": "PENDING",
+        "Runtime Reflection": "PENDING",
+        "Deep Links": "IN_PROGRESS",
+        "Broadcast Receivers": "PENDING",
+        "Exported Components": "PENDING",
+        "Background Services": "IN_PROGRESS"
+      },
+      "stopping_conditions": {
+        "action_budget_used": 10,
+        "action_budget_max": 25,
+        "empty_action_streak": 0,
+        "time_elapsed_s": 31.7
+      }
+    },
+    {
+      "type": "system_event",
+      "timestamp": "2026-08-05T12:06:13.002631+00:00",
+      "event": "exploration_complete",
+      "detail": "actions=10, goals_completed=1"
+    }
+  ]
+}

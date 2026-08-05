@@ -1,0 +1,224 @@
+[
+    {
+        "timestamp": "00:00",
+        "source": "System",
+        "action": "AgenticExplorer Started",
+        "details": "ActionBudget=25"
+    },
+    {
+        "timestamp": "00:00",
+        "source": "Frida",
+        "category": "accessibility",
+        "data": {
+            "hook": "AccessibilityManager.sendAccessibilityEvent",
+            "class_name": "android.view.accessibility.AccessibilityManager",
+            "severity": "HIGH",
+            "description": "AccessibilityManager event dispatched (possible ATS relay)"
+        }
+    },
+    {
+        "timestamp": "00:00",
+        "source": "Frida",
+        "category": "general",
+        "data": {
+            "evidence_id": "EVID-004",
+            "id": "b4084927-e3ba-48dd-88f6-56390709b421",
+            "category": "accessibility",
+            "severity": "HIGH"
+        }
+    },
+    {
+        "timestamp": "00:01",
+        "source": "GOAL_PLANNER",
+        "action": "click",
+        "target": "More options",
+        "goal": "Launch Application",
+        "details": "Enable Accessibility Service for malware execution",
+        "success": false
+    },
+    {
+        "timestamp": "00:02",
+        "source": "Frida",
+        "category": "accessibility",
+        "data": {
+            "hook": "AccessibilityManager.sendAccessibilityEvent",
+            "class_name": "android.view.accessibility.AccessibilityManager",
+            "severity": "HIGH",
+            "description": "AccessibilityManager event dispatched (possible ATS relay)"
+        }
+    },
+    {
+        "timestamp": "00:02",
+        "source": "Frida",
+        "category": "general",
+        "data": {
+            "evidence_id": "EVID-005",
+            "id": "6a024118-6feb-44ef-b88d-50e735110f55",
+            "category": "accessibility",
+            "severity": "HIGH"
+        }
+    },
+    {
+        "timestamp": "00:04",
+        "source": "GOAL_PLANNER",
+        "action": "click",
+        "target": "More options",
+        "goal": "Grant Runtime Permissions",
+        "details": "Enable Accessibility Service for malware execution",
+        "success": false
+    },
+    {
+        "timestamp": "00:04",
+        "source": "Frida",
+        "category": "accessibility",
+        "data": {
+            "hook": "AccessibilityManager.sendAccessibilityEvent",
+            "class_name": "android.view.accessibility.AccessibilityManager",
+            "severity": "HIGH",
+            "description": "AccessibilityManager event dispatched (possible ATS relay)"
+        }
+    },
+    {
+        "timestamp": "00:04",
+        "source": "Frida",
+        "category": "general",
+        "data": {
+            "evidence_id": "EVID-006",
+            "id": "b525680e-c814-425c-a166-93a9389b680e",
+            "category": "accessibility",
+            "severity": "HIGH"
+        }
+    },
+    {
+        "timestamp": "00:09",
+        "source": "LOOP_BREAKER",
+        "action": "press_back",
+        "target": "",
+        "goal": "LOOP_RECOVERY",
+        "details": "Loop detected: screen b9479e visited >3 times in recent steps. Backtracking.",
+        "success": true
+    },
+    {
+        "timestamp": "00:10",
+        "source": "GOAL_PLANNER",
+        "action": "click",
+        "target": "CONTINUE",
+        "goal": "Grant Runtime Permissions",
+        "details": "Enable Accessibility Service for malware execution",
+        "success": false
+    },
+    {
+        "timestamp": "00:13",
+        "source": "Frida",
+        "category": "general",
+        "data": {
+            "screenshot_id": "SCR-003",
+            "screenshot_uuid": "cfa5cc51-1c5c-4889-9045-3ac907e7f3f6",
+            "filename": "screenshots/003_1785931554208_perception_vision.png",
+            "label": "perception_vision",
+            "category": "ui",
+            "source": "explorer",
+            "trigger_event": "",
+            "reason": "SUSPICIOUS_UI",
+            "screen_hash": "3c2421b49f32b19c"
+        }
+    },
+    {
+        "timestamp": "00:13",
+        "source": "Frida",
+        "category": "general",
+        "data": {
+            "evidence_id": "EVID-007",
+            "id": "efb27218-c557-45dd-837c-35acc20f5221",
+            "category": "SCREENSHOT",
+            "severity": "INFO"
+        }
+    },
+    {
+        "timestamp": "00:13",
+        "source": "GOAL_PLANNER",
+        "action": "click",
+        "target": "CONTINUE",
+        "goal": "Grant Runtime Permissions",
+        "details": "Enable Accessibility Service for malware execution",
+        "success": false
+    },
+    {
+        "timestamp": "00:17",
+        "source": "LOOP_BREAKER",
+        "action": "press_back",
+        "target": "",
+        "goal": "LOOP_RECOVERY",
+        "details": "Loop detected: screen 784fee visited >3 times in recent steps. Backtracking.",
+        "success": true
+    },
+    {
+        "timestamp": "00:22",
+        "source": "LOOP_BREAKER",
+        "action": "press_back",
+        "target": "",
+        "goal": "LOOP_RECOVERY",
+        "details": "Loop detected: screen 784fee visited >3 times in recent steps. Backtracking.",
+        "success": true
+    },
+    {
+        "timestamp": "00:24",
+        "source": "GOAL_PLANNER",
+        "action": "click",
+        "target": "Phone",
+        "goal": "Grant Runtime Permissions",
+        "details": "Enable Accessibility Service for malware execution",
+        "success": false
+    },
+    {
+        "timestamp": "00:26",
+        "source": "Frida",
+        "category": "general",
+        "data": {
+            "screenshot_id": "SCR-004",
+            "screenshot_uuid": "c639b2b3-f49f-4b35-bf63-ff08109f2fd9",
+            "filename": "screenshots/004_1785931567931_perception_vision.png",
+            "label": "perception_vision",
+            "category": "ui",
+            "source": "explorer",
+            "trigger_event": "",
+            "reason": "SUSPICIOUS_UI",
+            "screen_hash": "82fdc2e21171140e"
+        }
+    },
+    {
+        "timestamp": "00:26",
+        "source": "Frida",
+        "category": "general",
+        "data": {
+            "evidence_id": "EVID-008",
+            "id": "7d0a8586-5005-4979-acde-ea96fab54683",
+            "category": "SCREENSHOT",
+            "severity": "INFO"
+        }
+    },
+    {
+        "timestamp": "00:26",
+        "source": "GOAL_PLANNER",
+        "action": "click",
+        "target": "Phone",
+        "goal": "Deep Links",
+        "details": "Enable Accessibility Service for malware execution",
+        "success": false
+    },
+    {
+        "timestamp": "00:31",
+        "source": "LOOP_BREAKER",
+        "action": "press_back",
+        "target": "",
+        "goal": "LOOP_RECOVERY",
+        "details": "Loop detected: screen 4fb2c4 visited >3 times in recent steps. Backtracking.",
+        "success": true
+    },
+    {
+        "timestamp": "00:31",
+        "source": "System",
+        "action": "AgenticExplorer Completed",
+        "details": "Actions=10, Goals: completed=1 skipped=0 failed=1"
+    }
+]

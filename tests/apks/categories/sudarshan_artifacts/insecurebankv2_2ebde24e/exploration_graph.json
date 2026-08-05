@@ -1,0 +1,92 @@
+[
+    {
+        "from": "ce3f3c124c6de9f3",
+        "to": "5b45c96f77036705",
+        "action": "click",
+        "target": "CONTINUE",
+        "goal": "Grant Runtime Permissions",
+        "timestamp": "00:10",
+        "source": "goal_planner",
+        "frida_events": [
+            {
+                "event_id": "ev_1785931554458_6",
+                "timestamp": 1785931554460,
+                "process": "com.android.insecurebankv2",
+                "thread": 6778,
+                "package": "com.android.insecurebankv2",
+                "pid": 6778,
+                "event_type": "FRIDA_HOOK",
+                "category": "accessibility",
+                "severity": "HIGH",
+                "method": "AccessibilityManager.sendAccessibilityEvent",
+                "class": "android.view.accessibility.AccessibilityManager",
+                "arguments": [],
+                "return_value": null,
+                "stacktrace": [
+                    "android.view.View.requestParentSendAccessibilityEvent(View.java:8333)",
+                    "android.view.View.sendAccessibilityEventUncheckedInternal(View.java:8326)",
+                    "android.view.View.sendAccessibilityEventUnchecked(View.java:8297)",
+                    "android.view.View.sendAccessibilityEventInternal(View.java:8274)",
+                    "android.view.View.sendAccessibilityEvent(View.java:8238)",
+                    "com.android.internal.policy.DecorView.sendAccessibilityEvent(DecorView.java:624)"
+                ],
+                "evidence": "AccessibilityManager event dispatched (possible ATS relay)",
+                "ioc": null,
+                "risk_vector": "accessibility",
+                "source": "frida",
+                "hook": "AccessibilityManager.sendAccessibilityEvent",
+                "thread_id": 6778,
+                "process_id": 6778,
+                "stack_trace": [
+                    "android.view.View.requestParentSendAccessibilityEvent(View.java:8333)",
+                    "android.view.View.sendAccessibilityEventUncheckedInternal(View.java:8326)",
+                    "android.view.View.sendAccessibilityEventUnchecked(View.java:8297)",
+                    "android.view.View.sendAccessibilityEventInternal(View.java:8274)",
+                    "android.view.View.sendAccessibilityEvent(View.java:8238)",
+                    "com.android.internal.policy.DecorView.sendAccessibilityEvent(DecorView.java:624)"
+                ],
+                "context": {
+                    "foreground_app": "Unknown",
+                    "current_activity": "Unknown",
+                    "previous_event_id": "ev_1785931552148_4"
+                },
+                "data": {
+                    "hook": "AccessibilityManager.sendAccessibilityEvent",
+                    "class_name": "android.view.accessibility.AccessibilityManager",
+                    "severity": "HIGH",
+                    "description": "AccessibilityManager event dispatched (possible ATS relay)"
+                }
+            },
+            {
+                "event_type": "EVIDENCE_CREATED",
+                "timestamp": 1785931554.46,
+                "session_id": "",
+                "payload": {
+                    "evidence_id": "EVID-006",
+                    "id": "b525680e-c814-425c-a166-93a9389b680e",
+                    "category": "accessibility",
+                    "severity": "HIGH"
+                },
+                "category": "general",
+                "severity": "INFO",
+                "data": {
+                    "evidence_id": "EVID-006",
+                    "id": "b525680e-c814-425c-a166-93a9389b680e",
+                    "category": "accessibility",
+                    "severity": "HIGH"
+                },
+                "type": "EVIDENCE_CREATED"
+            }
+        ]
+    },
+    {
+        "from": "5b45c96f77036705",
+        "to": "80b2104b028bfd54",
+        "action": "click",
+        "target": "Phone",
+        "goal": "Grant Runtime Permissions",
+        "timestamp": "00:24",
+        "source": "goal_planner",
+        "frida_events": []
+    }
+]

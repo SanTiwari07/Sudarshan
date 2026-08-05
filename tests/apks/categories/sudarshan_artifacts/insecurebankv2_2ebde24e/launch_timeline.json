@@ -1,0 +1,12 @@
+{
+  "apk_install": 0.0,
+  "launch_intent": 13.893,
+  "first_pid": 21.72,
+  "first_activity": 23.77,
+  "first_window": 23.77,
+  "first_ui_dump": 25.519,
+  "frida_attach": 25.519,
+  "canary_received": 25.828,
+  "explorer_start": null,
+  "first_hook_event": 26.132
+}

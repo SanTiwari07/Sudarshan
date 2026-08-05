@@ -70,6 +70,8 @@ MOBSF_API_KEY="sudarshan_mobsf_api_key_2026"
 
 # ── Security & Authentication ──
 JWT_SECRET_KEY="generate_with_python_secrets_token_urlsafe_48"
+# Recommended in production: shared secret so only the gateway can call analysis-engine:8001
+ANALYSIS_ENGINE_INTERNAL_TOKEN="generate_with_python_secrets_token_urlsafe_48"
 ADMIN_USERNAME="admin"
 ADMIN_PASSWORD="sudarshan_admin_2024"
 ```

@@ -81,6 +81,29 @@ app = FastAPI(
     description="Containerized analysis engine executing APKTool, JADX, Androguard, Frida, and ADB."
 )
 
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
+from sudarshan_core.security.internal_auth import HEADER_NAME, internal_service_token
+
+
+class _InternalServiceAuthMiddleware(BaseHTTPMiddleware):
+    """Optional shared-secret gate for every route except health/status/docs."""
+
+    _PUBLIC = frozenset({"/health", "/status", "/openapi.json", "/docs", "/redoc"})
+
+    async def dispatch(self, request, call_next):
+        if request.url.path in self._PUBLIC:
+            return await call_next(request)
+        expected = internal_service_token()
+        if not expected:
+            return await call_next(request)
+        if request.headers.get(HEADER_NAME) != expected:
+            return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+        return await call_next(request)
+
+
+app.add_middleware(_InternalServiceAuthMiddleware)
+
 DEFAULT_TIMEOUT_SECONDS = int(os.getenv("ANALYSIS_TIMEOUT_SECONDS", "300"))
 UPLOADS_DIR = Path(os.getenv("UPLOADS_DIR", "/app/uploads"))
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)

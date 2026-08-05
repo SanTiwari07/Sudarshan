@@ -12,8 +12,12 @@ load_dotenv(dotenv_path=_env_path)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
-from app.routes import upload, report, intelligence
+from app.rate_limit import limiter
+
+from app.routes import upload, report, intelligence, screenshots
 from app.routes.runtime_api import router as runtime_router
 from app.routes.cases import router as cases_router
 from app.auth.auth import router as auth_router
@@ -53,6 +57,9 @@ app = FastAPI(
     ),
 )
 
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # allow_origins=["*"] together with allow_credentials=True is invalid per the
 # Fetch standard; Starlette resolves it by reflecting the caller's Origin, which
 # means every site on the internet becomes a trusted origin. Use an explicit
@@ -79,6 +86,7 @@ app.include_router(upload.router,        prefix="/api/v1",         tags=["Analys
 app.include_router(report.router,        prefix="/api/v1",         tags=["Reports & Export"])
 app.include_router(cases_router,         prefix="/api/v1",         tags=["Case History"])
 app.include_router(intelligence.router,  prefix="/api/v1",         tags=["Threat Intelligence"])
+app.include_router(screenshots.router,   prefix="/api/v1",         tags=["Screenshots"])
 app.include_router(runtime_router,       prefix="/api",            tags=["Runtime Telemetry"])
 
 
@@ -86,6 +94,12 @@ app.include_router(runtime_router,       prefix="/api",            tags=["Runtim
 
 @app.on_event("startup")
 async def startup():
+    if os.getenv("SUDARSHAN_ENV", "").lower() == "production":
+        if not os.getenv("ANALYSIS_ENGINE_INTERNAL_TOKEN", "").strip():
+            logger.warning(
+                "[Startup] SUDARSHAN_ENV=production but ANALYSIS_ENGINE_INTERNAL_TOKEN "
+                "is unset — the analysis-engine is not mutually authenticated."
+            )
     # 1. Initialize SQLite tables
     await init_db()
     logger.info("[Startup] Database initialized")

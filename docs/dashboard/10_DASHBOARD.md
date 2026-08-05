@@ -64,7 +64,7 @@ Designed for reverse engineers and SOC tier-2/3 analysts in [`TechnicalView.tsx`
 - **Network Intelligence**: Extracted C2 URLs, IP addresses, and mitmproxy HAR flows.
 - **Raw Evidence Tabs**: Tabbed view of permissions, string literals, static APIs, manifest excerpts, and Frida runtime calls.
 - **Fraud Workflow Reconstruction**: Houses the interactive `WorkflowDiagram.tsx` component.
-- **Runtime Screenshots**: When `dynamic_analysis.screenshots` contains paths, the UI requests `${API_BASE}/screenshots/{filename}`. **There is no matching backend static-file route today** — screenshot paths are stored in case JSON and HTML reports; inline gallery images may 404 until a dedicated artifact route is added.
+- **Runtime Screenshots**: When `dynamic_analysis.screenshots` contains paths, the UI loads images via authenticated `GET /api/v1/screenshots/{sha256}/{filename}` (JWT `fetch` + blob URLs; `<img>` cannot send `Authorization`).
 
 ---
 

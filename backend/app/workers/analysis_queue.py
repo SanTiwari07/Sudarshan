@@ -64,13 +64,15 @@ def _evict_finished_jobs() -> None:
             _jobs.pop(jid, None)
 
 
-def create_job() -> str:
-    """Allocate a new job ID and register it as queued."""
+def create_job(sha256_hash: Optional[str] = None, analyst_id: Optional[int] = None) -> str:
+    """Allocate a new job ID and register it as queued (memory; DB write is async)."""
     _evict_finished_jobs()
     job_id = str(uuid.uuid4())
     _jobs[job_id] = {
         "job_id": job_id,
         "status": "queued",
+        "sha256": sha256_hash,
+        "analyst_id": analyst_id,
         "queued_at": datetime.now(timezone.utc).isoformat(),
         "started_at": None,
         "completed_at": None,
@@ -80,30 +82,50 @@ def create_job() -> str:
     return job_id
 
 
-def get_job(job_id: str) -> Optional[Dict[str, Any]]:
-    return _jobs.get(job_id)
+async def persist_job(job_id: str) -> None:
+    """Write the current in-memory job snapshot to SQLite."""
+    job = _jobs.get(job_id)
+    if not job:
+        return
+    from app.db.database import upsert_analysis_job
+    await upsert_analysis_job(job)
 
 
-def _set_processing(job_id: str) -> None:
+async def get_job(job_id: str) -> Optional[Dict[str, Any]]:
+    job = _jobs.get(job_id)
+    if job:
+        return job
+    from app.db.database import load_analysis_job
+    row = await load_analysis_job(job_id)
+    if row:
+        _jobs[job_id] = row
+        return row
+    return None
+
+
+async def _set_processing(job_id: str) -> None:
     if job_id in _jobs:
         _jobs[job_id]["status"] = "processing"
         _jobs[job_id]["started_at"] = datetime.now(timezone.utc).isoformat()
+        await persist_job(job_id)
 
 
-def _set_done(job_id: str, result: Dict[str, Any]) -> None:
+async def _set_done(job_id: str, result: Dict[str, Any]) -> None:
     if job_id in _jobs:
         _jobs[job_id]["status"] = "done"
         _jobs[job_id]["result"] = result
         _jobs[job_id]["completed_at"] = datetime.now(timezone.utc).isoformat()
         _jobs[job_id]["_finished_at"] = time.monotonic()
+        await persist_job(job_id)
 
 
-def _set_failed(job_id: str, error: str) -> None:
+async def _set_failed(job_id: str, error: str) -> None:
     if job_id in _jobs:
         _jobs[job_id]["status"] = "failed"
         _jobs[job_id]["error"] = error
         _jobs[job_id]["completed_at"] = datetime.now(timezone.utc).isoformat()
         _jobs[job_id]["_finished_at"] = time.monotonic()
+        await persist_job(job_id)
 
 
 # ─── Queue Interface ──────────────────────────────────────────────────────────
@@ -147,7 +169,7 @@ async def _worker(worker_id: int) -> None:
             sha256_hash = item["sha256_hash"]
             analyst_id = item.get("analyst_id")
 
-            _set_processing(job_id)
+            await _set_processing(job_id)
             logger.info(f"[Queue] Worker {worker_id} processing job {job_id}")
 
             try:
@@ -163,17 +185,17 @@ async def _worker(worker_id: int) -> None:
                 full_response = _build_response(raw_result, job_id=job_id)
                 result = full_response.model_dump() if hasattr(full_response, "model_dump") else full_response.dict()
 
-                _set_done(job_id, result)
+                await _set_done(job_id, result)
                 logger.info(f"[Queue] Worker {worker_id} completed job {job_id} score={result.get('final_risk_score')}")
 
             except Exception as e:
                 logger.exception(f"[Queue] Worker {worker_id} failed job {job_id}: {e}")
-                _set_failed(job_id, str(e))
+                await _set_failed(job_id, str(e))
             finally:
                 try:
                     _os.remove(temp_path)
-                except Exception:
-                    pass
+                except OSError as rm_err:
+                    logger.warning("[Queue] Could not remove temp APK %s: %s", temp_path, rm_err)
 
             _queue.task_done()
 

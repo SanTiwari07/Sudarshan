@@ -21,7 +21,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import Depends, HTTPException, APIRouter, status
+from fastapi import Depends, HTTPException, APIRouter, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -31,6 +31,7 @@ from app.db.database import (
     create_user, get_user_by_username, get_user_by_id, username_exists,
     update_user_role,
 )
+from app.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
 
@@ -165,7 +166,8 @@ class UserInfo(BaseModel):
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
 @router.post("/register", response_model=UserInfo, status_code=status.HTTP_201_CREATED)
-async def register(req: RegisterRequest):
+@limiter.limit("10/hour")
+async def register(request: Request, req: RegisterRequest):
     """
     Register a new account. Always created with the 'analyst' role —
     privilege is granted by an admin afterwards, never self-assigned.
@@ -220,7 +222,8 @@ async def set_user_role(
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(req: LoginRequest):
+@limiter.limit("30/minute")
+async def login(request: Request, req: LoginRequest):
     """
     Authenticate and receive a JWT access token.
     """

@@ -33,7 +33,7 @@ async def test_call_analysis_engine_success():
             return self
         async def __aexit__(self, exc_type, exc_val, exc_tb):
             pass
-        async def post(self, url, json=None):
+        async def post(self, url, json=None, headers=None):
             return mock_resp
 
     with patch("app.routes.upload.httpx.AsyncClient", side_effect=MockAsyncClient):

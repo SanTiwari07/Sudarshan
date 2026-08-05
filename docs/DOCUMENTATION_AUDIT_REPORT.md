@@ -74,7 +74,7 @@ A full zero-drift documentation pass was executed on **2026-08-05** against the 
 
 ## Remaining TODOs
 
-- Implement or document alternative for **`GET /api/v1/screenshots/{filename}`** so `TechnicalView.tsx` gallery matches backend capabilities (currently documented as a known gap only).
+- ~~Implement or document alternative for **`GET /api/v1/screenshots/{filename}`**~~ — **Done (2026-08-05)**: `GET /api/v1/screenshots/{sha256}/{filename}` in `backend/app/routes/screenshots.py`.
 - Optional: add `docs/VALIDATION.md` cross-link from `docs/README.md` index table (portal index lists `VALIDATION.md` in grep but verify index row — check docs/README)
 
 ## Warnings

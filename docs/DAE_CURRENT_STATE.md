@@ -32,7 +32,7 @@
 12. **Dynamic Validation Framework**: [`validate_dynamic_pipeline.py`](file:///d:/Projects/Sudarshan%20BOI/validate_dynamic_pipeline.py) and [`shared/sudarshan_core/validation/`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/validation/) run corpus APKs, stress/recovery suites, and engineering reports under `tests/apks/validation_runs/`.
 
 ### Known limitations (documented gaps, not hidden)
-- **Technical View screenshot gallery**: [`TechnicalView.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/pages/TechnicalView.tsx) requests `GET /api/v1/screenshots/{file}` but the gateway has **no** static artifact route; screenshots are persisted in case JSON and HTML reports until a dedicated download endpoint ships.
+- **Technical View screenshot gallery**: [`TechnicalView.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/pages/TechnicalView.tsx) loads runtime captures via `GET /api/v1/screenshots/{sha256}/{filename}` (JWT required; files resolved under `dynamic_result.artifact_dir`).
 
 ---
 

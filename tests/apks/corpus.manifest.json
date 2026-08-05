@@ -1,0 +1,115 @@
+{
+  "version": "1.0.0",
+  "description": "Sudarshan dynamic validation corpus. Place APKs at relative paths or run scripts/fetch_validation_corpus.py",
+  "samples": [
+    {
+      "id": "hello_world",
+      "category": "hello_world",
+      "label": "Hello World",
+      "relative_path": "categories/hello_world.apk",
+      "optional": true,
+      "notes": "AOSP HelloActivity or any minimal launcher APK"
+    },
+    {
+      "id": "insecurebankv2",
+      "category": "banking_demo",
+      "label": "InsecureBankv2 (Banking Demo)",
+      "relative_path": "categories/insecurebankv2.apk",
+      "fetch_url": "https://github.com/dineshshetty/Android-InsecureBankv2/raw/master/InsecureBankv2.apk",
+      "package_hint": "com.android.insecurebankv2"
+    },
+    {
+      "id": "insecurebankv2_dvb",
+      "category": "damn_vulnerable_bank",
+      "label": "Damn Vulnerable Bank (use InsecureBankv2 or DVBA APK)",
+      "relative_path": "categories/damn_vulnerable_bank.apk",
+      "optional": true,
+      "notes": "Place DamnVulnerableBank.apk here; alias insecurebankv2 for smoke tests"
+    },
+    {
+      "id": "goatdroid",
+      "category": "owasp_goatdroid",
+      "label": "OWASP GoatDroid",
+      "relative_path": "categories/owasp_goatdroid.apk",
+      "optional": true
+    },
+    {
+      "id": "runtime_permissions",
+      "category": "runtime_permission_demo",
+      "label": "Runtime Permission Demo",
+      "relative_path": "categories/runtime_permission_demo.apk",
+      "optional": true
+    },
+    {
+      "id": "webview_demo",
+      "category": "webview_demo",
+      "label": "WebView Demo",
+      "relative_path": "categories/webview_demo.apk",
+      "optional": true
+    },
+    {
+      "id": "accessibility_demo",
+      "category": "accessibility_demo",
+      "label": "Accessibility Demo",
+      "relative_path": "categories/accessibility_demo.apk",
+      "optional": true
+    },
+    {
+      "id": "overlay_demo",
+      "category": "overlay_demo",
+      "label": "Overlay Demo",
+      "relative_path": "categories/overlay_demo.apk",
+      "optional": true
+    },
+    {
+      "id": "sms_demo",
+      "category": "sms_permission_demo",
+      "label": "SMS Permission Demo",
+      "relative_path": "categories/sms_permission_demo.apk",
+      "optional": true
+    },
+    {
+      "id": "obfuscated",
+      "category": "obfuscated_apk",
+      "label": "Obfuscated APK",
+      "relative_path": "categories/obfuscated.apk",
+      "optional": true
+    },
+    {
+      "id": "splash",
+      "category": "splash_screen",
+      "label": "Splash Screen APK",
+      "relative_path": "categories/splash_screen.apk",
+      "optional": true
+    },
+    {
+      "id": "multi_activity",
+      "category": "multi_activity",
+      "label": "Multi-Activity APK",
+      "relative_path": "categories/multi_activity.apk",
+      "optional": true,
+      "alias_of": "categories/insecurebankv2.apk"
+    },
+    {
+      "id": "crash_on_launch",
+      "category": "crash_on_launch",
+      "label": "APK that crashes on launch",
+      "relative_path": "categories/crash_on_launch.apk",
+      "optional": true
+    },
+    {
+      "id": "no_launcher",
+      "category": "no_launcher",
+      "label": "APK with no launcher activity",
+      "relative_path": "categories/no_launcher.apk",
+      "optional": true
+    },
+    {
+      "id": "no_runtime_permissions",
+      "category": "no_runtime_permissions",
+      "label": "APK with no runtime permissions",
+      "relative_path": "categories/no_runtime_permissions.apk",
+      "optional": true
+    }
+  ]
+}

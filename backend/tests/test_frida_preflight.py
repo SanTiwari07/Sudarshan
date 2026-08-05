@@ -58,11 +58,17 @@ def test_attach_failure_message_does_not_blame_frida_server_blindly():
 
 def test_selinux_preflight_runs_before_frida_server_check():
     """
-    Ordering matters: starting frida-server while SELinux still blocks ptrace
-    produces a healthy-looking server and a failing attach, which is exactly the
-    misdiagnosis this fix removes.
+    SELinux must be relaxed before Frida attach. Preflight lives in
+    SandboxProvider.connect() (ensure_selinux_permissive → ensure_frida),
+    with a second hardening pass in _run_device_session for legacy paths.
     """
-    src = _preflight_source()
-    assert src.index("getenforce") < src.index("Checking frida-server status"), (
-        "SELinux preflight must precede the frida-server check"
-    )
+    from sudarshan_core.sandbox.provider import SandboxProvider
+
+    connect_src = inspect.getsource(SandboxProvider.connect)
+    assert connect_src.index("ensure_selinux_permissive") < connect_src.index(
+        "ensure_frida"
+    ), "SELinux must be configured before Frida verification in SandboxProvider.connect"
+
+    session_src = inspect.getsource(frida_sandbox._run_device_session)
+    assert "getenforce" in session_src
+    assert "setenforce 0" in session_src

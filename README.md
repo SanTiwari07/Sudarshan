@@ -5,7 +5,7 @@
   <p><i>Prepared and Submitted for Bank of India and IIT Hyderabad under the BOI Hackathon 2026</i></p>
   
   <p>
-    <b>421</b> Passing Unit & Integration Tests &nbsp;&nbsp;|&nbsp;&nbsp;
+    <b>457</b> Passing Unit & Integration Tests &nbsp;&nbsp;|&nbsp;&nbsp;
     <b>Deterministic Fraud Scoring</b> &nbsp;&nbsp;|&nbsp;&nbsp;
     <b>Containerized Microservice Architecture</b>
   </p>
@@ -371,9 +371,9 @@ Run the automated bootstrapper script from PowerShell:
 ```
 
 ### Automated Test Suite Execution
-Run the full automated test suite (**388 tests passing**):
+Run the full automated test suite (**457 tests collected & verified**):
 ```powershell
-$env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest backend/tests
+$env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests
 ```
 
 ### Accessing Platform Interfaces

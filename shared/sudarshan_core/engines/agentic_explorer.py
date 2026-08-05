@@ -131,14 +131,14 @@ class AgenticExplorer:
             device_serial=device_serial,
             package_name=package_name,
             adb_path=adb_path,
+            screenshot_manager=screenshot_manager,
         )
         self.executor   = ToolExecutor(
             device_serial=device_serial,
             package_name=package_name,
             adb_path=adb_path,
-            # Forward the manifest-parsed accessibility service class so that
-            # _grant_accessibility uses the real name, not a hardcoded guess.
             accessibility_service_class=accessibility_service_class,
+            screenshot_manager=screenshot_manager,
         )
         self.planner    = AgentPlanner(
             api_key=GEMINI_API_KEY,

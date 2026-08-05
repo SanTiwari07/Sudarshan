@@ -47,6 +47,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from sudarshan_core.engines.event_bus import RuntimeEventBus
 from sudarshan_core.engines.bfci_scorer import calculate_bfci_v2, BFCI_WEIGHTS
+from sudarshan_core.engines.dae_pipeline import DAEPipelineTracker, DAEStage
 
 logger = logging.getLogger(__name__)
 
@@ -390,7 +391,7 @@ def _adb_install_apk(apk_path: str, device: str) -> Tuple[bool, str, Dict[str, A
 
     # ── Stage 1: Try installing Original APK ─────────────────────────────────
     for attempt in range(2):
-        ok, out = _adb("-s", device, "install", "-r", "-t", apk_path, timeout=120)
+        ok, out = _adb("-s", device, "install", "-r", "-t", "-g", apk_path, timeout=120)
         if ok:
             logger.info(f"[Frida] Original APK installed successfully: {os.path.basename(apk_path)}")
             return True, out, default_provenance
@@ -399,7 +400,7 @@ def _adb_install_apk(apk_path: str, device: str) -> Tuple[bool, str, Dict[str, A
         if "INSTALL_FAILED_DEPRECATED_SDK_VERSION" in out:
             logger.info("[Frida] Retrying install with --bypass-low-target-sdk-block")
             ok2, out2 = _adb(
-                "-s", device, "install", "-r", "-t",
+                "-s", device, "install", "-r", "-t", "-g",
                 "--bypass-low-target-sdk-block",
                 apk_path, timeout=120
             )
@@ -498,6 +499,33 @@ def _adb_install_apk(apk_path: str, device: str) -> Tuple[bool, str, Dict[str, A
 
 
 
+def _find_aapt_executable(tool: str) -> Optional[str]:
+    """Locate ``aapt`` / ``aapt2`` on PATH or under the Android SDK build-tools."""
+    import shutil
+
+    aapt = shutil.which(tool)
+    if aapt:
+        return aapt
+    user = os.environ.get("USERNAME", os.environ.get("USER", "user"))
+    sdk_root = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT")
+    candidates: List[str] = []
+    if sdk_root:
+        bt = os.path.join(sdk_root, "build-tools")
+        if os.path.isdir(bt):
+            for ver in sorted(os.listdir(bt), reverse=True):
+                candidates.append(os.path.join(bt, ver, f"{tool}.exe"))
+                candidates.append(os.path.join(bt, ver, tool))
+    candidates.extend([
+        rf"C:\Users\{user}\AppData\Local\Android\Sdk\build-tools\36.1.0\{tool}.exe",
+        rf"C:\Users\{user}\AppData\Local\Android\Sdk\build-tools\36.0.0\{tool}.exe",
+        rf"C:\Users\{user}\AppData\Local\Android\Sdk\build-tools\34.0.0\{tool}.exe",
+    ])
+    for c in candidates:
+        if os.path.isfile(c):
+            return c
+    return None
+
+
 def _extract_apk_info(apk_path: str) -> Tuple[Optional[str], Optional[str]]:
     """Extract package name and main activity from APK.
 
@@ -510,18 +538,7 @@ def _extract_apk_info(apk_path: str) -> Tuple[Optional[str], Optional[str]]:
 
     # ── Strategy 1: aapt / aapt2 ──────────────────────────────────────────────
     for tool in ["aapt2", "aapt"]:
-        aapt = shutil.which(tool)
-        if not aapt:
-            user = os.environ.get("USERNAME", os.environ.get("USER", "user"))
-            candidates = [
-                rf"C:\Users\{user}\AppData\Local\Android\Sdk\build-tools\34.0.0\{tool}.exe",
-                rf"C:\Users\{user}\AppData\Local\Android\Sdk\build-tools\36.0.0\{tool}.exe",
-                rf"C:\Users\{user}\AppData\Local\Android\Sdk\build-tools\36.1.0\{tool}.exe",
-            ]
-            for c in candidates:
-                if os.path.exists(c):
-                    aapt = c
-                    break
+        aapt = _find_aapt_executable(tool)
         if aapt:
 
             try:
@@ -639,6 +656,181 @@ def _launch_app(device: str, package_name: str) -> bool:
     return ok
 
 
+def _format_activity_component(package_name: str, activity: str) -> str:
+    """Build an ``am start -n`` component string."""
+    act = (activity or "").strip()
+    if not act:
+        return ""
+    if act.startswith("."):
+        return f"{package_name}/{act}"
+    if "/" in act:
+        return act
+    if act.startswith(package_name):
+        return f"{package_name}/{act}"
+    return f"{package_name}/{act}"
+
+
+def _launch_failure_is_process_crash(reason: str) -> bool:
+    """True only when a PID existed and died — not when launch intent never started."""
+    r = (reason or "").lower()
+    if "never appeared" in r or "launch failed" in r:
+        return False
+    if "exited after" in r or "appeared but only survived" in r:
+        return True
+    if "unstable" in r and "pid" in r:
+        return True
+    return False
+
+
+def _dismiss_permission_review_screen(device: str) -> bool:
+    """
+    Android 11+ shows ReviewPermissionsActivity for legacy targetSdk apps even
+    when permissions were pre-granted via ``pm grant``. The target app process
+  does not appear in ``pidof`` until the user taps CONTINUE.
+    """
+    ok, out = _adb("-s", device, "shell", "dumpsys", "activity", "activities", timeout=20)
+    if not ok or "ReviewPermissionsActivity" not in (out or ""):
+        return False
+
+    ok_dump, _ = _adb(
+        "-s", device, "shell",
+        "uiautomator dump /data/local/tmp/sudarshan_perm_ui.xml",
+        timeout=25,
+    )
+    if ok_dump:
+        ok_cat, xml = _adb(
+            "-s", device, "shell",
+            "cat /data/local/tmp/sudarshan_perm_ui.xml",
+            timeout=15,
+        )
+        if ok_cat and xml:
+            m = re.search(
+                r'resource-id="com\.android\.permissioncontroller:id/continue_button"'
+                r'[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"',
+                xml,
+            )
+            if m:
+                x1, y1, x2, y2 = (int(m.group(i)) for i in range(1, 5))
+                tx, ty = (x1 + x2) // 2, (y1 + y2) // 2
+                _adb("-s", device, "shell", f"input tap {tx} {ty}", timeout=10)
+                logger.info(
+                    "[Frida] Dismissed ReviewPermissionsActivity (continue at %d,%d)",
+                    tx, ty,
+                )
+                time.sleep(0.75)
+                return True
+
+    logger.info("[Frida] ReviewPermissionsActivity visible — using fallback CONTINUE tap")
+    _adb("-s", device, "shell", "input tap 507 1127", timeout=10)
+    time.sleep(0.75)
+    return True
+
+
+def _grant_declared_runtime_permissions(device: str, apk_path: str, package_name: str) -> int:
+    """
+  Pre-grant install-time runtime permissions via ``pm grant`` so cold-start
+  does not block on ReviewPermissionsActivity (which leaves pidof empty).
+    """
+    import shlex as _shlex
+    import shutil
+
+    perms: List[str] = []
+    for tool in ("aapt2", "aapt"):
+        aapt = _find_aapt_executable(tool)
+        if not aapt:
+            continue
+        try:
+            result = subprocess.run(
+                [aapt, "dump", "permissions", apk_path],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
+            )
+            for line in (result.stdout or "").splitlines():
+                line = line.strip()
+                if line.startswith("uses-permission:") and "name=" in line:
+                    parts = line.split("'")
+                    if len(parts) >= 2:
+                        perms.append(parts[1])
+            if perms:
+                break
+        except Exception:
+            continue
+
+    granted = 0
+    safe_pkg = _shlex.quote(package_name)
+    for perm in perms:
+        if not perm.startswith("android.permission."):
+            continue
+        ok, out = _adb(
+            "-s", device, "shell", f"pm grant {safe_pkg} {perm}", timeout=10,
+        )
+        if ok or "granted" in (out or "").lower():
+            granted += 1
+        else:
+            logger.debug("[Frida] pm grant skipped for %s: %s", perm, out)
+    if granted:
+        logger.info(
+            "[Frida] Pre-granted %d declared permission(s) for %s before launch",
+            granted, package_name,
+        )
+    return granted
+
+
+def _launch_main_launcher_intent(device: str, package_name: str) -> bool:
+    """
+    Strategy 2: launch via resolved LAUNCHER component.
+
+    ``am start -p`` with implicit MAIN/LAUNCHER fails on API 30+ with
+    'unable to resolve Intent' (verified on InsecureBankv2 / Genymotion 11).
+    """
+    component = _resolve_launcher_activity(device, package_name)
+    if not component:
+        return False
+    import shlex as _shlex
+    ok, out = _adb(
+        "-s", device, "shell",
+        f"am start -W -n {_shlex.quote(component)}",
+        timeout=20,
+    )
+    if not ok and out:
+        logger.warning("[Frida] main launcher start: %s", out[:200])
+    return ok
+
+
+def _launch_via_monkey(device: str, package_name: str) -> bool:
+    """Strategy 4: Monkey launcher (single event, category LAUNCHER)."""
+    import shlex as _shlex
+    safe_pkg = _shlex.quote(package_name)
+    ok, _ = _adb(
+        "-s", device, "shell",
+        f"monkey -p {safe_pkg} -c android.intent.category.LAUNCHER 1",
+        timeout=25,
+    )
+    return ok
+
+
+def _verify_package_installed(device: str, package_name: str, retries: int = 5) -> bool:
+    """Confirm APK path is registered with PackageManager."""
+    import shlex as _shlex
+    safe_pkg = _shlex.quote(package_name)
+    for attempt in range(retries):
+        ok, out = _adb("-s", device, "shell", f"pm path {safe_pkg}", timeout=15)
+        if ok and package_name in (out or "") and "package:" in (out or ""):
+            return True
+        time.sleep(0.5 * (attempt + 1))
+    return False
+
+
+def _force_stop_package(device: str, package_name: str) -> None:
+    import shlex as _shlex
+    safe_pkg = _shlex.quote(package_name)
+    _adb("-s", device, "shell", f"am force-stop {safe_pkg}", timeout=15)
+    time.sleep(0.5)
+
+
 # ─── Launch State Machine Helpers ─────────────────────────────────────────────
 
 def _poll_pid_until_stable(
@@ -671,6 +863,7 @@ def _poll_pid_until_stable(
     deadline = time.monotonic() + total_timeout
     stable_since: Optional[float] = None
     last_pid: Optional[int] = None
+    last_review_dismiss = 0.0
 
     logger.info(
         "[Frida] Stability monitor: waiting up to %.0fs for %s "
@@ -714,7 +907,11 @@ def _poll_pid_until_stable(
                 )
                 logger.error("[Frida] %s", msg)
                 return False, last_pid, msg
-            # PID not yet seen — still starting up, keep waiting.
+            # PID not yet seen — permission review UI blocks process visibility.
+            if last_pid is None and (now - last_review_dismiss) >= 1.5:
+                if _dismiss_permission_review_screen(device):
+                    last_review_dismiss = now
+                    continue
 
         time.sleep(poll_interval)
 
@@ -1302,6 +1499,7 @@ class FridaSession:
         # process CWD only when a caller supplies nothing, which keeps the
         # constructor usable in tests without touching the filesystem.
         self.artifact_dir: Path = Path(artifact_dir) if artifact_dir else Path(".")
+        self.dae = DAEPipelineTracker(package_name=package_name)
         self.event_bus = RuntimeEventBus()
         # Keys MUST mirror the `events` object in frida_hooks/banking_trojan.js.
         # An unrecognised category is remapped to "dangerous_apis" by
@@ -1486,6 +1684,7 @@ class FridaSession:
 
             elif msg_type == "canary":
                 self.canary_received = True
+                self.dae.transition(DAEStage.VERIFY_HOOKS, "canary received")
                 # Stamp canary_received timeline milestone (Requirement 6)
                 if self.launch_timeline.get("canary_received") is None:
                     self.launch_timeline["canary_received"] = time.monotonic()
@@ -1591,6 +1790,7 @@ class FridaSession:
         try:
             ref = self.screenshot_manager.capture(
                 label=label, category=category, source="lifecycle",
+                reason="LIFECYCLE", force=True,
             )
             if ref:
                 logger.info(f"[Frida] Screenshot captured: {label}")
@@ -1789,6 +1989,8 @@ class FridaSession:
 
             import shlex
             safe_pkg = shlex.quote(self.package_name)
+            self.dae.transition(DAEStage.RESOLVE_ACTIVITY, "launch ladder")
+            self.dae.transition(DAEStage.LAUNCHING, "issuing launch intents")
 
             # ── 5-step launch fallback ladder ─────────────────────────────────
             # Each step is tried in order.  After issuing am start, the step
@@ -1859,27 +2061,36 @@ class FridaSession:
                     "[Frida] Launch step '%s' failed: %s — collecting crash diagnostics",
                     step_label, reason,
                 )
-                _art_dir = getattr(self, "artifact_dir", Path("."))
-                _prov    = getattr(self, "_provenance", None)
-                _apk_cks = getattr(self, "_apk_checksum", None)
-                _lifetime_ms: Optional[float] = None
-                if self.launch_timeline.get("first_pid") is not None:
-                    _lifetime_ms = (time.monotonic() - self.launch_timeline["first_pid"]) * 1000
-                self.crash_report = _collect_crash_diagnostics(
-                    self.device_serial,
-                    self.package_name,
-                    _art_dir,
-                    provenance=_prov,
-                    launcher_activity=self.main_activity,
-                    process_lifetime_ms=_lifetime_ms,
-                    launch_duration_ms=(time.monotonic() - _launch_start_ts) * 1000,
-                    apk_checksum=_apk_cks,
-                )
-                self.last_error = (
-                    f"CRASH_BEFORE_STABLE: {reason}. "
-                    f"exception_type={self.crash_report.exception_type}, "
-                    f"recommendation={self.crash_report.recommendation}"
-                )
+                self._last_launch_reason = reason  # type: ignore[attr-defined]
+                if _launch_failure_is_process_crash(reason):
+                    _art_dir = getattr(self, "artifact_dir", Path("."))
+                    _prov    = getattr(self, "_provenance", None)
+                    _apk_cks = getattr(self, "_apk_checksum", None)
+                    _lifetime_ms: Optional[float] = None
+                    if self.launch_timeline.get("first_pid") is not None:
+                        _lifetime_ms = (time.monotonic() - self.launch_timeline["first_pid"]) * 1000
+                    self.crash_report = _collect_crash_diagnostics(
+                        self.device_serial,
+                        self.package_name,
+                        _art_dir,
+                        provenance=_prov,
+                        launcher_activity=self.main_activity,
+                        process_lifetime_ms=_lifetime_ms,
+                        launch_duration_ms=(time.monotonic() - _launch_start_ts) * 1000,
+                        apk_checksum=_apk_cks,
+                    )
+                    self.last_error = (
+                        f"CRASH_BEFORE_STABLE: {reason}. "
+                        f"exception_type={self.crash_report.exception_type}, "
+                        f"recommendation={self.crash_report.recommendation}"
+                    )
+                else:
+                    logger.warning(
+                        "[Frida] Launch step '%s' did not start process (not a crash) — "
+                        "trying next launch strategy",
+                        step_label,
+                    )
+                    self.crash_report = None
                 return False
 
             launched = False
@@ -1887,18 +2098,36 @@ class FridaSession:
 
             # Step 1 — manifest-declared launcher activity (am start -W)
             if self.main_activity:
-                safe_act = shlex.quote(self.main_activity)
-                logger.info(
-                    "[Frida] Launch step 1: am start -W -n %s/%s",
+                component = _format_activity_component(
                     self.package_name, self.main_activity,
+                )
+                logger.info(
+                    "[Frida] Launch step 1: am start -W -n %s",
+                    component,
                 )
                 if _try_launch_step(
                     "am_start_main_activity",
-                    lambda: _am_start_w(f"{safe_pkg}/{safe_act}"),
+                    lambda c=component: _am_start_w(shlex.quote(c)),
                 ):
                     launched = True
                 elif self.crash_report is not None:
                     _crash_on_step = "step1_am_start_main_activity"
+
+            # Step 1b — MAIN + LAUNCHER implicit intent (PackageManager resolver)
+            if not launched and _crash_on_step is None:
+                logger.info(
+                    "[Frida] Launch step 1b: MAIN/LAUNCHER intent for %s",
+                    self.package_name,
+                )
+                if _try_launch_step(
+                    "main_launcher_intent",
+                    lambda: _launch_main_launcher_intent(
+                        self.device_serial, self.package_name
+                    ),
+                ):
+                    launched = True
+                elif self.crash_report is not None:
+                    _crash_on_step = "step1b_main_launcher_intent"
 
             # Step 2 — resolved LAUNCHER activity via cmd package resolve-activity
             # Never falls back to Monkey. Uses the platform resolver directly.
@@ -2046,6 +2275,50 @@ class FridaSession:
                     elif self.crash_report is not None:
                         _crash_on_step = f"step5_deep_link:{uri_scheme}"
 
+            # Step 6 — force-stop then retry resolved launcher (cold start)
+            if not launched and _crash_on_step is None:
+                logger.info(
+                    "[Frida] Launch step 6: force-stop + resolved launcher for %s",
+                    self.package_name,
+                )
+                self.dae.metrics["launch_retries"] = (
+                    int(self.dae.metrics.get("launch_retries", 0)) + 1
+                )
+
+                def _force_stop_and_launch():
+                    _force_stop_package(self.device_serial, self.package_name)
+                    component = _resolve_launcher_activity(
+                        self.device_serial, self.package_name
+                    )
+                    if component:
+                        import shlex as _shlex
+                        _am_start_w(_shlex.quote(component))
+                    else:
+                        _launch_main_launcher_intent(
+                            self.device_serial, self.package_name
+                        )
+
+                if _try_launch_step("force_stop_retry", _force_stop_and_launch):
+                    launched = True
+                elif self.crash_report is not None:
+                    _crash_on_step = "step6_force_stop_retry"
+
+            # Step 7 — Monkey launcher
+            if not launched and _crash_on_step is None:
+                logger.info(
+                    "[Frida] Launch step 7: monkey LAUNCHER for %s",
+                    self.package_name,
+                )
+                if _try_launch_step(
+                    "monkey_launcher",
+                    lambda: _launch_via_monkey(
+                        self.device_serial, self.package_name
+                    ),
+                ):
+                    launched = True
+                elif self.crash_report is not None:
+                    _crash_on_step = "step7_monkey_launcher"
+
             # ── Gate: did any step succeed? ───────────────────────────────────
             if not launched:
                 if _crash_on_step:
@@ -2062,8 +2335,10 @@ class FridaSession:
                     self.last_error = (
                         f"LAUNCH_FAILED: All 5 launch methods failed for "
                         f"{self.package_name}. "
-                        "Steps tried: am_start_main_activity, resolved_launcher_activity, "
-                        "exported_activity, boot_broadcast, deep_link. "
+                        "Steps tried: am_start_main_activity, main_launcher_intent, "
+                        "resolved_launcher_activity, "
+                        "exported_activity, boot_broadcast, deep_link, "
+                        "force_stop_retry, monkey_launcher. "
                         "This sample may require manual launch or has no runnable "
                         "entry point in the current environment."
                     )
@@ -2131,6 +2406,7 @@ class FridaSession:
             #   * _verify_launch_readiness() confirmed all 6 checks passed
             # We attach by the stable PID — no polling retry needed.
             self.launch_timeline["frida_attach"] = time.monotonic()
+            self.dae.transition(DAEStage.ATTACH_FRIDA, "attaching to stable PID")
 
             self._session = None
             for attempt in range(ATTACH_MAX_ATTEMPTS):
@@ -2264,6 +2540,7 @@ class FridaSession:
             self._capture_screenshot("01_app_opened", "lifecycle")
 
             logger.info(f"[Frida] ANALYSE: monitoring {self.package_name} for {duration_seconds}s...")
+            self.dae.transition(DAEStage.CAPTURE_RUNTIME, "exploration window")
             explorer = None
             explorer_thread = None
 
@@ -2282,6 +2559,7 @@ class FridaSession:
                 )
                 self.explorer_used = "agentic"
                 logger.info("[Frida] AgenticExplorer selected.")
+                self.dae.transition(DAEStage.START_EXPLORER, "AgenticExplorer")
             except Exception as exc:
                 # Rollback covers ANY construction failure, not just
                 # ImportError: a missing dependency, a bad device serial or
@@ -2656,16 +2934,54 @@ async def _run_device_session(
         base_result["error"] = "Could not extract valid package name from APK."
         return base_result
 
+    if not main_activity:
+        _pn, _ma = await loop.run_in_executor(None, _extract_apk_info, apk_path)
+        if _ma:
+            main_activity = _ma
+        if not package_name and _pn:
+            package_name = _pn
+
     logger.info(f"[Frida] Target package: {package_name} (Main Activity: {main_activity})")
+
+    apk_dir = artifact_dir_for(apk_path)
+    logger.info(f"[Frida] Artifacts for this sample: {apk_dir}")
+
+    session = FridaSession(
+        device_serial, package_name,
+        main_activity=main_activity,
+        artifact_dir=apk_dir,
+    )
 
     # ── Step 3: Install APK ────────────────────────────────────────────────────
     _install_start = time.monotonic()
+    session.dae.transition(DAEStage.INSTALLING, "adb install")
     ok, output, provenance = await loop.run_in_executor(None, _adb_install_apk, apk_path, device_serial)
     base_result["provenance"] = provenance
     if not ok:
         logger.error(f"[Frida] APK install failed: {output}")
+        session.dae.fail(f"APK install failed: {output}")
         base_result["error"] = f"APK install failed: {output}"
+        base_result["dae_pipeline"] = session.dae.to_dict()
         return base_result
+    session.dae.transition(DAEStage.VERIFY_INSTALL, "pm path verification")
+    if not await loop.run_in_executor(
+        None, _verify_package_installed, device_serial, package_name
+    ):
+        logger.warning(
+            "[Frida] Install reported success but pm path missing — reinstalling once"
+        )
+        session.dae.metrics["launch_retries"] = (
+            int(session.dae.metrics.get("launch_retries", 0)) + 1
+        )
+        ok, output, provenance = await loop.run_in_executor(
+            None, _adb_install_apk, apk_path, device_serial
+        )
+        base_result["provenance"] = provenance
+        if not ok:
+            session.dae.fail(f"Reinstall failed: {output}")
+            base_result["error"] = f"APK reinstall failed: {output}"
+            base_result["dae_pipeline"] = session.dae.to_dict()
+            return base_result
     logger.info(f"[Frida] APK installed: {package_name} (Derivative Repaired: {provenance.get('is_repaired_derivative', False)})")
     _install_ts = time.monotonic()  # install completed
 
@@ -2679,19 +2995,27 @@ async def _run_device_session(
             main_activity = rep_act
             logger.info(f"[Frida] Using repaired derivative main activity: {main_activity}")
 
+    await loop.run_in_executor(
+        None,
+        _grant_declared_runtime_permissions,
+        device_serial,
+        effective_apk_path,
+        package_name,
+    )
+
+    if not main_activity:
+        comp = await loop.run_in_executor(
+            None, _resolve_launcher_activity, device_serial, package_name,
+        )
+        if comp and "/" in comp:
+            main_activity = comp.split("/", 1)[1]
+            session.main_activity = main_activity
+            logger.info("[Frida] Resolved main activity from launcher: %s", main_activity)
+
+    if main_activity:
+        session.main_activity = main_activity
 
     # ── Step 4: Run Frida session ──────────────────────────────────────────────
-    # Per-sample artifact directory: previously every scan wrote audit_log.json
-    # and benchmark.json into the process CWD, so each run destroyed the last
-    # one's forensic record.
-    apk_dir = artifact_dir_for(apk_path)
-    logger.info(f"[Frida] Artifacts for this sample: {apk_dir}")
-
-    session = FridaSession(
-        device_serial, package_name,
-        main_activity=main_activity,
-        artifact_dir=apk_dir,
-    )
     # Give the launch ladder access to the APK path for steps 3 & 5
     # (androguard activity enumeration and URI scheme discovery).
     session._apk_path = effective_apk_path  # type: ignore[attr-defined]
@@ -2727,7 +3051,8 @@ async def _run_device_session(
             adb_path=_find_adb() or "adb",
             output_dir=apk_dir,
             event_bus=session.event_bus,
-            evidence_store=session.evidence_store
+            evidence_store=session.evidence_store,
+            package_name=package_name,
         )
     if IOCCollector is not None:
         session.ioc_collector = IOCCollector(
@@ -2877,6 +3202,7 @@ async def _run_device_session(
         "explorer_used":       session.explorer_used,
         "explorer_error":      session.explorer_error,
         "artifact_dir":        str(apk_dir),
+        "dae_pipeline":        session.dae.to_dict(),
         # Which of the 5-step launch ladder succeeded (or "failed" if none did).
         # Presence of non-standard launch method is itself a weak signal of
         # anti-analysis hardening. NOT consumed by risk_engine.
@@ -2979,6 +3305,9 @@ async def _run_device_session(
     # when flush() is called, causing them to be silently lost from evidence.json.
     if session.evidence_store is not None:
         try:
+            session.event_bus.drain(8.0)
+            if session.screenshot_manager is not None:
+                session.screenshot_manager.wait_pending(30.0)
             # Drain the queue with a bounded timeout so we never block indefinitely.
             _drain_timeout = 5.0
             try:
@@ -2992,6 +3321,7 @@ async def _run_device_session(
                         time.sleep(0.1)
                 except Exception:
                     pass
+            session.dae.transition(DAEStage.COLLECT_EVIDENCE, "flushing evidence store")
             n = session.evidence_store.flush(apk_dir / "evidence.json")
             result["evidence_record_count"] = n
             result["anti_analysis_events"] = session.collected_events.get("anti_analysis", [])
@@ -3004,6 +3334,7 @@ async def _run_device_session(
     # the evidence store flush so workflow records are available for the report.
     if WorkflowReconstructor is not None and session.total_hook_events_received > 0:
         try:
+            session.dae.transition(DAEStage.BUILD_WORKFLOW, "workflow reconstruction")
             # Flatten all hooked events into a record list the reconstructor understands
             workflow_records = []
             for cat, evts in session.collected_events.items():
@@ -3055,10 +3386,18 @@ async def _run_device_session(
     # discarded, so report_generator's gallery had nothing to enumerate.
     if hasattr(session, "screenshot_manager") and session.screenshot_manager is not None:
         try:
-            n = session.screenshot_manager.flush_manifest(apk_dir / "screenshots.json")
+            session.screenshot_manager.wait_pending(30.0)
+            n = session.screenshot_manager.flush_manifest()
+            # Legacy alias used by older report tooling
+            session.screenshot_manager.flush_manifest(apk_dir / "screenshots.json")
+            session.dae.update_metrics(
+                **session.screenshot_manager.get_telemetry()
+            )
             logger.info(f"[Frida] Screenshot manifest flushed: {n} image(s)")
         except Exception as e:
-            logger.error(f"[Frida] Failed to write screenshots.json: {e}")
+            logger.error(f"[Frida] Failed to write screenshot manifest: {e}")
+
+    session.dae.transition(DAEStage.GENERATE_REPORT, "artifact flush complete")
 
     # ── Wave 3: Flush Navigator Upgrades ───────────────────────────────────────
     if hasattr(session, "permission_orchestrator") and session.permission_orchestrator is not None:
@@ -3108,6 +3447,8 @@ async def _run_device_session(
             rg.render(apk_dir / "report.html")
         except Exception as e:
             logger.error(f"[Frida] Failed to generate HTML report: {e}")
+
+    session.dae.transition(DAEStage.COMPLETE, "dynamic session finished")
 
     return result
 

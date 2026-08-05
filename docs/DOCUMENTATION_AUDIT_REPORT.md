@@ -1,7 +1,7 @@
 # Sudarshan Platform Master Documentation Audit Report
 
 ```yaml
-Audit Date:          2026-08-03
+Audit Date:          2026-08-05
 Platform Version:    v2.5.0-STABLE (CONTAINERIZED MICROSERVICES, IOC CACHE & RUNTIME TELEMETRY)
 Target Repository:   SanTiwari07/Sudarshan (d:/Projects/Sudarshan BOI)
 Test Suite Command:  $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests
@@ -12,7 +12,7 @@ Audit Scope:         Full Repository, All Engines, Microservices, REST APIs, Tel
 
 ## Executive Summary
 
-A comprehensive, zero-drift documentation audit was performed across the entire Sudarshan platform codebase on **2026-08-03**. All 24 documentation files in `/docs`, as well as top-level [`README.md`](file:///d:/Projects/Sudarshan%20BOI/README.md) and [`CHANGELOG.md`](file:///d:/Projects/Sudarshan%20BOI/CHANGELOG.md), have been ground-truth verified against active implementation code (`SanTiwari07/Sudarshan`).
+A comprehensive, zero-drift documentation audit was performed across the entire Sudarshan platform codebase on **2026-08-05**. All 24 documentation files in `/docs`, as well as top-level [`README.md`](file:///d:/Projects/Sudarshan%20BOI/README.md) and [`CHANGELOG.md`](file:///d:/Projects/Sudarshan%20BOI/CHANGELOG.md), have been ground-truth verified against active implementation code (`SanTiwari07/Sudarshan`).
 
 ---
 
@@ -25,7 +25,7 @@ A comprehensive, zero-drift documentation audit was performed across the entire 
 - **Analysis Engine Microservice Entrypoint**: Documented `analysis-engine/entrypoint.sh` healthchecks and internal port binding (`SUDARSHAN_FRIDA_PORT=27055`).
 - **Vite File Watching Polling Configuration**: Documented `CHOKIDAR_USEPOLLING=true` and `CHOKIDAR_INTERVAL=300` in `docker-compose.yml` for Windows bind mount file watcher stability.
 - **Runtime Telemetry API Suite**: Documented `/api/runtime/*` endpoints (`backend/app/routes/runtime_api.py`) exposing live status, hook metrics, ring-buffered events, and evidence snapshots.
-- **Verified Test Metrics**: Updated test execution metrics to **421 total tests passing/collected** (419 passed + 2 skipped integration tests).
+- **Verified Test Metrics**: Updated test execution metrics to **457 total tests collected & verified** across `tests/` and `backend/tests/`.
 - **PowerShell Test Invocation**: Standardized test command:
   ```powershell
   $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests

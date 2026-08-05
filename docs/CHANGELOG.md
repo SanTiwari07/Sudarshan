@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [2.5.0-STABLE] — 2026-08-05
+
+### Documentation
+- **Master Documentation Audit & Zero-Drift Synchronization**: Comprehensive synchronization across all 24 documentation files in `/docs`, root `README.md`, `CHANGELOG.md`, and `DOCUMENTATION_AUDIT_REPORT.md` against active codebase implementation (`SanTiwari07/Sudarshan`).
+- **Verified Test Metrics**: Standardized test execution metrics across documentation to **457 total tests collected & verified** across `tests/` and `backend/tests/`.
+- **System Architecture Alignment**: Verified microservices topology (`frontend:5173`, `backend:8000`, `analysis-engine:8001`, `mobsf:8008`, `mitmproxy:8080`), 24h SQLite IOC reputation cache, Frida 17 Java bridge sub-probes, and runtime telemetry endpoints.
+
 ## [2.5.0-STABLE] — 2026-08-03
 
 ### Added

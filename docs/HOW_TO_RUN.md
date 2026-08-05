@@ -3,7 +3,7 @@
 ```yaml
 Document Title:      Sudarshan Installation & Execution Manual
 Version:             2.5.0-STABLE
-Last Revision:       2026-08-03
+Last Revision:       2026-08-05
 Target OS:           Windows 10/11, Linux (Ubuntu 22.04+), macOS 13+
 ```
 

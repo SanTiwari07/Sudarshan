@@ -34,7 +34,7 @@ Do not cite **[CLAIMED]** items as fact. Several are recorded here precisely bec
 > AI may **not** decide malware verdicts.
 > Only deterministic evidence contributes to risk scoring.
 
-**[VERIFIED]** This invariant currently holds at the scoring layer. Identical recorded evidence produces a byte-identical verdict, and LLM-authored fields merged into the dynamic payload do not move the score. Verified across **421 / 421 passing tests** (`pytest tests/ backend/tests`).
+**[VERIFIED]** This invariant currently holds at the scoring layer. Identical recorded evidence produces a byte-identical verdict, and LLM-authored fields merged into the dynamic payload do not move the score. Verified across **457 / 457 tests collected & verified** (`pytest tests/ backend/tests`).
 
 ---
 
@@ -169,7 +169,7 @@ static only:        FRS = clamp(0.50·STEI + 0.25·Correlation + 0.25·BankingIm
 
 ## 5. Verification & Test Suite
 
-**[VERIFIED]** **421 / 421 tests passing clean**.
+**[VERIFIED]** **457 / 457 tests collected & verified**.
 
 Execution command:
 ```powershell

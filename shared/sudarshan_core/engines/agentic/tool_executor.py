@@ -32,6 +32,7 @@ import re
 import shlex
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from sudarshan_core.engines.agentic.device_properties import get_screen_size
@@ -161,10 +162,12 @@ class ToolExecutor:
         package_name: str,
         adb_path: str = "adb",
         accessibility_service_class: Optional[str] = None,
+        screenshot_manager: Optional[Any] = None,
     ) -> None:
         self.device_serial              = device_serial
         self.package_name               = package_name
         self.adb_path                   = adb_path
+        self.screenshot_manager         = screenshot_manager
         # Real accessibility service class name extracted from the APK manifest
         # (e.g. ".zWPzgfI" for Cerberus). None means unknown — do not guess.
         self.accessibility_service_class: Optional[str] = accessibility_service_class
@@ -592,8 +595,29 @@ class ToolExecutor:
 
     async def _tool_take_screenshot(self, action: Dict) -> ToolResult:
         label = re.sub(r'[^a-zA-Z0-9_]', '', action.get("label", "agent"))[:32]
+        if self.screenshot_manager is not None:
+            ref = self.screenshot_manager.capture(
+                label=label,
+                category="ui",
+                source="explorer",
+                reason="EXPLORER_ACTION",
+                explorer_action=label,
+            )
+            if ref:
+                local = str(
+                    self.screenshot_manager.output_dir / Path(ref).name
+                )
+                return ToolResult(
+                    success=True, tool="take_screenshot",
+                    output=local, data={"local_path": local, "label": label},
+                )
+            return ToolResult(
+                success=False, tool="take_screenshot",
+                error="ScreenshotManager capture failed",
+            )
+
         ts    = int(time.time() * 1000)
-        remote = f"/sdcard/agent_{label}_{ts}.png"
+        remote = f"/data/local/tmp/agent_{label}_{ts}.png"
         local  = f"/tmp/agent_{label}_{ts}.png"
 
         await self._adb("shell", "screencap", "-p", remote)

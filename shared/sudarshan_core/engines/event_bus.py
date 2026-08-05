@@ -196,3 +196,27 @@ class RuntimeEventBus:
                 self._queue.task_done()
             except Exception as e:
                 logger.error("[EventBus] Worker loop error: %s", e)
+
+    def pending_count(self) -> int:
+        """Approximate number of events not yet delivered to subscribers."""
+        return self._queue.qsize()
+
+    def drain(self, timeout_seconds: float = 5.0) -> bool:
+        """
+        Block until the event queue is empty and all subscribers have run.
+
+        Returns True if drained within *timeout_seconds*, False on timeout.
+        Screenshot threads and other async work may still be in flight — use
+        ScreenshotManager.wait_pending() after this when flushing artifacts.
+        """
+        deadline = time.time() + max(0.1, timeout_seconds)
+        while time.time() < deadline:
+            if self._queue.unfinished_tasks == 0 and self._queue.empty():
+                return True
+            time.sleep(0.05)
+        logger.warning(
+            "[EventBus] drain() timed out after %.1fs (%d unfinished)",
+            timeout_seconds,
+            self._queue.unfinished_tasks,
+        )
+        return False

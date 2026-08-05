@@ -34,6 +34,7 @@ import logging
 import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
 from sudarshan_core.engines.agentic.sanitizer import sanitize, sanitize_block
@@ -250,10 +251,12 @@ class PerceptionPipeline:
         device_serial: str,
         package_name:  str,
         adb_path:      str = "adb",
+        screenshot_manager: Optional[Any] = None,
     ) -> None:
         self.device_serial = device_serial
         self.package_name  = package_name
         self.adb_path      = adb_path
+        self.screenshot_manager = screenshot_manager
 
         # Cache: last screen hash for which a screenshot was taken
         self._last_vision_hash: str = ""
@@ -513,9 +516,22 @@ class PerceptionPipeline:
 
     async def _take_screenshot(self) -> Optional[str]:
         """Capture a screenshot and return the local file path, or None on failure."""
+        if self.screenshot_manager is not None:
+            ref = self.screenshot_manager.capture(
+                label="perception_vision",
+                category="ui",
+                source="explorer",
+                reason="SUSPICIOUS_UI",
+                activity="",
+                force=False,
+            )
+            if ref:
+                return str(self.screenshot_manager.output_dir / Path(ref).name)
+            return None
+
         import time, os
         ts     = int(time.time() * 1000)
-        remote = f"/sdcard/percept_{ts}.png"
+        remote = f"/data/local/tmp/percept_{ts}.png"
         local  = f"/tmp/percept_{ts}.png"
 
         cmd_cap = [self.adb_path, "-s", self.device_serial,

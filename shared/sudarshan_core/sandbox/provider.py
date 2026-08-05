@@ -73,6 +73,8 @@ class SandboxProvider(ABC):
                 [adb] + list(args),
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=timeout,
             )
             output = (result.stdout or "") + (result.stderr or "")

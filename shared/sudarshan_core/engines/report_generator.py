@@ -866,28 +866,75 @@ def _build_dynamic(r: Dict, evidence_json: Optional[Dict], idx: _FindingIndex) -
     return html
 
 
-def _build_visual_gallery(apk_dir: Optional[Path], idx: _FindingIndex) -> str:
+def _load_screenshot_entries(
+    apk_dir: Optional[Path],
+    report: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Resolve screenshot manifest from every persisted location.
+
+    Historical bug: manifests were flushed to screenshots.json at artifact root
+    while the report generator only read screenshots/manifest.json — gallery
+    sections appeared empty despite PNGs on disk.
+    """
+    if report is None:
+        report = {}
+    entries: List[Dict[str, Any]] = []
+    candidates: List[Path] = []
+    if apk_dir:
+        candidates.extend([
+            apk_dir / "screenshots" / "manifest.json",
+            apk_dir / "manifest.json",
+            apk_dir / "screenshots.json",
+        ])
+    for manifest_path in candidates:
+        if not manifest_path.is_file():
+            continue
+        try:
+            data = json.loads(manifest_path.read_text(encoding="utf-8"))
+            shots = data.get("screenshots", [])
+            if shots:
+                entries = shots
+                break
+        except Exception as e:
+            logger.warning("[ReportGen] Failed to load %s: %s", manifest_path, e)
+
+    if entries:
+        return entries
+
+    # Fallback: paths listed on the analysis result (API / DB rehydration).
+    dyn = _get(report, "dynamic_analysis") or {}
+    paths = (
+        _get(dyn, "screenshots")
+        or _get(report, "screenshots")
+        or []
+    )
+    for i, rel in enumerate(paths):
+        if not rel:
+            continue
+        entries.append({
+            "screenshot_id": f"SCR-{i + 1:03d}",
+            "filename": rel,
+            "label": Path(str(rel)).stem,
+            "source": "result_fallback",
+        })
+    return entries
+
+
+def _build_visual_gallery(
+    apk_dir: Optional[Path],
+    idx: _FindingIndex,
+    report: Optional[Dict[str, Any]] = None,
+) -> str:
     """
     Renders the Visual UI & Dynamic Evidence Gallery section.
     Loads screenshots/manifest.json from apk_dir, reads screenshot PNG files,
     encodes them as Base64 data URIs, and renders responsive cards.
     """
-    if not apk_dir:
+    if not apk_dir and not report:
         return ""
 
-    manifest_path = apk_dir / "screenshots" / "manifest.json"
-    if not manifest_path.exists():
-        manifest_path = apk_dir / "manifest.json"
-    if not manifest_path.exists():
-        return ""
-
-    try:
-        data = json.loads(manifest_path.read_text(encoding="utf-8"))
-        screenshots = data.get("screenshots", [])
-    except Exception as e:
-        logger.warning("[ReportGen] Failed to load screenshot manifest: %s", e)
-        return ""
-
+    screenshots = _load_screenshot_entries(apk_dir, report)
     if not screenshots:
         return ""
 
@@ -904,15 +951,21 @@ def _build_visual_gallery(apk_dir: Optional[Path], idx: _FindingIndex) -> str:
         trigger_evid = _esc(scr.get("trigger_event", ""))
         category = _esc(scr.get("category", "ui"))
         source = _esc(scr.get("source", "manual"))
+        reason = _esc(scr.get("reason", ""))
+        activity = _esc(scr.get("activity", ""))
         rel_fn = scr.get("filename", "")
 
-        # Resolve file path
-        img_path = apk_dir / rel_fn
-        if not img_path.exists():
-            img_path = apk_dir / "screenshots" / Path(rel_fn).name
+        img_path = Path(rel_fn) if rel_fn else Path()
+        if apk_dir:
+            if rel_fn:
+                img_path = apk_dir / rel_fn
+                if not img_path.exists():
+                    img_path = apk_dir / "screenshots" / Path(rel_fn).name
+            else:
+                img_path = apk_dir / "screenshots" / "missing.png"
 
         b64_uri = ""
-        if img_path.exists():
+        if apk_dir and img_path.exists():
             try:
                 img_bytes = img_path.read_bytes()
                 b64_str = base64.b64encode(img_bytes).decode("utf-8")
@@ -923,6 +976,12 @@ def _build_visual_gallery(apk_dir: Optional[Path], idx: _FindingIndex) -> str:
         fid = idx.next("SCR", f"Screenshot {scr_id}: {label}")
         evid_badge = f'<span class="perm-tag perm-danger">Ref: [{trigger_evid}]</span>' if trigger_evid else ""
         src_badge = f'<span class="perm-tag perm-normal">{source}</span>'
+        reason_line = (
+            f'<span>Reason: {reason}</span>' if reason else ""
+        )
+        act_line = (
+            f'<span>Activity: {activity}</span>' if activity else ""
+        )
 
         img_html = (
             f'<img src="{b64_uri}" alt="{scr_id}" class="scr-img" loading="lazy" />'
@@ -938,6 +997,7 @@ def _build_visual_gallery(apk_dir: Optional[Path], idx: _FindingIndex) -> str:
             f'<div class="scr-body">{img_html}</div>'
             f'<div class="scr-meta">'
             f'<span>Cat: {category}</span>'
+            f'{reason_line}{act_line}'
             f'<div>{src_badge}{evid_badge}</div>'
             f'</div>'
             f'</div>'
@@ -1172,7 +1232,7 @@ class ReportGenerator:
             + _build_static(self.r, idx)
             + _build_threat_intel(self.r, idx)
             + _build_dynamic(self.r, evidence_json, idx)
-            + _build_visual_gallery(self.apk_dir, idx)
+            + _build_visual_gallery(self.apk_dir, idx, self.r)
             + _build_exploration_coverage(self.r, self.apk_dir, idx)
             + _build_recommendations(self.r)
             + _build_ledger(idx)

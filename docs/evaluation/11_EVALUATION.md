@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document outlines the evaluation methodology, verification protocols, test suite architecture, and audit scorecards for the **SUDARSHAN** platform. It documents how the system asserts mathematical determinism, prompt injection resilience, pipeline robustness, and accuracy across **421 automated unit, integration, and replay tests**.
+This document outlines the evaluation methodology, verification protocols, test suite architecture, and audit scorecards for the **SUDARSHAN** platform. It documents how the system asserts mathematical determinism, prompt injection resilience, pipeline robustness, and accuracy across **457 automated unit, integration, and replay tests**.
 
 ---
 
@@ -18,7 +18,7 @@ The evaluation framework is responsible for:
 
 ## High-Level Overview
 
-Sudarshan enforces a rigorous quality gate prior to deployment. The automated test suite consists of **421 passing pytest test cases** located in [`tests/`](file:///d:/Projects/Sudarshan%20BOI/tests/) and [`backend/tests/`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/).
+Sudarshan enforces a rigorous quality gate prior to deployment. The automated test suite consists of **457 passing pytest test cases** located in [`tests/`](file:///d:/Projects/Sudarshan%20BOI/tests/) and [`backend/tests/`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/).
 
 ```text
 [ Test Suite Execution (pytest) ]

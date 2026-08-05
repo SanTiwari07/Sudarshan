@@ -11,7 +11,7 @@ This document specifies the validation protocols, ground-truth verification rule
 This document is responsible for:
 1. **Pipeline Ground-Truth Mapping**: Establishing the validation standards used to classify analysis findings into verified True Positives (TP), True Negatives (TN), False Positives (FP), and False Negatives (FN).
 2. **Determinism Baseline Invariant**: Enforcing the strict mathematical assertion that identical input APK binaries produce 100% identical $STEI$, $BFCI$, $FRS$, and severity band outputs.
-3. **Validation Test Suite Protocol**: Documenting the execution of the **421 passing test cases** in `tests/` and `backend/tests/`.
+3. **Validation Test Suite Protocol**: Documenting the execution of the **457 test cases** in `tests/` and `backend/tests/`.
 4. **Audit Rule Governance**: Enforcing the rule that no simulated or mock scores are permitted in production reports.
 
 ---
@@ -64,7 +64,7 @@ Verification assertions enforced by [`test_determinism_replay.py`](file:///d:/Pr
 3. `calculated_band == baseline.expected_band`
 4. `stei_axes.ct == baseline.expected_ct`
 
-To run the full suite (**421 tests passing**):
+To run the full suite (**457 tests collected & verified**):
 ```powershell
 $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests
 ```

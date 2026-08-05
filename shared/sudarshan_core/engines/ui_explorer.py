@@ -295,7 +295,7 @@ Return valid JSON matching this schema:
     async def _find_ocr_action(self, screen_hash: str) -> Optional[Dict[str, Any]]:
         """Fallback to OCR/Vision when uiautomator fails or AI is blocked."""
         # 1. Take screenshot
-        remote_path = f"/sdcard/ui_exp_{screen_hash}.png"
+        remote_path = f"/data/local/tmp/ui_exp_{screen_hash}.png"
         local_path = f"ui_exp_{screen_hash}.png"
         await self._adb("shell", "screencap", "-p", remote_path)
         await self._adb("pull", remote_path, local_path)

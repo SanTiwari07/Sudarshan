@@ -39,10 +39,77 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("pipeline_verifier")
 
 
+def _run_live_prerequisites(device_serial: str, adb_path: str) -> list:
+    """Phase 2 emulator health checks — only when a device serial is available."""
+    from sudarshan_core.engines.frida_sandbox import _adb
+
+    checks = []
+
+    def _run(name: str, fn):
+        t0 = time.monotonic()
+        try:
+            ok, detail = fn()
+            ms = (time.monotonic() - t0) * 1000
+            checks.append((name, ok, f"{detail} ({ms:.0f}ms)"))
+        except Exception as exc:
+            ms = (time.monotonic() - t0) * 1000
+            checks.append((name, False, f"{type(exc).__name__}: {exc} ({ms:.0f}ms)"))
+
+    def _shell(cmd: str, timeout: int = 15):
+        ok, out = _adb("-s", device_serial, "shell", cmd, timeout=timeout)
+        return ok, (out or "").strip()
+
+    _run("Package manager (pm path)", lambda: (
+        _shell("pm list packages -f | head -n 1")[0],
+        "pm list packages responded",
+    ))
+    _run("SELinux mode", lambda: (
+        True,
+        _shell("getenforce")[1] or "unknown",
+    ))
+    _run("Root (whoami)", lambda: (
+        _shell("whoami")[1] == "root",
+        _shell("whoami")[1] or "not root",
+    ))
+    _run("Screen / keyguard", lambda: (
+        _shell("dumpsys power | grep mScreenOn")[0] or _shell("wm dismiss-keyguard")[0],
+        _shell("dumpsys power | grep mScreenOn")[1][:80] or "keyguard dismiss attempted",
+    ))
+    _run("uiautomator dump", lambda: (
+        _shell("uiautomator dump /data/local/tmp/sudarshan_ui.xml 2>&1", timeout=25)[0],
+        "dump to /data/local/tmp",
+    ))
+    _run("screencap", lambda: (
+        _shell("screencap -p /data/local/tmp/sudarshan_preflight.png", timeout=15)[0],
+        "screencap to /data/local/tmp",
+    ))
+    _run("logcat tail", lambda: (
+        _shell("logcat -d -t 5", timeout=15)[0],
+        "logcat readable",
+    ))
+
+    frida_ok = False
+    frida_detail = ""
+    try:
+        from sudarshan_core.sandbox import get_sandbox_provider
+
+        st = get_sandbox_provider().verify_frida(device_serial)
+        frida_ok = bool(st.available and st.running)
+        frida_detail = st.message or ("running" if frida_ok else "not running")
+    except Exception as exc:
+        frida_detail = str(exc)
+    checks.append(("Frida server on device", frida_ok, frida_detail))
+
+    return checks
+
+
 def run_pipeline_verification() -> bool:
     print("\n" + "=" * 70)
     print(" SUDARSHAN — AUTOMATED DYNAMIC PIPELINE SELF-TEST & DIAGNOSTICS")
     print("=" * 70 + "\n")
+
+    live_device_serial: str = ""
+    live_prereq_ok = False
 
     stages = [
         ("ADB Device Connected", False, ""),
@@ -59,6 +126,7 @@ def run_pipeline_verification() -> bool:
     ]
 
     all_passed = True
+    adb_path = None
 
     # --- Stage 1: ADB Device Connected ---
     try:
@@ -66,21 +134,39 @@ def run_pipeline_verification() -> bool:
         adb_path = _find_adb()
         emulators = get_connected_emulators() if adb_path else []
         if adb_path and emulators:
-            stages[0] = ("ADB Device Connected", True, f"Device: {emulators[0]} (via {adb_path})")
+            live_device_serial = emulators[0]
+            stages[0] = ("ADB Device Connected", True, f"Device: {live_device_serial} (via {adb_path})")
         else:
             stages[0] = ("ADB Device Connected", False, "No connected ADB devices/emulators found")
     except Exception as e:
         stages[0] = ("ADB Device Connected", False, str(e))
 
-    # --- Stage 2: Frida Server Running ---
+    # --- Stage 2: Frida on device (not merely host package import) ---
     try:
         import frida
-        from sudarshan_core.engines.frida_sandbox import get_sandbox_status
-        status = get_sandbox_status()
-        if status.get("ready") or status.get("frida_available"):
-            stages[1] = ("Frida Server Running", True, f"Frida v{frida.__version__} initialized")
+
+        if live_device_serial:
+            from sudarshan_core.sandbox import get_sandbox_provider
+
+            st = get_sandbox_provider().verify_frida(live_device_serial)
+            if st.available and st.running:
+                stages[1] = (
+                    "Frida Server Running",
+                    True,
+                    f"Device agent up; host Frida v{frida.__version__} — {st.message}",
+                )
+            else:
+                stages[1] = (
+                    "Frida Server Running",
+                    False,
+                    st.message or "frida-server not running on device",
+                )
         else:
-            stages[1] = ("Frida Server Running", False, status.get("connection_info", "Frida server not ready"))
+            stages[1] = (
+                "Frida Server Running",
+                False,
+                "Skipped — no ADB device (host frida package alone is not sufficient)",
+            )
     except Exception as e:
         stages[1] = ("Frida Server Running", False, str(e))
 
@@ -234,21 +320,49 @@ def run_pipeline_verification() -> bool:
     except Exception:
         pass
 
-    print(f"{'STAGE':<32} | {'STATUS':<8} | DETAILS")
+    live_stages_passed = stages[0][1] and stages[1][1]
+    offline_sim_passed = all(s[1] for s in stages[2:])
+
+    if live_device_serial:
+        print("\n--- LIVE SANDBOX PREREQUISITES (Phase 2) ---")
+        print(f"{'CHECK':<28} | {'STATUS':<8} | DETAILS")
+        print("-" * 70)
+        prereq_checks = _run_live_prerequisites(live_device_serial, adb_path or "adb")
+        live_prereq_ok = True
+        for name, passed, detail in prereq_checks:
+            if not passed:
+                live_prereq_ok = False
+            print(f"{name:<28} | {'[PASS]' if passed else '[FAIL]':<8} | {detail}")
+        print("-" * 70)
+    else:
+        live_prereq_ok = False
+
+    print(f"\n{'STAGE':<32} | {'STATUS':<8} | DETAILS")
     print("-" * 70)
     for stage_name, passed, detail in stages:
         status_str = "[PASS]" if passed else "[FAIL]"
-        if not passed and stage_name not in ("ADB Device Connected", "Frida Server Running"):
+        if not passed:
             all_passed = False
         print(f"{stage_name:<32} | {status_str:<8} | {detail}")
 
     print("-" * 70)
-    if all_passed:
-        print("OVERALL STATUS: ALL CORE PIPELINE STAGES PASSED\n")
-    else:
-        print("OVERALL STATUS: ONE OR MORE PIPELINE STAGES FAILED\n")
+    print(f"LIVE DAE PREREQUISITES (ADB+device Frida): {'PASS' if live_stages_passed else 'FAIL'}")
+    if live_device_serial:
+        print(f"LIVE EMULATOR HEALTH (Phase 2):            {'PASS' if live_prereq_ok else 'FAIL'}")
+    print(f"OFFLINE PIPELINE SIMULATION (bus/store/report): {'PASS' if offline_sim_passed else 'FAIL'}")
 
-    return all_passed
+    dae_stable = live_stages_passed and live_prereq_ok and offline_sim_passed
+    if dae_stable:
+        print("\nOVERALL: LIVE DYNAMIC ANALYSIS CAN BE ATTEMPTED; OFFLINE STAGES OK\n")
+    elif offline_sim_passed and not live_stages_passed:
+        print(
+            "\nOVERALL: OFFLINE STAGES OK — LIVE DAE NOT VERIFIED "
+            "(start emulator + frida-server, then re-run)\n"
+        )
+    else:
+        print("\nOVERALL: ONE OR MORE STAGES FAILED\n")
+
+    return dae_stable
 
 
 if __name__ == "__main__":

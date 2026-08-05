@@ -86,6 +86,7 @@ class DynamicAnalysisSession:
             event_bus=self.event_bus,
             evidence_store=self.evidence_store,
             adb_path=adb_path,
+            package_name=package_name,
         )
         self.behavior_graph = BehaviorGraphBuilder(event_bus=self.event_bus)
         self.threat_listener = ThreatCorrelatorListener(

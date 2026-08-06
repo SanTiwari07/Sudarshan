@@ -34,7 +34,7 @@ Do not cite **[CLAIMED]** items as fact. Several are recorded here precisely bec
 > AI may **not** decide malware verdicts.
 > Only deterministic evidence contributes to risk scoring.
 
-**[VERIFIED]** This invariant currently holds at the scoring layer. Identical recorded evidence produces a byte-identical verdict, and LLM-authored fields merged into the dynamic payload do not move the score. Verified across **457 / 457 tests collected & verified** (`pytest tests/ backend/tests`).
+**[VERIFIED]** This invariant currently holds at the scoring layer. Identical recorded evidence produces a byte-identical verdict, and LLM-authored fields merged into the dynamic payload do not move the score. Verified across **486 / 486 tests collected** (`pytest tests/ backend/tests --collect-only`).
 
 ---
 
@@ -49,11 +49,11 @@ Do not cite **[CLAIMED]** items as fact. Several are recorded here precisely bec
 | Persistence | SQLite (`sudarshan.db`), aiosqlite, SQLAlchemy, 24h IOC reputation cache |
 | Auth | JWT Bearer, passlib/bcrypt |
 | Static analysis | Androguard, MobSF (Port 8008), `apk_repair.py` AXML recovery, APKTool 2.10.0, JADX 1.5.1, YARA Scanner |
-| Dynamic analysis | Frida 17.16.4 + frida-tools, Java bridge sub-probes, ADB (`host.docker.internal:5555`), **SandboxProvider** (Genymotion default / Android Studio optional) |
+| Dynamic analysis | Frida 17.16.4 + frida-tools, Java bridge sub-probes, ADB via **SandboxProvider** (`ADB_HOST` / `DEVICE_SERIAL`; Genymotion default, Android Studio optional) |
 | Network Proxy | mitmproxy sidecar (`127.0.0.1:8080:8080`), HAR ingest |
 | Signatures | YARA Python |
 | Threat intel | VirusTotal, AlienVault OTX, AbuseIPDB (24h TTL SQLite cached correlation) |
-| LLM | Google Gemini via `google-genai` (`gemini-2.5-flash` / `gemini-3.6-flash`), Ollama |
+| LLM | Google Gemini via `google-genai` (default `gemini-2.5-flash`, overridable via `GEMINI_MODEL`) |
 | Orchestration | Docker Compose (frontend, backend, analysis-engine, mitmproxy, mobsf) |
 
 ---
@@ -82,10 +82,12 @@ Sudarshan BOI/
 │       │   ├── agentic_explorer.py Agentic UI exploration orchestrator
 │       │   ├── frida_hooks/        banking_trojan.js, java_probe.js, bisect_sec.js
 │       │   └── agentic/            planner.py, perception.py, goal_tracker.py, sanitizer.py, etc.
+│       ├── validation/             Corpus runner, stress/recovery, engineering reports
 │       └── sandbox/                Emulator abstraction (Genymotion / Android Studio / future)
 │           ├── provider.py         Abstract SandboxProvider
 │           ├── genymotion.py       Default Genymotion Desktop provider
 │           └── android_studio.py   Optional Android Studio AVD provider
+├── validate_dynamic_pipeline.py    Dynamic APK corpus validation CLI (live sandbox)
 ├── backend/
 │   ├── Dockerfile                  Python 3.12 gateway container definition
 │   ├── requirements.txt            Gateway dependencies
@@ -97,7 +99,7 @@ Sudarshan BOI/
 │   │   ├── ai/                     gemini_rag.py (RAG indexer), gemini_client.py
 │   │   └── workers/                analysis_queue.py (async worker pool)
 │   └── tests/                      Automated unit & regression tests
-├── tests/                          Integration test suite
+├── tests/                          Root pytest (`tests/unit`, `tests/integration`) + `tests/apks/` corpus
 ├── analysis-engine/
 │   ├── Dockerfile                  Ubuntu 24.04 + Java 17 + Python 3.12 microservice
 │   ├── entrypoint.sh               Uvicorn launcher with health check
@@ -149,27 +151,27 @@ BFCI = 0.35·A + 0.25·S + 0.20·O + 0.10·B + 0.05·N + 0.05·P
 ### 4.3 FRS — Fraud Risk Score
 
 ```text
-dynamic available:  FRS = clamp(0.40·STEI + 0.30·BFCI + 0.15·Correlation + 0.15·BankingImpact, 0, 100)
-static only:        FRS = clamp(0.50·STEI + 0.25·Correlation + 0.25·BankingImpact, 0, 100)
+dynamic conclusive:  nominal weights 0.25·STEI + 0.35·Dynamic + 0.20·Correlation + 0.20·BankingImpact
+                     → renormalize over axes with data → × ai_confidence_multiplier → final_risk_score
+static / inconclusive dynamic: dynamic axis excluded; correlation excluded when intel unavailable
 ```
 
 `ai_confidence` is **rule-derived, not LLM-derived**: 1.0 when family is Unknown, 1.2 on a deterministic family-classifier match, 1.15 when the family came from threat correlation. It is hard-clamped to [0.5, 1.5] as a last line of defence.
 
 ### 4.4 Bands and Confidence
 
-| Final score | Band |
+| Final score (after multiplier) | Band (`risk_engine.py`) |
 |---|---|
-| < 20.0 | SAFE |
-| 20.0 – 39.9 | LOW |
-| 40.0 – 59.9 | MEDIUM |
-| 60.0 – 79.9 | HIGH |
-| ≥ 80.0 | CRITICAL |
+| ≤ 30.0 | Safe |
+| ≤ 60.0 | Suspicious |
+| ≤ 89.0 | High Risk |
+| ≥ 90.0 | Critical |
 
 ---
 
 ## 5. Verification & Test Suite
 
-**[VERIFIED]** **457 / 457 tests collected & verified**.
+**[VERIFIED]** **486 / 486 tests collected & verified** (`pytest tests/ backend/tests --collect-only`, 2026-08-06).
 
 Execution command:
 ```powershell

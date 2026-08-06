@@ -37,6 +37,7 @@ from typing import Any, Dict, Optional
 
 from sudarshan_core.engines.agentic.device_properties import get_screen_size
 from sudarshan_core.engines.agentic.tool_registry import get_tool
+from sudarshan_core.sandbox import get_sandbox_provider
 
 logger = logging.getLogger(__name__)
 
@@ -259,21 +260,13 @@ class ToolExecutor:
     # ── ADB Helper ─────────────────────────────────────────────────────────────
 
     async def _adb(self, *args: str) -> tuple[bool, str]:
-        """Run an ADB command asynchronously. Returns (success, output)."""
-        cmd = [self.adb_path, "-s", self.device_serial] + list(args)
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, stderr = await proc.communicate()
-            out = stdout.decode("utf-8", errors="ignore").strip()
-            err = stderr.decode("utf-8", errors="ignore").strip()
-            success = proc.returncode == 0
-            return success, (out + ("\n" + err if err else "")).strip()
-        except Exception as exc:
-            return False, str(exc)
+        """Run an ADB command asynchronously via SandboxProvider (policy-enforced)."""
+        provider = get_sandbox_provider()
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            lambda: provider.adb("-s", self.device_serial, *args, timeout=30),
+        )
 
     # ── Device settling ────────────────────────────────────────────────────────
 

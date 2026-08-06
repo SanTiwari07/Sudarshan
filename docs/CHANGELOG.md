@@ -2,12 +2,28 @@
 
 All notable changes to this project are documented in this file.
 
+## 2026-08-06
+
+### Added
+- **Sandbox containment module**: `shared/sudarshan_core/security/` (`sandbox_containment.py`, `adb_gateway.py`, `internal_auth.py`) with startup audits on backend and analysis-engine.
+- **Production compose overlay**: `docker-compose.hardened.yml` and `deploy/security/seccomp-analysis-engine.json`.
+- **Containment regression tests**: `tests/unit/test_sandbox_containment.py`, `test_adb_policy_bypass.py`, `test_blocker_fixes.py`; `backend/tests/test_gateway_dynamic_blocker.py`.
+
+### Changed
+- **Gateway analysis path**: `upload.py` returns HTTP 503 when analysis-engine is unreachable unless `SUDARSHAN_ALLOW_GATEWAY_DYNAMIC=true`.
+- **Compose exposure**: MobSF and mitmproxy published on `127.0.0.1` only in base `docker-compose.yml`.
+- **Automated test suite**: **486** tests collected (`pytest tests/ backend/tests --collect-only`).
+
+### Documentation
+- Synchronized `/docs` with containment architecture, corrected FRS formula and risk bands to match `risk_engine.py`, updated test metrics to **486**, documented hardened deployment in `HOW_TO_RUN.md` and `ARCHITECTURE.md` §12.
+
 ## [2.5.0-STABLE] — 2026-08-05
 
 ### Documentation
 - **Master Documentation Audit & Zero-Drift Synchronization**: Comprehensive synchronization across all 24 documentation files in `/docs`, root `README.md`, `CHANGELOG.md`, and `DOCUMENTATION_AUDIT_REPORT.md` against active codebase implementation (`SanTiwari07/Sudarshan`).
 - **Verified Test Metrics**: Standardized test execution metrics across documentation to **457 total tests collected & verified** across `tests/` and `backend/tests/`.
 - **System Architecture Alignment**: Verified microservices topology (`frontend:5173`, `backend:8000`, `analysis-engine:8001`, `mobsf:8008`, `mitmproxy:8080`), 24h SQLite IOC reputation cache, Frida 17 Java bridge sub-probes, and runtime telemetry endpoints.
+- **Second-pass drift remediation (same date)**: Corrected gateway paths (`POST /api/v1/analyze`, `/analyze/async`, `GET /intelligence/{sha256}`), dashboard routes (`/fraud-card`, `/threat-intel`), removed Ollama/Gemini-3.6 references not present in code, documented `validate_dynamic_pipeline.py` / `shared/sudarshan_core/validation/`, and recorded Technical View screenshot URL gap.
 
 ## [2.5.0-STABLE] — 2026-08-03
 

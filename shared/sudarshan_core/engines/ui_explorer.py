@@ -16,6 +16,7 @@ from PIL import Image
 import io
 
 from sudarshan_core.engines.event_bus import RuntimeEventBus
+from sudarshan_core.sandbox import get_sandbox_provider
 
 logger = logging.getLogger(__name__)
 
@@ -114,12 +115,12 @@ class UIExplorer:
         return f"{elapsed // 60:02d}:{elapsed % 60:02d}"
 
     async def _adb(self, *args) -> str:
-        cmd = [self.adb_path, "-s", self.device_serial] + list(args)
-        process = await asyncio.create_subprocess_exec(
-            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        provider = get_sandbox_provider()
+        ok, out = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: provider.adb("-s", self.device_serial, *args, timeout=30),
         )
-        stdout, stderr = await process.communicate()
-        return stdout.decode('utf-8', errors='ignore')
+        return out if ok else ""
 
     async def _dump_ui(self) -> Optional[str]:
         # Some Android versions do not support dumping to /dev/stdout

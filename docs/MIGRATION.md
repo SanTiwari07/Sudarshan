@@ -49,9 +49,11 @@ shared/sudarshan_core/sandbox/
 
 ```bash
 SANDBOX_PROVIDER=genymotion   # or android_studio | corellium | waydroid | physical
-ADB_HOST=host.docker.internal
+# Genymotion: set ADB_HOST to the VM IP from `adb devices` (e.g. 192.168.56.101), not host.docker.internal.
+# Android Studio AVD from Docker: ADB_HOST=host.docker.internal is common.
+ADB_HOST=
 ADB_PORT=5555
-DEVICE_SERIAL=                # e.g. 192.168.56.101:5555
+DEVICE_SERIAL=                # e.g. 192.168.56.101:5555 — recommended when multiple devices are online
 FRIDA_PORT=27055
 AUTO_CONNECT=true
 ROOT_REQUIRED=true
@@ -102,19 +104,14 @@ MobSF remains static-only (`androguard` / `androguard+mobsf`). No MobSF dynamic 
    - Java: OpenJDK 17
    - Python: 3.12 with PyPI verified `frida==17.16.4` and `frida-tools`
    - Shared Library: [`shared/sudarshan_core/`](../shared/sudarshan_core/) mounted at `/opt/sudarshan-core`
-   - Network ADB: Auto-connects to host sandbox via `host.docker.internal:5555` (`AUTO_CONNECT=true`)
+   - Network ADB: `SandboxProvider` connects using `ADB_HOST`, `ADB_PORT`, and optional `DEVICE_SERIAL` from `.env` (`AUTO_CONNECT=true`). Genymotion uses the VM endpoint visible to the host; Android Studio AVDs often use `host.docker.internal:5555` from inside containers.
    - Resource Constraints: Hard limits (`mem_limit: 4g`, `cpus: 2.0`, `no-new-privileges:true`).
+   - REST API: `GET /health`, `GET /status`, `POST /api/v1/analyze`, `POST /api/v1/analyze/async`, `GET /api/v1/status/{job_id}` (optional `ANALYSIS_ENGINE_INTERNAL_TOKEN` in production).
 
 2. **Backend Orchestrator**:
    - Contains **zero local binary dependencies** (no local `apktool`, `jadx`, `java`, `frida`, or `adb`).
-   - Delegates analysis jobs to `http://analysis-engine:8001/api/v1/analyze` over internal Docker networking.
-
-3. **Analysis Engine REST API Endpoints**:
-   - `GET /health`: Healthcheck endpoint (`{"status": "ok"}`).
-   - `GET /status`: Detailed toolchain availability and ADB / sandbox connectivity status.
-   - `POST /api/v1/analyze`: Synchronous analysis endpoint.
-   - `POST /api/v1/analyze/async`: Asynchronous job submission returning `job_id`.
-   - `GET /api/v1/status/{job_id}`: Poll status of an async analysis job.
+   - Delegates analysis jobs to `http://analysis-engine:8001/api/v1/analyze` over internal Docker networking with optional `ANALYSIS_ENGINE_INTERNAL_TOKEN` (`shared/sudarshan_core/security/internal_auth.py`).
+   - Does **not** run dynamic analysis locally when the engine is down unless `SUDARSHAN_ALLOW_GATEWAY_DYNAMIC=true` (dev only).
 
 ---
 

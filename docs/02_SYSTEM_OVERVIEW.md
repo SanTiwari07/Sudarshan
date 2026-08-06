@@ -50,7 +50,7 @@ Sudarshan is designed as a modular, decoupled platform operating across 5 contai
 |                                v                                                  |
 |                    +-----------------------+                                      |
 |                    | Gemini 2.5 RAG Index  |                                      |
-|                    | / Ollama Local LLM    |                                      |
+|                    | (google-genai)        |                                      |
 |                    +-----------+-----------+                                      |
 |                                |                                                  |
 |                                v                                                  |
@@ -94,7 +94,7 @@ graph TB
         TC[Threat Correlator<br/>shared/sudarshan_core/services/threat_correlator.py]
         RE[Deterministic Risk Engine<br/>shared/sudarshan_core/engines/risk_engine.py]
         RAG[Gemini RAG Engine<br/>backend/app/ai/gemini_rag.py]
-        LLM[Gemini 2.5 Flash / Ollama]
+        LLM[Gemini 2.5 Flash API]
     end
 
     subgraph Tier 5: Export & Reporting
@@ -140,10 +140,11 @@ The architecture breaks down into discrete operational modules:
 | **Database Access** | [`backend/app/db/database.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/db/database.py) | Asynchronous SQLite database management via `aiosqlite` and `SQLAlchemy`. Persists cases, users, audit logs, and IOCs. |
 | **Authentication** | [`backend/app/auth/auth.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/auth/auth.py) | Seeded admin account generation, password hashing using `bcrypt`, JWT token encoding/decoding using `python-jose`. |
 | **Static Engine** | [`shared/sudarshan_core/services/mobsf_client.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/services/mobsf_client.py)<br/>[`shared/sudarshan_core/analyzers/apk_analyzer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/analyzers/apk_analyzer.py) | MobSF API client on Port 8008 and native APK analyzer fallback. Extracts permissions, components, hardcoded URLs, and DEX flags. |
-| **Dynamic Engine** | [`shared/sudarshan_core/engines/frida_sandbox.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/frida_sandbox.py)<br/>[`shared/sudarshan_core/engines/agentic_explorer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/agentic_explorer.py) | ADB controller over TCP (`host.docker.internal:5555`), Frida 17 script runner (`banking_trojan.bundle.js`), 15-stage fraud goal DAG explorer. |
+| **Dynamic Engine** | [`shared/sudarshan_core/engines/frida_sandbox.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/frida_sandbox.py)<br/>[`shared/sudarshan_core/sandbox/provider.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/sandbox/provider.py) | `SandboxProvider` + policy-enforced ADB (`adb_gateway.run_adb`). Genymotion: VM IP from `adb devices` (`ADB_HOST`). Android Studio AVD from Docker often uses `host.docker.internal:5555`. |
+| **Sandbox containment** | [`shared/sudarshan_core/security/sandbox_containment.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/security/sandbox_containment.py) | ADB/Frida connectivity audit, gateway dynamic-analysis gate, production fail-closed checks. |
 | **Risk Engine** | [`shared/sudarshan_core/engines/risk_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/risk_engine.py) | Computes 5-axis $STEI$, $BFCI$, $FRS$, severity band, and generates the Threat Scenario Table. |
 | **Threat Correlator** | [`shared/sudarshan_core/services/threat_correlator.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/services/threat_correlator.py)<br/>[`shared/sudarshan_core/engines/classification_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/classification_engine.py) | Queries VirusTotal, AlienVault OTX, and AbuseIPDB. Rule-based family classifier for *Drinik*, *Xenomorph*, *Cerberus*, *Anubis*, etc. |
-| **RAG Intelligence** | [`backend/app/ai/gemini_rag.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/ai/gemini_rag.py)<br/>[`backend/app/ai/gemini_client.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/ai/gemini_client.py) | In-memory RAG evidence index builder per SHA256. Gemini 2.5 Flash API client and local Ollama client. |
+| **RAG Intelligence** | [`backend/app/ai/gemini_rag.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/ai/gemini_rag.py)<br/>[`backend/app/ai/gemini_client.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/ai/gemini_client.py) | In-memory RAG evidence index builder per SHA256. Gemini 2.5 Flash API client (`google-genai`, model from `GEMINI_MODEL`). |
 | **Reporting & Export**| [`backend/app/routes/report.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/routes/report.py)<br/>[`shared/sudarshan_core/engines/report_generator.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/report_generator.py) | Jinja2 HTML report generator, STIX 2.1 JSON exporter (`stix2` library), CSV IOC exporter. |
 | **Frontend Application**| [`frontend/src/App.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/App.tsx)<br/>[`frontend/src/pages/*`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/pages/) | React 18 SPA with Vite 5, Tailwind CSS, Lucide icons, React Router v6. |
 
@@ -166,7 +167,7 @@ sequenceDiagram
     participant AI as Gemini RAG Engine
     participant DB as SQLite DB
 
-    User->>API: POST /api/v1/upload (Upload APK)
+    User->>API: POST /api/v1/analyze (Upload APK)
     API->>Q: Enqueue Job (SHA256, Temp File Path)
     API-->>User: HTTP 202 Accepted (job_id)
 
@@ -206,7 +207,7 @@ System overview documents the main deterministic risk formula executed by [`risk
                         +----------------------------------+
                                          |
      +-------------------+---------------+-------------------+-------------------+
-     | (Weight 0.40)     | (Weight 0.30)                     | (Weight 0.15)     | (Weight 0.15)
+     | (Nominal 0.25)    | (Nominal 0.35)                    | (Nominal 0.20)    | (Nominal 0.20)
      v                   v                                   v                   v
 +----------+      +--------------+                   +---------------+   +----------------+
 |  STEI    |      | Dynamic BFCI |                   |  Correlation  |   | Banking Impact |
@@ -217,10 +218,9 @@ System overview documents the main deterministic risk formula executed by [`risk
   Formula             Frida Formula                       AbuseIPDB Ratio    Family Severity
 ```
 
-1. **Full FRS Score**:
-   $$FRS = \text{clamp}(0.40 \cdot STEI + 0.30 \cdot Dynamic + 0.15 \cdot Correlation + 0.15 \cdot BankingImpact, 0.0, 100.0)$$
-2. **Static Fallback Score**:
-   $$FRS = \text{clamp}(0.50 \cdot STEI + 0.25 \cdot Correlation + 0.25 \cdot BankingImpact, 0.0, 100.0)$$
+1. **FRS score** ([`risk_engine.py`](../shared/sudarshan_core/engines/risk_engine.py)): Nominal weights $0.25\,STEI + 0.35\,Dynamic + 0.20\,Correlation + 0.20\,BankingImpact$, renormalized over axes with data; multiplied by rule-derived `ai_confidence_multiplier` (clamped $[0.5, 1.5]$).
+2. **Axis exclusion**: Unavailable threat intel or inconclusive dynamic runs drop those axes (they are not scored as zero).
+3. **Risk bands**: `Safe` (≤30), `Suspicious` (≤60), `High Risk` (≤89), `Critical` (≥90).
 
 ---
 
@@ -232,6 +232,7 @@ System overview documents the main deterministic risk formula executed by [`risk
 | **SQLite Case Store** | **Implemented** | Asynchronous persistent storage implemented in `backend/app/db/database.py`. |
 | **Async Queue Pool** | **Implemented** | In-memory asyncio queue worker pool running in background tasks. |
 | **Static Analysis Engine** | **Implemented** | MobSF API client with native `apk_analyzer.py` fallback active in production pipeline. |
-| **Dynamic Frida Engine** | **Implemented** | Frida sandbox attaching via SELinux preflight (`adb root` + `setenforce 0`), Java bridge sub-probes, and ART deoptimization (`Java.deoptimizeEverything()`). Verified via **421 / 421 passing unit & integration tests**. |
+| **Dynamic Frida Engine** | **Implemented** | Frida sandbox via `SandboxProvider`, SELinux preflight, containment policy (`sandbox_containment.py`). **486 / 486** collected tests (`pytest tests/ backend/tests`). |
+| **Sandbox containment & gateway policy** | **Implemented** | Centralized `adb_gateway`, engine internal token, gateway dynamic path disabled by default (`upload.py`). Hardened compose overlay available. |
 | **Deterministic Risk Engine** | **Implemented** | 5-Axis STEI, BFCI, and FRS formulas implemented and verified by unit tests. |
 | **AI RAG Investigation Assistant**| **Implemented** | Gemini 2.5 Flash RAG graph active with streaming SSE response support. |

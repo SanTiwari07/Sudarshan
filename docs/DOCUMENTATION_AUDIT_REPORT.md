@@ -1,82 +1,92 @@
 # Sudarshan Platform Master Documentation Audit Report
 
 ```yaml
-Audit Date:          2026-08-05
-Platform Version:    v2.5.0-STABLE (CONTAINERIZED MICROSERVICES, IOC CACHE & RUNTIME TELEMETRY)
+Audit Date:          2026-08-06
+Platform Version:    v2.5.0-STABLE (CONTAINERIZED MICROSERVICES, SANDBOX CONTAINMENT P0)
 Target Repository:   SanTiwari07/Sudarshan (d:/Projects/Sudarshan BOI)
 Test Suite Command:  $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests
-Audit Scope:         Full Repository, All Engines, Microservices, REST APIs, Telemetry, Docker Compose, Documentation Portal
+Audit Scope:         Full Repository, Security Containment, Engines, Microservices, REST APIs, Docker Compose, Documentation Portal
 ```
 
 ---
 
 ## Executive Summary
 
-A comprehensive, zero-drift documentation audit was performed across the entire Sudarshan platform codebase on **2026-08-05**. All 24 documentation files in `/docs`, as well as top-level [`README.md`](file:///d:/Projects/Sudarshan%20BOI/README.md) and [`CHANGELOG.md`](file:///d:/Projects/Sudarshan%20BOI/CHANGELOG.md), have been ground-truth verified against active implementation code (`SanTiwari07/Sudarshan`).
+A full zero-drift documentation pass was executed on **2026-08-06** against the active codebase. Portal documents in `/docs` were compared to implementation files, with emphasis on the P0 sandbox containment work (`shared/sudarshan_core/security/`, `docker-compose.hardened.yml`, gateway dynamic-analysis gate in `upload.py`).
+
+**Empirical verification:** `pytest tests/ backend/tests --collect-only` reports **486 tests collected** (`.pytest_cache/v/cache/nodeids`, 2026-08-06).
 
 ---
 
-## Documentation Update Summary
+# Documentation Update Report
 
-### Architecture & Service Alignment Fixed
-- **Persistent 24h SQLite IOC Reputation Cache**: Documented `configure_ioc_cache`, `get_cached_ioc`, and `save_ioc_cache` in `backend/app/main.py` and `shared/sudarshan_core/services/threat_correlator.py` protecting VirusTotal, OTX, and AbuseIPDB free tier rate limits (max 4 req/min).
-- **Frida 17 Java-Bridge Sub-Probes & ART Deoptimization**: Documented `java_probe.js`, `bisect_sec.js`, and `bisect_temp.js` preflight probes (`shared/sudarshan_core/engines/frida_hooks/`) and unconditional `Java.deoptimizeEverything()` execution.
-- **Automated APK Repair Engine**: Documented AXML header recovery, zip alignment, and re-signing in `shared/sudarshan_core/engines/apk_repair.py`.
-- **Analysis Engine Microservice Entrypoint**: Documented `analysis-engine/entrypoint.sh` healthchecks and internal port binding (`SUDARSHAN_FRIDA_PORT=27055`).
-- **Vite File Watching Polling Configuration**: Documented `CHOKIDAR_USEPOLLING=true` and `CHOKIDAR_INTERVAL=300` in `docker-compose.yml` for Windows bind mount file watcher stability.
-- **Runtime Telemetry API Suite**: Documented `/api/runtime/*` endpoints (`backend/app/routes/runtime_api.py`) exposing live status, hook metrics, ring-buffered events, and evidence snapshots.
-- **Verified Test Metrics**: Updated test execution metrics to **457 total tests collected & verified** across `tests/` and `backend/tests/`.
-- **PowerShell Test Invocation**: Standardized test command:
-  ```powershell
-  $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests
-  ```
+## Files Updated
 
-### Files Verified and Updated
-- [`README.md`](file:///d:/Projects/Sudarshan%20BOI/README.md) — Updated root documentation with test metrics (421 tests), microservice badges, component architecture, and port mappings.
-- [`docs/README.md`](file:///d:/Projects/Sudarshan%20BOI/docs/README.md) — Updated master portal index, container network topology diagram, document matrix, and test commands.
-- [`docs/PROJECT_CONTEXT.md`](file:///d:/Projects/Sudarshan%20BOI/docs/PROJECT_CONTEXT.md) — Updated Tech Stack, repository tree with `shared/sudarshan_core`, `runtime_api.py`, `apk_repair.py`, and MobSF port 8008.
-- [`docs/ARCHITECTURE.md`](file:///d:/Projects/Sudarshan%20BOI/docs/ARCHITECTURE.md) — Updated master system architectural specification, container topology, directory structure, microservices layout, and `/api/runtime/*` specifications.
-- [`docs/01_INTRODUCTION.md`](file:///d:/Projects/Sudarshan%20BOI/docs/01_INTRODUCTION.md) — Updated problem statement overview, system architecture summary, and file paths.
-- [`docs/02_SYSTEM_OVERVIEW.md`](file:///d:/Projects/Sudarshan%20BOI/docs/02_SYSTEM_OVERVIEW.md) — Updated microservices topology diagrams, component table including `runtime_api.py`, and port references.
-- [`docs/MIGRATION.md`](file:///d:/Projects/Sudarshan%20BOI/docs/MIGRATION.md) — Updated `analysis-engine` microservice migration spec, REST endpoints, zero-copy shared volume, and test commands.
-- [`docs/DAE_CURRENT_STATE.md`](file:///d:/Projects/Sudarshan%20BOI/docs/DAE_CURRENT_STATE.md) — Aligned DAE resolution status, Java bridge sub-probes (`java_probe.js`), runtime telemetry endpoints, Frida 17 instrumentation, module file links, SELinux preflight details, and verification test commands.
-- [`docs/HOW_TO_RUN.md`](file:///d:/Projects/Sudarshan%20BOI/docs/HOW_TO_RUN.md) — Updated prerequisites table, environment variables (`CHOKIDAR_USEPOLLING`), port matrix, runtime verification script, and test execution instructions.
-- [`docs/VALIDATION.md`](file:///d:/Projects/Sudarshan%20BOI/docs/VALIDATION.md) — Updated test execution paths and determinism replay test specifications.
-- [`docs/CONTRIBUTING.md`](file:///d:/Projects/Sudarshan%20BOI/docs/CONTRIBUTING.md) — Updated Python requirements, `shared/sudarshan_core/` guidelines, and test execution workflow.
-- [`docs/CHANGELOG.md`](file:///d:/Projects/Sudarshan%20BOI/docs/CHANGELOG.md) & [`CHANGELOG.md`](file:///d:/Projects/Sudarshan%20BOI/CHANGELOG.md) — Appended `[2.5.0-STABLE] — 2026-08-03` documentation audit and feature release entry.
-- [`docs/architecture/*`](file:///d:/Projects/Sudarshan%20BOI/docs/architecture/) — Updated all 7 architecture deep-dive documents (`03` through `09`) with corrected module file paths, 24h IOC cache details, Java bridge sub-probes, and test module locations.
-- [`docs/dashboard/10_DASHBOARD.md`](file:///d:/Projects/Sudarshan%20BOI/docs/dashboard/10_DASHBOARD.md) — Updated frontend component map, `FraudCard.tsx` description, and version strings.
-- [`docs/evaluation/*`](file:///d:/Projects/Sudarshan%20BOI/docs/evaluation/) — Updated test module inventory (421 total tests), benchmark details, and case study walkthrough references.
-- [`docs/future/12_FUTURE_WORK.md`](file:///d:/Projects/Sudarshan%20BOI/docs/future/12_FUTURE_WORK.md) — Aligned roadmap initiatives to ensure implemented features are correctly documented as completed while preserving planned initiatives.
+- [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) — §12 security/containment; FRS weights; repo tree (`security/`, hardened compose); test metric **486**; Genymotion ADB wording.
+- [`docs/02_SYSTEM_OVERVIEW.md`](02_SYSTEM_OVERVIEW.md) — FRS renormalization; containment subsystem row; test metric **486**.
+- [`docs/01_INTRODUCTION.md`](01_INTRODUCTION.md) — FRS formulation and risk bands aligned to `risk_engine.py`.
+- [`docs/PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md) — FRS §4.3–4.4; test metric **486**.
+- [`docs/architecture/08_DETERMINISTIC_RISK_ENGINE.md`](architecture/08_DETERMINISTIC_RISK_ENGINE.md) — Full FRS section rewrite (axis exclusion, bands, visibility floor).
+- [`docs/architecture/04_DYNAMIC_ANALYSIS_ENGINE.md`](architecture/04_DYNAMIC_ANALYSIS_ENGINE.md) — §2c sandbox containment and ADB policy.
+- [`docs/DAE_CURRENT_STATE.md`](DAE_CURRENT_STATE.md) — Containment capabilities, remediation rows, limitations; test metric **486**.
+- [`docs/HOW_TO_RUN.md`](HOW_TO_RUN.md) — `.env.example`-aligned security vars; §5.1 hardened compose; admin password behavior.
+- [`docs/MIGRATION.md`](MIGRATION.md) — Internal token and gateway dynamic-analysis policy.
+- [`docs/README.md`](README.md) — Index entries for security runbooks; test metric **486**; containment test modules.
+- [`docs/CONTRIBUTING.md`](CONTRIBUTING.md), [`docs/VALIDATION.md`](VALIDATION.md), [`docs/evaluation/11_EVALUATION.md`](evaluation/11_EVALUATION.md) — Test metric **486**; containment test modules in 11.
+- [`docs/dashboard/10_DASHBOARD.md`](dashboard/10_DASHBOARD.md) — Risk band labels from API.
+- [`docs/CHANGELOG.md`](CHANGELOG.md) — **2026-08-06** release notes.
+- [`README.md`](../README.md) — FRS summary and test metric **486** (root entry point).
 
----
+## Files Created
 
-## Major Architecture & Technical Specifications
+- None.
 
-1. **5-Container Microservice Topology**:
-   - `frontend` (React 18 SPA on port 5173 with polling file watcher)
-   - `backend` (FastAPI orchestrator gateway on port 8000)
-   - `analysis-engine` (Ubuntu 24.04 microservice on port 8001)
-   - `mobsf` (Mobile Security Framework on port 8008)
-   - `mitmproxy` (Transparent HTTPS sidecar on port 8080)
+## Files Deleted
 
-2. **Runtime Telemetry Pipeline**:
-   - Live state machine tracking, Frida hook inventory/fire counts, events/sec processing metrics, and ring-buffered telemetry stream (max 500 events) via `/api/runtime/*`.
+- None.
 
-3. **100% Host Binary Elimination**:
-   - APKTool v2.10.0, JADX CLI v1.5.1, OpenJDK 17, Frida 17.16.4, Androguard, ADB, and analysis scripts execute entirely inside `sudarshan-analysis-engine`.
-   - Backend container contains zero local binary dependencies.
+## Sections Rewritten
 
-4. **Zero-Copy Shared Volume**:
-   - Shared Docker volume `uploads:/app/uploads` mounted in both `backend` and `analysis-engine` containers for instant file access without network file copying.
+- **FRS / risk bands** across `01_INTRODUCTION`, `02_SYSTEM_OVERVIEW`, `08_DETERMINISTIC_RISK_ENGINE`, `PROJECT_CONTEXT`, `ARCHITECTURE`, root `README.md` (removed obsolete 0.40/0.30 fixed-weight and legacy five-band table).
+- **Security & isolation** — `ARCHITECTURE.md` §12, `04_DYNAMIC_ANALYSIS_ENGINE.md` §2c, `HOW_TO_RUN.md` §5.1.
+- **DAE operational state** — containment remediation scorecard and known artifact-root limitation.
 
-5. **24h Persistent IOC Reputation Cache**:
-   - SQLite cache table `ioc_cache` in `sudarshan.db` configured during startup in `backend/app/main.py` preventing API rate limit exhaustion.
+## Architecture Changes
 
----
+- Documented **two-layer containment** (guest compromise assumption + control-plane ADB/Frida policy).
+- Documented **analysis-engine internal auth** and **production fail-closed** behavior.
+- Documented **gateway dynamic analysis disabled by default** (`SUDARSHAN_ALLOW_GATEWAY_DYNAMIC`).
+- Documented **hardened compose overlay** and loopback-only MobSF/mitmproxy in base compose.
 
-## Verification Metrics
+## New Features Documented
 
-- **Automated Test Suite**: Passed clean with **421 / 421 tests collected** (419 passed + 2 skipped).
-- **Documentation Link Integrity**: 100% cross-linked markdown files with `file://` scheme support.
-- **Codebase Consistency**: **ZERO Documentation Drift** achieved across all 24 portal documents.
+- `adb_gateway.run_adb` centralized choke point.
+- `validate_backend_production_config()` on gateway startup.
+- Analysis-engine `_InternalServiceAuthMiddleware`.
+- Security regression tests under `tests/unit/` and `backend/tests/test_gateway_dynamic_blocker.py`.
+
+## Documentation Drift Fixed
+
+| Drift | Resolution |
+| :--- | :--- |
+| FRS fixed 0.40/0.30/0.15/0.15 weights | Replaced with nominal 0.25/0.35/0.20/0.20 + renormalization per `risk_engine.py` |
+| Legacy CRITICAL at ≥80 / five-band LOW–CRITICAL table | Replaced with Safe / Suspicious / High Risk / Critical thresholds from code |
+| Test count **457** | Updated to **486** collected tests |
+| Genymotion ADB always `host.docker.internal` | Clarified VM IP / `ADB_HOST` vs AVD exception |
+| `ADMIN_PASSWORD=sudarshan_admin_2024` in HOW_TO_RUN | Removed; documented random bootstrap password |
+| DAE “screenshot gallery gap” | Removed; UI uses JWT blob fetch (already in `10_DASHBOARD.md`) |
+
+## Remaining TODOs
+
+- [`docs/evaluation/CASE_STUDIES.md`](evaluation/CASE_STUDIES.md) and [`docs/VALIDATION.md`](VALIDATION.md) ground-truth tables still reference legacy `CRITICAL` score ranges (≥85 / ≥80); re-baseline against current `risk_engine.py` bands when corpus scores are re-measured.
+- Per-session ephemeral artifact roots — partial mitigation only; see [`security/P0_RED_TEAM_PENETRATION_REPORT.md`](security/P0_RED_TEAM_PENETRATION_REPORT.md).
+
+## Warnings
+
+- Default **dev** `docker-compose.yml` bind-mounts source trees; not equivalent to hardened production posture.
+- Enabling `SUDARSHAN_ALLOW_GATEWAY_DYNAMIC=true` runs dynamic analysis in the gateway container and is unsafe for production.
+
+## Suggestions
+
+- Run `pytest tests/ backend/tests` on CI after each release and pin the collected count in `DOCUMENTATION_AUDIT_REPORT.md`.
+- Add a short cross-link from [`08_DETERMINISTIC_RISK_ENGINE.md`](architecture/08_DETERMINISTIC_RISK_ENGINE.md) to `backend/tests/test_risk_engine.py` for band threshold regression tests.

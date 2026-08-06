@@ -1,6 +1,7 @@
 {
   "available": false,
   "engine": "frida",
+  "dynamic_status": "INSTRUMENTATION_FAILED",
   "bfci": 0.0,
   "bfci_components": {},
   "bfci_weights": {
@@ -20,5 +21,125 @@
   "evidence": [],
   "hook_errors": [],
   "duration_seconds": 30,
-  "error": "Frida attach failed. Ensure frida-server is running on emulator."
+  "sandbox_connection": {
+    "ok": true,
+    "device": {
+      "serial": "192.168.56.101:5555",
+      "state": "device",
+      "provider": "genymotion",
+      "android_version": "11",
+      "api_level": "30",
+      "abi": "x86_64",
+      "model": "Phone",
+      "manufacturer": "Genymobile",
+      "ip": "192.168.56.101",
+      "rooted": true,
+      "frida_running": true,
+      "frida_version": "17.16.4",
+      "connection_time_ms": 2617.4920000003112,
+      "extra": {}
+    },
+    "frida": {
+      "available": true,
+      "running": true,
+      "binary_path": "",
+      "binary_name": "sudarshan_agent_srv",
+      "port": "27055",
+      "version": "",
+      "host_version": "17.16.4",
+      "compatible": true,
+      "restarted": false,
+      "message": "frida agent running (root           4519      1 11919096 142240 poll_schedule_timeout 7946cb13aa0a S sudarshan_agent_srv)"
+    },
+    "error_code": null,
+    "error_message": null,
+    "stages": [
+      {
+        "stage": "adb",
+        "ok": true,
+        "detail": "C:\\Users\\sansk\\AppData\\Local\\Android\\Sdk\\platform-tools\\adb.EXE"
+      },
+      {
+        "stage": "device_detect",
+        "ok": true,
+        "detail": "192.168.56.101:5555"
+      },
+      {
+        "stage": "online",
+        "ok": true,
+        "detail": "192.168.56.101:5555"
+      },
+      {
+        "stage": "props",
+        "ok": true,
+        "detail": "android=11 api=30 abi=x86_64"
+      },
+      {
+        "stage": "root",
+        "ok": true,
+        "detail": "whoami=root"
+      },
+      {
+        "stage": "selinux",
+        "ok": true,
+        "detail": "Permissive"
+      },
+      {
+        "stage": "frida",
+        "ok": true,
+        "detail": "frida agent running (root           4519      1 11919096 142240 poll_schedule_timeout 7946cb13aa0a S sudarshan_agent_srv)"
+      }
+    ],
+    "connection_time_ms": 2617.4920000003112
+  },
+  "sandbox_provider": "genymotion",
+  "provenance": {
+    "is_repaired_derivative": false,
+    "original_sha256": "b18af2a0e44d7634bbcdf93664d9c78a2695e050393fcfbb5e8b91f902d194a4",
+    "repaired_sha256": null,
+    "repair_tool": "apkInspector v1.2.8",
+    "repair_reason": null,
+    "modifications_performed": [],
+    "signature_used": "Original APK Signature",
+    "timestamp": "2026-08-06T03:26:39Z"
+  },
+  "error": "APK install failed: Failed to install APK after retries. Last error: Performing Streamed Install\nadb.EXE: failed to install D:\\Projects\\Sudarshan BOI\\backend\\test_sample.apk: \nException occurred while executing 'install':\njava.lang.IllegalStateException: Cannot access system provider: 'settings' before system providers are installed!\n\tat com.android.server.am.ActivityManagerService.getContentProviderImpl(ActivityManagerService.java:7259)\n\tat com.android.server.am.ActivityManagerService.getContentProvider(ActivityManagerService.java:7578)\n\tat android.app.ActivityThread.acquireProvider(ActivityThread.java:6816)\n\tat android.app.ContextImpl$ApplicationContentResolver.acquireProvide",
+  "dae_pipeline": {
+    "session_id": "",
+    "package_name": "com.android.insecurebankv2",
+    "current_stage": "FAILED",
+    "failure_reason": "APK install failed: Failed to install APK after retries. Last error: Performing Streamed Install\nadb.EXE: failed to install D:\\Projects\\Sudarshan BOI\\backend\\test_sample.apk: \nException occurred while executing 'install':\njava.lang.IllegalStateException: Cannot access system provider: 'settings' before system providers are installed!\n\tat com.android.server.am.ActivityManagerService.getContentProviderImpl(ActivityManagerService.java:7259)\n\tat com.android.server.am.ActivityManagerService.getContentProvider(ActivityManagerService.java:7578)\n\tat android.app.ActivityThread.acquireProvider(ActivityThread.java:6816)\n\tat android.app.ContextImpl$ApplicationContentResolver.acquireProvide",
+    "suggested_recovery": "",
+    "metrics": {
+      "screenshots_captured": 0,
+      "screenshots_skipped_duplicate": 0,
+      "events_captured": 0,
+      "hooks_installed": 0,
+      "crashes_recovered": 0,
+      "launch_retries": 0,
+      "explorer_actions": 0,
+      "current_activity": "",
+      "current_fragment": "",
+      "workflow_stage": "",
+      "coverage_percent": 0.0
+    },
+    "transitions": [
+      {
+        "from": "INITIALIZING",
+        "to": "INSTALLING",
+        "timestamp": 1785986799.7420282,
+        "reason": "adb install",
+        "detail": {}
+      },
+      {
+        "from": "INSTALLING",
+        "to": "FAILED",
+        "timestamp": 1785986801.9503489,
+        "reason": "APK install failed: Failed to install APK after retries. Last error: Performing Streamed Install\nadb.EXE: failed to install D:\\Projects\\Sudarshan BOI\\backend\\test_sample.apk: \nException occurred while executing 'install':\njava.lang.IllegalStateException: Cannot access system provider: 'settings' before system providers are installed!\n\tat com.android.server.am.ActivityManagerService.getContentProviderImpl(ActivityManagerService.java:7259)\n\tat com.android.server.am.ActivityManagerService.getContentProvider(ActivityManagerService.java:7578)\n\tat android.app.ActivityThread.acquireProvider(ActivityThread.java:6816)\n\tat android.app.ContextImpl$ApplicationContentResolver.acquireProvide",
+        "detail": {
+          "recovery": ""
+        }
+      }
+    ]
+  }
 }

@@ -147,6 +147,131 @@ def _extract_declared_permissions(manifest_xml: str, out_dir: str) -> List[str]:
     return found
 
 
+def _debug_keystore_path() -> str:
+    return "/tmp/sudarshan_debug.keystore"
+
+
+def _ensure_debug_keystore() -> bool:
+    keystore_path = _debug_keystore_path()
+    if os.path.exists(keystore_path):
+        return True
+    keytool_bin = shutil.which("keytool") or "/usr/bin/keytool"
+    if not os.path.exists(keytool_bin):
+        return False
+    res = subprocess.run(
+        [
+            keytool_bin, "-genkey", "-noprompt", "-alias", "androiddebugkey",
+            "-dname", "CN=Sudarshan, OU=SOC, O=BOI, L=Mumbai, S=MH, C=IN",
+            "-keystore", keystore_path, "-storepass", "android",
+            "-keypass", "android", "-keyalg", "RSA", "-keysize", "2048", "-validity", "10000",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    return res.returncode == 0 and os.path.exists(keystore_path)
+
+
+def _apksigner_sign(apk_path: str) -> bool:
+    apksigner_bin = shutil.which("apksigner") or "/usr/bin/apksigner"
+    if not os.path.exists(apksigner_bin) or not _ensure_debug_keystore():
+        return False
+    res = subprocess.run(
+        [
+            apksigner_bin, "sign", "--ks", _debug_keystore_path(), "--ks-pass", "pass:android",
+            "--ks-key-alias", "androiddebugkey", "--key-pass", "pass:android",
+            apk_path,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    return res.returncode == 0
+
+
+def _zipalign_apk(unaligned: str, aligned: str) -> None:
+    zipalign_bin = shutil.which("zipalign") or "/usr/bin/zipalign"
+    if os.path.exists(zipalign_bin):
+        subprocess.run(
+            [zipalign_bin, "-v", "-p", "4", unaligned, aligned],
+            capture_output=True,
+            text=True,
+        )
+    else:
+        shutil.copy2(unaligned, aligned)
+
+
+def resign_apk_preserving_payload(original_apk_path: str) -> Tuple[bool, str, Dict]:
+    """
+    Strip broken META-INF signatures and re-sign the original payload unchanged.
+
+    Used when PackageManager rejects INSTALL_PARSE_FAILED_NO_CERTIFICATES but
+    classes.dex/resources are intact (common anti-sandbox trick).
+    """
+    if not os.path.exists(original_apk_path):
+        return False, f"Original file not found: {original_apk_path}", {}
+
+    original_sha256 = compute_sha256(original_apk_path)
+    base_dir = os.path.dirname(original_apk_path)
+    repaired_dir = os.path.join(base_dir, "repaired")
+    os.makedirs(repaired_dir, exist_ok=True)
+    unaligned = os.path.join(repaired_dir, f"unaligned_resigned_{original_sha256}.apk")
+    resigned_apk = os.path.join(repaired_dir, f"resigned_{original_sha256}.apk")
+
+    dex_count = 0
+    try:
+        with zipfile.ZipFile(original_apk_path, "r") as z_in:
+            with zipfile.ZipFile(unaligned, "w") as z_out:
+                for member in z_in.infolist():
+                    name = member.filename
+                    if name.startswith("META-INF/"):
+                        continue
+                    if name.endswith(".dex"):
+                        dex_count += 1
+                    data = z_in.read(name)
+                    comp = (
+                        zipfile.ZIP_STORED
+                        if name.endswith((".arsc", ".png", ".jpg", ".jpeg", ".gif"))
+                        else zipfile.ZIP_DEFLATED
+                    )
+                    z_out.writestr(member, data, compress_type=comp)
+    except Exception as exc:
+        return False, f"Re-sign repackage failed: {exc}", {}
+
+    if dex_count == 0:
+        return False, "Re-sign aborted: no classes.dex in original APK", {}
+
+    _zipalign_apk(unaligned, resigned_apk)
+    if not _apksigner_sign(resigned_apk):
+        return False, "apksigner failed on resigned APK", {}
+
+    try:
+        os.remove(unaligned)
+    except OSError:
+        pass
+
+    resigned_sha = compute_sha256(resigned_apk)
+    provenance = {
+        "is_repaired_derivative": True,
+        "original_sha256": original_sha256,
+        "repaired_sha256": resigned_sha,
+        "repaired_apk_path": resigned_apk,
+        "repair_tool": "zip strip META-INF + apksigner",
+        "repair_reason": "INSTALL_PARSE_FAILED_NO_CERTIFICATES (signature block invalid)",
+        "modifications_performed": [
+            "Removed META-INF signature block from original APK bytes",
+            "zipalign + Android debug re-sign (payload unchanged)",
+        ],
+        "signature_used": "Android Debug Key (RSA-2048)",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    logger.info(
+        "[APKRepair] Resigned APK ready: %s (%d dex, SHA %s…)",
+        resigned_apk,
+        dex_count,
+        resigned_sha[:12],
+    )
+    return True, resigned_apk, provenance
+
+
 def repair_obfuscated_apk(original_apk_path: str) -> Tuple[bool, str, Dict]:
     """
     Generate an isolated repaired derivative copy for sandbox installation.
@@ -450,28 +575,7 @@ packageInfo:
     else:
         shutil.copy2(unaligned_apk_path, repaired_apk_path)
 
-    # Step 8: Re-sign with apksigner
-    signed_ok = False
-    apksigner_bin = shutil.which("apksigner") or "/usr/bin/apksigner"
-    if os.path.exists(apksigner_bin):
-        keystore_path = "/tmp/sudarshan_debug.keystore"
-        if not os.path.exists(keystore_path):
-            keytool_bin = shutil.which("keytool") or "/usr/bin/keytool"
-            if os.path.exists(keytool_bin):
-                subprocess.run([
-                    keytool_bin, "-genkey", "-noprompt", "-alias", "androiddebugkey",
-                    "-dname", "CN=Sudarshan, OU=SOC, O=BOI, L=Mumbai, S=MH, C=IN",
-                    "-keystore", keystore_path, "-storepass", "android",
-                    "-keypass", "android", "-keyalg", "RSA", "-keysize", "2048", "-validity", "10000"
-                ], capture_output=True, text=True)
-
-        if os.path.exists(keystore_path):
-            res = subprocess.run([
-                apksigner_bin, "sign", "--ks", keystore_path, "--ks-pass", "pass:android",
-                "--ks-key-alias", "androiddebugkey", "--key-pass", "pass:android",
-                repaired_apk_path
-            ], capture_output=True, text=True)
-            signed_ok = (res.returncode == 0)
+    signed_ok = _apksigner_sign(repaired_apk_path)
 
     # Clean up scratch dirs
     shutil.rmtree(aapt_work_dir, ignore_errors=True)

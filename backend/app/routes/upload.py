@@ -21,14 +21,14 @@ import asyncio
 import httpx
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Request
 
 from app.ai.gemini_client import analyze_with_llm
 from sudarshan_core.analyzers.apk_analyzer import analyze_apk
 from app.auth.auth import get_current_user, require_analyst
 from app.db.database import save_case
 from sudarshan_core.engines.classification_engine import classify_family
-from sudarshan_core.engines.frida_sandbox import get_sandbox_status, run_frida_analysis
+from sudarshan_core.engines.frida_sandbox import artifact_dir_for, get_sandbox_status, run_frida_analysis
 from sudarshan_core.engines.risk_engine import calculate_risk_score
 from sudarshan_core.models.schemas import (
     AnalysisResponse,
@@ -51,9 +51,10 @@ from app.ai.gemini_rag import build_investigation_index
 from app.routes.report import cache_report
 from sudarshan_core.services.mobsf_client import MobSFAnalysisError, MobSFClient, MobSFNotAvailable
 from sudarshan_core.services.threat_correlator import correlate
-from app.workers.analysis_queue import create_job, enqueue, get_job
+from app.workers.analysis_queue import create_job, enqueue, get_job, persist_job
+from app.rate_limit import limiter
 from sudarshan_core.models.manifest import build_manifest, InvestigationManifest
-from sudarshan_core.engines.frida_sandbox import artifact_dir_for
+from sudarshan_core.security.sandbox_containment import gateway_dynamic_allowed
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -90,8 +91,8 @@ def _build_correlation_model(raw: Dict) -> ThreatCorrelationResult:
     for ioc in raw.get("ioc_reputation", []):
         try:
             ioc_list.append(IOCReputation(**ioc))
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("[Correlation] Skipped malformed IOC row: %s", exc)
     return ThreatCorrelationResult(
         available=raw.get("available", False),
         sha256_detections=raw.get("sha256_detections", 0),
@@ -169,7 +170,12 @@ async def _call_analysis_engine(temp_path: str, sha256_hash: str) -> Optional[Di
     url = f"{ANALYSIS_ENGINE_URL}/api/v1/analyze"
     try:
         async with httpx.AsyncClient(timeout=_ENGINE_TIMEOUT_SECONDS) as client:
-            resp = await client.post(url, json={"file_path": temp_path, "sha256": sha256_hash})
+            from sudarshan_core.security.internal_auth import internal_auth_headers
+            resp = await client.post(
+                url,
+                json={"file_path": temp_path, "sha256": sha256_hash},
+                headers=internal_auth_headers(),
+            )
             if resp.status_code == 200:
                 logger.info(f"[Orchestrator] Analysis engine microservice returned 200 OK for {sha256_hash}")
                 return resp.json()
@@ -430,6 +436,16 @@ async def _run_analysis_pipeline(
     if engine_result:
         logger.info(f"[Orchestrator] Enriching analysis-engine result for {sha256_hash}")
         return await _enrich_engine_result(engine_result, sha256_hash, analyst_id)
+
+    if not gateway_dynamic_allowed():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Analysis engine unavailable and gateway dynamic analysis is "
+                "disabled (SUDARSHAN_ALLOW_GATEWAY_DYNAMIC). Malware must not "
+                "run in the unhardened backend container."
+            ),
+        )
 
     analysis_mode = "androguard"
     mobsf_report: Optional[Dict] = None
@@ -970,7 +986,9 @@ def _build_response(result: Dict[str, Any], job_id: Optional[str] = None) -> Ana
 # ─── Sync Endpoint ────────────────────────────────────────────────────────────
 
 @router.post("/analyze", response_model=AnalysisResponse)
+@limiter.limit("10/minute")
 async def analyze_upload(
+    request: Request,
     file: UploadFile = File(...),
     user: dict = Depends(require_analyst),
 ):
@@ -1009,7 +1027,9 @@ class AsyncJobResponse(_BM):
 
 
 @router.post("/analyze/async", response_model=AsyncJobResponse, status_code=202)
+@limiter.limit("10/minute")
 async def analyze_upload_async(
+    request: Request,
     file: UploadFile = File(...),
     user: dict = Depends(require_analyst),
 ):
@@ -1019,7 +1039,8 @@ async def analyze_upload_async(
     """
     temp_path, sha256_hash = await _receive_apk(file)
 
-    job_id = create_job()
+    job_id = create_job(sha256_hash=sha256_hash, analyst_id=user.get("id"))
+    await persist_job(job_id)
     await enqueue(job_id, temp_path, file.filename, sha256_hash, analyst_id=user.get("id"))
 
     return AsyncJobResponse(
@@ -1032,7 +1053,7 @@ async def analyze_upload_async(
 @router.get("/status/{job_id}")
 async def job_status(job_id: str, user: dict = Depends(require_analyst)):
     """Poll the status of an async analysis job."""
-    job = get_job(job_id)
+    job = await get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found.")
 

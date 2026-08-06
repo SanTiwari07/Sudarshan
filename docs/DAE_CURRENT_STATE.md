@@ -2,7 +2,7 @@
 
 **Audience:** Sudarshan Core Engineering & Threat Research Team  
 **Version:** `v2.5.0-STABLE`  
-**Last Audit Date:** 2026-08-05  
+**Last Audit Date:** 2026-08-06  
 **Verification Method:** Empirical log trace, automated test suite, live AVD Frida execution, and runtime telemetry pipeline verification (`verify_runtime_pipeline.py`).
 
 ---
@@ -15,7 +15,7 @@
 - Frida attaches and executes banking trojan hooks after SELinux preflight (`adb root` + `setenforce 0`). Sub-probes (`java_probe.js`, `bisect_sec.js`) validate Java bridge binding and ART deoptimization.
 - Runtime Telemetry REST API ([`runtime_api.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/routes/runtime_api.py)) streams live pipeline status, telemetry events, Frida hook hit counters, error rates, and evidence snapshots.
 - Deterministic scoring ([`risk_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/risk_engine.py)), workflow reconstruction ([`workflow_reconstructor.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/workflow_reconstructor.py)), investigation manifest generation ([`manifest.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/models/manifest.py)), static analysis ([`apktool_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/apktool_engine.py), [`jadx_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/jadx_engine.py)), and network capture ingest ([`network_capture.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/network_capture.py) parsing mitmproxy HAR dumps) function cleanly.
-- Test coverage verified: Full automated suite passing (**457 / 457 tests collected & verified** via `pytest tests/ backend/tests`).
+- Test coverage verified: Full automated suite (**486 / 486 tests collected** via `pytest tests/ backend/tests --collect-only`, 2026-08-06).
 
 ### Core Operational Capabilities
 1. **Frida Runtime Instrumentation**: Active & verified via [`frida_sandbox.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/frida_sandbox.py) and [`banking_trojan.js`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/frida_hooks/banking_trojan.js). `Java.deoptimizeEverything()` runs unconditionally at script startup, preventing ART JIT inlining from suppressing hooks.
@@ -28,6 +28,12 @@
 8. **Static Analysis Pipeline**: [`apktool_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/apktool_engine.py) and [`jadx_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/jadx_engine.py) provide standalone resource decompilation and DEX-to-Java source scanning.
 9. **Network Interception**: Sidecar container runs `mitmproxy`, with [`network_capture.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/network_capture.py) parsing HAR dumps and merging full HTTPS headers/responses with Frida socket hooks.
 10. **Analyst Dashboard**: [`WorkflowDiagram.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/components/WorkflowDiagram.tsx) and [`FraudCard.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/pages/FraudCard.tsx) render interactive causal workflow chains and executive risk views directly in the React frontend.
+11. **Sandbox Provider Abstraction**: [`shared/sudarshan_core/sandbox/`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/sandbox/) (`get_sandbox_provider()`, Genymotion default, Android Studio optional) is the only supported path from DAE to ADB/install/launch.
+12. **Sandbox containment (P0)**: [`shared/sudarshan_core/security/`](../shared/sudarshan_core/security/) — `adb_gateway.run_adb` choke point, `sandbox_containment` policy, analysis-engine internal token middleware, gateway dynamic path blocked by default. Regression: `tests/unit/test_sandbox_containment.py`, `tests/unit/test_adb_policy_bypass.py`, `backend/tests/test_gateway_dynamic_blocker.py`.
+13. **Dynamic Validation Framework**: [`validate_dynamic_pipeline.py`](../validate_dynamic_pipeline.py) and [`shared/sudarshan_core/validation/`](../shared/sudarshan_core/validation/) run corpus APKs, stress/recovery suites, and engineering reports under `tests/apks/validation_runs/`.
+
+### Known limitations (documented gaps, not hidden)
+- **Per-session ephemeral artifact roots**: Containment helpers exist (`session_artifact_root`); full per-session isolation on disk is not complete — see [`security/P0_RED_TEAM_PENETRATION_REPORT.md`](security/P0_RED_TEAM_PENETRATION_REPORT.md).
 
 ---
 
@@ -65,7 +71,8 @@ AI controls UI exploration; deterministic engines control scoring. The `RiskEngi
 | Standalone Decompilation | Added APKTool & JADX CLI engines | [apktool_engine.py](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/apktool_engine.py), [jadx_engine.py](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/jadx_engine.py) | ✅ **RESOLVED** |
 | Encrypted HTTPS Interception | Added `mitmproxy` sidecar + HAR dump merger | [docker-compose.yml](file:///d:/Projects/Sudarshan%20BOI/docker-compose.yml), [network_capture.py](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/network_capture.py) | ✅ **RESOLVED** |
 | UI Workflow Visualization | Built interactive MITRE ATT&CK React timeline | [WorkflowDiagram.tsx](file:///d:/Projects/Sudarshan%20BOI/frontend/src/components/WorkflowDiagram.tsx) | ✅ **RESOLVED** |
-| Executive Risk Dashboard | Created FraudCard component for executive threat assessment | [FraudCard.tsx](file:///d:/Projects/Sudarshan%20BOI/frontend/src/pages/FraudCard.tsx) | ✅ **RESOLVED** |
+| Gateway runs malware locally when engine down | HTTP 503 unless `SUDARSHAN_ALLOW_GATEWAY_DYNAMIC` | [`upload.py`](../backend/app/routes/upload.py), `gateway_dynamic_allowed()` | ✅ **RESOLVED** (default off) |
+| Parallel ADB bypass of containment policy | Route all ADB via `adb_gateway.run_adb` | [`adb_gateway.py`](../shared/sudarshan_core/security/adb_gateway.py) | ✅ **RESOLVED** |
 
 ---
 
@@ -77,6 +84,9 @@ $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytes
 
 # Run live runtime pipeline verification
 $env:PYTHONPATH="backend;shared"; backend\.venv\Scripts\python.exe scripts/verify_runtime_pipeline.py
+
+# Run dynamic APK corpus validation (live sandbox; see docs/VALIDATION.md)
+$env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="validation"; python validate_dynamic_pipeline.py
 ```
 
 All automated unit & integration test modules pass clean across static analysis, dynamic sandbox, threat correlation, and deterministic risk scoring engines.

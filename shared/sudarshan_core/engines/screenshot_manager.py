@@ -17,7 +17,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import subprocess
+from sudarshan_core.sandbox import get_sandbox_provider
 import threading
 import time
 import uuid
@@ -211,25 +211,37 @@ class ScreenshotManager:
         rel_path = f"screenshots/{filename}"
 
         try:
-            subprocess.run(
-                [self.adb_path, "-s", self.device_serial, "shell",
-                 "screencap", "-p", remote_path],
-                capture_output=True, timeout=8,
+            provider = get_sandbox_provider()
+            provider.adb(
+                "-s",
+                self.device_serial,
+                "shell",
+                "screencap",
+                "-p",
+                remote_path,
+                timeout=8,
             )
-            res = subprocess.run(
-                [self.adb_path, "-s", self.device_serial, "pull",
-                 remote_path, str(local_path)],
-                capture_output=True, timeout=10,
+            res_ok, res_out = provider.adb(
+                "-s",
+                self.device_serial,
+                "pull",
+                remote_path,
+                str(local_path),
+                timeout=10,
             )
-            subprocess.run(
-                [self.adb_path, "-s", self.device_serial, "shell", "rm", remote_path],
-                capture_output=True, timeout=3,
+            provider.adb(
+                "-s",
+                self.device_serial,
+                "shell",
+                "rm",
+                remote_path,
+                timeout=3,
             )
 
             if not local_path.exists():
                 logger.warning(
                     "[ScreenshotManager] Failed to pull screenshot: %s",
-                    res.stderr.decode(errors="replace"),
+                    res_out,
                 )
                 return None
 

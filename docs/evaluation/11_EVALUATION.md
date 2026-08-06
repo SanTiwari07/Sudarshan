@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document outlines the evaluation methodology, verification protocols, test suite architecture, and audit scorecards for the **SUDARSHAN** platform. It documents how the system asserts mathematical determinism, prompt injection resilience, pipeline robustness, and accuracy across **457 automated unit, integration, and replay tests**.
+This document outlines the evaluation methodology, verification protocols, test suite architecture, and audit scorecards for the **SUDARSHAN** platform. It documents how the system asserts mathematical determinism, prompt injection resilience, pipeline robustness, and accuracy across **486 automated unit, integration, and replay tests**.
 
 ---
 
@@ -18,17 +18,17 @@ The evaluation framework is responsible for:
 
 ## High-Level Overview
 
-Sudarshan enforces a rigorous quality gate prior to deployment. The automated test suite consists of **457 passing pytest test cases** located in [`tests/`](file:///d:/Projects/Sudarshan%20BOI/tests/) and [`backend/tests/`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/).
+Sudarshan enforces a rigorous quality gate prior to deployment. The automated test suite consists of **486 passing pytest test cases** located in [`tests/`](file:///d:/Projects/Sudarshan%20BOI/tests/) and [`backend/tests/`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/).
 
 ```text
 [ Test Suite Execution (pytest) ]
                │
-  ┌────────────┼────────────┬────────────┐
-  │            │            │            │
-  ▼            ▼            ▼            ▼
-[ Determinism ] [ Sanitizer ] [ Risk Engine ] [ API Gateway ]
-Replay Tests   Prompt Injection Formula Tests Mock Uploads
-(9 Baselines)  Tests (64)   (STEI / FRS)     & Auth Tests
+  ┌────────────┼────────────┬────────────┬────────────┐
+  │            │            │            │            │
+  ▼            ▼            ▼            ▼            ▼
+[ Determinism ] [ Sanitizer ] [ Risk Engine ] [ Sandbox ] [ API Gateway ]
+Replay Tests   Prompt Injection Formula Tests Provider    Mock Uploads
+(9 Baselines)  Tests (64)   (STEI / FRS)     tests       & Auth Tests
 ```
 
 ---
@@ -135,7 +135,8 @@ The evaluation framework integrates into developer workflow and CI/CD pipelines:
 |                                                                          |
 |  +--------------------+      +--------------------+      +-------------+ |
 |  | Developer Commit / |=====>| Pytest Test Suite  |=====>| Build Pass /| |
-|  | CI Pipeline        |      | (backend/tests)    |      | Deployment  | |
+|  | CI Pipeline        |      | (tests/ +          |      | Deployment  | |
+|  |                    |      |  backend/tests)    |      |             | |
 |  +--------------------+      +--------------------+      +-------------+ |
 +--------------------------------------------------------------------------+
 ```
@@ -147,28 +148,42 @@ The evaluation framework integrates into developer workflow and CI/CD pipelines:
 Test files location:
 
 ```text
+tests/
+├── unit/
+│   ├── test_sandbox_provider.py       # SandboxProvider factory & ADB checks
+│   ├── test_frida_pipeline_full.py    # Full dynamic pipeline integration
+│   ├── test_evidence_pipeline.py      # EvidenceStore / EventBus
+│   └── test_tier2_agentic.py          # Agentic explorer tier-2 paths
+├── integration/
+│   └── test_pipeline.py               # End-to-end pipeline (optional live deps)
+└── apks/                              # Corpus manifest + validation_runs artifacts
+
 backend/
 ├── tests/
-│   ├── determinism_baseline.json  <- Pinned Feature & Score Fixtures
-│   ├── test_determinism_replay.py <- Replay Test Verification Runner
-│   ├── test_prompt_injection.py   <- Prompt Injection Security Tests
-│   ├── test_risk_engine.py        <- STEI, BFCI & FRS Formula Unit Tests
-│   ├── test_bfci_scorer.py        <- BFCI v2 Scorer Tests
-│   ├── test_workflow_reconstructor.py <- Causal Workflow Tests
-│   ├── test_agentic_explorer.py   <- Agentic Explorer & Goal Tracker Tests
-│   ├── test_detection_regressions.py <- Detection Regression Tests
-│   ├── test_frida_preflight.py    <- Frida SELinux Preflight Tests
-│   └── test_remaining_features.py <- Manifest, APKTool, JADX & HAR Tests
+│   ├── determinism_baseline.json      # Pinned feature & score fixtures
+│   ├── test_determinism_replay.py     # Replay verification runner
+│   ├── test_prompt_injection.py       # Prompt injection security tests
+│   ├── test_risk_engine.py            # STEI, BFCI & FRS formula unit tests
+│   ├── test_bfci_scorer.py            # BFCI v2 scorer tests
+│   ├── test_workflow_reconstructor.py # Causal workflow tests
+│   ├── test_agentic_explorer.py       # Agentic explorer & goal tracker tests
+│   ├── test_detection_regressions.py  # Detection regression tests
+│   ├── test_frida_preflight.py        # Frida SELinux preflight tests
+│   ├── test_validation_corpus.py      # Corpus manifest & validation helpers
+│   ├── test_screenshot_report_pipeline.py # Screenshot manifest in HTML reports
+│   └── test_remaining_features.py     # Manifest, APKTool, JADX & HAR tests
 ```
+
+Live sandbox corpus runs (not part of default `pytest` collection): see [`VALIDATION.md`](../VALIDATION.md) and [`validate_dynamic_pipeline.py`](file:///d:/Projects/Sudarshan%20BOI/validate_dynamic_pipeline.py).
 
 ---
 
 ## API Reference
 
-Run the automated test suite locally (**388 tests passing**):
+Run the automated test suite locally (**486 tests collected**):
 
 ```powershell
-$env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest backend/tests
+$env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests
 ```
 
 Run determinism replay tests specifically:
@@ -182,7 +197,8 @@ $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytes
 
 | Evaluation Category | Status | Details |
 | :--- | :--- | :--- |
-| **Total Test Suite** | **Implemented** | 25 test modules in `backend/tests/` passing clean (388 tests). |
+| **Total Test Suite** | **Implemented** | **486** pytest cases across `tests/` and `backend/tests/` (25 modules under `backend/tests/`, 6 under `tests/unit/`, 1 integration). |
+| **Sandbox Containment Tests** | **Implemented** | `tests/unit/test_sandbox_containment.py`, `test_adb_policy_bypass.py`, `test_blocker_fixes.py`; `backend/tests/test_gateway_dynamic_blocker.py`. |
 | **Determinism Baselines** | **Implemented** | Pinned benchmark cases passing in `test_determinism_replay.py`. |
 | **Sanitizer Tests** | **Implemented** | Prompt injection tests passing in `test_prompt_injection.py`. |
 | **Risk Formula Tests** | **Implemented** | Mathematical boundary tests passing in `test_risk_engine.py`. |

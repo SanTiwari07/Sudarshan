@@ -13,7 +13,6 @@ from __future__ import annotations
 import logging
 import os
 import shutil
-import subprocess
 import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
@@ -27,6 +26,12 @@ from sudarshan_core.sandbox.exceptions import (
     SandboxOffline,
 )
 from sudarshan_core.sandbox.types import ConnectionResult, DeviceInfo, FridaStatus
+from sudarshan_core.security.sandbox_containment import (
+    ContainmentViolation,
+    build_frida_start_command,
+    enforce_connectivity_policy,
+    validate_adb_invocation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -69,20 +74,12 @@ class SandboxProvider(ABC):
         if not adb:
             return False, "adb not found"
         try:
-            result = subprocess.run(
-                [adb] + list(args),
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=timeout,
-            )
-            output = (result.stdout or "") + (result.stderr or "")
-            return result.returncode == 0, output.strip()
-        except subprocess.TimeoutExpired:
-            return False, "adb command timed out"
-        except Exception as exc:  # noqa: BLE001 — never crash the pipeline
-            return False, str(exc)
+            validate_adb_invocation(args)
+        except ContainmentViolation as exc:
+            return False, exc.message
+        from sudarshan_core.security.adb_gateway import run_adb
+
+        return run_adb(adb, args, timeout=timeout)
 
     def adb_shell(self, serial: str, command: str, timeout: int = 30) -> Tuple[bool, str]:
         return self.adb("-s", serial, "shell", command, timeout=timeout)
@@ -284,6 +281,37 @@ class SandboxProvider(ABC):
             paths.append(f"/data/local/tmp/{name}")
         return paths
 
+    def _frida_process_running(self, serial: str, names: List[str]) -> Tuple[bool, str]:
+        """Detect frida-server via pgrep (ps NAME column may truncate long binary names)."""
+        patterns: List[str] = []
+        for n in names:
+            if not n:
+                continue
+            patterns.append(n)
+            if len(n) > 15:
+                patterns.append(n[:15])
+        if not patterns:
+            patterns = ["frida-server"]
+        # Unique, order preserved
+        seen = set()
+        uniq = []
+        for p in patterns:
+            if p not in seen:
+                seen.add(p)
+                uniq.append(p)
+        grep_pat = "|".join(uniq)
+        ok, out = self.adb_shell(
+            serial,
+            f"pgrep -f '{uniq[0]}' 2>/dev/null || pgrep -f frida-server 2>/dev/null "
+            f"|| ps -A 2>/dev/null | grep -E '{grep_pat}' || true",
+            timeout=20,
+        )
+        text = out or ""
+        running = bool(text.strip()) and any(p in text for p in uniq)
+        if not running and text.strip().isdigit():
+            running = True
+        return running, text
+
     def ensure_frida(self, serial: str, restart_if_needed: bool = True) -> FridaStatus:
         """
         Verify frida-server is running; restart if necessary.
@@ -299,9 +327,7 @@ class SandboxProvider(ABC):
             host_version = ""
 
         names = self._frida_process_names()
-        pattern = "|".join(names)
-        ok, out = self.adb_shell(serial, f"ps -A | grep -E '{pattern}'", timeout=15)
-        running = any(n in (out or "") for n in names)
+        running, out = self._frida_process_running(serial, names)
 
         status = FridaStatus(
             available=False,
@@ -335,12 +361,11 @@ class SandboxProvider(ABC):
             for n in names:
                 self.adb_shell(serial, f"pkill -f {n} 2>/dev/null", timeout=5)
             port = self.config.frida_port
-            start_cmd = f"nohup {remote} -l 0.0.0.0:{port} > /dev/null 2>&1 &"
-            # Also try default listen if custom port fails later
+            start_cmd = build_frida_start_command(remote, port, self.config)
             self.adb_shell(serial, start_cmd, timeout=10)
-            time.sleep(2)
-            ok2, out2 = self.adb_shell(serial, f"ps -A | grep -E '{pattern}'", timeout=15)
-            if any(n in (out2 or "") for n in names):
+            time.sleep(3)
+            started_run, out2 = self._frida_process_running(serial, names)
+            if started_run:
                 started = True
                 status.running = True
                 status.restarted = True
@@ -356,12 +381,13 @@ class SandboxProvider(ABC):
             # Last-ditch: try configured binary name with configured port or default frida-server
             bin_name = self.config.frida_bin or "frida-server"
             port = self.config.frida_port or "27055"
-            legacy_cmd = f"nohup /data/local/tmp/{bin_name} -l 0.0.0.0:{port} > /dev/null 2>&1 &"
+            legacy_cmd = build_frida_start_command(
+                f"/data/local/tmp/{bin_name}", port, self.config
+            )
             self.adb_shell(serial, legacy_cmd, timeout=10)
-            time.sleep(2)
-            pattern = f"{bin_name}|frida-server"
-            ok3, out3 = self.adb_shell(serial, f"ps -A | grep -E '{pattern}'", timeout=15)
-            if any(n in (out3 or "") for n in (bin_name, "frida-server")):
+            time.sleep(3)
+            started_run, out3 = self._frida_process_running(serial, [bin_name, "frida-server"])
+            if started_run:
                 status.running = True
                 status.restarted = True
                 status.available = True
@@ -416,6 +442,8 @@ class SandboxProvider(ABC):
             )
 
         try:
+            enforce_connectivity_policy(self.config)
+
             adb_path = self.find_adb()
             if not adb_path:
                 _stage("adb", False, "adb not found")
@@ -489,12 +517,13 @@ class SandboxProvider(ABC):
             SandboxOffline,
             RootUnavailable,
             FridaUnavailable,
+            ContainmentViolation,
         ) as exc:
             elapsed = (time.monotonic() - t0) * 1000
             return ConnectionResult(
                 ok=False,
-                error_code=exc.code,
-                error_message=exc.message,
+                error_code=getattr(exc, "code", "SANDBOX_ERROR"),
+                error_message=getattr(exc, "message", str(exc)),
                 stages=stages,
                 connection_time_ms=elapsed,
             )

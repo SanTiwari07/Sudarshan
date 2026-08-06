@@ -54,20 +54,20 @@ Sudarshan supports two operational ingestion modes:
 
 ```mermaid
 graph TD
-    subgraph Synchronous Analysis Mode (/api/v1/upload)
+    subgraph Synchronous Analysis Mode (/api/v1/analyze)
         A1[Upload APK] --> A2[Execute Full Pipeline 35s] --> A3[Return Complete JSON]
     end
 
-    subgraph Asynchronous Analysis Mode (/api/v1/upload)
+    subgraph Asynchronous Analysis Mode (/api/v1/analyze/async)
         B1[Upload APK] --> B2[Enqueue & Return job_id < 0.2s] --> B3[Background Worker Execution]
     end
 ```
 
-- **Synchronous Ingestion (`POST /api/v1/upload`)**:
+- **Synchronous Ingestion (`POST /api/v1/analyze`)**:
   - Client blocks until complete analysis finishes.
   - Latency: **$25.0s - 55.0s$** depending on MobSF container load and APK size.
   - Recommended for single-file analyst uploads via Dashboard.
-- **Asynchronous Ingestion (`POST /api/v1/upload` with worker queue)**:
+- **Asynchronous Ingestion (`POST /api/v1/analyze/async` with worker queue)**:
   - Immediate HTTP response with job status in **$<0.20$ seconds**.
   - Background worker pool processes queue items asynchronously ([`analysis_queue.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/workers/analysis_queue.py)).
   - Recommended for high-volume SIEM/SOAR bulk ingestion.

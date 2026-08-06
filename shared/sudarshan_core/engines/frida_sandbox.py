@@ -353,6 +353,37 @@ def _adb(*args: str, timeout: int = 30) -> Tuple[bool, str]:
     return _get_provider().adb(*args, timeout=timeout)
 
 
+def _device_api_level(device: str) -> int:
+    ok, out = _adb("-s", device, "shell", "getprop", "ro.build.version.sdk", timeout=10)
+    if not ok:
+        return 0
+    try:
+        return int(out.strip())
+    except ValueError:
+        return 0
+
+
+def _supports_low_sdk_bypass(device: str) -> bool:
+    """``--bypass-low-target-sdk-block`` exists only on Android 14+ (API 34)."""
+    return _device_api_level(device) >= 34
+
+
+# Genymotion / older API levels reject adb incremental installs; always disable.
+_ADB_INSTALL_FLAGS = ("install", "--no-incremental", "-r", "-t", "-g")
+
+_CERT_FAIL_MARKERS = (
+    "INSTALL_PARSE_FAILED_NO_CERTIFICATES",
+    "NO_CERTIFICATES",
+    "Failed collecting certificates",
+)
+
+_MANIFEST_REPAIR_MARKERS = (
+    "Corrupt XML binary file",
+    "INSTALL_PARSE_FAILED_UNEXPECTED_EXCEPTION",
+    "INSTALL_PARSE_FAILED_BAD_MANIFEST",
+)
+
+
 def get_connected_emulators() -> List[str]:
     """
     Return list of connected sandbox device serials.
@@ -373,7 +404,11 @@ def _adb_install_apk(apk_path: str, device: str) -> Tuple[bool, str, Dict[str, A
     Stage 3: If INSTALL_PARSE_FAILED / Corrupt AXML is caught, invoke conditional derivative repair,
              re-sign, install derivative, and record APK Provenance Metadata.
     """
-    from sudarshan_core.engines.apk_repair import compute_sha256, repair_obfuscated_apk
+    from sudarshan_core.engines.apk_repair import (
+        compute_sha256,
+        repair_obfuscated_apk,
+        resign_apk_preserving_payload,
+    )
 
     original_sha256 = compute_sha256(apk_path) if os.path.exists(apk_path) else "unknown"
     default_provenance = {
@@ -391,16 +426,19 @@ def _adb_install_apk(apk_path: str, device: str) -> Tuple[bool, str, Dict[str, A
 
     # ── Stage 1: Try installing Original APK ─────────────────────────────────
     for attempt in range(2):
-        ok, out = _adb("-s", device, "install", "-r", "-t", "-g", apk_path, timeout=120)
+        ok, out = _adb("-s", device, *_ADB_INSTALL_FLAGS, apk_path, timeout=120)
         if ok:
             logger.info(f"[Frida] Original APK installed successfully: {os.path.basename(apk_path)}")
             return True, out, default_provenance
 
-        # ── Stage 2: Bypass deprecated SDK version block ──────────────────────
-        if "INSTALL_FAILED_DEPRECATED_SDK_VERSION" in out:
+        # ── Stage 2: Bypass deprecated SDK version block (Android 14+ only) ─
+        if (
+            "INSTALL_FAILED_DEPRECATED_SDK_VERSION" in out
+            and _supports_low_sdk_bypass(device)
+        ):
             logger.info("[Frida] Retrying install with --bypass-low-target-sdk-block")
             ok2, out2 = _adb(
-                "-s", device, "install", "-r", "-t", "-g",
+                "-s", device, "install", "--no-incremental", "-r", "-t", "-g",
                 "--bypass-low-target-sdk-block",
                 apk_path, timeout=120
             )
@@ -410,13 +448,32 @@ def _adb_install_apk(apk_path: str, device: str) -> Tuple[bool, str, Dict[str, A
             out = out2
 
         last_out = out
-        if any(m in out for m in (
-            "INSTALL_PARSE_FAILED",
-            "Corrupt XML binary file",
-            "INSTALL_PARSE_FAILED_UNEXPECTED_EXCEPTION",
-        )):
+        if any(m in out for m in _MANIFEST_REPAIR_MARKERS):
+            break
+        if any(m in out for m in _CERT_FAIL_MARKERS):
             break
         time.sleep(1)
+
+    # ── Stage 2b: Re-sign when signature block is invalid (payload intact) ───
+    if any(m in last_out for m in _CERT_FAIL_MARKERS):
+        logger.info("[Frida] Invalid APK signatures — re-signing original payload for sandbox install")
+        res_ok, res_path, res_prov = resign_apk_preserving_payload(apk_path)
+        if res_ok and os.path.exists(res_path):
+            pkg_to_uninstall = None
+            try:
+                from androguard.misc import AnalyzeAPK as _AAA
+                _a_r, _, _ = _AAA(res_path)
+                pkg_to_uninstall = _a_r.get_package()
+            except Exception:
+                pass
+            if pkg_to_uninstall:
+                _adb("-s", device, "uninstall", pkg_to_uninstall, timeout=30)
+            ok_res, out_res = _adb("-s", device, *_ADB_INSTALL_FLAGS, res_path, timeout=120)
+            if ok_res:
+                logger.info("[Frida] Resigned APK installed successfully")
+                return True, out_res, res_prov
+            last_out = out_res
+            logger.warning("[Frida] Resigned APK install failed: %s", out_res.strip()[:500])
 
     # ── Stage 3: Conditional Derivative Repair (ZIP/AXML/Manifest corruption) ──
     # Teabot and similar samples deliberately malform their manifest to evade
@@ -424,11 +481,7 @@ def _adb_install_apk(apk_path: str, device: str) -> Tuple[bool, str, Dict[str, A
     # this, repair the derivative copy, re-sign, and retry.  The repair step
     # is logged prominently in both the console and the provenance record —
     # this is a disclosed methodological step, not evidence tampering.
-    _PARSE_FAIL_MARKERS = (
-        "INSTALL_PARSE_FAILED",
-        "Corrupt XML binary file",
-        "INSTALL_PARSE_FAILED_UNEXPECTED_EXCEPTION",
-    )
+    _PARSE_FAIL_MARKERS = _MANIFEST_REPAIR_MARKERS
     if any(m in last_out for m in _PARSE_FAIL_MARKERS):
         logger.warning(
             "\n" + "="*70 + "\n"
@@ -483,7 +536,20 @@ def _adb_install_apk(apk_path: str, device: str) -> Tuple[bool, str, Dict[str, A
                     "attempting install anyway (INSTALL_FAILED_UPDATE_INCOMPATIBLE may still occur)"
                 )
 
-            ok3, out3 = _adb("-s", device, "install", "-t", "--bypass-low-target-sdk-block", rep_path_or_err, timeout=120)
+            ok3, out3 = _adb(
+                "-s", device, *_ADB_INSTALL_FLAGS,
+                rep_path_or_err, timeout=120
+            )
+            if (
+                not ok3
+                and _supports_low_sdk_bypass(device)
+                and "INSTALL_FAILED_DEPRECATED_SDK_VERSION" in out3
+            ):
+                ok3, out3 = _adb(
+                    "-s", device, "install", "--no-incremental", "-r", "-t", "-g",
+                    "--bypass-low-target-sdk-block",
+                    rep_path_or_err, timeout=120
+                )
             if ok3:
                 logger.info(f"[Frida Repair] Repaired derivative artifact installed successfully on emulator!")
                 return True, out3, rep_provenance

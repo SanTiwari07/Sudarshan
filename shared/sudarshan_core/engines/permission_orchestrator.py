@@ -15,6 +15,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
 
 from sudarshan_core.engines.event_bus import RuntimeEventBus
+from sudarshan_core.sandbox import get_sandbox_provider
 
 logger = logging.getLogger(__name__)
 
@@ -167,13 +168,9 @@ class PermissionOrchestrator:
                 })
 
     def _adb(self, *args) -> str:
-        cmd = [self.adb_path, "-s", self.device_serial] + list(args)
-        try:
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-            return res.stdout.strip()
-        except Exception as e:
-            logger.error(f"[PermissionOrchestrator] ADB error: {e}")
-            return ""
+        provider = get_sandbox_provider()
+        ok, out = provider.adb("-s", self.device_serial, *args, timeout=10)
+        return out if ok else ""
 
     def grant_accessibility(
         self,

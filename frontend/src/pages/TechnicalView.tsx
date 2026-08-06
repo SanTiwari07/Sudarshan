@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import {
   Terminal, Cpu, Search, Lock, Code, Package,
@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import type { FraudCardData } from '../App';
 import { exportJSON, exportCSV } from '../utils/derive';
-import { API_BASE } from '../config';
+import { API_BASE, authHeaders } from '../config';
 import SocCard from '../components/ui/Card';
 import SectionHeader from '../components/ui/SectionHeader';
 import CopyButton from '../components/ui/CopyButton';
@@ -281,7 +281,51 @@ function LogcatInspectorPanel({ logcat }: { logcat?: string }) {
 
 // ─── Dynamic Sandbox Panel ────────────────────────────────────────────────────────
 
-// ─── Dynamic Sandbox Panel ────────────────────────────────────────────────────────
+function AuthedScreenshot({ sha256, relPath }: { sha256: string; relPath: string }) {
+  const filename = relPath.split('/').pop() || relPath;
+  const [src, setSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    const url = `${API_BASE}/screenshots/${sha256}/${encodeURIComponent(filename)}`;
+
+    fetch(url, { headers: authHeaders() })
+      .then((res) => {
+        if (!res.ok) throw new Error(String(res.status));
+        return res.blob();
+      })
+      .then((blob) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setSrc(objectUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setSrc(null);
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [sha256, filename]);
+
+  if (!src) {
+    return (
+      <div className="h-52 w-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-400">
+        Unavailable
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={filename}
+      className="h-52 w-full object-cover"
+    />
+  );
+}
 
 function DynamicAnalysisPanel({ data }: { data: FraudCardData }) {
   const dyn = data.dynamic_result || {};
@@ -341,17 +385,9 @@ function DynamicAnalysisPanel({ data }: { data: FraudCardData }) {
           <div className="flex gap-4 overflow-x-auto pb-2">
             {dyn.screenshots.map((s: string, i: number) => {
               const filename = s.split('/').pop() || s;
-              const imgUrl = `${API_BASE}/screenshots/${filename}`;
               return (
                 <div key={i} className="flex-shrink-0 w-36 border border-slate-200 rounded-lg overflow-hidden shadow-xs bg-white">
-                  <img
-                    src={imgUrl}
-                    alt={`Screen capture ${i + 1}`}
-                    className="h-52 w-full object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLElement).style.display = 'none';
-                    }}
-                  />
+                  <AuthedScreenshot sha256={data.sha256} relPath={s} />
                   <div className="p-1.5 text-[10px] font-mono text-slate-700 truncate bg-slate-50 border-t border-slate-200">
                     {filename}
                   </div>

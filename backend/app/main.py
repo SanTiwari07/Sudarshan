@@ -12,8 +12,12 @@ load_dotenv(dotenv_path=_env_path)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
-from app.routes import upload, report, intelligence
+from app.rate_limit import limiter
+
+from app.routes import upload, report, intelligence, screenshots
 from app.routes.runtime_api import router as runtime_router
 from app.routes.cases import router as cases_router
 from app.auth.auth import router as auth_router
@@ -53,6 +57,9 @@ app = FastAPI(
     ),
 )
 
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # allow_origins=["*"] together with allow_credentials=True is invalid per the
 # Fetch standard; Starlette resolves it by reflecting the caller's Origin, which
 # means every site on the internet becomes a trusted origin. Use an explicit
@@ -79,6 +86,7 @@ app.include_router(upload.router,        prefix="/api/v1",         tags=["Analys
 app.include_router(report.router,        prefix="/api/v1",         tags=["Reports & Export"])
 app.include_router(cases_router,         prefix="/api/v1",         tags=["Case History"])
 app.include_router(intelligence.router,  prefix="/api/v1",         tags=["Threat Intelligence"])
+app.include_router(screenshots.router,   prefix="/api/v1",         tags=["Screenshots"])
 app.include_router(runtime_router,       prefix="/api",            tags=["Runtime Telemetry"])
 
 
@@ -86,6 +94,11 @@ app.include_router(runtime_router,       prefix="/api",            tags=["Runtim
 
 @app.on_event("startup")
 async def startup():
+    from sudarshan_core.security.sandbox_containment import validate_backend_production_config
+    from app.startup_validation import validate_production_environment
+
+    validate_backend_production_config()
+    validate_production_environment()
     # 1. Initialize SQLite tables
     await init_db()
     logger.info("[Startup] Database initialized")
@@ -115,6 +128,13 @@ async def startup():
             )
         else:
             logger.info(f"[Startup] Seeded admin user: {admin_user}")
+
+    # 2b. Optional BOI hackathon demo accounts (soclead, analyst1, optional boi_*).
+    try:
+        from app.demo_seed import seed_demo_users
+        await seed_demo_users()
+    except Exception as e:
+        logger.warning(f"[Startup] Demo user seed skipped ({e})")
 
     # 3. Install the persistent IOC reputation cache.
     #    The ioc_cache table and its 24h-TTL accessors already existed and were

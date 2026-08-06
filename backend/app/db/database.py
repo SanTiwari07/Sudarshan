@@ -94,6 +94,7 @@ _CREATE_INDEXES = (
     "CREATE INDEX IF NOT EXISTS idx_cases_created_at ON cases(created_at DESC);",
     "CREATE INDEX IF NOT EXISTS idx_cases_analyst    ON cases(analyst_id);",
     "CREATE INDEX IF NOT EXISTS idx_ioc_expires      ON ioc_cache(expires_at);",
+    "CREATE INDEX IF NOT EXISTS idx_jobs_status      ON analysis_jobs(status);",
 )
 
 
@@ -104,6 +105,20 @@ CREATE TABLE IF NOT EXISTS case_notes (
     text        TEXT NOT NULL,
     author      TEXT NOT NULL,
     created_at  TEXT NOT NULL
+);
+"""
+
+_CREATE_ANALYSIS_JOBS = """
+CREATE TABLE IF NOT EXISTS analysis_jobs (
+    job_id          TEXT PRIMARY KEY,
+    status          TEXT NOT NULL,
+    sha256          TEXT,
+    analyst_id      INTEGER,
+    queued_at       TEXT NOT NULL,
+    started_at      TEXT,
+    completed_at    TEXT,
+    result_json     TEXT,
+    error           TEXT
 );
 """
 
@@ -158,6 +173,7 @@ async def init_db() -> None:
         await db.execute(_CREATE_CASES)
         await db.execute(_CREATE_IOC_CACHE)
         await db.execute(_CREATE_NOTES)
+        await db.execute(_CREATE_ANALYSIS_JOBS)
         for stmt in _CREATE_INDEXES:
             await db.execute(stmt)
         await _apply_migrations(db)
@@ -248,10 +264,16 @@ async def list_cases(limit: int = 50, offset: int = 0, analyst_id: Optional[int]
     return [_row_to_case(dict(r)) for r in rows]
 
 
-async def count_cases() -> int:
+async def count_cases(analyst_id: Optional[int] = None) -> int:
     async with _connect() as db:
-        async with db.execute("SELECT COUNT(*) FROM cases") as cur:
-            row = await cur.fetchone()
+        if analyst_id is not None:
+            async with db.execute(
+                "SELECT COUNT(*) FROM cases WHERE analyst_id = ?", (analyst_id,)
+            ) as cur:
+                row = await cur.fetchone()
+        else:
+            async with db.execute("SELECT COUNT(*) FROM cases") as cur:
+                row = await cur.fetchone()
     return row[0] if row else 0
 
 
@@ -409,4 +431,71 @@ async def get_case_notes(sha256: str) -> List[Dict[str, Any]]:
         async with db.execute("SELECT * FROM case_notes WHERE sha256=? ORDER BY id ASC", (sha256,)) as cur:
             rows = await cur.fetchall()
     return [dict(r) for r in rows]
+
+
+# ─── Async analysis jobs (durable poll state) ───────────────────────────────
+
+async def upsert_analysis_job(job: Dict[str, Any]) -> None:
+    """Persist gateway async job state for restart-safe polling."""
+    result_json = None
+    if job.get("result") is not None:
+        result_json = json.dumps(job["result"])
+    async with _connect() as db:
+        await db.execute(
+            """
+            INSERT INTO analysis_jobs (
+                job_id, status, sha256, analyst_id, queued_at, started_at,
+                completed_at, result_json, error
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(job_id) DO UPDATE SET
+                status=excluded.status,
+                sha256=excluded.sha256,
+                analyst_id=excluded.analyst_id,
+                started_at=excluded.started_at,
+                completed_at=excluded.completed_at,
+                result_json=excluded.result_json,
+                error=excluded.error
+            """,
+            (
+                job["job_id"],
+                job["status"],
+                job.get("sha256"),
+                job.get("analyst_id"),
+                job.get("queued_at"),
+                job.get("started_at"),
+                job.get("completed_at"),
+                result_json,
+                job.get("error"),
+            ),
+        )
+        await db.commit()
+
+
+async def load_analysis_job(job_id: str) -> Optional[Dict[str, Any]]:
+    async with _connect() as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM analysis_jobs WHERE job_id = ?", (job_id,)
+        ) as cur:
+            row = await cur.fetchone()
+    if not row:
+        return None
+    data = dict(row)
+    result = None
+    if data.get("result_json"):
+        try:
+            result = json.loads(data["result_json"])
+        except json.JSONDecodeError:
+            logger.warning("[DB] analysis_jobs.result_json corrupt for %s", job_id[:8])
+    return {
+        "job_id": data["job_id"],
+        "status": data["status"],
+        "sha256": data.get("sha256"),
+        "analyst_id": data.get("analyst_id"),
+        "queued_at": data.get("queued_at"),
+        "started_at": data.get("started_at"),
+        "completed_at": data.get("completed_at"),
+        "result": result,
+        "error": data.get("error"),
+    }
 

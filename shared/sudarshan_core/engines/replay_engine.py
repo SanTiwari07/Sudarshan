@@ -7,13 +7,13 @@ and allows them to be replayed deterministically via ADB.
 
 import json
 import logging
-import subprocess
 import time
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
 
 from sudarshan_core.engines.event_bus import RuntimeEventBus
+from sudarshan_core.sandbox import get_sandbox_provider
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +53,7 @@ class ReplayEngine:
 
     def replay(self, device_serial: str, replay_json_path: Path, adb_path: str = "adb") -> bool:
         """Replay a recorded JSON sequence."""
+        provider = get_sandbox_provider()
         try:
             with open(replay_json_path, "r", encoding="utf-8") as f:
                 sequence = json.load(f)
@@ -64,25 +65,30 @@ class ReplayEngine:
         
         for action in sequence:
             delay_sec = action.get("delay_ms", 0) / 1000.0
-            time.sleep(min(delay_sec, 2.0)) # Don't wait forever, cap at 2s between actions
-            
-            cmd = [adb_path, "-s", device_serial, "shell", "input"]
+            time.sleep(min(delay_sec, 2.0))  # cap wait between actions
+
             atype = action.get("type")
-            
+            shell_args: List[str] = []
             if atype == "tap":
-                cmd.extend(["tap", str(action.get("x")), str(action.get("y"))])
+                shell_args = ["tap", str(action.get("x")), str(action.get("y"))]
             elif atype == "text":
-                cmd.extend(["text", f'"{action.get("text")}"'])
+                shell_args = ["text", action.get("text", "")]
             elif atype == "swipe":
-                # Assuming swipe needs x1, y1, x2, y2, duration. Needs proper mapping if used.
-                pass 
-                
-            if len(cmd) > 5:
+                continue
+
+            if shell_args:
                 try:
-                    subprocess.run(cmd, capture_output=True, timeout=5)
+                    provider.adb(
+                        "-s",
+                        device_serial,
+                        "shell",
+                        "input",
+                        *shell_args,
+                        timeout=5,
+                    )
                 except Exception as e:
                     logger.warning(f"[ReplayEngine] Replay command failed: {e}")
-                    
+
         return True
 
     def flush(self, output_path: Path) -> int:

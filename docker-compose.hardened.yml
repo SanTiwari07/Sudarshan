@@ -1,0 +1,49 @@
+# Production-oriented overlay — use with:
+#   docker compose -f docker-compose.yml -f docker-compose.hardened.yml up -d
+#
+# Removes dev bind-mounts, enables read-only rootfs, drops capabilities, and
+# applies seccomp. Dynamic analysis still requires a host-side Genymotion VM on
+# a private host-only NIC (see docs/security/P0_SANDBOX_ESCAPE_INCIDENT.md).
+
+services:
+  backend:
+    read_only: true
+    tmpfs:
+      - /tmp:size=256M,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      - SUDARSHAN_ENV=production
+      - SANDBOX_CONTAINMENT_STRICT=true
+    volumes:
+      - uploads:/app/uploads
+      - ./.env:/app/.env:ro
+    # Dev bind-mounts removed — image-baked code only.
+
+  analysis-engine:
+    read_only: true
+    tmpfs:
+      - /tmp:size=512M,mode=1777
+    security_opt:
+      - no-new-privileges:true
+      - seccomp:deploy/security/seccomp-analysis-engine.json
+    cap_drop:
+      - ALL
+    environment:
+      - SUDARSHAN_ENV=production
+      - SANDBOX_CONTAINMENT_STRICT=true
+      - FRIDA_LISTEN_HOST=127.0.0.1
+    volumes:
+      - uploads:/app/uploads
+      - ./.env:/app/.env:ro
+      - mitmproxy_har:/mitmproxy_har:ro
+    # Do NOT mount ~/.android in production — host keystore exposure.
+
+  mitmproxy:
+    ports:
+      - "127.0.0.1:8080:8080"
+  mobsf:
+    ports:
+      - "127.0.0.1:8008:8000"

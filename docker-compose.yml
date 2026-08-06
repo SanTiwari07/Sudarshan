@@ -37,7 +37,8 @@ services:
       - PYTHONPATH=/app:/opt/sudarshan-core
       - ANALYSIS_ENGINE_URL=http://analysis-engine:8001
       - MOBSF_HOST=http://mobsf:8000
-      - MOBSF_API_KEY=sudarshan_mobsf_api_key_2026
+      - MOBSF_API_KEY=${MOBSF_API_KEY:-sudarshan_mobsf_api_key_2026}
+      - ANALYSIS_ENGINE_INTERNAL_TOKEN=${ANALYSIS_ENGINE_INTERNAL_TOKEN:-}
       - SANDBOX_PROVIDER=${SANDBOX_PROVIDER:-genymotion}
       # Genymotion exposes each VM at its own TCP endpoint on the host-only
       # network; it is not the Docker host's port 5555.
@@ -93,7 +94,8 @@ services:
       - AUTO_CONNECT=${AUTO_CONNECT:-true}
       - ROOT_REQUIRED=${ROOT_REQUIRED:-true}
       - MOBSF_HOST=http://mobsf:8000
-      - MOBSF_API_KEY=sudarshan_mobsf_api_key_2026
+      - MOBSF_API_KEY=${MOBSF_API_KEY:-sudarshan_mobsf_api_key_2026}
+      - ANALYSIS_ENGINE_INTERNAL_TOKEN=${ANALYSIS_ENGINE_INTERNAL_TOKEN:-}
       # The engine now performs the analysis, so it needs the same AI
       # credentials the backend has. Without them ui_explorer and the agentic
       # planner import successfully but disable themselves, and exploration
@@ -159,9 +161,9 @@ services:
     image: opensecurity/mobile-security-framework-mobsf:latest
     container_name: sudarshan-mobsf
     ports:
-      - "8008:8000"
+      - "127.0.0.1:8008:8000"
     environment:
-      - MOBSF_API_KEY=sudarshan_mobsf_api_key_2026
+      - MOBSF_API_KEY=${MOBSF_API_KEY:-sudarshan_mobsf_api_key_2026}
     healthcheck:
       # /api_docs requires auth and may redirect (302/401), which fails curl -f.
       # The root URL (/) always returns 200 once Django is up — use that.

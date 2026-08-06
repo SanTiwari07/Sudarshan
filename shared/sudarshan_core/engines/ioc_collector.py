@@ -8,12 +8,12 @@ at the end of the run for databases and shared preferences.
 
 import json
 import logging
-import subprocess
 import hashlib
 from pathlib import Path
 from typing import Dict, Any, List, Set, Optional
 
 from sudarshan_core.engines.event_bus import RuntimeEventBus
+from sudarshan_core.sandbox import get_sandbox_provider
 
 logger = logging.getLogger(__name__)
 
@@ -102,12 +102,12 @@ class IOCCollector:
 
         for sweep_type, cmd in commands.items():
             try:
-                res = subprocess.run(
-                    [self.adb_path, "-s", self.device_serial, "shell", cmd],
-                    capture_output=True, text=True, timeout=5
+                provider = get_sandbox_provider()
+                ok, out = provider.adb(
+                    "-s", self.device_serial, "shell", cmd, timeout=5
                 )
-                if res.returncode == 0 and res.stdout.strip():
-                    files = [f.strip() for f in res.stdout.strip().split("\n") if f.strip()]
+                if ok and out.strip():
+                    files = [f.strip() for f in out.strip().split("\n") if f.strip()]
                     for f in files:
                         self.iocs["accessed_files"].add(f)
             except Exception as e:

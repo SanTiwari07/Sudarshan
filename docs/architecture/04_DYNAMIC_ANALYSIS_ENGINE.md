@@ -92,6 +92,19 @@ The DAE exposes real-time telemetry, hook execution statistics, and evidence sna
 
 ---
 
+## 2c. Sandbox containment & ADB policy
+
+Dynamic analysis reaches the guest only through [`SandboxProvider`](../../shared/sudarshan_core/sandbox/provider.py) and [`adb_gateway.run_adb`](../../shared/sudarshan_core/security/adb_gateway.py). [`sandbox_containment.py`](../../shared/sudarshan_core/security/sandbox_containment.py) enforces:
+
+- Valid `ADB_HOST` for Genymotion (private NIC; not `host.docker.internal`).
+- Blocked ADB subcommands (`tcpip`, `kill-server`, `start-server`, …).
+- Loopback-only Frida on the guest (`FRIDA_LISTEN_HOST=127.0.0.1`).
+- Startup audit or fail-closed when `SANDBOX_CONTAINMENT_STRICT=true` or `SUDARSHAN_ENV=production`.
+
+The analysis-engine exposes port **8001** only on the internal Docker network and optionally requires `ANALYSIS_ENGINE_INTERNAL_TOKEN`. Operational runbooks: [`../security/P0_SANDBOX_ESCAPE_INCIDENT.md`](../security/P0_SANDBOX_ESCAPE_INCIDENT.md).
+
+---
+
 ## 3. Frida 17 Runtime & ART Deoptimization
 
 - **PID Attachment**: Resolves running application process ID via `adb shell pidof <package>`, avoiding package label retries.

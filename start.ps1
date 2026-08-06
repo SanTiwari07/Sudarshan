@@ -131,6 +131,42 @@ function Find-FridaHostBinary {
     return $null
 }
 
+function Get-FridaListenHost {
+    $listen = $env:FRIDA_LISTEN_HOST
+    if ([string]::IsNullOrWhiteSpace($listen)) { $listen = "127.0.0.1" }
+    if ($listen -ne "127.0.0.1" -and $listen -ne "::1") {
+        Write-Warn "FRIDA_LISTEN_HOST=$listen is not loopback; using 127.0.0.1 for guest bind"
+        $listen = "127.0.0.1"
+    }
+    return $listen
+}
+
+function Test-FridaRunningOnDevice {
+    param(
+        [string]$AdbPath,
+        [string]$Serial,
+        [string]$FridaBinName
+    )
+    # pgrep is more reliable than scanning full `ps -A` (huge output, truncated names).
+    $pat = if ($FridaBinName.Length -gt 15) { $FridaBinName.Substring(0, 15) } else { $FridaBinName }
+    $cmd = "pgrep -f '$pat' 2>/dev/null || pgrep -f frida-server 2>/dev/null || ps -A 2>/dev/null | grep -E '${pat}|frida-server' || true"
+    $r = Invoke-Adb -AdbPath $AdbPath -AdbArguments @("-s", $Serial, "shell", $cmd) -TimeoutSec 45
+    return ($r.Out -match '\d+' -or $r.Out -match $pat -or $r.Out -match 'frida-server')
+}
+
+function Start-FridaOnDevice {
+    param(
+        [string]$AdbPath,
+        [string]$Serial,
+        [string]$RemotePath,
+        [string]$ListenHost,
+        [string]$Port
+    )
+    $log = "/data/local/tmp/frida-start.log"
+    $startCmd = "nohup $RemotePath -l ${ListenHost}:$Port > $log 2>&1 &"
+    [void](Invoke-Adb -AdbPath $AdbPath -AdbArguments @("-s", $Serial, "shell", $startCmd) -TimeoutSec 45)
+}
+
 Write-Host ""
 Write-Host "+------------------------------------------------------+" -ForegroundColor Cyan
 Write-Host "|        SUDARSHAN ENTERPRISE -- STARTUP SCRIPT        |" -ForegroundColor Cyan
@@ -346,26 +382,31 @@ if ($hasDevice -and $adb) {
         [void](Invoke-Adb -AdbPath $adb -AdbArguments @("-s", $deviceSerial, "shell", "if [ -f $legacyRemote ] && [ ! -f $fridaRemotePath ]; then cp $legacyRemote $fridaRemotePath && chmod 755 $fridaRemotePath; fi"))
     }
 
-    # Start Frida on custom port
-    [void](Invoke-Adb -AdbPath $adb -AdbArguments @("-s", $deviceSerial, "shell", "nohup $fridaRemotePath -l 0.0.0.0:$fridaPort >/dev/null 2>&1 &"))
-    Start-Sleep -Seconds 2
+    $fridaListen = Get-FridaListenHost
+    Start-FridaOnDevice -AdbPath $adb -Serial $deviceSerial -RemotePath $fridaRemotePath -ListenHost $fridaListen -Port $fridaPort
+    Start-Sleep -Seconds 3
 
-    # If custom name failed, try legacy binary on default path
-    $psCheck = Invoke-Adb -AdbPath $adb -AdbArguments @("-s", $deviceSerial, "shell", "ps -A")
-    if ($psCheck.Out -notmatch "$fridaBinName|frida-server") {
-        [void](Invoke-Adb -AdbPath $adb -AdbArguments @("-s", $deviceSerial, "shell", "nohup $legacyRemote -l 0.0.0.0:$fridaPort >/dev/null 2>&1 &"))
-        Start-Sleep -Seconds 2
-        $psCheck = Invoke-Adb -AdbPath $adb -AdbArguments @("-s", $deviceSerial, "shell", "ps -A")
+    $fridaUp = Test-FridaRunningOnDevice -AdbPath $adb -Serial $deviceSerial -FridaBinName $fridaBinName
+    if (-not $fridaUp) {
+        Start-FridaOnDevice -AdbPath $adb -Serial $deviceSerial -RemotePath $legacyRemote -ListenHost $fridaListen -Port $fridaPort
+        Start-Sleep -Seconds 3
+        $fridaUp = Test-FridaRunningOnDevice -AdbPath $adb -Serial $deviceSerial -FridaBinName $fridaBinName
     }
 
     [void](Invoke-Adb -AdbPath $adb -AdbArguments @("-s", $deviceSerial, "forward", "tcp:27055", "tcp:$fridaPort"))
     [void](Invoke-Adb -AdbPath $adb -AdbArguments @("-s", $deviceSerial, "forward", "tcp:27042", "tcp:$fridaPort"))
 
-    if ($psCheck.Out -match "$fridaBinName|frida-server") {
-        Write-Ok "Frida agent running on port $fridaPort (forwarded 27055/27042)"
+    if ($fridaUp) {
+        Write-Ok "Frida agent running on ${fridaListen}:$fridaPort (forwarded 27055/27042)"
     } else {
         Write-Fail "Frida did NOT start -- dynamic analysis will be skipped"
-        Write-Warn "Place frida-server 17.16.4 x86_64 in frida-server-17.16.4-android-x86_64\ and re-run"
+        $logTail = Invoke-Adb -AdbPath $adb -AdbArguments @("-s", $deviceSerial, "shell", "tail -n 20 /data/local/tmp/frida-start.log 2>/dev/null || echo '(no frida-start.log)'")
+        if ($logTail.Out) { Write-Warn "Frida log: $($logTail.Out)" }
+        Write-Warn "Manual start: adb -s $deviceSerial shell `"nohup $fridaRemotePath -l ${fridaListen}:$fridaPort &`""
+        Write-Warn "Or run: python scripts/setup_dynamic_analysis.py"
+        if (-not $hostFrida) {
+            Write-Warn "Place frida-server 17.16.4 x86_64 in frida-server-17.16.4-android-x86_64\ and re-run"
+        }
     }
 } else {
     Write-Warn "Skipped (no device)"

@@ -281,6 +281,37 @@ class SandboxProvider(ABC):
             paths.append(f"/data/local/tmp/{name}")
         return paths
 
+    def _frida_process_running(self, serial: str, names: List[str]) -> Tuple[bool, str]:
+        """Detect frida-server via pgrep (ps NAME column may truncate long binary names)."""
+        patterns: List[str] = []
+        for n in names:
+            if not n:
+                continue
+            patterns.append(n)
+            if len(n) > 15:
+                patterns.append(n[:15])
+        if not patterns:
+            patterns = ["frida-server"]
+        # Unique, order preserved
+        seen = set()
+        uniq = []
+        for p in patterns:
+            if p not in seen:
+                seen.add(p)
+                uniq.append(p)
+        grep_pat = "|".join(uniq)
+        ok, out = self.adb_shell(
+            serial,
+            f"pgrep -f '{uniq[0]}' 2>/dev/null || pgrep -f frida-server 2>/dev/null "
+            f"|| ps -A 2>/dev/null | grep -E '{grep_pat}' || true",
+            timeout=20,
+        )
+        text = out or ""
+        running = bool(text.strip()) and any(p in text for p in uniq)
+        if not running and text.strip().isdigit():
+            running = True
+        return running, text
+
     def ensure_frida(self, serial: str, restart_if_needed: bool = True) -> FridaStatus:
         """
         Verify frida-server is running; restart if necessary.
@@ -296,9 +327,7 @@ class SandboxProvider(ABC):
             host_version = ""
 
         names = self._frida_process_names()
-        pattern = "|".join(names)
-        ok, out = self.adb_shell(serial, f"ps -A | grep -E '{pattern}'", timeout=15)
-        running = any(n in (out or "") for n in names)
+        running, out = self._frida_process_running(serial, names)
 
         status = FridaStatus(
             available=False,
@@ -334,9 +363,9 @@ class SandboxProvider(ABC):
             port = self.config.frida_port
             start_cmd = build_frida_start_command(remote, port, self.config)
             self.adb_shell(serial, start_cmd, timeout=10)
-            time.sleep(2)
-            ok2, out2 = self.adb_shell(serial, f"ps -A | grep -E '{pattern}'", timeout=15)
-            if any(n in (out2 or "") for n in names):
+            time.sleep(3)
+            started_run, out2 = self._frida_process_running(serial, names)
+            if started_run:
                 started = True
                 status.running = True
                 status.restarted = True
@@ -356,10 +385,9 @@ class SandboxProvider(ABC):
                 f"/data/local/tmp/{bin_name}", port, self.config
             )
             self.adb_shell(serial, legacy_cmd, timeout=10)
-            time.sleep(2)
-            pattern = f"{bin_name}|frida-server"
-            ok3, out3 = self.adb_shell(serial, f"ps -A | grep -E '{pattern}'", timeout=15)
-            if any(n in (out3 or "") for n in (bin_name, "frida-server")):
+            time.sleep(3)
+            started_run, out3 = self._frida_process_running(serial, [bin_name, "frida-server"])
+            if started_run:
                 status.running = True
                 status.restarted = True
                 status.available = True

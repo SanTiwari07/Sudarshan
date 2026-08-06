@@ -143,6 +143,7 @@ def _empty_result() -> Dict[str, Any]:
         "otx_pulses": [],
         "correlation_confidence": 0.0,
         "sources_queried": [],
+        "vt_hash_in_database": None,
     }
 
 # ─── VirusTotal ───────────────────────────────────────────────────────────────
@@ -162,7 +163,7 @@ async def _vt_check_hash(sha256: str) -> Dict[str, Any]:
                 headers={"x-apikey": vt_key},
             )
             if r.status_code == 404:
-                return {"found": False}
+                return {"found": False, "in_database": False}
             r.raise_for_status()
             data = r.json()
             attrs = data.get("data", {}).get("attributes", {})
@@ -425,6 +426,7 @@ async def correlate(
     # ── Process VirusTotal hash ────────────────────────────────────────────────
     if vt_hash.get("found"):
         result["available"] = True
+        result["vt_hash_in_database"] = True
         result["sha256_detections"] = vt_hash.get("malicious", 0)
         result["sha256_total"] = vt_hash.get("total", 0)
         result["vt_detection_ratio"] = vt_hash.get("ratio", 0.0)
@@ -432,6 +434,9 @@ async def correlate(
         result["vt_malicious_vendors"] = vt_hash.get("malicious_vendors", [])
         if vt_hash.get("family"):
             result["known_family"] = vt_hash["family"]
+        sources_queried.append("VirusTotal")
+    elif vt_hash.get("found") is False and _get_vt_key():
+        result["vt_hash_in_database"] = False
         sources_queried.append("VirusTotal")
 
     # ── Process OTX hash ──────────────────────────────────────────────────────

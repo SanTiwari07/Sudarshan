@@ -276,11 +276,18 @@ async def get_threat_intelligence(
                 message=f"{vt_detections}/{vt_total} engines detected as malicious ({(vt_ratio*100):.0f}%)"
             ))
             active_sources.append("VirusTotal")
+        elif tc.get("vt_hash_in_database") is False:
+            sources_status.append(SourceStatus(
+                name="VirusTotal",
+                status="active",
+                message="API connected — hash not in VirusTotal yet (upload sample for vendor scan)"
+            ))
+            active_sources.append("VirusTotal")
         else:
             sources_status.append(SourceStatus(
                 name="VirusTotal",
                 status="active",
-                message="Hash submitted — 0 vendor detections recorded"
+                message="Hash lookup returned no engine stats"
             ))
             active_sources.append("VirusTotal")
     else:
@@ -323,7 +330,7 @@ async def get_threat_intelligence(
 
     # 5. Extract Detailed Vendor & Source Data
     vt_detail = VirusTotalDetail(
-        available=bool(vt_key and vt_total > 0),
+        available=bool(vt_key),
         malicious=vt_detections,
         total=vt_total,
         ratio=vt_ratio,

@@ -1,10 +1,10 @@
 {
   "benchmark_version": "1.0",
-  "generated_at": "2026-08-05T12:06:14.721176+00:00",
+  "generated_at": "2026-08-06T06:42:31.050679+00:00",
   "package_name": "com.android.insecurebankv2",
-  "total_elapsed_seconds": 33.4,
-  "unique_screens_visited": 3,
-  "ui_elements_interacted": 10,
+  "total_elapsed_seconds": 31.6,
+  "unique_screens_visited": 2,
+  "ui_elements_interacted": 8,
   "redundant_actions": 0,
   "llm_prompt_tokens": 0,
   "llm_output_tokens": 0,
@@ -12,7 +12,7 @@
   "llm_models_used": [],
   "frida_events_by_category": {
     "accessibility": 3,
-    "general": 7
+    "general": 5
   },
   "frida_unique_hook_types": 1,
   "bfci_categories_triggered": [
@@ -20,9 +20,9 @@
     "general"
   ],
   "bfci_category_count": 2,
-  "actions_taken": 10,
+  "actions_taken": 8,
   "llm_calls_made": 0,
-  "screenshots_taken": 2,
+  "screenshots_taken": 1,
   "fallback_activations": 0,
   "goals_completed": 1,
   "goals_skipped": 0,

@@ -65,6 +65,11 @@ class BehaviorGraphBuilder:
         payload = event.get("payload", event.get("data", {}))
         
         # Only build graph for meaningful security/UI/network events
+        # Agent hook payloads use FRIDA_HOOK until normalized at publish time;
+        # accept both for backward compatibility with raw dict publishes.
+        if etype == "FRIDA_HOOK":
+            etype = EventType.FRIDA_EVENT
+
         if etype not in (
             EventType.UI_ACTION,
             EventType.NETWORK_EVENT,

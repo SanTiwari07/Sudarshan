@@ -356,6 +356,32 @@ async def _abuseipdb_check_ip(ip: str) -> Dict[str, Any]:
         logger.warning(f"AbuseIPDB query failed for {ip}: {e}")
         return {}
 
+# ─── Dynamic IOC extraction ───────────────────────────────────────────────────
+
+def extract_dynamic_urls(dynamic_result: Optional[Dict[str, Any]] = None) -> List[str]:
+    """Collect runtime-observed URLs from a Frida dynamic_result dict."""
+    if not dynamic_result:
+        return []
+    urls: List[str] = []
+    seen: set = set()
+
+    def _add(raw: str) -> None:
+        u = (raw or "").strip()
+        if u and u not in seen:
+            seen.add(u)
+            urls.append(u)
+
+    for u in dynamic_result.get("network_logs") or []:
+        if isinstance(u, str):
+            _add(u)
+    for flow in dynamic_result.get("network_flows") or []:
+        if isinstance(flow, dict):
+            _add(str(flow.get("url", "")))
+        elif isinstance(flow, str):
+            _add(flow)
+    return urls
+
+
 # ─── Main Correlator ─────────────────────────────────────────────────────────
 
 async def correlate(
@@ -440,11 +466,9 @@ async def correlate(
         sources_queried.append("VirusTotal")
 
     # ── Process OTX hash ──────────────────────────────────────────────────────
-    if _get_otx_key():
+    if otx_hash.get("found") and otx_hash.get("pulse_count", 0) > 0:
         sources_queried.append("AlienVault OTX")
         result["available"] = True
-
-    if otx_hash.get("found") and otx_hash.get("pulse_count", 0) > 0:
         result["otx_pulses"] = otx_hash.get("pulses", [])
         # Extract family from pulses
         for pulse in otx_hash.get("pulses", []):
@@ -500,6 +524,8 @@ async def correlate(
             sources_queried.append("AbuseIPDB")
 
     result["ioc_reputation"] = ioc_rep
+    if ioc_rep:
+        result["available"] = True
 
     # ── Threat Score Calculation ───────────────────────────────────────────────
     score_components: List[str] = []

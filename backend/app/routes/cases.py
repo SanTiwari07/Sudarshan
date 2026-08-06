@@ -1,4 +1,4 @@
-# backend/app/routes/cases.py
+# backend/app/routes/cases.py — expanded CaseDetail + evidence endpoint
 """
 Sudarshan Cases API
 =====================
@@ -7,16 +7,18 @@ Provides persistent case history retrieved from SQLite.
 Endpoints:
   GET /api/v1/cases            — paginated list (JWT required, analyst+)
   GET /api/v1/cases/{sha256}   — single case by hash (JWT required, analyst+)
+  GET /api/v1/cases/{sha256}/evidence — Frida evidence.json for case
 """
 
 import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.auth.auth import require_analyst
 from app.db.database import get_case, list_cases, count_cases, add_case_note, get_case_notes
+from app.evidence_loader import load_evidence_records
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cases", tags=["Case History"])
@@ -58,6 +60,36 @@ async def add_case_note_endpoint(sha256: str, req: NoteCreateRequest, user: dict
     return note
 
 
+@router.get("/{sha256}/evidence")
+async def get_case_evidence(
+    sha256: str,
+    user: dict = Depends(require_analyst),
+    limit: int = Query(500, ge=1, le=2000),
+    severity: Optional[str] = Query(None),
+):
+    """Return structured Frida evidence records for a persisted case."""
+    row = await get_case(sha256)
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Case not found for SHA256 {sha256}.")
+    _assert_case_visible(user, row)
+
+    dyn = row.get("dynamic_result") or {}
+    artifact_dir = dyn.get("artifact_dir")
+    records = load_evidence_records(
+        sha256=sha256,
+        artifact_dir=artifact_dir,
+    )
+    if severity:
+        records = [r for r in records if str(r.get("severity", "")).upper() == severity.upper()]
+    records = records[:limit]
+    return {
+        "sha256": sha256,
+        "artifact_dir": artifact_dir,
+        "total_found": len(records),
+        "returned": len(records),
+        "evidence": records,
+    }
+
 
 # ─── Response Models ──────────────────────────────────────────────────────────
 
@@ -77,9 +109,43 @@ class CaseSummary(BaseModel):
 
 
 class CaseDetail(CaseSummary):
+    base_score: Optional[float] = None
+    ai_confidence_multiplier: Optional[float] = None
+    recommended_action: Optional[str] = None
     frs_breakdown: Optional[Dict[str, Any]] = None
+    risk_explanation: Optional[Dict[str, Any]] = None
     threat_scenario_table: Optional[List[Dict[str, Any]]] = None
     intelligence_report: Optional[Dict[str, Any]] = None
+    threat_correlation: Optional[Dict[str, Any]] = None
+    dynamic_analysis: Optional[Dict[str, Any]] = None
+    fraud_workflow: Optional[Dict[str, Any]] = None
+    executive_view: Optional[Dict[str, Any]] = None
+    technical_view: Optional[Dict[str, Any]] = None
+    all_permissions: List[str] = Field(default_factory=list)
+    hardcoded_urls_ips: List[str] = Field(default_factory=list)
+    targets_indian_banks: bool = False
+    has_accessibility_abuse: bool = False
+    has_sms_read_write: bool = False
+    has_system_alert_window: bool = False
+    manifest_findings: List[Dict[str, Any]] = Field(default_factory=list)
+    code_findings: List[Dict[str, Any]] = Field(default_factory=list)
+    dangerous_permissions: List[Any] = Field(default_factory=list)
+    activities: List[str] = Field(default_factory=list)
+    services: List[str] = Field(default_factory=list)
+    receivers: List[str] = Field(default_factory=list)
+    certificate: Dict[str, Any] = Field(default_factory=dict)
+    domains: Dict[str, Any] = Field(default_factory=dict)
+    hardcoded_secrets: List[str] = Field(default_factory=list)
+    apktool_enrichment: Optional[Dict[str, Any]] = None
+    jadx_enrichment: Optional[Dict[str, Any]] = None
+    providers: List[str] = Field(default_factory=list)
+    exported_activities: List[str] = Field(default_factory=list)
+    exported_services: List[str] = Field(default_factory=list)
+    exported_receivers: List[str] = Field(default_factory=list)
+    binary_analysis: List[Dict[str, Any]] = Field(default_factory=list)
+    network_security: Dict[str, Any] = Field(default_factory=dict)
+    trackers: List[Dict[str, Any]] = Field(default_factory=list)
+    emails: List[str] = Field(default_factory=list)
 
 
 class CaseListResponse(BaseModel):
@@ -87,6 +153,78 @@ class CaseListResponse(BaseModel):
     limit: int
     offset: int
     cases: List[CaseSummary]
+
+
+def _dynamic_analysis_from_row(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    dyn = row.get("dynamic_result")
+    if dyn and isinstance(dyn, dict):
+        return dyn
+    da = row.get("dynamic_analysis")
+    if da and isinstance(da, dict):
+        return da
+    return None
+
+
+def _case_detail_from_row(row: Dict[str, Any]) -> CaseDetail:
+    dyn = _dynamic_analysis_from_row(row)
+    services = row.get("services_list") or row.get("services") or []
+    return CaseDetail(
+        sha256=row["sha256"],
+        package_name=row.get("package_name"),
+        app_name=row.get("app_name"),
+        analysis_mode=row.get("analysis_mode"),
+        family_classification=row.get("family_classification"),
+        final_risk_score=row.get("final_risk_score"),
+        risk_band=row.get("risk_band"),
+        confidence=row.get("confidence"),
+        dynamic_available=bool(row.get("dynamic_available")),
+        obfuscation_score=float(row.get("obfuscation_score") or 0.0),
+        has_reflection=bool(row.get("has_reflection")),
+        created_at=row.get("created_at", ""),
+        base_score=row.get("base_score"),
+        ai_confidence_multiplier=row.get("ai_confidence_multiplier"),
+        recommended_action=row.get("recommended_action"),
+        frs_breakdown=row.get("frs_breakdown"),
+        risk_explanation=row.get("risk_explanation"),
+        threat_scenario_table=row.get("threat_scenario_table"),
+        intelligence_report=row.get("intelligence_report"),
+        threat_correlation=row.get("threat_correlation"),
+        dynamic_analysis=dyn,
+        fraud_workflow=row.get("fraud_workflow"),
+        executive_view=row.get("executive_view"),
+        technical_view=row.get("technical_view") or {
+            "permissions_fired": [],
+            "strings_fired": row.get("suspicious_strings", [])[:20] if row.get("suspicious_strings") else [],
+            "apis_fired": row.get("dangerous_apis_found_raw", []) or [],
+            "matched_rule": row.get("matched_rule", ""),
+            "decoded_manifest_excerpts": [],
+        },
+        all_permissions=row.get("all_permissions") or [],
+        hardcoded_urls_ips=row.get("hardcoded_urls_ips") or [],
+        targets_indian_banks=bool(row.get("targets_indian_banks")),
+        has_accessibility_abuse=bool(row.get("has_accessibility_abuse")),
+        has_sms_read_write=bool(row.get("has_sms_read_write")),
+        has_system_alert_window=bool(row.get("has_system_alert_window")),
+        manifest_findings=row.get("manifest_findings") or [],
+        code_findings=row.get("code_findings") or [],
+        dangerous_permissions=row.get("dangerous_perms") or row.get("dangerous_permissions") or [],
+        activities=row.get("activities") or [],
+        services=services if isinstance(services, list) else [],
+        receivers=row.get("receivers") or [],
+        certificate=row.get("certificate") or {},
+        domains=row.get("domains") or {},
+        hardcoded_secrets=row.get("hardcoded_secrets") or [],
+        apktool_enrichment=row.get("apktool_enrichment"),
+        jadx_enrichment=row.get("jadx_enrichment"),
+        providers=row.get("providers") or [],
+        exported_activities=row.get("exported_activities") or [],
+        exported_services=row.get("exported_services") or [],
+        exported_receivers=row.get("exported_receivers") or [],
+        binary_analysis=row.get("binary_analysis") or [],
+        network_security=row.get("network_security") or {},
+        trackers=row.get("trackers") or [],
+        emails=row.get("emails") or [],
+    )
 
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────
@@ -137,20 +275,4 @@ async def get_case_detail(
         )
     _assert_case_visible(user, row)
 
-    return CaseDetail(
-        sha256=row["sha256"],
-        package_name=row.get("package_name"),
-        app_name=row.get("app_name"),
-        analysis_mode=row.get("analysis_mode"),
-        family_classification=row.get("family_classification"),
-        final_risk_score=row.get("final_risk_score"),
-        risk_band=row.get("risk_band"),
-        confidence=row.get("confidence"),
-        dynamic_available=bool(row.get("dynamic_available")),
-        obfuscation_score=float(row.get("obfuscation_score") or 0.0),
-        has_reflection=bool(row.get("has_reflection")),
-        created_at=row.get("created_at", ""),
-        frs_breakdown=row.get("frs_breakdown"),
-        threat_scenario_table=row.get("threat_scenario_table"),
-        intelligence_report=row.get("intelligence_report"),
-    )
+    return _case_detail_from_row(row)

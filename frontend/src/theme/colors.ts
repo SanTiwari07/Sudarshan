@@ -75,6 +75,16 @@ export function getRiskStyle(band: string | null | undefined) {
   return COLORS.riskBand.unknown;
 }
 
+/** Left accent bar + subtle tint for intel hero panels */
+export function getRiskAccent(band: string | null | undefined) {
+  const normalized = (band || '').toLowerCase();
+  if (normalized.includes('critical')) return { bar: 'border-l-red-600', ring: 'ring-red-100' };
+  if (normalized.includes('high')) return { bar: 'border-l-orange-500', ring: 'ring-orange-100' };
+  if (normalized.includes('suspicious')) return { bar: 'border-l-amber-500', ring: 'ring-amber-100' };
+  if (normalized.includes('safe')) return { bar: 'border-l-emerald-600', ring: 'ring-emerald-100' };
+  return { bar: 'border-l-slate-400', ring: 'ring-slate-100' };
+}
+
 export function getSeverityStyle(severity: string | null | undefined): string {
   const normalized = (severity || '').toLowerCase();
   if (normalized.includes('critical')) return COLORS.severity.critical;

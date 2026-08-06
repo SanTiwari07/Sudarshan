@@ -3,6 +3,7 @@ import { Shield, LayoutDashboard, Terminal, Globe, Database, LogOut, LogIn, Mess
 import Login, { getToken, getUser, clearToken } from './pages/Login';
 import { lazy, Suspense, useEffect, useCallback } from 'react';
 import ErrorBoundary from './components/ErrorBoundary';
+import InvestigationShell from './components/investigation/InvestigationShell';
 import { AnalysisProvider, useAnalysis } from './context/AnalysisContext';
 import { LoadingSpinner, ErrorState } from './components/ui/Skeleton';
 
@@ -42,6 +43,7 @@ export type ThreatCorrelation = {
   correlation_confidence: number;
   suspicious_domains: string[];
   malicious_ips: string[];
+  threat_score_sources?: string[];
 };
 
 export type FRSBreakdown = {
@@ -58,6 +60,18 @@ export type FRSBreakdown = {
     ob: number;
     ir: number;
   };
+  axes_used?: Record<string, number>;
+  axes_excluded?: string[];
+  concealed_payload?: boolean;
+  verdict_floored_for_visibility?: boolean;
+  dynamic_ran?: boolean;
+  dynamic_conclusive?: boolean;
+};
+
+export type RiskExplanation = {
+  evidence_lines?: string[];
+  component_evidence?: Record<string, string[]>;
+  stei_evidence_by_axis?: Record<string, string[]>;
 };
 
 export type ThreatScenarioRow = {
@@ -117,6 +131,11 @@ export type DynamicAnalysis = {
   clicked_nodes: string[];
   anti_analysis_events: any[];
   yara_matches: any[];
+  bfci?: number;
+  bfci_components?: Record<string, number>;
+  bfci_evidence?: string[];
+  artifact_dir?: string;
+  evidence_record_count?: number;
 };
 
 export type WorkflowStage = {
@@ -153,6 +172,7 @@ export type FraudCardData = {
   confidence: number;
   recommended_action: string;
   frs_breakdown?: FRSBreakdown;
+  risk_explanation?: RiskExplanation;
   threat_scenario_table?: ThreatScenarioRow[];
   all_permissions: string[];
   hardcoded_urls_ips: string[];
@@ -205,6 +225,8 @@ export type FraudCardData = {
     website: string;
   }>;
   emails?: string[];
+  apktool_enrichment?: Record<string, unknown>;
+  jadx_enrichment?: Record<string, unknown>;
   intelligence_report?: IntelligenceReport;
   fraud_workflow?: FraudWorkflow;
   dynamic_result?: any;
@@ -278,7 +300,7 @@ function AppContent() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-100">
       <nav className="bg-blue-900 text-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-[1760px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center gap-3">
               <Shield className="h-8 w-8 text-blue-400" />
@@ -359,7 +381,7 @@ function AppContent() {
         </div>
       </nav>
 
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+      <main className="flex-1 max-w-[1760px] w-full mx-auto p-4 sm:p-6 lg:px-8 lg:py-8">
         <Routes>
           {/* Public */}
           <Route path="/login" element={<Login />} />
@@ -369,16 +391,32 @@ function AppContent() {
             <RequireAuth label="Upload"><Upload onAnalysisComplete={setAnalysisResult} /></RequireAuth>
           } />
           <Route path="/fraud-card" element={
-            <RequireAuth label="Fraud Card"><ActiveCaseRoute component={FraudCard} /></RequireAuth>
+            <RequireAuth label="Fraud Card">
+              <InvestigationShell>
+                <ActiveCaseRoute component={FraudCard} />
+              </InvestigationShell>
+            </RequireAuth>
           } />
           <Route path="/technical" element={
-            <RequireAuth label="Technical View"><ActiveCaseRoute component={TechnicalView} /></RequireAuth>
+            <RequireAuth label="Technical View">
+              <InvestigationShell>
+                <ActiveCaseRoute component={TechnicalView} />
+              </InvestigationShell>
+            </RequireAuth>
           } />
           <Route path="/threat-intel" element={
-            <RequireAuth label="Threat Intelligence"><ActiveCaseRoute component={ThreatIntelView} /></RequireAuth>
+            <RequireAuth label="Threat Intelligence">
+              <InvestigationShell>
+                <ActiveCaseRoute component={ThreatIntelView} />
+              </InvestigationShell>
+            </RequireAuth>
           } />
           <Route path="/chat" element={
-            <RequireAuth label="Investigation Chat"><ActiveCaseRoute component={InvestigationChat} /></RequireAuth>
+            <RequireAuth label="Investigation Chat">
+              <InvestigationShell>
+                <ActiveCaseRoute component={InvestigationChat} />
+              </InvestigationShell>
+            </RequireAuth>
           } />
           <Route path="/history" element={
             <RequireAuth label="Case History"><History /></RequireAuth>

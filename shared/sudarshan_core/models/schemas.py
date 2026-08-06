@@ -56,6 +56,13 @@ class FraudCardTechnicalView(BaseModel):
 
 # ─── FRS Breakdown ────────────────────────────────────────────────────────────
 
+class RiskExplanation(BaseModel):
+    """Deterministic score justification — ledger lines from the risk engine."""
+    evidence_lines: List[str] = Field(default_factory=list)
+    component_evidence: Dict[str, List[str]] = Field(default_factory=dict)
+    stei_evidence_by_axis: Dict[str, List[str]] = Field(default_factory=dict)
+
+
 class FRSBreakdown(BaseModel):
     stei: float = 0.0
     dynamic: float = 0.0
@@ -125,6 +132,7 @@ class ThreatCorrelationResult(BaseModel):
     correlation_confidence: float = 0.0
     suspicious_domains: List[str] = Field(default_factory=list)
     malicious_ips: List[str] = Field(default_factory=list)
+    threat_score_sources: List[str] = Field(default_factory=list)
 
 
 # ─── Dynamic Analysis ────────────────────────────────────────────────────────
@@ -143,6 +151,11 @@ class DynamicAnalysisResult(BaseModel):
     clicked_nodes: List[str] = Field(default_factory=list)
     anti_analysis_events: List[Dict[str, Any]] = Field(default_factory=list)
     yara_matches: List[str] = Field(default_factory=list)
+    bfci: float = 0.0
+    bfci_components: Dict[str, float] = Field(default_factory=dict)
+    bfci_evidence: List[str] = Field(default_factory=list)
+    artifact_dir: Optional[str] = None
+    evidence_record_count: int = 0
 
 
 # ─── Fraud Workflow Reconstruction ───────────────────────────────────────────────────────────────────
@@ -228,6 +241,7 @@ class AnalysisResponse(BaseModel):
 
     # FRS breakdown (now includes 5-axis STEI)
     frs_breakdown: Optional[FRSBreakdown] = None
+    risk_explanation: Optional[RiskExplanation] = None
 
     # Granular threat-scenario correlation table
     threat_scenario_table: List[ThreatScenarioRow] = Field(default_factory=list)

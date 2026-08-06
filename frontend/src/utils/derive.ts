@@ -1,6 +1,7 @@
 // Pure presentation & data export utility helpers for Sudarshan BOI
 
 import type { FraudCardData } from '../App';
+import type { LedgerLine } from '../types/investigation';
 
 // ─── Export Helpers ─────────────────────────────────────────────────────────────
 
@@ -27,6 +28,27 @@ export function exportCSV(data: FraudCardData): void {
   const a = document.createElement('a');
   a.href = url;
   a.download = `sudarshan-ioc-${data.sha256.slice(0, 8)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function exportLedgerCSV(data: FraudCardData, lines: LedgerLine[]): void {
+  const header = 'id,component,label,detail,contribution';
+  const rows = lines.map((l) =>
+    [
+      l.id,
+      l.component,
+      `"${l.label.replace(/"/g, '""')}"`,
+      `"${l.detail.replace(/"/g, '""')}"`,
+      l.contribution ?? '',
+    ].join(','),
+  );
+  const csv = [header, ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `sudarshan-ledger-${data.sha256.slice(0, 8)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }

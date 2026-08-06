@@ -199,7 +199,7 @@ def _calculate_stei(
 ) -> Tuple[float, Dict[str, float], List[str]]:
     """
     STEI = 0.60 × CT + 0.20 × BT + 0.10 × PR + 0.05 × OB + 0.05 × IR
-    Returns (stei_score, axes_dict, evidence_list).
+    Returns (stei_score, axes_dict, evidence_list, evidence_by_axis).
     """
     ct, ct_ev = _axis_ct(flags)
     bt, bt_ev = _axis_bt(flags)
@@ -214,7 +214,8 @@ def _calculate_stei(
     stei = round(min(stei, 100.0), 2)
 
     all_evidence = ct_ev + bt_ev + pr_ev + ob_ev + ir_ev
-    return stei, axes, all_evidence
+    by_axis = {"ct": ct_ev, "bt": bt_ev, "pr": pr_ev, "ob": ob_ev, "ir": ir_ev}
+    return stei, axes, all_evidence, by_axis
 
 
 # ─── Threat Scenario Table ────────────────────────────────────────────────────
@@ -692,7 +693,7 @@ def calculate_risk_score(
         flags_dict = flags
 
     # ── Component Scores ──────────────────────────────────────────────────────
-    stei, stei_axes, stei_evidence = _calculate_stei(flags_dict, all_permissions)
+    stei, stei_axes, stei_evidence, stei_by_axis = _calculate_stei(flags_dict, all_permissions)
     dynamic_score, dynamic_evidence = _calculate_dynamic_score(dynamic_result)
     correlation_score, corr_evidence = _calculate_correlation_score(correlation_result)
     banking_score, banking_evidence = _calculate_banking_impact(flags_dict, family, correlation_result)
@@ -846,6 +847,16 @@ def calculate_risk_score(
         "confidence": confidence,
         "severity": band,
         "evidence": all_evidence[:12],  # Cap evidence list for payload size
+        "risk_explanation": {
+            "evidence_lines": all_evidence[:48],
+            "component_evidence": {
+                "stei": stei_evidence,
+                "dynamic": dynamic_evidence,
+                "correlation": corr_evidence,
+                "banking": banking_evidence,
+            },
+            "stei_evidence_by_axis": stei_by_axis,
+        },
         "recommended_action": _get_recommended_action(band, family, flags_dict),
     }
 

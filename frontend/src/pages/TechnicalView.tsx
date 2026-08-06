@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Navigate } from 'react-router-dom';
 import {
   Terminal, Cpu, Search, Lock, Code, Package,
   ChevronDown, ChevronUp, Shield, Globe, AlertTriangle, Database, Tag, Key
@@ -11,6 +10,8 @@ import SocCard from '../components/ui/Card';
 import SectionHeader from '../components/ui/SectionHeader';
 import CopyButton from '../components/ui/CopyButton';
 import WorkflowDiagram from '../components/WorkflowDiagram';
+import FindingsRegistryTable from '../components/investigation/FindingsRegistryTable';
+import { useAnalysis } from '../context/AnalysisContext';
 
 // ─── Explainability Engine ────────────────────────────────────────────────────────
 
@@ -843,7 +844,8 @@ function SecretsPanel({ data }: { data: FraudCardData }) {
 // ─── Main TechnicalView Page ──────────────────────────────────────────────────────
 
 export default function TechnicalView({ data }: { data: FraudCardData | null }) {
-  if (!data) return <Navigate to="/" />;
+  const { investigationBundle } = useAnalysis();
+  if (!data) return null;
 
   return (
     <div className="space-y-5">
@@ -865,6 +867,8 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
           </button>
         </div>
       </div>
+
+      {investigationBundle && <FindingsRegistryTable bundle={investigationBundle} />}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <ExplainabilityEngine data={data} />

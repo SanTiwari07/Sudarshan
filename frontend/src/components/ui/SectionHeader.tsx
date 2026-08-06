@@ -3,7 +3,7 @@ import React from 'react';
 interface SectionHeaderProps {
   icon: React.ReactNode;
   title: string;
-  subtitle?: string;
+  subtitle?: React.ReactNode;
   badge?: React.ReactNode;
   action?: React.ReactNode; // alias for badge, used by collapsible panels
   className?: string;

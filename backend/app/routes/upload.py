@@ -41,6 +41,7 @@ from sudarshan_core.models.schemas import (
     IntelligenceReport,
     IOCReputation,
     ManifestFinding,
+    RiskExplanation,
     StaticAnalysisFlags,
     ThreatCorrelationResult,
     ThreatScenarioRow,
@@ -107,7 +108,46 @@ def _build_correlation_model(raw: Dict) -> ThreatCorrelationResult:
         correlation_confidence=raw.get("correlation_confidence", 0.0),
         suspicious_domains=raw.get("suspicious_domains", []),
         malicious_ips=raw.get("malicious_ips", []),
+        threat_score_sources=raw.get("threat_score_sources", []) or [],
     )
+
+
+def _build_dynamic_analysis_model(dynamic_result: Optional[Dict]) -> Optional[DynamicAnalysisResult]:
+    if not dynamic_result:
+        return None
+    bfci_ev = dynamic_result.get("bfci_evidence", [])
+    if not isinstance(bfci_ev, list):
+        bfci_ev = []
+    return DynamicAnalysisResult(
+        available=dynamic_result.get("available", False),
+        activities_triggered=dynamic_result.get("activities_triggered", []),
+        network_logs=dynamic_result.get("network_logs", []),
+        api_calls=dynamic_result.get("api_calls", []),
+        files_accessed=dynamic_result.get("files_accessed", []),
+        screenshots=dynamic_result.get("screenshots", []),
+        logcat=dynamic_result.get("logcat", ""),
+        multi_stage_summary=dynamic_result.get("multi_stage_summary", {}),
+        coverage_metrics=dynamic_result.get("coverage_metrics", {}),
+        attack_timeline=dynamic_result.get("attack_timeline", []),
+        clicked_nodes=list(dynamic_result.get("clicked_nodes", [])),
+        anti_analysis_events=dynamic_result.get("anti_analysis_events", []),
+        yara_matches=dynamic_result.get("yara_matches", []),
+        bfci=float(dynamic_result.get("bfci", 0.0) or 0.0),
+        bfci_components=dynamic_result.get("bfci_components", {}) or {},
+        bfci_evidence=bfci_ev,
+        artifact_dir=dynamic_result.get("artifact_dir"),
+        evidence_record_count=int(dynamic_result.get("evidence_record_count", 0) or 0),
+    )
+
+
+def _build_risk_explanation(raw: Optional[Dict]) -> Optional[RiskExplanation]:
+    if not raw or not isinstance(raw, dict):
+        return None
+    try:
+        return RiskExplanation(**raw)
+    except Exception as exc:
+        logger.debug("[RiskExplanation] Skipped malformed payload: %s", exc)
+        return None
 
 
 def _build_fraud_workflow(raw: Optional[Dict]) -> Optional[FraudWorkflow]:
@@ -686,6 +726,7 @@ async def _run_analysis_pipeline(
         "confidence": risk_result.get("confidence", 70.0),
         "recommended_action": risk_result.get("recommended_action", ""),
         "frs_breakdown": risk_result.get("frs_breakdown", {}),
+        "risk_explanation": risk_result.get("risk_explanation", {}),
         "threat_scenario_table": risk_result.get("threat_scenario_table", []),
         "all_permissions": all_permissions,
         "hardcoded_urls_ips": flags_dict.get("hardcoded_urls_ips", []),
@@ -928,6 +969,7 @@ def _build_response(result: Dict[str, Any], job_id: Optional[str] = None) -> Ana
         confidence=result.get("confidence", 70.0),
         recommended_action=result.get("recommended_action", ""),
         frs_breakdown=frs_model,
+        risk_explanation=_build_risk_explanation(result.get("risk_explanation")),
         threat_scenario_table=scenario_rows,
         all_permissions=result["all_permissions"],
         hardcoded_urls_ips=result["hardcoded_urls_ips"],
@@ -938,21 +980,7 @@ def _build_response(result: Dict[str, Any], job_id: Optional[str] = None) -> Ana
         obfuscation_score=result.get("obfuscation_score", 0.0),
         has_reflection=result.get("has_reflection", False),
         threat_correlation=_build_correlation_model(result["threat_correlation"]),
-        dynamic_analysis=DynamicAnalysisResult(
-            available=dynamic_result.get("available", False) if dynamic_result else False,
-            activities_triggered=dynamic_result.get("activities_triggered", []) if dynamic_result else [],
-            network_logs=dynamic_result.get("network_logs", []) if dynamic_result else [],
-            api_calls=dynamic_result.get("api_calls", []) if dynamic_result else [],
-            files_accessed=dynamic_result.get("files_accessed", []) if dynamic_result else [],
-            screenshots=dynamic_result.get("screenshots", []) if dynamic_result else [],
-            logcat=dynamic_result.get("logcat", "") if dynamic_result else "",
-            multi_stage_summary=dynamic_result.get("multi_stage_summary", {}) if dynamic_result else {},
-            coverage_metrics=dynamic_result.get("coverage_metrics", {}) if dynamic_result else {},
-            attack_timeline=dynamic_result.get("attack_timeline", []) if dynamic_result else [],
-            clicked_nodes=list(dynamic_result.get("clicked_nodes", [])) if dynamic_result else [],
-            anti_analysis_events=dynamic_result.get("anti_analysis_events", []) if dynamic_result else [],
-            yara_matches=dynamic_result.get("yara_matches", []) if dynamic_result else [],
-        ) if dynamic_result else None,
+        dynamic_analysis=_build_dynamic_analysis_model(dynamic_result),
         dynamic_available=result["dynamic_available"],
         manifest_findings=result["manifest_findings"],
         code_findings=result["code_findings"],

@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from 'react';
-import { Navigate } from 'react-router-dom';
 import {
   Cpu, Send, Shield, User, RefreshCw, AlertTriangle, CheckCircle2,
   HelpCircle, FileText, Lock, Eye, Check,
@@ -7,6 +6,8 @@ import {
 } from 'lucide-react';
 import type { FraudCardData } from '../App';
 import { API_BASE, authHeaders } from '../config';
+import { useAnalysis } from '../context/AnalysisContext';
+import { useInvestigationUI } from '../context/InvestigationUIContext';
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
 
@@ -634,7 +635,17 @@ function InvestigationResponseRenderer({
 // ─── Main InvestigationChat Component ───────────────────────────────────────────
 
 export default function InvestigationChat({ data }: { data: FraudCardData | null }) {
-  if (!data) return <Navigate to="/" />;
+  const { investigationBundle } = useAnalysis();
+  const { openLedger } = useInvestigationUI();
+
+  if (!data) return null;
+
+  const ledgerSummary = investigationBundle
+    ? `Deterministic ledger: ${investigationBundle.counts.evidenceRecords} evidence records, ` +
+      `STEI ${data.frs_breakdown?.stei?.toFixed(1) ?? '—'}, ` +
+      `Dynamic ${data.frs_breakdown?.dynamic?.toFixed(1) ?? '—'}, ` +
+      `Correlation ${data.frs_breakdown?.correlation?.toFixed(1) ?? '—'}.`
+    : '';
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -721,6 +732,7 @@ Everything is grounded strictly in investigation evidence.`,
           sha256: data.sha256,
           question: text.trim(),
           history,
+          ledger_summary: ledgerSummary,
         }),
         signal: controller.signal,
       });
@@ -845,6 +857,15 @@ Everything is grounded strictly in investigation evidence.`,
         </div>
         <RiskBadge band={data.risk_band} score={data.final_risk_score} />
       </div>
+
+      {ledgerSummary && (
+        <div className="px-5 py-2 bg-amber-50 border-b border-amber-100 text-xs flex flex-wrap items-center justify-between gap-2">
+          <span className="text-amber-900">{ledgerSummary}</span>
+          <button type="button" onClick={() => openLedger('full')} className="font-semibold text-blue-700">
+            Open score ledger
+          </button>
+        </div>
+      )}
 
       {/* Quick Prompts Bar */}
       {messages.length <= 1 && (

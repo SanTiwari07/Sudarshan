@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { GitBranch, ChevronDown, ChevronRight, AlertTriangle, CheckCircle2, Activity, Shield } from 'lucide-react';
+import { useInvestigationUI } from '../context/InvestigationUIContext';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -98,6 +99,7 @@ function StageCard({
   isLast: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const { openEvidence } = useInvestigationUI();
   const durationS = ((stage.end_ms - stage.start_ms) / 1000).toFixed(1);
 
   return (
@@ -161,10 +163,24 @@ function StageCard({
                 </div>
               </div>
             )}
-            <div className="flex gap-4 text-gray-500">
+            <div className="flex flex-wrap gap-4 text-gray-500 items-center">
               <span><b>{stage.evidence_ids.length}</b> evidence events</span>
               <span>Duration: <b>{durationS}s</b></span>
             </div>
+            {stage.evidence_ids.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {stage.evidence_ids.map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => openEvidence(id)}
+                    className="font-mono text-[10px] px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-100 rounded"
+                  >
+                    {id}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

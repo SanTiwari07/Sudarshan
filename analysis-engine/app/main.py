@@ -38,7 +38,7 @@ from sudarshan_core.engines.network_capture import NetworkCapture
 from sudarshan_core.engines.risk_engine import calculate_risk_score as compute_fraud_risk_score
 from sudarshan_core.models.manifest import build_manifest
 from sudarshan_core.services.mobsf_client import MobSFAnalysisError, MobSFClient, MobSFNotAvailable
-from sudarshan_core.services.threat_correlator import correlate
+from sudarshan_core.services.threat_correlator import correlate, extract_dynamic_urls
 
 # ─── Structured Logging Configuration ───────────────────────────────────────
 # CRITICAL: Androguard at DEBUG level generates tens of thousands of log records
@@ -375,6 +375,7 @@ async def _execute_analysis_pipeline(
             sha256=sha256_hash,
             urls=flags.hardcoded_urls_ips,
             package_name=package_name,
+            dynamic_urls=extract_dynamic_urls(dynamic_result),
         )
 
         risk_output = await asyncio.to_thread(

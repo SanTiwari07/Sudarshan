@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Sudarshan DAE Validation Report</title>
+<style>
+body{font-family:Segoe UI,sans-serif;background:#0d1117;color:#e6edf3;padding:24px}
+table{border-collapse:collapse;width:100%;margin:16px 0}
+th,td{border:1px solid #30363d;padding:8px;text-align:left;font-size:13px}
+th{background:#161b22}
+.score{font-size:2rem;font-weight:bold;color:#58a6ff}
+.warn{color:#f85149}
+.ok{color:#3fb950}
+</style></head><body>
+<h1>Dynamic Analysis Engine — Validation Report</h1>
+<p>Generated 2026-08-06T06:16:07.681633+00:00</p>
+<p class="score">Overall: 23.8% — <span class="warn">NOT STABLE</span></p>
+<ul>
+<li>Reliability: 0.0%</li>
+<li>Coverage: 20.0%</li>
+<li>Performance: 75.0%</li>
+<li>Production readiness recommendation: <strong>NO-GO</strong></li>
+</ul>
+<h2>Architecture (validation path)</h2>
+<pre class="mermaid">
+flowchart TD
+  UPLOAD[Corpus APK] --> INSTALL[ADB Install]
+  INSTALL --> LAUNCH[Launch Ladder]
+  LAUNCH --> FRIDA[Frida Attach]
+  FRIDA --> HOOKS[Hooks + Canary]
+  HOOKS --> BUS[Event Bus]
+  BUS --> EXP[Agentic Explorer]
+  EXP --> SCR[Screenshot Manager]
+  SCR --> EV[Evidence Store]
+  EV --> WF[Workflow]
+  WF --> RISK[Risk Engine]
+  RISK --> HTML[HTML Report]
+  HTML --> PDF[PDF via print embed]
+</pre>
+<h2>Validation matrix</h2>
+<table>
+<tr><th>ID</th><th>Category</th><th>Status</th><th>Launch</th><th>Launch ms</th><th>Attach ms</th>
+<th>Events</th><th>Screenshots</th><th>HTML</th><th>PDF-ready</th><th>Failures</th></tr>
+<tr><td>hello_world</td><td>hello_world</td><td>SKIP</td><td>no</td><td>-</td><td>-</td><td>0</td><td>0</td><td>no</td><td>no</td><td></td></tr><tr><td>insecurebankv2</td><td>banking_demo</td><td>FAIL</td><td>yes</td><td>30177.0</td><td>35204.0</td><td>4</td><td>4</td><td>yes</td><td>yes</td><td>screenshot SCR-001: not embedded as base64 in HTML (PDF print would be broken); screenshot SCR-002: not embedded as base64 in HTML (PDF print would be broken); screenshot SCR-003: not embedded as base64 in HTML (PDF print would be broken)</td></tr><tr><td>insecurebankv2_dvb</td><td>damn_vulnerable_bank</td><td>SKIP</td><td>no</td><td>-</td><td>-</td><td>0</td><td>0</td><td>no</td><td>no</td><td></td></tr><tr><td>goatdroid</td><td>owasp_goatdroid</td><td>SKIP</td><td>no</td><td>-</td><td>-</td><td>0</td><td>0</td><td>no</td><td>no</td><td></td></tr><tr><td>runtime_permissions</td><td>runtime_permission_demo</td><td>SKIP</td><td>no</td><td>-</td><td>-</td><td>0</td><td>0</td><td>no</td><td>no</td><td></td></tr><tr><td>webview_demo</td><td>webview_demo</td><td>SKIP</td><td>no</td><td>-</td><td>-</td><td>0</td><td>0</td><td>no</td><td>no</td><td></td></tr><tr><td>accessibility_demo</td><td>accessibility_demo</td><td>SKIP</td><td>no</td><td>-</td><td>-</td><td>0</td><td>0</td><td>no</td><td>no</td><td></td></tr><tr><td>overlay_demo</td><td>overlay_demo</td><td>SKIP</td><td>no</td><td>-</td><td>-</td><td>0</td><td>0</td><td>no</td><td>no</td><td></td></tr><tr><td>sms_demo</td><td>sms_permission_demo</td><td>SKIP</td><td>no</td><td>-</td><td>-</td><td>0</td><td>0</td><td>no</td><td>no</td><td></td></tr><tr><td>obfuscated</td><td>obfuscated_apk</td><td>SKIP</td><td>no</td><td>-</td><td>-</td><td>0</td><td>0</td><td>no</td><td>no</td><td></td></tr><tr><td>splash</td><td>splash_screen</td><td>SKIP</td><td>no</td><td>-</td><td>-</td><td>0</td><td>0</td><td>no</td><td>no</td><td></td></tr><tr><td>multi_activity</td><td>multi_activity</td><td>FAIL</td><td>yes</td><td>23830.0</td><td>27668.0</td><td>4</td><td>4</td><td>yes</td><td>yes</td><td>screenshot SCR-001: not embedded as base64 in HTML (PDF print would be broken); screenshot SCR-002: not embedded as base64 in HTML (PDF print would be broken); screenshot SCR-003: not embedded as base64 in HTML (PDF print would be broken)</td></tr><tr><td>crash_on_launch</td><td>crash_on_launch</td><td>SKIP</td><td>no</td><td>-</td><td>-</td><td>0</td><td>0</td><td>no</td><td>no</td><td></td></tr><tr><td>no_launcher</td><td>no_launcher</td><td>SKIP</td><td>no</td><td>-</td><td>-</td><td>0</td><td>0</td><td>no</td><td>no</td><td></td></tr><tr><td>no_runtime_permissions</td><td>no_runtime_permissions</td><td>SKIP</td><td>no</td><td>-</td><td>-</td><td>0</td><td>0</td><td>no</td><td>no</td><td></td></tr>
+</table>
+<h2>Remaining risks</h2>
+<ul>
+<li>Corpus completeness: optional APKs skipped until placed under tests/apks/categories/</li>
+<li>Stress/recovery results in engineering_report.json</li>
+<li>Stability requires 100% pass on all non-optional samples with full screenshot/report integrity</li>
+</ul>
+</body></html>

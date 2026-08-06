@@ -1,0 +1,118 @@
+{
+  "entry_id": "insecurebankv2",
+  "category": "banking_demo",
+  "label": "InsecureBankv2 (Banking Demo)",
+  "apk_path": "D:\\Projects\\Sudarshan BOI\\tests\\apks\\categories\\insecurebankv2.apk",
+  "status": "FAIL",
+  "skipped": false,
+  "skip_reason": "",
+  "launch_success": true,
+  "launch_time_ms": 30177.0,
+  "frida_attach_time_ms": 35204.0,
+  "dynamic_status": "EVENTS_CAPTURED",
+  "explorer_used": "agentic",
+  "explorer_coverage": {
+    "screens": 2,
+    "buttons_found": 9,
+    "buttons_clicked": 0,
+    "forms_found": 2,
+    "forms_completed": 0,
+    "permissions_granted": 0,
+    "dialogs_dismissed": 0,
+    "navigation_depth": 1,
+    "coverage_percent": 0
+  },
+  "permission_dialogs_found": 0,
+  "runtime_events": 4,
+  "screenshots_count": 4,
+  "evidence_objects": 8,
+  "workflow_nodes": 0,
+  "risk_score": 27.81,
+  "html_success": true,
+  "pdf_success": true,
+  "failures": [
+    "screenshot SCR-001: not embedded as base64 in HTML (PDF print would be broken)",
+    "screenshot SCR-002: not embedded as base64 in HTML (PDF print would be broken)",
+    "screenshot SCR-003: not embedded as base64 in HTML (PDF print would be broken)",
+    "screenshot SCR-004: not embedded as base64 in HTML (PDF print would be broken)"
+  ],
+  "recovery_attempts": [],
+  "timings": {
+    "analysis_seconds": 79.94593539999914,
+    "total_seconds": 80.07496659999924
+  },
+  "coverage": {
+    "activities_discovered": 0,
+    "activities_visited": 0,
+    "fragments_visited": 0,
+    "permission_dialogs_found": 0,
+    "permission_dialogs_handled": 0,
+    "unique_screens": 2,
+    "explorer_depth": 1,
+    "runtime_apis_hooked": 1,
+    "accessibility_callbacks": 3,
+    "network_requests": 0,
+    "security_events": 1,
+    "coverage_percent": 20.0,
+    "hook_fire_total": 4
+  },
+  "screenshot_validation": [
+    {
+      "screenshot_id": "SCR-001",
+      "path": "D:\\Projects\\Sudarshan BOI\\tests\\apks\\categories\\sudarshan_artifacts\\insecurebankv2_2ebde24e\\screenshots\\001_1785996864297_anti_analysis_detected.png",
+      "exists": true,
+      "readable": true,
+      "size_bytes": 137954,
+      "in_manifest": true,
+      "in_evidence": true,
+      "in_html": true,
+      "html_embedded": false,
+      "errors": [
+        "not embedded as base64 in HTML (PDF print would be broken)"
+      ]
+    },
+    {
+      "screenshot_id": "SCR-002",
+      "path": "D:\\Projects\\Sudarshan BOI\\tests\\apks\\categories\\sudarshan_artifacts\\insecurebankv2_2ebde24e\\screenshots\\002_1785996865648_01_app_opened.png",
+      "exists": true,
+      "readable": true,
+      "size_bytes": 137954,
+      "in_manifest": true,
+      "in_evidence": true,
+      "in_html": true,
+      "html_embedded": false,
+      "errors": [
+        "not embedded as base64 in HTML (PDF print would be broken)"
+      ]
+    },
+    {
+      "screenshot_id": "SCR-003",
+      "path": "D:\\Projects\\Sudarshan BOI\\tests\\apks\\categories\\sudarshan_artifacts\\insecurebankv2_2ebde24e\\screenshots\\003_1785996880784_perception_vision.png",
+      "exists": true,
+      "readable": true,
+      "size_bytes": 257402,
+      "in_manifest": true,
+      "in_evidence": true,
+      "in_html": true,
+      "html_embedded": false,
+      "errors": [
+        "not embedded as base64 in HTML (PDF print would be broken)"
+      ]
+    },
+    {
+      "screenshot_id": "SCR-004",
+      "path": "D:\\Projects\\Sudarshan BOI\\tests\\apks\\categories\\sudarshan_artifacts\\insecurebankv2_2ebde24e\\screenshots\\004_1785996896242_99_final_screen.png",
+      "exists": true,
+      "readable": true,
+      "size_bytes": 257402,
+      "in_manifest": true,
+      "in_evidence": true,
+      "in_html": true,
+      "html_embedded": false,
+      "errors": [
+        "not embedded as base64 in HTML (PDF print would be broken)"
+      ]
+    }
+  ],
+  "artifact_dir": "D:\\Projects\\Sudarshan BOI\\tests\\apks\\categories\\sudarshan_artifacts\\insecurebankv2_2ebde24e"
+}

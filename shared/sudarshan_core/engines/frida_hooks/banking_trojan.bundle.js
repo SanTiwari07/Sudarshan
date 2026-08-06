@@ -1,5 +1,5 @@
 📦
-512508 /shared/sudarshan_core/engines/frida_hooks/banking_trojan.js
+511796 /banking_trojan.js
 ✄
 var __defProp = Object.defineProperty;
 var __export = (target, all) => {
@@ -1728,7 +1728,7 @@ var hexSliceLookupTable = function() {
   return table;
 }();
 
-// shared/sudarshan_core/engines/frida_hooks/node_modules/frida-java-bridge/lib/android.js
+// node_modules/frida-java-bridge/lib/android.js
 var android_exports = {};
 __export(android_exports, {
   ArtMethod: () => ArtMethod,
@@ -1760,7 +1760,7 @@ __export(android_exports, {
   withRunnableArtThread: () => withRunnableArtThread
 });
 
-// shared/sudarshan_core/engines/frida_hooks/node_modules/frida-java-bridge/lib/alloc.js
+// node_modules/frida-java-bridge/lib/alloc.js
 var {
   pageSize,
   pointerSize
@@ -1825,7 +1825,7 @@ function makeAllocator(sliceSize) {
   return new CodeAllocator(sliceSize);
 }
 
-// shared/sudarshan_core/engines/frida_hooks/node_modules/frida-java-bridge/lib/result.js
+// node_modules/frida-java-bridge/lib/result.js
 var JNI_OK = 0;
 function checkJniResult(name, result) {
   if (result !== JNI_OK) {
@@ -1833,7 +1833,7 @@ function checkJniResult(name, result) {
   }
 }
 
-// shared/sudarshan_core/engines/frida_hooks/node_modules/frida-java-bridge/lib/jvmti.js
+// node_modules/frida-java-bridge/lib/jvmti.js
 var jvmtiVersion = {
   v1_0: 805371904,
   v1_2: 805372416
@@ -1880,7 +1880,7 @@ function proxy(offset, retType, argTypes, wrapper) {
   };
 }
 
-// shared/sudarshan_core/engines/frida_hooks/node_modules/frida-java-bridge/lib/machine-code.js
+// node_modules/frida-java-bridge/lib/machine-code.js
 function parseInstructionsAt(address, tryParse, { limit }) {
   let cursor = address;
   let prevInsn = null;
@@ -1896,7 +1896,7 @@ function parseInstructionsAt(address, tryParse, { limit }) {
   return null;
 }
 
-// shared/sudarshan_core/engines/frida_hooks/node_modules/frida-java-bridge/lib/memoize.js
+// node_modules/frida-java-bridge/lib/memoize.js
 function memoize(compute) {
   let value = null;
   let computed = false;
@@ -1909,7 +1909,7 @@ function memoize(compute) {
   };
 }
 
-// shared/sudarshan_core/engines/frida_hooks/node_modules/frida-java-bridge/lib/env.js
+// node_modules/frida-java-bridge/lib/env.js
 function Env(handle, vm3) {
   this.handle = handle;
   this.vm = vm3;
@@ -2719,7 +2719,7 @@ Env.prototype.stringFromJni = function(str) {
   }
 };
 
-// shared/sudarshan_core/engines/frida_hooks/node_modules/frida-java-bridge/lib/vm.js
+// node_modules/frida-java-bridge/lib/vm.js
 var JNI_VERSION_1_6 = 65542;
 var pointerSize4 = Process.pointerSize;
 var jsThreadID = Process.getCurrentThreadId();
@@ -2857,7 +2857,7 @@ VM.dispose = function(vm3) {
   }
 };
 
-// shared/sudarshan_core/engines/frida_hooks/node_modules/frida-java-bridge/lib/android.js
+// node_modules/frida-java-bridge/lib/android.js
 var jsizeSize = 4;
 var pointerSize5 = Process.pointerSize;
 var {
@@ -7293,7 +7293,7 @@ function alignPointerOffset(offset) {
   return offset;
 }
 
-// shared/sudarshan_core/engines/frida_hooks/node_modules/frida-java-bridge/lib/jvm.js
+// node_modules/frida-java-bridge/lib/jvm.js
 var jsizeSize2 = 4;
 var { pointerSize: pointerSize6 } = Process;
 var JVM_ACC_NATIVE = 256;
@@ -8091,7 +8091,7 @@ function parseX64VTableOffset(insn) {
   return defaultVtableIndicesOffset + 16;
 }
 
-// shared/sudarshan_core/engines/frida_hooks/node_modules/frida-java-bridge/lib/api.js
+// node_modules/frida-java-bridge/lib/api.js
 var getApi3 = getApi;
 try {
   getAndroidVersion();
@@ -8100,7 +8100,7 @@ try {
 }
 var api_default = getApi3;
 
-// shared/sudarshan_core/engines/frida_hooks/node_modules/frida-java-bridge/lib/class-model.js
+// node_modules/frida-java-bridge/lib/class-model.js
 var code2 = `#include <json-glib/json-glib.h>
 #include <string.h>
 
@@ -9529,7 +9529,7 @@ function boolToNative(val) {
   return val ? 1 : 0;
 }
 
-// shared/sudarshan_core/engines/frida_hooks/node_modules/frida-java-bridge/lib/lru.js
+// node_modules/frida-java-bridge/lib/lru.js
 var LRU = class {
   constructor(capacity, destroy) {
     this.items = /* @__PURE__ */ new Map();
@@ -9568,7 +9568,7 @@ var LRU = class {
   }
 };
 
-// shared/sudarshan_core/engines/frida_hooks/node_modules/frida-java-bridge/lib/mkdex.js
+// node_modules/frida-java-bridge/lib/mkdex.js
 var kAccPublic2 = 1;
 var kAccNative2 = 256;
 var kAccConstructor = 65536;
@@ -10303,7 +10303,7 @@ function adler32(buffer, offset) {
 }
 var mkdex_default = mkdex;
 
-// shared/sudarshan_core/engines/frida_hooks/node_modules/frida-java-bridge/lib/types.js
+// node_modules/frida-java-bridge/lib/types.js
 var JNILocalRefType = 1;
 var vm = null;
 var primitiveArrayHandler = null;
@@ -10998,7 +10998,7 @@ function identity(value) {
   return value;
 }
 
-// shared/sudarshan_core/engines/frida_hooks/node_modules/frida-java-bridge/lib/class-factory.js
+// node_modules/frida-java-bridge/lib/class-factory.js
 var jsizeSize3 = 4;
 var {
   ensureClassInitialized: ensureClassInitialized3,
@@ -13012,7 +13012,7 @@ function makeSourceFileName(className) {
   return tokens[tokens.length - 1] + ".java";
 }
 
-// shared/sudarshan_core/engines/frida_hooks/node_modules/frida-java-bridge/index.js
+// node_modules/frida-java-bridge/index.js
 var jsizeSize4 = 4;
 var pointerSize8 = Process.pointerSize;
 var Runtime = class {
@@ -13494,7 +13494,7 @@ Script.bindWeak(runtime, () => {
 });
 var frida_java_bridge_default = runtime;
 
-// shared/sudarshan_core/engines/frida_hooks/banking_trojan.js
+// banking_trojan.js
 var JAVA_BRIDGE_SOURCE = "none";
 var Java = function resolveJavaBridge() {
   try {
@@ -14660,11 +14660,11 @@ function initHooks() {
         reportHookError("AlarmManager.setExact", e.message);
       }
       try {
-        var JobScheduler = Java.use("android.app.JobScheduler");
-        JobScheduler.schedule.implementation = function(job) {
+        var JobScheduler = Java.use("android.app.job.JobScheduler");
+        JobScheduler.schedule.overload("android.app.job.JobInfo").implementation = function(job) {
           emit("persistence", {
             hook: "JobScheduler.schedule",
-            class_name: "android.app.JobScheduler",
+            class_name: "android.app.job.JobScheduler",
             severity: "MED",
             job_id: job ? job.getId() : 0,
             description: "App scheduled background JobScheduler job (persistence mechanism)"

@@ -1397,11 +1397,11 @@ function initHooks() {
       } catch (e) { reportHookError('AlarmManager.setExact', e.message); }
 
       try {
-        var JobScheduler = Java.use('android.app.JobScheduler');
-        JobScheduler.schedule.implementation = function (job) {
+        var JobScheduler = Java.use('android.app.job.JobScheduler');
+        JobScheduler.schedule.overload('android.app.job.JobInfo').implementation = function (job) {
           emit('persistence', {
             hook: 'JobScheduler.schedule',
-            class_name: 'android.app.JobScheduler',
+            class_name: 'android.app.job.JobScheduler',
             severity: 'MED',
             job_id: job ? job.getId() : 0,
             description: 'App scheduled background JobScheduler job (persistence mechanism)',

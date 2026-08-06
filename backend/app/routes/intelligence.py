@@ -25,7 +25,7 @@ from app.db.database import get_case
 from sudarshan_core.engines.classification_engine import classify_family
 from sudarshan_core.models.schemas import StaticAnalysisFlags
 from sudarshan_core.services.threat_correlator import (
-    correlate, _get_vt_key, _get_otx_key, _get_abuseipdb_key
+    correlate, _get_vt_key, _get_otx_key, _get_abuseipdb_key, extract_dynamic_urls,
 )
 
 logger = logging.getLogger(__name__)
@@ -242,7 +242,13 @@ async def get_threat_intelligence(
     if should_recorrelate:
         try:
             urls = rdict.get("hardcoded_urls_ips", [])
-            tc = await correlate(sha256_clean, urls=urls, package_name=package_name)
+            dyn_urls = extract_dynamic_urls(rdict.get("dynamic_result"))
+            tc = await correlate(
+                sha256_clean,
+                urls=urls,
+                package_name=package_name,
+                dynamic_urls=dyn_urls,
+            )
             rdict["threat_correlation"] = tc
         except Exception as e:
             logger.warning(f"Live correlation execution failed: {e}")

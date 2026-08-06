@@ -45,7 +45,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from sudarshan_core.engines.event_bus import RuntimeEventBus
+from sudarshan_core.engines.event_bus import EventType, RuntimeEvent, RuntimeEventBus
 from sudarshan_core.engines.bfci_scorer import calculate_bfci_v2, BFCI_WEIGHTS
 from sudarshan_core.engines.dae_pipeline import DAEPipelineTracker, DAEStage
 
@@ -1720,8 +1720,33 @@ class FridaSession:
                 if self.launch_timeline.get("first_hook_event") is None:
                     self.launch_timeline["first_hook_event"] = time.monotonic()
 
-                # Publish to Event Bus (EvidenceStore + UIExplorer subscribe here)
-                self.event_bus.publish(event)
+                # Publish to Event Bus (EvidenceStore, NetworkCapture, BehaviorGraph,
+                # ThreatCorrelatorListener). The agent tags hook payloads with
+                # event_type=FRIDA_HOOK; subscribers expect FRIDA_EVENT / NETWORK_EVENT.
+                bus_event = dict(event)
+                bus_event["event_type"] = EventType.FRIDA_EVENT
+                bus_event["type"] = EventType.FRIDA_EVENT
+                self.event_bus.publish(bus_event)
+
+                if category == "network":
+                    net_data = event.get("data") or {}
+                    url = net_data.get("url") or net_data.get("ioc")
+                    if url:
+                        ts_raw = event.get("timestamp", 0) or 0
+                        ts_sec = (
+                            ts_raw / 1000.0
+                            if ts_raw > 1e12
+                            else (ts_raw if ts_raw else time.time())
+                        )
+                        self.event_bus.publish(
+                            RuntimeEvent(
+                                event_type=EventType.NETWORK_EVENT,
+                                timestamp=ts_sec,
+                                payload={**net_data, "url": url},
+                                category="network",
+                                severity=str(severity),
+                            )
+                        )
 
             elif msg_type == "ping":
                 self.last_heartbeat_ts = time.time()
@@ -3142,6 +3167,15 @@ async def _run_device_session(
     # ── Wave 4: Initialize Intelligence Depth ──────────────────────────────────
     if NetworkCapture is not None:
         session.network_capture = NetworkCapture(event_bus=session.event_bus)
+    try:
+        from sudarshan_core.services.threat_correlator import ThreatCorrelatorListener
+
+        session._threat_listener = ThreatCorrelatorListener(
+            event_bus=session.event_bus,
+            package_name=package_name,
+        )
+    except Exception as _tc_exc:
+        logger.warning("[Frida] ThreatCorrelatorListener not started: %s", _tc_exc)
     if AntiAnalysisDetector is not None:
         session.anti_analysis_detector = AntiAnalysisDetector(event_bus=session.event_bus)
     if YARAScanner is not None:
@@ -3482,6 +3516,7 @@ async def _run_device_session(
     if hasattr(session, "network_capture") and session.network_capture is not None:
         try:
             session.network_capture.flush(apk_dir / "network.json")
+            result["network_flows"] = list(session.network_capture.flows)
         except Exception as e:
             logger.error(f"[Frida] Failed to write network.json: {e}")
             
@@ -3537,7 +3572,13 @@ def get_sandbox_status() -> Dict[str, Any]:
     adb_path = _find_adb()
     emulators = get_connected_emulators() if adb_path else []
 
-    hooks_ok = _HOOKS_SCRIPT.exists()
+    try:
+        hooks_ok = (
+            _HOOKS_BUNDLE.exists()
+            and _HOOKS_BUNDLE.stat().st_size >= _MIN_BUNDLE_BYTES
+        )
+    except OSError:
+        hooks_ok = False
 
     ready = frida_available and adb_path is not None and len(emulators) > 0 and hooks_ok
 

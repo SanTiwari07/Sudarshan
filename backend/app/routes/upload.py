@@ -50,7 +50,7 @@ from app.rag.knowledge_base import build_rag_context  # noqa: F401
 from app.ai.gemini_rag import build_investigation_index
 from app.routes.report import cache_report
 from sudarshan_core.services.mobsf_client import MobSFAnalysisError, MobSFClient, MobSFNotAvailable
-from sudarshan_core.services.threat_correlator import correlate
+from sudarshan_core.services.threat_correlator import correlate, extract_dynamic_urls
 from app.workers.analysis_queue import create_job, enqueue, get_job, persist_job
 from app.rate_limit import limiter
 from sudarshan_core.models.manifest import build_manifest, InvestigationManifest
@@ -621,7 +621,6 @@ async def _run_analysis_pipeline(
                 logger.info(f"Frida BFCI={dynamic_result.get('bfci', 0):.1f}")
             else:
                 logger.warning(f"Frida did not complete: {dynamic_result.get('error')}")
-                dynamic_result = None
         except Exception as e:
             logger.warning(f"Frida analysis failed: {e}")
             dynamic_result = None
@@ -640,6 +639,7 @@ async def _run_analysis_pipeline(
             sha256=sha256_hash,
             urls=flags_dict.get("hardcoded_urls_ips", []),
             package_name=package_name,
+            dynamic_urls=extract_dynamic_urls(dynamic_result),
         )
     except Exception as e:
         logger.warning(f"Threat correlation failed: {e}")

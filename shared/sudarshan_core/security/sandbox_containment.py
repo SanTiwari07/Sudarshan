@@ -21,9 +21,10 @@ import logging
 import os
 import re
 from dataclasses import dataclass
-from typing import Iterable, List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Iterable, List, Optional, Sequence, Tuple
 
-from sudarshan_core.sandbox.config import SandboxConfig
+if TYPE_CHECKING:
+    from sudarshan_core.sandbox.config import SandboxConfig
 
 logger = logging.getLogger(__name__)
 

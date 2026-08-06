@@ -303,6 +303,56 @@ class TestFridaSessionMessageHandling(unittest.TestCase):
         self.assertEqual(len(session.hook_errors), 1)
 
 
+class TestFridaEventBusNormalization(unittest.TestCase):
+    """Hook payloads must publish FRIDA_EVENT and NETWORK_EVENT for subscribers."""
+
+    def test_network_hook_publishes_network_event(self):
+        bus = RuntimeEventBus()
+        received: list = []
+
+        def _capture(evt):
+            received.append(evt.get("event_type", evt.get("type")))
+
+        bus.subscribe(_capture)
+
+        session = FridaSession("emulator-5554", "com.test.app")
+        session.event_bus = bus
+
+        session._on_message(
+            {
+                "type": "send",
+                "payload": {
+                    "type": "event",
+                    "payload": {
+                        "event_type": "FRIDA_HOOK",
+                        "category": "network",
+                        "severity": "MED",
+                        "timestamp": int(time.time() * 1000),
+                        "data": {
+                            "hook": "URL.openConnection",
+                            "url": "https://c2.evil.example/gate",
+                            "description": "Network connection",
+                        },
+                    },
+                },
+            },
+            None,
+        )
+        time.sleep(0.35)
+        self.assertIn(EventType.FRIDA_EVENT, received)
+        self.assertIn(EventType.NETWORK_EVENT, received)
+
+    def test_extract_dynamic_urls_merges_logs_and_flows(self):
+        from sudarshan_core.services.threat_correlator import extract_dynamic_urls
+
+        dyn = {
+            "network_logs": ["https://a.example"],
+            "network_flows": [{"url": "https://b.example"}],
+        }
+        urls = extract_dynamic_urls(dyn)
+        self.assertEqual(set(urls), {"https://a.example", "https://b.example"})
+
+
 class TestRuntimeAPIRecording(unittest.TestCase):
     def setUp(self):
         from app.routes.runtime_api import _hook_registry, _recent_events

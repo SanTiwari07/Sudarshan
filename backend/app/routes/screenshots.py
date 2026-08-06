@@ -29,15 +29,50 @@ _SHA256_RE = re.compile(r"^[a-fA-F0-9]{64}$")
 _UPLOADS_DIR = Path(__import__("os").getenv("UPLOADS_DIR", "/app/uploads"))
 
 
+def _dynamic_block(report: Dict[str, Any]) -> Dict[str, Any]:
+    dyn = report.get("dynamic_result") or report.get("dynamic_analysis") or {}
+    return dyn if isinstance(dyn, dict) else {}
+
+
 def _artifact_dir_from_report(report: Dict[str, Any]) -> Optional[Path]:
-    dyn = report.get("dynamic_result") or {}
+    dyn = _dynamic_block(report)
     raw_dir = dyn.get("artifact_dir") or report.get("artifact_dir") or report.get("_artifact_dir")
     if not raw_dir:
         return None
+
+    raw_str = str(raw_dir).replace("\\", "/")
+    candidates: list[Path] = []
+
     try:
-        return Path(raw_dir).resolve()
+        candidates.append(Path(raw_dir).resolve())
     except (OSError, RuntimeError):
-        return None
+        pass
+
+    # Docker volume path when API runs with a host-mounted UPLOADS_DIR
+    if raw_str.startswith("/app/uploads/"):
+        suffix = raw_str[len("/app/uploads/") :]
+        candidates.append((_UPLOADS_DIR / suffix).resolve())
+    elif raw_str.startswith("/app/uploads"):
+        candidates.append(_UPLOADS_DIR.resolve())
+
+    folder_name = Path(raw_str).name
+    if folder_name:
+        candidates.append((_UPLOADS_DIR / "sudarshan_artifacts" / folder_name).resolve())
+        candidates.append((_UPLOADS_DIR / folder_name).resolve())
+
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            if candidate.is_dir():
+                return candidate
+        except (OSError, RuntimeError):
+            continue
+
+    return None
 
 
 def _resolve_image_path(artifact_dir: Path, filename: str) -> Path:
@@ -91,12 +126,12 @@ async def get_screenshot(
         )
 
     artifact_dir = _artifact_dir_from_report(report if isinstance(report, dict) else {})
-    if artifact_dir is None or not artifact_dir.is_dir():
+    if artifact_dir is None:
         raise HTTPException(status_code=404, detail="No artifact directory for this case.")
 
     # Manifest entries may be full relative paths (screenshots/foo.png) or basenames.
     rel_for_lookup = filename
-    dyn = (report.get("dynamic_result") or {}) if isinstance(report, dict) else {}
+    dyn = _dynamic_block(report if isinstance(report, dict) else {})
     for entry in dyn.get("screenshots") or []:
         if not entry:
             continue

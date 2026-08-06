@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import { Navigate } from 'react-router-dom';
 import { LoadingSpinner } from '../ui/Skeleton';
 import { useAnalysis } from '../../context/AnalysisContext';
@@ -25,20 +24,6 @@ function InvestigationChrome({ children }: { children: React.ReactNode }) {
   return (
     <>
       <CaseHeader data={analysisResult} onExplainScore={() => openLedger('full')} />
-      <div className="mb-4 flex flex-wrap gap-2 text-xs">
-        <Link to="/fraud-card" className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50">
-          Fraud analyst
-        </Link>
-        <Link to="/technical" className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50">
-          SOC / technical
-        </Link>
-        <Link to="/threat-intel" className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50">
-          Threat intel
-        </Link>
-        <Link to="/chat" className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50">
-          AI assistant
-        </Link>
-      </div>
       {children}
       {bundle && (
         <>
@@ -51,10 +36,18 @@ function InvestigationChrome({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function InvestigationShell({ children }: { children: React.ReactNode }) {
+export default function InvestigationShell({
+  children,
+  className = 'analyst-page',
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
     <InvestigationUIProvider>
-      <InvestigationChrome>{children}</InvestigationChrome>
+      <div className={className}>
+        <InvestigationChrome>{children}</InvestigationChrome>
+      </div>
     </InvestigationUIProvider>
   );
 }

@@ -23,7 +23,7 @@ export default function ScoreLedgerSlideOver({
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-slate-900/40" onClick={closeLedger} />
       <div
-        className="relative w-full max-w-xl bg-white h-full shadow-2xl border-l border-slate-200 flex flex-col"
+        className="relative w-full max-w-2xl bg-white h-full shadow-2xl border-l border-slate-200 flex flex-col"
         role="dialog"
         aria-label="Score ledger"
       >

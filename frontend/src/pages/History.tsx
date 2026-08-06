@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  Database, Search, Shield, Clock,
-  Filter, RefreshCw, XCircle, Eye
+  Database, Search,
+  Filter, RefreshCw, XCircle, Eye, Clock, UploadCloud,
 } from 'lucide-react';
-import { getToken, getUser } from './Login';
+import { getToken } from './Login';
 import { API_BASE } from '../config';
 import { useAnalysis } from '../context/AnalysisContext';
 import Badge from '../components/ui/Badge';
@@ -35,7 +35,7 @@ interface CaseListResponse {
 
 export default function History() {
   const navigate = useNavigate();
-  const user = getUser();
+  const [searchParams] = useSearchParams();
   const { loadCaseByHash } = useAnalysis();
 
   const [cases, setCases] = useState<CaseSummary[]>([]);
@@ -43,7 +43,7 @@ export default function History() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(searchParams.get('q') || '');
   const [filter, setFilter] = useState<string>('all');
   const LIMIT = 15;
 
@@ -69,6 +69,11 @@ export default function History() {
     }
   };
 
+  useEffect(() => {
+    const q = searchParams.get('q');
+    if (q) setSearch(q);
+  }, [searchParams]);
+
   useEffect(() => { fetchCases(page); }, [page]);
 
   const handleCaseClick = async (sha256: string) => {
@@ -89,40 +94,26 @@ export default function History() {
   const totalPages = Math.ceil(total / LIMIT);
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Header */}
-      <div className="bg-blue-900 text-white px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Shield className="h-6 w-6 text-blue-300" />
-            <span className="font-bold text-lg tracking-wide">SUDARSHAN</span>
-            <span className="text-xs text-blue-400 font-mono hidden sm:inline">ENTERPRISE SOC</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-blue-300 hidden sm:block">
-              {user?.username} · <span className="uppercase">{user?.role}</span>
-            </span>
-            <button
-              onClick={() => navigate('/')}
-              className="text-xs px-3 py-1.5 rounded bg-blue-700 hover:bg-blue-600 transition-colors"
-            >
-              ← Upload New APK
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 py-6 space-y-5">
-        <div className="flex items-center gap-2">
-          <Database className="h-5 w-5 text-blue-700" />
+    <div className="w-full min-w-0 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <Database className="h-5 w-5 text-blue-700 shrink-0" />
           <h1 className="text-xl font-bold text-slate-900">Case History Registry</h1>
-          <span className="ml-2 px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold">
-            {total} Total Persisted Cases
+          <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold">
+            {total} cases
           </span>
         </div>
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-blue-700 text-white hover:bg-blue-800 transition-colors"
+        >
+          <UploadCloud className="h-3.5 w-3.5" />
+          Upload new APK
+        </button>
+      </div>
 
-        {/* Controls */}
-        <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
@@ -203,12 +194,12 @@ export default function History() {
                       <td className="px-4 py-3">
                         <Badge label={c.risk_band || 'Safe'} variant="risk" />
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-slate-800 truncate max-w-[180px]">
+                      <td className="px-4 py-3 min-w-[12rem]">
+                        <div className="font-medium text-slate-800 truncate">
                           {c.app_name || c.package_name || '—'}
                         </div>
                         {c.app_name && c.package_name && (
-                          <div className="text-xs text-slate-400 truncate max-w-[180px] font-mono">{c.package_name}</div>
+                          <div className="text-xs text-slate-400 truncate font-mono">{c.package_name}</div>
                         )}
                       </td>
                       <td className="px-4 py-3">
@@ -273,7 +264,6 @@ export default function History() {
             </div>
           )}
         </div>
-      </div>
     </div>
   );
 }

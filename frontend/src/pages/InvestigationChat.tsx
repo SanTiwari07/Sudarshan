@@ -324,7 +324,7 @@ function MarkdownRenderer({ content, isStreaming }: { content: string; isStreami
   const blocks = formattedContent.split(/(```[\s\S]*?```)/g);
 
   return (
-    <div className="space-y-4 text-slate-800 text-[15px] leading-[1.85] font-sans max-w-[880px]">
+    <div className="space-y-4 text-slate-800 text-[15px] leading-[1.85] font-sans w-full min-w-0">
       {blocks.map((block, bIdx) => {
         if (block.startsWith('```') && block.endsWith('```')) {
           const match = block.match(/^```(\w+)?\n([\s\S]*?)```$/);
@@ -605,7 +605,7 @@ function InvestigationResponseRenderer({
   }
 
   return (
-    <div className="space-y-4 max-w-[880px]">
+    <div className="space-y-4 w-full min-w-0">
       <MarkdownRenderer content={bodyContent} isStreaming={isStreaming} />
 
       {followUps.length > 0 && (
@@ -839,7 +839,10 @@ Everything is grounded strictly in investigation evidence.`,
   };
 
   return (
-    <div className="flex flex-col h-full min-h-0 bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden" style={{ height: 'calc(100vh - 80px)' }}>
+    <div
+      className="flex flex-col flex-1 min-h-0 bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden"
+      style={{ minHeight: 'calc(100vh - var(--app-header-height) - 1.5rem)' }}
+    >
 
       {/* Top Header */}
       <div className="flex items-center justify-between px-5 py-3.5 bg-slate-900 text-white border-b border-slate-800 flex-shrink-0">
@@ -902,10 +905,10 @@ Everything is grounded strictly in investigation evidence.`,
             </div>
 
             {/* Message Box */}
-            <div className={`flex flex-col gap-1.5 ${msg.role === 'user' ? 'items-end' : 'items-start'} max-w-[850px]`}>
+            <div className={`flex flex-col gap-1.5 ${msg.role === 'user' ? 'items-end' : 'items-start'} w-full max-w-4xl`}>
               <div className={`rounded-2xl ${
                 msg.role === 'user'
-                  ? 'bg-blue-700 text-white px-5 py-3.5 shadow-sm max-w-[650px] text-xs font-medium leading-relaxed'
+                  ? 'bg-blue-700 text-white px-5 py-3.5 shadow-sm max-w-2xl text-xs font-medium leading-relaxed'
                   : 'bg-white border border-slate-200/90 p-5 shadow-sm text-slate-800 w-full'
               }`}>
                 {msg.role === 'assistant' ? (

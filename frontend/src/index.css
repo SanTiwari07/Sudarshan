@@ -3,7 +3,53 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --app-header-height: 3.5rem;
+  }
+
   body {
-    @apply antialiased text-gray-800 bg-gray-50;
+    @apply antialiased text-gray-800 bg-gray-50 min-w-0;
+  }
+}
+
+@layer components {
+  .analyst-main {
+    @apply px-2 sm:px-3 lg:px-4 py-3 sm:py-4 min-h-0;
+  }
+
+  .analyst-page {
+    @apply w-full min-w-0 space-y-4;
+  }
+
+  .analyst-page-tight {
+    @apply w-full min-w-0 flex flex-col flex-1 min-h-0;
+  }
+
+  .analyst-grid-2 {
+    @apply grid gap-3 sm:gap-4 grid-cols-1 lg:grid-cols-2;
+  }
+
+  .analyst-grid-3 {
+    @apply grid gap-3 sm:gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3;
+  }
+
+  .analyst-grid-4 {
+    @apply grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4;
+  }
+
+  .analyst-grid-6 {
+    @apply grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6;
+  }
+
+  .analyst-split-main {
+    @apply grid gap-3 sm:gap-4 grid-cols-1 2xl:grid-cols-12;
+  }
+
+  .analyst-split-main > .analyst-split-primary {
+    @apply 2xl:col-span-8 min-w-0 space-y-3 sm:space-y-4;
+  }
+
+  .analyst-split-main > .analyst-split-side {
+    @apply 2xl:col-span-4 min-w-0 space-y-3 sm:space-y-4;
   }
 }

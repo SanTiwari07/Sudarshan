@@ -154,24 +154,24 @@ export default function FraudCard({ data }: { data: FraudCardData | null }) {
   return (
     <div className="space-y-4">
       <ProvenanceBanner data={data} />
+      <RiskScorePanel data={data} />
       <ExecutiveBriefing data={data} />
       {investigationBundle && (
         <CaseSummaryStrip riskScore={data.final_risk_score} counts={investigationBundle.counts} />
       )}
-      <RiskScorePanel data={data} />
-      {investigationBundle && <IntelligencePhaseCards data={data} bundle={investigationBundle} />}
       <ScreenshotGallery data={data} bundle={investigationBundle} />
+      {investigationBundle && <IntelligencePhaseCards data={data} bundle={investigationBundle} />}
       <CoreFindingsList data={data} bundle={investigationBundle} />
       <GroundedNarrativeCard data={data} />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 space-y-4">
+      <div className="analyst-split-main">
+        <div className="analyst-split-primary">
           <MitrePanel data={data} />
           {data.threat_scenario_table && data.threat_scenario_table.length > 0 && (
             <ThreatScenarioTable rows={data.threat_scenario_table} />
           )}
           {investigationBundle && <InvestigationTimeline bundle={investigationBundle} />}
         </div>
-        <div className="space-y-4">
+        <div className="analyst-split-side">
           <ApplicationInfoCard data={data} />
           <ScoreEntryCard data={data} />
           <ExportOptions data={data} />

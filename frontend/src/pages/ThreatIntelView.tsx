@@ -151,11 +151,11 @@ export default function ThreatIntelView({ data }: { data: FraudCardData | null }
         <div className={INTEL.sectionGap}>
           <ThreatIntelHero data={data} intel={intel} evidenceConfidence={derived.overallConf} />
 
-          <div className={`grid grid-cols-1 xl:grid-cols-12 ${INTEL.gridGap} items-stretch`}>
-            <div className="xl:col-span-7 min-h-0">
+          <div className={`grid grid-cols-1 2xl:grid-cols-12 ${INTEL.gridGap} items-stretch`}>
+            <div className="2xl:col-span-7 min-h-0">
               <ThreatDnaPanel traits={derived.dna} />
             </div>
-            <div className="xl:col-span-5 min-h-0">
+            <div className="2xl:col-span-5 min-h-0">
               <AttackChainFlow stages={derived.chain} />
             </div>
           </div>
@@ -230,11 +230,13 @@ export default function ThreatIntelView({ data }: { data: FraudCardData | null }
 
           <HistoricalCasesPanel data={data} />
 
-          <div className={`grid grid-cols-1 lg:grid-cols-3 ${INTEL.gridGap} items-stretch`}>
-            <div className="lg:col-span-2 min-h-0">
+          <div className={`analyst-split-main ${INTEL.gridGap}`}>
+            <div className="analyst-split-primary min-h-0">
               <IntelPipelineTimeline timeline={intel.timeline} />
             </div>
-            <ThreatIntelExportSuite sha256={data.sha256} />
+            <div className="analyst-split-side min-h-0">
+              <ThreatIntelExportSuite sha256={data.sha256} />
+            </div>
           </div>
         </div>
       ) : null}

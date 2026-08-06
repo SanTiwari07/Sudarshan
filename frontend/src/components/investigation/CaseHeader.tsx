@@ -52,7 +52,7 @@ export default function CaseHeader({
         </div>
       </div>
       <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-3 text-xs text-slate-600">
-        <span className="font-mono truncate max-w-[280px]" title={data.sha256}>
+        <span className="font-mono truncate max-w-[min(100%,28rem)]" title={data.sha256}>
           SHA256 {data.sha256.slice(0, 16)}…
         </span>
         <CopyButton value={data.sha256} />

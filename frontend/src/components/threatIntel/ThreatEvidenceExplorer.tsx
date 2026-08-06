@@ -21,37 +21,58 @@ export default function ThreatEvidenceExplorer({ groups }: { groups: Group[] }) 
 
   return (
     <SocCard>
-      <SectionHeader icon={<FileSearch className="h-4 w-4" />} title="Evidence explorer" subtitle="View evidence behind each claim" />
+      <SectionHeader
+        icon={<FileSearch className="h-4 w-4" />}
+        title="Evidence explorer"
+        subtitle="View evidence behind each claim — full-width registry"
+      />
       <div className="divide-y divide-slate-100">
         {groups.map((g) => {
           const open = expanded[g.group] ?? true;
           return (
-            <div key={g.group} className="p-4">
+            <div key={g.group} className="px-4 sm:px-5 py-4">
               <button
                 type="button"
                 className="flex items-center gap-2 text-xs font-bold text-slate-800 w-full text-left"
                 onClick={() => setExpanded((e) => ({ ...e, [g.group]: !open }))}
               >
-                {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                {open ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
                 {g.group}
                 <span className="text-slate-400 font-normal">({g.items.length})</span>
               </button>
               {open && (
-                <ul className="mt-2 space-y-1 max-h-48 overflow-y-auto">
-                  {g.items.map((item) => (
-                    <li key={item.id}>
-                      <button
-                        type="button"
-                        onClick={() => item.id.startsWith('VT-') ? undefined : openEvidence(item.id)}
-                        className="w-full text-left px-2 py-1.5 rounded hover:bg-slate-50 text-xs"
-                        disabled={item.id.startsWith('VT-')}
-                      >
-                        <span className="font-semibold text-slate-900">{item.title}</span>
-                        <span className="block text-[10px] text-slate-500">{item.subtitle}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200">
+                  <table className="w-full min-w-[640px] text-xs">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-semibold w-[38%]">Finding</th>
+                        <th className="px-3 py-2 text-left font-semibold">Source / detail</th>
+                        <th className="px-3 py-2 text-right font-semibold w-24">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {g.items.map((item) => {
+                        const disabled = item.id.startsWith('VT-');
+                        return (
+                          <tr key={item.id} className="hover:bg-slate-50/80">
+                            <td className="px-3 py-2.5 font-semibold text-slate-900 align-top">{item.title}</td>
+                            <td className="px-3 py-2.5 text-slate-600 align-top">{item.subtitle}</td>
+                            <td className="px-3 py-2.5 text-right align-top">
+                              <button
+                                type="button"
+                                onClick={() => !disabled && openEvidence(item.id)}
+                                disabled={disabled}
+                                className="text-[11px] font-semibold text-blue-700 hover:text-blue-900 disabled:text-slate-400 disabled:cursor-default"
+                              >
+                                {disabled ? '—' : 'Open'}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           );

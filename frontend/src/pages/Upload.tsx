@@ -51,8 +51,9 @@ export default function Upload({ onAnalysisComplete }: { onAnalysisComplete: (da
   };
 
   return (
-    <div className="max-w-2xl mx-auto mt-12">
-      <SocCard className="p-8">
+    <div className="w-full min-w-0">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+        <SocCard className="p-6 sm:p-8 xl:col-span-7">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-50 text-blue-700 mb-3">
             <Shield className="h-6 w-6" />
@@ -104,7 +105,25 @@ export default function Upload({ onAnalysisComplete }: { onAnalysisComplete: (da
             )}
           </button>
         </form>
-      </SocCard>
+        </SocCard>
+
+        <div className="xl:col-span-5 space-y-4">
+          <SocCard className="p-5">
+            <h3 className="text-sm font-bold text-slate-900">Analyst workflow</h3>
+            <ol className="mt-3 space-y-2 text-xs text-slate-600 list-decimal list-inside">
+              <li>Upload APK — static and dynamic engines run in pipeline.</li>
+              <li>Review fraud card — executive risk and verified evidence.</li>
+              <li>Deep dive — technical view, threat intel, and AI assistant.</li>
+              <li>Export — STIX, IOC CSV, and executive PDF for SOC handoff.</li>
+            </ol>
+          </SocCard>
+          <SocCard className="p-5 bg-blue-50 border-blue-100">
+            <p className="text-xs text-blue-900 leading-relaxed">
+              Investigations use the full viewport — open the menu (☰) for navigation without losing analysis context.
+            </p>
+          </SocCard>
+        </div>
+      </div>
     </div>
   );
 }

@@ -24,19 +24,32 @@ function ScreenshotTile({
 }) {
   const [src, setSrc] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    let revoked: string | null = null;
+    let cancelled = false;
+    let objectUrl: string | null = null;
     setLoading(true);
+    setFailed(false);
+    setSrc(null);
+
     fetchScreenshotBlob(sha256, filename).then((url) => {
+      if (cancelled) {
+        if (url) URL.revokeObjectURL(url);
+        return;
+      }
       if (url) {
-        revoked = url;
+        objectUrl = url;
         setSrc(url);
+      } else {
+        setFailed(true);
       }
       setLoading(false);
     });
+
     return () => {
-      if (revoked) URL.revokeObjectURL(revoked);
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [sha256, filename]);
 
@@ -46,13 +59,14 @@ function ScreenshotTile({
       onClick={onZoom}
       className="group text-left rounded-xl border border-slate-200 overflow-hidden bg-white hover:border-blue-300 hover:shadow-md transition-all"
     >
-      <div className="aspect-[9/16] max-h-64 w-full bg-slate-100 relative overflow-hidden">
+      <div className="aspect-[9/16] min-h-[200px] w-full bg-slate-100 relative overflow-hidden">
         {loading && (
           <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-slate-100 to-slate-200" />
         )}
         {!loading && !src && (
-          <div className="absolute inset-0 flex items-center justify-center text-slate-400">
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 px-2 text-center">
             <ImageOff className="h-8 w-8" />
+            <span className="text-[10px] mt-2">{failed ? 'Could not load image' : 'Unavailable'}</span>
           </div>
         )}
         {src && (
@@ -112,7 +126,7 @@ export default function ScreenshotGallery({
   });
 
   return (
-    <SocCard>
+    <SocCard id="runtime-screenshots">
       <SectionHeader
         icon={<Camera className="h-4 w-4" />}
         title="Runtime Screenshots"
@@ -129,7 +143,7 @@ export default function ScreenshotGallery({
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-3 sm:gap-4">
             {shots.map((filename) => {
               const meta = evidenceByShot.get(filename);
               const title = meta?.title || titleFromFilename(filename);

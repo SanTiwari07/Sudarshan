@@ -26,16 +26,16 @@ function PhaseCard({
 }) {
   return (
     <SocCard className="h-full flex flex-col">
-      <button type="button" onClick={onOpen} className="text-left flex-1 flex flex-col">
-        <div className="px-5 py-4 border-b border-slate-200 flex items-start gap-3">
-          <span className="p-2 rounded-lg bg-blue-50 text-blue-700">{icon}</span>
-          <div className="min-w-0">
-            <h3 className="text-sm font-bold text-slate-900">
-              <HelpTerm term={term}>{title}</HelpTerm>
-            </h3>
-            <p className="text-xs text-slate-500 mt-1">{description}</p>
-          </div>
+      <div className="px-5 py-4 border-b border-slate-200 flex items-start gap-3">
+        <span className="p-2 rounded-lg bg-blue-50 text-blue-700">{icon}</span>
+        <div className="min-w-0">
+          <h3 className="text-sm font-bold text-slate-900">
+            <HelpTerm term={term}>{title}</HelpTerm>
+          </h3>
+          <p className="text-xs text-slate-500 mt-1">{description}</p>
         </div>
+      </div>
+      <button type="button" onClick={onOpen} className="text-left flex-1 flex flex-col">
         <div className="p-5 flex-1 flex flex-col gap-4">
           <div>
             <div className="flex justify-between text-[11px] text-slate-500 mb-1">

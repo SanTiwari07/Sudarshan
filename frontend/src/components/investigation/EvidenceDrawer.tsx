@@ -41,7 +41,7 @@ export default function EvidenceDrawer({
     <>
       <div className="fixed inset-0 z-50 flex justify-end">
         <div className="absolute inset-0 bg-slate-900/40" onClick={closeEvidence} />
-        <div className="relative w-full max-w-md bg-white h-full shadow-2xl border-l border-slate-200 flex flex-col">
+        <div className="relative w-full max-w-lg sm:max-w-xl bg-white h-full shadow-2xl border-l border-slate-200 flex flex-col">
           <div className="px-5 py-4 border-b flex justify-between items-start shrink-0">
             <div>
               <h2 className="text-sm font-bold text-slate-900">Evidence</h2>

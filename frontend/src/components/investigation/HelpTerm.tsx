@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { HelpCircle } from 'lucide-react';
 import { TERM_HELP } from '../../lib/analystCopy';
 
@@ -12,6 +13,25 @@ type HelpTermProps = {
 export default function HelpTerm({ children, term, helper, className = '' }: HelpTermProps) {
   const key = term || (typeof children === 'string' ? children : '');
   const text = helper || TERM_HELP[key] || TERM_HELP[String(children)] || '';
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLSpanElement>(null);
+
+  const close = useCallback(() => setOpen(false), []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocPointer = (e: MouseEvent | TouchEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        close();
+      }
+    };
+    document.addEventListener('mousedown', onDocPointer);
+    document.addEventListener('touchstart', onDocPointer);
+    return () => {
+      document.removeEventListener('mousedown', onDocPointer);
+      document.removeEventListener('touchstart', onDocPointer);
+    };
+  }, [open, close]);
 
   if (!text) {
     return <span className={className}>{children}</span>;
@@ -20,14 +40,33 @@ export default function HelpTerm({ children, term, helper, className = '' }: Hel
   return (
     <span className={`inline-flex items-center gap-1 ${className}`}>
       <span>{children}</span>
-      <span className="relative group">
-        <HelpCircle
-          className="h-3.5 w-3.5 text-slate-400 hover:text-blue-600 cursor-help shrink-0"
+      <span ref={rootRef} className="relative inline-flex shrink-0 group/help">
+        <span
+          role="button"
+          tabIndex={0}
+          className="rounded-full p-0.5 text-slate-400 hover:text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 cursor-help"
           aria-label={text}
-        />
+          aria-expanded={open}
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            setOpen((v) => !v);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.stopPropagation();
+              e.preventDefault();
+              setOpen((v) => !v);
+            }
+          }}
+        >
+          <HelpCircle className="h-3.5 w-3.5" />
+        </span>
         <span
           role="tooltip"
-          className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 z-50 w-56 px-2.5 py-2 rounded-lg bg-slate-900 text-white text-[11px] leading-snug opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity shadow-lg"
+          className={`pointer-events-none absolute left-0 top-full z-[60] mt-1.5 w-56 px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 text-[11px] leading-snug shadow-md transition-opacity ${
+            open ? 'opacity-100' : 'opacity-0 group-hover/help:opacity-100 group-focus-within/help:opacity-100'
+          }`}
         >
           {text}
         </span>

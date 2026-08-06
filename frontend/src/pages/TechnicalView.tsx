@@ -870,14 +870,14 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
 
       {investigationBundle && <FindingsRegistryTable bundle={investigationBundle} />}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
         <ExplainabilityEngine data={data} />
-        <div className="lg:col-span-2">
+        <div className="xl:col-span-8 min-w-0">
           <APKMetadata data={data} />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="analyst-grid-2">
         <PermissionTable data={data} />
         <DangerousAPITable data={data} />
       </div>
@@ -889,7 +889,7 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
       {/* MobSF Enrichment: Attack surface — exported components */}
       <ExportedComponentsPanel data={data} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="analyst-grid-2">
         <CertificatePanel certificate={data.certificate} />
         <DecompilationPanel data={data} />
       </div>
@@ -897,7 +897,7 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
       {/* MobSF Enrichment: Native binary security */}
       <BinaryAnalysisPanel data={data} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="analyst-grid-2">
         {/* MobSF Enrichment: Network Security Config */}
         <NetworkSecurityPanel data={data} />
         {/* MobSF Enrichment: Third-party SDKs/Trackers */}
@@ -907,7 +907,7 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
       {/* MobSF Enrichment: Secrets Inspector */}
       <SecretsPanel data={data} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="analyst-grid-2">
         <NetworkCapturePanel networkLogs={data.dynamic_analysis?.network_logs} />
         <LogcatInspectorPanel logcat={data.dynamic_analysis?.logcat} />
       </div>

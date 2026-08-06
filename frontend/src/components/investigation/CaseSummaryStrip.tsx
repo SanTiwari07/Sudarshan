@@ -86,6 +86,9 @@ export default function CaseSummaryStrip({
         value={counts.screenshots}
         title="Runtime Screenshots"
         blurb="Captured during sandbox execution."
+        onClick={() => {
+          document.getElementById('runtime-screenshots')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }}
       />
     </div>
   );

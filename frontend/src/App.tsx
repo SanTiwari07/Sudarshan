@@ -1,6 +1,6 @@
-import { Routes, Route, Link, useNavigate, Navigate, useParams } from 'react-router-dom';
-import { Shield, LayoutDashboard, Terminal, Globe, Database, LogOut, LogIn, MessageSquare } from 'lucide-react';
-import Login, { getToken, getUser, clearToken } from './pages/Login';
+import { Routes, Route, useNavigate, Navigate, useParams } from 'react-router-dom';
+import Login, { getToken, clearToken } from './pages/Login';
+import AppShell from './components/layout/AppShell';
 import { lazy, Suspense, useEffect, useCallback } from 'react';
 import ErrorBoundary from './components/ErrorBoundary';
 import InvestigationShell from './components/investigation/InvestigationShell';
@@ -287,7 +287,6 @@ function ActiveCaseRoute({ component: Component }: { component: React.ComponentT
 
 function AppContent() {
   const navigate = useNavigate();
-  const user = getUser();
   const isAuthed = !!getToken();
   const { setAnalysisResult, clearAnalysis } = useAnalysis();
 
@@ -298,135 +297,81 @@ function AppContent() {
   }, [navigate, clearAnalysis]);
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-100">
-      <nav className="bg-blue-900 text-white shadow-lg">
-        <div className="max-w-[1760px] mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center gap-3">
-              <Shield className="h-8 w-8 text-blue-400" />
-              <div>
-                <span className="font-bold text-xl tracking-wider">SUDARSHAN</span>
-                <span className="ml-2 text-xs text-blue-400 font-mono hidden sm:inline">ENTERPRISE SOC</span>
+    <AppShell isAuthed={isAuthed} onLogout={handleLogout}>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route
+          path="/"
+          element={
+            <RequireAuth label="Upload">
+              <div className="analyst-page">
+                <Upload onAnalysisComplete={setAnalysisResult} />
               </div>
-            </div>
-
-            <div className="flex items-center space-x-1">
-              {isAuthed && (
-                <>
-                  <Link
-                    to="/"
-                    className="flex items-center px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-800 transition-colors"
-                  >
-                    Upload
-                  </Link>
-                  <Link
-                    to="/fraud-card"
-                    className="flex items-center px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-800 transition-colors"
-                  >
-                    <LayoutDashboard className="h-4 w-4 mr-1.5" />
-                    <span className="hidden sm:inline">Fraud Analyst</span>
-                  </Link>
-                  <Link
-                    to="/technical"
-                    className="flex items-center px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-800 transition-colors"
-                  >
-                    <Terminal className="h-4 w-4 mr-1.5" />
-                    <span className="hidden sm:inline">SOC / Technical</span>
-                  </Link>
-                  <Link
-                    to="/chat"
-                    className="flex items-center px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-800 transition-colors relative"
-                  >
-                    <MessageSquare className="h-4 w-4 mr-1.5" />
-                    <span className="hidden sm:inline">AI Assistant</span>
-                    <span className="ml-1.5 w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-                  </Link>
-                  <Link
-                    to="/threat-intel"
-                    className="flex items-center px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-800 transition-colors relative"
-                  >
-                    <Globe className="h-4 w-4 mr-1.5" />
-                    <span className="hidden sm:inline">Threat Intel</span>
-                  </Link>
-                  <Link
-                    to="/history"
-                    className="flex items-center px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-800 transition-colors"
-                  >
-                    <Database className="h-4 w-4 mr-1.5" />
-                    <span className="hidden sm:inline">History</span>
-                  </Link>
-                </>
-              )}
-
-              {isAuthed ? (
-                <button
-                  onClick={handleLogout}
-                  className="flex items-center px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-800 transition-colors text-blue-300 ml-2"
-                  title={`Logged in as ${user?.username} (${user?.role})`}
-                >
-                  <LogOut className="h-4 w-4 mr-1.5" />
-                  <span className="hidden sm:inline">{user?.username}</span>
-                </button>
-              ) : (
-                <Link
-                  to="/login"
-                  className="flex items-center px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-800 transition-colors"
-                >
-                  <LogIn className="h-4 w-4 mr-1.5" />
-                  Sign In
-                </Link>
-              )}
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      <main className="flex-1 max-w-[1760px] w-full mx-auto p-4 sm:p-6 lg:px-8 lg:py-8">
-        <Routes>
-          {/* Public */}
-          <Route path="/login" element={<Login />} />
-
-          {/* Protected */}
-          <Route path="/" element={
-            <RequireAuth label="Upload"><Upload onAnalysisComplete={setAnalysisResult} /></RequireAuth>
-          } />
-          <Route path="/fraud-card" element={
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/fraud-card"
+          element={
             <RequireAuth label="Fraud Card">
               <InvestigationShell>
                 <ActiveCaseRoute component={FraudCard} />
               </InvestigationShell>
             </RequireAuth>
-          } />
-          <Route path="/technical" element={
+          }
+        />
+        <Route
+          path="/technical"
+          element={
             <RequireAuth label="Technical View">
               <InvestigationShell>
                 <ActiveCaseRoute component={TechnicalView} />
               </InvestigationShell>
             </RequireAuth>
-          } />
-          <Route path="/threat-intel" element={
+          }
+        />
+        <Route
+          path="/threat-intel"
+          element={
             <RequireAuth label="Threat Intelligence">
               <InvestigationShell>
                 <ActiveCaseRoute component={ThreatIntelView} />
               </InvestigationShell>
             </RequireAuth>
-          } />
-          <Route path="/chat" element={
+          }
+        />
+        <Route
+          path="/chat"
+          element={
             <RequireAuth label="Investigation Chat">
-              <InvestigationShell>
+              <InvestigationShell className="analyst-page-tight">
                 <ActiveCaseRoute component={InvestigationChat} />
               </InvestigationShell>
             </RequireAuth>
-          } />
-          <Route path="/history" element={
-            <RequireAuth label="Case History"><History /></RequireAuth>
-          } />
-          <Route path="/history/:sha256" element={
-            <RequireAuth label="Case Detail"><CaseDetailRoute /></RequireAuth>
-          } />
-        </Routes>
-      </main>
-    </div>
+          }
+        />
+        <Route
+          path="/history"
+          element={
+            <RequireAuth label="Case History">
+              <div className="analyst-page">
+                <History />
+              </div>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/history/:sha256"
+          element={
+            <RequireAuth label="Case Detail">
+              <InvestigationShell>
+                <CaseDetailRoute />
+              </InvestigationShell>
+            </RequireAuth>
+          }
+        />
+      </Routes>
+    </AppShell>
   );
 }
 

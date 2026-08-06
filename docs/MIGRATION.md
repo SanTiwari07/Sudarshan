@@ -106,17 +106,12 @@ MobSF remains static-only (`androguard` / `androguard+mobsf`). No MobSF dynamic 
    - Shared Library: [`shared/sudarshan_core/`](../shared/sudarshan_core/) mounted at `/opt/sudarshan-core`
    - Network ADB: `SandboxProvider` connects using `ADB_HOST`, `ADB_PORT`, and optional `DEVICE_SERIAL` from `.env` (`AUTO_CONNECT=true`). Genymotion uses the VM endpoint visible to the host; Android Studio AVDs often use `host.docker.internal:5555` from inside containers.
    - Resource Constraints: Hard limits (`mem_limit: 4g`, `cpus: 2.0`, `no-new-privileges:true`).
+   - REST API: `GET /health`, `GET /status`, `POST /api/v1/analyze`, `POST /api/v1/analyze/async`, `GET /api/v1/status/{job_id}` (optional `ANALYSIS_ENGINE_INTERNAL_TOKEN` in production).
 
 2. **Backend Orchestrator**:
    - Contains **zero local binary dependencies** (no local `apktool`, `jadx`, `java`, `frida`, or `adb`).
-   - Delegates analysis jobs to `http://analysis-engine:8001/api/v1/analyze` over internal Docker networking.
-
-3. **Analysis Engine REST API Endpoints**:
-   - `GET /health`: Healthcheck endpoint (`{"status": "ok"}`).
-   - `GET /status`: Detailed toolchain availability and ADB / sandbox connectivity status.
-   - `POST /api/v1/analyze`: Synchronous analysis endpoint.
-   - `POST /api/v1/analyze/async`: Asynchronous job submission returning `job_id`.
-   - `GET /api/v1/status/{job_id}`: Poll status of an async analysis job.
+   - Delegates analysis jobs to `http://analysis-engine:8001/api/v1/analyze` over internal Docker networking with optional `ANALYSIS_ENGINE_INTERNAL_TOKEN` (`shared/sudarshan_core/security/internal_auth.py`).
+   - Does **not** run dynamic analysis locally when the engine is down unless `SUDARSHAN_ALLOW_GATEWAY_DYNAMIC=true` (dev only).
 
 ---
 

@@ -28,7 +28,7 @@ from sudarshan_core.analyzers.apk_analyzer import analyze_apk
 from app.auth.auth import get_current_user, require_analyst
 from app.db.database import save_case
 from sudarshan_core.engines.classification_engine import classify_family
-from sudarshan_core.engines.frida_sandbox import get_sandbox_status, run_frida_analysis
+from sudarshan_core.engines.frida_sandbox import artifact_dir_for, get_sandbox_status, run_frida_analysis
 from sudarshan_core.engines.risk_engine import calculate_risk_score
 from sudarshan_core.models.schemas import (
     AnalysisResponse,
@@ -54,7 +54,7 @@ from sudarshan_core.services.threat_correlator import correlate
 from app.workers.analysis_queue import create_job, enqueue, get_job, persist_job
 from app.rate_limit import limiter
 from sudarshan_core.models.manifest import build_manifest, InvestigationManifest
-from sudarshan_core.engines.frida_sandbox import artifact_dir_for
+from sudarshan_core.security.sandbox_containment import gateway_dynamic_allowed
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -436,6 +436,16 @@ async def _run_analysis_pipeline(
     if engine_result:
         logger.info(f"[Orchestrator] Enriching analysis-engine result for {sha256_hash}")
         return await _enrich_engine_result(engine_result, sha256_hash, analyst_id)
+
+    if not gateway_dynamic_allowed():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Analysis engine unavailable and gateway dynamic analysis is "
+                "disabled (SUDARSHAN_ALLOW_GATEWAY_DYNAMIC). Malware must not "
+                "run in the unhardened backend container."
+            ),
+        )
 
     analysis_mode = "androguard"
     mobsf_report: Optional[Dict] = None
@@ -976,7 +986,7 @@ def _build_response(result: Dict[str, Any], job_id: Optional[str] = None) -> Ana
 # ─── Sync Endpoint ────────────────────────────────────────────────────────────
 
 @router.post("/analyze", response_model=AnalysisResponse)
-@limiter.limit("30/hour")
+@limiter.limit("10/minute")
 async def analyze_upload(
     request: Request,
     file: UploadFile = File(...),
@@ -1017,7 +1027,7 @@ class AsyncJobResponse(_BM):
 
 
 @router.post("/analyze/async", response_model=AsyncJobResponse, status_code=202)
-@limiter.limit("30/hour")
+@limiter.limit("10/minute")
 async def analyze_upload_async(
     request: Request,
     file: UploadFile = File(...),

@@ -16,7 +16,7 @@ Test Suite:          backend/tests/test_risk_engine.py, backend/tests/test_bfci_
 - [3. Static Threat Exposure Index (STEI)](#3-static-threat-exposure-index-stei)
 - [4. Behavioral Fraud Confidence Index (BFCI v2)](#4-behavioral-fraud-confidence-index-bfci-v2)
 - [5. Fraud Risk Score (FRS)](#5-fraud-risk-score-frs)
-- [6. Static Risk Fallback Engine](#6-static-risk-fallback-engine)
+- [6. Static Risk Fallback Engine](#6-dynamic-axis-exclusion-static-only-and-inconclusive-runs)
 - [7. Threat Scenario Correlation Matrix](#7-threat-scenario-correlation-matrix)
 
 ---
@@ -36,10 +36,10 @@ graph TD
     INTEL[VirusTotal / OTX] --> CORR_CALC[Threat Correlation Score]
     BANKS[Target Packages] --> BANK_CALC[Banking Impact Score]
 
-    STEI_CALC -->|Weight 0.40| FRS_ENG[Fraud Risk Engine]
-    BFCI_CALC -->|Weight 0.30| FRS_ENG
-    CORR_CALC -->|Weight 0.15| FRS_ENG
-    BANK_CALC -->|Weight 0.15| FRS_ENG
+    STEI_CALC -->|Nominal 0.25| FRS_ENG[Fraud Risk Engine]
+    BFCI_CALC -->|Nominal 0.35| FRS_ENG
+    CORR_CALC -->|Nominal 0.20| FRS_ENG
+    BANK_CALC -->|Nominal 0.20| FRS_ENG
 
     FRS_ENG --> FRS[Fraud Risk Score: 0.0 - 100.0]
 ```
@@ -71,23 +71,37 @@ $$BFCI_{\text{v2}} = \min\left(100.0, \sum_{c} W_c \cdot \min\left(1.0, \frac{\l
 
 ## 5. Fraud Risk Score (FRS)
 
-$$FRS = \text{clamp}(0.40 \times STEI + 0.30 \times BFCI_{\text{v2}} + 0.15 \times \text{ThreatCorrelation} + 0.15 \times \text{BankingImpact}, 0.0, 100.0)$$
+[`calculate_risk_score`](../../shared/sudarshan_core/engines/risk_engine.py) uses **nominal** axis weights that **renormalize** over only the axes that have data. An absent axis is excluded (not scored as zero).
 
-| FRS Range | Risk Band | Recommended Action |
+| Axis | Nominal weight | Included when |
 | :--- | :--- | :--- |
-| **80.0 – 100.0** | `CRITICAL` | Immediate App Block & CERT-In Incident Report. |
-| **60.0 – 79.9** | `HIGH` | Step-up Auth Enforcement & Account Monitoring. |
-| **40.0 – 59.9** | `MEDIUM` | Flag for Analyst Manual Review. |
-| **20.0 – 39.9** | `LOW` | Low risk activity — step-up monitoring. |
-| **0.0 – 19.9** | `SAFE` | Benign Application — Pass. |
+| `stei` | 0.25 | Always (static analysis ran) |
+| `dynamic` | 0.35 | Dynamic run was **conclusive** (`dynamic_conclusive`) |
+| `correlation` | 0.20 | Threat-intel correlation returned `available: true` |
+| `banking_impact` | 0.20 | Always |
+
+$$\text{base\_frs} = \frac{\sum_{a \in \text{live}} w_a \cdot s_a}{\sum_{a \in \text{live}} w_a}$$
+
+$$\text{final\_risk\_score} = \min(\text{base\_frs} \times \text{ai\_confidence\_multiplier}, 100.0)$$
+
+The `ai_confidence_multiplier` is rule-derived (family classifier / correlation), clamped to `[0.5, 1.5]` — not LLM output.
+
+Response field `frs_breakdown.axes_used` lists the **renormalized** weights; `axes_excluded` lists omitted axes.
+
+| Final score (after multiplier) | Risk band (`risk_engine.py`) | UI label |
+| :--- | :--- | :--- |
+| **0.0 – 30.0** | `Safe` | Safe |
+| **30.1 – 60.0** | `Suspicious` | Suspicious |
+| **60.1 – 89.0** | `High Risk` | High |
+| **≥ 90.0** | `Critical` | Critical |
+
+**Visibility floor:** If the band would be `Safe`, the sample has a concealed payload (`has_concealed_payload`), and dynamic analysis did not run conclusively, the band is raised to `Suspicious` (`verdict_floored_for_visibility`).
 
 ---
 
-## 6. Static Risk Fallback Engine
+## 6. Dynamic axis exclusion (static-only and inconclusive runs)
 
-When dynamic sandbox execution fails or produces 0 events (`dynamic_available = False`), the engine automatically switches to the **Static Fallback Risk Engine**:
-
-$$\text{FRS}_{\text{static}} = \text{clamp}(0.50 \times STEI + 0.25 \times \text{ThreatCorrelation} + 0.25 \times \text{BankingImpact}, 0.0, 100.0)$$
+There is no separate fixed-weight “static fallback” formula. When dynamic analysis is unavailable or **inconclusive** (sandbox ran but captured no observable behavior), the `dynamic` axis is excluded and the remaining weights renormalize — the same mechanism used when threat-intel keys are unset and `correlation` is excluded.
 
 ---
 

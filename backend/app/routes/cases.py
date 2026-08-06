@@ -22,6 +22,22 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cases", tags=["Case History"])
 
 
+def _list_scope_analyst_id(user: dict) -> Optional[int]:
+    """Analysts see only their cases; soc_lead and admin see all."""
+    if user.get("role") == "analyst":
+        return int(user["id"])
+    return None
+
+
+def _assert_case_visible(user: dict, case_row: dict) -> None:
+    scope = _list_scope_analyst_id(user)
+    if scope is None:
+        return
+    owner = case_row.get("analyst_id")
+    if owner is not None and int(owner) != scope:
+        raise HTTPException(status_code=404, detail="Case not found.")
+
+
 class NoteCreateRequest(BaseModel):
     text: str
     author: Optional[str] = "SOC Analyst"
@@ -81,12 +97,10 @@ async def list_all_cases(
     offset: int = Query(default=0, ge=0),
     user: dict = Depends(require_analyst),
 ):
-    """
-    Return paginated list of all past APK analyses.
-    Analysts see all cases (no per-user scoping — analysts share context).
-    """
-    total = await count_cases()
-    rows = await list_cases(limit=limit, offset=offset)
+    """Return paginated case history (scoped to analyst_id for role=analyst)."""
+    scope_id = _list_scope_analyst_id(user)
+    total = await count_cases(analyst_id=scope_id)
+    rows = await list_cases(limit=limit, offset=offset, analyst_id=scope_id)
 
     cases = [
         CaseSummary(
@@ -121,6 +135,7 @@ async def get_case_detail(
             status_code=404,
             detail=f"Case not found for SHA256 {sha256}. Analyze the APK first.",
         )
+    _assert_case_visible(user, row)
 
     return CaseDetail(
         sha256=row["sha256"],

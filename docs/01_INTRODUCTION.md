@@ -153,15 +153,20 @@ sequenceDiagram
 The introduction establishes the core mathematical formulation governing the platform's risk decisions:
 
 ### Fraud Risk Score ($FRS$) Formulation
+
+Nominal axis weights (renormalized when an axis has no data):
+
 ```text
-FRS = 0.40 × STEI + 0.30 × BFCI + 0.15 × ThreatCorrelation + 0.15 × BankingImpact
+FRS_base = weighted_mean( stei×0.25, dynamic×0.35, correlation×0.20, banking_impact×0.20 )
+final_risk_score = min( FRS_base × ai_confidence_multiplier, 100 )
 ```
 
-Where:
-- **Static Exposure ($STEI$)**: Weighted sum across Credential Theft ($0.60$), Banking Targeting ($0.20$), Permission Risk ($0.10$), Obfuscation ($0.05$), and Infrastructure Risk ($0.05$).
-- **Dynamic Behavior ($BFCI$)**: Weighted sum across Accessibility ($0.35$), SMS ($0.25$), Overlay ($0.20$), Banking Interaction ($0.10$), Network C2 ($0.05$), and Persistence ($0.05$).
-- **Threat Correlation**: VirusTotal / AlienVault OTX / AbuseIPDB reputation ratio ($0.0 - 100.0$).
+- **Static Exposure ($STEI$)**: Credential Theft ($0.60$), Banking Targeting ($0.20$), Permission Risk ($0.10$), Obfuscation ($0.05$), Infrastructure Risk ($0.05$).
+- **Dynamic Behavior ($BFCI$)**: Used when the sandbox run is **conclusive**; otherwise the dynamic axis is excluded.
+- **Threat Correlation**: Included only when VT/OTX/AbuseIPDB correlation returns `available: true`.
 - **Banking Impact**: Severity weight of matched malware family and regulatory risk indicators.
+
+**Risk bands** (from `risk_engine.py`): `Safe` (≤30), `Suspicious` (≤60), `High Risk` (≤89), `Critical` (≥90).
 
 ---
 
@@ -188,7 +193,7 @@ Sudarshan integrates into enterprise banking environments through standard proto
 
 - **REST API Gateway**: Exposes `/api/v1/analyze`, `/api/v1/cases`, `/api/v1/intelligence/{sha256}`, `/api/v1/report/*`, and `/api/runtime/*`.
 - **SIEM / SOAR Export**: Emits standard STIX 2.1 JSON bundles and CSV IOC feeds.
-- **Core Banking System**: Triggers API-based account quarantine and token revocation when $FRS \ge 80.0$ (`CRITICAL`).
+- **Core Banking System**: Integrate playbooks on `Critical` band (typically $FRS \ge 90$) or institution-specific thresholds.
 
 ---
 

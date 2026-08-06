@@ -1,0 +1,38 @@
+{
+  "defaultAction": "SCMP_ACT_ERRNO",
+  "defaultErrnoRet": 1,
+  "archMap": [
+    {
+      "architecture": "SCMP_ARCH_X86_64",
+      "subArchitectures": ["SCMP_ARCH_X86", "SCMP_ARCH_X32"]
+    }
+  ],
+  "syscalls": [
+    {
+      "names": [
+        "accept", "accept4", "access", "arch_prctl", "bind", "brk", "capget", "capset",
+        "chdir", "chmod", "chown", "clock_gettime", "clone", "clone3", "close", "connect",
+        "copy_file_range", "dup", "dup2", "dup3", "epoll_create", "epoll_create1",
+        "epoll_ctl", "epoll_pwait", "epoll_wait", "eventfd", "eventfd2", "execve",
+        "execveat", "exit", "exit_group", "faccessat", "faccessat2", "fchdir", "fchmod",
+        "fchmodat", "fchown", "fchownat", "fcntl", "fdatasync", "flock", "fork",
+        "fstat", "fstatfs", "fsync", "ftruncate", "futex", "getcwd", "getdents",
+        "getdents64", "getegid", "geteuid", "getgid", "getgroups", "getpeername",
+        "getpid", "getppid", "getrandom", "getrlimit", "getsockname", "getsockopt",
+        "gettid", "gettimeofday", "getuid", "ioctl", "kill", "lseek", "lstat", "madvise",
+        "mkdir", "mkdirat", "mmap", "mprotect", "mremap", "munmap", "nanosleep",
+        "newfstatat", "open", "openat", "pipe", "pipe2", "poll", "ppoll", "prctl",
+        "pread64", "pwrite64", "read", "readlink", "readlinkat", "recvfrom", "recvmmsg",
+        "recvmsg", "rename", "renameat", "renameat2", "rmdir", "rt_sigaction",
+        "rt_sigprocmask", "rt_sigreturn", "rt_sigsuspend", "sched_getaffinity",
+        "sched_yield", "select", "sendfile", "sendmmsg", "sendmsg", "sendto",
+        "set_robust_list", "set_tid_address", "setgid", "setgroups", "setpgid",
+        "setsid", "setsockopt", "setuid", "shutdown", "sigaltstack", "socket",
+        "socketpair", "stat", "statfs", "statx", "symlink", "symlinkat", "tgkill",
+        "time", "tkill", "uname", "unlink", "unlinkat", "utime", "utimensat",
+        "wait4", "waitid", "write", "writev"
+      ],
+      "action": "SCMP_ACT_ALLOW"
+    }
+  ]
+}

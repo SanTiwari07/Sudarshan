@@ -96,6 +96,16 @@ class _InternalServiceAuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         expected = internal_service_token()
         if not expected:
+            if os.getenv("SUDARSHAN_ENV", "").strip().lower() == "production":
+                return JSONResponse(
+                    status_code=503,
+                    content={
+                        "detail": (
+                            "Analysis engine refuses unauthenticated requests in "
+                            "production. Set ANALYSIS_ENGINE_INTERNAL_TOKEN."
+                        )
+                    },
+                )
             return await call_next(request)
         if request.headers.get(HEADER_NAME) != expected:
             return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
@@ -103,6 +113,26 @@ class _InternalServiceAuthMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(_InternalServiceAuthMiddleware)
+
+
+@app.on_event("startup")
+async def _sandbox_containment_startup() -> None:
+    """Fail closed in production when ADB/Frida targets bridge the host LAN."""
+    from sudarshan_core.sandbox import load_sandbox_config
+    from sudarshan_core.security.sandbox_containment import (
+        audit_sandbox_connectivity,
+        containment_strict_enabled,
+        enforce_connectivity_policy,
+    )
+
+    cfg = load_sandbox_config()
+    if containment_strict_enabled():
+        enforce_connectivity_policy(cfg)
+        return
+    for finding in audit_sandbox_connectivity(cfg):
+        log = logger.error if finding.severity == "error" else logger.warning
+        log("[Containment] %s: %s", finding.code, finding.message)
+
 
 DEFAULT_TIMEOUT_SECONDS = int(os.getenv("ANALYSIS_TIMEOUT_SECONDS", "300"))
 UPLOADS_DIR = Path(os.getenv("UPLOADS_DIR", "/app/uploads"))
@@ -192,10 +222,16 @@ def health():
 def _adb_connected() -> bool:
     """Blocking ADB probe — always call via a worker thread."""
     try:
-        import subprocess
-        adb_bin = shutil.which("adb") or "adb"
-        res = subprocess.run([adb_bin, "devices"], capture_output=True, text=True, timeout=5)
-        lines = [line.strip() for line in res.stdout.splitlines()[1:] if line.strip()]
+        from sudarshan_core.sandbox import get_sandbox_provider
+
+        provider = get_sandbox_provider()
+        adb = provider.find_adb()
+        if not adb:
+            return False
+        ok, out = provider.adb("devices", timeout=5)
+        if not ok:
+            return False
+        lines = [line.strip() for line in out.splitlines()[1:] if line.strip()]
         return any("device" in line for line in lines)
     except Exception as e:
         logger.warning(f"[Status] ADB check failed: {e}")

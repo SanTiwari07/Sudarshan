@@ -15,20 +15,22 @@ All documentation herein is strictly derived from and cross-verified against the
 | [**ARCHITECTURE.md**](ARCHITECTURE.md) | System Design & Technical Spec | In-depth technical specification of backend, frontend, engines, database, `/api/runtime/*` APIs, and zero-copy volumes. |
 | [**MIGRATION.md**](MIGRATION.md) | Microservice Migration Guide | Architectural specification of `analysis-engine` microservice container, REST APIs, zero-copy shared volume, and entrypoint healthchecks. |
 | [**03 — Static Threat Intelligence**](architecture/03_STATIC_THREAT_INTELLIGENCE.md) | Static Analysis & Decompilation | Containerized static engine, MobSF, native `apk_analyzer.py`, `apk_repair.py` AXML recovery, APKTool 2.10.0, JADX 1.5.1, `manifest.py` Investigation Manifest, STEI formula. |
-| [**04 — Dynamic Analysis Engine**](architecture/04_DYNAMIC_ANALYSIS_ENGINE.md) | Dynamic Sandbox & Agentic Explorer | Containerized Frida 17 PID attach, Java-bridge probing (`java_probe.js`), ART deoptimization, Network ADB (`host.docker.internal:5555`), mitmproxy HAR, Agentic Explorer 15-stage DAG. |
+| [**04 — Dynamic Analysis Engine**](architecture/04_DYNAMIC_ANALYSIS_ENGINE.md) | Dynamic Sandbox & Agentic Explorer | Frida 17 PID attach, containment policy (`sandbox_containment.py`, `adb_gateway`), Genymotion `ADB_HOST` / AVD serial, mitmproxy HAR, Agentic Explorer. |
 | [**05 — AI Investigation Engine**](architecture/05_AI_INVESTIGATION_ENGINE.md) | AI Core, RAG & Prompt Safety | Gemini 2.5 Flash (`GEMINI_MODEL`), vector RAG index (`gemini_rag.py`), prompt sanitizer. |
 | [**06 — Evidence Processing**](architecture/06_EVIDENCE_PROCESSING.md) | Event Bus & Workflow Engine | `EventBus`, `EvidenceStore`, `WorkflowReconstructor` causal chain engine, runtime telemetry sink (`runtime_api.py`). |
 | [**07 — Fraud Intelligence Engine**](architecture/07_FRAUD_INTELLIGENCE_ENGINE.md) | Threat Correlation & Attribution | VirusTotal, AlienVault OTX, AbuseIPDB lookup, 24h TTL SQLite IOC reputation cache, deterministic family classifier. |
 | [**08 — Deterministic Risk Engine**](architecture/08_DETERMINISTIC_RISK_ENGINE.md) | Risk Scoring & Math Formulas | 5-axis STEI, logarithmic volume-aware BFCI v2, 4-axis FRS formula, static fallback. |
 | [**09 — AI Report Generation**](architecture/09_AI_REPORT_GENERATION.md) | Security Reporting & Export | Executive Fraud Cards, HTML security reports, PDF report exporter, STIX 2.1 exporter, CSV IOC feed. |
 | [**10 — Analyst Dashboard**](dashboard/10_DASHBOARD.md) | Analyst UI & Visual Workflows | React 18 SPA, Executive View (`FraudCard.tsx`), Technical SOC View, `WorkflowDiagram.tsx` timeline. |
-| [**11 — Evaluation Strategy**](evaluation/11_EVALUATION.md) | Verification & Testing | Automated test suite in `tests/` & `backend/tests/` (**457 collected & verified tests**), benchmarks, determinism baselines. |
+| [**11 — Evaluation Strategy**](evaluation/11_EVALUATION.md) | Verification & Testing | Automated test suite in `tests/` & `backend/tests/` (**486 collected & verified tests**), benchmarks, determinism baselines. |
 | [**HOW_TO_RUN.md**](HOW_TO_RUN.md) | Installation & Operations | Prerequisites, Docker Compose setup, single-command `start.ps1`, Vite polling mode, environment variables. |
-| [**VALIDATION.md**](VALIDATION.md) | Validation Protocols | Determinism replay, ground-truth matrix, pytest suite (**457**), dynamic APK corpus (`validate_dynamic_pipeline.py`). |
+| [**VALIDATION.md**](VALIDATION.md) | Validation Protocols | Determinism replay, ground-truth matrix, pytest suite (**486**), dynamic APK corpus (`validate_dynamic_pipeline.py`). |
 | [**DAE_CURRENT_STATE.md**](DAE_CURRENT_STATE.md) | Technical Resolution Audit | Resolution state of containerization, Frida 17 Java bridge, ART JIT deopt, PID attach, BFCI v2, manifest, and HAR merger. |
 | [**CONTRIBUTING.md**](CONTRIBUTING.md) | Developer Guidelines | Code standards, PEP-8/ESLint style, pytest testing workflows, pull request process. |
 | [**CHANGELOG.md**](CHANGELOG.md) | Release Notes & Version History | Version history (`v2.5.0-STABLE`), release highlights, and commit traceability. |
 | [**DOCUMENTATION_AUDIT_REPORT.md**](DOCUMENTATION_AUDIT_REPORT.md) | Master Audit Report | Summary of audit changes, updated files, new files, and link verification results. |
+| [**security/P0_SANDBOX_ESCAPE_INCIDENT.md**](security/P0_SANDBOX_ESCAPE_INCIDENT.md) | Sandbox Escape Incident | P0 containment remediation, hardened compose, env checklist. |
+| [**security/P0_RED_TEAM_PENETRATION_REPORT.md**](security/P0_RED_TEAM_PENETRATION_REPORT.md) | Red Team Findings | ADB bypass fixes, residual risks, regression test commands. |
 
 ---
 
@@ -60,7 +62,7 @@ graph TD
     end
 
     subgraph External Devices & Network Sidecars
-        ADB["ADB TCP Bridge<br/>(host.docker.internal:5555)"]
+        ADB["ADB TCP Bridge<br/>(Genymotion VM IP or AVD serial)"]
         AVD["Android 13 AVD<br/>(frida-server 17.16.4)"]
         MITM["mitmproxy Sidecar<br/>(Port 8080 / HAR Dump Parser)"]
         MOBSF["MobSF Engine<br/>(Port 8008 / mobsf_client.py)"]
@@ -109,12 +111,13 @@ graph TD
 The Sudarshan platform codebase is backed by an automated regression and determinism verification test suite:
 
 - **Test Suite Command**: `$env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests`
-- **Verification Metric**: **457 / 457 tests collected & verified**.
+- **Verification Metric**: **486 / 486 tests collected & verified**.
 - **Key Test Modules (in [`tests/`](file:///d:/Projects/Sudarshan%20BOI/tests/) and [`backend/tests/`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/))**:
   - `test_remaining_features.py`: Tests `InvestigationManifest`, `ApktoolEngine`, `JadxEngine`, and `NetworkCapture` mitmproxy HAR parsing.
   - `test_bfci_scorer.py`: Tests logarithmic volume scoring and sequence bonuses.
   - `test_workflow_reconstructor.py`: Tests temporal causal chain reconstruction and MITRE stage mapping.
-  - `test_risk_engine.py`: Tests 5-axis STEI, static fallback gate, and 4-axis FRS formula.
+  - `test_risk_engine.py`: Tests 5-axis STEI, axis exclusion / renormalization, and FRS bands.
+  - `test_sandbox_containment.py`, `test_adb_policy_bypass.py`, `test_gateway_dynamic_blocker.py`: Sandbox containment and gateway dynamic-analysis policy.
   - `test_manifest_repair.py`: Tests automated AXML manifest repair and fallback XML decoding.
   - `test_prompt_injection.py`: Tests input sanitization against prompt injection attacks.
   - `test_determinism_replay.py`: Asserts byte-for-byte verdict stability across refactors.

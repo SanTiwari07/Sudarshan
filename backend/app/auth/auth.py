@@ -32,6 +32,7 @@ from app.db.database import (
     update_user_role,
 )
 from app.rate_limit import limiter
+from app.registration_policy import public_registration_allowed
 
 logger = logging.getLogger(__name__)
 
@@ -172,6 +173,12 @@ async def register(request: Request, req: RegisterRequest):
     Register a new account. Always created with the 'analyst' role —
     privilege is granted by an admin afterwards, never self-assigned.
     """
+    if not public_registration_allowed():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Public registration is disabled.",
+        )
+
     if await username_exists(req.username):
         raise HTTPException(status_code=409, detail="Username already taken")
 

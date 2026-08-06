@@ -264,10 +264,16 @@ async def list_cases(limit: int = 50, offset: int = 0, analyst_id: Optional[int]
     return [_row_to_case(dict(r)) for r in rows]
 
 
-async def count_cases() -> int:
+async def count_cases(analyst_id: Optional[int] = None) -> int:
     async with _connect() as db:
-        async with db.execute("SELECT COUNT(*) FROM cases") as cur:
-            row = await cur.fetchone()
+        if analyst_id is not None:
+            async with db.execute(
+                "SELECT COUNT(*) FROM cases WHERE analyst_id = ?", (analyst_id,)
+            ) as cur:
+                row = await cur.fetchone()
+        else:
+            async with db.execute("SELECT COUNT(*) FROM cases") as cur:
+                row = await cur.fetchone()
     return row[0] if row else 0
 
 

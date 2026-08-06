@@ -34,7 +34,7 @@ Do not cite **[CLAIMED]** items as fact. Several are recorded here precisely bec
 > AI may **not** decide malware verdicts.
 > Only deterministic evidence contributes to risk scoring.
 
-**[VERIFIED]** This invariant currently holds at the scoring layer. Identical recorded evidence produces a byte-identical verdict, and LLM-authored fields merged into the dynamic payload do not move the score. Verified across **457 / 457 tests collected & verified** (`pytest tests/ backend/tests`).
+**[VERIFIED]** This invariant currently holds at the scoring layer. Identical recorded evidence produces a byte-identical verdict, and LLM-authored fields merged into the dynamic payload do not move the score. Verified across **486 / 486 tests collected** (`pytest tests/ backend/tests --collect-only`).
 
 ---
 
@@ -151,27 +151,27 @@ BFCI = 0.35·A + 0.25·S + 0.20·O + 0.10·B + 0.05·N + 0.05·P
 ### 4.3 FRS — Fraud Risk Score
 
 ```text
-dynamic available:  FRS = clamp(0.40·STEI + 0.30·BFCI + 0.15·Correlation + 0.15·BankingImpact, 0, 100)
-static only:        FRS = clamp(0.50·STEI + 0.25·Correlation + 0.25·BankingImpact, 0, 100)
+dynamic conclusive:  nominal weights 0.25·STEI + 0.35·Dynamic + 0.20·Correlation + 0.20·BankingImpact
+                     → renormalize over axes with data → × ai_confidence_multiplier → final_risk_score
+static / inconclusive dynamic: dynamic axis excluded; correlation excluded when intel unavailable
 ```
 
 `ai_confidence` is **rule-derived, not LLM-derived**: 1.0 when family is Unknown, 1.2 on a deterministic family-classifier match, 1.15 when the family came from threat correlation. It is hard-clamped to [0.5, 1.5] as a last line of defence.
 
 ### 4.4 Bands and Confidence
 
-| Final score | Band |
+| Final score (after multiplier) | Band (`risk_engine.py`) |
 |---|---|
-| < 20.0 | SAFE |
-| 20.0 – 39.9 | LOW |
-| 40.0 – 59.9 | MEDIUM |
-| 60.0 – 79.9 | HIGH |
-| ≥ 80.0 | CRITICAL |
+| ≤ 30.0 | Safe |
+| ≤ 60.0 | Suspicious |
+| ≤ 89.0 | High Risk |
+| ≥ 90.0 | Critical |
 
 ---
 
 ## 5. Verification & Test Suite
 
-**[VERIFIED]** **457 / 457 tests collected & verified**.
+**[VERIFIED]** **486 / 486 tests collected & verified** (`pytest tests/ backend/tests --collect-only`, 2026-08-06).
 
 Execution command:
 ```powershell

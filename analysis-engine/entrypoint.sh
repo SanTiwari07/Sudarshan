@@ -9,33 +9,10 @@ java -version 2>&1 | head -n 1
 apktool --version 2>&1 | head -n 1
 jadx --version 2>&1 | head -n 1
 
-# Idempotent ADB connection retry loop
-ADB_HOST="${ADB_HOST:-host.docker.internal}"
-ADB_PORT="${ADB_PORT:-5555}"
-
-echo "[Analysis Engine] Starting background ADB daemon..."
-adb start-server || true
-
-echo "[Analysis Engine] Attempting ADB connection to ${ADB_HOST}:${ADB_PORT}..."
+# ADB warm-up / connect — policy-validated via adb_gateway (not raw shell adb).
+echo "[Analysis Engine] Starting background ADB bootstrap (validated)..."
 (
-    _connected=0
-    for i in {1..10}; do
-        if adb connect "${ADB_HOST}:${ADB_PORT}" | grep -E "connected|already"; then
-            echo "[Analysis Engine] ADB connection established to ${ADB_HOST}:${ADB_PORT}"
-            _connected=1
-            break
-        fi
-        echo "[Analysis Engine] ADB target ${ADB_HOST}:${ADB_PORT} not ready (attempt $i/10)."
-        # Do not sleep after the last attempt — no emulator is a normal operating
-        # mode for static-only analysis; the extra delay just makes cold-start noisy.
-        if [ "$i" -lt 10 ]; then
-            sleep 3
-        fi
-    done
-    # Only print when all retries were exhausted — not on a successful connect.
-    if [ "$_connected" -eq 0 ]; then
-        echo "[Analysis Engine] No emulator reachable at ${ADB_HOST}:${ADB_PORT} — static analysis only."
-    fi
+    python -m app.adb_bootstrap || true
 ) &
 
 # Launch FastAPI Uvicorn Server on 0.0.0.0:8001

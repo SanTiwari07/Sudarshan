@@ -32,7 +32,6 @@ from __future__ import annotations
 import logging
 import os
 import re
-import subprocess
 import threading
 import time
 from typing import Dict, Optional, Tuple
@@ -141,13 +140,15 @@ def get_screen_size(
 
     size: Optional[Tuple[int, int]] = None
     try:
-        cmd = [adb_path or "adb"]
+        from sudarshan_core.sandbox import get_sandbox_provider
+
+        provider = get_sandbox_provider()
         if device_serial:
-            cmd += ["-s", device_serial]
-        cmd += ["shell", "wm", "size"]
-        completed = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-        size = parse_wm_size(completed.stdout or "")
-    except (OSError, subprocess.SubprocessError) as exc:
+            ok, out = provider.adb("-s", device_serial, "shell", "wm", "size", timeout=10)
+        else:
+            ok, out = provider.adb("shell", "wm", "size", timeout=10)
+        size = parse_wm_size(out if ok else "")
+    except Exception as exc:
         logger.warning(
             f"[DeviceProps] Could not query device resolution "
             f"({type(exc).__name__}: {exc}) — using "

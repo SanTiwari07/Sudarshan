@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented in this file.
 
+## 2026-08-06
+
+### Added
+- **Sandbox containment module**: `shared/sudarshan_core/security/` (`sandbox_containment.py`, `adb_gateway.py`, `internal_auth.py`) with startup audits on backend and analysis-engine.
+- **Production compose overlay**: `docker-compose.hardened.yml` and `deploy/security/seccomp-analysis-engine.json`.
+- **Containment regression tests**: `tests/unit/test_sandbox_containment.py`, `test_adb_policy_bypass.py`, `test_blocker_fixes.py`; `backend/tests/test_gateway_dynamic_blocker.py`.
+
+### Changed
+- **Gateway analysis path**: `upload.py` returns HTTP 503 when analysis-engine is unreachable unless `SUDARSHAN_ALLOW_GATEWAY_DYNAMIC=true`.
+- **Compose exposure**: MobSF and mitmproxy published on `127.0.0.1` only in base `docker-compose.yml`.
+- **Automated test suite**: **486** tests collected (`pytest tests/ backend/tests --collect-only`).
+
+### Documentation
+- Synchronized `/docs` with containment architecture, corrected FRS formula and risk bands to match `risk_engine.py`, updated test metrics to **486**, documented hardened deployment in `HOW_TO_RUN.md` and `ARCHITECTURE.md` §12.
+
 ## [2.5.0-STABLE] — 2026-08-05
 
 ### Documentation

@@ -94,12 +94,11 @@ app.include_router(runtime_router,       prefix="/api",            tags=["Runtim
 
 @app.on_event("startup")
 async def startup():
-    if os.getenv("SUDARSHAN_ENV", "").lower() == "production":
-        if not os.getenv("ANALYSIS_ENGINE_INTERNAL_TOKEN", "").strip():
-            logger.warning(
-                "[Startup] SUDARSHAN_ENV=production but ANALYSIS_ENGINE_INTERNAL_TOKEN "
-                "is unset — the analysis-engine is not mutually authenticated."
-            )
+    from sudarshan_core.security.sandbox_containment import validate_backend_production_config
+    from app.startup_validation import validate_production_environment
+
+    validate_backend_production_config()
+    validate_production_environment()
     # 1. Initialize SQLite tables
     await init_db()
     logger.info("[Startup] Database initialized")
@@ -129,6 +128,13 @@ async def startup():
             )
         else:
             logger.info(f"[Startup] Seeded admin user: {admin_user}")
+
+    # 2b. Optional BOI hackathon demo accounts (soclead, analyst1, optional boi_*).
+    try:
+        from app.demo_seed import seed_demo_users
+        await seed_demo_users()
+    except Exception as e:
+        logger.warning(f"[Startup] Demo user seed skipped ({e})")
 
     # 3. Install the persistent IOC reputation cache.
     #    The ioc_cache table and its 24h-TTL accessors already existed and were

@@ -161,7 +161,7 @@ services:
     image: opensecurity/mobile-security-framework-mobsf:latest
     container_name: sudarshan-mobsf
     ports:
-      - "8008:8000"
+      - "127.0.0.1:8008:8000"
     environment:
       - MOBSF_API_KEY=${MOBSF_API_KEY:-sudarshan_mobsf_api_key_2026}
     healthcheck:

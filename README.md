@@ -5,7 +5,7 @@
   <p><i>Prepared and Submitted for Bank of India and IIT Hyderabad under the BOI Hackathon 2026</i></p>
   
   <p>
-    <b>457</b> Passing Unit & Integration Tests &nbsp;&nbsp;|&nbsp;&nbsp;
+    <b>486</b> Passing Unit & Integration Tests &nbsp;&nbsp;|&nbsp;&nbsp;
     <b>Deterministic Fraud Scoring</b> &nbsp;&nbsp;|&nbsp;&nbsp;
     <b>Containerized Microservice Architecture</b>
   </p>
@@ -320,7 +320,8 @@ Sudarshan BOI/
 Sudarshan enforces a strict **Determinism Invariant**: AI models generate narrative explanations downstream, but mathematical risk scores are strictly computed by deterministic formulas.
 
 ### 1. Fraud Risk Score ($FRS$)
-$$FRS = 0.40 \times STEI + 0.30 \times BFCI_{\text{v2}} + 0.15 \times \text{ThreatCorrelation} + 0.15 \times \text{BankingImpact}$$
+
+Nominal weights $0.25 \times STEI + 0.35 \times Dynamic + 0.20 \times ThreatCorrelation + 0.20 \times BankingImpact$, renormalized over axes with data; `final_risk_score = min(base\_frs \times ai\_confidence\_multiplier, 100)`. See [`shared/sudarshan_core/engines/risk_engine.py`](shared/sudarshan_core/engines/risk_engine.py).
 
 ### 2. Static Threat and Environmental Index ($STEI$)
 $$STEI = 0.60 \times CT + 0.20 \times BT + 0.10 \times PR + 0.05 \times OB + 0.05 \times IR$$
@@ -374,7 +375,7 @@ Run the automated bootstrapper script from PowerShell:
 ```
 
 ### Automated Test Suite Execution
-Run the full automated test suite (**457 tests collected & verified**):
+Run the full automated test suite (**486 tests collected**):
 ```powershell
 $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests
 ```

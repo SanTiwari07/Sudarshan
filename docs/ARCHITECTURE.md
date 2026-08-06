@@ -3,10 +3,10 @@
 ```yaml
 Document Title:      Sudarshan Platform Architectural Specification
 Version:             2.5.0-STABLE
-Last Revision:       2026-08-05
+Last Revision:       2026-08-06
 Repository Scope:    SanTiwari07/Sudarshan (d:/Projects/Sudarshan BOI)
 Target Audience:     Enterprise Security Engineers, SOC Analysts, System Architects
-Verification Status: 457 / 457 Unit & Integration Tests Collected & Verified (100%)
+Verification Status: 486 / 486 Unit & Integration Tests Collected & Verified (100%)
 ```
 
 ---
@@ -72,7 +72,7 @@ graph TD
     end
 
     subgraph External Devices & Network Sidecars
-        ADB["ADB TCP Bridge<br/>(host.docker.internal:5555)"]
+        ADB["ADB TCP Bridge<br/>(Genymotion VM IP:5555 or AVD serial)"]
         AVD["Android 13 AVD<br/>(frida-server 17.16.4)"]
         PROXY["mitmproxy Sidecar<br/>(Port 8080 / HAR Parser)"]
         MOBSF["MobSF Static Engine<br/>(Port 8008 / mobsf_client.py)"]
@@ -127,6 +127,8 @@ d:\Projects\Sudarshan BOI\
 │       ├── analyzers/               # Native APK analyzer (apk_analyzer.py)
 │       ├── engines/                 # Risk engine, BFCI, Frida sandbox, APKTool, JADX, etc.
 │       ├── models/                  # Pydantic schemas & InvestigationManifest (manifest.py)
+│       ├── security/                # ADB gateway, sandbox containment, internal service auth
+│       ├── sandbox/                   # SandboxProvider (Genymotion, Android Studio, …)
 │       └── services/                # MobSF client & Threat Correlator
 ├── backend/                         # FastAPI Orchestrator Gateway
 │   ├── app/
@@ -137,7 +139,9 @@ d:\Projects\Sudarshan BOI\
 │   │   ├── routes/                  # Gateway API routers (upload.py, report.py, cases.py, runtime_api.py)
 │   │   └── workers/                 # Async worker pool (analysis_queue.py)
 │   └── tests/                       # Automated unit & regression tests
-├── tests/                           # 457 automated unit & integration tests
+├── tests/                           # 486 automated unit & integration tests
+├── docker-compose.hardened.yml      # Production overlay (read-only rootfs, seccomp, containment)
+├── deploy/security/                 # seccomp profiles for hardened analysis-engine
 ├── analysis-engine/                 # Containerized Analysis Microservice (Port 8001)
 │   ├── app/
 │   │   └── main.py                  # Standalone analysis microservice REST endpoints
@@ -246,7 +250,7 @@ $$STEI = 0.60 \times CT + 0.20 \times BT + 0.10 \times PR + 0.05 \times OB + 0.0
 $$BFCI_{\text{v2}} = \min\left(100.0, \sum_{c} W_c \cdot \min\left(1.0, \frac{\ln(1 + N_c)}{\ln(1 + M_c)}\right) \times 100 + S_{\text{sequence}}\right)$$
 
 ### 3. Fraud Risk Score ($FRS$)
-$$FRS = \text{clamp}(0.40 \times STEI + 0.30 \times BFCI_{\text{v2}} + 0.15 \times \text{ThreatCorrelation} + 0.15 \times \text{BankingImpact}, 0.0, 100.0)$$
+Nominal weights: $0.25 \times STEI + 0.35 \times Dynamic + 0.20 \times ThreatCorrelation + 0.20 \times BankingImpact$, renormalized over axes with data; `final_risk_score = min(base_frs × ai_confidence_multiplier, 100)`. Bands: `Safe` (≤30), `Suspicious` (≤60), `High Risk` (≤89), `Critical` (≥90). See [`risk_engine.py`](../shared/sudarshan_core/engines/risk_engine.py).
 
 ---
 
@@ -291,6 +295,10 @@ Related gateway routes (same `/api/v1` prefix): `POST /analyze/async`, `GET /sta
 
 ## 12. Storage, Security & Isolation Architecture
 
-- **Sandbox Isolation**: Target APKs run inside the configured host sandbox (Genymotion Desktop by default, or Android Studio AVD via `SANDBOX_PROVIDER`). Net traffic is routed through the `mitmproxy` container.
-- **Process & Storage Isolation**: Uploaded files buffer in temporary directories and clean up automatically after analysis. Case data persists in SQLite (`sudarshan.db`).
-- **Authentication**: All non-public API endpoints require valid JWT Bearer tokens signed with `JWT_SECRET_KEY`.
+- **Guest sandbox**: Target APKs execute on the Android guest (Genymotion or AVD). Treat the guest as compromised after each session. HTTPS capture uses the `mitmproxy` sidecar (`127.0.0.1:8080` in base `docker-compose.yml`).
+- **Control-plane containment** ([`shared/sudarshan_core/security/sandbox_containment.py`](../shared/sudarshan_core/security/sandbox_containment.py)): Validates `ADB_HOST` (rejects `host.docker.internal` for Genymotion), blocks high-risk ADB subcommands (`tcpip`, `kill-server`, …) via [`adb_gateway.run_adb`](../shared/sudarshan_core/security/adb_gateway.py), and forces loopback Frida listen (`FRIDA_LISTEN_HOST=127.0.0.1`). Strict mode: `SANDBOX_CONTAINMENT_STRICT=true` or `SUDARSHAN_ENV=production`.
+- **Analysis delegation**: Dynamic analysis runs in `analysis-engine` (resource limits, `no-new-privileges`). If the engine is unreachable, the gateway returns **503** unless `SUDARSHAN_ALLOW_GATEWAY_DYNAMIC=true` (dev-only; blocked in strict production config). See [`backend/app/routes/upload.py`](../backend/app/routes/upload.py).
+- **Engine authentication**: `analysis-engine` middleware requires `ANALYSIS_ENGINE_INTERNAL_TOKEN` (header via [`internal_auth.py`](../shared/sudarshan_core/security/internal_auth.py)) when `SUDARSHAN_ENV=production`; backend startup calls `validate_backend_production_config()`.
+- **Hardened deployment**: `docker compose -f docker-compose.yml -f docker-compose.hardened.yml up` — read-only rootfs, dropped capabilities, seccomp on analysis-engine, no dev bind-mounts. See [`docs/security/P0_SANDBOX_ESCAPE_INCIDENT.md`](security/P0_SANDBOX_ESCAPE_INCIDENT.md).
+- **Process & storage**: Shared upload volume `uploads`; case data in SQLite (`sudarshan.db`).
+- **Authentication**: JWT Bearer on `/api/v1/*` (except auth routes). MobSF published on `127.0.0.1:8008` only in base compose.

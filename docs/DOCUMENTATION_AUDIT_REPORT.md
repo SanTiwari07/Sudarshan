@@ -1,20 +1,20 @@
 # Sudarshan Platform Master Documentation Audit Report
 
 ```yaml
-Audit Date:          2026-08-05
-Platform Version:    v2.5.0-STABLE (CONTAINERIZED MICROSERVICES, IOC CACHE & RUNTIME TELEMETRY)
+Audit Date:          2026-08-06
+Platform Version:    v2.5.0-STABLE (CONTAINERIZED MICROSERVICES, SANDBOX CONTAINMENT P0)
 Target Repository:   SanTiwari07/Sudarshan (d:/Projects/Sudarshan BOI)
 Test Suite Command:  $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests
-Audit Scope:         Full Repository, All Engines, Microservices, REST APIs, Telemetry, Docker Compose, Documentation Portal
+Audit Scope:         Full Repository, Security Containment, Engines, Microservices, REST APIs, Docker Compose, Documentation Portal
 ```
 
 ---
 
 ## Executive Summary
 
-A full zero-drift documentation pass was executed on **2026-08-05** against the active codebase. All portal documents in `/docs`, root [`README.md`](../README.md), and [`CHANGELOG.md`](../CHANGELOG.md) were compared to implementation files (FastAPI routes, frontend routes, `shared/sudarshan_core`, Docker Compose, `.env.example`, and validation tooling).
+A full zero-drift documentation pass was executed on **2026-08-06** against the active codebase. Portal documents in `/docs` were compared to implementation files, with emphasis on the P0 sandbox containment work (`shared/sudarshan_core/security/`, `docker-compose.hardened.yml`, gateway dynamic-analysis gate in `upload.py`).
 
-**Empirical verification:** `pytest tests/ backend/tests --collect-only` reports **457 tests collected** (executed on the audit host).
+**Empirical verification:** `pytest tests/ backend/tests --collect-only` reports **486 tests collected** (`.pytest_cache/v/cache/nodeids`, 2026-08-06).
 
 ---
 
@@ -22,26 +22,24 @@ A full zero-drift documentation pass was executed on **2026-08-05** against the 
 
 ## Files Updated
 
-- [`docs/CONTRIBUTING.md`](CONTRIBUTING.md) — Test gate aligned to 457 collected tests and full suite path.
-- [`docs/02_SYSTEM_OVERVIEW.md`](02_SYSTEM_OVERVIEW.md) — Removed Ollama references; fixed `/api/v1/analyze`; test metric 457.
-- [`docs/VALIDATION.md`](VALIDATION.md) — Fixed diagram test count; added Dynamic APK Corpus Validation section.
-- [`docs/README.md`](README.md) — Gemini-only AI index; diagram label correction.
-- [`docs/PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md) — LLM stack, ADB/SandboxProvider wording; `validation/` tree; `validate_dynamic_pipeline.py`.
-- [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) — Gateway analyze/async API specification.
-- [`docs/01_INTRODUCTION.md`](01_INTRODUCTION.md) — Correct REST surface listing.
-- [`docs/dashboard/10_DASHBOARD.md`](dashboard/10_DASHBOARD.md) — Route paths (`/fraud-card`, `/threat-intel`); Gemini-only narrative; screenshot API gap documented.
-- [`docs/evaluation/11_EVALUATION.md`](evaluation/11_EVALUATION.md) — Full `tests/` + `backend/tests` layout; 457 metrics; validation cross-link.
-- [`docs/evaluation/BENCHMARKS.md`](evaluation/BENCHMARKS.md) — `/api/v1/analyze` and `/analyze/async` ingestion modes.
-- [`docs/DAE_CURRENT_STATE.md`](DAE_CURRENT_STATE.md) — SandboxProvider, validation framework, known screenshot route gap, corpus CLI command.
-- [`docs/HOW_TO_RUN.md`](HOW_TO_RUN.md) — `validate_dynamic_pipeline.py` operational steps.
-- [`docs/future/12_FUTURE_WORK.md`](future/12_FUTURE_WORK.md) — Baseline platform reflects Genymotion-default SandboxProvider.
-- [`README.md`](../README.md) — API table, Ollama removal, repo tree, evaluation pytest path.
-- [`docs/DOCUMENTATION_AUDIT_REPORT.md`](DOCUMENTATION_AUDIT_REPORT.md) — This report.
-- [`docs/CHANGELOG.md`](CHANGELOG.md) — Documentation drift fixes appended under 2026-08-05.
+- [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) — §12 security/containment; FRS weights; repo tree (`security/`, hardened compose); test metric **486**; Genymotion ADB wording.
+- [`docs/02_SYSTEM_OVERVIEW.md`](02_SYSTEM_OVERVIEW.md) — FRS renormalization; containment subsystem row; test metric **486**.
+- [`docs/01_INTRODUCTION.md`](01_INTRODUCTION.md) — FRS formulation and risk bands aligned to `risk_engine.py`.
+- [`docs/PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md) — FRS §4.3–4.4; test metric **486**.
+- [`docs/architecture/08_DETERMINISTIC_RISK_ENGINE.md`](architecture/08_DETERMINISTIC_RISK_ENGINE.md) — Full FRS section rewrite (axis exclusion, bands, visibility floor).
+- [`docs/architecture/04_DYNAMIC_ANALYSIS_ENGINE.md`](architecture/04_DYNAMIC_ANALYSIS_ENGINE.md) — §2c sandbox containment and ADB policy.
+- [`docs/DAE_CURRENT_STATE.md`](DAE_CURRENT_STATE.md) — Containment capabilities, remediation rows, limitations; test metric **486**.
+- [`docs/HOW_TO_RUN.md`](HOW_TO_RUN.md) — `.env.example`-aligned security vars; §5.1 hardened compose; admin password behavior.
+- [`docs/MIGRATION.md`](MIGRATION.md) — Internal token and gateway dynamic-analysis policy.
+- [`docs/README.md`](README.md) — Index entries for security runbooks; test metric **486**; containment test modules.
+- [`docs/CONTRIBUTING.md`](CONTRIBUTING.md), [`docs/VALIDATION.md`](VALIDATION.md), [`docs/evaluation/11_EVALUATION.md`](evaluation/11_EVALUATION.md) — Test metric **486**; containment test modules in 11.
+- [`docs/dashboard/10_DASHBOARD.md`](dashboard/10_DASHBOARD.md) — Risk band labels from API.
+- [`docs/CHANGELOG.md`](CHANGELOG.md) — **2026-08-06** release notes.
+- [`README.md`](../README.md) — FRS summary and test metric **486** (root entry point).
 
 ## Files Created
 
-- None (all changes applied to existing numbered portal documents).
+- None.
 
 ## Files Deleted
 
@@ -49,49 +47,46 @@ A full zero-drift documentation pass was executed on **2026-08-05** against the 
 
 ## Sections Rewritten
 
-- REST API ingestion paths (`/api/v1/upload` → `/api/v1/analyze`, `/api/v1/analyze/async`, `/api/v1/intelligence/{sha256}`).
-- Frontend SPA route map in `10_DASHBOARD.md`.
-- Evaluation folder structure and CI diagram in `11_EVALUATION.md`.
-- Dynamic validation protocol in `VALIDATION.md` and `HOW_TO_RUN.md`.
+- **FRS / risk bands** across `01_INTRODUCTION`, `02_SYSTEM_OVERVIEW`, `08_DETERMINISTIC_RISK_ENGINE`, `PROJECT_CONTEXT`, `ARCHITECTURE`, root `README.md` (removed obsolete 0.40/0.30 fixed-weight and legacy five-band table).
+- **Security & isolation** — `ARCHITECTURE.md` §12, `04_DYNAMIC_ANALYSIS_ENGINE.md` §2c, `HOW_TO_RUN.md` §5.1.
+- **DAE operational state** — containment remediation scorecard and known artifact-root limitation.
 
 ## Architecture Changes
 
-- No code architecture changes in this pass — documentation now matches the existing **SandboxProvider** boundary, **validation** package under `shared/sudarshan_core/validation/`, and **5-container** Compose topology already in `docker-compose.yml`.
+- Documented **two-layer containment** (guest compromise assumption + control-plane ADB/Frida policy).
+- Documented **analysis-engine internal auth** and **production fail-closed** behavior.
+- Documented **gateway dynamic analysis disabled by default** (`SUDARSHAN_ALLOW_GATEWAY_DYNAMIC`).
+- Documented **hardened compose overlay** and loopback-only MobSF/mitmproxy in base compose.
 
 ## New Features Documented
 
-- **Dynamic Validation Framework**: `validate_dynamic_pipeline.py`, corpus manifest, `validation_runs/` engineering reports, stress/recovery flags (implementation pre-existed; was missing from portal docs).
+- `adb_gateway.run_adb` centralized choke point.
+- `validate_backend_production_config()` on gateway startup.
+- Analysis-engine `_InternalServiceAuthMiddleware`.
+- Security regression tests under `tests/unit/` and `backend/tests/test_gateway_dynamic_blocker.py`.
 
 ## Documentation Drift Fixed
 
 | Drift | Resolution |
 | :--- | :--- |
-| Stale test counts (388 / 421 vs **457**) | Standardized on empirically collected count |
-| Ollama / Gemini 3.6 cited without code references | Removed; docs state Gemini via `google-genai` + `GEMINI_MODEL` |
-| Wrong upload API path | Updated to `/api/v1/analyze` across portal + root README |
-| Wrong dashboard routes (`/executive`, `/intel`) | Updated to `/fraud-card`, `/threat-intel` per `App.tsx` |
-| Missing validation CLI documentation | Added to `VALIDATION.md`, `HOW_TO_RUN.md`, `DAE_CURRENT_STATE.md`, `PROJECT_CONTEXT.md` |
+| FRS fixed 0.40/0.30/0.15/0.15 weights | Replaced with nominal 0.25/0.35/0.20/0.20 + renormalization per `risk_engine.py` |
+| Legacy CRITICAL at ≥80 / five-band LOW–CRITICAL table | Replaced with Safe / Suspicious / High Risk / Critical thresholds from code |
+| Test count **457** | Updated to **486** collected tests |
+| Genymotion ADB always `host.docker.internal` | Clarified VM IP / `ADB_HOST` vs AVD exception |
+| `ADMIN_PASSWORD=sudarshan_admin_2024` in HOW_TO_RUN | Removed; documented random bootstrap password |
+| DAE “screenshot gallery gap” | Removed; UI uses JWT blob fetch (already in `10_DASHBOARD.md`) |
 
 ## Remaining TODOs
 
-- ~~Implement or document alternative for **`GET /api/v1/screenshots/{filename}`**~~ — **Done (2026-08-05)**: `GET /api/v1/screenshots/{sha256}/{filename}` in `backend/app/routes/screenshots.py`.
-- Optional: add `docs/VALIDATION.md` cross-link from `docs/README.md` index table (portal index lists `VALIDATION.md` in grep but verify index row — check docs/README)
+- [`docs/evaluation/CASE_STUDIES.md`](evaluation/CASE_STUDIES.md) and [`docs/VALIDATION.md`](VALIDATION.md) ground-truth tables still reference legacy `CRITICAL` score ranges (≥85 / ≥80); re-baseline against current `risk_engine.py` bands when corpus scores are re-measured.
+- Per-session ephemeral artifact roots — partial mitigation only; see [`security/P0_RED_TEAM_PENETRATION_REPORT.md`](security/P0_RED_TEAM_PENETRATION_REPORT.md).
 
 ## Warnings
 
-- **Historical changelog entries** under `docs/CHANGELOG.md` for 2026-08-03 still mention 421 tests — accurate for that release; do not rewrite history.
-- **Root `CHANGELOG.md` RC-2 entries** reference `backend/app/engines/` paths — superseded by `shared/sudarshan_core/engines/`; left as historical traceability.
-- Live **corpus validation** requires host sandbox connectivity; failures are environmental, not pytest failures.
+- Default **dev** `docker-compose.yml` bind-mounts source trees; not equivalent to hardened production posture.
+- Enabling `SUDARSHAN_ALLOW_GATEWAY_DYNAMIC=true` runs dynamic analysis in the gateway container and is unsafe for production.
 
 ## Suggestions
 
-- Add a authenticated static route (or signed URL) for screenshot artifacts under `uploads/` or case artifact directories.
-- Wire `docs/README.md` document matrix row for [`VALIDATION.md`](VALIDATION.md) if not already present in the index table.
-
----
-
-## Verification Metrics
-
-- **Automated Test Suite**: **457 / 457 tests collected** (`pytest tests/ backend/tests --collect-only`, 2026-08-05).
-- **Documentation Link Integrity**: Internal `file:///` links preserved; relative markdown links preferred in new sections.
-- **Codebase Consistency**: API paths, frontend routes, and LLM stack aligned with source inspection.
+- Run `pytest tests/ backend/tests` on CI after each release and pin the collected count in `DOCUMENTATION_AUDIT_REPORT.md`.
+- Add a short cross-link from [`08_DETERMINISTIC_RISK_ENGINE.md`](architecture/08_DETERMINISTIC_RISK_ENGINE.md) to `backend/tests/test_risk_engine.py` for band threshold regression tests.

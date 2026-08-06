@@ -13,7 +13,6 @@ from __future__ import annotations
 import logging
 import os
 import shutil
-import subprocess
 import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
@@ -27,6 +26,12 @@ from sudarshan_core.sandbox.exceptions import (
     SandboxOffline,
 )
 from sudarshan_core.sandbox.types import ConnectionResult, DeviceInfo, FridaStatus
+from sudarshan_core.security.sandbox_containment import (
+    ContainmentViolation,
+    build_frida_start_command,
+    enforce_connectivity_policy,
+    validate_adb_invocation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -69,20 +74,12 @@ class SandboxProvider(ABC):
         if not adb:
             return False, "adb not found"
         try:
-            result = subprocess.run(
-                [adb] + list(args),
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=timeout,
-            )
-            output = (result.stdout or "") + (result.stderr or "")
-            return result.returncode == 0, output.strip()
-        except subprocess.TimeoutExpired:
-            return False, "adb command timed out"
-        except Exception as exc:  # noqa: BLE001 — never crash the pipeline
-            return False, str(exc)
+            validate_adb_invocation(args)
+        except ContainmentViolation as exc:
+            return False, exc.message
+        from sudarshan_core.security.adb_gateway import run_adb
+
+        return run_adb(adb, args, timeout=timeout)
 
     def adb_shell(self, serial: str, command: str, timeout: int = 30) -> Tuple[bool, str]:
         return self.adb("-s", serial, "shell", command, timeout=timeout)
@@ -335,8 +332,7 @@ class SandboxProvider(ABC):
             for n in names:
                 self.adb_shell(serial, f"pkill -f {n} 2>/dev/null", timeout=5)
             port = self.config.frida_port
-            start_cmd = f"nohup {remote} -l 0.0.0.0:{port} > /dev/null 2>&1 &"
-            # Also try default listen if custom port fails later
+            start_cmd = build_frida_start_command(remote, port, self.config)
             self.adb_shell(serial, start_cmd, timeout=10)
             time.sleep(2)
             ok2, out2 = self.adb_shell(serial, f"ps -A | grep -E '{pattern}'", timeout=15)
@@ -356,7 +352,9 @@ class SandboxProvider(ABC):
             # Last-ditch: try configured binary name with configured port or default frida-server
             bin_name = self.config.frida_bin or "frida-server"
             port = self.config.frida_port or "27055"
-            legacy_cmd = f"nohup /data/local/tmp/{bin_name} -l 0.0.0.0:{port} > /dev/null 2>&1 &"
+            legacy_cmd = build_frida_start_command(
+                f"/data/local/tmp/{bin_name}", port, self.config
+            )
             self.adb_shell(serial, legacy_cmd, timeout=10)
             time.sleep(2)
             pattern = f"{bin_name}|frida-server"
@@ -416,6 +414,8 @@ class SandboxProvider(ABC):
             )
 
         try:
+            enforce_connectivity_policy(self.config)
+
             adb_path = self.find_adb()
             if not adb_path:
                 _stage("adb", False, "adb not found")
@@ -489,12 +489,13 @@ class SandboxProvider(ABC):
             SandboxOffline,
             RootUnavailable,
             FridaUnavailable,
+            ContainmentViolation,
         ) as exc:
             elapsed = (time.monotonic() - t0) * 1000
             return ConnectionResult(
                 ok=False,
-                error_code=exc.code,
-                error_message=exc.message,
+                error_code=getattr(exc, "code", "SANDBOX_ERROR"),
+                error_message=getattr(exc, "message", str(exc)),
                 stages=stages,
                 connection_time_ms=elapsed,
             )

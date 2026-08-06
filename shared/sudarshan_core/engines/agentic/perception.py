@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
 from sudarshan_core.engines.agentic.sanitizer import sanitize, sanitize_block
+from sudarshan_core.sandbox import get_sandbox_provider
 
 logger = logging.getLogger(__name__)
 
@@ -319,41 +320,29 @@ class PerceptionPipeline:
 
         return obs
 
+    async def _adb(self, *args: str) -> tuple[bool, str]:
+        """Policy-enforced ADB via SandboxProvider (same choke point as ToolExecutor)."""
+        provider = get_sandbox_provider()
+        return await asyncio.to_thread(
+            provider.adb, "-s", self.device_serial, *args, timeout=30
+        )
+
     # ── Level 1: UI XML ───────────────────────────────────────────────────────
 
     async def _dump_ui_xml(self) -> Optional[str]:
         """Dump the UI hierarchy XML from the device."""
-        cmd = [self.adb_path, "-s", self.device_serial, "shell",
-               "uiautomator", "dump", "/data/local/tmp/ui_dump.xml"]
         try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            await asyncio.wait_for(proc.communicate(), timeout=8)
+            await self._adb("shell", "uiautomator", "dump", "/data/local/tmp/ui_dump.xml")
+            ok, output = await self._adb("shell", "cat", "/data/local/tmp/ui_dump.xml")
+            if not ok:
+                return None
+            m = re.search(r"(<\?xml.*)", output, re.DOTALL)
+            return m.group(1) if m else None
         except asyncio.TimeoutError:
             logger.warning("[Perception] UI dump timed out")
             return None
         except Exception as e:
             logger.warning(f"[Perception] UI dump error: {e}")
-            return None
-
-        # Pull the file
-        cmd2 = [self.adb_path, "-s", self.device_serial, "shell",
-                "cat", "/data/local/tmp/ui_dump.xml"]
-        try:
-            proc2 = await asyncio.create_subprocess_exec(
-                *cmd2,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, _ = await asyncio.wait_for(proc2.communicate(), timeout=8)
-            output = stdout.decode("utf-8", errors="ignore")
-            m = re.search(r'(<\?xml.*)', output, re.DOTALL)
-            return m.group(1) if m else None
-        except Exception as e:
-            logger.warning(f"[Perception] UI cat error: {e}")
             return None
 
     def _parse_ui_nodes(self, xml_content: str) -> List[UINode]:
@@ -426,17 +415,10 @@ class PerceptionPipeline:
 
     async def _get_current_activity(self) -> str:
         """Return the fully-qualified name of the foreground Activity."""
-        cmd = [self.adb_path, "-s", self.device_serial, "shell",
-               "dumpsys", "activity", "activities"]
         try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=6)
-            output = stdout.decode("utf-8", errors="ignore")
-            return parse_foreground_activity(output)
+            ok, output = await self._adb("shell", "dumpsys", "activity", "activities")
+            if ok:
+                return parse_foreground_activity(output)
         except Exception as e:
             logger.warning(
                 f"[Perception] Activity fetch failed ({type(e).__name__}: {e}) "
@@ -489,23 +471,17 @@ class PerceptionPipeline:
 
     async def _capture_logcat(self) -> str:
         """Capture recent logcat lines from the target package."""
-        cmd = [self.adb_path, "-s", self.device_serial, "shell",
-               "logcat", "-d", "-t", str(LOGCAT_LINES)]
         try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+            ok, output = await self._adb(
+                "shell", "logcat", "-d", "-t", str(LOGCAT_LINES)
             )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=6)
-            lines = stdout.decode("utf-8", errors="ignore").splitlines()
-            # Filter to package-relevant lines when possible
+            if not ok:
+                return ""
+            lines = output.splitlines()
             pkg_short = self.package_name.split(".")[-1]
-            relevant = [l for l in lines if pkg_short in l]
+            relevant = [line for line in lines if pkg_short in line]
             return "\n".join(relevant[-LOGCAT_LINES:] if relevant else lines[-LOGCAT_LINES:])
         except Exception as e:
-            # Handled failure that degrades an observation → WARNING, per the
-            # project logging policy. DEBUG hid real capture failures.
             logger.warning(
                 f"[Perception] Logcat capture failed "
                 f"({type(e).__name__}: {e}) — observation continues without it"
@@ -529,26 +505,18 @@ class PerceptionPipeline:
                 return str(self.screenshot_manager.output_dir / Path(ref).name)
             return None
 
-        import time, os
-        ts     = int(time.time() * 1000)
-        remote = f"/data/local/tmp/percept_{ts}.png"
-        local  = f"/tmp/percept_{ts}.png"
+        import time
+        import os as _os
 
-        cmd_cap = [self.adb_path, "-s", self.device_serial,
-                   "shell", "screencap", "-p", remote]
-        cmd_pull = [self.adb_path, "-s", self.device_serial,
-                    "pull", remote, local]
-        cmd_rm   = [self.adb_path, "-s", self.device_serial,
-                    "shell", "rm", remote]
+        ts = int(time.time() * 1000)
+        remote = f"/data/local/tmp/percept_{ts}.png"
+        local = f"/tmp/percept_{ts}.png"
+
         try:
-            for cmd in (cmd_cap, cmd_pull, cmd_rm):
-                proc = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                await asyncio.wait_for(proc.communicate(), timeout=8)
-            return local if os.path.exists(local) else None
+            await self._adb("shell", "screencap", "-p", remote)
+            await self._adb("pull", remote, local)
+            await self._adb("shell", "rm", remote)
+            return local if _os.path.exists(local) else None
         except Exception as e:
             logger.warning(f"[Perception] Screenshot failed: {e}")
             return None

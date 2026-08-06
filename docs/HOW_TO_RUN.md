@@ -3,7 +3,7 @@
 ```yaml
 Document Title:      Sudarshan Installation & Execution Manual
 Version:             2.5.0-STABLE
-Last Revision:       2026-08-05
+Last Revision:       2026-08-06
 Target OS:           Windows 10/11, Linux (Ubuntu 22.04+), macOS 13+
 ```
 
@@ -70,10 +70,14 @@ MOBSF_API_KEY="sudarshan_mobsf_api_key_2026"
 
 # ── Security & Authentication ──
 JWT_SECRET_KEY="generate_with_python_secrets_token_urlsafe_48"
-# Recommended in production: shared secret so only the gateway can call analysis-engine:8001
-ANALYSIS_ENGINE_INTERNAL_TOKEN="generate_with_python_secrets_token_urlsafe_48"
+ANALYSIS_ENGINE_INTERNAL_TOKEN=""   # Required when SUDARSHAN_ENV=production
 ADMIN_USERNAME="admin"
-ADMIN_PASSWORD="sudarshan_admin_2024"
+ADMIN_PASSWORD=""                   # If blank on first boot, a random password is logged once by the backend
+CORS_ALLOW_ORIGINS="http://localhost:5173,http://127.0.0.1:5173"
+SUDARSHAN_ENV=""                    # Set to production for strict containment + engine auth
+# SANDBOX_CONTAINMENT_STRICT=true   # Implied when SUDARSHAN_ENV=production
+# SUDARSHAN_ALLOW_GATEWAY_DYNAMIC=false  # Never enable in production (dev-only local dynamic fallback)
+FRIDA_LISTEN_HOST="127.0.0.1"
 ```
 
 ---
@@ -120,6 +124,16 @@ docker compose ps
 # 3. Stream backend logs
 docker compose logs -f backend
 ```
+
+### 5.1 Production-hardened stack (optional)
+
+For deployments that remove dev bind-mounts and enable containment strict mode:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.hardened.yml up --build -d
+```
+
+Requires `SUDARSHAN_ENV=production`, `ANALYSIS_ENGINE_INTERNAL_TOKEN`, correct Genymotion `ADB_HOST`, and `JWT_SECRET_KEY`. See [`security/P0_SANDBOX_ESCAPE_INCIDENT.md`](security/P0_SANDBOX_ESCAPE_INCIDENT.md).
 
 ---
 

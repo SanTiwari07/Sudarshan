@@ -1,24 +1,22 @@
-import { useState } from 'react';
-import { Download, FileText, Target, Database, Globe } from 'lucide-react';
+import { Target } from 'lucide-react';
 import type { FraudCardData } from '../App';
 import { useAnalysis } from '../context/AnalysisContext';
-import { exportJSON, exportCSV } from '../utils/derive';
-import { API_BASE, authHeaders, downloadAuthed } from '../config';
 import SocCard from '../components/ui/Card';
 import SectionHeader from '../components/ui/SectionHeader';
 import HelpTerm from '../components/investigation/HelpTerm';
 import CoreFindingsList from '../components/investigation/CoreFindingsList';
-import GroundedNarrativeCard from '../components/investigation/GroundedNarrativeCard';
-import ScoreEntryCard from '../components/investigation/ScoreEntryCard';
 import InvestigationTimeline from '../components/investigation/InvestigationTimeline';
 import ThreatScenarioTable from '../components/investigation/ThreatScenarioTable';
-import ProvenanceBanner from '../components/investigation/ProvenanceBanner';
-import ExecutiveBriefing from '../components/investigation/ExecutiveBriefing';
-import RiskScorePanel from '../components/investigation/RiskScorePanel';
+import FraudRiskHero from '../components/investigation/FraudRiskHero';
+import ExecutiveIntelligenceOverview from '../components/investigation/ExecutiveIntelligenceOverview';
+import EvidencePipelineTimeline from '../components/investigation/EvidencePipelineTimeline';
+import StructuredCaseSummary from '../components/investigation/StructuredCaseSummary';
 import CaseSummaryStrip from '../components/investigation/CaseSummaryStrip';
 import IntelligencePhaseCards from '../components/investigation/IntelligencePhaseCards';
 import ScreenshotGallery from '../components/investigation/ScreenshotGallery';
 import ApplicationInfoCard from '../components/investigation/ApplicationInfoCard';
+import ScoreEntryCard from '../components/investigation/ScoreEntryCard';
+import { useRuntimeScreenshots } from '../hooks/useRuntimeScreenshots';
 
 function MitrePanel({ data }: { data: FraudCardData }) {
   const techniques = data.intelligence_report?.mitre_techniques_used || [];
@@ -59,110 +57,29 @@ function MitrePanel({ data }: { data: FraudCardData }) {
   );
 }
 
-function ExportOptions({ data }: { data: FraudCardData }) {
-  const [status, setStatus] = useState<string | null>(null);
-
-  const exportStix = async () => {
-    try {
-      setStatus('Downloading STIX 2.1...');
-      await downloadAuthed(`${API_BASE}/report/stix/${data.sha256}`, `sudarshan_stix_${data.sha256.slice(0, 8)}.json`);
-      setStatus('STIX export complete');
-    } catch (err: unknown) {
-      setStatus(err instanceof Error ? err.message : 'STIX export failed');
-    }
-    setTimeout(() => setStatus(null), 3000);
-  };
-
-  const exportIocs = async () => {
-    try {
-      setStatus('Downloading threat indicators...');
-      await downloadAuthed(`${API_BASE}/report/iocs/${data.sha256}`, `sudarshan_iocs_${data.sha256.slice(0, 8)}.csv`);
-      setStatus('Export complete');
-    } catch (err: unknown) {
-      setStatus(err instanceof Error ? err.message : 'Export failed');
-    }
-    setTimeout(() => setStatus(null), 3000);
-  };
-
-  const exportPdfReport = async () => {
-    try {
-      setStatus('Generating executive PDF report...');
-      const res = await fetch(`${API_BASE}/report/pdf/${data.sha256}`, {
-        headers: authHeaders(),
-      });
-      if (!res.ok) {
-        throw new Error(res.status === 401 ? 'Session expired' : `PDF export failed (${res.status})`);
-      }
-      const htmlBlob = await res.blob();
-      const blobUrl = URL.createObjectURL(htmlBlob);
-      const win = window.open(blobUrl, '_blank');
-      if (!win) {
-        await downloadAuthed(`${API_BASE}/report/html/${data.sha256}`, `sudarshan_report_${data.sha256.slice(0, 8)}.html`);
-      }
-      setStatus('PDF report ready');
-    } catch (err: unknown) {
-      setStatus(err instanceof Error ? err.message : 'PDF export failed');
-    }
-    setTimeout(() => setStatus(null), 3000);
-  };
-
-  return (
-    <SocCard className="relative">
-      <SectionHeader icon={<Download className="h-4 w-4" />} title="Export & Sharing" subtitle="Reports for fraud ops and SIEM ingestion." />
-      <div className="p-4 grid grid-cols-2 gap-2">
-        <button
-          onClick={exportStix}
-          className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors"
-        >
-          <Globe className="h-3.5 w-3.5" /> STIX 2.1 JSON
-        </button>
-        <button
-          onClick={exportIocs}
-          className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors"
-        >
-          <Database className="h-3.5 w-3.5" /> Threat indicators CSV
-        </button>
-        <button
-          onClick={() => exportJSON(data)}
-          className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors"
-        >
-          <FileText className="h-3.5 w-3.5" /> Full JSON
-        </button>
-        <button
-          onClick={() => exportCSV(data)}
-          className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors"
-        >
-          <Download className="h-3.5 w-3.5" /> Summary CSV
-        </button>
-        <button
-          onClick={exportPdfReport}
-          className="col-span-2 flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-semibold text-white bg-blue-700 rounded-lg hover:bg-blue-800 transition-colors shadow-sm mt-1"
-        >
-          <FileText className="h-4 w-4" /> Export Executive PDF Report
-        </button>
-      </div>
-      {status && <div className="px-4 pb-3 text-xs text-blue-700 font-medium">{status}</div>}
-    </SocCard>
-  );
-}
-
 export default function FraudCard({ data }: { data: FraudCardData | null }) {
   const { investigationBundle } = useAnalysis();
+  const { entries: screenshotEntries } = useRuntimeScreenshots(data?.sha256);
 
   if (!data) return null;
 
+  const stripCounts =
+    investigationBundle && screenshotEntries.length > 0
+      ? { ...investigationBundle.counts, screenshots: screenshotEntries.length }
+      : investigationBundle?.counts;
+
   return (
-    <div className="space-y-4">
-      <ProvenanceBanner data={data} />
-      <RiskScorePanel data={data} />
-      <ExecutiveBriefing data={data} />
-      {investigationBundle && (
-        <CaseSummaryStrip riskScore={data.final_risk_score} counts={investigationBundle.counts} />
+    <div className="space-y-6 sm:space-y-8">
+      <FraudRiskHero data={data} />
+      <ExecutiveIntelligenceOverview data={data} bundle={investigationBundle} />
+      <EvidencePipelineTimeline data={data} />
+      <StructuredCaseSummary data={data} />
+      {investigationBundle && stripCounts && (
+        <CaseSummaryStrip riskScore={data.final_risk_score} counts={stripCounts} />
       )}
       <ScreenshotGallery data={data} bundle={investigationBundle} />
       {investigationBundle && <IntelligencePhaseCards data={data} bundle={investigationBundle} />}
       <CoreFindingsList data={data} bundle={investigationBundle} />
-      <GroundedNarrativeCard data={data} />
       <div className="analyst-split-main">
         <div className="analyst-split-primary">
           <MitrePanel data={data} />
@@ -174,7 +91,6 @@ export default function FraudCard({ data }: { data: FraudCardData | null }) {
         <div className="analyst-split-side">
           <ApplicationInfoCard data={data} />
           <ScoreEntryCard data={data} />
-          <ExportOptions data={data} />
         </div>
       </div>
     </div>

@@ -1,20 +1,48 @@
+import { useState } from 'react';
 import type { FraudCardData } from '../../App';
-import { getRiskStyle } from '../../theme/colors';
-import { dynamicRuntimeLabel, riskBandPlainEnglish } from '../../lib/analystCopy';
+import { dynamicRuntimeLabel } from '../../lib/analystCopy';
+import { API_BASE, authHeaders, downloadAuthed } from '../../config';
 import CopyButton from '../ui/CopyButton';
 import Badge from '../ui/Badge';
-import { Package } from 'lucide-react';
+import { Download, Package } from 'lucide-react';
 
-export default function CaseHeader({
-  data,
-  onExplainScore,
-}: {
-  data: FraudCardData;
-  onExplainScore: () => void;
-}) {
-  const riskStyle = getRiskStyle(data.risk_band);
+export default function CaseHeader({ data }: { data: FraudCardData }) {
   const displayName = data.app_name || data.package_name || 'Unknown application';
   const runtimeLabel = dynamicRuntimeLabel(data);
+  const [downloading, setDownloading] = useState(false);
+
+  const downloadReport = async () => {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      const res = await fetch(`${API_BASE}/report/pdf/${data.sha256}`, {
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        throw new Error(res.status === 401 ? 'Session expired' : `Report download failed (${res.status})`);
+      }
+      const htmlBlob = await res.blob();
+      const blobUrl = URL.createObjectURL(htmlBlob);
+      const win = window.open(blobUrl, '_blank');
+      if (!win) {
+        await downloadAuthed(
+          `${API_BASE}/report/html/${data.sha256}`,
+          `sudarshan_report_${data.sha256.slice(0, 8)}.html`,
+        );
+      }
+    } catch {
+      try {
+        await downloadAuthed(
+          `${API_BASE}/report/html/${data.sha256}`,
+          `sudarshan_report_${data.sha256.slice(0, 8)}.html`,
+        );
+      } catch {
+        // user sees no file — avoid toast infra for minimal change
+      }
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl shadow-sm px-5 py-4 mb-4">
@@ -31,23 +59,18 @@ export default function CaseHeader({
             </p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg">
-            <span className={`text-xl font-black tabular-nums ${riskStyle.text}`}>
-              {data.final_risk_score.toFixed(0)}
-            </span>
-            <span className="text-xs text-slate-400">/ 100</span>
-            <Badge label={riskBandPlainEnglish(data.risk_band)} className={riskStyle.badge} />
-          </div>
+        <div className="flex flex-wrap items-center gap-2 ml-auto">
           <span className="text-[10px] font-semibold text-slate-600 uppercase px-2.5 py-2 bg-slate-100 rounded-lg border border-slate-200">
             {runtimeLabel}
           </span>
           <button
             type="button"
-            onClick={onExplainScore}
-            className="text-xs font-semibold px-3 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-800"
+            onClick={() => void downloadReport()}
+            disabled={downloading}
+            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-white bg-blue-700 rounded-lg hover:bg-blue-800 disabled:opacity-60 transition-colors shadow-sm"
           >
-            View score breakdown
+            <Download className="h-3.5 w-3.5" />
+            {downloading ? 'Preparing…' : 'Download Report'}
           </button>
         </div>
       </div>

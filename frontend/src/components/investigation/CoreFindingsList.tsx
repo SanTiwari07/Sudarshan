@@ -1,6 +1,7 @@
 import type { FraudCardData } from '../../App';
 import type { InvestigationBundle } from '../../types/investigation';
 import { useInvestigationUI } from '../../context/InvestigationUIContext';
+import HelpTerm from './HelpTerm';
 import { countFindingEvidence } from '../../lib/analystCopy';
 import SocCard from '../ui/Card';
 import SectionHeader from '../ui/SectionHeader';
@@ -9,6 +10,7 @@ import { COLORS } from '../../theme/colors';
 
 type FindingRow = {
   title: string;
+  helpTerm: string;
   explanation: string;
   severity: keyof typeof COLORS.severity;
   detected: boolean;
@@ -36,8 +38,9 @@ export default function CoreFindingsList({
   const rows: FindingRow[] = [
     {
       title: 'Accessibility Service Abuse',
+      helpTerm: 'Accessibility Abuse',
       explanation:
-        'This permission could allow automated interaction with banking applications and reading on-screen content.',
+        'Allows malware to control the phone without the user\'s knowledge — including reading banking screens and automating taps.',
       severity: 'critical',
       detected: data.has_accessibility_abuse,
       evidenceId: 'STAT-A11Y',
@@ -46,6 +49,7 @@ export default function CoreFindingsList({
     },
     {
       title: 'SMS & OTP Interception',
+      helpTerm: 'SMS Interception',
       explanation: 'SMS read permissions may allow theft of one-time passwords sent by banks.',
       severity: 'critical',
       detected: data.has_sms_read_write,
@@ -55,7 +59,8 @@ export default function CoreFindingsList({
     },
     {
       title: 'Overlay Window Capability',
-      explanation: 'Floating windows can mimic legitimate banking login screens above other apps.',
+      helpTerm: 'Overlay Attack',
+      explanation: 'Can display fake banking login screens over legitimate apps.',
       severity: 'high',
       detected: data.has_system_alert_window,
       evidenceId: 'STAT-OVERLAY',
@@ -64,12 +69,23 @@ export default function CoreFindingsList({
     },
     {
       title: 'Runtime Code Loading',
-      explanation: 'Patterns suggest code may be loaded at runtime, which can hide malicious behaviour from inspection.',
+      helpTerm: 'Runtime Code Loading',
+      explanation: 'Downloads or loads hidden code after installation, evading static inspection.',
       severity: 'medium',
       detected: Boolean(data.obfuscation_score && data.obfuscation_score > 0),
       evidenceId: 'STAT-CODE-0',
       ledgerScope: 'stei',
       evidenceKeywords: ['code', 'load', 'dex', 'STAT-CODE'],
+    },
+    {
+      title: 'Obfuscation',
+      helpTerm: 'Obfuscation',
+      explanation: 'Makes the application\'s code difficult to inspect and reverse-engineer.',
+      severity: 'medium',
+      detected: Boolean(data.obfuscation_score && data.obfuscation_score > 0.25),
+      evidenceId: 'STAT-CODE-0',
+      ledgerScope: 'stei',
+      evidenceKeywords: ['obfus', 'STAT-CODE'],
     },
   ];
 
@@ -80,10 +96,10 @@ export default function CoreFindingsList({
     <SocCard>
       <SectionHeader
         icon={<AlertTriangle className="h-4 w-4" />}
-        title="Core Findings"
-        subtitle="Why we believe this app is risky — in plain language."
+        title="Technical Findings"
+        subtitle="Key fraud techniques with one-line explanations for non-security stakeholders."
       />
-      <div className="p-5 space-y-3">
+      <div className="p-5 sm:p-6 space-y-3">
         {detected.length === 0 && (
           <div className="text-center py-8 px-4 rounded-xl border border-dashed border-slate-200 bg-slate-50">
             <p className="text-sm text-slate-700">No high-priority fraud patterns were flagged on this case.</p>
@@ -101,7 +117,9 @@ export default function CoreFindingsList({
               className="w-full text-left rounded-xl border border-slate-200 p-4 hover:border-blue-300 hover:bg-blue-50/30 transition-colors"
             >
               <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                <h3 className="text-sm font-bold text-slate-900">{row.title}</h3>
+                <h3 className="text-sm font-bold text-slate-900">
+                  <HelpTerm term={row.helpTerm}>{row.title}</HelpTerm>
+                </h3>
                 <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${sevClass}`}>
                   {SEVERITY_LABEL[row.severity] || 'Risk'}
                 </span>

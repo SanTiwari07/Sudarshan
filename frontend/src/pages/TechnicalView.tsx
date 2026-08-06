@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   Terminal, Cpu, Search, Lock, Code, Package,
   ChevronDown, ChevronUp, Shield, Globe, AlertTriangle, Database, Tag, Key
@@ -10,25 +10,51 @@ import SocCard from '../components/ui/Card';
 import SectionHeader from '../components/ui/SectionHeader';
 import CopyButton from '../components/ui/CopyButton';
 import WorkflowDiagram from '../components/WorkflowDiagram';
-import FindingsRegistryTable from '../components/investigation/FindingsRegistryTable';
+import EvidenceRegistrySection from '../components/investigation/EvidenceRegistrySection';
+import ScreenshotGallery from '../components/investigation/ScreenshotGallery';
+import IntelligentOverview from '../components/investigation/IntelligentOverview';
 import { useAnalysis } from '../context/AnalysisContext';
+
+function EvidenceSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="evidence-section">
+      <header className="evidence-section__header">
+        <h2 className="evidence-section__title">{title}</h2>
+        {description && <p className="evidence-section__desc">{description}</p>}
+      </header>
+      <div className="space-y-4">{children}</div>
+    </section>
+  );
+}
 
 // ─── Explainability Engine ────────────────────────────────────────────────────────
 
 function ExplainabilityEngine({ data }: { data: FraudCardData }) {
   return (
-    <SocCard>
-      <SectionHeader icon={<Cpu className="h-4 w-4 text-blue-700" />} title="Explainability Engine" />
+    <SocCard className="h-full">
+      <SectionHeader
+        icon={<Cpu className="h-4 w-4" />}
+        title="Explainability Engine"
+        subtitle="Classification output from the rules engine"
+      />
       <div className="p-4 space-y-3">
-        <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl">
-          <p className="text-[10px] text-slate-500 font-mono mb-1 uppercase tracking-wider">Classification Result</p>
-          <p className={`text-base font-bold ${data.family_classification !== 'Unknown' ? 'text-red-600' : 'text-slate-900'}`}>
+        <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-3">
+          <p className="text-xs font-medium text-slate-500 mb-1">Classification result</p>
+          <p className={`text-lg font-semibold leading-snug ${data.family_classification !== 'Unknown' ? 'text-red-600' : 'text-slate-900'}`}>
             {data.family_classification}
           </p>
         </div>
-        <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl">
-          <p className="text-[10px] text-slate-500 font-mono mb-2 uppercase tracking-wider">Matched Rule</p>
-          <p className="font-mono text-xs text-slate-800 bg-white border border-slate-200 p-3 rounded-lg leading-relaxed shadow-xs">
+        <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-3 min-w-0">
+          <p className="text-xs font-medium text-slate-500 mb-2">Matched rule</p>
+          <p className="font-mono text-xs text-slate-800 bg-white border border-slate-100 p-3 rounded-lg leading-relaxed break-words">
             {data.technical_view.matched_rule}
           </p>
         </div>
@@ -53,13 +79,23 @@ function APKMetadata({ data }: { data: FraudCardData }) {
 
   return (
     <SocCard>
-      <SectionHeader icon={<Package className="h-4 w-4" />} title="APK Technical Identifiers" />
-      <div className="divide-y divide-slate-100">
+      <SectionHeader
+        icon={<Package className="h-4 w-4" />}
+        title="APK Technical Identifiers"
+        subtitle="Package identity, hash, and scoring inputs"
+      />
+      <div className="px-4 py-2">
         {rows.map(r => (
-          <div key={r.label} className="flex items-start justify-between gap-3 px-4 py-2.5 hover:bg-slate-50 transition-colors">
-            <span className="text-xs text-slate-500 flex-shrink-0 w-36">{r.label}</span>
-            <div className="flex items-center gap-1 min-w-0 flex-1 justify-end">
-              <span className={`text-xs text-right ${r.mono ? 'font-mono' : ''} ${r.highlight ? 'text-red-600 font-semibold' : 'text-slate-800'} ${r.truncate ? 'truncate max-w-xs' : ''}`}>
+          <div
+            key={r.label}
+            className="grid grid-cols-1 sm:grid-cols-[minmax(9rem,32%)_1fr] gap-x-4 gap-y-1 py-3 border-b border-slate-100 last:border-0 hover:bg-slate-50/80 rounded-lg px-2 -mx-2 transition-colors duration-150"
+          >
+            <span className="text-xs font-medium text-slate-500">{r.label}</span>
+            <div className="flex items-center gap-2 min-w-0">
+              <span
+                className={`text-xs sm:text-sm min-w-0 ${r.mono ? 'font-mono' : ''} ${r.highlight ? 'text-red-600 font-semibold' : 'text-slate-800'} ${r.truncate ? 'truncate' : 'break-words'}`}
+                title={r.truncate ? String(r.value) : undefined}
+              >
                 {r.value}
               </span>
               {r.copy && <CopyButton value={r.copy} />}
@@ -93,23 +129,25 @@ function PermissionTable({ data }: { data: FraudCardData }) {
           />
         </div>
       </div>
-      <div className="overflow-x-auto max-h-64">
-        <table className="w-full text-xs">
-          <thead className="bg-slate-50 border-b border-slate-200">
+      <div className="soc-table-wrap max-h-72">
+        <table className="soc-table text-xs">
+          <thead>
             <tr>
-              <th className="px-4 py-2 text-left font-semibold text-slate-600">Permission</th>
-              <th className="px-4 py-2 text-right font-semibold text-slate-600">Status</th>
+              <th>Permission</th>
+              <th className="text-right">Status</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100 font-mono">
+          <tbody className="font-mono">
             {perms.map(p => {
               const isFired = fired.has(p);
               return (
-                <tr key={p} className={`hover:bg-slate-50 ${isFired ? 'bg-red-50/50' : ''}`}>
-                  <td className="px-4 py-2 text-slate-800">{p}</td>
-                  <td className="px-4 py-2 text-right">
+                <tr key={p} className={isFired ? '!bg-red-50/60' : ''}>
+                  <td className="break-all">{p}</td>
+                  <td className="text-right">
                     {isFired ? (
-                      <span className="px-2 py-0.5 text-[10px] font-bold bg-red-100 text-red-700 rounded">FLAGGED CRITICAL</span>
+                      <span className="inline-flex px-2 py-0.5 text-[10px] font-semibold bg-red-100 text-red-700 rounded-md whitespace-nowrap">
+                        Critical
+                      </span>
                     ) : (
                       <span className="text-slate-400">Normal</span>
                     )}
@@ -137,11 +175,13 @@ function DangerousAPITable({ data }: { data: FraudCardData }) {
           No dangerous Java/Android API invocations detected in DEX bytecode.
         </div>
       ) : (
-        <div className="divide-y divide-slate-100 font-mono text-xs max-h-64 overflow-y-auto">
+        <div className="divide-y divide-slate-100 font-mono text-xs max-h-72 overflow-y-auto scrollbar-hidden">
           {apis.map((api, i) => (
-            <div key={i} className="px-4 py-2.5 flex items-center justify-between hover:bg-slate-50">
-              <span className="text-red-700 font-semibold">{api}</span>
-              <span className="px-2 py-0.5 text-[10px] bg-red-50 text-red-600 border border-red-200 rounded">DANGEROUS HOOK</span>
+            <div key={i} className="px-4 py-3 flex flex-wrap items-center justify-between gap-2 hover:bg-slate-50/80 transition-colors duration-150">
+              <span className="text-red-700 font-semibold break-all min-w-0">{api}</span>
+              <span className="px-2 py-0.5 text-[10px] font-semibold bg-red-50 text-red-600 border border-red-100 rounded-md shrink-0">
+                Dangerous hook
+              </span>
             </div>
           ))}
         </div>
@@ -167,7 +207,7 @@ function CertificatePanel({ certificate }: { certificate?: Record<string, any> }
   return (
     <SocCard>
       <SectionHeader icon={<Lock className="h-4 w-4" />} title="Digital Certificate & Signature" subtitle="X.509 Cryptographic Identity & Attribution" />
-      <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto text-xs">
+      <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto scrollbar-hidden text-xs">
         {entries.map(([k, v]) => (
           <div key={k} className="flex justify-between p-2.5 hover:bg-slate-50">
             <span className="text-slate-500 font-mono capitalize">{k.replace(/_/g, ' ')}</span>
@@ -232,23 +272,23 @@ function NetworkCapturePanel({ networkLogs }: { networkLogs?: any[] }) {
   return (
     <SocCard>
       <SectionHeader icon={<Terminal className="h-4 w-4" />} title="Network Capture & C2 Telemetry" subtitle={`${networkLogs.length} network request(s) captured`} />
-      <div className="overflow-x-auto max-h-64">
-        <table className="w-full text-xs">
-          <thead className="bg-slate-50 border-b border-slate-200">
+      <div className="soc-table-wrap max-h-72">
+        <table className="soc-table text-xs">
+          <thead>
             <tr>
-              <th className="px-3 py-2 text-left font-semibold text-slate-600">Method</th>
-              <th className="px-3 py-2 text-left font-semibold text-slate-600">Host / IP</th>
-              <th className="px-3 py-2 text-left font-semibold text-slate-600">URL / Endpoint</th>
-              <th className="px-3 py-2 text-left font-semibold text-slate-600">Status</th>
+              <th>Method</th>
+              <th>Host / IP</th>
+              <th>URL / Endpoint</th>
+              <th>Status</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100 font-mono">
+          <tbody className="font-mono">
             {networkLogs.map((req, i) => (
-              <tr key={i} className={`hover:bg-slate-50 ${req.is_suspicious ? 'bg-red-50/60' : ''}`}>
-                <td className="px-3 py-2 font-bold text-slate-800">{req.method || 'GET'}</td>
-                <td className="px-3 py-2 text-slate-700">{req.domain || req.ip || '—'}</td>
-                <td className="px-3 py-2 text-slate-600 truncate max-w-xs">{req.url || '—'}</td>
-                <td className="px-3 py-2 font-bold text-slate-800">{req.response_status || 200}</td>
+              <tr key={i} className={req.is_suspicious ? '!bg-red-50/50' : ''}>
+                <td className="font-semibold">{req.method || 'GET'}</td>
+                <td className="break-all">{req.domain || req.ip || '—'}</td>
+                <td className="max-w-[14rem] truncate" title={req.url || undefined}>{req.url || '—'}</td>
+                <td className="font-semibold tabular-nums">{req.response_status || 200}</td>
               </tr>
             ))}
           </tbody>
@@ -273,7 +313,7 @@ function LogcatInspectorPanel({ logcat }: { logcat?: string }) {
   return (
     <SocCard>
       <SectionHeader icon={<Terminal className="h-4 w-4" />} title="Logcat System Diagnostics" subtitle="Monospace Android System Log Inspector" />
-      <div className="p-3 bg-slate-900 font-mono text-[11px] text-emerald-400 max-h-60 overflow-y-auto rounded-b-lg whitespace-pre-wrap leading-relaxed border-t border-slate-800">
+      <div className="p-4 bg-slate-900 font-mono text-[11px] text-emerald-400 max-h-60 overflow-y-auto scrollbar-hidden rounded-b-xl whitespace-pre-wrap leading-relaxed border-t border-slate-800">
         {logcat}
       </div>
     </SocCard>
@@ -282,15 +322,25 @@ function LogcatInspectorPanel({ logcat }: { logcat?: string }) {
 
 // ─── Dynamic Sandbox Panel ────────────────────────────────────────────────────────
 
-function AuthedScreenshot({ sha256, relPath }: { sha256: string; relPath: string }) {
+function AuthedScreenshot({
+  sha256,
+  relPath,
+  onEnlarge,
+}: {
+  sha256: string;
+  relPath: string;
+  onEnlarge?: (src: string) => void;
+}) {
   const filename = relPath.split('/').pop() || relPath;
   const [src, setSrc] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     let objectUrl: string | null = null;
     const url = `${API_BASE}/screenshots/${sha256}/${encodeURIComponent(filename)}`;
 
+    setLoading(true);
     fetch(url, { headers: authHeaders() })
       .then((res) => {
         if (!res.ok) throw new Error(String(res.status));
@@ -303,6 +353,9 @@ function AuthedScreenshot({ sha256, relPath }: { sha256: string; relPath: string
       })
       .catch(() => {
         if (!cancelled) setSrc(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
 
     return () => {
@@ -311,20 +364,35 @@ function AuthedScreenshot({ sha256, relPath }: { sha256: string; relPath: string
     };
   }, [sha256, filename]);
 
+  if (loading) {
+    return (
+      <div className="aspect-[9/16] w-full bg-slate-100 animate-pulse flex items-center justify-center text-[10px] text-slate-400">
+        Loading…
+      </div>
+    );
+  }
+
   if (!src) {
     return (
-      <div className="h-52 w-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-400">
+      <div className="aspect-[9/16] w-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-400">
         Unavailable
       </div>
     );
   }
 
   return (
-    <img
-      src={src}
-      alt={filename}
-      className="h-52 w-full object-cover"
-    />
+    <button
+      type="button"
+      onClick={() => onEnlarge?.(src)}
+      className="block w-full aspect-[9/16] overflow-hidden bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+    >
+      <img
+        src={src}
+        alt={filename}
+        loading="lazy"
+        className="h-full w-full object-cover object-top transition-transform duration-200 hover:scale-[1.02]"
+      />
+    </button>
   );
 }
 
@@ -332,6 +400,7 @@ function DynamicAnalysisPanel({ data }: { data: FraudCardData }) {
   const dyn = data.dynamic_result || {};
   const status = (dyn.dynamic_status || (data.frs_breakdown?.dynamic_available ? 'EVENTS_CAPTURED' : 'NOT_RUN')).toUpperCase();
   const isOk = status === 'EVENTS_CAPTURED' || status === 'NO_RUNTIME_ACTIVITY';
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   return (
     <SocCard>
@@ -381,15 +450,18 @@ function DynamicAnalysisPanel({ data }: { data: FraudCardData }) {
 
       {/* Real Screenshots Gallery */}
       <div className="p-4 border-b border-slate-100">
-        <h3 className="text-xs font-semibold uppercase text-slate-500 mb-3">Runtime Screen Captures</h3>
+        <h3 className="text-xs font-semibold text-slate-600 mb-3">Runtime screen captures</h3>
         {(dyn.screenshots || []).length > 0 ? (
-          <div className="flex gap-4 overflow-x-auto pb-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
             {dyn.screenshots.map((s: string, i: number) => {
               const filename = s.split('/').pop() || s;
               return (
-                <div key={i} className="flex-shrink-0 w-36 border border-slate-200 rounded-lg overflow-hidden shadow-xs bg-white">
-                  <AuthedScreenshot sha256={data.sha256} relPath={s} />
-                  <div className="p-1.5 text-[10px] font-mono text-slate-700 truncate bg-slate-50 border-t border-slate-200">
+                <div
+                  key={i}
+                  className="min-w-0 rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm"
+                >
+                  <AuthedScreenshot sha256={data.sha256} relPath={s} onEnlarge={setLightboxSrc} />
+                  <div className="p-2 text-[10px] font-mono text-slate-600 truncate border-t border-slate-100" title={filename}>
                     {filename}
                   </div>
                 </div>
@@ -404,10 +476,32 @@ function DynamicAnalysisPanel({ data }: { data: FraudCardData }) {
       </div>
 
       {/* Fraud Workflow Reconstruction */}
-      <div className="p-5">
-        <h3 className="text-xs font-semibold uppercase text-slate-500 mb-3">Reconstructed Behavioral Chain</h3>
+      <div className="p-4">
+        <h3 className="text-xs font-semibold text-slate-600 mb-3">Reconstructed behavioral chain</h3>
         <WorkflowDiagram workflow={data.fraud_workflow} />
       </div>
+      {lightboxSrc && (
+        <div
+          className="fixed inset-0 z-[60] bg-slate-900/90 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setLightboxSrc(null)}
+        >
+          <button
+            type="button"
+            className="absolute top-4 right-4 text-white/90 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            onClick={() => setLightboxSrc(null)}
+          >
+            Close
+          </button>
+          <img
+            src={lightboxSrc}
+            alt="Runtime capture enlarged"
+            className="max-h-[90vh] max-w-full rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </SocCard>
   );
 }
@@ -466,7 +560,7 @@ function ManifestFindingsPanel({ data }: { data: FraudCardData }) {
               </button>
             ))}
           </div>
-          <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto">
+          <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto scrollbar-hidden">
             {visible.map((f, i) => (
               <div key={i} className="px-4 py-2.5 hover:bg-slate-50">
                 <div className="flex items-start gap-2">
@@ -556,7 +650,7 @@ function CodeFindingsPanel({ data }: { data: FraudCardData }) {
               ))}
             </div>
           </div>
-          <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
+          <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto scrollbar-hidden">
             {visible.map((f, i) => (
               <div key={i} className="px-4 py-3 hover:bg-slate-50">
                 <div className="flex items-start justify-between gap-2 mb-1">
@@ -629,7 +723,7 @@ function ExportedComponentsPanel({ data }: { data: FraudCardData }) {
                 placeholder="Filter by component name..." className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500" />
             </div>
           </div>
-          <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto">
+          <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto scrollbar-hidden">
             {visible.map((row, i) => (
               <div key={i} className="px-4 py-2.5 flex items-center gap-3 hover:bg-slate-50">
                 <span className={`px-2 py-0.5 text-[10px] font-bold rounded border flex-shrink-0 ${row.color}`}>{row.type}</span>
@@ -673,27 +767,27 @@ function BinaryAnalysisPanel({ data }: { data: FraudCardData }) {
         />
       </button>
       {open && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead className="bg-slate-50 border-b border-slate-200">
+        <div className="soc-table-wrap">
+          <table className="soc-table text-xs">
+            <thead>
               <tr>
-                <th className="px-4 py-2 text-left font-semibold text-slate-600">Library</th>
-                <th className="px-3 py-2 text-center font-semibold text-slate-600">NX</th>
-                <th className="px-3 py-2 text-center font-semibold text-slate-600">Stack Canary</th>
-                <th className="px-3 py-2 text-center font-semibold text-slate-600">RELRO</th>
-                <th className="px-3 py-2 text-center font-semibold text-slate-600">RPATH</th>
-                <th className="px-3 py-2 text-center font-semibold text-slate-600">Fortify</th>
+                <th>Library</th>
+                <th className="text-center">NX</th>
+                <th className="text-center">Stack Canary</th>
+                <th className="text-center">RELRO</th>
+                <th className="text-center">RPATH</th>
+                <th className="text-center">Fortify</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody>
               {bins.map((b, i) => (
-                <tr key={i} className="hover:bg-slate-50">
-                  <td className="px-4 py-2.5 font-mono text-slate-800">{b.name || '—'}</td>
-                  <td className={`px-3 py-2.5 text-center font-mono ${flagStyle(b.nx)}`}>{String(b.nx ?? '—')}</td>
-                  <td className={`px-3 py-2.5 text-center font-mono ${flagStyle(b.stack_canary)}`}>{String(b.stack_canary ?? '—')}</td>
-                  <td className={`px-3 py-2.5 text-center font-mono ${flagStyle(b.relro)}`}>{String(b.relro ?? '—')}</td>
-                  <td className={`px-3 py-2.5 text-center font-mono ${b.rpath && String(b.rpath) !== 'False' ? 'text-red-600 font-bold' : 'text-emerald-600'}`}>{String(b.rpath ?? '—')}</td>
-                  <td className={`px-3 py-2.5 text-center font-mono ${flagStyle(b.fortify)}`}>{String(b.fortify ?? '—')}</td>
+                <tr key={i}>
+                  <td className="font-mono break-all">{b.name || '—'}</td>
+                  <td className={`text-center font-mono ${flagStyle(b.nx)}`}>{String(b.nx ?? '—')}</td>
+                  <td className={`text-center font-mono ${flagStyle(b.stack_canary)}`}>{String(b.stack_canary ?? '—')}</td>
+                  <td className={`text-center font-mono ${flagStyle(b.relro)}`}>{String(b.relro ?? '—')}</td>
+                  <td className={`text-center font-mono ${b.rpath && String(b.rpath) !== 'False' ? 'text-red-600 font-bold' : 'text-emerald-600'}`}>{String(b.rpath ?? '—')}</td>
+                  <td className={`text-center font-mono ${flagStyle(b.fortify)}`}>{String(b.fortify ?? '—')}</td>
                 </tr>
               ))}
             </tbody>
@@ -725,7 +819,7 @@ function NetworkSecurityPanel({ data }: { data: FraudCardData }) {
         />
       </button>
       {open && (
-        <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto text-xs">
+        <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto scrollbar-hidden text-xs">
           {entries.map(([k, v]) => (
             <div key={k} className="flex justify-between p-3 hover:bg-slate-50 gap-4">
               <span className="text-slate-500 font-mono flex-shrink-0 capitalize">{k.replace(/_/g, ' ')}</span>
@@ -818,7 +912,7 @@ function SecretsPanel({ data }: { data: FraudCardData }) {
                 placeholder="Filter secrets..." className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500" />
             </div>
           </div>
-          <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto">
+          <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto scrollbar-hidden">
             {display.map((s, i) => (
               <div key={i} className="px-4 py-2.5 flex items-center gap-2 hover:bg-slate-50">
                 <span className="px-1.5 py-0.5 text-[9px] font-bold bg-red-50 text-red-600 border border-red-200 rounded flex-shrink-0">SECRET</span>
@@ -844,75 +938,84 @@ function SecretsPanel({ data }: { data: FraudCardData }) {
 // ─── Main TechnicalView Page ──────────────────────────────────────────────────────
 
 export default function TechnicalView({ data }: { data: FraudCardData | null }) {
-  const { investigationBundle } = useAnalysis();
+  const { investigationBundle, loading } = useAnalysis();
   if (!data) return null;
 
   return (
-    <div className="space-y-5">
-      {/* Page header */}
-      <div className="flex items-center justify-between pb-4 border-b border-slate-200">
-        <div className="flex items-center gap-3">
-          <Terminal className="h-7 w-7 text-slate-700" />
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">SOC / Technical View</h1>
-            <p className="text-sm text-slate-500 mt-0.5">Deep inspection — {data.package_name || data.sha256.slice(0, 16) + '…'}</p>
+    <div className="technical-view">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pb-4 border-b border-slate-200/80">
+        <div className="flex items-start gap-3 min-w-0">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700 border border-slate-200/80">
+            <Terminal className="h-5 w-5" />
+          </span>
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold text-slate-900 tracking-tight">Live Analysis</h1>
+            <p className="text-sm text-slate-500 mt-1 leading-relaxed truncate sm:whitespace-normal">
+              Verified evidence and inspection detail — {data.package_name || `${data.sha256.slice(0, 16)}…`}
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => exportJSON(data)} className="px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors shadow-xs">
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => exportJSON(data)}
+            className="px-3 py-2 text-xs font-semibold bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
             Export JSON
           </button>
-          <button onClick={() => exportCSV(data)} className="px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors shadow-xs">
+          <button
+            type="button"
+            onClick={() => exportCSV(data)}
+            className="px-3 py-2 text-xs font-semibold bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
             Export CSV
           </button>
         </div>
-      </div>
+      </header>
 
-      {investigationBundle && <FindingsRegistryTable bundle={investigationBundle} />}
+      <IntelligentOverview data={data} bundle={investigationBundle} />
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
-        <ExplainabilityEngine data={data} />
-        <div className="xl:col-span-8 min-w-0">
-          <APKMetadata data={data} />
+      <EvidenceRegistrySection data={data} bundle={investigationBundle} loading={loading} />
+
+      <EvidenceSection title="Overview" description="Classification summary and APK identifiers.">
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-stretch">
+          <div className="xl:col-span-4 min-w-0">
+            <ExplainabilityEngine data={data} />
+          </div>
+          <div className="xl:col-span-8 min-w-0">
+            <APKMetadata data={data} />
+          </div>
         </div>
-      </div>
+      </EvidenceSection>
 
-      <div className="analyst-grid-2">
-        <PermissionTable data={data} />
-        <DangerousAPITable data={data} />
-      </div>
+      <EvidenceSection title="Static analysis" description="Permissions, bytecode signals, manifest, and attack surface.">
+        <div className="analyst-grid-2">
+          <PermissionTable data={data} />
+          <DangerousAPITable data={data} />
+        </div>
+        <ManifestFindingsPanel data={data} />
+        <CodeFindingsPanel data={data} />
+        <ExportedComponentsPanel data={data} />
+        <div className="analyst-grid-2">
+          <CertificatePanel certificate={data.certificate} />
+          <DecompilationPanel data={data} />
+        </div>
+        <BinaryAnalysisPanel data={data} />
+        <div className="analyst-grid-2">
+          <NetworkSecurityPanel data={data} />
+          <TrackersPanel data={data} />
+        </div>
+        <SecretsPanel data={data} />
+      </EvidenceSection>
 
-      {/* MobSF Enrichment: Manifest + Code Findings with compliance mappings */}
-      <ManifestFindingsPanel data={data} />
-      <CodeFindingsPanel data={data} />
-
-      {/* MobSF Enrichment: Attack surface — exported components */}
-      <ExportedComponentsPanel data={data} />
-
-      <div className="analyst-grid-2">
-        <CertificatePanel certificate={data.certificate} />
-        <DecompilationPanel data={data} />
-      </div>
-
-      {/* MobSF Enrichment: Native binary security */}
-      <BinaryAnalysisPanel data={data} />
-
-      <div className="analyst-grid-2">
-        {/* MobSF Enrichment: Network Security Config */}
-        <NetworkSecurityPanel data={data} />
-        {/* MobSF Enrichment: Third-party SDKs/Trackers */}
-        <TrackersPanel data={data} />
-      </div>
-
-      {/* MobSF Enrichment: Secrets Inspector */}
-      <SecretsPanel data={data} />
-
-      <div className="analyst-grid-2">
-        <NetworkCapturePanel networkLogs={data.dynamic_analysis?.network_logs} />
-        <LogcatInspectorPanel logcat={data.dynamic_analysis?.logcat} />
-      </div>
-
-      <DynamicAnalysisPanel data={data} />
+      <EvidenceSection title="Runtime analysis" description="Network capture, sandbox telemetry, and visual evidence.">
+        <ScreenshotGallery data={data} bundle={investigationBundle} />
+        <div className="analyst-grid-2">
+          <NetworkCapturePanel networkLogs={data.dynamic_analysis?.network_logs} />
+          <LogcatInspectorPanel logcat={data.dynamic_analysis?.logcat} />
+        </div>
+        <DynamicAnalysisPanel data={data} />
+      </EvidenceSection>
     </div>
   );
 }

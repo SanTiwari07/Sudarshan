@@ -1,85 +1,161 @@
-import SocCard from '../ui/Card';
-import SectionHeader from '../ui/SectionHeader';
 import { Database } from 'lucide-react';
 import type { IntelApiPayload } from '../../lib/threatIntelModel';
 import type { FraudCardData } from '../../App';
-import { useInvestigationUI } from '../../context/InvestigationUIContext';
+import type { InvestigationBundle } from '../../types/investigation';
+import { IntelCard, IntelCardBody, IntelSectionHeader } from './IntelCard';
+import { INTEL } from './intelTokens';
+
+type SourceStatus = 'available' | 'matched' | 'unavailable';
+
+type IntelSourceRow = {
+  name: string;
+  status: SourceStatus;
+  detail: string;
+};
+
+function buildSources(
+  data: FraudCardData,
+  intel: IntelApiPayload,
+  bundle: InvestigationBundle | null,
+): IntelSourceRow[] {
+  const staticFindings =
+    (data.manifest_findings?.length || 0) + (data.code_findings?.length || 0);
+  const runtimeCount = bundle?.counts.runtimeBehaviors ?? 0;
+  const mitreCount = data.intelligence_report?.mitre_techniques_used?.length || 0;
+  const vt = intel.virus_total;
+  const iocCount = intel.iocs?.length || 0;
+  const family = intel.malware_family || data.family_classification;
+
+  const staticStatus: SourceStatus =
+    staticFindings > 0 ? 'matched' : data.sha256 ? 'available' : 'unavailable';
+
+  let runtimeStatus: SourceStatus = 'unavailable';
+  if (data.dynamic_available && runtimeCount > 0) runtimeStatus = 'matched';
+  else if (data.dynamic_available) runtimeStatus = 'available';
+
+  const mitreStatus: SourceStatus =
+    mitreCount > 0 ? 'matched' : data.intelligence_report ? 'available' : 'unavailable';
+
+  let vtStatus: SourceStatus = 'unavailable';
+  if (vt?.available) {
+    vtStatus = vt.malicious > 0 ? 'matched' : 'available';
+  }
+
+  const iocStatus: SourceStatus = iocCount > 0 ? 'matched' : intel.sources_status.length ? 'available' : 'unavailable';
+
+  const rulesStatus: SourceStatus =
+    family && family !== 'Unknown'
+      ? 'matched'
+      : data.technical_view?.matched_rule
+        ? 'available'
+        : 'unavailable';
+
+  return [
+    {
+      name: 'Static Evidence',
+      status: staticStatus,
+      detail:
+        staticFindings > 0
+          ? `${staticFindings} manifest and code findings reviewed`
+          : 'Package submitted; limited static findings',
+    },
+    {
+      name: 'Runtime Behaviour',
+      status: runtimeStatus,
+      detail:
+        runtimeStatus === 'matched'
+          ? `${runtimeCount} runtime behaviours recorded`
+          : data.dynamic_available
+            ? 'Sandbox ran; no strong behaviour signals'
+            : 'Runtime analysis not available for this case',
+    },
+    {
+      name: 'MITRE ATT&CK',
+      status: mitreStatus,
+      detail:
+        mitreCount > 0
+          ? `${mitreCount} techniques mapped to this app`
+          : 'No techniques mapped yet',
+    },
+    {
+      name: 'VirusTotal',
+      status: vtStatus,
+      detail:
+        vtStatus === 'unavailable'
+          ? 'VirusTotal lookup not available'
+          : vt.malicious > 0
+            ? `${vt.malicious} vendors flagged this hash`
+            : 'Hash seen; no malicious consensus',
+    },
+    {
+      name: 'IOC Correlation',
+      status: iocStatus,
+      detail:
+        iocCount > 0 ? `${iocCount} indicators correlated` : 'No indicators matched external feeds',
+    },
+    {
+      name: 'Malware Family Rules',
+      status: rulesStatus,
+      detail:
+        rulesStatus === 'matched'
+          ? `Matched as ${family}`
+          : rulesStatus === 'available'
+            ? 'Rules ran; family not confirmed'
+            : 'No family rule match',
+    },
+  ];
+}
+
+const STATUS_LABEL: Record<SourceStatus, string> = {
+  available: 'Available',
+  matched: 'Matched',
+  unavailable: 'Unavailable',
+};
+
+const STATUS_BADGE: Record<SourceStatus, string> = {
+  matched: 'bg-blue-50 text-blue-800 border-blue-200',
+  available: 'bg-slate-50 text-slate-700 border-slate-200',
+  unavailable: 'bg-slate-50 text-slate-400 border-slate-100',
+};
 
 export default function IntelligenceSourcesPanel({
   intel,
   data,
+  bundle,
 }: {
   intel: IntelApiPayload;
   data: FraudCardData;
+  bundle: InvestigationBundle | null;
 }) {
-  const { openLedger } = useInvestigationUI();
-
-  const sources = [
-    ...intel.sources_status.map((s) => ({
-      name: s.name,
-      status: s.status,
-      message: s.message,
-      clickable: s.status === 'active',
-    })),
-    {
-      name: 'MITRE',
-      status: (data.intelligence_report?.mitre_techniques_used?.length || 0) > 0 ? 'active' : 'no_match',
-      message:
-        (data.intelligence_report?.mitre_techniques_used?.length || 0) > 0
-          ? `${data.intelligence_report!.mitre_techniques_used.length} techniques`
-          : 'No MITRE mapping in report',
-      clickable: true,
-    },
-    {
-      name: 'YARA',
-      status: 'active',
-      message: 'Export YARA from report suite',
-      clickable: false,
-    },
-    {
-      name: 'Internal Corpus',
-      status: data.threat_scenario_table?.length ? 'active' : 'no_match',
-      message: `${data.threat_scenario_table?.length || 0} threat scenarios`,
-      clickable: true,
-    },
-    {
-      name: 'Historical Cases',
-      status: 'active',
-      message: 'See similar investigations below',
-      clickable: false,
-    },
-    {
-      name: 'Local Rules',
-      status: data.technical_view?.matched_rule ? 'active' : 'no_match',
-      message: data.technical_view?.matched_rule || 'No local rule match',
-      clickable: true,
-    },
-  ];
+  const sources = buildSources(data, intel, bundle);
 
   return (
-    <SocCard>
-      <SectionHeader icon={<Database className="h-4 w-4" />} title="Intelligence sources" subtitle="Configured feeds and internal engines" />
-      <div className="p-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-        {sources.map((s) => (
-          <button
-            key={s.name}
-            type="button"
-            disabled={!s.clickable}
-            onClick={() => s.clickable && openLedger(s.name.includes('Correlation') ? 'correlation' : 'full')}
-            className={`text-left p-3 rounded-lg border text-xs transition-all ${
-              s.status === 'active'
-                ? 'border-slate-300 bg-white hover:border-slate-500 hover:shadow-sm'
-                : 'border-slate-100 bg-slate-50 text-slate-500'
-            } ${!s.clickable ? 'cursor-default' : ''}`}
-          >
-            <div className="font-bold text-slate-900 flex justify-between gap-2">
-              {s.name}
-              <span className="text-[9px] uppercase font-semibold text-slate-500">{s.status}</span>
+    <IntelCard>
+      <IntelSectionHeader
+        icon={<Database className="h-4 w-4" />}
+        title="Threat Intelligence Sources"
+        subtitle="Where correlations came from — not raw feed metrics"
+      />
+      <IntelCardBody compact>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {sources.map((s) => (
+            <div
+              key={s.name}
+              className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm flex flex-col gap-2"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-slate-900">{s.name}</span>
+                <span
+                  className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-md border ${STATUS_BADGE[s.status]}`}
+                >
+                  {STATUS_LABEL[s.status]}
+                </span>
+              </div>
+              <p className={`${INTEL.caption} leading-relaxed`}>{s.detail}</p>
             </div>
-            <p className="mt-1 text-[10px] text-slate-600 leading-snug">{s.message}</p>
-          </button>
-        ))}
-      </div>
-    </SocCard>
+          ))}
+        </div>
+      </IntelCardBody>
+    </IntelCard>
   );
 }

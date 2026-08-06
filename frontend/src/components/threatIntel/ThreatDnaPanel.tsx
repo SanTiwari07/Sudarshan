@@ -1,55 +1,103 @@
-import { Dna } from 'lucide-react';
+import { ScanEye } from 'lucide-react';
 import type { DnaTrait } from '../../lib/threatIntelModel';
-import { useInvestigationUI } from '../../context/InvestigationUIContext';
 import { IntelCard, IntelCardBody, IntelSectionHeader } from './IntelCard';
 import { INTEL, INTEL_THEME } from './intelTokens';
-import IntelBadge, { toneFromPercent } from './IntelBadge';
+
+const BEHAVIOUR_ORDER: {
+  key: string;
+  label: string;
+  aliases: string[];
+  explanation: string;
+}[] = [
+  {
+    key: 'a11y',
+    label: 'Accessibility Abuse',
+    aliases: ['Accessibility Abuse'],
+    explanation: 'Used to automate banking apps',
+  },
+  {
+    key: 'cred',
+    label: 'Credential Theft',
+    aliases: ['Credential Theft'],
+    explanation: 'Attempts to capture user credentials',
+  },
+  {
+    key: 'sms',
+    label: 'SMS Interception',
+    aliases: ['SMS Interception'],
+    explanation: 'Can read OTP messages',
+  },
+  {
+    key: 'overlay',
+    label: 'Overlay Attack',
+    aliases: ['Overlay Attack'],
+    explanation: 'Can imitate banking screens',
+  },
+  {
+    key: 'persist',
+    label: 'Persistence',
+    aliases: ['Persistence'],
+    explanation: 'Attempts to remain active',
+  },
+  {
+    key: 'remote',
+    label: 'Remote Communication',
+    aliases: ['Remote Access', 'Remote Communication'],
+    explanation: 'May communicate with attacker infrastructure',
+  },
+];
+
+function confidenceLabel(percent: number): string {
+  if (percent >= 70) return 'High confidence';
+  if (percent >= 35) return 'Medium confidence';
+  if (percent > 0) return 'Low confidence';
+  return 'Not observed';
+}
+
+function resolveTrait(traits: DnaTrait[], aliases: string[]): DnaTrait | undefined {
+  return traits.find((t) => aliases.some((a) => t.label.toLowerCase() === a.toLowerCase()));
+}
 
 export default function ThreatDnaPanel({ traits }: { traits: DnaTrait[] }) {
-  const { openEvidence } = useInvestigationUI();
-  const top = traits.slice(0, 9);
-
   return (
     <IntelCard>
       <IntelSectionHeader
-        icon={<Dna className="h-4 w-4" />}
-        title="Threat DNA"
-        subtitle="Behavioural fingerprint derived from static and runtime evidence"
+        icon={<ScanEye className="h-4 w-4" />}
+        title="Observed Fraud Behaviours"
+        subtitle="Banking-relevant behaviours seen in static and runtime evidence"
       />
       <IntelCardBody>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-          {top.map((t) => (
-            <div
-              key={t.label}
-              className="group rounded-lg border border-transparent hover:border-slate-200 hover:bg-slate-50/50 px-2 py-2 -mx-2 transition-colors"
-            >
-              <div className="flex justify-between items-center gap-2 mb-2">
-                <span className="text-xs font-semibold text-slate-800">{t.label}</span>
-                <IntelBadge tone={toneFromPercent(t.percent)}>{t.percent}%</IntelBadge>
-              </div>
-              <div className="h-2.5 bg-blue-100 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full ${INTEL_THEME.barGradient} transition-all duration-700 ease-out opacity-90 group-hover:opacity-100`}
-                  style={{ width: `${Math.min(100, t.percent)}%` }}
-                />
-              </div>
-              <p className={`${INTEL.caption} mt-2`}>{t.rationale}</p>
-              {t.evidenceIds.length > 0 && (
-                <div className="flex gap-2 mt-2 flex-wrap">
-                  {t.evidenceIds.map((id) => (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => openEvidence(id)}
-                      className="text-[10px] font-medium text-blue-700 hover:text-blue-900 hover:underline"
-                    >
-                      View evidence · {id}
-                    </button>
-                  ))}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+          {BEHAVIOUR_ORDER.map((behaviour) => {
+            const trait = resolveTrait(traits, behaviour.aliases);
+            const percent = trait?.percent ?? 0;
+            const detail = trait?.rationale
+              ? trait.rationale.replace(/BIND_ACCESSIBILITY_SERVICE|SYSTEM_ALERT_WINDOW/gi, (m) =>
+                  m.includes('ACCESSIBILITY') ? 'accessibility service' : 'overlay permission',
+                )
+              : behaviour.explanation;
+
+            return (
+              <div key={behaviour.key} className="space-y-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">{behaviour.label}</div>
+                    <p className={`${INTEL.caption} mt-0.5`}>{behaviour.explanation}</p>
+                  </div>
+                  <span className={`${INTEL.caption} shrink-0 font-medium text-slate-600`}>
+                    {confidenceLabel(percent)}
+                  </span>
                 </div>
-              )}
-            </div>
-          ))}
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${INTEL_THEME.barGradient} transition-all duration-700 ease-out`}
+                    style={{ width: `${Math.min(100, percent)}%` }}
+                  />
+                </div>
+                <p className={`${INTEL.caption} leading-relaxed`}>{detail}</p>
+              </div>
+            );
+          })}
         </div>
       </IntelCardBody>
     </IntelCard>

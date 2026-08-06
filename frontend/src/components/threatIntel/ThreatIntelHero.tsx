@@ -1,9 +1,14 @@
-import { getRiskAccent } from '../../theme/colors';
+import {
+  ShieldAlert,
+  Bug,
+  BadgeCheck,
+  Radar,
+  Compass,
+} from 'lucide-react';
 import type { IntelApiPayload } from '../../lib/threatIntelModel';
-import { campaignStatus, malwareTypeLabel, analysisCoveragePercent } from '../../lib/threatIntelModel';
+import { campaignStatus } from '../../lib/threatIntelModel';
 import type { FraudCardData } from '../../App';
-import CopyButton from '../ui/CopyButton';
-import IntelBadge, { RiskBandBadge, toneFromPercent } from './IntelBadge';
+import { riskBandPlainEnglish } from '../../lib/analystCopy';
 import { INTEL } from './intelTokens';
 
 type Props = {
@@ -12,97 +17,108 @@ type Props = {
   evidenceConfidence: number;
 };
 
-export default function ThreatIntelHero({ data, intel, evidenceConfidence }: Props) {
-  const band = data.risk_band || intel.risk_band || 'Unknown';
-  const accent = getRiskAccent(band);
-  const campaign = campaignStatus(intel);
-  const coverage = analysisCoveragePercent(data, intel);
+function campaignMatchText(data: FraudCardData, intel: IntelApiPayload): string {
+  const campaign = (intel.campaign || '').trim();
+  const attributed =
+    campaign &&
+    !/^not attributed$/i.test(campaign) &&
+    campaign !== 'None' &&
+    campaign !== 'Unknown';
+  if (attributed) return campaign;
   const family = intel.malware_family || data.family_classification;
-  const classConf = Math.round(data.confidence || intel.confidence || 0);
-  const threatConf = Math.round(intel.confidence || data.confidence || 0);
+  if (family && family !== 'Unknown') return `Patterns similar to ${family}`;
+  if (intel.alienvault.pulse_count > 0) return 'Pulses found — campaign not named';
+  return 'No known campaign match';
+}
 
-  const campaignTone =
-    campaign.tone === 'active' ? 'critical' : campaign.tone === 'unknown' ? 'medium' : 'neutral';
+function recommendedActionText(data: FraudCardData): string {
+  if (data.recommended_action) return data.recommended_action;
+  if (data.final_risk_score >= 80) return 'Block Application';
+  if (data.final_risk_score >= 60) return 'Manual Review';
+  if (data.targets_indian_banks) return 'Notify Fraud Team';
+  return 'Monitor';
+}
 
+function SummaryCard({
+  icon,
+  label,
+  value,
+  hint,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  hint?: string;
+}) {
   return (
-    <section
-      className={`rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden ring-1 ${accent.ring} border-l-[5px] ${accent.bar}`}
-    >
-      <div className="px-6 py-6 lg:px-8 lg:py-7">
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
-          <div className="xl:col-span-5 space-y-4 min-w-0">
-            <p className={INTEL.eyebrow}>Threat intelligence profile</p>
-            <div>
-              <h1 className="text-2xl lg:text-3xl font-bold text-slate-800 tracking-tight">
-                {family !== 'Unknown' ? family : 'Unclassified sample'}
-              </h1>
-              <p className={`${INTEL.meta} mt-1`}>{malwareTypeLabel(data, family)}</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <RiskBandBadge band={band} />
-              <IntelBadge tone={campaignTone}>{campaign.label}</IntelBadge>
-              <IntelBadge tone={toneFromPercent(evidenceConfidence)}>{evidenceConfidence}% evidence</IntelBadge>
-              <IntelBadge tone={toneFromPercent(coverage)}>{coverage}% coverage</IntelBadge>
-            </div>
-            <div className="space-y-2 pt-2 border-t border-slate-100">
-              <div className="flex items-start gap-2 min-w-0">
-                <span className={`${INTEL.caption} shrink-0 w-16`}>Package</span>
-                <span className="text-xs font-mono text-slate-800 truncate" title={data.package_name}>
-                  {data.package_name}
-                </span>
-              </div>
-              <div className="flex items-start gap-2 min-w-0">
-                <span className={`${INTEL.caption} shrink-0 w-16`}>SHA-256</span>
-                <span className="text-xs font-mono text-slate-700 truncate flex-1" title={data.sha256}>
-                  {data.sha256}
-                </span>
-                <CopyButton value={data.sha256} />
-              </div>
-            </div>
-          </div>
-
-          <div className="xl:col-span-7 grid grid-cols-2 md:grid-cols-4 gap-3">
-            <HeroStat label="Threat level" value={band.toUpperCase()} />
-            <HeroStat label="Malware family" value={family} />
-            <HeroStat
-              label="Classification"
-              value={family === 'Unknown' ? 'Reduced' : `${classConf}%`}
-            />
-            <HeroStat label="Threat confidence" value={threatConf ? `${threatConf}%` : '—'} />
-            <HeroStat label="Evidence confidence" value={`${evidenceConfidence}%`} />
-            <HeroStat label="Analysis coverage" value={`${coverage}%`} />
-            <HeroStat
-              label="Runtime"
-              value={data.dynamic_available ? 'Available' : 'Unavailable'}
-            />
-            <HeroStat
-              label="Verdict"
-              value={data.recommended_action || 'See risk engine'}
-              truncate
-            />
-          </div>
-        </div>
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm h-full flex flex-col gap-2">
+      <div className="flex items-center gap-2">
+        <span className="p-2 rounded-lg bg-slate-100 text-blue-700 shrink-0">{icon}</span>
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</span>
       </div>
-    </section>
+      <p className="text-sm font-semibold text-slate-900 leading-snug line-clamp-2" title={value}>
+        {value}
+      </p>
+      {hint ? <p className={`${INTEL.caption} mt-auto`}>{hint}</p> : null}
+    </div>
   );
 }
 
-function HeroStat({
-  label,
-  value,
-  truncate: trunc,
-}: {
-  label: string;
-  value: string;
-  tone?: 'critical' | 'high' | 'medium' | 'low' | 'safe' | 'neutral' | 'info';
-  truncate?: boolean;
-}) {
+export default function ThreatIntelHero({ data, intel, evidenceConfidence }: Props) {
+  const band = data.risk_band || intel.risk_band || 'Unknown';
+  const family = intel.malware_family || data.family_classification || 'Unknown';
+  const campaign = campaignStatus(intel);
+
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-3 hover:bg-white hover:border-slate-300 transition-colors min-h-[4.5rem]">
-      <div className={INTEL.caption}>{label}</div>
-      <div className={`mt-1 text-sm font-bold text-slate-800 leading-snug ${trunc ? 'truncate' : 'line-clamp-2'}`} title={value}>
-        {value}
+    <section className="space-y-5">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+          How this application compares with known banking threats
+        </h1>
+        <p className={`${INTEL.meta} max-w-3xl leading-relaxed`}>
+          This page correlates verified evidence against known malware families, threat intelligence databases, banking
+          attack techniques, and fraud behaviours.
+        </p>
       </div>
-    </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <SummaryCard
+          icon={<ShieldAlert className="h-4 w-4" />}
+          label="Threat Level"
+          value={band}
+          hint={riskBandPlainEnglish(band)}
+        />
+        <SummaryCard
+          icon={<Bug className="h-4 w-4" />}
+          label="Malware Family"
+          value={family === 'Unknown' ? 'Not classified' : family}
+          hint={family === 'Unknown' ? 'No family rule matched' : 'Best match from rules and intel'}
+        />
+        <SummaryCard
+          icon={<BadgeCheck className="h-4 w-4" />}
+          label="Evidence Confidence"
+          value={`${evidenceConfidence}%`}
+          hint="Average across static, runtime, IOC, and classification sources"
+        />
+        <SummaryCard
+          icon={<Radar className="h-4 w-4" />}
+          label="Known Campaign Match"
+          value={campaignMatchText(data, intel)}
+          hint={
+            campaign.tone === 'active'
+              ? 'Linked to a named campaign'
+              : campaign.tone === 'unknown'
+                ? 'Intel pulses without attribution'
+                : 'No campaign attribution'
+          }
+        />
+        <SummaryCard
+          icon={<Compass className="h-4 w-4" />}
+          label="Recommended Action"
+          value={recommendedActionText(data)}
+          hint="From risk engine and correlated findings"
+        />
+      </div>
+    </section>
   );
 }

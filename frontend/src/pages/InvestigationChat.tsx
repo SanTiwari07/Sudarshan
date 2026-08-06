@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Cpu, Send, Shield, User, RefreshCw, AlertTriangle, CheckCircle2,
   HelpCircle, FileText, Lock, Eye, Check,
@@ -676,6 +677,8 @@ Everything is grounded strictly in investigation evidence.`,
   ]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const prefilledHandled = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -837,6 +840,18 @@ Everything is grounded strictly in investigation evidence.`,
       );
     }
   };
+
+  useEffect(() => {
+    const q = searchParams.get('q')?.trim();
+    if (!q || prefilledHandled.current) return;
+    prefilledHandled.current = true;
+    setSearchParams({}, { replace: true });
+    const timer = window.setTimeout(() => {
+      void sendMessage(q);
+    }, 400);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot URL prefill only
+  }, [searchParams, setSearchParams]);
 
   return (
     <div

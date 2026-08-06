@@ -1,7 +1,7 @@
 import { Navigate } from 'react-router-dom';
 import { LoadingSpinner } from '../ui/Skeleton';
 import { useAnalysis } from '../../context/AnalysisContext';
-import { InvestigationUIProvider, useInvestigationUI } from '../../context/InvestigationUIContext';
+import { InvestigationUIProvider } from '../../context/InvestigationUIContext';
 import CaseHeader from './CaseHeader';
 import ScoreLedgerSlideOver from './ScoreLedgerSlideOver';
 import EvidenceDrawer from './EvidenceDrawer';
@@ -9,7 +9,6 @@ import AnalystNotesPanel from './AnalystNotesPanel';
 
 function InvestigationChrome({ children }: { children: React.ReactNode }) {
   const { analysisResult, investigationBundle, loading } = useAnalysis();
-  const { openLedger } = useInvestigationUI();
 
   if (loading && !analysisResult) {
     return <LoadingSpinner label="Loading case…" />;
@@ -23,7 +22,7 @@ function InvestigationChrome({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <CaseHeader data={analysisResult} onExplainScore={() => openLedger('full')} />
+      <CaseHeader data={analysisResult} />
       {children}
       {bundle && (
         <>

@@ -120,7 +120,19 @@ export default function EvidenceDrawer({
         </div>
       </div>
       {lightbox && (
-        <ScreenshotLightbox sha256={data.sha256} filename={lightbox} onClose={() => setLightbox(null)} />
+        <ScreenshotLightbox
+          sha256={data.sha256}
+          entries={[
+            {
+              screenshot_id: 'EVIDENCE',
+              filename: lightbox,
+              label: evidence?.title || 'Evidence screenshot',
+            },
+          ]}
+          index={0}
+          onClose={() => setLightbox(null)}
+          onIndexChange={() => {}}
+        />
       )}
     </>
   );

@@ -11,20 +11,23 @@ const TONE_STYLES = {
   completed: {
     border: 'border-emerald-400',
     bg: 'bg-emerald-50',
-    icon: <CheckCircle2 className="h-4 w-4 text-emerald-600" />,
+    icon: <CheckCircle2 className="h-5 w-5 text-emerald-600" />,
     text: 'text-slate-800',
+    chip: 'bg-emerald-50 text-emerald-800 border-emerald-200',
   },
   active: {
     border: 'border-blue-500',
     bg: 'bg-blue-50',
-    icon: <CircleDot className="h-4 w-4 text-blue-600" />,
+    icon: <CircleDot className="h-5 w-5 text-blue-600" />,
     text: 'text-slate-900',
+    chip: 'bg-blue-50 text-blue-800 border-blue-200',
   },
   warning: {
     border: 'border-amber-400',
     bg: 'bg-amber-50',
-    icon: <AlertTriangle className="h-4 w-4 text-amber-600" />,
+    icon: <AlertTriangle className="h-5 w-5 text-amber-600" />,
     text: 'text-amber-950',
+    chip: 'bg-amber-50 text-amber-900 border-amber-200',
   },
 };
 
@@ -34,7 +37,13 @@ const STORY_OPENING: { label: string; tone: 'completed' | 'active' | 'warning' }
   { label: 'Permissions and manifest extracted', tone: 'completed' },
 ];
 
-export default function InvestigationTimeline({ bundle }: { bundle: InvestigationBundle }) {
+export default function InvestigationTimeline({
+  bundle,
+  embedded = false,
+}: {
+  bundle: InvestigationBundle;
+  embedded?: boolean;
+}) {
   const { openEvidence, setTimelineFocus } = useInvestigationUI();
   const events = bundle.timelineEvents;
   const base = events[0]?.timestampMs ?? 0;
@@ -43,31 +52,25 @@ export default function InvestigationTimeline({ bundle }: { bundle: Investigatio
       ? 'Fraud intelligence report produced'
       : null;
 
-  return (
-    <SocCard>
-      <SectionHeader
-        icon={<Clock className="h-4 w-4" />}
-        title="Investigation Timeline"
-        subtitle={
-          <>
-            Chronological sequence of this case —{' '}
-            <HelpTerm term="Verified Evidence">not raw system logs</HelpTerm>.
-          </>
-        }
-      />
-      <div className="p-5 max-h-[28rem] overflow-y-auto">
-        <div className="relative pl-2">
+  const timelineBody = (
+    <div className="px-4 sm:px-5 py-4 max-h-[28rem] overflow-y-auto scrollbar-hidden">
+        <div className="relative">
           {STORY_OPENING.map((step, i) => {
             const style = TONE_STYLES[step.tone];
             const isLastStory = i === STORY_OPENING.length - 1 && events.length === 0;
             return (
-              <div key={step.label} className="flex gap-0">
-                <div className="flex flex-col items-center w-8 shrink-0">
-                  <div className={`p-1 rounded-full border-2 ${style.border} ${style.bg}`}>{style.icon}</div>
-                  {!isLastStory && <div className="w-0.5 flex-1 min-h-[2rem] bg-slate-200 my-1" />}
+              <div key={step.label} className="flex gap-4">
+                <div className="flex flex-col items-center w-10 shrink-0">
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-full border-2 ${style.border} ${style.bg}`}>
+                    {style.icon}
+                  </div>
+                  {!isLastStory && <div className="w-px flex-1 min-h-[1.5rem] bg-slate-200 my-1" />}
                 </div>
-                <div className="flex-1 text-left pb-5">
-                  <div className="text-sm font-semibold text-slate-800">{step.label}</div>
+                <div className="flex-1 text-left pb-6 min-w-0">
+                  <div className="text-sm font-semibold text-slate-800 leading-snug">{step.label}</div>
+                  <span className={`inline-flex mt-1 text-[10px] font-medium px-2 py-0.5 rounded-full border ${style.chip}`}>
+                    Complete
+                  </span>
                 </div>
               </div>
             );
@@ -76,13 +79,15 @@ export default function InvestigationTimeline({ bundle }: { bundle: Investigatio
             const tone = timelineTone(ev, i, events.length);
             const style = TONE_STYLES[tone];
             const label = humanizeTimelineLabel(ev.label);
-            const isLast = i === events.length - 1;
+            const isLast = i === events.length - 1 && !closingLabel;
 
             return (
-              <div key={ev.id} className="flex gap-0">
-                <div className="flex flex-col items-center w-8 shrink-0">
-                  <div className={`p-1 rounded-full border-2 ${style.border} ${style.bg}`}>{style.icon}</div>
-                  {!isLast && <div className="w-0.5 flex-1 min-h-[2rem] bg-slate-200 my-1" />}
+              <div key={ev.id} className="flex gap-4">
+                <div className="flex flex-col items-center w-10 shrink-0">
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-full border-2 ${style.border} ${style.bg}`}>
+                    {style.icon}
+                  </div>
+                  {!isLast && <div className="w-px flex-1 min-h-[1.5rem] bg-slate-200 my-1" />}
                 </div>
                 <button
                   type="button"
@@ -90,19 +95,19 @@ export default function InvestigationTimeline({ bundle }: { bundle: Investigatio
                     setTimelineFocus(ev.timestampMs);
                     if (ev.evidenceIds[0]) openEvidence(ev.evidenceIds[0]);
                   }}
-                  className={`flex-1 text-left pb-5 ${isLast ? 'pb-0' : ''}`}
+                  className={`flex-1 text-left pb-6 min-w-0 rounded-lg -ml-1 pl-1 pr-2 transition-colors duration-200 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isLast ? 'pb-0' : ''}`}
                 >
-                  <div className="font-mono text-[10px] text-slate-500 mb-0.5">
+                  <div className="font-mono text-[11px] text-slate-500 mb-1 tabular-nums">
                     {formatTimelineOffset(ev.timestampMs, base)}
                   </div>
-                  <div className={`text-sm font-semibold ${style.text}`}>{label}</div>
+                  <div className={`text-sm font-semibold leading-snug ${style.text}`}>{label}</div>
                   {ev.contributionLabel && (
-                    <span className="text-[10px] font-mono text-amber-700">{ev.contributionLabel}</span>
+                    <span className="text-[11px] font-mono text-amber-700 mt-0.5 block">{ev.contributionLabel}</span>
                   )}
                   {ev.evidenceIds.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1">
+                    <div className="flex flex-wrap gap-1 mt-2">
                       {ev.evidenceIds.slice(0, 3).map((id) => (
-                        <span key={id} className="font-mono text-[9px] px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded">
+                        <span key={id} className="font-mono text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded-md border border-blue-100">
                           {id}
                         </span>
                       ))}
@@ -113,19 +118,49 @@ export default function InvestigationTimeline({ bundle }: { bundle: Investigatio
             );
           })}
           {closingLabel && (
-            <div className="flex gap-0">
-              <div className="flex flex-col items-center w-8 shrink-0">
-                <div className={`p-1 rounded-full border-2 ${TONE_STYLES.active.border} ${TONE_STYLES.active.bg}`}>
+            <div className="flex gap-4">
+              <div className="flex flex-col items-center w-10 shrink-0">
+                <div className={`flex h-10 w-10 items-center justify-center rounded-full border-2 ${TONE_STYLES.active.border} ${TONE_STYLES.active.bg}`}>
                   {TONE_STYLES.active.icon}
                 </div>
               </div>
-              <div className="flex-1 text-left pb-0">
-                <div className="text-sm font-semibold text-slate-900">{closingLabel}</div>
+              <div className="flex-1 text-left min-w-0">
+                <div className="text-sm font-semibold text-slate-900 leading-snug">{closingLabel}</div>
               </div>
             </div>
           )}
         </div>
       </div>
+  );
+
+  if (embedded) {
+    return (
+      <div className="relative static">
+        <div className="px-4 sm:px-5 py-3 border-t border-slate-100">
+          <h3 className="text-sm font-semibold text-slate-900">Investigation timeline</h3>
+          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+            Chronological sequence —{' '}
+            <HelpTerm term="Verified Evidence">verified evidence only</HelpTerm>.
+          </p>
+        </div>
+        {timelineBody}
+      </div>
+    );
+  }
+
+  return (
+    <SocCard className="relative static">
+      <SectionHeader
+        icon={<Clock className="h-4 w-4" />}
+        title="Investigation timeline"
+        subtitle={
+          <>
+            Chronological sequence —{' '}
+            <HelpTerm term="Verified Evidence">verified evidence only</HelpTerm>, not raw system logs.
+          </>
+        }
+      />
+      {timelineBody}
     </SocCard>
   );
 }

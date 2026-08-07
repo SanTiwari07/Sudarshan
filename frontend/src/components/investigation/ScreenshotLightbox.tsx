@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, Download, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { fetchScreenshotBlob, screenshotBasename } from '../../lib/screenshots';
 import {
+  entryFilename,
   formatScreenshotTime,
   screenshotDescription,
   screenshotStageLabel,
@@ -30,7 +31,9 @@ export default function ScreenshotLightbox({
     let revoked: string | null = null;
     setSrc(null);
     if (!entry) return;
-    fetchScreenshotBlob(sha256, entry.filename).then((url) => {
+    const file = entryFilename(entry);
+    if (!file) return;
+    fetchScreenshotBlob(sha256, file).then((url) => {
       if (url) {
         revoked = url;
         setSrc(url);
@@ -39,7 +42,7 @@ export default function ScreenshotLightbox({
     return () => {
       if (revoked) URL.revokeObjectURL(revoked);
     };
-  }, [sha256, entry?.filename, entry]);
+  }, [sha256, entry]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -59,7 +62,7 @@ export default function ScreenshotLightbox({
     if (!src) return;
     const a = document.createElement('a');
     a.href = src;
-    a.download = screenshotBasename(entry.filename);
+    a.download = screenshotBasename(entryFilename(entry));
     a.click();
   };
 

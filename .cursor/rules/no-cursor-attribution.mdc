@@ -1,0 +1,6 @@
+---
+description: Never add Cursor git or PR attribution in this repository
+alwaysApply: true
+---
+
+Do not add `Co-authored-by: Cursor`, `Made-with: Cursor`, `Made with Cursor`, or any `cursoragent` identity to commits, PR descriptions, or code comments. All git work must use the human maintainer as sole author with no AI co-author trailers.

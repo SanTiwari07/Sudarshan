@@ -1,0 +1,3 @@
+#!/bin/sh
+# Cloud agents may append trailers after prepare-commit-msg; strip again here.
+. "$(dirname "$0")/strip-cursor-attribution.sh" "$1"

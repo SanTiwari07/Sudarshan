@@ -1,4 +1,4 @@
-# Fold Cursor co-author identity into primary maintainer (GitHub contributor sidebar).
+# Local git shortlog/log/blame only. GitHub Contributors ignores .mailmap (author email + Co-authored-by).
 SanTiwari07 <sanskartiwari.smt@gmail.com> Cursor <cursoragent@cursor.com>
 SanTiwari07 <sanskartiwari.smt@gmail.com> <cursoragent@cursor.com>
 SanTiwari07 <sanskartiwari.smt@gmail.com> cursoragent <199161495+cursoragent@users.noreply.github.com>

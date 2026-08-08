@@ -1,7 +1,3 @@
 #!/bin/sh
-# Remove Cursor agent attribution from commit messages (IDE/CLI/cloud co-author lines).
-MSG_FILE="$1"
-[ -f "$MSG_FILE" ] || exit 0
-TMP="${MSG_FILE}.cursor-strip"
-grep -vi 'cursoragent@cursor.com' "$MSG_FILE" | grep -vi '^co-authored-by: cursor' | grep -vi '^made-with: cursor' > "$TMP" || true
-mv "$TMP" "$MSG_FILE"
+# Strip Cursor co-author / Made-with trailers before the commit is created.
+. "$(dirname "$0")/strip-cursor-attribution.sh" "$1"

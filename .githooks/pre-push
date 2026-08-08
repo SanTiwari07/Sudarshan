@@ -1,0 +1,18 @@
+#!/bin/sh
+# Block pushes that would re-introduce Cursor Agent on GitHub (author, committer, or trailers).
+zero=$(git hash-object --stdin </dev/null | tr '0-9a-f' '0')
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue
+  if [ "$remote_sha" = "$zero" ]; then
+    range="$local_sha"
+  else
+    range="${remote_sha}..${local_sha}"
+  fi
+  if git log "$range" --format='%an%n%ae%n%cn%n%ce%n%B%n---' 2>/dev/null \
+    | grep -qiE 'cursoragent@cursor\.com|199161495\+cursoragent@users\.noreply\.github\.com|^co-authored-by:[[:space:]]*cursor|^made-with:[[:space:]]*cursor'; then
+    echo "pre-push: blocked — commits include Cursor Agent attribution." >&2
+    echo "Run: powershell -File scripts/strip-cursor-from-git-history.ps1" >&2
+    exit 1
+  fi
+done
+exit 0

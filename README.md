@@ -3,11 +3,15 @@
   <h1>SUDARSHAN</h1>
   <p><b>AI-Assisted Autonomous Mobile Fraud Investigation Platform</b></p>
   <p><i>Prepared and Submitted for Bank of India and IIT Hyderabad under the BOI Hackathon 2026</i></p>
+  <p>
+    <a href="https://github.com/SanTiwari07/Sudarshan">github.com/SanTiwari07/Sudarshan</a>
+  </p>
   
   <p>
-    <b>519</b> Passing Unit & Integration Tests &nbsp;&nbsp;|&nbsp;&nbsp;
+    <b>526</b> Automated Unit & Integration Tests &nbsp;&nbsp;|&nbsp;&nbsp;
+    <b>VIDE Visual Impersonation Detection</b> &nbsp;&nbsp;|&nbsp;&nbsp;
     <b>Deterministic Fraud Scoring</b> &nbsp;&nbsp;|&nbsp;&nbsp;
-    <b>Containerized Microservice Architecture</b>
+    <b>Containerized Microservices</b>
   </p>
 </div>
 
@@ -78,6 +82,9 @@ JADX --> Normalize
 
 Normalize --> STEI
 Normalize --> Planner
+Normalize --> VIDE["VIDE (UI baseline compare)"]
+
+VIDE --> STEI
 
 end
 
@@ -248,6 +255,8 @@ Failed --> Dashboard
 
 ## Key Platform Features
 
+- **VIDE (Visual Impersonation Detection Engine)**: Deterministic comparison of static/dynamic UI fingerprints against lab banking baselines (SBI, HDFC, ICICI); rule **VIDE-F001**, signer registry checks, and FRS escalation without LLM verdicts. Results surface on the analyst dashboard (`VisualImpersonationPanel`) and persist on cases via `GET /api/v1/cases/{sha256}`.
+- **Case workspace API**: Paginated case history, per-hash evidence export (`/cases/{sha256}/evidence`), and analyst notes (`/cases/{sha256}/notes`) backed by SQLite.
 - **Dual Static Decompilation Pipeline**: Combines **APKTool** (xml/asset decompilation & obfuscated resource extraction) and **JADX** (DEX-to-Java source scanning across 10 fraud patterns) to complement MobSF & native APK parsing.
 - **Pre-Sandbox Investigation Manifest (`manifest.py`)**: Produces a standardized `manifest.json` artifact before dynamic execution to dynamically select hook profiles (`canary`, `accessibility`, `sms`, `overlay`, `banking`, `dynamic_code`, `persistence`, `network`) and weigh goal priorities.
 - **Frida 17 ART Deoptimization**: Executes `Java.deoptimizeEverything()` unconditionally upon attachment to guarantee hook execution on JIT-compiled Android system methods.
@@ -267,8 +276,9 @@ Failed --> Dashboard
 | **Frontend UI** | React 18 SPA | TypeScript, Vite, Tailwind CSS, Lucide React, React Router v6 |
 | **API & Gateway** | FastAPI Backend | Python 3.10+, Pydantic v2, PyJWT, Uvicorn, Asyncio |
 | **Storage & Queue** | Persistent Case Store | SQLite (`sudarshan.db`), Async Worker Pool, File Artifact Store |
-| **Shared Package** | Sudarshan Core | [`shared/sudarshan_core/`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/) mounted via `PYTHONPATH=/app:/opt/sudarshan-core` |
+| **Shared Package** | Sudarshan Core | [`shared/sudarshan_core/`](shared/sudarshan_core/) mounted via `PYTHONPATH=/app:/opt/sudarshan-core` |
 | **Static Analysis** | Decompilation Engines | MobSF Docker (Port 8008), Native `apk_analyzer.py`, APKTool CLI, JADX CLI, YARA Scanner |
+| **Visual Impersonation** | VIDE pipeline | `shared/sudarshan_core/engines/vide/` — UI profiles, baseline compare, `VIDE-F001`, risk-engine hooks |
 | **Dynamic Sandbox** | Execution Environment | Genymotion Desktop (default) or Android Studio AVD via `SandboxProvider`, ADB TCP (Port 5555), Frida 17.16.4 |
 | **Network Intercept**| Transparent Proxy | mitmproxy Docker Sidecar (Port 8080), HAR Dump Parser |
 | **Risk & Scoring** | Math Scoring Engine | 5-Axis STEI, Volume Logarithmic BFCI v2, 4-Axis FRS, Threat Scenario Matrix |
@@ -279,7 +289,7 @@ Failed --> Dashboard
 ## Repository Structure
 
 ```text
-Sudarshan BOI/
+Sudarshan/
 ├── analysis-engine/                # Analysis Engine container (Ubuntu 24.04, JDK 17, Python 3.12)
 ├── backend/
 │   ├── app/
@@ -287,7 +297,7 @@ Sudarshan BOI/
 │   │   ├── auth/                    # JWT authentication & user RBAC management
 │   │   ├── db/                      # SQLite database initialization & case persistence
 │   │   ├── rag/                     # Knowledge base & financial fraud indexer
-│   │   ├── routes/                  # FastAPI endpoints (upload, report, cases, intelligence)
+│   │   ├── routes/                  # FastAPI endpoints (upload, cases, report, intelligence, runtime)
 │   │   └── workers/                 # Async analysis queue dispatcher & worker pool
 │   ├── tests/                       # Gateway-focused pytest modules (see also `tests/` at repo root)
 │   ├── Dockerfile                   # FastAPI backend container configuration
@@ -295,21 +305,26 @@ Sudarshan BOI/
 ├── shared/
 │   └── sudarshan_core/              # Core domain engines, analyzers, models & services
 │       ├── analyzers/               # Native APK analyzer
-│       ├── engines/                 # Frida sandbox, UI explorer, Risk engine, BFCI, Workflow
+│       ├── engines/                 # Frida sandbox, VIDE, UI explorer, risk engine, BFCI, workflow
+│       ├── engines/vide/            # Visual impersonation pipeline (static + dynamic UI compare)
+│       ├── data/ui_baselines/       # Lab UI baselines for VIDE (demo / hackathon scope)
 │       ├── models/                  # Pydantic schemas & Manifest models
 │       └── services/                # MobSF REST client & Threat Correlator
 ├── frontend/
 │   ├── src/
 │   │   ├── components/              # UI components, ErrorBoundary & WorkflowDiagram.tsx
-│   │   ├── pages/                   # Login, Upload, FraudCard, TechnicalView, ThreatIntel, Chat, History
+│   │   ├── pages/                   # Login, Upload, FraudCard, TechnicalView, ThreatIntel, Chat, History, Cases
+│   │   ├── components/investigation/ # VIDE panels, workflow diagram, findings registry
 │   │   ├── App.tsx                  # Primary router & layout
 │   │   └── main.tsx                 # React entry point
 │   ├── Dockerfile                   # Nginx frontend container configuration
 │   └── package.json                 # Node.js dependencies
 ├── tests/                           # Root pytest suite + APK validation corpus (`tests/apks/`)
+├── scripts/                         # Health checks, hooks enable, corpus fetch, migration utilities
 ├── validate_dynamic_pipeline.py     # Live sandbox corpus validation CLI
-├── docs/                            # Enterprise documentation portal
-├── docker-compose.yml               # Multi-container orchestration (Frontend, Backend, Engine, MobSF, mitmproxy)
+├── docs/                            # Architecture & operations documentation portal
+├── docker-compose.yml               # Frontend, backend, analysis-engine, MobSF, mitmproxy
+├── .githooks/                       # Strips Cursor co-author trailers on commit (optional)
 └── start.ps1                        # One-command bootstrapper script
 ```
 
@@ -356,6 +371,8 @@ The FastAPI backend exposes versioned REST API endpoints (`/api/v1`):
 | `GET` | `/api/v1/report/pdf/{sha256}` | Bearer Token | PDF export (HTML report is primary). |
 | `POST` | `/api/v1/chat/stream` | Bearer Token | RAG-grounded AI investigator (SSE streaming). |
 | `GET` | `/api/v1/auth/me` | Bearer Token | Return the authenticated user's profile. |
+| `GET` | `/api/runtime/status` | Bearer Token | Live pipeline / Frida instrumentation snapshot (analyst runtime view). |
+| `GET` | `/api/runtime/evidence` | Bearer Token | Latest or case-scoped `evidence.json` records from artifact store. |
 
 ---
 
@@ -378,9 +395,14 @@ Run the automated bootstrapper script from PowerShell:
 ```
 
 ### Automated Test Suite Execution
-Run the full automated test suite (**519 tests collected**):
+Run the full automated test suite (**526 tests collected**):
 ```powershell
 $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests
+```
+
+Enable local git hooks (strips Cursor attribution trailers on commit):
+```powershell
+.\scripts\enable-githooks.ps1
 ```
 
 ### Accessing Platform Interfaces
@@ -394,7 +416,7 @@ $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytes
 
 ## Documentation Portal Index
 
-The detailed documentation portal is available under [`docs/`](file:///d:/Projects/Sudarshan%20BOI/docs/README.md):
+The detailed documentation portal is available under [`docs/`](docs/README.md):
 
 | Guide / Document | Summary |
 | :--- | :--- |
@@ -410,7 +432,7 @@ The detailed documentation portal is available under [`docs/`](file:///d:/Projec
 | [**08 — Deterministic Risk Engine**](docs/architecture/08_DETERMINISTIC_RISK_ENGINE.md) | Math formulas for 5-axis STEI, BFCI v2, FRS, Threat Scenario Matrix. |
 | [**09 — AI Report Generation**](docs/architecture/09_AI_REPORT_GENERATION.md) | HTML security reports, PDF report exporter, JSON report feed. |
 | [**10 — Analyst Dashboard**](docs/dashboard/10_DASHBOARD.md) | React 18 SPA, `InvestigationShell`, Executive Fraud Card, Technical View, VIDE panels, Workflow UI. |
-| [**11 — Evaluation Strategy**](docs/evaluation/11_EVALUATION.md) | Automated testing suite (**519** tests in `pytest tests/ backend/tests`), benchmarks, determinism baselines. |
+| [**11 — Evaluation Strategy**](docs/evaluation/11_EVALUATION.md) | Automated testing suite (**526** tests in `pytest tests/ backend/tests`), benchmarks, determinism baselines. |
 | [**How to Run Guide**](docs/HOW_TO_RUN.md) | Comprehensive installation, configuration, and execution guide. |
 | [**DAE Current State**](docs/DAE_CURRENT_STATE.md) | Complete resolution audit and technical current state document. |
 | [**Documentation Audit Report**](docs/DOCUMENTATION_AUDIT_REPORT.md) | Formal documentation audit, file mapping, and verification report. |

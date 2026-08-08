@@ -3,10 +3,10 @@
 ```yaml
 Document Title:      Sudarshan Platform Architectural Specification
 Version:             2.5.0-STABLE
-Last Revision:       2026-08-06
+Last Revision:       2026-08-08
 Repository Scope:    SanTiwari07/Sudarshan (d:/Projects/Sudarshan BOI)
 Target Audience:     Enterprise Security Engineers, SOC Analysts, System Architects
-Verification Status: 486 / 486 Unit & Integration Tests Collected & Verified (100%)
+Verification Status: 519 / 519 Unit & Integration Tests Collected & Verified (100%)
 ```
 
 ---
@@ -139,7 +139,7 @@ d:\Projects\Sudarshan BOI\
 │   │   ├── routes/                  # Gateway API routers (upload.py, report.py, cases.py, runtime_api.py)
 │   │   └── workers/                 # Async worker pool (analysis_queue.py)
 │   └── tests/                       # Automated unit & regression tests
-├── tests/                           # 486 automated unit & integration tests
+├── tests/                           # 519 automated unit & integration tests
 ├── docker-compose.hardened.yml      # Production overlay (read-only rootfs, seccomp, containment)
 ├── deploy/security/                 # seccomp profiles for hardened analysis-engine
 ├── analysis-engine/                 # Containerized Analysis Microservice (Port 8001)
@@ -199,6 +199,9 @@ graph LR
 3. **APKTool ([`shared/sudarshan_core/engines/apktool_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/apktool_engine.py))**: Decompiles binary XML resources (`AndroidManifest.xml`) and extracts raw assets and layout XML files.
 4. **JADX ([`shared/sudarshan_core/engines/jadx_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/jadx_engine.py))**: Decompiles DEX bytecode into Java source code and scans for fraud-relevant code signatures (`AccessibilityService`, `SmsManager`, `DexClassLoader`, `TYPE_APPLICATION_OVERLAY`, OTP harvesting, etc.).
 
+### Visual Impersonation (VIDE) static inputs
+[`shared/sudarshan_core/engines/vide/`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/vide/) builds a `UIProfile` from Apktool layout XML and `assets/*.html` (`build_static_ui_profile()`). Lab baselines live under `shared/sudarshan_core/data/ui_baselines/`. Full specification: [`architecture/VIDE.md`](architecture/VIDE.md).
+
 ### Investigation Manifest ([`shared/sudarshan_core/models/manifest.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/models/manifest.py))
 Before sandbox execution, static findings are normalized into an `InvestigationManifest` serialized to `manifest.json`. The manifest defines capability flags, dynamic hook profile selection, and goal priorities.
 
@@ -237,6 +240,9 @@ Intercepts transparent HTTPS traffic via Docker sidecar (`mitmproxy:8080`), pars
 ### Agentic UI Explorer ([`agentic_explorer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/agentic_explorer.py))
 An autonomous UI navigation engine guided by an LLM planner and a 15-stage fraud goal DAG ([`goal_tracker.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/agentic/goal_tracker.py)). Operates with screen-hash loop detection, coordinate bounds validation, and deterministic fallback actions.
 
+### Visual Impersonation (VIDE)
+After dynamic analysis, [`safe_run_vide_analysis()`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/vide/pipeline.py) merges static `UIProfile` data with WebView HTML collected from Frida events (`collect_webview_html_from_frida_events()`). Results are passed to `calculate_risk_score(..., vide_result=...)` and persisted on the analysis payload as `vide`. See [`architecture/VIDE.md`](architecture/VIDE.md).
+
 ---
 
 ## 8. Risk Engine & Mathematical Models
@@ -252,6 +258,8 @@ $$BFCI_{\text{v2}} = \min\left(100.0, \sum_{c} W_c \cdot \min\left(1.0, \frac{\l
 ### 3. Fraud Risk Score ($FRS$)
 Nominal weights: $0.25 \times STEI + 0.35 \times Dynamic + 0.20 \times ThreatCorrelation + 0.20 \times BankingImpact$, renormalized over axes with data; `final_risk_score = min(base_frs × ai_confidence_multiplier, 100)`. Bands: `Safe` (≤30), `Suspicious` (≤60), `High Risk` (≤89), `Critical` (≥90). See [`risk_engine.py`](../shared/sudarshan_core/engines/risk_engine.py).
 
+**VIDE escalations:** When `vide_result` is present, rule **VIDE-F001** can raise the Banking Targeting (`BT`) axis and apply score floors / `critical_visual_cluster` or CH06 signer impersonation caps before band assignment (visual-only matches cap at High Risk unless clustered with high-risk static capabilities or signer hit). Details: [`architecture/VIDE.md`](architecture/VIDE.md) and [`architecture/08_DETERMINISTIC_RISK_ENGINE.md`](architecture/08_DETERMINISTIC_RISK_ENGINE.md) §8.
+
 ---
 
 ## 9. AI Intelligence Core & RAG Pipeline
@@ -266,10 +274,12 @@ Structured findings from static and dynamic analysis are passed to the AI Intell
 
 ## 10. Frontend Analyst Dashboard Architecture
 
-The React 18 SPA frontend provides three primary analytical views:
+Investigation views (`/fraud-card`, `/technical`, `/threat-intel`, `/chat`, `/history/:sha256`) share [`InvestigationShell.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/components/investigation/InvestigationShell.tsx): loads the active case via `AnalysisContext.loadCaseByHash`, renders `CaseHeader`, and provides `ScoreLedgerSlideOver`, `EvidenceDrawer`, and `AnalystNotesPanel` (notes API). [`useInvestigationModel`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/hooks/useInvestigationModel.ts) merges static findings with `GET /api/v1/cases/{sha256}/evidence` runtime records for the drawer.
 
-1. **Executive View ([`FraudCard.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/pages/FraudCard.tsx))**: High-level risk badge, plain-English narrative, recommended SOC actions, and regulatory advisory drafts.
-2. **Technical SOC View ([`TechnicalView.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/pages/TechnicalView.tsx))**: Detailed breakdown of permissions, hardcoded URLs, dangerous APIs, IOC panel, raw evidence tabs, and the **Causal Fraud Workflow Diagram** ([`WorkflowDiagram.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/components/WorkflowDiagram.tsx)).
+The React 18 SPA provides these primary analytical views:
+
+1. **Executive View ([`FraudCard.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/pages/FraudCard.tsx))**: High-level risk badge, plain-English narrative, recommended SOC actions, regulatory advisory drafts, and [`VisualImpersonationExecutiveCard`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/components/investigation/VisualImpersonationExecutiveCard.tsx) when `vide` is present.
+2. **Technical SOC View ([`TechnicalView.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/pages/TechnicalView.tsx))**: Permissions, URLs, dangerous APIs, IOC panel, evidence registry, [`VisualImpersonationPanel`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/components/investigation/VisualImpersonationPanel.tsx), raw evidence tabs, and the **Causal Fraud Workflow Diagram** ([`WorkflowDiagram.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/components/WorkflowDiagram.tsx)).
 3. **Threat Intelligence View ([`ThreatIntelView.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/pages/ThreatIntelView.tsx))**: VirusTotal detection ratios, AlienVault OTX pulses, AbuseIPDB reputation, and malware family classification.
 
 ---
@@ -281,7 +291,7 @@ The React 18 SPA frontend provides three primary analytical views:
 - **Header**: `Authorization: Bearer <jwt_token>`
 - **Response**: `AnalysisResponse` JSON object containing `sha256`, `case_id`, `family_classification`, `final_risk_score`, `risk_band`, `frs_breakdown`, `threat_scenario_table`, `fraud_workflow`, `intelligence_report`, `executive_view`, and `technical_view`.
 
-Related gateway routes (same `/api/v1` prefix): `POST /analyze/async`, `GET /status/{job_id}`, `GET /sandbox/status`, `GET /intelligence/{sha256}`, `GET /report/html/{sha256}`, `POST /chat/stream`.
+Related gateway routes (same `/api/v1` prefix): `POST /analyze/async`, `GET /status/{job_id}`, `GET /sandbox/status`, `GET /intelligence/{sha256}`, `GET /cases`, `GET /cases/{sha256}`, `GET /cases/{sha256}/evidence`, `GET|POST /cases/{sha256}/notes`, `GET /report/html/{sha256}`, `POST /chat/stream`.
 
 ### GET `/api/runtime/*` (Runtime Telemetry API Suite)
 - **`/api/runtime/status`**: Pipeline health summary and active `PipelineTracker` registry states.

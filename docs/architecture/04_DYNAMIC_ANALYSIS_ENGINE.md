@@ -197,6 +197,13 @@ Where $W_c$ is category weight, $N_c$ is event count, $M_c$ is saturation thresh
 ## 9. Fraud Workflow Reconstruction
 
 [`workflow_reconstructor.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/workflow_reconstructor.py) maps raw Frida events into MITRE ATT&CK causal stages:
+
 - **Full Account Takeover**: Accessibility Enable $\rightarrow$ Overlay Phishing $\rightarrow$ SMS Intercept $\rightarrow$ C2 Exfiltration.
 - **OTP Theft Chain**: SMS Intercept $\rightarrow$ C2 POST.
 - **Interactive UI Timeline**: Rendered in the frontend via [`WorkflowDiagram.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/components/WorkflowDiagram.tsx).
+
+---
+
+## 10. VIDE runtime inputs (WebView HTML)
+
+The **Visual Impersonation Detection Engine** ([`engines/vide/`](../../shared/sudarshan_core/engines/vide/)) consumes Frida events from `banking_trojan.bundle.js` (WebView `loadData` / `loadDataWithBaseURL`) via `collect_webview_html_from_frida_events()`. The analysis microservice runs `safe_run_vide_analysis()` after dynamic analysis and attaches `vide` to the consolidated result ([`analysis-engine/app/main.py`](../../analysis-engine/app/main.py)). Specification and verification matrix: [`VIDE.md`](VIDE.md).

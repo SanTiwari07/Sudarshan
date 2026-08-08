@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
+## 2026-08-08
+
+### Added
+- **VIDE (Visual Impersonation Detection Engine)**: `shared/sudarshan_core/engines/vide/` — static/dynamic UI profiling, baseline compare, rule **VIDE-F001**, CH06 signer registry; integrated in `analysis-engine/app/main.py` via `safe_run_vide_analysis()`; `vide` field on analysis and case payloads; dashboard `VisualImpersonationPanel` / `VisualImpersonationExecutiveCard`; unit tests `tests/unit/test_vide_*.py`.
+- **Investigation shell UI**: `frontend/src/components/investigation/InvestigationShell.tsx` wraps fraud-card, technical, threat-intel, chat, and `/history/:sha256` routes with shared `CaseHeader`, `ScoreLedgerSlideOver`, `EvidenceDrawer`, and `AnalystNotesPanel`; `useInvestigationModel` merges static + runtime evidence for the drawer.
+- **Cases API expansion**: `GET/POST /api/v1/cases/{sha256}/notes`, `GET /api/v1/cases/{sha256}/evidence` (Frida `evidence.json` via `evidence_loader.py`); role-scoped case list for `analyst`; `GET /api/v1/cases/{sha256}` returns full persisted record including `vide`.
+
+### Changed
+- **Automated test suite**: **519** tests collected (`pytest tests/ backend/tests --collect-only`, 2026-08-08).
+
+### Documentation
+- Synchronized `/docs` with VIDE, investigation shell, cases/evidence APIs, and test metric **519**; cross-linked [`architecture/VIDE.md`](architecture/VIDE.md) in the documentation portal index.
+
 ## 2026-08-06
 
 ### Added

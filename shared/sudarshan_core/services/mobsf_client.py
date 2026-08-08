@@ -32,6 +32,7 @@ import logging
 import os
 import re
 import time
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -69,6 +70,13 @@ MOBSF_POLL_INTERVAL_SECONDS: float = float(
     os.getenv("MOBSF_POLL_INTERVAL_SECONDS", "15")
 )
 MOBSF_POLL_MAX_SECONDS: float = float(os.getenv("MOBSF_POLL_MAX_SECONDS", "600"))
+
+MOBSF_RESULT_CACHE_VERSION = os.getenv("MOBSF_RESULT_CACHE_VERSION", "1")
+MOBSF_RESULT_CACHE_ENABLED = os.getenv("MOBSF_RESULT_CACHE", "true").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 # ─── Exceptions ───────────────────────────────────────────────────────────────
 
@@ -306,6 +314,12 @@ class MobSFClient:
         Full pipeline: upload → scan → report → parse.
         Returns a normalized dict consumed by Sudarshan's engines.
         """
+        file_sha256 = await asyncio.to_thread(self._sha256_file, apk_path)
+        cached = self._load_cached_report(file_sha256)
+        if cached is not None:
+            logger.info("MobSF cache hit for SHA-256 %s", file_sha256[:12])
+            return cached
+
         max_retries = 3
         scan_hash: Optional[str] = None
 
@@ -324,7 +338,10 @@ class MobSFClient:
                     await self._wait_for_report(scan_hash)
                     raw = await self.get_report(scan_hash)
                 scorecard = await self.get_scorecard(scan_hash)
-                return self._parse_report(raw, scorecard, scan_hash)
+                return self._finalize_report(
+                    file_sha256,
+                    self._parse_report(raw, scorecard, scan_hash),
+                )
 
             except MobSFNotAvailable:
                 raise
@@ -341,7 +358,10 @@ class MobSFClient:
                         await self._wait_for_report(scan_hash)
                         raw = await self.get_report(scan_hash)
                         scorecard = await self.get_scorecard(scan_hash)
-                        return self._parse_report(raw, scorecard, scan_hash)
+                        return self._finalize_report(
+                            file_sha256,
+                            self._parse_report(raw, scorecard, scan_hash),
+                        )
                     except Exception as poll_err:
                         logger.error(
                             "MobSF poll after timeout failed on attempt %s: %s",
@@ -360,6 +380,61 @@ class MobSFClient:
                     raise MobSFAnalysisError(str(e)) from e
             await asyncio.sleep(2.0 ** (attempt + 1))
         raise MobSFAnalysisError("MobSF analysis failed after retries")
+
+    @staticmethod
+    def _sha256_file(apk_path: str) -> str:
+        hasher = hashlib.sha256()
+        with open(apk_path, "rb") as f:
+            while chunk := f.read(1024 * 1024):
+                hasher.update(chunk)
+        return hasher.hexdigest()
+
+    def _cache_file(self, sha256: str) -> Path:
+        root = Path(os.getenv("UPLOADS_DIR", "/app/uploads"))
+        return root / sha256 / "mobsf_parsed_cache.json"
+
+    def _load_cached_report(self, sha256: str) -> Optional[Dict[str, Any]]:
+        if not MOBSF_RESULT_CACHE_ENABLED:
+            return None
+        path = self._cache_file(sha256)
+        if not path.is_file():
+            return None
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            if payload.get("cache_version") != MOBSF_RESULT_CACHE_VERSION:
+                return None
+            if payload.get("mobsf_host") != self.host:
+                return None
+            report = payload.get("report")
+            if isinstance(report, dict) and report.get("available"):
+                return report
+        except (OSError, json.JSONDecodeError, TypeError):
+            return None
+        return None
+
+    def _store_cached_report(self, sha256: str, report: Dict[str, Any]) -> None:
+        if not MOBSF_RESULT_CACHE_ENABLED or not report.get("available"):
+            return
+        path = self._cache_file(sha256)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                json.dumps(
+                    {
+                        "cache_version": MOBSF_RESULT_CACHE_VERSION,
+                        "mobsf_host": self.host,
+                        "sha256": sha256,
+                        "report": report,
+                    }
+                ),
+                encoding="utf-8",
+            )
+        except OSError as e:
+            logger.warning("MobSF cache write failed for %s: %s", sha256[:12], e)
+
+    def _finalize_report(self, sha256: str, report: Dict[str, Any]) -> Dict[str, Any]:
+        self._store_cached_report(sha256, report)
+        return report
 
     def _parse_report(
         self, raw: Dict[str, Any], scorecard: Dict[str, Any], scan_hash: str

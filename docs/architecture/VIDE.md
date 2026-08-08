@@ -15,7 +15,7 @@ Dynamic → frida_events (WebView loadData / loadDataWithBaseURL) + optional ui_
     → compare.py (40% strings / 35% tree / 25% colors, threshold 0.72)
     → VIDE-F001 + CH06 signer registry
     → risk_engine (BT boost, score floors, Critical only with cluster or signer)
-    → API `vide` → dashboard + RAG evidence block (facts only)
+    → API `vide` → dashboard; VIDE-F001 lines in `report.evidence` indexed under RAG `risk_engine` (no separate LLM scorer)
 ```
 
 ## Scoring

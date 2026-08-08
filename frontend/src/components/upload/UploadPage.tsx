@@ -22,7 +22,8 @@ const PIPELINE_OVERVIEW = [
 
 export default function UploadPage({ onAnalysisComplete }: UploadPageProps) {
   const session = useAnalysisSession(onAnalysisComplete);
-  const { phase, file, setFile, error, smoothProgress, result, isBusy, startAnalysis, reset } = session;
+  const { phase, file, setFile, error, smoothProgress, result, pipelineUi, isBusy, startAnalysis, reset } =
+    session;
 
   if (phase === 'complete' && result) {
     return <CompletionScreen fileName={file?.name ?? result.app_name ?? 'APK'} />;
@@ -35,6 +36,8 @@ export default function UploadPage({ onAnalysisComplete }: UploadPageProps) {
         progress={smoothProgress}
         error={phase === 'error' ? error : null}
         onRetry={phase === 'error' ? reset : undefined}
+        stageTitle={pipelineUi?.title}
+        stageDescription={pipelineUi?.description}
       />
     );
   }

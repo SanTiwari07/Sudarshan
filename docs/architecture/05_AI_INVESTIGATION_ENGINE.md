@@ -54,6 +54,8 @@ graph TD
 
 Implemented in [`gemini_rag.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/ai/gemini_rag.py).
 
+**VIDE facts:** There is no dedicated `vide` RAG section. Deterministic **VIDE-F001** strings are merged into `report.evidence` by [`risk_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/risk_engine.py) and indexed under the `risk_engine` chunk list (first 10 evidence lines). The dashboard reads the structured `vide` object directly for UI panels.
+
 ---
 
 ## 3. Gemini 2.5 Flash Standardization

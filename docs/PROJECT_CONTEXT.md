@@ -34,7 +34,7 @@ Do not cite **[CLAIMED]** items as fact. Several are recorded here precisely bec
 > AI may **not** decide malware verdicts.
 > Only deterministic evidence contributes to risk scoring.
 
-**[VERIFIED]** This invariant currently holds at the scoring layer. Identical recorded evidence produces a byte-identical verdict, and LLM-authored fields merged into the dynamic payload do not move the score. Verified across **486 / 486 tests collected** (`pytest tests/ backend/tests --collect-only`).
+**[VERIFIED]** This invariant currently holds at the scoring layer. Identical recorded evidence produces a byte-identical verdict, and LLM-authored fields merged into the dynamic payload do not move the score. Verified across **519 / 519 tests collected** (`pytest tests/ backend/tests --collect-only`).
 
 ---
 
@@ -81,6 +81,7 @@ Sudarshan BOI/
 │       │   ├── workflow_reconstructor.py Causal chain temporal reconstruction
 │       │   ├── agentic_explorer.py Agentic UI exploration orchestrator
 │       │   ├── frida_hooks/        banking_trojan.js, java_probe.js, bisect_sec.js
+│       │   ├── vide/               Visual impersonation detection (pipeline, compare, baselines)
 │       │   └── agentic/            planner.py, perception.py, goal_tracker.py, sanitizer.py, etc.
 │       ├── validation/             Corpus runner, stress/recovery, engineering reports
 │       └── sandbox/                Emulator abstraction (Genymotion / Android Studio / future)
@@ -94,6 +95,7 @@ Sudarshan BOI/
 │   ├── app/
 │   │   ├── main.py                 FastAPI Gateway entrypoint & lifecycle hooks
 │   │   ├── routes/                 upload.py, cases.py, report.py, intelligence.py, runtime_api.py
+│   │   ├── evidence_loader.py      Loads Frida evidence.json for cases API
 │   │   ├── auth/                   auth.py (JWT authentication & RBAC)
 │   │   ├── db/                     database.py (SQLite case store & IOC cache persistence)
 │   │   ├── ai/                     gemini_rag.py (RAG indexer), gemini_client.py
@@ -171,7 +173,7 @@ static / inconclusive dynamic: dynamic axis excluded; correlation excluded when 
 
 ## 5. Verification & Test Suite
 
-**[VERIFIED]** **486 / 486 tests collected & verified** (`pytest tests/ backend/tests --collect-only`, 2026-08-06).
+**[VERIFIED]** **519 / 519 tests collected & verified** (`pytest tests/ backend/tests --collect-only`, 2026-08-08).
 
 Execution command:
 ```powershell

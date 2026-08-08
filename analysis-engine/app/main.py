@@ -273,70 +273,91 @@ async def _execute_analysis_pipeline(
     timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
 ) -> Dict[str, Any]:
     """Execute the full static & dynamic analysis pipeline with hard timeout protection."""
+    from sudarshan_core.engines.pipeline_timing import PipelineTimer
+
+    timer = PipelineTimer(job_id=sha256_hash[:12], case_id=sha256_hash)
     logger.info(f"[Engine] Executing analysis pipeline for SHA-256: {sha256_hash} (Timeout: {timeout_seconds}s)")
 
     async def _run():
-        # 1. Primary Static Analysis via Androguard / MobSF
-        #    analyze_apk is synchronous and CPU-bound (Androguard parses the whole
-        #    DEX). Called directly it pins the event loop, which meant /health
-        #    stopped answering mid-analysis and the compose healthcheck could
-        #    restart the container out from under a running job.
-        androguard_output = await asyncio.to_thread(analyze_apk, apk_path)
-        flags = androguard_output.flags
-        package_name = androguard_output.package_name
-        permissions = androguard_output.permissions or []
+        # 1. Primary Static Analysis — Androguard, MobSF, APKTool, JADX in parallel where safe
+        async def _run_androguard():
+            timer.stage_started("NATIVE_ANALYSIS")
+            out = await asyncio.to_thread(analyze_apk, apk_path)
+            timer.stage_completed("NATIVE_ANALYSIS")
+            return out
+
+        androguard_task = asyncio.create_task(_run_androguard())
 
         # MobSF is OPTIONAL enrichment. Unguarded, an unreachable MOBSF_HOST
         # raised MobSFAnalysisError straight out of the pipeline and the whole
         # request 500'd — so the gateway silently fell back to its own
         # (toolchain-less) local run. The backend has always guarded this
         # (routes/upload.py); the engine did not.
-        mobsf_res = None
         mobsf_budget = int(os.getenv("MOBSF_MAX_SECONDS", "0") or "0")
 
         async def _run_mobsf() -> Optional[Dict[str, Any]]:
+            timer.stage_started("MOBSF")
             try:
                 client = MobSFClient()
                 if mobsf_budget > 0:
-                    return await asyncio.wait_for(
+                    res = await asyncio.wait_for(
                         client.analyze(apk_path),
                         timeout=float(mobsf_budget),
                     )
-                return await client.analyze(apk_path)
+                else:
+                    res = await client.analyze(apk_path)
+                timer.stage_completed("MOBSF")
+                return res
             except asyncio.TimeoutError:
+                timer.stage_failed("MOBSF", "MOBSF_MAX_SECONDS exceeded")
                 logger.warning(
                     "[Engine] MobSF exceeded MOBSF_MAX_SECONDS=%ss; continuing without MobSF",
                     mobsf_budget,
                 )
                 return None
             except (MobSFAnalysisError, MobSFNotAvailable) as e:
+                timer.stage_failed("MOBSF", str(e))
                 logger.warning("[Engine] MobSF unavailable, continuing without it: %s", e)
                 return None
             except Exception as e:
+                timer.stage_failed("MOBSF", str(e))
                 logger.warning("[Engine] MobSF failed unexpectedly, continuing without it: %s", e)
                 return None
 
         async def _run_apktool():
             if await asyncio.to_thread(_apktool.is_available):
-                return await asyncio.to_thread(_apktool.analyze, apk_path)
+                timer.stage_started("APKTOOL")
+                res = await asyncio.to_thread(_apktool.analyze, apk_path)
+                timer.stage_completed("APKTOOL")
+                return res
             return None
 
         async def _run_jadx():
             if await asyncio.to_thread(_jadx.is_available):
-                return await asyncio.to_thread(_jadx.analyze, apk_path)
+                timer.stage_started("JADX")
+                res = await asyncio.to_thread(_jadx.analyze, apk_path)
+                timer.stage_completed("JADX")
+                return res
             return None
 
         if os.getenv("MOBSF_HOST"):
-            mobsf_res, apktool_res, jadx_res = await asyncio.gather(
+            androguard_output, mobsf_res, apktool_res, jadx_res = await asyncio.gather(
+                androguard_task,
                 _run_mobsf(),
                 _run_apktool(),
                 _run_jadx(),
             )
         else:
-            apktool_res, jadx_res = await asyncio.gather(
+            androguard_output, apktool_res, jadx_res = await asyncio.gather(
+                androguard_task,
                 _run_apktool(),
                 _run_jadx(),
             )
+            mobsf_res = None
+
+        flags = androguard_output.flags
+        package_name = androguard_output.package_name
+        permissions = androguard_output.permissions or []
 
         flags_dict = {
             "dangerous_permissions": permissions,
@@ -362,6 +383,7 @@ async def _execute_analysis_pipeline(
 
         # 3. Investigation Manifest Generation (blocking disk I/O)
         analysis_mode_str = "androguard+mobsf" if mobsf_res else "androguard"
+        timer.stage_started("MANIFEST")
         manifest = await asyncio.to_thread(
             build_manifest,
             sha256=sha256_hash,
@@ -378,12 +400,15 @@ async def _execute_analysis_pipeline(
         manifest_dir = UPLOADS_DIR / sha256_hash
         await asyncio.to_thread(manifest_dir.mkdir, parents=True, exist_ok=True)
         await asyncio.to_thread(manifest.to_file, manifest_dir / "manifest.json")
+        timer.stage_completed("MANIFEST")
 
         # 4. Dynamic Sandbox Analysis via Frida & ADB
+        timer.stage_started("AGENTIC_EXPLORER")
         dynamic_result = await run_frida_analysis(
             apk_path=apk_path,
             package_name=package_name,
         )
+        timer.stage_completed("AGENTIC_EXPLORER")
 
         # 5. mitmproxy HAR Net Ingest
         har_path = os.getenv("MITMPROXY_HAR_PATH")
@@ -398,12 +423,14 @@ async def _execute_analysis_pipeline(
                 logger.warning(f"[Engine] mitmproxy HAR ingest notice: {e}")
 
         # 6. Threat Correlation & Risk Scoring
+        timer.stage_started("THREAT_CORRELATION")
         threat_corr = await correlate(
             sha256=sha256_hash,
             urls=flags.hardcoded_urls_ips,
             package_name=package_name,
             dynamic_urls=extract_dynamic_urls(dynamic_result),
         )
+        timer.stage_completed("THREAT_CORRELATION")
 
         if dynamic_result and isinstance(dynamic_result, dict):
             dynamic_result["has_high_risk_capabilities"] = bool(
@@ -416,6 +443,7 @@ async def _execute_analysis_pipeline(
         if apktool_res and apktool_res.ui_profile:
             suspect_ui = UIProfile.from_dict(apktool_res.ui_profile)
 
+        timer.stage_started("VIDE_DYNAMIC")
         vide_result = await asyncio.to_thread(
             safe_run_vide_analysis,
             suspect_profile=suspect_ui,
@@ -424,7 +452,9 @@ async def _execute_analysis_pipeline(
             certificate=(mobsf_res or {}).get("certificate", {}),
             apktool_available=bool(apktool_res and apktool_res.available),
         )
+        timer.stage_completed("VIDE_DYNAMIC")
 
+        timer.stage_started("RISK")
         risk_output = await asyncio.to_thread(
             compute_fraud_risk_score,
             flags=flags,
@@ -436,6 +466,7 @@ async def _execute_analysis_pipeline(
             all_permissions=permissions,
             vide_result=vide_result,
         )
+        timer.stage_completed("RISK")
 
         # MobSF is the only source for component inventory, certificate and
         # AppSec score. When it is not configured these stay empty/None — they
@@ -499,6 +530,7 @@ async def _execute_analysis_pipeline(
                 "vide_ui": bool(vide_result.get("visual_impersonation_detected")),
             },
             "vide": vide_result,
+            "_pipeline": {"stage_timings": timer.snapshot()["stage_timings"]},
         }
 
     # The timeout only has teeth now that every blocking step is dispatched to a

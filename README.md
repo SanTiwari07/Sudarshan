@@ -5,7 +5,7 @@
   <p><i>Prepared and Submitted for Bank of India and IIT Hyderabad under the BOI Hackathon 2026</i></p>
   
   <p>
-    <b>486</b> Passing Unit & Integration Tests &nbsp;&nbsp;|&nbsp;&nbsp;
+    <b>519</b> Passing Unit & Integration Tests &nbsp;&nbsp;|&nbsp;&nbsp;
     <b>Deterministic Fraud Scoring</b> &nbsp;&nbsp;|&nbsp;&nbsp;
     <b>Containerized Microservice Architecture</b>
   </p>
@@ -31,7 +31,7 @@
 
 A malicious Android application can execute account takeover (ATO), OTP theft, or overlay phishing within **90 seconds** of installation. Conversely, a financial fraud analyst typically begins an investigation days later. **Sudarshan** bridges this critical time gap by delivering an end-to-end autonomous mobile threat intelligence platform specifically tailored for banking fraud operations.
 
-Rather than producing generic static vulnerability summaries, Sudarshan performs deep static code decompilation (via **MobSF**, **Androguard**, **APKTool**, and **JADX**), autonomous dynamic runtime sandbox execution (via **Frida 17** with ART deoptimization and **mitmproxy** transparent HTTPS decryption), deterministic multi-axis risk scoring ($STEI$, $BFCI\text{ v2}$, $FRS$), and causal workflow reconstruction. Structured findings are indexed into an evidence-constrained **Gemini 2.5 Flash** RAG pipeline to generate analyst-actionable threat intelligence cards, MITRE ATT&CK mappings, regulatory customer advisories, and STIX 2.1 feeds.
+Rather than producing generic static vulnerability summaries, Sudarshan performs deep static code decompilation (via **MobSF**, **Androguard**, **APKTool**, and **JADX**), autonomous dynamic runtime sandbox execution (via **Frida 17** with ART deoptimization and **mitmproxy** transparent HTTPS decryption), deterministic **VIDE** visual-impersonation detection against lab UI baselines, multi-axis risk scoring ($STEI$, $BFCI\text{ v2}$, $FRS$), and causal workflow reconstruction. Structured findings are indexed into an evidence-constrained **Gemini 2.5 Flash** RAG pipeline to generate analyst-actionable threat intelligence cards, MITRE ATT&CK mappings, regulatory customer advisories, and STIX 2.1 feeds.
 
 ---
 
@@ -347,7 +347,10 @@ The FastAPI backend exposes versioned REST API endpoints (`/api/v1`):
 | `POST` | `/api/v1/analyze` | Bearer Token | Upload APK, validate manifest, dispatch synchronous analysis. |
 | `POST` | `/api/v1/analyze/async` | Bearer Token | Enqueue analysis job; poll `GET /api/v1/status/{job_id}`. |
 | `GET` | `/api/v1/cases` | Bearer Token | Retrieve paginated historical analysis cases from SQLite. |
-| `GET` | `/api/v1/cases/{sha256}` | Bearer Token | Retrieve a single stored case by hash. |
+| `GET` | `/api/v1/cases/{sha256}` | Bearer Token | Retrieve a single stored case by hash (full persisted JSON, including `vide`). |
+| `GET` | `/api/v1/cases/{sha256}/evidence` | Bearer Token | Structured Frida `evidence.json` records (`limit`, optional `severity` filter). |
+| `GET` | `/api/v1/cases/{sha256}/notes` | Bearer Token | List analyst notes for a case. |
+| `POST` | `/api/v1/cases/{sha256}/notes` | Bearer Token | Append an analyst note (`text`, optional `author`). |
 | `GET` | `/api/v1/intelligence/{sha256}` | Bearer Token | Threat intelligence correlation for a case hash. |
 | `GET` | `/api/v1/report/html/{sha256}` | Bearer Token | Export standalone HTML security report. |
 | `GET` | `/api/v1/report/pdf/{sha256}` | Bearer Token | PDF export (HTML report is primary). |
@@ -375,7 +378,7 @@ Run the automated bootstrapper script from PowerShell:
 ```
 
 ### Automated Test Suite Execution
-Run the full automated test suite (**486 tests collected**):
+Run the full automated test suite (**519 tests collected**):
 ```powershell
 $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests
 ```
@@ -398,15 +401,16 @@ The detailed documentation portal is available under [`docs/`](file:///d:/Projec
 | [**Docs Portal Index**](docs/README.md) | Central entry point, component inventory, data flow specifications. |
 | [**01 — Introduction**](docs/01_INTRODUCTION.md) | Problem statement, threat model, target banking operational scope. |
 | [**02 — System Overview**](docs/02_SYSTEM_OVERVIEW.md) | Platform architecture, microservices layout, container topology. |
-| [**03 — Static Threat Intelligence**](docs/architecture/03_STATIC_THREAT_INTELLIGENCE.md) | APKTool, JADX, MobSF, Androguard, Manifest serialization, STEI formula. |
+| [**03 — Static Threat Intelligence**](docs/architecture/03_STATIC_THREAT_INTELLIGENCE.md) | APKTool, JADX, MobSF, Androguard, Manifest serialization, STEI formula, VIDE static UI profiles. |
+| [**VIDE — Visual Impersonation**](docs/architecture/VIDE.md) | Deterministic UI baseline compare, VIDE-F001, signer registry, FRS escalation. |
 | [**04 — Dynamic Analysis Engine**](docs/architecture/04_DYNAMIC_ANALYSIS_ENGINE.md) | Frida 17 PID attach, ART deopt, mitmproxy HAR, Agentic Explorer 15-stage DAG. |
 | [**05 — AI Investigation Engine**](docs/architecture/05_AI_INVESTIGATION_ENGINE.md) | RAG graph index, Gemini 2.5 Flash, prompt sanitization. |
 | [**06 — Evidence Processing**](docs/architecture/06_EVIDENCE_PROCESSING.md) | EventBus, EvidenceStore, WorkflowReconstructor causal chain engine. |
 | [**07 — Fraud Intelligence Engine**](docs/architecture/07_FRAUD_INTELLIGENCE_ENGINE.md) | Threat correlation (VirusTotal/OTX/AbuseIPDB) & family classifier. |
 | [**08 — Deterministic Risk Engine**](docs/architecture/08_DETERMINISTIC_RISK_ENGINE.md) | Math formulas for 5-axis STEI, BFCI v2, FRS, Threat Scenario Matrix. |
 | [**09 — AI Report Generation**](docs/architecture/09_AI_REPORT_GENERATION.md) | HTML security reports, PDF report exporter, JSON report feed. |
-| [**10 — Analyst Dashboard**](docs/dashboard/10_DASHBOARD.md) | React 18 SPA workflow, Executive Fraud Card, Technical View, Workflow UI. |
-| [**11 — Evaluation Strategy**](docs/evaluation/11_EVALUATION.md) | Automated testing suite (`pytest tests/ backend/tests`), benchmarks, determinism baselines. |
+| [**10 — Analyst Dashboard**](docs/dashboard/10_DASHBOARD.md) | React 18 SPA, `InvestigationShell`, Executive Fraud Card, Technical View, VIDE panels, Workflow UI. |
+| [**11 — Evaluation Strategy**](docs/evaluation/11_EVALUATION.md) | Automated testing suite (**519** tests in `pytest tests/ backend/tests`), benchmarks, determinism baselines. |
 | [**How to Run Guide**](docs/HOW_TO_RUN.md) | Comprehensive installation, configuration, and execution guide. |
 | [**DAE Current State**](docs/DAE_CURRENT_STATE.md) | Complete resolution audit and technical current state document. |
 | [**Documentation Audit Report**](docs/DOCUMENTATION_AUDIT_REPORT.md) | Formal documentation audit, file mapping, and verification report. |

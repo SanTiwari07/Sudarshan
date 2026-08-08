@@ -68,6 +68,7 @@ Together, APKTool provides structural & asset visibility while JADX provides beh
 Wraps the APKTool CLI to decompile resources and extract decoded XML files when MobSF is offline:
 
 - **Decoded Manifest Extraction**: Reads `AndroidManifest.xml` in human-readable text format.
+- **VIDE static UI profile**: Layout XML and `assets/*.html` extracted here feed [`build_static_ui_profile()`](../../shared/sudarshan_core/engines/vide/ui_profile.py) for deterministic baseline comparison (see [`VIDE.md`](VIDE.md)).
 - **Obfuscation Detection**: Counts single-character resource files (e.g., `a.xml`, `b.png`) to measure resource obfuscation entropy.
 - **Suspicious Resource Scanning**: Scans text resource files for embedded IP addresses, C2 URLs, and permission strings.
 - **Graceful Fallback**: If `apktool` is not in PATH, analysis logs a warning and continues cleanly using native parser/JADX.

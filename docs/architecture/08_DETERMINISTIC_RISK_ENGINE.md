@@ -18,6 +18,7 @@ Test Suite:          backend/tests/test_risk_engine.py, backend/tests/test_bfci_
 - [5. Fraud Risk Score (FRS)](#5-fraud-risk-score-frs)
 - [6. Static Risk Fallback Engine](#6-dynamic-axis-exclusion-static-only-and-inconclusive-runs)
 - [7. Threat Scenario Correlation Matrix](#7-threat-scenario-correlation-matrix)
+- [8. VIDE deterministic escalations](#8-vide-deterministic-escalations)
 
 ---
 
@@ -120,3 +121,15 @@ class ThreatScenarioRow(BaseModel):
     evidence: str
     confidence: int           # 0–100
 ```
+
+---
+
+## 8. VIDE deterministic escalations
+
+[`calculate_risk_score`](../../shared/sudarshan_core/engines/risk_engine.py) accepts optional `vide_result` from [`safe_run_vide_analysis()`](../../shared/sudarshan_core/engines/vide/pipeline.py). Deterministic effects (no LLM):
+
+- **VIDE-F001** raises the Banking Targeting (`BT`) axis inside `_axis_bt()` when `visual_impersonation_detected` is set on flags derived from `vide_result`.
+- **Visual-only match**: score capped toward High Risk (~75); **not** promoted to Critical without `critical_visual_cluster` (visual + high-risk static capability at confidence ≥ 0.80) or **CH06 signer impersonation** (`signer_impersonation.detected`).
+- VIDE evidence lines are merged into the top-level `evidence` list (capped for API payload) and appear in RAG under the `risk_engine` section via those strings.
+
+Full compare weights, baselines, and verification status: [`VIDE.md`](VIDE.md).

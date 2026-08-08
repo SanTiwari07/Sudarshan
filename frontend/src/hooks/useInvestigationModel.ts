@@ -32,10 +32,11 @@ function buildStaticEvidence(data: FraudCardData): InvestigationEvidence[] {
   const out: InvestigationEvidence[] = [];
   let n = 0;
   data.manifest_findings?.forEach((f, i) => {
+    if (!f || typeof f !== 'object' || typeof f.title !== 'string') return;
     out.push({
       id: `STAT-MAN-${i}`,
       title: f.title,
-      severity: f.severity,
+      severity: f.severity || 'info',
       confidence: 90,
       category: 'static',
       sourceEngine: data.analysis_mode?.includes('mobsf') ? 'MobSF' : 'Androguard',
@@ -44,10 +45,11 @@ function buildStaticEvidence(data: FraudCardData): InvestigationEvidence[] {
     });
   });
   data.code_findings?.forEach((f, i) => {
+    if (!f || typeof f !== 'object' || typeof f.title !== 'string') return;
     out.push({
       id: `STAT-CODE-${i}`,
       title: f.title,
-      severity: f.severity,
+      severity: f.severity || 'info',
       confidence: 88,
       category: 'static',
       sourceEngine: 'Static Engine',

@@ -22,6 +22,7 @@ Future development focuses on advancing from user-space application hooking to u
 ```text
 [ Current Baseline Platform ]
 - User-Space Frida Instrumentation (Java.deoptimizeEverything)
+- Deterministic VIDE visual impersonation detection (lab baselines; device WebView path gated)
 - In-Memory Python Async Queue (analysis_queue.py)
 - Host sandbox via SandboxProvider (Genymotion Desktop default; Android Studio AVD optional)
 - In-Memory Gemini RAG Evidence Index

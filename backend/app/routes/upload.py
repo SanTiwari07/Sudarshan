@@ -54,7 +54,7 @@ from app.ai.gemini_rag import build_investigation_index
 from app.routes.report import cache_report
 from sudarshan_core.services.mobsf_client import MobSFAnalysisError, MobSFClient, MobSFNotAvailable
 from sudarshan_core.services.threat_correlator import correlate, extract_dynamic_urls
-from app.workers.analysis_queue import create_job, enqueue, get_job, persist_job
+from app.workers.analysis_queue import create_job, enqueue, get_job, persist_job, update_job_pipeline
 from app.rate_limit import limiter
 from sudarshan_core.models.manifest import build_manifest, InvestigationManifest
 from sudarshan_core.security.sandbox_containment import gateway_dynamic_allowed
@@ -63,6 +63,26 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _mobsf = MobSFClient()
+
+
+def _pipeline_progress_callback(job_id: Optional[str]):
+    if not job_id:
+        return None
+
+    def _on_update(snapshot: Dict[str, Any]) -> None:
+        update_job_pipeline(job_id, snapshot)
+
+    return _on_update
+
+
+def _make_pipeline_timer(job_id: Optional[str], case_id: str):
+    from sudarshan_core.engines.pipeline_timing import PipelineTimer
+
+    return PipelineTimer(
+        job_id=job_id or case_id[:12],
+        case_id=case_id,
+        on_update=_pipeline_progress_callback(job_id),
+    )
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -379,6 +399,7 @@ async def _enrich_engine_result(
     engine_result: Dict[str, Any],
     sha256_hash: str,
     analyst_id: Optional[int],
+    timer=None,
 ) -> Dict[str, Any]:
     """
     Bring an analysis-engine result up to the gateway's response contract.
@@ -427,7 +448,14 @@ async def _enrich_engine_result(
 
     # LLM/RAG synthesis — the engine has no LLM, which is why returning its
     # result raw produced KeyError: 'intelligence_report'.
+    from sudarshan_core.engines.pipeline_timing import OrchestratorStage
+
+    if timer:
+        timer.set_orchestrator_stage(OrchestratorStage.INTELLIGENCE_GENERATION)
+
     try:
+        if timer:
+            timer.stage_started("GEMINI", "Gemini 2.5 Flash narrative")
         result["intelligence_report"] = await analyze_with_llm(
             flags=flags_dict,
             family=family,
@@ -450,7 +478,11 @@ async def _enrich_engine_result(
             dynamic=result.get("dynamic_result"),
             vide_result=result.get("vide"),
         ) or {}
+        if timer:
+            timer.stage_completed("GEMINI")
     except Exception as e:
+        if timer:
+            timer.stage_failed("GEMINI", str(e))
         # Degrade visibly rather than failing the analysis.
         logger.warning(f"[Orchestrator] LLM synthesis failed on engine result: {e}")
         result["intelligence_report"] = {
@@ -462,7 +494,14 @@ async def _enrich_engine_result(
             "confidence": "Low",
         }
 
+    if timer:
+        timer.set_orchestrator_stage(OrchestratorStage.PERSISTING)
+        timer.stage_started("PERSISTENCE", "case store, report cache, RAG index")
     await _persist_and_index(sha256_hash, result, analyst_id)
+    if timer:
+        timer.stage_completed("PERSISTENCE")
+        timer.set_orchestrator_stage(OrchestratorStage.COMPLETED)
+        result["pipeline_timing"] = timer.to_dict()
     return result
 
 
@@ -472,27 +511,28 @@ async def _run_analysis_pipeline(
     temp_path: str,
     sha256_hash: str,
     analyst_id: Optional[int] = None,
+    job_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Full analysis pipeline. Returns a dict that can be serialised as AnalysisResponse.
     Delegates to analysis-engine microservice if available.
     """
-    # 1. Attempt containerized microservice execution first.
-    #
-    # The engine owns the toolchain: APKTool and JADX exist ONLY in its image,
-    # so a local fallback silently skips resource and Java decompilation. It is
-    # also the only container with memory/CPU limits and no-new-privileges, so
-    # the fallback runs malware in the unrestricted gateway.
-    #
-    # Its result is ENRICHED here rather than returned raw. Returning it raw
-    # skipped LLM/RAG synthesis (which the engine cannot do — no LLM there),
-    # and also skipped save_case / cache_report / build_investigation_index, so
-    # a delegated analysis was never persisted, never exportable and never
-    # indexed for the AI assistant.
+    from sudarshan_core.engines.pipeline_timing import OrchestratorStage
+
+    timer = _make_pipeline_timer(job_id, sha256_hash)
+    timer.set_orchestrator_stage(OrchestratorStage.VALIDATING)
+
+    timer.stage_started("ENGINE_DELEGATION", "analysis-engine microservice")
+    timer.set_orchestrator_stage(OrchestratorStage.ANALYSIS_ENGINE)
     engine_result = await _call_analysis_engine(temp_path, sha256_hash)
+    timer.stage_completed("ENGINE_DELEGATION")
+
     if engine_result:
+        pipeline_meta = engine_result.pop("_pipeline", None)
+        if pipeline_meta:
+            timer.merge_engine_timings(pipeline_meta)
         logger.info(f"[Orchestrator] Enriching analysis-engine result for {sha256_hash}")
-        return await _enrich_engine_result(engine_result, sha256_hash, analyst_id)
+        return await _enrich_engine_result(engine_result, sha256_hash, analyst_id, timer=timer)
 
     if not gateway_dynamic_allowed():
         raise HTTPException(
@@ -531,14 +571,37 @@ async def _run_analysis_pipeline(
     trackers_data: list = []
     emails_data: list = []
 
+    timer.set_orchestrator_stage(OrchestratorStage.STATIC_ANALYSIS)
     mobsf_available = await _mobsf.is_available()
+    androguard_output = None
+
+    async def _run_native() -> Any:
+        timer.stage_started("NATIVE_ANALYSIS", "Androguard static analyzer")
+        try:
+            out = await asyncio.to_thread(analyze_apk, temp_path)
+            timer.stage_completed("NATIVE_ANALYSIS")
+            return out
+        except Exception as e:
+            timer.stage_failed("NATIVE_ANALYSIS", str(e))
+            raise
+
+    async def _run_mobsf() -> Optional[Dict]:
+        timer.stage_started("MOBSF", "MobSF static engine")
+        try:
+            report = await _mobsf.analyze(temp_path)
+            timer.stage_completed("MOBSF")
+            return report
+        except (MobSFAnalysisError, MobSFNotAvailable) as e:
+            timer.stage_failed("MOBSF", str(e))
+            return None
+        except Exception as e:
+            timer.stage_failed("MOBSF", str(e))
+            return None
 
     if mobsf_available:
-        try:
-            logger.info("MobSF available — using MobSF analysis engine")
-            mobsf_report = await _mobsf.analyze(temp_path)
+        mobsf_report, androguard_output = await asyncio.gather(_run_mobsf(), _run_native())
+        if mobsf_report:
             analysis_mode = "mobsf"
-
             package_name = mobsf_report.get("package_name") or "Unknown"
             all_permissions = _mobsf.get_all_permissions(mobsf_report)
             flags_dict = _mobsf.extract_flags(mobsf_report)
@@ -551,8 +614,6 @@ async def _run_analysis_pipeline(
             hardcoded_secrets = mobsf_report.get("hardcoded_secrets", [])
             appsec_score = mobsf_report.get("appsec_score")
             mobsf_scan_hash = mobsf_report.get("scan_hash")
-
-            # ── MobSF enrichment fields — previously discarded ──────────────────
             providers = mobsf_report.get("providers", [])[:20]
             exported_activities = mobsf_report.get("exported_activities", [])
             exported_services = mobsf_report.get("exported_services", [])
@@ -561,7 +622,6 @@ async def _run_analysis_pipeline(
             network_security_data = mobsf_report.get("network_security", {})
             trackers_data = mobsf_report.get("trackers", [])
             emails_data = mobsf_report.get("emails", [])[:50]
-
             for mf in mobsf_report.get("manifest_analysis", []):
                 try:
                     manifest_findings.append(ManifestFinding(**mf))
@@ -572,22 +632,22 @@ async def _run_analysis_pipeline(
                     code_findings.append(CodeFinding(**cf))
                 except Exception:
                     pass
-
             logger.info(f"MobSF analysis complete: pkg={package_name}")
-
-        except (MobSFAnalysisError, MobSFNotAvailable) as e:
-            logger.warning(f"MobSF failed ({e}), falling back to Androguard")
+        elif androguard_output:
+            logger.warning("MobSF failed — using Androguard primary output")
             mobsf_available = False
 
-    if not mobsf_available:
-        logger.info("Using Androguard fallback")
-        androguard_output = await asyncio.to_thread(analyze_apk, temp_path)
+    if not mobsf_available or not mobsf_report:
+        if androguard_output is None:
+            androguard_output = await _run_native()
+        logger.info("Using Androguard for package metadata")
         package_name = androguard_output.package_name
         all_permissions = androguard_output.permissions or []
-        flags_dict = _flags_to_dict(androguard_output.flags)
+        if not flags_dict:
+            flags_dict = _flags_to_dict(androguard_output.flags)
         suspicious_strings = androguard_output.suspicious_strings
 
-    # ── STEP 1.5a: APKTool + JADX Enrichment (optional, gracefully skipped if not installed) ──
+    # ── STEP 1.5a: APKTool + JADX Enrichment (parallel when available) ──
     apktool_result = None
     jadx_result = None
     try:
@@ -595,41 +655,52 @@ async def _run_analysis_pipeline(
         from sudarshan_core.engines.jadx_engine import JadxEngine
         _apktool = ApktoolEngine()
         _jadx = JadxEngine()
-        if _apktool.is_available():
-            apktool_result = await asyncio.to_thread(_apktool.analyze, temp_path)
-            if apktool_result.available:
-                # Enrich suspicious_strings with resource-level URL hits
-                suspicious_strings = list(dict.fromkeys(
-                    suspicious_strings + apktool_result.resource_strings
-                ))[:100]
-                logger.info(
-                    f"[APKTool] Enrichment: {len(apktool_result.suspicious_resources)} suspicious resources, "
-                    f"{apktool_result.obfuscated_resource_count} obfuscated names"
-                )
-        if _jadx.is_available():
-            jadx_result = await asyncio.to_thread(_jadx.analyze, temp_path)
-            if jadx_result.available:
-                # Promote JADX-detected fraud patterns into flags_dict
-                for hit in jadx_result.fraud_class_hits:
-                    label = hit.split(":")[0]
-                    if label == "ACCESSIBILITY_SERVICE":
-                        flags_dict["has_accessibility_abuse"] = True
-                    elif label == "SMS_RECEIVER":
-                        flags_dict["has_sms_read_write"] = True
-                    elif label in ("OVERLAY_WINDOW", "OVERLAY_DRAW"):
-                        flags_dict["has_system_alert_window"] = True
-                    elif label == "DEVICE_ADMIN":
-                        flags_dict["has_device_admin"] = True
-                    elif label == "DYNAMIC_CLASS_LOAD":
-                        flags_dict["has_dynamic_code_loading"] = True
-                # Merge JADX-extracted URL strings
-                suspicious_strings = list(dict.fromkeys(
-                    suspicious_strings + jadx_result.suspicious_strings
-                ))[:100]
-                logger.info(
-                    f"[JADX] Enrichment: {len(jadx_result.fraud_class_hits)} fraud class hits, "
-                    f"{jadx_result.decompiled_class_count} classes decompiled"
-                )
+
+        async def _apktool_task():
+            if not await asyncio.to_thread(_apktool.is_available):
+                return None
+            timer.stage_started("APKTOOL")
+            res = await asyncio.to_thread(_apktool.analyze, temp_path)
+            timer.stage_completed("APKTOOL")
+            return res
+
+        async def _jadx_task():
+            if not await asyncio.to_thread(_jadx.is_available):
+                return None
+            timer.stage_started("JADX")
+            res = await asyncio.to_thread(_jadx.analyze, temp_path)
+            timer.stage_completed("JADX")
+            return res
+
+        apktool_result, jadx_result = await asyncio.gather(_apktool_task(), _jadx_task())
+        if apktool_result and apktool_result.available:
+            suspicious_strings = list(dict.fromkeys(
+                suspicious_strings + apktool_result.resource_strings
+            ))[:100]
+            logger.info(
+                f"[APKTool] Enrichment: {len(apktool_result.suspicious_resources)} suspicious resources, "
+                f"{apktool_result.obfuscated_resource_count} obfuscated names"
+            )
+        if jadx_result and jadx_result.available:
+            for hit in jadx_result.fraud_class_hits:
+                label = hit.split(":")[0]
+                if label == "ACCESSIBILITY_SERVICE":
+                    flags_dict["has_accessibility_abuse"] = True
+                elif label == "SMS_RECEIVER":
+                    flags_dict["has_sms_read_write"] = True
+                elif label in ("OVERLAY_WINDOW", "OVERLAY_DRAW"):
+                    flags_dict["has_system_alert_window"] = True
+                elif label == "DEVICE_ADMIN":
+                    flags_dict["has_device_admin"] = True
+                elif label == "DYNAMIC_CLASS_LOAD":
+                    flags_dict["has_dynamic_code_loading"] = True
+            suspicious_strings = list(dict.fromkeys(
+                suspicious_strings + jadx_result.suspicious_strings
+            ))[:100]
+            logger.info(
+                f"[JADX] Enrichment: {len(jadx_result.fraud_class_hits)} fraud class hits, "
+                f"{jadx_result.decompiled_class_count} classes decompiled"
+            )
     except Exception as e:
         logger.warning(f"[Static Enrichment] APKTool/JADX enrichment failed (non-critical): {e}")
 
@@ -637,6 +708,7 @@ async def _run_analysis_pipeline(
     apk_artifact_dir = artifact_dir_for(temp_path)
     manifest: Optional[InvestigationManifest] = None
     try:
+        timer.stage_started("MANIFEST")
         manifest = build_manifest(
             sha256=sha256_hash,
             package_name=package_name,
@@ -650,6 +722,7 @@ async def _run_analysis_pipeline(
             receivers=receivers,
         )
         manifest.to_file(apk_artifact_dir / "manifest.json")
+        timer.stage_completed("MANIFEST")
         logger.info(
             f"[Manifest] Generated: hook_profiles={manifest.hook_profiles}, "
             f"priorities={{A:{manifest.goal_priority_config.accessibility_priority},"
@@ -657,14 +730,17 @@ async def _run_analysis_pipeline(
             f"O:{manifest.goal_priority_config.overlay_priority}}}"
         )
     except Exception as e:
+        timer.stage_failed("MANIFEST", str(e))
         logger.warning(f"[Manifest] Manifest generation failed (non-critical): {e}")
 
     # ── STEP 1.5c: Frida Dynamic Analysis ────────────────────────────────────
     dynamic_result: Optional[Dict] = None
     frida_status = get_sandbox_status()
+    timer.set_orchestrator_stage(OrchestratorStage.DYNAMIC_ANALYSIS)
 
     if frida_status["ready"]:
         logger.info("Frida sandbox ready — running dynamic behavioral analysis")
+        timer.stage_started("AGENTIC_EXPLORER", "Frida sandbox and Agentic Explorer")
         try:
             use_multistage = os.getenv("SUDARSHAN_MULTISTAGE", "false").lower() == "true"
             if use_multistage:
@@ -678,7 +754,9 @@ async def _run_analysis_pipeline(
                 logger.info(f"Frida BFCI={dynamic_result.get('bfci', 0):.1f}")
             else:
                 logger.warning(f"Frida did not complete: {dynamic_result.get('error')}")
+            timer.stage_completed("AGENTIC_EXPLORER")
         except Exception as e:
+            timer.stage_failed("AGENTIC_EXPLORER", str(e))
             logger.warning(f"Frida analysis failed: {e}")
             dynamic_result = None
     else:
@@ -691,6 +769,8 @@ async def _run_analysis_pipeline(
 
     # ── STEP 3: Threat Correlation ────────────────────────────────────────────
     logger.info("Running threat correlation...")
+    timer.set_orchestrator_stage(OrchestratorStage.THREAT_CORRELATION)
+    timer.stage_started("THREAT_CORRELATION")
     try:
         correlation_raw = await correlate(
             sha256=sha256_hash,
@@ -698,7 +778,9 @@ async def _run_analysis_pipeline(
             package_name=package_name,
             dynamic_urls=extract_dynamic_urls(dynamic_result),
         )
+        timer.stage_completed("THREAT_CORRELATION")
     except Exception as e:
+        timer.stage_failed("THREAT_CORRELATION", str(e))
         logger.warning(f"Threat correlation failed: {e}")
         correlation_raw = {"available": False}
 
@@ -717,6 +799,7 @@ async def _run_analysis_pipeline(
     if apktool_result and apktool_result.available and apktool_result.ui_profile:
         suspect_ui = UIProfile.from_dict(apktool_result.ui_profile)
 
+    timer.stage_started("VIDE_DYNAMIC")
     vide_result = await asyncio.to_thread(
         safe_run_vide_analysis,
         suspect_profile=suspect_ui,
@@ -725,8 +808,11 @@ async def _run_analysis_pipeline(
         certificate=certificate,
         apktool_available=bool(apktool_result and apktool_result.available),
     )
+    timer.stage_completed("VIDE_DYNAMIC")
 
     # ── STEP 4: Risk Scoring (5-axis STEI) ───────────────────────────────────
+    timer.set_orchestrator_stage(OrchestratorStage.RISK_ASSESSMENT)
+    timer.stage_started("RISK", "deterministic FRS")
     risk_result = calculate_risk_score(
         flags=flags_dict,
         ai_confidence=ai_confidence,
@@ -736,9 +822,12 @@ async def _run_analysis_pipeline(
         all_permissions=all_permissions,
         vide_result=vide_result,
     )
+    timer.stage_completed("RISK")
 
     # ── STEP 5: RAG + Gemini Flash Intelligence ──────────────────────────────
     logger.info("Running RAG-grounded Gemini Flash AI analysis...")
+    timer.set_orchestrator_stage(OrchestratorStage.INTELLIGENCE_GENERATION)
+    timer.stage_started("GEMINI")
     llm_response = await analyze_with_llm(
         flags=flags_dict,
         family=family_class,
@@ -749,6 +838,7 @@ async def _run_analysis_pipeline(
         dynamic=dynamic_result,
         vide_result=vide_result,
     )
+    timer.stage_completed("GEMINI")
 
     # ── Assemble result dict ──────────────────────────────────────────────────
     result = {
@@ -820,6 +910,8 @@ async def _run_analysis_pipeline(
     }
 
     # ── Persist to DB ─────────────────────────────────────────────────────────
+    timer.set_orchestrator_stage(OrchestratorStage.PERSISTING)
+    timer.stage_started("PERSISTENCE")
     await save_case(sha256_hash, result, analyst_id=analyst_id)
 
     # ── Cache for export endpoints ────────────────────────────────────────────
@@ -846,6 +938,10 @@ async def _run_analysis_pipeline(
         logger.info(f"[RAG] Investigation indexed for {sha256_hash}")
     except Exception as e:
         logger.warning(f"[RAG] Investigation indexing failed (non-critical): {e}")
+
+    timer.stage_completed("PERSISTENCE")
+    timer.set_orchestrator_stage(OrchestratorStage.COMPLETED)
+    result["pipeline_timing"] = timer.to_dict()
 
     return result
 
@@ -1136,8 +1232,15 @@ async def job_status(job_id: str, user: dict = Depends(require_analyst)):
 
     if job["status"] == "done":
         response["result"] = job.get("result")
+        response["progress_pct"] = 100
     elif job["status"] == "failed":
         response["error"] = job.get("error")
+    else:
+        response["progress_pct"] = job.get("progress_pct", 0)
+        response["pipeline_stage"] = job.get("pipeline_stage")
+        response["pipeline_substage"] = job.get("pipeline_substage")
+        response["pipeline_message"] = job.get("pipeline_message")
+        response["elapsed_ms"] = job.get("elapsed_ms")
 
     return response
 

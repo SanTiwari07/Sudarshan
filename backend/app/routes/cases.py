@@ -263,7 +263,7 @@ async def list_all_cases(
     return CaseListResponse(total=total, limit=limit, offset=offset, cases=cases)
 
 
-@router.get("/{sha256}", response_model=CaseDetail)
+@router.get("/{sha256}")
 async def get_case_detail(
     sha256: str,
     user: dict = Depends(require_analyst),
@@ -277,4 +277,22 @@ async def get_case_detail(
         )
     _assert_case_visible(user, row)
 
-    return _case_detail_from_row(row)
+    # Return the merged persistence record (raw_result + summary columns) so
+    # fields like `vide` and dynamic artifacts are not dropped by response_model.
+    dyn = _dynamic_analysis_from_row(row)
+    if dyn is not None:
+        row.setdefault("dynamic_analysis", dyn)
+        row.setdefault("dynamic_result", dyn)
+    row.setdefault(
+        "technical_view",
+        {
+            "permissions_fired": [],
+            "strings_fired": row.get("suspicious_strings", [])[:20]
+            if row.get("suspicious_strings")
+            else [],
+            "apis_fired": row.get("dangerous_apis_found_raw", []) or [],
+            "matched_rule": row.get("matched_rule", ""),
+            "decoded_manifest_excerpts": [],
+        },
+    )
+    return row

@@ -184,7 +184,7 @@ sequenceDiagram
     Q->>C: Correlate SHA256 & URLs (VT / OTX / AbuseIPDB)
     C-->>Q: Return Threat Reputation & Family Match
 
-    Q->>R: Calculate 5-Axis STEI, BFCI & FRS Score
+    Q->>R: Calculate 5-Axis STEI, BFCI, VIDE & FRS Score
     R-->>Q: Return Deterministic Verdict & Threat Table
 
     Q->>AI: Index Evidence into RAG Graph
@@ -232,7 +232,8 @@ System overview documents the main deterministic risk formula executed by [`risk
 | **SQLite Case Store** | **Implemented** | Asynchronous persistent storage implemented in `backend/app/db/database.py`. |
 | **Async Queue Pool** | **Implemented** | In-memory asyncio queue worker pool running in background tasks. |
 | **Static Analysis Engine** | **Implemented** | MobSF API client with native `apk_analyzer.py` fallback active in production pipeline. |
-| **Dynamic Frida Engine** | **Implemented** | Frida sandbox via `SandboxProvider`, SELinux preflight, containment policy (`sandbox_containment.py`). **486 / 486** collected tests (`pytest tests/ backend/tests`). |
+| **Dynamic Frida Engine** | **Implemented** | Frida sandbox via `SandboxProvider`, SELinux preflight, containment policy (`sandbox_containment.py`). **519 / 519** collected tests (`pytest tests/ backend/tests`). |
 | **Sandbox containment & gateway policy** | **Implemented** | Centralized `adb_gateway`, engine internal token, gateway dynamic path disabled by default (`upload.py`). Hardened compose overlay available. |
-| **Deterministic Risk Engine** | **Implemented** | 5-Axis STEI, BFCI, and FRS formulas implemented and verified by unit tests. |
+| **Deterministic Risk Engine** | **Implemented** | 5-Axis STEI, BFCI, FRS, and VIDE deterministic escalations (`risk_engine.py` + `engines/vide/`). |
+| **VIDE (Visual Impersonation)** | **Implemented (static + code path)** | UI baseline compare, VIDE-F001, signer registry; live WebView on device requires verification per `scripts/verify_vide_webview_device.md`. |
 | **AI RAG Investigation Assistant**| **Implemented** | Gemini 2.5 Flash RAG graph active with streaming SSE response support. |

@@ -112,7 +112,9 @@ function APKMetadata({ data }: { data: FraudCardData }) {
 
 function PermissionTable({ data }: { data: FraudCardData }) {
   const [filter, setFilter] = useState('');
-  const perms = data.all_permissions.filter(p => p.toLowerCase().includes(filter.toLowerCase()));
+  const perms = data.all_permissions.filter(
+    (p) => typeof p === 'string' && p.toLowerCase().includes(filter.toLowerCase()),
+  );
   const fired = new Set(data.technical_view.permissions_fired);
 
   return (
@@ -398,8 +400,13 @@ function AuthedScreenshot({
 }
 
 function DynamicAnalysisPanel({ data }: { data: FraudCardData }) {
-  const dyn = data.dynamic_result || {};
-  const status = (dyn.dynamic_status || (data.frs_breakdown?.dynamic_available ? 'EVENTS_CAPTURED' : 'NOT_RUN')).toUpperCase();
+  const dyn =
+    data.dynamic_result && typeof data.dynamic_result === 'object' && !Array.isArray(data.dynamic_result)
+      ? data.dynamic_result
+      : {};
+  const statusRaw =
+    dyn.dynamic_status || (data.frs_breakdown?.dynamic_available ? 'EVENTS_CAPTURED' : 'NOT_RUN');
+  const status = String(statusRaw || 'NOT_RUN').toUpperCase();
   const isOk = status === 'EVENTS_CAPTURED' || status === 'NO_RUNTIME_ACTIVITY';
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
@@ -514,7 +521,9 @@ function ManifestFindingsPanel({ data }: { data: FraudCardData }) {
   const [open, setOpen] = useState(true);
   const [filter, setFilter] = useState('');
   const [sev, setSev] = useState<string>('all');
-  const findings = data.manifest_findings || [];
+  const findings = (data.manifest_findings || []).filter(
+    (f) => f && typeof f === 'object' && typeof f.title === 'string',
+  );
 
   if (findings.length === 0) return null;
 
@@ -526,15 +535,18 @@ function ManifestFindingsPanel({ data }: { data: FraudCardData }) {
 
   const visible = findings.filter(f => {
     const matchSev = sev === 'all' || (f.severity?.toLowerCase() === sev);
-    const matchText = !filter || f.title.toLowerCase().includes(filter.toLowerCase()) || f.component.toLowerCase().includes(filter.toLowerCase());
+    const matchText =
+      !filter ||
+      f.title.toLowerCase().includes(filter.toLowerCase()) ||
+      String(f.component || '').toLowerCase().includes(filter.toLowerCase());
     return matchSev && matchText;
   });
 
-  const sevColor = (s: string) => ({
+  const sevColor = (s?: string) => ({
     high: 'bg-red-100 text-red-700',
     warning: 'bg-orange-100 text-orange-700',
     info: 'bg-blue-100 text-blue-700',
-  }[s.toLowerCase()] || 'bg-slate-100 text-slate-600');
+  }[(s || 'info').toLowerCase()] || 'bg-slate-100 text-slate-600');
 
   return (
     <SocCard>
@@ -597,7 +609,9 @@ function CodeFindingsPanel({ data }: { data: FraudCardData }) {
   const [filter, setFilter] = useState('');
   const [cat, setCat] = useState('all');
   const [sev, setSev] = useState<string>('all');
-  const findings = data.code_findings || [];
+  const findings = (data.code_findings || []).filter(
+    (f) => f && typeof f === 'object' && typeof f.title === 'string',
+  );
 
   if (findings.length === 0) return null;
 
@@ -610,11 +624,11 @@ function CodeFindingsPanel({ data }: { data: FraudCardData }) {
     return matchCat && matchSev && matchFilter;
   });
 
-  const sevColor = (s: string) => ({
+  const sevColor = (s?: string) => ({
     high: 'text-red-700 bg-red-50 border-red-200',
     warning: 'text-orange-700 bg-orange-50 border-orange-200',
     info: 'text-blue-700 bg-blue-50 border-blue-200',
-  }[s?.toLowerCase()] || 'text-slate-600 bg-slate-50 border-slate-200');
+  }[(s || 'info').toLowerCase()] || 'text-slate-600 bg-slate-50 border-slate-200');
 
   return (
     <SocCard>

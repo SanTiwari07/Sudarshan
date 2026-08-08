@@ -78,8 +78,34 @@ def create_job(sha256_hash: Optional[str] = None, analyst_id: Optional[int] = No
         "completed_at": None,
         "result": None,
         "error": None,
+        "progress_pct": 0,
+        "pipeline_stage": "QUEUED",
+        "pipeline_substage": "",
+        "pipeline_message": "Queued for analysis",
+        "elapsed_ms": 0,
+        "stage_timings": [],
     }
     return job_id
+
+
+def update_job_pipeline(job_id: str, snapshot: Dict[str, Any]) -> None:
+    """Merge live pipeline telemetry into the in-memory job record."""
+    job = _jobs.get(job_id)
+    if not job:
+        return
+    if job.get("status") not in ("queued", "processing"):
+        return
+    for key in (
+        "progress_pct",
+        "pipeline_stage",
+        "pipeline_substage",
+        "pipeline_message",
+        "elapsed_ms",
+        "stage_timings",
+        "orchestrator_stage",
+    ):
+        if key in snapshot:
+            job[key] = snapshot[key]
 
 
 async def persist_job(job_id: str) -> None:
@@ -107,6 +133,8 @@ async def _set_processing(job_id: str) -> None:
     if job_id in _jobs:
         _jobs[job_id]["status"] = "processing"
         _jobs[job_id]["started_at"] = datetime.now(timezone.utc).isoformat()
+        _jobs[job_id]["pipeline_stage"] = "VALIDATING"
+        _jobs[job_id]["progress_pct"] = 5
         await persist_job(job_id)
 
 
@@ -116,6 +144,9 @@ async def _set_done(job_id: str, result: Dict[str, Any]) -> None:
         _jobs[job_id]["result"] = result
         _jobs[job_id]["completed_at"] = datetime.now(timezone.utc).isoformat()
         _jobs[job_id]["_finished_at"] = time.monotonic()
+        _jobs[job_id]["progress_pct"] = 100
+        _jobs[job_id]["pipeline_stage"] = "COMPLETED"
+        _jobs[job_id]["pipeline_message"] = "Investigation complete"
         await persist_job(job_id)
 
 
@@ -179,6 +210,7 @@ async def _worker(worker_id: int) -> None:
                     temp_path=temp_path,
                     sha256_hash=sha256_hash,
                     analyst_id=analyst_id,
+                    job_id=job_id,
                 )
                 
                 # Build the complete Pydantic response and convert to dict for the queue

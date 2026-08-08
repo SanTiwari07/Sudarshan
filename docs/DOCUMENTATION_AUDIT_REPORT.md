@@ -1,6 +1,45 @@
 # Sudarshan Platform Master Documentation Audit Report
 
 ```yaml
+Audit Date:          2026-08-08
+Platform Version:    v2.5.0-STABLE (VIDE, Investigation Shell, Cases evidence API)
+Target Repository:   SanTiwari07/Sudarshan (d:/Projects/Sudarshan BOI)
+Test Suite Command:  $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests
+Audit Scope:         VIDE engine, dashboard investigation shell, cases/evidence APIs, test metric refresh
+```
+
+---
+
+## Executive Summary (2026-08-08)
+
+Documentation was re-synchronized with the codebase after **VIDE** (`shared/sudarshan_core/engines/vide/`), **InvestigationShell** / investigation UX, and expanded **Cases API** (`/evidence`, `/notes`). **Empirical verification:** `pytest tests/ backend/tests --collect-only` reports **519 tests collected** (2026-08-08).
+
+### Files updated (2026-08-08 pass)
+
+- [`docs/CHANGELOG.md`](CHANGELOG.md), [`docs/README.md`](README.md), [`docs/DAE_CURRENT_STATE.md`](DAE_CURRENT_STATE.md), [`docs/ARCHITECTURE.md`](ARCHITECTURE.md), [`docs/02_SYSTEM_OVERVIEW.md`](02_SYSTEM_OVERVIEW.md), [`docs/PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md)
+- [`docs/dashboard/10_DASHBOARD.md`](dashboard/10_DASHBOARD.md), [`docs/architecture/03_STATIC_THREAT_INTELLIGENCE.md`](architecture/03_STATIC_THREAT_INTELLIGENCE.md), [`docs/architecture/04_DYNAMIC_ANALYSIS_ENGINE.md`](architecture/04_DYNAMIC_ANALYSIS_ENGINE.md), [`docs/architecture/05_AI_INVESTIGATION_ENGINE.md`](architecture/05_AI_INVESTIGATION_ENGINE.md), [`docs/architecture/07_FRAUD_INTELLIGENCE_ENGINE.md`](architecture/07_FRAUD_INTELLIGENCE_ENGINE.md), [`docs/architecture/08_DETERMINISTIC_RISK_ENGINE.md`](architecture/08_DETERMINISTIC_RISK_ENGINE.md), [`docs/architecture/VIDE.md`](architecture/VIDE.md)
+- [`docs/CONTRIBUTING.md`](CONTRIBUTING.md), [`docs/VALIDATION.md`](VALIDATION.md), [`docs/evaluation/11_EVALUATION.md`](evaluation/11_EVALUATION.md), [`docs/future/12_FUTURE_WORK.md`](future/12_FUTURE_WORK.md), [`README.md`](../README.md)
+
+### Drift fixed
+
+| Issue | Resolution |
+| :--- | :--- |
+| Test count **486** | Updated to **519** collected tests |
+| Missing VIDE in portal index | Added `architecture/VIDE.md` row; cross-links in DAE, static/dynamic/risk docs |
+| Dashboard missing InvestigationShell | Documented shared chrome, evidence drawer, notes API |
+| Cases API incomplete in README | Documented `/evidence` and `/notes` routes |
+| VIDE RAG claim | Clarified: VIDE lines flow via `report.evidence` / `risk_engine` RAG chunks only |
+
+### Remaining TODOs
+
+- **VIDE live WebView on device**: Run `scripts/verify_vide_webview_device.md` when frida-server is up; do not mark device path as production-verified until that checklist passes.
+- **Dedicated `vide` RAG section**: Not implemented in `gemini_rag.py` today — optional future enhancement.
+
+---
+
+## Prior audit (2026-08-06)
+
+```yaml
 Audit Date:          2026-08-06
 Platform Version:    v2.5.0-STABLE (CONTAINERIZED MICROSERVICES, SANDBOX CONTAINMENT P0)
 Target Repository:   SanTiwari07/Sudarshan (d:/Projects/Sudarshan BOI)

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import type { FraudCardData } from '../../App';
 import { API_BASE } from '../../config';
 import { getToken } from '../../pages/Login';
+import { resolvePipelineUi, type BackendPipelineState } from './backendPipelineStages';
 
 export type AnalysisSessionState =
   | 'idle'
@@ -10,8 +11,6 @@ export type AnalysisSessionState =
   | 'analyzing'
   | 'complete'
   | 'error';
-
-const ESTIMATED_MS = 4 * 60 * 1000;
 
 async function sha256Hex(file: File): Promise<string> {
   const buf = await file.arrayBuffer();
@@ -28,49 +27,51 @@ export function useAnalysisSession(onComplete: (data: FraudCardData) => void) {
   const [error, setError] = useState<string | null>(null);
   const [smoothProgress, setSmoothProgress] = useState(0);
   const [result, setResult] = useState<FraudCardData | null>(null);
+  const [pipelineUi, setPipelineUi] = useState<ReturnType<typeof resolvePipelineUi> | null>(
+    null,
+  );
 
   const abortRef = useRef(false);
-  const progressRef = useRef(0);
-  const rafRef = useRef<number | null>(null);
-  const startedAtRef = useRef<number | null>(null);
+  const targetProgressRef = useRef(0);
 
   const reset = useCallback(() => {
     abortRef.current = true;
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
     abortRef.current = false;
-    progressRef.current = 0;
-    startedAtRef.current = null;
+    targetProgressRef.current = 0;
     setPhase('idle');
     setFile(null);
     setError(null);
     setSmoothProgress(0);
     setResult(null);
+    setPipelineUi(null);
   }, []);
 
   const isBusy = phase === 'uploading' || phase === 'analyzing';
 
   useEffect(() => {
     if (!isBusy) return;
-
-    const animate = () => {
-      const started = startedAtRef.current ?? Date.now();
-      const elapsed = Date.now() - started;
-      const timeTarget = Math.min(92, 5 + (elapsed / ESTIMATED_MS) * 87);
-      const target = Math.max(progressRef.current, timeTarget);
-      const next = progressRef.current + (target - progressRef.current) * 0.08;
-      progressRef.current = next;
-      setSmoothProgress(next);
-
-      if (phase === 'analyzing' && next < 92) {
-        rafRef.current = requestAnimationFrame(animate);
-      }
+    let raf: number;
+    const tick = () => {
+      setSmoothProgress((prev) => {
+        const target = targetProgressRef.current;
+        if (Math.abs(target - prev) < 0.5) return target;
+        return prev + (target - prev) * 0.15;
+      });
+      raf = requestAnimationFrame(tick);
     };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [isBusy]);
 
-    rafRef.current = requestAnimationFrame(animate);
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-  }, [isBusy, phase]);
+  const applyBackendPipeline = useCallback((data: BackendPipelineState & { status?: string }) => {
+    const ui = resolvePipelineUi(data);
+    setPipelineUi(ui);
+    if (typeof data.progress_pct === 'number') {
+      targetProgressRef.current = data.progress_pct;
+    } else if (data.status === 'processing') {
+      targetProgressRef.current = Math.max(targetProgressRef.current, ui.progress);
+    }
+  }, []);
 
   const pollJob = useCallback(
     async (jobId: string, token: string | null): Promise<FraudCardData> => {
@@ -87,19 +88,26 @@ export function useAnalysisSession(onComplete: (data: FraudCardData) => void) {
           throw new Error(body.detail || 'Status poll failed');
         }
         const data = await res.json();
+        applyBackendPipeline(data);
+
         if (data.status === 'queued') {
-          progressRef.current = Math.max(progressRef.current, 8);
+          targetProgressRef.current = Math.max(targetProgressRef.current, 3);
         } else if (data.status === 'processing') {
-          progressRef.current = Math.max(progressRef.current, 15);
+          targetProgressRef.current = Math.max(
+            targetProgressRef.current,
+            typeof data.progress_pct === 'number' ? data.progress_pct : 5,
+          );
         } else if (data.status === 'done' && data.result) {
+          targetProgressRef.current = 100;
+          setSmoothProgress(100);
           return data.result as FraudCardData;
         } else if (data.status === 'failed') {
           throw new Error(data.error || 'Analysis job failed');
         }
-        await new Promise((r) => setTimeout(r, 1500));
+        await new Promise((r) => setTimeout(r, 1200));
       }
     },
-    [navigate],
+    [navigate, applyBackendPipeline],
   );
 
   const startAnalysis = useCallback(async () => {
@@ -107,9 +115,15 @@ export function useAnalysisSession(onComplete: (data: FraudCardData) => void) {
 
     setError(null);
     setPhase('uploading');
-    startedAtRef.current = Date.now();
-    progressRef.current = 2;
+    targetProgressRef.current = 2;
     setSmoothProgress(2);
+    setPipelineUi(
+      resolvePipelineUi({
+        pipeline_stage: 'VALIDATING',
+        pipeline_message: 'Uploading APK to Sudarshan gateway…',
+        progress_pct: 2,
+      }),
+    );
 
     const token = getToken();
     await sha256Hex(file);
@@ -121,7 +135,7 @@ export function useAnalysisSession(onComplete: (data: FraudCardData) => void) {
     };
 
     try {
-      progressRef.current = 5;
+      targetProgressRef.current = 5;
       const asyncRes = await fetch(`${API_BASE}/analyze/async`, {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -138,6 +152,11 @@ export function useAnalysisSession(onComplete: (data: FraudCardData) => void) {
       if (asyncRes.status === 202) {
         const { job_id } = await asyncRes.json();
         setPhase('analyzing');
+        applyBackendPipeline({
+          pipeline_stage: 'QUEUED',
+          pipeline_message: 'Job queued — waiting for worker…',
+          progress_pct: 5,
+        });
         analysisResult = await pollJob(job_id, token);
       } else if (asyncRes.ok) {
         setPhase('analyzing');
@@ -160,8 +179,9 @@ export function useAnalysisSession(onComplete: (data: FraudCardData) => void) {
         analysisResult = await syncRes.json();
       }
 
-      progressRef.current = 100;
+      targetProgressRef.current = 100;
       setSmoothProgress(100);
+      setPipelineUi(resolvePipelineUi({ pipeline_stage: 'COMPLETED', progress_pct: 100 }));
       setResult(analysisResult);
       onComplete(analysisResult);
       setPhase('complete');
@@ -169,7 +189,7 @@ export function useAnalysisSession(onComplete: (data: FraudCardData) => void) {
       setPhase('error');
       setError(err instanceof Error ? err.message : 'Analysis pipeline failed.');
     }
-  }, [file, isBusy, pollJob, navigate, onComplete]);
+  }, [file, isBusy, pollJob, navigate, onComplete, applyBackendPipeline]);
 
   return {
     phase,
@@ -178,6 +198,7 @@ export function useAnalysisSession(onComplete: (data: FraudCardData) => void) {
     error,
     smoothProgress,
     result,
+    pipelineUi,
     isBusy,
     startAnalysis,
     reset,

@@ -2,7 +2,7 @@
 
 **Audience:** Sudarshan Core Engineering & Threat Research Team  
 **Version:** `v2.5.0-STABLE`  
-**Last Audit Date:** 2026-08-06  
+**Last Audit Date:** 2026-08-08  
 **Verification Method:** Empirical log trace, automated test suite, live AVD Frida execution, and runtime telemetry pipeline verification (`verify_runtime_pipeline.py`).
 
 ---
@@ -15,7 +15,7 @@
 - Frida attaches and executes banking trojan hooks after SELinux preflight (`adb root` + `setenforce 0`). Sub-probes (`java_probe.js`, `bisect_sec.js`) validate Java bridge binding and ART deoptimization.
 - Runtime Telemetry REST API ([`runtime_api.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/routes/runtime_api.py)) streams live pipeline status, telemetry events, Frida hook hit counters, error rates, and evidence snapshots.
 - Deterministic scoring ([`risk_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/risk_engine.py)), workflow reconstruction ([`workflow_reconstructor.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/workflow_reconstructor.py)), investigation manifest generation ([`manifest.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/models/manifest.py)), static analysis ([`apktool_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/apktool_engine.py), [`jadx_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/jadx_engine.py)), and network capture ingest ([`network_capture.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/network_capture.py) parsing mitmproxy HAR dumps) function cleanly.
-- Test coverage verified: Full automated suite (**486 / 486 tests collected** via `pytest tests/ backend/tests --collect-only`, 2026-08-06).
+- Test coverage verified: Full automated suite (**519 / 519 tests collected** via `pytest tests/ backend/tests --collect-only`, 2026-08-08).
 
 ### Core Operational Capabilities
 1. **Frida Runtime Instrumentation**: Active & verified via [`frida_sandbox.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/frida_sandbox.py) and [`banking_trojan.js`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/frida_hooks/banking_trojan.js). `Java.deoptimizeEverything()` runs unconditionally at script startup, preventing ART JIT inlining from suppressing hooks.
@@ -31,6 +31,7 @@
 11. **Sandbox Provider Abstraction**: [`shared/sudarshan_core/sandbox/`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/sandbox/) (`get_sandbox_provider()`, Genymotion default, Android Studio optional) is the only supported path from DAE to ADB/install/launch.
 12. **Sandbox containment (P0)**: [`shared/sudarshan_core/security/`](../shared/sudarshan_core/security/) — `adb_gateway.run_adb` choke point, `sandbox_containment` policy, analysis-engine internal token middleware, gateway dynamic path blocked by default. Regression: `tests/unit/test_sandbox_containment.py`, `tests/unit/test_adb_policy_bypass.py`, `backend/tests/test_gateway_dynamic_blocker.py`.
 13. **Dynamic Validation Framework**: [`validate_dynamic_pipeline.py`](../validate_dynamic_pipeline.py) and [`shared/sudarshan_core/validation/`](../shared/sudarshan_core/validation/) run corpus APKs, stress/recovery suites, and engineering reports under `tests/apks/validation_runs/`.
+14. **VIDE (Visual Impersonation Detection Engine)**: [`shared/sudarshan_core/engines/vide/`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/vide/) compares suspect UI fingerprints against lab baselines (`data/ui_baselines/`, `bank_signer_registry.json`); merges static Apktool/HTML profiles with Frida WebView HTML from `banking_trojan` hooks; feeds deterministic rule **VIDE-F001** and FRS escalations in [`risk_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/risk_engine.py). Orchestrated in [`analysis-engine/app/main.py`](file:///d:/Projects/Sudarshan%20BOI/analysis-engine/app/main.py). See [`architecture/VIDE.md`](architecture/VIDE.md). Live device WebView path: **device verification required** (`scripts/verify_vide_webview_device.md`).
 
 ### Known limitations (documented gaps, not hidden)
 - **Per-session ephemeral artifact roots**: Containment helpers exist (`session_artifact_root`); full per-session isolation on disk is not complete — see [`security/P0_RED_TEAM_PENETRATION_REPORT.md`](security/P0_RED_TEAM_PENETRATION_REPORT.md).

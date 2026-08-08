@@ -14,6 +14,8 @@ type InvestigationProgressProps = {
   progress: number;
   error: string | null;
   onRetry?: () => void;
+  stageTitle?: string;
+  stageDescription?: string;
 };
 
 export default function InvestigationProgress({
@@ -21,19 +23,24 @@ export default function InvestigationProgress({
   progress,
   error,
   onRetry,
+  stageTitle,
+  stageDescription,
 }: InvestigationProgressProps) {
+  const useBackend = Boolean(stageTitle && stageDescription);
   const statuses = stageStatesForProgress(progress);
   const activeIdx = activeStageIndex(progress);
   const activeStage = INVESTIGATION_STAGES[activeIdx];
+  const displayTitle = useBackend ? stageTitle! : activeStage.title;
+  const displayDescription = useBackend ? stageDescription! : activeStage.description;
 
   return (
     <div className="upload-fade-in w-full flex justify-center px-4 py-10 sm:py-16">
       <div className="w-full max-w-[42rem]">
         <ProgressHeader fileName={fileName} progress={progress} />
         <CurrentStageCard
-          key={activeStage.id}
-          stage={activeStage}
-          isActive={statuses[activeIdx] === 'active'}
+          key={useBackend ? stageTitle : activeStage.id}
+          stage={{ ...activeStage, title: displayTitle, description: displayDescription }}
+          isActive={statuses[activeIdx] === 'active' || useBackend}
         />
         <StageTimeline statuses={statuses} />
         <NextStepsCard steps={activeStage.nextSteps} />

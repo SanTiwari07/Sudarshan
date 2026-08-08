@@ -1,0 +1,33 @@
+{
+  "institution_id": "demo_sbi_yono",
+  "display_name": "State Bank of India (YONO — lab baseline)",
+  "package_names": ["com.sbi.lotus", "com.sbi.lotusintouch"],
+  "allowed_signers_sha256": [],
+  "version": "1.0.0-hackathon",
+  "profile": {
+    "source": "baseline",
+    "strings": [
+      "Enter UPI PIN",
+      "MPIN",
+      "User ID",
+      "Forgot Password",
+      "Login",
+      "YONO",
+      "State Bank of India",
+      "Net Banking",
+      "OTP",
+      "Account Balance"
+    ],
+    "view_sequence": [
+      "LinearLayout",
+      "ImageView",
+      "TextView",
+      "TextInputEditText",
+      "TextInputEditText",
+      "MaterialButton",
+      "TextView"
+    ],
+    "colors": ["#1a237e", "#ffffff", "#0d47a1"],
+    "asset_hashes": []
+  }
+}

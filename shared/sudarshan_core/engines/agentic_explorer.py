@@ -158,6 +158,7 @@ class AgenticExplorer:
         # ── Frida event buffer (filled by EventBus callback) ──────────────────
         self._pending_frida_events: List[Dict] = []
         self._events_lock = threading.Lock()
+        self.last_ui_hierarchy_xml: str = ""
 
         # ── Coverage artifacts (matches UIExplorer.get_reports() shape) ───────
         self.attack_timeline: List[Dict]        = []
@@ -271,6 +272,8 @@ class AgenticExplorer:
                     last_action_failed=last_action_failed,
                     static_findings=self.static_findings,
                 )
+                if obs.ui_xml_raw:
+                    self.last_ui_hierarchy_xml = obs.ui_xml_raw[:120_000]
                 self.memory.register_screen(obs.screen_hash, obs.activity)
                 self.benchmark.record_screen(obs.screen_hash)
 

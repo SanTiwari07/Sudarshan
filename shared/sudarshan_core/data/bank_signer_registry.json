@@ -1,0 +1,14 @@
+{
+  "com.sbi.lotus": {
+    "display_name": "SBI YONO",
+    "allowed_signers_sha256": [
+      "0000000000000000000000000000000000000000000000000000000000000001"
+    ]
+  },
+  "com.sbi.lotusintouch": {
+    "display_name": "SBI Lotus",
+    "allowed_signers_sha256": [
+      "0000000000000000000000000000000000000000000000000000000000000001"
+    ]
+  }
+}

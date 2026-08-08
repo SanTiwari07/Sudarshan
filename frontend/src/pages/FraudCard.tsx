@@ -8,6 +8,7 @@ import CoreFindingsList from '../components/investigation/CoreFindingsList';
 import InvestigationTimeline from '../components/investigation/InvestigationTimeline';
 import ThreatScenarioTable from '../components/investigation/ThreatScenarioTable';
 import FraudRiskHero from '../components/investigation/FraudRiskHero';
+import VisualImpersonationExecutiveCard from '../components/investigation/VisualImpersonationExecutiveCard';
 import ExecutiveIntelligenceOverview from '../components/investigation/ExecutiveIntelligenceOverview';
 import EvidencePipelineTimeline from '../components/investigation/EvidencePipelineTimeline';
 import StructuredCaseSummary from '../components/investigation/StructuredCaseSummary';
@@ -71,6 +72,7 @@ export default function FraudCard({ data }: { data: FraudCardData | null }) {
   return (
     <div className="space-y-6 sm:space-y-8">
       <FraudRiskHero data={data} />
+      <VisualImpersonationExecutiveCard data={data} />
       <ExecutiveIntelligenceOverview data={data} bundle={investigationBundle} />
       <EvidencePipelineTimeline data={data} />
       <StructuredCaseSummary data={data} />

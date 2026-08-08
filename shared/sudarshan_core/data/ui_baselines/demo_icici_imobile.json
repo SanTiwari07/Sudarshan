@@ -1,0 +1,29 @@
+{
+  "institution_id": "demo_icici_imobile",
+  "display_name": "ICICI iMobile (lab baseline)",
+  "package_names": ["com.csam.icici.bank.imobile"],
+  "allowed_signers_sha256": [],
+  "version": "1.0.0-hackathon",
+  "profile": {
+    "source": "baseline",
+    "strings": [
+      "User ID",
+      "Grid Card",
+      "iMobile",
+      "ICICI Bank",
+      "Login",
+      "MPIN",
+      "OTP",
+      "Fingerprint Login"
+    ],
+    "view_sequence": [
+      "RelativeLayout",
+      "TextView",
+      "EditText",
+      "Button",
+      "ImageView"
+    ],
+    "colors": ["#f58220", "#ffffff", "#333333"],
+    "asset_hashes": []
+  }
+}

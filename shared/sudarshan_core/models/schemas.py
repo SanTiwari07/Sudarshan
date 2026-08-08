@@ -301,6 +301,9 @@ class AnalysisResponse(BaseModel):
     # Fraud Workflow Reconstruction (from WorkflowReconstructor)
     fraud_workflow: Optional[FraudWorkflow] = None
 
+    # Visual impersonation (VIDE) — deterministic baseline compare output
+    vide: Optional[Dict[str, Any]] = None
+
     # Legacy view compatibility (kept for existing frontend)
     executive_view: FraudCardExecutiveView
     technical_view: FraudCardTechnicalView

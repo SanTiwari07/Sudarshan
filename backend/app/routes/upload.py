@@ -30,6 +30,8 @@ from app.db.database import save_case
 from sudarshan_core.engines.classification_engine import classify_family
 from sudarshan_core.engines.frida_sandbox import artifact_dir_for, get_sandbox_status, run_frida_analysis
 from sudarshan_core.engines.risk_engine import calculate_risk_score
+from sudarshan_core.engines.vide.pipeline import safe_run_vide_analysis
+from sudarshan_core.engines.vide.ui_profile import UIProfile
 from sudarshan_core.models.schemas import (
     AnalysisResponse,
     CodeFinding,
@@ -219,8 +221,21 @@ async def _call_analysis_engine(temp_path: str, sha256_hash: str) -> Optional[Di
             if resp.status_code == 200:
                 logger.info(f"[Orchestrator] Analysis engine microservice returned 200 OK for {sha256_hash}")
                 return resp.json()
-            else:
-                logger.warning(f"[Orchestrator] Analysis engine returned status {resp.status_code}: {resp.text}")
+            if resp.status_code == 408:
+                detail = resp.text
+                try:
+                    detail = resp.json().get("detail", detail)
+                except Exception:
+                    pass
+                logger.warning(
+                    "[Orchestrator] Analysis engine timed out for %s: %s",
+                    sha256_hash,
+                    detail,
+                )
+                raise HTTPException(status_code=408, detail=detail)
+            logger.warning(
+                f"[Orchestrator] Analysis engine returned status {resp.status_code}: {resp.text}"
+            )
     except Exception as e:
         # WARNING, not INFO: the fallback runs the pipeline in the gateway, which
         # has no APKTool/JADX, no memory or CPU cap and no no-new-privileges. A
@@ -319,6 +334,7 @@ async def _persist_and_index(
         "hardcoded_urls_ips": result.get("hardcoded_urls_ips", []),
         "targets_indian_banks": result.get("targets_indian_banks", False),
         "threat_correlation": result.get("threat_correlation") or {"available": False},
+        "vide": result.get("vide") or {},
         "intelligence_report": result.get("intelligence_report") or {},
     })
 
@@ -432,6 +448,7 @@ async def _enrich_engine_result(
             },
             correlation=result.get("threat_correlation") or {},
             dynamic=result.get("dynamic_result"),
+            vide_result=result.get("vide"),
         ) or {}
     except Exception as e:
         # Degrade visibly rather than failing the analysis.
@@ -689,6 +706,26 @@ async def _run_analysis_pipeline(
         family_class = correlation_raw["known_family"]
         ai_confidence = 1.15
 
+    if dynamic_result and isinstance(dynamic_result, dict):
+        dynamic_result["has_high_risk_capabilities"] = bool(
+            flags_dict.get("has_accessibility_abuse")
+            or flags_dict.get("has_system_alert_window")
+            or flags_dict.get("has_sms_read_write")
+        )
+
+    suspect_ui = None
+    if apktool_result and apktool_result.available and apktool_result.ui_profile:
+        suspect_ui = UIProfile.from_dict(apktool_result.ui_profile)
+
+    vide_result = await asyncio.to_thread(
+        safe_run_vide_analysis,
+        suspect_profile=suspect_ui,
+        dynamic_result=dynamic_result,
+        package_name=package_name or "",
+        certificate=certificate,
+        apktool_available=bool(apktool_result and apktool_result.available),
+    )
+
     # ── STEP 4: Risk Scoring (5-axis STEI) ───────────────────────────────────
     risk_result = calculate_risk_score(
         flags=flags_dict,
@@ -697,6 +734,7 @@ async def _run_analysis_pipeline(
         correlation_result=correlation_raw,
         family=family_class,
         all_permissions=all_permissions,
+        vide_result=vide_result,
     )
 
     # ── STEP 5: RAG + Gemini Flash Intelligence ──────────────────────────────
@@ -709,6 +747,7 @@ async def _run_analysis_pipeline(
         risk_result=risk_result,
         correlation=correlation_raw,
         dynamic=dynamic_result,
+        vide_result=vide_result,
     )
 
     # ── Assemble result dict ──────────────────────────────────────────────────
@@ -754,6 +793,7 @@ async def _run_analysis_pipeline(
         "suspicious_strings": suspicious_strings,
         "intelligence_report": llm_response,
         "matched_rule": matched_rule,
+        "vide": vide_result,
         # ── MobSF enrichment fields ────────────────────────────────────────────
         "providers": providers,
         "exported_activities": exported_activities,
@@ -1006,6 +1046,7 @@ def _build_response(result: Dict[str, Any], job_id: Optional[str] = None) -> Ana
         emails=result.get("emails", []),
         intelligence_report=intel_report,
         fraud_workflow=_build_fraud_workflow(result.get("fraud_workflow")),
+        vide=result.get("vide"),
         executive_view=executive_view,
         technical_view=technical_view,
     )

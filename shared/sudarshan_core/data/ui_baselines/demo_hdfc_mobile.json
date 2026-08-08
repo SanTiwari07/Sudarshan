@@ -1,0 +1,29 @@
+{
+  "institution_id": "demo_hdfc_mobile",
+  "display_name": "HDFC Bank Mobile (lab baseline)",
+  "package_names": ["com.hdfc.bank", "com.snapwork.hdfc"],
+  "allowed_signers_sha256": [],
+  "version": "1.0.0-hackathon",
+  "profile": {
+    "source": "baseline",
+    "strings": [
+      "Customer ID",
+      "IPIN",
+      "Login",
+      "HDFC Bank",
+      "Secure Login",
+      "OTP",
+      "MPIN",
+      "Forgot IPIN"
+    ],
+    "view_sequence": [
+      "ConstraintLayout",
+      "TextView",
+      "EditText",
+      "EditText",
+      "Button"
+    ],
+    "colors": ["#004b8d", "#ed232a", "#ffffff"],
+    "asset_hashes": []
+  }
+}

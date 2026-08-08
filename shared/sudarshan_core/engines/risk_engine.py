@@ -78,15 +78,28 @@ def _axis_bt(flags: Dict[str, Any]) -> Tuple[float, List[str]]:
     """
     evidence: List[str] = []
     bank_pkgs = flags.get("indian_bank_packages_found", [])
+    score = 0.0
+
+    if flags.get("visual_impersonation_detected"):
+        conf = float(flags.get("visual_impersonation_confidence") or 0.0)
+        inst = flags.get("visual_impersonation_institution") or "protected institution"
+        boost = min(35.0 + conf * 40.0, 85.0)
+        score = max(score, boost)
+        evidence.append(
+            f"VIDE-F001: visual impersonation of {inst} (confidence {conf:.2f}, +{boost:.0f} BT)"
+        )
 
     if not flags.get("targets_indian_banks") and not bank_pkgs:
+        if score > 0:
+            return min(score, 100.0), evidence
         return 0.0, evidence
 
     # Base 20 for any targeting, +10 per additional package up to 100
-    score = 20.0 + min(len(bank_pkgs) * 10.0, 80.0)
+    pkg_score = 20.0 + min(len(bank_pkgs) * 10.0, 80.0)
+    score = max(score, pkg_score)
     evidence.append(
         f"{len(bank_pkgs)} Indian banking package(s) matched: "
-        f"{', '.join(bank_pkgs[:3])} (+{score:.0f} BT)"
+        f"{', '.join(bank_pkgs[:3])} (+{pkg_score:.0f} BT)"
     )
     return min(score, 100.0), evidence
 
@@ -653,6 +666,7 @@ def calculate_risk_score(
     correlation_result: Optional[Dict] = None,
     family: str = "Unknown",
     all_permissions: Optional[List[str]] = None,
+    vide_result: Optional[Dict] = None,
 ) -> Dict[str, Any]:
     """
     Full Fraud Risk Score (FRS) calculation.
@@ -691,6 +705,21 @@ def calculate_risk_score(
         }
     else:
         flags_dict = flags
+
+    if vide_result:
+        flags_dict = dict(flags_dict)
+        flags_dict["visual_impersonation_detected"] = bool(
+            vide_result.get("visual_impersonation_detected")
+        )
+        flags_dict["visual_impersonation_institution"] = vide_result.get(
+            "visual_impersonation_institution", ""
+        )
+        flags_dict["visual_impersonation_confidence"] = vide_result.get(
+            "visual_impersonation_confidence", 0.0
+        )
+        flags_dict["signer_impersonation_detected"] = bool(
+            (vide_result.get("signer_impersonation") or {}).get("detected")
+        )
 
     # ── Component Scores ──────────────────────────────────────────────────────
     stei, stei_axes, stei_evidence, stei_by_axis = _calculate_stei(flags_dict, all_permissions)
@@ -752,7 +781,22 @@ def calculate_risk_score(
     ai_multiplier = max(0.5, min(ai_confidence, 1.5))
     final_score = min(frs * ai_multiplier, 100.0)
 
-    base_score = round(frs, 2)
+    # CH06 / VIDE deterministic escalations (P1: cluster required for visual-only)
+    vide_evidence: List[str] = []
+    if vide_result:
+        for line in (vide_result.get("vide_compare") or {}).get("evidence_lines") or []:
+            vide_evidence.append(line)
+        for line in (vide_result.get("signer_impersonation") or {}).get("evidence_lines") or []:
+            vide_evidence.append(line)
+        if vide_result.get("signer_impersonation", {}).get("detected"):
+            final_score = max(final_score, 92.0)
+        elif vide_result.get("critical_visual_cluster"):
+            final_score = max(final_score, 88.0)
+        elif vide_result.get("visual_impersonation_detected"):
+            final_score = max(final_score, min(55.0 + float(
+                vide_result.get("visual_impersonation_confidence") or 0.0
+            ) * 35.0, 75.0))
+
     final_rounded = round(final_score, 2)
 
     # ── Risk Band ─────────────────────────────────────────────────────────────
@@ -764,6 +808,13 @@ def calculate_risk_score(
         band = "High Risk"
     else:
         band = "Critical"
+
+    if vide_result and vide_result.get("signer_impersonation", {}).get("detected"):
+        band = "Critical"
+    elif vide_result and vide_result.get("critical_visual_cluster"):
+        band = "Critical"
+
+    base_score = round(frs, 2)
 
     # ── Visibility floor ──────────────────────────────────────────────────────
     # "We could not see the code" is not the same claim as "the code is safe".
@@ -806,7 +857,7 @@ def calculate_risk_score(
         confidence = min(confidence, 60.0)
     confidence = min(confidence, 99.0)
 
-    all_evidence = stei_evidence + dynamic_evidence + corr_evidence + banking_evidence
+    all_evidence = stei_evidence + dynamic_evidence + corr_evidence + banking_evidence + vide_evidence
 
     return {
         # Legacy fields (keep backward compat)
@@ -858,6 +909,7 @@ def calculate_risk_score(
             "stei_evidence_by_axis": stei_by_axis,
         },
         "recommended_action": _get_recommended_action(band, family, flags_dict),
+        "vide_result": vide_result or {},
     }
 
 

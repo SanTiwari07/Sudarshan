@@ -90,6 +90,26 @@ You MUST respond with strictly valid JSON. No markdown. No code blocks. No extra
 }}"""
 
 
+def _build_vide_evidence_block(vide_result: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not vide_result:
+        return {"Available": False}
+    vc = vide_result.get("vide_compare") or {}
+    si = vide_result.get("signer_impersonation") or {}
+    return {
+        "Available": bool(vide_result.get("available")),
+        "Status": vide_result.get("status", "UNKNOWN"),
+        "RuleId": vc.get("rule_id"),
+        "Detected": vc.get("detected"),
+        "Institution": vide_result.get("visual_impersonation_institution"),
+        "Confidence": vide_result.get("visual_impersonation_confidence"),
+        "Scores": vc.get("scores"),
+        "MatchedStrings": (vc.get("matched_strings") or [])[:12],
+        "EvidenceLines": (vc.get("evidence_lines") or [])[:8],
+        "SignerImpersonation": si.get("detected"),
+        "CriticalVisualCluster": vide_result.get("critical_visual_cluster"),
+    }
+
+
 def _build_evidence_dict(
     flags: Dict[str, Any],
     family: str,
@@ -98,6 +118,7 @@ def _build_evidence_dict(
     risk_result: Dict[str, Any],
     correlation: Optional[Dict] = None,
     dynamic: Optional[Dict] = None,
+    vide_result: Optional[Dict] = None,
 ) -> Dict[str, Any]:
     """Build structured evidence dict for Gemini — strictly grounded data."""
     evidence: Dict[str, Any] = {
@@ -118,6 +139,7 @@ def _build_evidence_dict(
             "BankPackagesFound": flags.get("indian_bank_packages_found", [])[:5],
         },
         "Evidence": risk_result.get("evidence", [])[:8],
+        "VIDE": _build_vide_evidence_block(vide_result or risk_result.get("vide_result")),
     }
 
     if correlation and correlation.get("available"):
@@ -208,6 +230,7 @@ async def analyze_with_llm(
     risk_result: Optional[Dict[str, Any]] = None,
     correlation: Optional[Dict] = None,
     dynamic: Optional[Dict] = None,
+    vide_result: Optional[Dict] = None,
     max_retries: int = 3,
 ) -> Dict[str, Any]:
     """
@@ -240,7 +263,8 @@ async def analyze_with_llm(
 
     # ── Build verified evidence & RAG context ─────────────────────────────────
     evidence = _build_evidence_dict(
-        flags, family, matched_rule, package_name, risk_result, correlation, dynamic
+        flags, family, matched_rule, package_name, risk_result,
+        correlation, dynamic, vide_result,
     )
     rag_context = build_rag_context(family=family, flags=flags, correlation_result=correlation)
     evidence_json = json.dumps(evidence, indent=2)

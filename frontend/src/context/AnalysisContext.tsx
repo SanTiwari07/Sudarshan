@@ -51,6 +51,7 @@ function mapCaseDetailToFraudCard(caseDetail: Record<string, unknown>): FraudCar
     threat_correlation: caseDetail.threat_correlation as FraudCardData['threat_correlation'],
     dynamic_available: Boolean(caseDetail.dynamic_available),
     dynamic_analysis: dyn,
+    dynamic_result: (caseDetail.dynamic_result || caseDetail.dynamic_analysis) as FraudCardData['dynamic_result'],
     manifest_findings: (caseDetail.manifest_findings as FraudCardData['manifest_findings']) || [],
     code_findings: (caseDetail.code_findings as FraudCardData['code_findings']) || [],
     dangerous_permissions: (caseDetail.dangerous_permissions as FraudCardData['dangerous_permissions']) || [],
@@ -72,6 +73,7 @@ function mapCaseDetailToFraudCard(caseDetail: Record<string, unknown>): FraudCar
     emails: (caseDetail.emails as string[]) || [],
     apktool_enrichment: caseDetail.apktool_enrichment as FraudCardData['apktool_enrichment'],
     jadx_enrichment: caseDetail.jadx_enrichment as FraudCardData['jadx_enrichment'],
+    vide: caseDetail.vide as FraudCardData['vide'],
     executive_view: (caseDetail.executive_view as FraudCardData['executive_view']) || {
       risk_badge: String(caseDetail.risk_band || 'Safe'),
       plain_english_narrative:

@@ -4,6 +4,7 @@ import {
   ChevronDown, ChevronUp, Shield, Globe, AlertTriangle, Database, Tag, Key
 } from 'lucide-react';
 import type { FraudCardData } from '../App';
+import VisualImpersonationPanel from '../components/investigation/VisualImpersonationPanel';
 import { exportJSON, exportCSV } from '../utils/derive';
 import { API_BASE, authHeaders } from '../config';
 import SocCard from '../components/ui/Card';
@@ -989,6 +990,7 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
       </EvidenceSection>
 
       <EvidenceSection title="Static analysis" description="Permissions, bytecode signals, manifest, and attack surface.">
+        <VisualImpersonationPanel data={data} />
         <div className="analyst-grid-2">
           <PermissionTable data={data} />
           <DangerousAPITable data={data} />

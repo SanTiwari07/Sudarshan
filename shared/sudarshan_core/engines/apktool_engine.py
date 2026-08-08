@@ -36,7 +36,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +61,9 @@ class ApktoolResult:
     resource_strings: List[str] = field(default_factory=list)
     obfuscated_resource_count: int = 0
     error: Optional[str] = None
+    # VIDE (CH11 T2): structural UI profile extracted before temp dir cleanup
+    ui_profile: Dict[str, Any] = field(default_factory=dict)
+    overlay_html_asset_count: int = 0
 
 
 class ApktoolEngine:
@@ -172,6 +175,15 @@ class ApktoolEngine:
         # Deduplicate
         result.resource_strings = list(dict.fromkeys(result.resource_strings))[:50]
         result.suspicious_resources = list(dict.fromkeys(result.suspicious_resources))[:20]
+
+        try:
+            from sudarshan_core.engines.vide.static_profile import build_static_ui_profile
+
+            profile, html_count = build_static_ui_profile(out_dir)
+            result.ui_profile = profile.to_dict()
+            result.overlay_html_asset_count = html_count
+        except Exception as e:
+            logger.warning("[APKTool] VIDE static profile extraction failed: %s", e)
 
         logger.info(
             f"[APKTool] Analysis complete: {len(result.suspicious_resources)} suspicious resources, "

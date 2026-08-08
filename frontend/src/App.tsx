@@ -243,6 +243,51 @@ export type FraudCardData = {
     matched_rule: string;
     decoded_manifest_excerpts: string[];
   };
+  vide?: VideResult;
+};
+
+export type VideCompareScores = {
+  string_jaccard?: number;
+  tree_similarity?: number;
+  color_match?: number;
+};
+
+export type VideCompareResult = {
+  rule_id: string;
+  detected: boolean;
+  capability?: string;
+  institution_id?: string;
+  institution_display?: string;
+  confidence?: number;
+  scores?: VideCompareScores;
+  matched_strings?: string[];
+  evidence_lines?: string[];
+};
+
+export type VideSignerResult = {
+  detected: boolean;
+  rule_id?: string;
+  package_name?: string;
+  signer_sha256?: string;
+  evidence_lines?: string[];
+};
+
+export type VideResult = {
+  available?: boolean;
+  status?: string;
+  error?: string;
+  vide_compare?: VideCompareResult;
+  signer_impersonation?: VideSignerResult;
+  suspect_profile_summary?: {
+    string_count?: number;
+    view_node_count?: number;
+    sources?: string;
+  };
+  critical_visual_cluster?: boolean;
+  visual_impersonation_detected?: boolean;
+  visual_impersonation_institution?: string;
+  visual_impersonation_confidence?: number;
+  ui_hierarchy_integrated?: boolean;
 };
 
 // ─── Auth Guard & Wrappers ──────────────────────────────────────────────────

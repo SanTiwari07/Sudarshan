@@ -246,6 +246,7 @@ def a11y_config(apk: APK):
 | **Referenced package names** | **Overlay target list.** Is the client bank on it? |
 | **URLs in resources** | C2 and phishing infrastructure |
 | **Overlay HTML in `assets/`** | Direct evidence of phishing intent; often bank-branded |
+| **VIDE UI structural profile** (`res/layout` + `assets/*.html` + optional dynamic WebView/uiautomator) | **Disjoint-package impersonation** — deterministic **VIDE-F001** vs lab baselines; CH06 signer check separate. See [VIDE architecture](../../docs/architecture/VIDE.md). **Static path: verified in CI.** **Dynamic WebView path: code + bundle verified; live device requires frida-server (see `scripts/verify_vide_webview_device.md`).** Lab baselines only — not production bank authority. |
 | **High-entropy blobs in `assets/`** | Encrypted stage-2 payload |
 | **Certificate/key material** | Correlation pivots → [Ch 05 §10](../security/05-android-cryptography.md#10-detection-logic-for-sudarshan) |
 

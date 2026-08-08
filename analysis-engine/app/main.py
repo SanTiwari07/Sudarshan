@@ -36,6 +36,9 @@ from sudarshan_core.engines.jadx_engine import JadxEngine
 from sudarshan_core.engines.frida_sandbox import run_frida_analysis
 from sudarshan_core.engines.network_capture import NetworkCapture
 from sudarshan_core.engines.risk_engine import calculate_risk_score as compute_fraud_risk_score
+from sudarshan_core.engines.vide import run_vide_analysis
+from sudarshan_core.engines.vide.pipeline import safe_run_vide_analysis
+from sudarshan_core.engines.vide.ui_profile import UIProfile
 from sudarshan_core.models.manifest import build_manifest
 from sudarshan_core.services.mobsf_client import MobSFAnalysisError, MobSFClient, MobSFNotAvailable
 from sudarshan_core.services.threat_correlator import correlate, extract_dynamic_urls
@@ -289,13 +292,51 @@ async def _execute_analysis_pipeline(
         # (toolchain-less) local run. The backend has always guarded this
         # (routes/upload.py); the engine did not.
         mobsf_res = None
-        if os.getenv("MOBSF_HOST"):
+        mobsf_budget = int(os.getenv("MOBSF_MAX_SECONDS", "0") or "0")
+
+        async def _run_mobsf() -> Optional[Dict[str, Any]]:
             try:
-                mobsf_res = await MobSFClient().analyze(apk_path)
+                client = MobSFClient()
+                if mobsf_budget > 0:
+                    return await asyncio.wait_for(
+                        client.analyze(apk_path),
+                        timeout=float(mobsf_budget),
+                    )
+                return await client.analyze(apk_path)
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "[Engine] MobSF exceeded MOBSF_MAX_SECONDS=%ss; continuing without MobSF",
+                    mobsf_budget,
+                )
+                return None
             except (MobSFAnalysisError, MobSFNotAvailable) as e:
                 logger.warning("[Engine] MobSF unavailable, continuing without it: %s", e)
+                return None
             except Exception as e:
                 logger.warning("[Engine] MobSF failed unexpectedly, continuing without it: %s", e)
+                return None
+
+        async def _run_apktool():
+            if await asyncio.to_thread(_apktool.is_available):
+                return await asyncio.to_thread(_apktool.analyze, apk_path)
+            return None
+
+        async def _run_jadx():
+            if await asyncio.to_thread(_jadx.is_available):
+                return await asyncio.to_thread(_jadx.analyze, apk_path)
+            return None
+
+        if os.getenv("MOBSF_HOST"):
+            mobsf_res, apktool_res, jadx_res = await asyncio.gather(
+                _run_mobsf(),
+                _run_apktool(),
+                _run_jadx(),
+            )
+        else:
+            apktool_res, jadx_res = await asyncio.gather(
+                _run_apktool(),
+                _run_jadx(),
+            )
 
         flags_dict = {
             "dangerous_permissions": permissions,
@@ -313,20 +354,6 @@ async def _execute_analysis_pipeline(
             "has_sms_read_write": getattr(flags, "has_sms_read_write", False),
             "has_system_alert_window": getattr(flags, "has_system_alert_window", False),
         }
-
-        # 2. Standalone Static Enrichment (APKTool + JADX)
-        #    Both shell out via a blocking subprocess.run (with their own 120s /
-        #    180s timeouts), so they must not run on the loop either.
-        apktool_res = (
-            await asyncio.to_thread(_apktool.analyze, apk_path)
-            if await asyncio.to_thread(_apktool.is_available)
-            else None
-        )
-        jadx_res = (
-            await asyncio.to_thread(_jadx.analyze, apk_path)
-            if await asyncio.to_thread(_jadx.is_available)
-            else None
-        )
 
         if apktool_res and apktool_res.decoded_manifest_xml:
             flags_dict["decoded_manifest_xml"] = apktool_res.decoded_manifest_xml
@@ -378,6 +405,26 @@ async def _execute_analysis_pipeline(
             dynamic_urls=extract_dynamic_urls(dynamic_result),
         )
 
+        if dynamic_result and isinstance(dynamic_result, dict):
+            dynamic_result["has_high_risk_capabilities"] = bool(
+                getattr(flags, "has_accessibility_abuse", False)
+                or getattr(flags, "has_system_alert_window", False)
+                or getattr(flags, "has_sms_read_write", False)
+            )
+
+        suspect_ui = None
+        if apktool_res and apktool_res.ui_profile:
+            suspect_ui = UIProfile.from_dict(apktool_res.ui_profile)
+
+        vide_result = await asyncio.to_thread(
+            safe_run_vide_analysis,
+            suspect_profile=suspect_ui,
+            dynamic_result=dynamic_result,
+            package_name=package_name or "",
+            certificate=(mobsf_res or {}).get("certificate", {}),
+            apktool_available=bool(apktool_res and apktool_res.available),
+        )
+
         risk_output = await asyncio.to_thread(
             compute_fraud_risk_score,
             flags=flags,
@@ -387,6 +434,7 @@ async def _execute_analysis_pipeline(
             # every sample, because _axis_pr falls back to an empty list. The
             # backend already passed it (routes/upload.py); the engine did not.
             all_permissions=permissions,
+            vide_result=vide_result,
         )
 
         # MobSF is the only source for component inventory, certificate and
@@ -448,7 +496,9 @@ async def _execute_analysis_pipeline(
                 "static_mobsf": mobsf_res is not None,
                 "dynamic_frida": bool(dynamic_result and dynamic_result.get("available")),
                 "threat_correlation": bool(threat_corr and threat_corr.get("available")),
+                "vide_ui": bool(vide_result.get("visual_impersonation_detected")),
             },
+            "vide": vide_result,
         }
 
     # The timeout only has teeth now that every blocking step is dispatched to a

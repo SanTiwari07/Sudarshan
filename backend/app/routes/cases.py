@@ -146,6 +146,7 @@ class CaseDetail(CaseSummary):
     network_security: Dict[str, Any] = Field(default_factory=dict)
     trackers: List[Dict[str, Any]] = Field(default_factory=list)
     emails: List[str] = Field(default_factory=list)
+    vide: Optional[Dict[str, Any]] = None
 
 
 class CaseListResponse(BaseModel):
@@ -224,6 +225,7 @@ def _case_detail_from_row(row: Dict[str, Any]) -> CaseDetail:
         network_security=row.get("network_security") or {},
         trackers=row.get("trackers") or [],
         emails=row.get("emails") or [],
+        vide=row.get("vide"),
     )
 
 

@@ -1603,6 +1603,7 @@ class FridaSession:
         # Which explorer actually ran ("agentic" | "ui_explorer" | "none"), and
         # why it failed if it did. Surfaced in the result so a reviewer can tell
         # AI exploration from a rollback without reading the logs.
+        self.last_ui_hierarchy_xml: str = ""
         self.explorer_used: str = "none"
         self.explorer_error: Optional[str] = None
         # Which of the 5-step launch ladder succeeded for this sample.
@@ -2765,6 +2766,9 @@ class FridaSession:
                 try:
                     explorer.stop()
                     self.reports = explorer.get_reports()
+                    ui_xml = getattr(explorer, "last_ui_hierarchy_xml", "") or ""
+                    if ui_xml:
+                        self.last_ui_hierarchy_xml = ui_xml
                     # Flush agentic-only artifacts (audit_log.json, benchmark.json)
                     # UIExplorer does not have flush_artifacts() — guarded by hasattr.
                     if hasattr(explorer, 'flush_artifacts'):
@@ -3334,6 +3338,11 @@ async def _run_device_session(
         # every captured image was invisible to the API, the report and the
         # analyst. The manifest is now surfaced here and flushed to disk below.
         "screenshots": _collect_screenshots(session),
+        "frida_events": {
+            cat: list(events)[:50]
+            for cat, events in session.collected_events.items()
+        },
+        "ui_hierarchy_xml": session.last_ui_hierarchy_xml or None,
         # Package still alive after force-stop at session end.
         "survived_force_stop": session.survived_force_stop,
         # Real activities observed during the session, derived from the

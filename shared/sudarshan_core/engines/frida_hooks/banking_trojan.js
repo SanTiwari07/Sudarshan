@@ -1336,6 +1336,40 @@ function initHooks() {
         };
         registerHook('WebView.loadUrl');
 
+        WebView.loadData.overload('java.lang.String', 'java.lang.String', 'java.lang.String').implementation = function (data, mime, encoding) {
+          var preview = data ? data.substring(0, 500) : '';
+          emit('network', {
+            hook: 'WebView.loadData',
+            class_name: 'android.webkit.WebView',
+            severity: 'HIGH',
+            html_preview: preview,
+            mime: mime ? mime.toString() : null,
+            description: 'WebView.loadData HTML overlay (' + (preview ? preview.length : 0) + ' chars)',
+          });
+          return this.loadData(data, mime, encoding);
+        };
+        registerHook('WebView.loadData');
+
+        WebView.loadDataWithBaseURL.overload(
+          'java.lang.String',
+          'java.lang.String',
+          'java.lang.String',
+          'java.lang.String',
+          'java.lang.String'
+        ).implementation = function (baseUrl, data, mime, encoding, historyUrl) {
+          var preview = data ? data.substring(0, 500) : '';
+          emit('network', {
+            hook: 'WebView.loadDataWithBaseURL',
+            class_name: 'android.webkit.WebView',
+            severity: 'HIGH',
+            html_preview: preview,
+            base_url: baseUrl ? baseUrl.toString() : null,
+            description: 'WebView.loadDataWithBaseURL overlay (' + (preview ? preview.length : 0) + ' chars)',
+          });
+          return this.loadDataWithBaseURL(baseUrl, data, mime, encoding, historyUrl);
+        };
+        registerHook('WebView.loadDataWithBaseURL');
+
         WebView.evaluateJavascript.overload('java.lang.String', 'android.webkit.ValueCallback').implementation = function (script, callback) {
           var scriptPreview = script ? script.substring(0, 200) : '';
           emit('network', {

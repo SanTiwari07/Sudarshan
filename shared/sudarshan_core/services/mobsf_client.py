@@ -55,6 +55,21 @@ HEALTH_CACHE_TTL_UP: float = float(os.getenv("MOBSF_HEALTH_TTL_UP", "60"))
 # rediscover that a service which is not deployed is still not deployed.
 HEALTH_CACHE_TTL_DOWN: float = float(os.getenv("MOBSF_HEALTH_TTL_DOWN", "300"))
 
+# MobSF /api/v1/scan blocks until JADX/SAST finish. Large APKs routinely exceed
+# 5 minutes; a short client timeout aborts the HTTP call while MobSF keeps
+# scanning, which led to full re-upload/re-scan retries and sqlite lock storms.
+MOBSF_UPLOAD_TIMEOUT_SECONDS: float = float(
+    os.getenv("MOBSF_UPLOAD_TIMEOUT_SECONDS", "300")
+)
+MOBSF_SCAN_TIMEOUT_SECONDS: float = float(os.getenv("MOBSF_SCAN_TIMEOUT_SECONDS", "900"))
+MOBSF_REPORT_TIMEOUT_SECONDS: float = float(
+    os.getenv("MOBSF_REPORT_TIMEOUT_SECONDS", "120")
+)
+MOBSF_POLL_INTERVAL_SECONDS: float = float(
+    os.getenv("MOBSF_POLL_INTERVAL_SECONDS", "15")
+)
+MOBSF_POLL_MAX_SECONDS: float = float(os.getenv("MOBSF_POLL_MAX_SECONDS", "600"))
+
 # ─── Exceptions ───────────────────────────────────────────────────────────────
 
 class MobSFNotAvailable(Exception):
@@ -194,7 +209,7 @@ class MobSFClient:
         file_name = os.path.basename(apk_path)
 
         with open(apk_path, "rb") as f:
-            async with httpx.AsyncClient(timeout=300.0) as client:
+            async with httpx.AsyncClient(timeout=MOBSF_UPLOAD_TIMEOUT_SECONDS) as client:
                 r = await client.post(
                     f"{self.host}/api/v1/upload",
                     headers=self.headers,
@@ -211,18 +226,58 @@ class MobSFClient:
 
     async def scan(self, scan_hash: str, rescan: bool = False) -> None:
         """Trigger static analysis scan for an uploaded APK."""
-        async with httpx.AsyncClient(timeout=300.0) as client:
-            r = await client.post(
-                f"{self.host}/api/v1/scan",
-                headers=self.headers,
-                data={"hash": scan_hash, "re_scan": 1 if rescan else 0},
+        timeout = httpx.Timeout(MOBSF_SCAN_TIMEOUT_SECONDS, connect=30.0)
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                r = await client.post(
+                    f"{self.host}/api/v1/scan",
+                    headers=self.headers,
+                    data={"hash": scan_hash, "re_scan": 1 if rescan else 0},
+                )
+                r.raise_for_status()
+        except httpx.TimeoutException:
+            logger.warning(
+                "MobSF scan HTTP timed out after %.0fs for hash=%s; "
+                "scan may still be running — polling report",
+                MOBSF_SCAN_TIMEOUT_SECONDS,
+                scan_hash,
             )
-            r.raise_for_status()
+            await self._wait_for_report(scan_hash)
+            return
         logger.info(f"MobSF scan triggered for hash={scan_hash}")
+
+    @staticmethod
+    def _report_ready(raw: Dict[str, Any]) -> bool:
+        """True when MobSF has produced a usable static report."""
+        if not isinstance(raw, dict):
+            return False
+        if raw.get("package_name") or raw.get("app_name"):
+            return True
+        perms = raw.get("permissions")
+        return isinstance(perms, dict) and len(perms) > 0
+
+    async def _wait_for_report(self, scan_hash: str) -> None:
+        """Poll report_json until the scan completes or the poll budget expires."""
+        deadline = time.monotonic() + MOBSF_POLL_MAX_SECONDS
+        while time.monotonic() < deadline:
+            try:
+                raw = await self.get_report(scan_hash)
+                if self._report_ready(raw):
+                    logger.info("MobSF report ready after poll for hash=%s", scan_hash)
+                    return
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code not in (400, 404):
+                    raise
+            except httpx.TimeoutException:
+                pass
+            await asyncio.sleep(MOBSF_POLL_INTERVAL_SECONDS)
+        raise MobSFAnalysisError(
+            f"MobSF scan did not complete within {MOBSF_POLL_MAX_SECONDS:.0f}s poll window"
+        )
 
     async def get_report(self, scan_hash: str) -> Dict[str, Any]:
         """Fetch complete JSON report for a scan hash."""
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=MOBSF_REPORT_TIMEOUT_SECONDS) as client:
             r = await client.post(
                 f"{self.host}/api/v1/report_json",
                 headers=self.headers,
@@ -250,30 +305,61 @@ class MobSFClient:
         """
         Full pipeline: upload → scan → report → parse.
         Returns a normalized dict consumed by Sudarshan's engines.
-        Falls back to empty_report on any failure.
         """
         max_retries = 3
-        
+        scan_hash: Optional[str] = None
+
         for attempt in range(max_retries):
             try:
-                logger.info(f"MobSF analysis attempt {attempt + 1}/{max_retries} for {apk_path}")
+                logger.info(
+                    "MobSF analysis attempt %s/%s for %s",
+                    attempt + 1,
+                    max_retries,
+                    apk_path,
+                )
                 scan_hash = await self.upload(apk_path)
                 await self.scan(scan_hash)
-
-                # MobSF analysis typically takes 30–120 seconds
-                # The scan endpoint is synchronous on the server side
                 raw = await self.get_report(scan_hash)
+                if not self._report_ready(raw):
+                    await self._wait_for_report(scan_hash)
+                    raw = await self.get_report(scan_hash)
                 scorecard = await self.get_scorecard(scan_hash)
-
                 return self._parse_report(raw, scorecard, scan_hash)
 
             except MobSFNotAvailable:
                 raise
+            except httpx.TimeoutException as e:
+                # Do not re-upload while a server-side scan may still be running.
+                if scan_hash:
+                    logger.warning(
+                        "MobSF client timeout on attempt %s (hash=%s): %s — polling",
+                        attempt + 1,
+                        scan_hash,
+                        e,
+                    )
+                    try:
+                        await self._wait_for_report(scan_hash)
+                        raw = await self.get_report(scan_hash)
+                        scorecard = await self.get_scorecard(scan_hash)
+                        return self._parse_report(raw, scorecard, scan_hash)
+                    except Exception as poll_err:
+                        logger.error(
+                            "MobSF poll after timeout failed on attempt %s: %s",
+                            attempt + 1,
+                            poll_err,
+                        )
+                        if attempt == max_retries - 1:
+                            raise MobSFAnalysisError(str(poll_err)) from poll_err
+                else:
+                    logger.error("MobSF upload timed out on attempt %s: %s", attempt + 1, e)
+                    if attempt == max_retries - 1:
+                        raise MobSFAnalysisError(str(e)) from e
             except Exception as e:
                 logger.error(f"MobSF analysis failed on attempt {attempt + 1}: {e}")
                 if attempt == max_retries - 1:
-                    raise MobSFAnalysisError(str(e))
-                await asyncio.sleep(2.0 ** (attempt + 1))
+                    raise MobSFAnalysisError(str(e)) from e
+            await asyncio.sleep(2.0 ** (attempt + 1))
+        raise MobSFAnalysisError("MobSF analysis failed after retries")
 
     def _parse_report(
         self, raw: Dict[str, Any], scorecard: Dict[str, Any], scan_hash: str

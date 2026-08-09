@@ -10,7 +10,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   fi
   if git log "$range" --format='%an%n%ae%n%cn%n%ce%n%B%n---' 2>/dev/null \
     | grep -qiE 'cursoragent@cursor\.com|199161495\+cursoragent@users\.noreply\.github\.com|^co-authored-by:[[:space:]]*cursor|^made-with:[[:space:]]*cursor'; then
-    echo "pre-push: blocked — commits include Cursor Agent attribution." >&2
+    echo "pre-push: blocked - commits include Cursor Agent attribution." >&2
     echo "Run: powershell -File scripts/strip-cursor-from-git-history.ps1" >&2
     exit 1
   fi

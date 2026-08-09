@@ -196,7 +196,7 @@ export default function History() {
                       </td>
                       <td className="px-4 py-3 min-w-[12rem]">
                         <div className="font-medium text-slate-800 truncate">
-                          {c.app_name || c.package_name || '—'}
+                          {c.app_name || c.package_name || '-'}
                         </div>
                         {c.app_name && c.package_name && (
                           <div className="text-xs text-slate-400 truncate font-mono">{c.package_name}</div>

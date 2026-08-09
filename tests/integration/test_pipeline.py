@@ -13,7 +13,7 @@ Tests:
   5. Risk Engine (STEI/BFCI/FRS scoring)
   6. Backend API (upload endpoint, auth)
   7. Dashboard API (cases, reports)
-  8. Dynamic Analysis (ADB + Frida — skipped if no emulator)
+  8. Dynamic Analysis (ADB + Frida - skipped if no emulator)
   9. Evidence Store
   10. Workflow Reconstructor
 
@@ -213,7 +213,7 @@ def test_apktool(apk_path: str):
         engine = ApktoolEngine()
 
         if not engine.is_available():
-            _skip("APKTool analyze", "apktool not in PATH (not installed locally — runs in container)")
+            _skip("APKTool analyze", "apktool not in PATH (not installed locally - runs in container)")
             return
 
         result = engine.analyze(apk_path)
@@ -236,7 +236,7 @@ def test_jadx(apk_path: str):
         engine = JadxEngine()
 
         if not engine.is_available():
-            _skip("JADX analyze", "jadx not in PATH (not installed locally — runs in container)")
+            _skip("JADX analyze", "jadx not in PATH (not installed locally - runs in container)")
             return
 
         result = engine.analyze(apk_path)
@@ -374,13 +374,13 @@ def test_backend_api(apk_path: str):
             token = r.json().get("access_token")
             _assert(bool(token), "Backend auth (JWT)", f"token={token[:20]}...")
         else:
-            _skip("Backend auth", f"HTTP {r.status_code} — may need ADMIN_PASSWORD env var")
+            _skip("Backend auth", f"HTTP {r.status_code} - may need ADMIN_PASSWORD env var")
             token = None
     except Exception as e:
         _assert(False, "Backend auth", str(e))
         token = None
 
-    # Upload endpoint (without auth — should get 401)
+    # Upload endpoint (without auth - should get 401)
     try:
         with open(apk_path, "rb") as f:
             r = requests.post(
@@ -389,7 +389,7 @@ def test_backend_api(apk_path: str):
                 timeout=10,
             )
         _assert(r.status_code in (401, 403, 422), "Unauthenticated upload rejected",
-                f"HTTP {r.status_code} (correct — not unauthorized to bypass auth)")
+                f"HTTP {r.status_code} (correct - not unauthorized to bypass auth)")
     except Exception as e:
         _assert(False, "Unauthenticated upload check", str(e))
 
@@ -410,7 +410,7 @@ def test_dynamic_analysis(apk_path: str):
 
         emulators = get_connected_emulators()
         if not emulators:
-            _skip("ADB emulator connected", "No emulator — start an AVD")
+            _skip("ADB emulator connected", "No emulator - start an AVD")
             _skip("APK install", "No emulator")
             _skip("App launch", "No emulator")
             _skip("Frida attach", "No emulator")
@@ -532,7 +532,7 @@ def test_threat_correlator():
         _assert("threat_score" in result, "Result has threat_score", f"{result.get('threat_score'):.1f}")
 
         if not result.get("available"):
-            print("     (No threat intel API keys configured — graceful degradation ✅)")
+            print("     (No threat intel API keys configured - graceful degradation ✅)")
 
     except Exception as e:
         _assert(False, "Threat correlator", str(e))
@@ -554,7 +554,7 @@ def main():
         sys.exit(1)
 
     print("=" * 70)
-    print("SUDARSHAN — Integration Test Suite")
+    print("SUDARSHAN - Integration Test Suite")
     print(f"APK: {apk_path}")
     print("=" * 70)
 

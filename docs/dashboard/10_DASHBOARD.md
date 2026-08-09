@@ -1,4 +1,4 @@
-# 10 — Analyst Dashboard & UI Specification
+# 10 - Analyst Dashboard & UI Specification
 
 ```yaml
 Module Title:        React 18 Analyst Dashboard & Workflow Components

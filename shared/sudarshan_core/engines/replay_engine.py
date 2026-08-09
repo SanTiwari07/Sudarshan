@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Replay Engine
+SUDARSHAN - Replay Engine
 ==========================
 Records UI actions taken by the AI Explorer or manually by an analyst,
 and allows them to be replayed deterministically via ADB.

@@ -10,7 +10,7 @@
   "final_risk_score": 25.95,
   "risk_band": "Safe",
   "confidence": 71.7,
-  "recommended_action": "MONITOR \u2014 Low risk. Approved for deployment under standard monitoring. Re-scan on next version update.",
+  "recommended_action": "MONITOR - Low risk. Approved for deployment under standard monitoring. Re-scan on next version update.",
   "frs_breakdown": {
     "stei": 30.71,
     "dynamic": 0.0,

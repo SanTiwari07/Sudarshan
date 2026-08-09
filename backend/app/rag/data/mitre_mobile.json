@@ -8,10 +8,10 @@
     "description": "Adversaries may abuse Android Accessibility Service to capture user input and screen content. This technique is used by banking trojans to intercept OTPs, harvest credentials, and perform overlay attacks without user awareness.",
     "mitigations": ["Disable Accessibility Service for untrusted apps", "MDM policy to restrict Accessibility permissions", "User awareness training"],
     "detection": "Monitor for BIND_ACCESSIBILITY_SERVICE in APK manifest. Alert on AccessibilityServiceInfo with eventType covering TYPE_VIEW_TEXT_CHANGED.",
-    "banking_relevance": "Critical — directly enables OTP harvesting from banking apps",
+    "banking_relevance": "Critical - directly enables OTP harvesting from banking apps",
     "ioc_patterns": ["BIND_ACCESSIBILITY_SERVICE", "onAccessibilityEvent", "AccessibilityNodeInfo"],
     "known_families": ["Xenomorph", "Anubis", "BankBot", "Cerberus", "Hydra", "SharkBot"],
-    "rbi_reference": "RBI Circular RBI/2021-22/74 — Mobile Banking Security"
+    "rbi_reference": "RBI Circular RBI/2021-22/74 - Mobile Banking Security"
   },
   {
     "id": "T1412",
@@ -22,7 +22,7 @@
     "description": "Adversaries may capture SMS messages to obtain OTPs and 2FA codes used by banking applications. READ_SMS and RECEIVE_SMS permissions allow silent interception of incoming messages before the user sees them.",
     "mitigations": ["Restrict SMS permissions on enterprise devices", "Use authenticator apps instead of SMS-based 2FA", "Monitor for apps requesting READ_SMS without clear purpose"],
     "detection": "Flag any APK requesting READ_SMS or RECEIVE_SMS that also targets banking applications.",
-    "banking_relevance": "Critical — RBI mandates OTP for all banking transactions; SMS interception breaks this security control",
+    "banking_relevance": "Critical - RBI mandates OTP for all banking transactions; SMS interception breaks this security control",
     "ioc_patterns": ["READ_SMS", "RECEIVE_SMS", "SEND_SMS", "SmsMessage.getMessageBody", "BroadcastReceiver SMS_RECEIVED"],
     "known_families": ["FluBot", "Cerberus", "Xenomorph", "Drinik", "Joker"],
     "rbi_reference": "RBI Master Direction on Digital Payment Security Controls 2021"
@@ -36,10 +36,10 @@
     "description": "Adversaries use SYSTEM_ALERT_WINDOW permission to draw overlay windows on top of legitimate banking apps, creating fake login screens that harvest credentials. The user interacts with the fake UI believing they are in the real banking app.",
     "mitigations": ["Block SYSTEM_ALERT_WINDOW for sideloaded APKs", "Implement visual anti-phishing indicators in banking apps", "MDM overlay protection policies"],
     "detection": "Flag SYSTEM_ALERT_WINDOW permission combined with banking app package name references.",
-    "banking_relevance": "Critical — primary credential harvesting technique for banking trojans targeting Indian UPI apps",
+    "banking_relevance": "Critical - primary credential harvesting technique for banking trojans targeting Indian UPI apps",
     "ioc_patterns": ["SYSTEM_ALERT_WINDOW", "TYPE_APPLICATION_OVERLAY", "WindowManager.LayoutParams", "NPCI", "UPI"],
     "known_families": ["Cerberus", "Anubis", "Hydra", "BankBot", "SOVA"],
-    "rbi_reference": "NPCI Security Circular 2022-23 — Mobile App Overlay Protection"
+    "rbi_reference": "NPCI Security Circular 2022-23 - Mobile App Overlay Protection"
   },
   {
     "id": "T1407",
@@ -50,10 +50,10 @@
     "description": "Adversaries use DexClassLoader or PathClassLoader to load additional DEX payloads from remote servers at runtime. This technique bypasses static analysis tools that only inspect the original APK, allowing malware to update its capabilities post-installation.",
     "mitigations": ["Network monitoring for DEX file downloads", "Restrict ClassLoader usage via app signing policies", "Runtime application self-protection (RASP)"],
     "detection": "Detect DexClassLoader, PathClassLoader, InMemoryDexClassLoader in DEX bytecode. Network traffic to raw DEX file URLs.",
-    "banking_relevance": "High — allows banking malware to receive new overlay templates or updated C2 commands without reinstallation",
+    "banking_relevance": "High - allows banking malware to receive new overlay templates or updated C2 commands without reinstallation",
     "ioc_patterns": ["DexClassLoader", "PathClassLoader", "InMemoryDexClassLoader", "loadDex", "dalvik.system"],
     "known_families": ["Drinik", "Xenomorph", "SpyNote"],
-    "rbi_reference": "CERT-In Advisory CIAD-2023-0042 — Android Dropper Malware"
+    "rbi_reference": "CERT-In Advisory CIAD-2023-0042 - Android Dropper Malware"
   },
   {
     "id": "T1516",
@@ -64,10 +64,10 @@
     "description": "Adversaries abuse addJavascriptInterface to expose native Android methods to JavaScript running in a WebView. Attacker-controlled web content can call Java code with device-level privileges, enabling remote code execution.",
     "mitigations": ["Remove addJavascriptInterface calls", "Use @JavascriptInterface annotation strictly", "Enable SafeBrowsing in WebView"],
     "detection": "Static: detect addJavascriptInterface. Dynamic: monitor WebView URL navigation to non-whitelisted domains.",
-    "banking_relevance": "High — webview injection enables fake banking portal sessions inside trojan app",
+    "banking_relevance": "High - webview injection enables fake banking portal sessions inside trojan app",
     "ioc_patterns": ["addJavascriptInterface", "WebView.loadUrl", "setJavaScriptEnabled"],
     "known_families": ["Anubis", "Cerberus"],
-    "rbi_reference": "RBI IT Framework for Banks 2021 — Secure Mobile App Development"
+    "rbi_reference": "RBI IT Framework for Banks 2021 - Secure Mobile App Development"
   },
   {
     "id": "T1603",
@@ -78,7 +78,7 @@
     "description": "Adversaries use Runtime.exec() or ProcessBuilder to execute shell commands on the Android device. This is used for privilege escalation, file system access, or executing additional payloads.",
     "mitigations": ["Static analysis scanning for Runtime.exec usage", "Application sandboxing", "Device policy restrictions"],
     "detection": "Detect Runtime.exec, ProcessBuilder.start, ProcessBuilder in DEX methods.",
-    "banking_relevance": "Medium — used for persistence and privilege escalation that enables banking malware to survive app uninstalls",
+    "banking_relevance": "Medium - used for persistence and privilege escalation that enables banking malware to survive app uninstalls",
     "ioc_patterns": ["Runtime.exec", "ProcessBuilder", "ProcessBuilder.start", "su ", "/system/bin/"],
     "known_families": ["SpyNote", "Dendroid"],
     "rbi_reference": "CERT-In Best Practices for Android Security"
@@ -92,10 +92,10 @@
     "description": "Adversaries use standard HTTP/HTTPS protocols to blend C2 traffic with legitimate web traffic. Hardcoded URLs in APK strings indicate callback endpoints for receiving commands or exfiltrating stolen credentials.",
     "mitigations": ["Network traffic inspection", "Block hardcoded C2 IPs at firewall", "Certificate pinning in banking apps"],
     "detection": "Extract hardcoded URLs from DEX strings. Flag non-CDN, non-known-good domains especially those using dynamic DNS.",
-    "banking_relevance": "High — C2 endpoints receive stolen OTPs and credentials from compromised banking sessions",
+    "banking_relevance": "High - C2 endpoints receive stolen OTPs and credentials from compromised banking sessions",
     "ioc_patterns": ["http://", "https://", "ngrok.io", "pastebin.com", ".xyz", ".tk", ".top", "telegram.org/bot"],
     "known_families": ["FluBot", "Drinik", "Xenomorph", "Joker"],
-    "rbi_reference": "CERT-In Alert 2023 — Banking Malware C2 Infrastructure"
+    "rbi_reference": "CERT-In Alert 2023 - Banking Malware C2 Infrastructure"
   },
   {
     "id": "T1418",
@@ -106,10 +106,10 @@
     "description": "Adversaries enumerate installed applications to identify specific targets. Banking trojans scan for Indian banking app package names to determine which overlay to deploy or which credentials to harvest.",
     "mitigations": ["Restrict QUERY_ALL_PACKAGES permission", "API-level restrictions on package enumeration"],
     "detection": "Flag APKs containing hardcoded Indian banking package names (com.boi, com.sbi, com.icici, etc.).",
-    "banking_relevance": "Critical — banking malware uses this to deploy targeted overlays for specific Indian banks including BOI, SBI, ICICI, HDFC",
+    "banking_relevance": "Critical - banking malware uses this to deploy targeted overlays for specific Indian banks including BOI, SBI, ICICI, HDFC",
     "ioc_patterns": ["com.boi", "com.sbi", "com.icici", "com.hdfc", "com.axis", "com.pnb", "com.kotak", "net.one97.paytm", "com.phonepe", "in.org.npci.upiapp"],
     "known_families": ["Drinik", "Xenomorph", "Cerberus", "SOVA"],
-    "rbi_reference": "RBI Cyber Security Framework 2021 — Threat Intelligence Sharing"
+    "rbi_reference": "RBI Cyber Security Framework 2021 - Threat Intelligence Sharing"
   },
   {
     "id": "T1430",
@@ -120,7 +120,7 @@
     "description": "Adversaries collect device GPS location data. In banking fraud contexts, location is used to evade fraud detection systems that flag transactions from unusual geographies.",
     "mitigations": ["Restrict ACCESS_FINE_LOCATION for apps without clear need", "Runtime permission monitoring"],
     "detection": "Flag ACCESS_FINE_LOCATION in apps that also request SMS or Accessibility permissions.",
-    "banking_relevance": "Medium — location data is exfiltrated to help fraudsters mimic legitimate transaction locations",
+    "banking_relevance": "Medium - location data is exfiltrated to help fraudsters mimic legitimate transaction locations",
     "ioc_patterns": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", "LocationManager", "FusedLocationProvider"],
     "known_families": ["SpyNote", "Anubis"],
     "rbi_reference": "RBI Customer Data Protection Guidelines 2022"
@@ -134,7 +134,7 @@
     "description": "Adversaries obfuscate code to prevent static analysis. Techniques include dynamic class loading, string encryption, and reflection-based API calls that hide the true intent of the malware.",
     "mitigations": ["Dynamic analysis in sandbox", "Deobfuscation engines", "Runtime monitoring"],
     "detection": "Detect reflection usage, Base64-encoded strings, dynamic class loading, and encrypted string constants.",
-    "banking_relevance": "Medium — obfuscation delays detection and incident response, increasing dwell time of banking malware",
+    "banking_relevance": "Medium - obfuscation delays detection and incident response, increasing dwell time of banking malware",
     "ioc_patterns": ["DexClassLoader", "Class.forName", "Method.invoke", "Base64.decode", "AES", "XOR"],
     "known_families": ["Cerberus", "Anubis", "Hydra"],
     "rbi_reference": "CERT-In Malware Analysis Guidelines 2022"

@@ -1,10 +1,10 @@
 """
-SUDARSHAN — Explainable Exploration Audit Log
+SUDARSHAN - Explainable Exploration Audit Log
 ===============================================
 Records every agent iteration as a structured, queryable log entry.
 
 Design rules:
-  - One entry per agent iteration — no partial writes.
+  - One entry per agent iteration - no partial writes.
   - Credential VALUES are NEVER written to the log.
     Only field_hint keys (e.g. "password") appear in tool params.
   - All app-controlled strings (UI text, activity names, Frida hook names)
@@ -126,7 +126,7 @@ class AuditLog:
           - `action` dict is copied and sanitized before storage.
             If action contains a 'text' key whose value is an actual credential
             (not a field_hint), it is replaced with the field_hint placeholder.
-          - Frida event data is stored verbatim — it contains only hook names
+          - Frida event data is stored verbatim - it contains only hook names
             and API call data, never user credentials.
         """
         safe_action = self._sanitize_action(action)
@@ -188,7 +188,7 @@ class AuditLog:
         """
         Write the complete audit log to a JSON file.
         Returns the number of entries written.
-        Idempotent — can be called multiple times.
+        Idempotent - can be called multiple times.
         """
         with self._lock:
             snapshot = list(self._entries)

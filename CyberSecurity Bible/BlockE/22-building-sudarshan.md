@@ -1,4 +1,4 @@
-# 22 — Building SUDARSHAN
+# 22 - Building SUDARSHAN
 
 > **Chapter ID:** `CH22` · **Block:** E (Building SUDARSHAN) · **Status:** Stable
 > **Tags:** `#architecture` `#principles` `#roadmap` `#non-goals` `#staging` `#design`
@@ -31,7 +31,7 @@
 
 Written precisely, because a vague problem statement produces a vague product.
 
-> A bank's fraud team receives an Android APK — pulled from a victim's device, flagged by a
+> A bank's fraud team receives an Android APK - pulled from a victim's device, flagged by a
 > threat feed, or found impersonating the bank's own app. They must answer, **inside the fraud
 > response window**:
 >
@@ -64,49 +64,49 @@ document nobody can audit six months later.
 
 Each one is a conclusion from Blocks A–D, not a preference.
 
-### P1 — No single signal is a verdict
+### P1 - No single signal is a verdict
 Not a permission, not obfuscation, not a VirusTotal count, not root detection. Scoring operates
 on **capability clusters** with corroboration.
 *Source: [Ch 04 §11](../security/04-android-security-model.md#11-detection-logic-for-sudarshan), [Ch 32](../appendix/32-common-misconceptions.md)*
 
-### P2 — Confidence and severity are separate axes
+### P2 - Confidence and severity are separate axes
 "Definitely bad" and "possibly very bad" are different rows in a queue and warrant different
 actions.
 *Source: [Ch 16 §8](../threat-intelligence/16-threat-intelligence.md#8-iocs-types-quality-lifecycle)*
 
-### P3 — Every point of score traces to an artifact
+### P3 - Every point of score traces to an artifact
 File path, line number, log offset, timestamp. A regulator can verify it; a model score cannot.
 *Source: [Ch 21 §10](../ai-malware-analysis/21-ai-assisted-malware-analysis.md#10-explainability-for-regulated-banks)*
 
-### P4 — Analysis quality caps confidence
-Packed and un-unpacked, or C2 unreachable, means **inconclusive** — never clean. Inability to
+### P4 - Analysis quality caps confidence
+Packed and un-unpacked, or C2 unreachable, means **inconclusive** - never clean. Inability to
 analyse is an escalation trigger, not a silent pass.
 *Source: [Ch 10 §13](../reverse-engineering/10-reverse-engineering.md#13-detection-logic-for-sudarshan), [Ch 12 §9](../dynamic-analysis/12-dynamic-analysis.md#9-sandbox-evasion)*
 
-### P5 — Identity is the signer, never the package name or hash
+### P5 - Identity is the signer, never the package name or hash
 Signer certificate SHA-256 is the primary index. Hashes are IOCs with short TTLs.
 *Source: [Ch 06 §9](../security/06-certificates.md#9-certificate--signature--hash)*
 
-### P6 — Recursion is mandatory
+### P6 - Recursion is mandatory
 Any dumped DEX or installed APK becomes a **linked child artifact** re-entering the full
 pipeline. Findings attach to the parent.
 *Source: [Ch 03 §11](../android/03-android-runtime.md#11-detection-logic-for-sudarshan), [Ch 09 §10](../apk/09-package-manager.md#10-detection-logic-for-sudarshan)*
 
-### P7 — Detect at the top of the Pyramid of Pain
+### P7 - Detect at the top of the Pyramid of Pain
 Weight TTPs and capability clusters above domains and hashes. Extract all levels; expire by type.
 *Source: [Ch 16 §7](../threat-intelligence/16-threat-intelligence.md#7-the-pyramid-of-pain)*
 
-### P8 — Two clocks, two tracks
+### P8 - Two clocks, two tracks
 Containment tolerates medium confidence in minutes; investigation requires high confidence over
 hours. Stream partial results.
 *Source: [Ch 20 §3](../incident-response/20-incident-response.md#3-the-response-clock)*
 
-### P9 — AI accelerates; deterministic rules decide
+### P9 - AI accelerates; deterministic rules decide
 ML orders the queue and links campaigns. LLMs summarise and draft. Neither produces a verdict or
 triggers containment.
 *Source: [Ch 21 §1](../ai-malware-analysis/21-ai-assisted-malware-analysis.md#1-where-ai-actually-helps)*
 
-> **⚖️ Judge Tip:** If asked "what's your differentiator," the answer is not a feature — it is
+> **⚖️ Judge Tip:** If asked "what's your differentiator," the answer is not a feature - it is
 > **P3 + P4 together**: every verdict is evidence-linked and reproducible, *and* the system
 > refuses to claim cleanliness on samples it could not actually analyse. Most scanners fail both.
 > Those two properties are what make the output usable by a regulated institution.
@@ -234,7 +234,7 @@ communicate intent. A property graph makes the pivot the primitive.
 > **⚙️ Engineering Note:** Store the graph in a graph database (or a relational store with an
 > explicit edge table) **and** keep a columnar analytical store for corpus-wide queries and
 > hunting ([Ch 18 §5](../soc/18-mobile-threat-hunting.md#5-hunt-playbooks)). Trying to serve both
-> access patterns from one engine is a common early mistake — graph traversal and
+> access patterns from one engine is a common early mistake - graph traversal and
 > aggregate-over-millions have genuinely different requirements.
 
 ---
@@ -259,7 +259,7 @@ Illustrative, with the reasoning that matters more than the specific pick.
 | Rules | Git-versioned (**detection-as-code**) | [Ch 19 §7](../soc/19-enterprise-soc-operations.md#7-detection-engineering) |
 | LLM | API-based, grounded, cited | [Ch 21 §7](../ai-malware-analysis/21-ai-assisted-malware-analysis.md#7-llms-in-malware-analysis) |
 
-> **⚙️ Engineering Note — the one non-negotiable:** **analysis tooling parses attacker-controlled
+> **⚙️ Engineering Note - the one non-negotiable:** **analysis tooling parses attacker-controlled
 > input.** `apktool`, `jadx`, `unzip`, image parsers, and MobSF have all had parser
 > vulnerabilities; MobSF v4.4.6 (March 2026) patched a SQL injection in its SQLite viewer. Every
 > parsing and detonation stage runs in an **isolated, ephemeral, network-restricted sandbox**,
@@ -293,7 +293,7 @@ Stating these explicitly prevents scope drift and, in a pitch, signals maturity.
 
 ## 8. Staging roadmap
 
-### Stage 1 — Deterministic core (0–3 months)
+### Stage 1 - Deterministic core (0–3 months)
 
 **Goal: a defensible verdict on a single APK, fast.**
 
@@ -312,7 +312,7 @@ Stating these explicitly prevents scope drift and, in a pitch, signals maturity.
 impersonating APK with cryptographic justification; produce a capability profile in under 2
 seconds; never emit "clean" for an unanalysable sample.
 
-### Stage 2 — Fusion and intelligence (3–9 months)
+### Stage 2 - Fusion and intelligence (3–9 months)
 
 | Ship | Chapter |
 |---|---|
@@ -324,7 +324,7 @@ seconds; never emit "clean" for an unanalysable sample.
 | MITRE ATT&CK mapping on every rule | [Ch 16 §3](../threat-intelligence/16-threat-intelligence.md#3-mitre-attck-for-mobile) |
 | SOC/SOAR API + partial-result streaming | [Ch 19 §6](../soc/19-enterprise-soc-operations.md#6-where-sudarshan-plugs-in) |
 
-### Stage 3 — Campaign scale and operations (9–18 months)
+### Stage 3 - Campaign scale and operations (9–18 months)
 
 | Ship | Chapter |
 |---|---|
@@ -350,7 +350,7 @@ seconds; never emit "clean" for an unanalysable sample.
 
 > **🏛️ Enterprise Insight:** Stage 1's impersonation rule is deliberately first. It is
 > deterministic, requires no ML, has essentially zero false positives when the registry is
-> correct, and demos in thirty seconds — genuine APK and clone side by side, same package name,
+> correct, and demos in thirty seconds - genuine APK and clone side by side, same package name,
 > different fingerprint, instant verdict with cryptographic justification. **Ship the credible
 > thing first**; it buys the runway to build the hard parts.
 
@@ -367,14 +367,14 @@ seconds; never emit "clean" for an unanalysable sample.
 | **Multi-tenancy** | Hard tenant isolation; cross-bank correlation only on aggregate, consented indicators |
 | **Auditability** | Every query, verdict, and verdict change logged immutably |
 | **Reproducibility** | Rule versions, tool versions, ART/Conscrypt module versions, model versions recorded per analysis |
-| **Detection timestamp** | Immutable — starts the CERT-In clock |
+| **Detection timestamp** | Immutable - starts the CERT-In clock |
 
-> **⚙️ Engineering Note — cross-tenant correlation is the hardest design problem in the product.**
+> **⚙️ Engineering Note - cross-tenant correlation is the hardest design problem in the product.**
 > The value proposition is that one bank's submission protects others
 > ([Ch 15 §11](../malware/15-malware-infrastructure.md#11-pivoting-infrastructure-as-an-investigative-graph)),
 > but bank A must never see bank B's customer or submission data. The workable design shares
 > **indicators and family/campaign linkage** (signer fingerprints, C2, code-similarity clusters)
-> while keeping **submissions, customer cohorts, and impact data tenant-private** — with the
+> while keeping **submissions, customer cohorts, and impact data tenant-private** - with the
 > sharing consented contractually. Get this wrong and the product is either useless or unsellable.
 
 ---
@@ -402,12 +402,12 @@ seconds; never emit "clean" for an unanalysable sample.
 ## 11. Engineering tips
 
 1. **Build the signer registry and impersonation rule first.** Highest precision, lowest cost.
-2. **Design the artifact graph with recursion from day one** — retrofitting P6 is painful.
+2. **Design the artifact graph with recursion from day one** - retrofitting P6 is painful.
 3. **Make analysis quality a first-class field**, not a log line.
 4. **Separate the graph store from the analytics store.**
 5. **Never parse untrusted input outside the sandbox.**
-6. **Stream partial results** — the money clock doesn't wait for certainty.
-7. **Version everything** — rules, tools, models, ART/Conscrypt.
+6. **Stream partial results** - the money clock doesn't wait for certainty.
+7. **Version everything** - rules, tools, models, ART/Conscrypt.
 8. **Write the "must not" boundaries into service contracts.**
 9. **Solve tenant isolation before multi-tenant correlation**, not after.
 10. **Keep non-goals visible in the repo**, not just in a slide.
@@ -420,25 +420,25 @@ seconds; never emit "clean" for an unanalysable sample.
 VirusTotal?"*
 
 **Perfect answer:** They could, and they'd get two things neither tool provides. MobSF scores app
-**security hygiene** — a hardened banking app with pinning and obfuscation grades badly while a
+**security hygiene** - a hardened banking app with pinning and obfuscation grades badly while a
 dropper with three permissions grades well, because the payload isn't there yet. VirusTotal is a
 multi-engine aggregator, and Anatsa's droppers reached the top of Play's Tools chart essentially
 undetected. What a bank actually needs is the answer to "is *our* package name in this malware's
 overlay target list, which of our customers have it installed, and what do we do in the next
-thirty minutes" — with every claim traceable to a file and a line so we can defend the decision
+thirty minutes" - with every claim traceable to a file and a line so we can defend the decision
 to RBI six months later. That's an investigation platform, not a scanner, and it's built around
 three constraints those tools weren't designed for: a minutes-long fraud window, mandatory
 explainability, and the fact that static and dynamic analysis have complementary blind spots so
 neither alone is sufficient.
 
 **Common mistakes:**
-- Claiming to prevent fraud. Claim to compress time-to-informed-response — provable and large.
+- Claiming to prevent fraud. Claim to compress time-to-informed-response - provable and large.
 - Not having non-goals. It reads as not having thought about scope.
 - Positioning against a SIEM. Banks have one and won't replace it.
 
 **Follow-ups to expect:**
 - *"What ships first?"* → The signer impersonation check. Deterministic, instant, essentially
-  zero false positives, and it demos in thirty seconds — genuine bank APK versus clone, same
+  zero false positives, and it demos in thirty seconds - genuine bank APK versus clone, same
   package name, different certificate fingerprint. Credible thing first.
 - *"How is this defensible to a regulator?"* → Every point of score traces to an artifact, and the
   system structurally refuses to report "clean" on a sample it couldn't actually analyse. Those
@@ -447,7 +447,7 @@ neither alone is sufficient.
   bank's submission protects four, but bank A can never see bank B's data. We share indicators
   and campaign linkage; submissions and customer impact stay tenant-private.
 
-**Fact that impresses:** The most valuable single output isn't the verdict — it's the extracted
+**Fact that impresses:** The most valuable single output isn't the verdict - it's the extracted
 **overlay target list**. It converts "this is malware" into "this campaign specifically hunts for
 `com.yourbank.app` alongside 46 other Indian financial apps," and it costs under a second to
 produce from resource strings. That's the finding a CISO forwards upward within the hour.
@@ -465,10 +465,10 @@ deterministic scoring layer with evidence pointers.
 **Q: "Why a graph database?"**
 Because investigation is pivoting: signer → sibling samples → shared key → affiliates → C2 →
 sibling domains → other victims. Relational can express it, but as joins-of-joins. Keep a separate
-columnar store for corpus-wide analytics — different access patterns.
+columnar store for corpus-wide analytics - different access patterns.
 
 **Q: "How do you make the verdict explainable?"**
-Deterministic rules produce the score; every point traces to an artifact — file, line, timestamp.
+Deterministic rules produce the score; every point traces to an artifact - file, line, timestamp.
 ML orders the queue; LLMs narrate. Nothing model-derived enters the verdict, so the decision is
 reproducible even after models change.
 
@@ -504,15 +504,15 @@ sharing contractually. Solve isolation before building correlation, not after.
 
 ## 15. References
 
-1. NIST SP 800-163 Rev. 1 — *Vetting the Security of Mobile Applications*.
-2. NIST SP 800-61 Rev. 2 — *Computer Security Incident Handling Guide*.
+1. NIST SP 800-163 Rev. 1 - *Vetting the Security of Mobile Applications*.
+2. NIST SP 800-61 Rev. 2 - *Computer Security Incident Handling Guide*.
 3. OWASP MASVS v2.1.0 / MASTG. https://mas.owasp.org/
 4. MITRE ATT&CK for Mobile. https://attack.mitre.org/matrices/mobile/
 5. MobSF documentation and release notes (v4.4.x). https://mobsf.github.io/docs/
-6. Androguard, YARA-X, TLSH, Frida — tooling documentation.
+6. Androguard, YARA-X, TLSH, Frida - tooling documentation.
 7. Digital Personal Data Protection Act, 2023 (India).
 8. CERT-In Directions, April 28, 2022.
-9. Reserve Bank of India — Cyber Security Framework for Banks.
+9. Reserve Bank of India - Cyber Security Framework for Banks.
 
 ---
 

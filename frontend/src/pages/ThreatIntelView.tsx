@@ -126,7 +126,7 @@ export default function ThreatIntelView({ data }: { data: FraudCardData | null }
               </div>
               <p className={`${INTEL.meta} leading-relaxed`}>{intel.ai_summary}</p>
               <p className={`${INTEL.caption} mt-3`}>
-                Grounded in intelligence report and engine facts — not an unverified model verdict.
+                Grounded in intelligence report and engine facts - not an unverified model verdict.
               </p>
             </SocCard>
           )}

@@ -33,7 +33,7 @@ Documentation was re-synchronized with the codebase after **VIDE** (`shared/suda
 ### Remaining TODOs
 
 - **VIDE live WebView on device**: Run `scripts/verify_vide_webview_device.md` when frida-server is up; do not mark device path as production-verified until that checklist passes.
-- **Dedicated `vide` RAG section**: Not implemented in `gemini_rag.py` today — optional future enhancement.
+- **Dedicated `vide` RAG section**: Not implemented in `gemini_rag.py` today - optional future enhancement.
 
 ---
 
@@ -61,20 +61,20 @@ A full zero-drift documentation pass was executed on **2026-08-06** against the 
 
 ## Files Updated
 
-- [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) — §12 security/containment; FRS weights; repo tree (`security/`, hardened compose); test metric **486**; Genymotion ADB wording.
-- [`docs/02_SYSTEM_OVERVIEW.md`](02_SYSTEM_OVERVIEW.md) — FRS renormalization; containment subsystem row; test metric **486**.
-- [`docs/01_INTRODUCTION.md`](01_INTRODUCTION.md) — FRS formulation and risk bands aligned to `risk_engine.py`.
-- [`docs/PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md) — FRS §4.3–4.4; test metric **486**.
-- [`docs/architecture/08_DETERMINISTIC_RISK_ENGINE.md`](architecture/08_DETERMINISTIC_RISK_ENGINE.md) — Full FRS section rewrite (axis exclusion, bands, visibility floor).
-- [`docs/architecture/04_DYNAMIC_ANALYSIS_ENGINE.md`](architecture/04_DYNAMIC_ANALYSIS_ENGINE.md) — §2c sandbox containment and ADB policy.
-- [`docs/DAE_CURRENT_STATE.md`](DAE_CURRENT_STATE.md) — Containment capabilities, remediation rows, limitations; test metric **486**.
-- [`docs/HOW_TO_RUN.md`](HOW_TO_RUN.md) — `.env.example`-aligned security vars; §5.1 hardened compose; admin password behavior.
-- [`docs/MIGRATION.md`](MIGRATION.md) — Internal token and gateway dynamic-analysis policy.
-- [`docs/README.md`](README.md) — Index entries for security runbooks; test metric **486**; containment test modules.
-- [`docs/CONTRIBUTING.md`](CONTRIBUTING.md), [`docs/VALIDATION.md`](VALIDATION.md), [`docs/evaluation/11_EVALUATION.md`](evaluation/11_EVALUATION.md) — Test metric **486**; containment test modules in 11.
-- [`docs/dashboard/10_DASHBOARD.md`](dashboard/10_DASHBOARD.md) — Risk band labels from API.
-- [`docs/CHANGELOG.md`](CHANGELOG.md) — **2026-08-06** release notes.
-- [`README.md`](../README.md) — FRS summary and test metric **486** (root entry point).
+- [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) - §12 security/containment; FRS weights; repo tree (`security/`, hardened compose); test metric **486**; Genymotion ADB wording.
+- [`docs/02_SYSTEM_OVERVIEW.md`](02_SYSTEM_OVERVIEW.md) - FRS renormalization; containment subsystem row; test metric **486**.
+- [`docs/01_INTRODUCTION.md`](01_INTRODUCTION.md) - FRS formulation and risk bands aligned to `risk_engine.py`.
+- [`docs/PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md) - FRS §4.3–4.4; test metric **486**.
+- [`docs/architecture/08_DETERMINISTIC_RISK_ENGINE.md`](architecture/08_DETERMINISTIC_RISK_ENGINE.md) - Full FRS section rewrite (axis exclusion, bands, visibility floor).
+- [`docs/architecture/04_DYNAMIC_ANALYSIS_ENGINE.md`](architecture/04_DYNAMIC_ANALYSIS_ENGINE.md) - §2c sandbox containment and ADB policy.
+- [`docs/DAE_CURRENT_STATE.md`](DAE_CURRENT_STATE.md) - Containment capabilities, remediation rows, limitations; test metric **486**.
+- [`docs/HOW_TO_RUN.md`](HOW_TO_RUN.md) - `.env.example`-aligned security vars; §5.1 hardened compose; admin password behavior.
+- [`docs/MIGRATION.md`](MIGRATION.md) - Internal token and gateway dynamic-analysis policy.
+- [`docs/README.md`](README.md) - Index entries for security runbooks; test metric **486**; containment test modules.
+- [`docs/CONTRIBUTING.md`](CONTRIBUTING.md), [`docs/VALIDATION.md`](VALIDATION.md), [`docs/evaluation/11_EVALUATION.md`](evaluation/11_EVALUATION.md) - Test metric **486**; containment test modules in 11.
+- [`docs/dashboard/10_DASHBOARD.md`](dashboard/10_DASHBOARD.md) - Risk band labels from API.
+- [`docs/CHANGELOG.md`](CHANGELOG.md) - **2026-08-06** release notes.
+- [`README.md`](../README.md) - FRS summary and test metric **486** (root entry point).
 
 ## Files Created
 
@@ -87,8 +87,8 @@ A full zero-drift documentation pass was executed on **2026-08-06** against the 
 ## Sections Rewritten
 
 - **FRS / risk bands** across `01_INTRODUCTION`, `02_SYSTEM_OVERVIEW`, `08_DETERMINISTIC_RISK_ENGINE`, `PROJECT_CONTEXT`, `ARCHITECTURE`, root `README.md` (removed obsolete 0.40/0.30 fixed-weight and legacy five-band table).
-- **Security & isolation** — `ARCHITECTURE.md` §12, `04_DYNAMIC_ANALYSIS_ENGINE.md` §2c, `HOW_TO_RUN.md` §5.1.
-- **DAE operational state** — containment remediation scorecard and known artifact-root limitation.
+- **Security & isolation** - `ARCHITECTURE.md` §12, `04_DYNAMIC_ANALYSIS_ENGINE.md` §2c, `HOW_TO_RUN.md` §5.1.
+- **DAE operational state** - containment remediation scorecard and known artifact-root limitation.
 
 ## Architecture Changes
 
@@ -118,7 +118,7 @@ A full zero-drift documentation pass was executed on **2026-08-06** against the 
 ## Remaining TODOs
 
 - [`docs/evaluation/CASE_STUDIES.md`](evaluation/CASE_STUDIES.md) and [`docs/VALIDATION.md`](VALIDATION.md) ground-truth tables still reference legacy `CRITICAL` score ranges (≥85 / ≥80); re-baseline against current `risk_engine.py` bands when corpus scores are re-measured.
-- Per-session ephemeral artifact roots — partial mitigation only; see [`security/P0_RED_TEAM_PENETRATION_REPORT.md`](security/P0_RED_TEAM_PENETRATION_REPORT.md).
+- Per-session ephemeral artifact roots - partial mitigation only; see [`security/P0_RED_TEAM_PENETRATION_REPORT.md`](security/P0_RED_TEAM_PENETRATION_REPORT.md).
 
 ## Warnings
 

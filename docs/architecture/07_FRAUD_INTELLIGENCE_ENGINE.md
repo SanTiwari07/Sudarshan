@@ -1,4 +1,4 @@
-# 07 — Fraud Intelligence Engine Specification
+# 07 - Fraud Intelligence Engine Specification
 
 ```yaml
 Module Title:        Threat Intelligence Correlation & Family Classification
@@ -76,6 +76,6 @@ Returns `family_classification` (e.g., `Drinik`, `Xenomorph`, or `Unknown`) and 
 
 ---
 
-## 5. Visual impersonation (VIDE) — not external TI
+## 5. Visual impersonation (VIDE) - not external TI
 
-Bank-brand UI impersonation is detected deterministically by **VIDE** ([`architecture/VIDE.md`](VIDE.md)) using lab UI baselines and certificate registry data — not VirusTotal/OTX. VIDE output is exposed as `vide` on the analysis/case payload and folded into FRS via [`risk_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/risk_engine.py).
+Bank-brand UI impersonation is detected deterministically by **VIDE** ([`architecture/VIDE.md`](VIDE.md)) using lab UI baselines and certificate registry data - not VirusTotal/OTX. VIDE output is exposed as `vide` on the analysis/case payload and folded into FRS via [`risk_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/risk_engine.py).

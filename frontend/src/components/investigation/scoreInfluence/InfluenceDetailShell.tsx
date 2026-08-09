@@ -46,12 +46,12 @@ export function FrsAxisTransparencyTable({
                   <span className="text-emerald-800 font-semibold">Included</span>
                 ) : (
                   <span className="text-amber-800 font-semibold">
-                    Excluded{r.reason ? ` — ${r.reason}` : ''}
+                    Excluded{r.reason ? ` - ${r.reason}` : ''}
                   </span>
                 )}
               </td>
               <td className="px-3 py-2 text-right font-mono tabular-nums">
-                {r.weightPct != null ? `${r.weightPct.toFixed(1)}%` : '—'}
+                {r.weightPct != null ? `${r.weightPct.toFixed(1)}%` : '-'}
               </td>
             </tr>
           ))}

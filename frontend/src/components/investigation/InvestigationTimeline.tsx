@@ -218,7 +218,7 @@ export default function InvestigationTimeline({
         title="Investigation timeline"
         subtitle={
           <>
-            Chronological sequence —{' '}
+            Chronological sequence - {' '}
             <HelpTerm term="Verified Evidence">verified evidence only</HelpTerm>, not raw system logs.
           </>
         }

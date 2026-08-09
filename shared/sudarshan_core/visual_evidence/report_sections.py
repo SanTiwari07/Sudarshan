@@ -59,7 +59,7 @@ def build_executive_visual_html(apk_dir: Optional[Path]) -> str:
             f'<div class="gallery-card"><div style="padding:12px">{img_tag}</div>'
             f'<div style="padding:12px"><strong>{sid}</strong> · Quality {qual} · {_esc(corr)}<br/>'
             f'<p style="margin-top:8px;font-size:13px">{claim}</p>'
-            f'<p style="font-size:12px;color:#666">Supported by: {evids or "—"}</p></div></div>'
+            f'<p style="font-size:12px;color:#666">Supported by: {evids or "-"}</p></div></div>'
         )
     parts.append("</div></section>")
     return "\n".join(parts)
@@ -107,11 +107,11 @@ def build_appendix_visual_html(apk_dir: Optional[Path]) -> str:
         return ""
     parts = [
         '<section class="section" id="appendix-visual-evidence">',
-        "<h2>Appendix — Additional Visual Context</h2><ul>",
+        "<h2>Appendix - Additional Visual Context</h2><ul>",
     ]
     for rec in rows:
         parts.append(
-            f"<li><strong>{_esc(str(rec.get('screenshot_id') or ''))}</strong> — "
+            f"<li><strong>{_esc(str(rec.get('screenshot_id') or ''))}</strong> - "
             f"{_esc(str(rec.get('investigative_claim') or '')[:160])}</li>"
         )
     parts.append("</ul></section>")

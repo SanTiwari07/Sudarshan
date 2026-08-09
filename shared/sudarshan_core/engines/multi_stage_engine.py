@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Multi-Stage Analysis Engine
+SUDARSHAN - Multi-Stage Analysis Engine
 ========================================
 Orchestrates multiple analysis runs for a single APK across different
 simulated device states (e.g. Fresh Install -> Accessibility Enabled -> Rebooted).

@@ -1,4 +1,4 @@
-# SUDARSHAN — Frida Dynamic Analysis Setup Guide
+# SUDARSHAN - Frida Dynamic Analysis Setup Guide
 
 This document explains how to set up the Frida-based dynamic behavioral analysis sandbox for the Sudarshan platform.
 
@@ -126,7 +126,7 @@ Fraud Intelligence Report (via Gemini 2.5 Flash / Ollama)
 
 ---
 
-## Step 1 — Create an Android Emulator in Android Studio
+## Step 1 - Create an Android Emulator in Android Studio
 
 1. Open **Android Studio → Virtual Device Manager**.
 2. Click **Create Device**.
@@ -136,7 +136,7 @@ Fraud Intelligence Report (via Gemini 2.5 Flash / Ollama)
 
 ---
 
-## Step 2 — Deploy frida-server on the Emulator
+## Step 2 - Deploy frida-server on the Emulator
 
 1. Download `frida-server-17.16.4-android-x86_64.xz` from [Frida Releases](https://github.com/frida/frida/releases/tag/17.16.4).
 2. Extract the file and push it to the device:

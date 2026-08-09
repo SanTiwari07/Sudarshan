@@ -23,7 +23,7 @@ INDIAN_BANK_PACKAGES = [
     "com.npci", "com.bhimupi", "in.org.npci.upiapp",
 ]
 
-# Dangerous API detection — REPORTED names.
+# Dangerous API detection - REPORTED names.
 #
 # These were previously matched with `if name in method.get_name()`, against a
 # method name, which never contains a dot. So "Runtime.exec",
@@ -32,7 +32,7 @@ INDIAN_BANK_PACKAGES = [
 # (risk_engine._axis_ob checks for "System.loadLibrary", classification_engine
 # checks for "Runtime.exec" and "DexClassLoader").
 #
-# Detection now matches the bare method name AND its defining class — see
+# Detection now matches the bare method name AND its defining class - see
 # analyze_apk. The names below are the labels the rest of the system expects and
 # must not be renamed.
 DANGEROUS_APIS = [
@@ -60,7 +60,7 @@ def _matches_package(haystack: str, package: str) -> bool:
     A package reference must end at a component boundary: end-of-string, a '/'
     (as in a component name "com.sbi.app/.MainActivity"), or a character that
     cannot continue an identifier. Without this, "com.sbi" matched
-    "com.sbidiagnostics" and "in.example.com.sbin" — false Banking-Targeting
+    "com.sbidiagnostics" and "in.example.com.sbin" - false Banking-Targeting
     hits that carry 20% of STEI plus a +20 regulatory bonus.
     """
     idx = 0
@@ -124,7 +124,7 @@ def _detects_accessibility_service(apk) -> bool:
       2. declared intent-filter actions
       3. the raw decoded manifest, as a last-resort substring match
 
-    Never raises — a manifest that fails to parse must degrade to False rather
+    Never raises - a manifest that fails to parse must degrade to False rather
     than abort the whole analysis.
     """
     # 1. Parsed service declarations
@@ -179,7 +179,7 @@ def _detect_concealed_payload(apk_path: str) -> Tuple[bool, List[str]]:
     Two principled indicators, both of which legitimate apps have no reason to
     exhibit:
 
-      1. A nested executable — an APK or DEX shipped as a resource/asset rather
+      1. A nested executable - an APK or DEX shipped as a resource/asset rather
          than as a top-level classes*.dex.
       2. A max-entropy blob (encrypted) that is large relative to the primary
          classes.dex, i.e. the real code is not the code you can read.
@@ -187,7 +187,7 @@ def _detect_concealed_payload(apk_path: str) -> Tuple[bool, List[str]]:
     Measured on the labelled corpus this fired on 5/8 banking trojans
     (Anubis, Drinik, FluBot, Hook, Octo) and 0/9 non-malware samples
     (4 legitimate apps, 4 OWASP crackmes, 1 deliberately vulnerable app).
-    That corpus is small — this is a measured signal, not a proven one.
+    That corpus is small - this is a measured signal, not a proven one.
 
     Never raises: a malformed archive degrades to "not detected".
     """
@@ -220,7 +220,7 @@ def _detect_concealed_payload(apk_path: str) -> Tuple[bool, List[str]]:
                 if head.startswith(_APK_MAGIC) or head.startswith(_DEX_MAGIC):
                     kind = "APK" if head.startswith(_APK_MAGIC) else "DEX"
                     evidence.append(
-                        f"Nested {kind} concealed at '{name}' ({info.file_size // 1024} KB) — "
+                        f"Nested {kind} concealed at '{name}' ({info.file_size // 1024} KB) - "
                         "executable payload shipped as a resource"
                     )
                     continue
@@ -235,23 +235,23 @@ def _detect_concealed_payload(apk_path: str) -> Tuple[bool, List[str]]:
                 if ent > _ENCRYPTED_ENTROPY and info.file_size > max(primary * 0.25, _MIN_PAYLOAD_BYTES):
                     evidence.append(
                         f"Encrypted blob '{name}' ({info.file_size // 1024} KB, entropy {ent:.2f}) "
-                        f"vs {primary // 1024} KB classes.dex — payload likely unpacked at runtime"
+                        f"vs {primary // 1024} KB classes.dex - payload likely unpacked at runtime"
                     )
     except Exception as exc:
         # A malformed archive is NOT evidence of safety.
         #
-        # This used to return (False, []) — "no concealment detected" — for any
+        # This used to return (False, []) - "no concealment detected" - for any
         # exception, including the one that matters most: a deliberately
         # corrupted ZIP. Samples malform their own archive precisely to break
         # static parsers, so the parse failure IS the signal. Reporting it as
         # "clean" inverted the meaning of the strongest concealment indicator.
         logger.warning(
             "[APKAnalyzer] Archive could not be parsed for concealment analysis "
-            "(%s: %s) — treating the parse failure itself as a concealment signal.",
+            "(%s: %s) - treating the parse failure itself as a concealment signal.",
             type(exc).__name__, exc,
         )
         return True, [
-            f"Archive structure could not be parsed ({type(exc).__name__}) — "
+            f"Archive structure could not be parsed ({type(exc).__name__}) - "
             f"malformed or deliberately corrupted ZIP, which defeats static "
             f"inspection of the payload"
         ]
@@ -303,8 +303,8 @@ def analyze_apk(apk_path: str) -> AndroguardOutput:
     #
     # The previous check scanned get_permissions() for that string, so it could
     # never fire. Measured against the labelled corpus it returned False for all
-    # eight banking trojans — including Cerberus, Octo, SharkBot and Teabot,
-    # which all declare it — while accessibility abuse is the single
+    # eight banking trojans - including Cerberus, Octo, SharkBot and Teabot,
+    # which all declare it - while accessibility abuse is the single
     # highest-weighted signal in the CT axis (BFCI weight 0.35).
     flags.has_accessibility_abuse = _detects_accessibility_service(a)
 
@@ -404,7 +404,7 @@ def analyze_apk(apk_path: str) -> AndroguardOutput:
         # Cross-reference scan: an app CALLING Runtime.exec does not necessarily
         # DEFINE a method named exec, so the loop above (which walks defined
         # methods) can miss real usage. Androguard exposes the external methods
-        # a DEX references — that is where an invoked platform API shows up.
+        # a DEX references - that is where an invoked platform API shows up.
         try:
             for ext in dx.get_external_classes():
                 cls = ext.get_vm_class().get_name() if hasattr(ext, "get_vm_class") else str(ext)

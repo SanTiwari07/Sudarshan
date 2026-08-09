@@ -31,7 +31,7 @@ def test_accessibility_abuse_raises_ct_axis():
 
 # ── Bug 2: an unavailable axis must be EXCLUDED, not scored as 0 ─────────────
 # Threat correlation contributed 0.20 * 0.0 when no VT/OTX key was configured,
-# pinning 20% of every score at zero — absence of evidence scored as innocence.
+# pinning 20% of every score at zero - absence of evidence scored as innocence.
 
 def test_unavailable_correlation_is_excluded_not_scored_zero():
     flags = dict(has_accessibility_abuse=True, has_sms_read_write=True)
@@ -80,7 +80,7 @@ def test_concealed_payload_lowers_confidence():
 
 def test_visibility_floor_lifts_only_for_a_CONCLUSIVE_dynamic_run():
     """
-    Dynamic analysis sees the unpacked payload — but only if it actually
+    Dynamic analysis sees the unpacked payload - but only if it actually
     observed something. A run that merely started the process leaves the
     dropper just as unexamined as no run at all, so the floor stays.
     """
@@ -129,7 +129,7 @@ def test_permissions_drive_pr_axis():
 
 def test_banking_trojan_profile_outranks_benign_profile():
     """
-    Anubis previously scored 7.1 while Amaze File Manager scored 8.35 — the
+    Anubis previously scored 7.1 while Amaze File Manager scored 8.35 - the
     ordering was inverted. Assert the property, not a magic threshold.
     """
     trojan = _score(
@@ -189,7 +189,7 @@ def test_inconclusive_dynamic_run_does_not_lower_the_verdict():
     with_empty = calculate_risk_score(flags=StaticAnalysisFlags(**_TROJAN), dynamic_result=_EMPTY_RUN)
 
     assert with_empty["final_risk_score"] >= static_only["final_risk_score"], (
-        "a sandbox run that observed nothing must never reduce the score — "
+        "a sandbox run that observed nothing must never reduce the score - "
         "otherwise better evasion produces a safer rating"
     )
 

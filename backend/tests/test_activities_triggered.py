@@ -6,7 +6,7 @@ Regression tests for Task 4:
   _collect_observed_activities() must:
     - Extract real activity names from session.reports["agent_memory"]["visited_screens"]
     - Fall back to EventBus activity events in attack_timeline
-    - Return [] (empty list) when no explorer ran — NEVER [package_name]
+    - Return [] (empty list) when no explorer ran - NEVER [package_name]
     - Be idempotent and never raise on malformed/missing data
 """
 from __future__ import annotations
@@ -64,7 +64,7 @@ def test_extracts_activities_from_agent_memory():
     )
     assert PACKAGE not in result, (
         "activities_triggered must not contain the bare package name "
-        "— that was the fabricated placeholder."
+        " - that was the fabricated placeholder."
     )
 
 
@@ -73,7 +73,7 @@ def test_extracts_activities_from_agent_memory():
 def test_returns_empty_when_no_explorer():
     """
     When session.reports is empty (no explorer ran), _collect_observed_activities
-    must return [] — not [package_name], which was the old fabrication.
+    must return [] - not [package_name], which was the old fabrication.
     """
     session = _make_session(reports={})
     result = _collect_observed_activities(session)
@@ -168,7 +168,7 @@ def test_result_is_never_package_name_alone():
 
         result = _collect_observed_activities(session)
         assert result != [PACKAGE], (
-            f"result == ['{PACKAGE}'] — this is the fabricated placeholder that "
+            f"result == ['{PACKAGE}'] - this is the fabricated placeholder that "
             "must never be returned by _collect_observed_activities."
         )
 

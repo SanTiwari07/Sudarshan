@@ -28,7 +28,7 @@ export default function InvestigationConclusionCard({
           </span>
           <div>
             <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">Intelligent Overview</h2>
-            <p className="text-[11px] text-slate-500 mt-0.5">Investigation conclusion — grounded in case evidence only</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">Investigation conclusion - grounded in case evidence only</p>
           </div>
         </div>
       </div>

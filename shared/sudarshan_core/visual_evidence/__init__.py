@@ -1,4 +1,4 @@
-"""Visual investigation evidence — deterministic claims and linking."""
+"""Visual investigation evidence - deterministic claims and linking."""
 
 from sudarshan_core.visual_evidence.claim_templates import (
     ClaimTemplateError,

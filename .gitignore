@@ -93,7 +93,7 @@ npm-debug.log
 yarn-error.log
 yarn-debug.log
 .pnpm-debug.log
-# Lockfiles are COMMITTED on purpose — without one, `npm install` can resolve
+# Lockfiles are COMMITTED on purpose - without one, `npm install` can resolve
 # different dependency versions from the same commit, so builds are not
 # reproducible and a compromised transitive dep cannot be pinned out.
 
@@ -103,7 +103,7 @@ build/
 out/
 .next/
 
-# Databases — these contain user accounts and password hashes. Never track.
+# Databases - these contain user accounts and password hashes. Never track.
 *.db
 *.db-wal
 *.db-shm
@@ -131,7 +131,7 @@ powershell.cmd
 .github/
 audit/
 
-# Test APKs and binaries — never commit malware samples to the repo.
+# Test APKs and binaries - never commit malware samples to the repo.
 test apk/
 *.apk
 *.zip

@@ -101,9 +101,9 @@ th{{background:#161b22}}
 .warn{{color:#f85149}}
 .ok{{color:#3fb950}}
 </style></head><body>
-<h1>Dynamic Analysis Engine — Validation Report</h1>
+<h1>Dynamic Analysis Engine - Validation Report</h1>
 <p>Generated {payload['generated_at']}</p>
-<p class="score">Overall: {overall}% — <span class="{'ok' if production_ready else 'warn'}">{payload['stable_declaration']}</span></p>
+<p class="score">Overall: {overall}% - <span class="{'ok' if production_ready else 'warn'}">{payload['stable_declaration']}</span></p>
 <ul>
 <li>Reliability: {rel}%</li>
 <li>Coverage: {cov}%</li>

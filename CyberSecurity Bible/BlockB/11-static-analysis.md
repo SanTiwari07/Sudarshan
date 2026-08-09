@@ -1,4 +1,4 @@
-# 11 — Static Analysis
+# 11 - Static Analysis
 
 > **Chapter ID:** `CH11` · **Block:** B (Analysis Craft) · **Status:** Stable
 > **Tags:** `#static-analysis` `#mobsf` `#yara` `#capability-extraction` `#taint-analysis` `#automation` `#pipeline`
@@ -11,10 +11,10 @@
 
 1. [Static analysis vs reverse engineering](#1-static-analysis-vs-reverse-engineering)
 2. [The tiered pipeline](#2-the-tiered-pipeline)
-3. [Tier 0 — structural](#3-tier-0--structural)
-4. [Tier 1 — manifest and capability extraction](#4-tier-1--manifest-and-capability-extraction)
-5. [Tier 2 — resource and asset mining](#5-tier-2--resource-and-asset-mining)
-6. [Tier 3 — code analysis](#6-tier-3--code-analysis)
+3. [Tier 0 - structural](#3-tier-0--structural)
+4. [Tier 1 - manifest and capability extraction](#4-tier-1--manifest-and-capability-extraction)
+5. [Tier 2 - resource and asset mining](#5-tier-2--resource-and-asset-mining)
+6. [Tier 3 - code analysis](#6-tier-3--code-analysis)
 7. [Taint analysis](#7-taint-analysis)
 8. [MobSF](#8-mobsf)
 9. [YARA](#9-yara)
@@ -94,7 +94,7 @@ be recorded so it can be audited and tuned. → [Ch 23](../sudarshan/23-detectio
 
 ---
 
-## 3. Tier 0 — structural
+## 3. Tier 0 - structural
 
 Everything from [Ch 08 §10](../apk/08-apk-file-format.md#10-detection-logic-for-sudarshan) and
 [Ch 07 §11](../security/07-apk-signing.md#11-detection-logic-for-sudarshan), run on 100% of
@@ -107,7 +107,7 @@ input:
 - Signing: which schemes verified, signer fingerprints, v3 rotation lineage, signing-block IDs
 - ELF: per-library entropy, `.init_array` / `JNI_OnLoad` presence, packer fingerprint
 
-These findings are **deterministic and explainable** — the highest-precision output the
+These findings are **deterministic and explainable** - the highest-precision output the
 platform produces, and the easiest to defend in an audit.
 
 ```python
@@ -133,7 +133,7 @@ def tier0(path):
         for i in z.infolist():
             if i.filename == 'resources.arsc':
                 out['arsc_compressed'] = i.compress_type != zipfile.ZIP_STORED
-        # DEX integrity — hand-edit detection
+        # DEX integrity - hand-edit detection
         out['dex'] = []
         for n in [x for x in names if x.startswith('classes') and x.endswith('.dex')]:
             d = z.read(n)
@@ -148,12 +148,12 @@ def tier0(path):
 
 ---
 
-## 4. Tier 1 — manifest and capability extraction
+## 4. Tier 1 - manifest and capability extraction
 
 ### The capability vector
 
 This is the single most important data structure in SUDARSHAN's static analysis. Everything
-downstream — scoring, correlation, reporting — consumes it.
+downstream - scoring, correlation, reporting - consumes it.
 
 ```python
 from androguard.core.bytecodes.apk import APK
@@ -199,7 +199,7 @@ def capability_vector(path):
     return v
 ```
 
-### The accessibility config — parse it, always
+### The accessibility config - parse it, always
 
 From [Ch 02 §4](../apk/02-apk-architecture.md#4-androidmanifestxml--the-apps-declaration-of-intent):
 when an a11y service exists, its `@xml/...` config is where the real capability lives.
@@ -225,36 +225,36 @@ def a11y_config(apk: APK):
 | `canRetrieveWindowContent` | **Read** any app's screen | High |
 | `canPerformGestures` | **Write** input to any app | High |
 | `typeAllMask` | Every event on the device | Medium |
-| empty `packageNames` | Unscoped — targets everything | Medium |
+| empty `packageNames` | Unscoped - targets everything | Medium |
 | `notificationTimeout` ≤ 100 | Real-time capture intent | Low |
 
 > **⚙️ Engineering Note:** `canRetrieveWindowContent` + `canPerformGestures` + unscoped
 > `packageNames` is functionally *"read and control every app on this device."* A legitimate
 > password manager typically scopes `packageNames` or at minimum doesn't need
 > `canPerformGestures`. **Parsing this config is the highest-value 50 milliseconds in the whole
-> pipeline** — it converts a generic permission into a specific, explainable capability claim.
+> pipeline** - it converts a generic permission into a specific, explainable capability claim.
 
 ---
 
-## 5. Tier 2 — resource and asset mining
+## 5. Tier 2 - resource and asset mining
 
 ### What to extract, and why a bank cares
 
 | Extraction | Business value |
 |---|---|
-| **Locale set** (`res/values-*/`) | **Victim geography.** Antidot (Cyble, May 16 2024) carried German, French, Spanish, Russian, Portuguese, Romanian, English — the resource set *was* the target list. |
+| **Locale set** (`res/values-*/`) | **Victim geography.** Antidot (Cyble, May 16 2024) carried German, French, Spanish, Russian, Portuguese, Romanian, English - the resource set *was* the target list. |
 | **Referenced package names** | **Overlay target list.** Is the client bank on it? |
 | **URLs in resources** | C2 and phishing infrastructure |
 | **Overlay HTML in `assets/`** | Direct evidence of phishing intent; often bank-branded |
-| **VIDE UI structural profile** (`res/layout` + `assets/*.html` + optional dynamic WebView/uiautomator) | **Disjoint-package impersonation** — deterministic **VIDE-F001** vs lab baselines; CH06 signer check separate. See [VIDE architecture](../../docs/architecture/VIDE.md). **Static path: verified in CI.** **Dynamic WebView path: code + bundle verified; live device requires frida-server (see `scripts/verify_vide_webview_device.md`).** Lab baselines only — not production bank authority. |
+| **VIDE UI structural profile** (`res/layout` + `assets/*.html` + optional dynamic WebView/uiautomator) | **Disjoint-package impersonation** - deterministic **VIDE-F001** vs lab baselines; CH06 signer check separate. See [VIDE architecture](../../docs/architecture/VIDE.md). **Static path: verified in CI.** **Dynamic WebView path: code + bundle verified; live device requires frida-server (see `scripts/verify_vide_webview_device.md`).** Lab baselines only - not production bank authority. |
 | **High-entropy blobs in `assets/`** | Encrypted stage-2 payload |
 | **Certificate/key material** | Correlation pivots → [Ch 05 §10](../security/05-android-cryptography.md#10-detection-logic-for-sudarshan) |
 
 ```bash
-# locale set — the targeting map
+# locale set - the targeting map
 $ aapt2 dump configurations app.apk | tr ' ' '\n' | grep -E '^[a-z]{2}(-r[A-Z]{2})?$' | sort -u
 
-# referenced package names — the overlay target list
+# referenced package names - the overlay target list
 $ apktool d -s app.apk -o w/ >/dev/null
 $ grep -rEoh '\bcom\.[a-z0-9_]+(\.[a-z0-9_]+)+' w/res/ w/assets/ 2>/dev/null \
     | sort | uniq -c | sort -rn | head -40
@@ -262,7 +262,7 @@ $ grep -rEoh '\bcom\.[a-z0-9_]+(\.[a-z0-9_]+)+' w/res/ w/assets/ 2>/dev/null \
 # infrastructure strings
 $ grep -rEoh 'https?://[^"<[:space:]]+' w/res/ w/assets/ | sort -u
 
-# entropy scan of assets — encrypted payload candidates
+# entropy scan of assets - encrypted payload candidates
 $ python3 - <<'PY'
 import math, os, collections
 for root, _, files in os.walk('w/assets'):
@@ -285,7 +285,7 @@ PY
 
 ---
 
-## 6. Tier 3 — code analysis
+## 6. Tier 3 - code analysis
 
 ### API cross-reference extraction
 
@@ -387,7 +387,7 @@ A path from source to sink is a **data-flow finding**: "SMS body reaches an HTTP
 ### The honest assessment
 
 > **🔬 Research Gap / practical warning:** Full static taint analysis on real-world Android
-> apps is **slow** (minutes to hours per app), **memory-hungry**, and **fragile** — it degrades
+> apps is **slow** (minutes to hours per app), **memory-hungry**, and **fragile** - it degrades
 > badly on obfuscated code, reflection, native calls, and inter-component communication via
 > Binder. FlowDroid is excellent research work and is genuinely useful for *auditing a known,
 > unobfuscated app* (e.g. vetting a bank's own build). It is **not** a practical component of a
@@ -405,8 +405,7 @@ A path from source to sink is a **data-flow finding**: "SMS body reaches an HTTP
 
 ### WHAT
 
-**Mobile Security Framework (MobSF)** is the de-facto open-source mobile app security tool —
-a Django application (GPL-3.0, v4.4.x) offering static and dynamic analysis for Android and
+**Mobile Security Framework (MobSF)** is the de-facto open-source mobile app security tool - a Django application (GPL-3.0, v4.4.x) offering static and dynamic analysis for Android and
 iOS through a web UI and REST API.
 
 **Supported inputs:** APK, XAPK, AAB, AAR, JAR, SO (Android) and IPA, APPX/dylib/a (iOS/Windows).
@@ -454,7 +453,7 @@ $ curl -X POST --url http://localhost:8000/api/v1/report_json \
 $ docker run -e MOBSF_API_ONLY=1 -p 8000:8000 opensecurity/mobile-security-framework-mobsf
 ```
 
-### The scoring formula — and why you must not trust it blindly
+### The scoring formula - and why you must not trust it blindly
 
 MobSF produces a **security score (0–100)** and an **A–F grade**, computed approximately as:
 
@@ -467,9 +466,9 @@ Score ≈ 100 − ( (High + 0.5·Medium − 0.2·Secure) / count )
 > anti-correlated:
 >
 > - A **legitimate bank app** with certificate pinning, obfuscation, root detection, and
->   sensitive permissions can score poorly — the formula penalises high-severity findings and
+>   sensitive permissions can score poorly - the formula penalises high-severity findings and
 >   the app legitimately needs risky capabilities.
-> - A **dropper** with three permissions and no crypto misuse can score **well** — it has
+> - A **dropper** with three permissions and no crypto misuse can score **well** - it has
 >   nothing insecure in it, because the malicious payload isn't there yet
 >   ([Ch 09 §7](../apk/09-package-manager.md#7-droppers-the-technique-in-full)).
 >
@@ -485,11 +484,11 @@ Score ≈ 100 − ( (High + 0.5·Medium − 0.2·Secure) / count )
 | Its dynamic analyser as one detonation option | Scoring |
 
 **Version note:** MobSF **v4.4.6 (March 2026)** patched a SQL-injection vulnerability in its
-SQLite viewer. Analysis tools are software too — keep them patched and, more importantly,
+SQLite viewer. Analysis tools are software too - keep them patched and, more importantly,
 **run them in an isolated sandbox**, because you are feeding them hostile input by design.
 
-> **⚙️ Engineering Note:** That last point generalises. Your analysis stack — MobSF, apktool,
-> jadx, unzip — parses attacker-controlled files. Parser vulnerabilities in analysis tooling
+> **⚙️ Engineering Note:** That last point generalises. Your analysis stack - MobSF, apktool,
+> jadx, unzip - parses attacker-controlled files. Parser vulnerabilities in analysis tooling
 > are a real and recurring attack surface. Never run intake parsing on the orchestrator host.
 > → [Ch 24](../sudarshan/24-threat-intake.md)
 
@@ -500,7 +499,7 @@ SQLite viewer. Analysis tools are software too — keep them patched and, more i
 ### WHAT
 
 YARA is a pattern-matching engine for classifying files by strings and byte patterns. **YARA-X**
-is the modern Rust rewrite, now the recommended engine — faster, safer, with a compatible rule
+is the modern Rust rewrite, now the recommended engine - faster, safer, with a compatible rule
 language.
 
 ### An Android-oriented rule
@@ -550,8 +549,7 @@ rule Android_Janus_Format
 ```
 
 > **⚙️ Engineering Note:** The Janus case is better handled by the deterministic byte check in
-> [Ch 08 §10](../apk/08-apk-file-format.md#10-detection-logic-for-sudarshan) than by YARA —
-> YARA is poor at expressing "is also a valid ZIP." **Use the right tool per signal:** YARA for
+> [Ch 08 §10](../apk/08-apk-file-format.md#10-detection-logic-for-sudarshan) than by YARA - > YARA is poor at expressing "is also a valid ZIP." **Use the right tool per signal:** YARA for
 > string and byte patterns, purpose-built parsers for structural logic. Cramming structural
 > checks into YARA produces slow, fragile rules.
 
@@ -590,7 +588,7 @@ $ yr scan --recursive rules.yar x/                # ← the one that actually wo
 
 > **⚙️ Engineering Note:** Track **false-positive rate per rule** in production and retire
 > rules that exceed a threshold. A rule library nobody prunes becomes a rule library nobody
-> trusts, and then a rule library nobody reads. Rules are code — they need ownership, tests,
+> trusts, and then a rule library nobody reads. Rules are code - they need ownership, tests,
 > and deprecation.
 
 ---
@@ -598,13 +596,13 @@ $ yr scan --recursive rules.yar x/                # ← the one that actually wo
 ## 10. Similarity hashing
 
 For clustering and campaign correlation ([Ch 28](../sudarshan/28-campaign-correlation.md)),
-cryptographic hashes are useless — one byte changes everything. **Fuzzy hashes** survive small
+cryptographic hashes are useless - one byte changes everything. **Fuzzy hashes** survive small
 changes.
 
 | Hash | Property | Use |
 |---|---|---|
 | **SSDEEP** | Context-triggered piecewise hashing | Legacy compatibility; widely present in TI feeds |
-| **TLSH** | Locality-sensitive; distance score | **Preferred** — better behaviour on larger files, numeric distance |
+| **TLSH** | Locality-sensitive; distance score | **Preferred** - better behaviour on larger files, numeric distance |
 | **Import/API hash** | Digest of the sorted sensitive-API set | DEX analogue of PE imphash |
 | **Manifest hash** | Digest of normalised permission + component set | Clusters same-builder apps |
 | **Resource hash** | Digest of the overlay target list / asset names | Clusters campaigns sharing target sets |
@@ -645,8 +643,7 @@ An honest boundary list. Publishing this internally prevents overclaiming extern
 | Distinguish hardening from hiding | Identical techniques | Signer + capability + behaviour |
 | Prove intent | Code shows capability, not purpose | Behavioural corroboration |
 
-> **🚨 Misconception:** "Static analysis is enough." It is necessary, fast, and reproducible —
-> and it is structurally blind to staged and packed malware, which is the dominant modern
+> **🚨 Misconception:** "Static analysis is enough." It is necessary, fast, and reproducible - > and it is structurally blind to staged and packed malware, which is the dominant modern
 > pattern. The converse misconception ("dynamic is enough") fails for the opposite reason:
 > evasion, geofencing, and C2-gating. **Neither alone is sufficient; the fusion is the
 > product.** → [Ch 32](../appendix/32-common-misconceptions.md)
@@ -712,7 +709,7 @@ escalate_to_dynamic_when:
     - tier0.duplicate_entries
 ```
 
-> **⚙️ Engineering Note — the fourth condition is the one people forget.** *"Packed and could
+> **⚙️ Engineering Note - the fourth condition is the one people forget.** *"Packed and could
 > not be unpacked"* must escalate to dynamic analysis. Otherwise the pipeline's response to
 > "I can't read this" is silence, and the samples that most resist analysis are exactly the
 > ones that most deserve it. Make inability-to-analyse a first-class escalation trigger.
@@ -739,7 +736,7 @@ escalate_to_dynamic_when:
 
 - Droppers (payload absent).
 - Native-implemented behaviour.
-- Successfully packed, un-unpacked samples — **caught only if you escalate on analysis failure**.
+- Successfully packed, un-unpacked samples - **caught only if you escalate on analysis failure**.
 - Novel techniques with no rule coverage.
 
 ### Edge cases
@@ -752,10 +749,10 @@ escalate_to_dynamic_when:
 | Apps with no DEX | Legal; not a finding |
 | Manifest-merged SDK permissions | A permission may come from a third-party SDK, not app intent |
 
-> **⚙️ Engineering Note — the SDK attribution problem.** Manifest merging means an app's
+> **⚙️ Engineering Note - the SDK attribution problem.** Manifest merging means an app's
 > permission list includes everything its libraries request. An ad SDK requesting
 > `QUERY_ALL_PACKAGES` makes the *app* look like it enumerates packages. Where possible,
-> attribute capabilities to the declaring component and note SDK provenance — otherwise you
+> attribute capabilities to the declaring component and note SDK provenance - otherwise you
 > will generate false positives against apps whose developers never asked for the permission.
 > This is a genuine, under-addressed accuracy problem in mobile static analysis.
 
@@ -769,7 +766,7 @@ escalate_to_dynamic_when:
 | 3 | 120 s | ~20% |
 
 Tier 3 timeouts are normal on large or hostile samples. **A timeout is an analysis-quality
-event, not a clean result** — record it and cap confidence.
+event, not a clean result** - record it and cap confidence.
 
 ---
 
@@ -784,7 +781,7 @@ event, not a clean result** — record it and cap confidence.
 7. **Use MobSF findings as features; ignore its score as a verdict.**
 8. **Escalate on analysis failure**, not just on positive findings.
 9. **Record analysis quality on every result and enforce a confidence ceiling.**
-10. **Run all parsing in a sandbox** — your tools parse hostile input.
+10. **Run all parsing in a sandbox** - your tools parse hostile input.
 11. **Track per-rule false-positive rates** and prune.
 12. **Attribute permissions to SDKs** where you can.
 
@@ -795,8 +792,7 @@ event, not a clean result** — record it and cap confidence.
 **What judges ask:** *"What exactly does your static analysis do that MobSF doesn't already
 do for free?"*
 
-**Perfect answer:** MobSF is an excellent app-security scanner and we use it as a baseline —
-but it answers a different question. MobSF scores **security hygiene**; we assess
+**Perfect answer:** MobSF is an excellent app-security scanner and we use it as a baseline - but it answers a different question. MobSF scores **security hygiene**; we assess
 **maliciousness**, and those are different axes that are often anti-correlated. A hardened
 bank app with pinning, obfuscation, and root detection scores badly in MobSF; a dropper with
 three permissions and no crypto misuse scores well, because its payload isn't there yet.
@@ -811,21 +807,21 @@ actually read the sample.
 **Common mistakes:**
 - Presenting a security score as a malware verdict.
 - Claiming full static taint analysis at scale. FlowDroid is real research, but it's slow,
-  memory-hungry, and fragile on obfuscated code — say what you actually run.
+  memory-hungry, and fragile on obfuscated code - say what you actually run.
 - Not acknowledging that static analysis is blind to droppers.
 
 **Follow-ups to expect:**
 - *"What's your false positive rate?"* → The honest framing: single signals have high FP rates
   by design, which is why nothing is scored in isolation. The cluster rule plus the signer
   registry is where precision comes from. Then quote your measured numbers on a labelled
-  corpus — and if you don't have a labelled corpus yet, say that.
+  corpus - and if you don't have a labelled corpus yet, say that.
 - *"How do you handle packed samples?"* → Escalate on *inability to analyse*, dump at runtime,
   recurse. Never silently return "clean."
-- *"Isn't this just permission counting?"* → No — and here's the accessibility config parse and
+- *"Isn't this just permission counting?"* → No - and here's the accessibility config parse and
   the crypto-to-classloader chain as concrete counter-examples.
 
 **Fact that impresses:** MobSF's score formula is roughly
-`100 − ((High + 0.5·Medium − 0.2·Secure)/count)` — which means it **penalises apps for having
+`100 − ((High + 0.5·Medium − 0.2·Secure)/count)` - which means it **penalises apps for having
 high-severity findings regardless of context**. A bank's genuinely hardened app can grade worse
 than a clean-looking dropper. Knowing the formula and its consequence shows you've read the
 tool rather than just run it.
@@ -842,18 +838,18 @@ tier gates the next. Emphasise that gates must err toward escalation and be audi
 **Q: "What's the difference between static analysis and reverse engineering?"**
 Scale and purpose. Static analysis is automated fact extraction across thousands of samples,
 producing feature vectors. RE is a human understanding specific logic deeply, producing IOCs
-and rules. RE feeds patterns back into static analysis — that's the loop that makes a team
+and rules. RE feeds patterns back into static analysis - that's the loop that makes a team
 compound.
 
 **Q: "Write a YARA rule for Android banking malware."**
 Then explain what you did: match on the ZIP magic, require the accessibility service action
-plus a capability flag, plus an overlay indicator, plus package enumeration — and set
+plus a capability flag, plus an overlay indicator, plus package enumeration - and set
 `confidence` low in `meta` because it's a **capability** rule, not a family rule. Also mention
 that you must scan the **extracted** DEX, not just the container, because APK entries are
 compressed.
 
 **Q: "Why can't static analysis alone detect banking trojans?"**
-Droppers — the payload isn't in the file at analysis time. Anatsa's Play droppers were
+Droppers - the payload isn't in the file at analysis time. Anatsa's Play droppers were
 genuinely clean at review. Also packing, native code, reflection, and C2-gated behaviour.
 
 **Q: "What's taint analysis and would you use it?"**
@@ -878,17 +874,17 @@ C2 infrastructure, and resource artifacts like the overlay target list.
 ## 17. Cross-references
 
 **Upstream:**
-- [← Ch 04 Android Security Model](../security/04-android-security-model.md) — capability weights
-- [← Ch 08 APK File Format](../apk/08-apk-file-format.md) — Tier 0 structural checks
-- [← Ch 10 Reverse Engineering](../reverse-engineering/10-reverse-engineering.md) — the manual craft this automates
+- [← Ch 04 Android Security Model](../security/04-android-security-model.md) - capability weights
+- [← Ch 08 APK File Format](../apk/08-apk-file-format.md) - Tier 0 structural checks
+- [← Ch 10 Reverse Engineering](../reverse-engineering/10-reverse-engineering.md) - the manual craft this automates
 
 **Downstream:**
-- [→ Ch 12 Dynamic Analysis](../dynamic-analysis/12-dynamic-analysis.md) — where escalation goes
-- [→ Ch 16 Threat Intelligence](../threat-intelligence/16-threat-intelligence.md) — MITRE mapping, IOC context
-- [→ Ch 23 Detection Pipeline](../sudarshan/23-detection-pipeline.md) — the tiering formalised
-- [→ Ch 26 IOC Extraction](../sudarshan/26-ioc-extraction.md) — Tier 2/3 outputs as indicators
-- [→ Ch 27 Risk Scoring](../sudarshan/27-risk-scoring.md) — consuming the capability vector
-- [→ Ch 28 Campaign Correlation](../sudarshan/28-campaign-correlation.md) — similarity hashing
+- [→ Ch 12 Dynamic Analysis](../dynamic-analysis/12-dynamic-analysis.md) - where escalation goes
+- [→ Ch 16 Threat Intelligence](../threat-intelligence/16-threat-intelligence.md) - MITRE mapping, IOC context
+- [→ Ch 23 Detection Pipeline](../sudarshan/23-detection-pipeline.md) - the tiering formalised
+- [→ Ch 26 IOC Extraction](../sudarshan/26-ioc-extraction.md) - Tier 2/3 outputs as indicators
+- [→ Ch 27 Risk Scoring](../sudarshan/27-risk-scoring.md) - consuming the capability vector
+- [→ Ch 28 Campaign Correlation](../sudarshan/28-campaign-correlation.md) - similarity hashing
 
 **Related chain:** Manifest → capability vector → escalation gate → dynamic analysis →
 IOC extraction → risk score → report.
@@ -897,25 +893,25 @@ IOC extraction → risk score → report.
 
 ## 18. References
 
-1. MobSF — *Mobile Security Framework* documentation. https://mobsf.github.io/docs/
-2. MobSF — REST API reference. https://mobsf.github.io/docs/#/rest_api
+1. MobSF - *Mobile Security Framework* documentation. https://mobsf.github.io/docs/
+2. MobSF - REST API reference. https://mobsf.github.io/docs/#/rest_api
 3. MobSF project repository (v4.4.x; v4.4.6 SQLite-viewer SQLi fix, March 2026). https://github.com/MobSF/Mobile-Security-Framework-MobSF
 4. YARA-X documentation. https://virustotal.github.io/yara-x/
 5. YARA documentation (legacy engine). https://yara.readthedocs.io/
 6. Androguard documentation. https://androguard.readthedocs.io/
-7. FlowDroid — static taint analysis for Android. https://github.com/secure-software-engineering/FlowDroid
-8. TLSH — Trend Micro Locality Sensitive Hash. https://github.com/trendmicro/tlsh
-9. ssdeep — context-triggered piecewise hashing. https://ssdeep-project.github.io/ssdeep/
-10. OWASP MASVS v2.1.0 and MASTG — static analysis test cases. https://mas.owasp.org/
-11. NIST SP 800-163 Rev. 1 — *Vetting the Security of Mobile Applications*.
-12. Cyble Research and Intelligence Labs — *Antidot* (May 16, 2024) — multi-locale overlay targeting.
-13. ThreatFabric — Anatsa Google Play dropper campaigns (July 2025).
+7. FlowDroid - static taint analysis for Android. https://github.com/secure-software-engineering/FlowDroid
+8. TLSH - Trend Micro Locality Sensitive Hash. https://github.com/trendmicro/tlsh
+9. ssdeep - context-triggered piecewise hashing. https://ssdeep-project.github.io/ssdeep/
+10. OWASP MASVS v2.1.0 and MASTG - static analysis test cases. https://mas.owasp.org/
+11. NIST SP 800-163 Rev. 1 - *Vetting the Security of Mobile Applications*.
+12. Cyble Research and Intelligence Labs - *Antidot* (May 16, 2024) - multi-locale overlay targeting.
+13. ThreatFabric - Anatsa Google Play dropper campaigns (July 2025).
 14. MITRE ATT&CK for Mobile. https://attack.mitre.org/matrices/mobile/
 
 ### Further reading
-- Androguard `Analysis` API — cross-reference and call-graph construction
+- Androguard `Analysis` API - cross-reference and call-graph construction
 - VirusTotal Retrohunt and LiveHunt documentation (YARA at scale)
-- OWASP MASTG — MASVS-CODE and MASVS-RESILIENCE test cases
+- OWASP MASTG - MASVS-CODE and MASVS-RESILIENCE test cases
 
 ---
 

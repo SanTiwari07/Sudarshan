@@ -10,7 +10,7 @@ Supported sources:
   - AbuseIPDB (IP reputation)
 
 All queries are async and parallel.
-Missing API keys cause graceful skip — never a failure.
+Missing API keys cause graceful skip - never a failure.
 Results are cached per-hash for the session.
 """
 
@@ -74,14 +74,14 @@ def _get_abuseipdb_key() -> str:
 # ─── IOC reputation cache ─────────────────────────────────────────────────────
 #
 # The `ioc_cache` table exists, is indexed (idx_ioc_expires) and has correct
-# 24-hour TTL accessors in app.db.database — and NOTHING ever called them.
+# 24-hour TTL accessors in app.db.database - and NOTHING ever called them.
 # Meanwhile this module issued up to 14 uncached outbound requests per analysis
 # (1 VT hash + 1 OTX hash + 3 VT URLs + 5 OTX domains + 5 AbuseIPDB IPs) against
 # a VirusTotal free tier of 4 requests/minute. A single analysis exceeded the
 # quota, and GET /intelligence/{sha} re-fired the whole set on every request.
 #
 # The cache lives in the backend (app.db), which sudarshan_core must not import
-# — the analysis engine has no such package. So it is injected: the backend
+# - the analysis engine has no such package. So it is injected: the backend
 # passes its accessors in, and when they are absent (engine-side) correlation
 # simply runs uncached exactly as before.
 _cache_get = None   # async (indicator, ioc_type) -> Optional[dict]
@@ -178,17 +178,17 @@ async def _vt_check_hash(sha256: str) -> Dict[str, Any]:
             total = sum(stats.values()) or 1
             malicious = stats.get("malicious", 0)
 
-            # Malware family — VirusTotal's OWN classification, or nothing.
+            # Malware family - VirusTotal's OWN classification, or nothing.
             #
-            # There used to be a fallback here that scanned attrs["names"] — the
-            # list of FILENAMES other people have submitted this file under — for
+            # There used to be a fallback here that scanned attrs["names"] - the
+            # list of FILENAMES other people have submitted this file under - for
             # one containing "android", and used that string as the malware
             # family. `names` is uploader-supplied metadata, not analysis output.
             #
             # Observed live on a benign sample: Amaze File Manager is known to VT
             # with 0/75 detections, so it has no threat label, and the fallback
             # assigned it the family "Amaze File Manager 3.11.2 (Android 5.0+).apk".
-            # That is not cosmetic — routes/upload.py adopts a correlation-derived
+            # That is not cosmetic - routes/upload.py adopts a correlation-derived
             # family when static classification says Unknown AND raises
             # ai_confidence to 1.15, a 15% multiplier on the final score. A clean
             # file manager was inflated because of a filename, and the report told

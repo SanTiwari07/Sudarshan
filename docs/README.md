@@ -10,20 +10,20 @@ All documentation herein is strictly derived from and cross-verified against the
 
 | Document | Title | Primary Focus & System Scope |
 | :--- | :--- | :--- |
-| [**01 — Introduction**](01_INTRODUCTION.md) | Problem Statement & Scope | Threat model, operational challenges in mobile banking fraud, target audience. |
-| [**02 — System Overview**](02_SYSTEM_OVERVIEW.md) | Platform Architecture & Data Flow | End-to-end processing pipeline, microservices layout, container network topology, runtime telemetry. |
+| [**01 - Introduction**](01_INTRODUCTION.md) | Problem Statement & Scope | Threat model, operational challenges in mobile banking fraud, target audience. |
+| [**02 - System Overview**](02_SYSTEM_OVERVIEW.md) | Platform Architecture & Data Flow | End-to-end processing pipeline, microservices layout, container network topology, runtime telemetry. |
 | [**ARCHITECTURE.md**](ARCHITECTURE.md) | System Design & Technical Spec | In-depth technical specification of backend, frontend, engines, database, `/api/runtime/*` APIs, and zero-copy volumes. |
 | [**MIGRATION.md**](MIGRATION.md) | Microservice Migration Guide | Architectural specification of `analysis-engine` microservice container, REST APIs, zero-copy shared volume, and entrypoint healthchecks. |
-| [**03 — Static Threat Intelligence**](architecture/03_STATIC_THREAT_INTELLIGENCE.md) | Static Analysis & Decompilation | Containerized static engine, MobSF, native `apk_analyzer.py`, `apk_repair.py` AXML recovery, APKTool 2.10.0, JADX 1.5.1, `manifest.py` Investigation Manifest, STEI formula, static UI profiles for VIDE. |
-| [**VIDE — Visual Impersonation Detection**](architecture/VIDE.md) | Visual Impersonation (deterministic) | UI baseline compare, VIDE-F001, signer registry, FRS escalation; static verified; live WebView path device-gated. |
-| [**04 — Dynamic Analysis Engine**](architecture/04_DYNAMIC_ANALYSIS_ENGINE.md) | Dynamic Sandbox & Agentic Explorer | Frida 17 PID attach, containment policy (`sandbox_containment.py`, `adb_gateway`), Genymotion `ADB_HOST` / AVD serial, mitmproxy HAR, Agentic Explorer. |
-| [**05 — AI Investigation Engine**](architecture/05_AI_INVESTIGATION_ENGINE.md) | AI Core, RAG & Prompt Safety | Gemini 2.5 Flash (`GEMINI_MODEL`), vector RAG index (`gemini_rag.py`), prompt sanitizer. |
-| [**06 — Evidence Processing**](architecture/06_EVIDENCE_PROCESSING.md) | Event Bus & Workflow Engine | `EventBus`, `EvidenceStore`, `WorkflowReconstructor` causal chain engine, runtime telemetry sink (`runtime_api.py`). |
-| [**07 — Fraud Intelligence Engine**](architecture/07_FRAUD_INTELLIGENCE_ENGINE.md) | Threat Correlation & Attribution | VirusTotal, AlienVault OTX, AbuseIPDB lookup, 24h TTL SQLite IOC reputation cache, deterministic family classifier. |
-| [**08 — Deterministic Risk Engine**](architecture/08_DETERMINISTIC_RISK_ENGINE.md) | Risk Scoring & Math Formulas | 5-axis STEI, logarithmic volume-aware BFCI v2, 4-axis FRS formula, static fallback. |
-| [**09 — AI Report Generation**](architecture/09_AI_REPORT_GENERATION.md) | Security Reporting & Export | Executive Fraud Cards, HTML security reports, PDF report exporter, STIX 2.1 exporter, CSV IOC feed. |
-| [**10 — Analyst Dashboard**](dashboard/10_DASHBOARD.md) | Analyst UI & Visual Workflows | React 18 SPA, `InvestigationShell`, Executive View (`FraudCard.tsx`), Technical SOC View, VIDE panels, `WorkflowDiagram.tsx` timeline. |
-| [**11 — Evaluation Strategy**](evaluation/11_EVALUATION.md) | Verification & Testing | Automated test suite in `tests/` & `backend/tests/` (**519 collected & verified tests**), benchmarks, determinism baselines. |
+| [**03 - Static Threat Intelligence**](architecture/03_STATIC_THREAT_INTELLIGENCE.md) | Static Analysis & Decompilation | Containerized static engine, MobSF, native `apk_analyzer.py`, `apk_repair.py` AXML recovery, APKTool 2.10.0, JADX 1.5.1, `manifest.py` Investigation Manifest, STEI formula, static UI profiles for VIDE. |
+| [**VIDE - Visual Impersonation Detection**](architecture/VIDE.md) | Visual Impersonation (deterministic) | UI baseline compare, VIDE-F001, signer registry, FRS escalation; static verified; live WebView path device-gated. |
+| [**04 - Dynamic Analysis Engine**](architecture/04_DYNAMIC_ANALYSIS_ENGINE.md) | Dynamic Sandbox & Agentic Explorer | Frida 17 PID attach, containment policy (`sandbox_containment.py`, `adb_gateway`), Genymotion `ADB_HOST` / AVD serial, mitmproxy HAR, Agentic Explorer. |
+| [**05 - AI Investigation Engine**](architecture/05_AI_INVESTIGATION_ENGINE.md) | AI Core, RAG & Prompt Safety | Gemini 2.5 Flash (`GEMINI_MODEL`), vector RAG index (`gemini_rag.py`), prompt sanitizer. |
+| [**06 - Evidence Processing**](architecture/06_EVIDENCE_PROCESSING.md) | Event Bus & Workflow Engine | `EventBus`, `EvidenceStore`, `WorkflowReconstructor` causal chain engine, runtime telemetry sink (`runtime_api.py`). |
+| [**07 - Fraud Intelligence Engine**](architecture/07_FRAUD_INTELLIGENCE_ENGINE.md) | Threat Correlation & Attribution | VirusTotal, AlienVault OTX, AbuseIPDB lookup, 24h TTL SQLite IOC reputation cache, deterministic family classifier. |
+| [**08 - Deterministic Risk Engine**](architecture/08_DETERMINISTIC_RISK_ENGINE.md) | Risk Scoring & Math Formulas | 5-axis STEI, logarithmic volume-aware BFCI v2, 4-axis FRS formula, static fallback. |
+| [**09 - AI Report Generation**](architecture/09_AI_REPORT_GENERATION.md) | Security Reporting & Export | Executive Fraud Cards, HTML security reports, PDF report exporter, STIX 2.1 exporter, CSV IOC feed. |
+| [**10 - Analyst Dashboard**](dashboard/10_DASHBOARD.md) | Analyst UI & Visual Workflows | React 18 SPA, `InvestigationShell`, Executive View (`FraudCard.tsx`), Technical SOC View, VIDE panels, `WorkflowDiagram.tsx` timeline. |
+| [**11 - Evaluation Strategy**](evaluation/11_EVALUATION.md) | Verification & Testing | Automated test suite in `tests/` & `backend/tests/` (**519 collected & verified tests**), benchmarks, determinism baselines. |
 | [**HOW_TO_RUN.md**](HOW_TO_RUN.md) | Installation & Operations | Prerequisites, Docker Compose setup, single-command `start.ps1`, Vite polling mode, environment variables. |
 | [**VALIDATION.md**](VALIDATION.md) | Validation Protocols | Determinism replay, ground-truth matrix, pytest suite (**519**), dynamic APK corpus (`validate_dynamic_pipeline.py`). |
 | [**DAE_CURRENT_STATE.md**](DAE_CURRENT_STATE.md) | Technical Resolution Audit | Resolution state of containerization, Frida 17 Java bridge, ART JIT deopt, PID attach, BFCI v2, manifest, and HAR merger. |

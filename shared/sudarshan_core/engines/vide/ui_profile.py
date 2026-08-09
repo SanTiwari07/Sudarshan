@@ -1,4 +1,4 @@
-"""VIDE — normalized UI profile for static/dynamic comparison."""
+"""VIDE - normalized UI profile for static/dynamic comparison."""
 
 from __future__ import annotations
 

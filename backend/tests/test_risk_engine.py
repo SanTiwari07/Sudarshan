@@ -2,7 +2,7 @@
 Risk Engine regression tests.
 
 These previously unpacked four values from ``calculate_risk_score``, which
-returns a dict — every test in this module raised
+returns a dict - every test in this module raised
 ``ValueError: too many values to unpack`` and the deterministic scoring engine
 therefore had ZERO passing coverage. They also asserted a legacy weighted
 formula (w1=25/w2=15/w3=10) that the 5-axis STEI engine replaced.
@@ -147,7 +147,7 @@ def test_static_only_weights_renormalise_over_available_axes():
     This replaces the previous fixed 0.50/0.25/0.25 assertion. That formula
     multiplied every unavailable axis by its weight against a value of 0, so a
     deployment without VirusTotal/OTX keys had ~20-25% of every score pinned at
-    zero — absence of evidence scored as evidence of innocence. Measured on the
+    zero - absence of evidence scored as evidence of innocence. Measured on the
     labelled corpus, that alone kept real banking trojans inside the "Safe"
     band. See tests/test_detection_regressions.py.
     """
@@ -164,7 +164,7 @@ def test_static_only_weights_renormalise_over_available_axes():
     assert abs(sum(b["axes_used"].values()) - 1.0) < 0.01
 
     # axes_used publishes weights rounded to 3 decimals for readability, so
-    # recomputing from them cannot be exact — allow for that rounding only.
+    # recomputing from them cannot be exact - allow for that rounding only.
     expected = sum(w * b[axis] for axis, w in b["axes_used"].items())
     assert result["base_score"] == pytest.approx(expected, abs=0.1)
 
@@ -195,7 +195,7 @@ def test_full_frs_weights_sum_correctly():
 def test_ai_confidence_is_clamped(supplied, expected):
     """
     The multiplier is rule-derived (1.0 / 1.15 / 1.2) and hard-clamped to
-    [0.5, 1.5]. It is NOT an LLM output — clamping is the last line of defence.
+    [0.5, 1.5]. It is NOT an LLM output - clamping is the last line of defence.
     """
     result = calculate_risk_score(StaticAnalysisFlags(), ai_confidence=supplied)
     assert result["ai_confidence_multiplier"] == expected
@@ -300,7 +300,7 @@ def test_result_is_finite_for_all_scenarios():
 
 def test_confidence_rises_with_more_sources():
     """
-    A corroborating source must raise confidence — but only if it actually
+    A corroborating source must raise confidence - but only if it actually
     observed something. The dynamic fixture here now carries real events; it
     previously passed an empty run (bfci 10, no API/network/activity records),
     which under the corrected contract is an inconclusive run and no longer

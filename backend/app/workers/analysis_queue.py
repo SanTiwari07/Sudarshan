@@ -32,7 +32,7 @@ ANALYSIS_WORKERS = int(os.getenv("ANALYSIS_WORKERS", "2"))
 # ─── In-Memory Job Store ──────────────────────────────────────────────────────
 #
 # BOUNDED by TTL and count. This previously grew for the whole process lifetime,
-# and each finished entry holds a full AnalysisResponse.model_dump() — which
+# and each finished entry holds a full AnalysisResponse.model_dump() - which
 # embeds dynamic_analysis.logcat (an unbounded string), the attack timeline and
 # every API call. A few hundred analyses was a multi-hundred-megabyte resident
 # set that nothing ever released.
@@ -57,7 +57,7 @@ def _evict_finished_jobs() -> None:
         _jobs.pop(jid, None)
 
     # Over the cap: drop finished jobs oldest-first. An in-flight job is never
-    # evicted — losing its result would be worse than the memory it holds.
+    # evicted - losing its result would be worse than the memory it holds.
     if len(_jobs) > MAX_RETAINED_JOBS:
         finished = [jid for jid, j in _jobs.items() if j.get("_finished_at")]
         for jid in finished[: len(_jobs) - MAX_RETAINED_JOBS]:
@@ -186,8 +186,8 @@ async def _worker(worker_id: int) -> None:
     import os as _os
 
     # The pipeline lives in routes/upload.py and is imported lazily below, at
-    # the call site. Every analysis import that used to be here was dead — the
-    # worker delegates entirely — and MobSFClient() was constructed once per
+    # the call site. Every analysis import that used to be here was dead - the
+    # worker delegates entirely - and MobSFClient() was constructed once per
     # worker and never referenced.
     logger.info(f"[Queue] Worker {worker_id} started")
 

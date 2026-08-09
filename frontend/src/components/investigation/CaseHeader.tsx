@@ -37,7 +37,7 @@ export default function CaseHeader({ data }: { data: FraudCardData }) {
           `sudarshan_report_${data.sha256.slice(0, 8)}.html`,
         );
       } catch {
-        // user sees no file — avoid toast infra for minimal change
+        // user sees no file - avoid toast infra for minimal change
       }
     } finally {
       setDownloading(false);
@@ -55,7 +55,7 @@ export default function CaseHeader({ data }: { data: FraudCardData }) {
             <h1 className="text-lg font-bold text-slate-900">Fraud Analyst Intelligence</h1>
             <p className="text-sm text-slate-700 font-medium truncate mt-0.5">{displayName}</p>
             <p className="text-xs text-slate-500 mt-1">
-              Bank of India fraud investigation workspace — evidence-backed assessment.
+              Bank of India fraud investigation workspace - evidence-backed assessment.
             </p>
           </div>
         </div>

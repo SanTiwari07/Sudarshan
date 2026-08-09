@@ -59,7 +59,7 @@ export default function ScoreEntryCard({ data }: { data: FraudCardData }) {
                 />
               </div>
               {unavailable && (
-                <div className="text-[10px] text-amber-700 mt-1">Runtime inconclusive — axis not used in final score</div>
+                <div className="text-[10px] text-amber-700 mt-1">Runtime inconclusive - axis not used in final score</div>
               )}
               {excluded && <div className="text-[10px] text-amber-700 mt-1">Axis excluded (no data)</div>}
             </button>

@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Agentic Tool Executor
+SUDARSHAN - Agentic Tool Executor
 ===================================
 Real ADB-backed implementations for every tool in the Tool Registry.
 
@@ -7,9 +7,9 @@ Architecture rules:
   - Every tool is implemented as an async method returning a ToolResult.
   - All implementations enforce the timeout and retry count from ToolDef.
   - Failure is always graceful: returns ToolResult(success=False, error=...).
-  - No tool raises unhandled exceptions — exceptions are caught and returned.
+  - No tool raises unhandled exceptions - exceptions are caught and returned.
   - Credential VALUES are looked up from FORM_VALUES but NEVER returned in
-    ToolResult.data — only field_hint is echoed back.
+    ToolResult.data - only field_hint is echoed back.
 
 FORM_VALUES contains safe, synthetic test credentials only.
 These values are used for form filling during security analysis and
@@ -59,7 +59,7 @@ FORM_VALUES: Dict[str, str] = {
 # Module-level defaults, kept for backwards compatibility with callers that
 # import SCREEN_WIDTH/SCREEN_HEIGHT directly. The AUTHORITATIVE values come from
 # device_properties.get_screen_size() at run time, via ToolExecutor.screen_size
-# — the same provider the planner's coordinate validator uses, so the two can
+# - the same provider the planner's coordinate validator uses, so the two can
 # never disagree again.
 SCREEN_WIDTH:  int = int(os.getenv("SUDARSHAN_SCREEN_WIDTH",  "1080"))
 SCREEN_HEIGHT: int = int(os.getenv("SUDARSHAN_SCREEN_HEIGHT", "1920"))
@@ -74,7 +74,7 @@ DEFAULT_SWIPE_DURATION_MS: int = 300
 # The agent used to drive the device as fast as ADB would accept input: each
 # tool slept a fixed 0.4-1.0 s and the explorer loop went straight from ACT back
 # to OBSERVE. With the deterministic FallbackPlanner there is no LLM round trip
-# either, so taps landed back-to-back THROUGH activity transitions — tapping a
+# either, so taps landed back-to-back THROUGH activity transitions - tapping a
 # view that was already being torn down, and running `uiautomator dump` while
 # the window was still animating. On a slower emulator that reliably crashed or
 # ANR'd the app under analysis, which then reads as "no behaviour observed"
@@ -170,7 +170,7 @@ class ToolExecutor:
         self.adb_path                   = adb_path
         self.screenshot_manager         = screenshot_manager
         # Real accessibility service class name extracted from the APK manifest
-        # (e.g. ".zWPzgfI" for Cerberus). None means unknown — do not guess.
+        # (e.g. ".zWPzgfI" for Cerberus). None means unknown - do not guess.
         self.accessibility_service_class: Optional[str] = accessibility_service_class
 
     @property
@@ -191,7 +191,7 @@ class ToolExecutor:
         Dispatch an action dict from the planner to the correct tool implementation.
 
         action must contain "tool" key. All other keys are parameters.
-        Returns ToolResult — never raises.
+        Returns ToolResult - never raises.
         """
         tool_name = action.get("tool", "")
         tool_def  = get_tool(tool_name)
@@ -295,15 +295,14 @@ class ToolExecutor:
         Block until the window stops changing, or `timeout` elapses.
 
         Returns True if the UI was observed to settle, False on timeout or if
-        the device could not be probed. NEVER raises and never waits forever —
-        a settling wait that can hang would be worse than the crash it prevents.
+        the device could not be probed. NEVER raises and never waits forever - a settling wait that can hang would be worse than the crash it prevents.
 
         This replaces the guesswork of a fixed post-action sleep. A fixed sleep
         is simultaneously too long for a no-op tap and far too short for a cold
         Activity start, which is exactly how the agent ended up driving input
         into an app that was still starting.
         """
-        # Input dispatch is async — `input tap` returns when the event is queued.
+        # Input dispatch is async - `input tap` returns when the event is queued.
         # Poll only after giving the app a chance to begin reacting, otherwise
         # the first two samples match trivially and we declare victory early.
         await asyncio.sleep(_paced(POST_INPUT_SETTLE_SECONDS))
@@ -333,7 +332,7 @@ class ToolExecutor:
             await asyncio.sleep(IDLE_POLL_INTERVAL_SECONDS)
 
         logger.debug(
-            "[ToolExecutor] wait_for_idle timed out after %.1fs — UI still changing",
+            "[ToolExecutor] wait_for_idle timed out after %.1fs - UI still changing",
             (timeout if timeout is not None else _paced(IDLE_WAIT_TIMEOUT_SECONDS)),
         )
         return False
@@ -453,7 +452,7 @@ class ToolExecutor:
         Type text into a focused input field.
         Looks up the actual value from FORM_VALUES using field_hint.
         The value is used for ADB input but is NOT stored in ToolResult.data.
-        Only field_hint is echoed back — never the actual text value.
+        Only field_hint is echoed back - never the actual text value.
         """
         sw, sh = self.screen_size
         x = int(action.get("x", sw // 2))
@@ -535,7 +534,7 @@ class ToolExecutor:
         svc_class = self.accessibility_service_class
         if svc_class is None:
             logger.warning(
-                "[ToolExecutor] accessibility_service_class is not set — "
+                "[ToolExecutor] accessibility_service_class is not set - "
                 "cannot grant accessibility without a manifest-parsed class name. "
                 "This sample may not declare an accessibility service."
             )
@@ -562,7 +561,7 @@ class ToolExecutor:
         return f"{out1}\n{out2}".strip()
 
     async def _tool_deny_permission(self, action: Dict) -> ToolResult:
-        # Tap 'Deny' button — look for it in UI XML
+        # Tap 'Deny' button - look for it in UI XML
         xml = await self._get_ui_xml()
         if xml:
             for keyword in ["Deny", "Don't allow", "DENY", "Cancel"]:

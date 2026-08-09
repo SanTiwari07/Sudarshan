@@ -1,4 +1,4 @@
-# 04 — Dynamic Analysis Engine & Agentic Explorer Specification
+# 04 - Dynamic Analysis Engine & Agentic Explorer Specification
 
 ```yaml
 Module Title:        Dynamic Analysis Engine (DAE) & Agentic Explorer

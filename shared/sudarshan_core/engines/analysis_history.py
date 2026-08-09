@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Analysis History
+SUDARSHAN - Analysis History
 =============================
 Maintains a SQLite database of all analysis runs for trending and historical comparison.
 """

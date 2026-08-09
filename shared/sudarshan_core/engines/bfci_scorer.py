@@ -1,5 +1,5 @@
 """
-SUDARSHAN — BFCI v2 Scoring Engine
+SUDARSHAN - BFCI v2 Scoring Engine
 =====================================
 Behavioral Fraud Confidence Index calculation with volume-aware scoring
 and temporal sequence detection.
@@ -36,30 +36,30 @@ logger = logging.getLogger(__name__)
 # ─── BFCI Weights (validated against Indian banking trojans) ──────────────────
 
 BFCI_WEIGHTS: Dict[str, float] = {
-    "accessibility": 0.35,   # wa — heaviest: present in 87% of banking trojans
-    "sms":           0.25,   # ws — OTP theft
-    "overlay":       0.20,   # wo — phishing screens
-    "banking":       0.10,   # wb — confirms target is a banking app
-    "network":       0.05,   # wn — C2 communication
-    "persistence":   0.05,   # wp — device admin / lockdown
+    "accessibility": 0.35,   # wa - heaviest: present in 87% of banking trojans
+    "sms":           0.25,   # ws - OTP theft
+    "overlay":       0.20,   # wo - phishing screens
+    "banking":       0.10,   # wb - confirms target is a banking app
+    "network":       0.05,   # wn - C2 communication
+    "persistence":   0.05,   # wp - device admin / lockdown
 }
 
-# ─── Unscored categories — collected as evidence, never scored ────────────────
+# ─── Unscored categories - collected as evidence, never scored ────────────────
 #
 # Membership of a SCORED category is a strong claim. The caps below are 2-3
 # events with logarithmic scaling, so ONE event scores 50-63/100 for its
 # component. A scored category that also catches ordinary application behaviour
-# is not a weak signal — it is a constant, and it inflates every verdict equally.
+# is not a weak signal - it is a constant, and it inflates every verdict equally.
 #
 # These categories exist so that behaviour which is worth RECORDING but is not
 # by itself evidence of fraud has somewhere to go. calculate_bfci_v2 iterates
 # `for cat in BFCI_WEIGHTS`, and detect_fraud_sequences skips anything not in
 # it, so a category listed here is inert by construction. This tuple is
-# documentation and a test anchor — nothing reads it to make a decision.
+# documentation and a test anchor - nothing reads it to make a decision.
 #
 # Reviewer note: `device_fingerprint`, `notification` and `dangerous_apis` all
 # carry real evidential value and are candidates for their own weights. Adding
-# one is a MODEL CHANGE — it raises existing verdicts — and must be done against
+# one is a MODEL CHANGE - it raises existing verdicts - and must be done against
 # the labelled corpus, not by intuition. See audit/12_Frida_Agent_Audit.md §7.
 UNSCORED_CATEGORIES: tuple = (
     "dangerous_apis",       # DexClassLoader, Runtime.exec, InMemoryDexClassLoader, execve
@@ -94,7 +94,7 @@ SEQUENCE_WINDOW_SECONDS: float = 30.0
 SEQUENCE_MULTIPLIER: float = 1.25
 
 # ─── Fraud sequence definitions ───────────────────────────────────────────────
-# Each entry: (label, [required_categories]) — all categories must have events
+# Each entry: (label, [required_categories]) - all categories must have events
 # within SEQUENCE_WINDOW_SECONDS of each other to detect the sequence.
 
 FRAUD_SEQUENCES: List[Tuple[str, List[str]]] = [
@@ -277,7 +277,7 @@ def calculate_bfci_v2(
             contribution = round(weight * score, 2)
             event_count = len(collected_events.get(key, []))
             evidence.append(
-                f"[{symbol}] {label}: {event_count} event(s) — "
+                f"[{symbol}] {label}: {event_count} event(s) - "
                 f"component score {score:.1f}/100 x weight {weight} = +{contribution:.1f} to BFCI"
             )
     if detected_sequences:

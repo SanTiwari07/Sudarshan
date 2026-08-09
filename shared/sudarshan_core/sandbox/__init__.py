@@ -4,9 +4,9 @@ Sudarshan Sandbox Abstraction Layer
 Decouples the Dynamic Analysis Engine from a concrete emulator backend.
 
 Providers:
-  - GenymotionProvider   (default) — Genymotion Desktop
-  - AndroidStudioProvider — Android Studio AVD (optional / legacy)
-  - FutureProvider        — Corellium / Waydroid / physical stubs
+  - GenymotionProvider   (default) - Genymotion Desktop
+  - AndroidStudioProvider - Android Studio AVD (optional / legacy)
+  - FutureProvider - Corellium / Waydroid / physical stubs
 
 The DAE must communicate only through SandboxProvider. Analysis logic,
 risk scoring, Frida hooks, MobSF, and the AI pipeline are intentionally

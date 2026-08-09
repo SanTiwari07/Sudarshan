@@ -44,7 +44,7 @@ export default function ExecutiveIntelligenceOverview({
   const frs = data.frs_breakdown;
   if (frs?.concealed_payload) analystFlags.push('Concealed payload detected in static analysis');
   if (frs?.dynamic_ran && !frs.dynamic_conclusive) {
-    analystFlags.push('Runtime inconclusive — sandbox evidence not used in final score');
+    analystFlags.push('Runtime inconclusive - sandbox evidence not used in final score');
   }
   if (frs?.verdict_floored_for_visibility) analystFlags.push('Verdict floored for analyst visibility');
   if (frs?.axes_excluded?.length) analystFlags.push(`Excluded axes: ${frs.axes_excluded.join(', ')}`);
@@ -59,7 +59,7 @@ export default function ExecutiveIntelligenceOverview({
           <div>
             <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">Intelligent Overview</h2>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              Evidence-grounded synthesis from static, runtime, threat correlation, and risk engine — no speculative
+              Evidence-grounded synthesis from static, runtime, threat correlation, and risk engine - no speculative
               claims.
             </p>
           </div>
@@ -130,7 +130,7 @@ export default function ExecutiveIntelligenceOverview({
           <div>
             <p className="text-sm font-semibold text-slate-900">Still have questions?</p>
             <p className="text-xs text-slate-500 mt-1">
-              Ask the AI Investigation Assistant anything about this APK — answers stay grounded in case evidence.
+              Ask the AI Investigation Assistant anything about this APK - answers stay grounded in case evidence.
             </p>
           </div>
           <Link

@@ -154,7 +154,7 @@ export function useAnalysisSession(onComplete: (data: FraudCardData) => void) {
         setPhase('analyzing');
         applyBackendPipeline({
           pipeline_stage: 'QUEUED',
-          pipeline_message: 'Job queued — waiting for worker…',
+          pipeline_message: 'Job queued - waiting for worker…',
           progress_pct: 5,
         });
         analysisResult = await pollJob(job_id, token);

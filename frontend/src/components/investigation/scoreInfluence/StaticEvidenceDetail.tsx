@@ -114,7 +114,7 @@ export default function StaticEvidenceDetail({ data }: { data: FraudCardData }) 
             'Static capability flags & STEI sub-axes',
             `STEI aggregate: ${view.steiTotal.toFixed(1)} / 100`,
             view.frsContribution != null
-              ? `FRS contribution: ~${view.frsContribution.toFixed(2)} pts (weight ${view.frsWeightPct?.toFixed(1) ?? '—'}%)`
+              ? `FRS contribution: ~${view.frsContribution.toFixed(2)} pts (weight ${view.frsWeightPct?.toFixed(1) ?? '-'}%)`
               : 'FRS: static axis excluded',
           ]}
         />

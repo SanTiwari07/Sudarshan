@@ -18,7 +18,7 @@
     },
     {
       "id": "RBI-ITF-2021",
-      "title": "IT Framework for Banks — Cyber Security Policy",
+      "title": "IT Framework for Banks - Cyber Security Policy",
       "issued": "2021-11-02",
       "summary": "RBI mandates banks to maintain a 24x7 SOC, conduct threat intelligence sharing, and implement mobile application security testing before deployment. Third-party APKs used for banking must undergo security review.",
       "key_controls": [
@@ -34,7 +34,7 @@
     },
     {
       "id": "RBI-CPG-2022",
-      "title": "Customer Protection Guidelines — Mobile Banking Fraud",
+      "title": "Customer Protection Guidelines - Mobile Banking Fraud",
       "issued": "2022-08-01",
       "summary": "RBI mandates zero-liability for customers when fraud occurs due to bank system compromise. Banks must provide 24-hour fraud reporting channel and reimburse within 10 working days. Proactive customer advisory when new malware targeting their app is detected.",
       "key_controls": [
@@ -49,14 +49,14 @@
     },
     {
       "id": "RBI-CSITE-TI-2023",
-      "title": "RBI-CSITE Threat Intelligence Bulletin — Android Banking Malware 2023",
+      "title": "RBI-CSITE Threat Intelligence Bulletin - Android Banking Malware 2023",
       "issued": "2023-03-15",
       "summary": "RBI Computer Science and Information Technology Examination (RBI-CSITE) advisory on rise of Android banking trojans targeting Indian banking apps. Drinik, Xenomorph, and SOVA variants specifically targeting Indian UPI ecosystem.",
       "active_threats": [
-        "Drinik v3 — targets SBI, BOI, PNB with accessibility overlay",
-        "Xenomorph — targeting 400+ banking apps globally including Indian banks",
-        "SOVA — sophisticated banking trojan with 2FA bypass",
-        "FluBot — SMS worm with OTP interception, Indian campaigns active"
+        "Drinik v3 - targets SBI, BOI, PNB with accessibility overlay",
+        "Xenomorph - targeting 400+ banking apps globally including Indian banks",
+        "SOVA - sophisticated banking trojan with 2FA bypass",
+        "FluBot - SMS worm with OTP interception, Indian campaigns active"
       ],
       "indicators": [
         "Package name com.sbi.lotusintouch impersonation",
@@ -69,7 +69,7 @@
   "cert_in_advisories": [
     {
       "id": "CIAD-2023-0042",
-      "title": "Android Dropper Malware — Banking Sector Alert",
+      "title": "Android Dropper Malware - Banking Sector Alert",
       "severity": "Critical",
       "issued": "2023-06-20",
       "summary": "CERT-In has observed a campaign distributing Android dropper APKs through WhatsApp and SMS links. The droppers use DexClassLoader to fetch second-stage banking trojan payloads from pastebin-like services.",
@@ -88,7 +88,7 @@
     },
     {
       "id": "CIAD-2023-0067",
-      "title": "Drinik Banking Trojan — New Variant Alert",
+      "title": "Drinik Banking Trojan - New Variant Alert",
       "severity": "Critical",
       "issued": "2023-09-12",
       "summary": "New Drinik variant targeting 18 Indian banks with updated overlay screens for UPI PIN harvesting. Uses Accessibility Service to auto-fill OTPs and perform fraudulent transfers.",
@@ -110,7 +110,7 @@
   "npci_security": [
     {
       "id": "NPCI-SEC-2022",
-      "title": "UPI Ecosystem Security — Mobile App Requirements",
+      "title": "UPI Ecosystem Security - Mobile App Requirements",
       "summary": "NPCI mandates all UPI apps to implement root detection, emulator detection, overlay attack prevention, and secure keyboard for PIN entry. Apps must detect when another app is drawing over them during payment flow.",
       "requirements": [
         "Root/jailbreak detection mandatory",
@@ -130,15 +130,15 @@
     }
   ],
   "indian_banking_packages": {
-    "com.boi": "Bank of India — BHIM BOI UPI",
-    "com.sbi.lotusintouch": "State Bank of India — YONO SBI",
-    "com.icici": "ICICI Bank — iMobile Pay",
-    "com.hdfcbank.hdfcquickpayapp": "HDFC Bank — MobileBanking",
-    "com.axis.mobile": "Axis Bank — Mobile Banking",
-    "com.pnb": "Punjab National Bank — PNB ONE",
+    "com.boi": "Bank of India - BHIM BOI UPI",
+    "com.sbi.lotusintouch": "State Bank of India - YONO SBI",
+    "com.icici": "ICICI Bank - iMobile Pay",
+    "com.hdfcbank.hdfcquickpayapp": "HDFC Bank - MobileBanking",
+    "com.axis.mobile": "Axis Bank - Mobile Banking",
+    "com.pnb": "Punjab National Bank - PNB ONE",
     "com.kotak.mobilebanking": "Kotak Mahindra Bank",
-    "com.canarabank.mobility": "Canara Bank — Canara ai1",
-    "com.unionbank.eunionbank": "Union Bank — Union Bank Mobile",
+    "com.canarabank.mobility": "Canara Bank - Canara ai1",
+    "com.unionbank.eunionbank": "Union Bank - Union Bank Mobile",
     "in.org.npci.upiapp": "BHIM UPI",
     "net.one97.paytm": "Paytm",
     "com.phonepe.app": "PhonePe",

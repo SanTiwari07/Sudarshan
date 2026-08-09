@@ -91,7 +91,7 @@ export default function OperationalRecommendationCard({
             {actions.slice(0, 4).map((a) => (
               <li key={`${a.label}-${a.evidenceRef}`} className="text-[11px] text-slate-600">
                 <span className="font-semibold text-slate-800">{normalizeActionLabel(a.label)}</span>
-                <span className="text-slate-400 mx-1">—</span>
+                <span className="text-slate-400 mx-1"> - </span>
                 {a.evidenceRef}
               </li>
             ))}

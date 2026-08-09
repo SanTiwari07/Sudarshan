@@ -1,4 +1,4 @@
-# 01 — Android Internals
+# 01 - Android Internals
 
 > **Chapter ID:** `CH01` · **Block:** A (Foundations) · **Status:** Stable
 > **Tags:** `#android` `#internals` `#binder` `#zygote` `#ipc` `#components` `#aosp`
@@ -44,7 +44,7 @@ wall fast, and it will look like this:
 
 Every one of those is an internals question. This chapter is the map.
 
-> **⚙️ Engineering Note:** The single most useful mental model is this — **Android is a
+> **⚙️ Engineering Note:** The single most useful mental model is this - **Android is a
 > Linux system where the interesting security boundaries are not Linux boundaries.**
 > Linux gives you UIDs and processes. Android adds Binder, permissions, components, and
 > the framework. Attackers live in the gap between the two models.
@@ -87,11 +87,11 @@ Three forces shaped it:
 
 1. **Hardware fragmentation.** Thousands of device models with different cameras,
    sensors, and modems. The HAL exists so the framework can be written once. This is why
-   Project Treble (Android 8) mattered — it decoupled the vendor implementation from the
+   Project Treble (Android 8) mattered - it decoupled the vendor implementation from the
    framework so OS updates stopped requiring full vendor rebuilds.
 2. **App portability.** Apps ship as bytecode (DEX), not native code, so the same APK
    runs on ARM and x86. This is also why *native* libraries (`lib/arm64-v8a/*.so`) need
-   per-ABI builds — and why malware often ships several ABI variants.
+   per-ABI builds - and why malware often ships several ABI variants.
 3. **Isolation.** The Linux kernel supplies process and UID isolation for free. Android
    builds its permission model on top.
 
@@ -100,7 +100,7 @@ Three forces shaped it:
 | Layer | What the adversary wants from it |
 |---|---|
 | Kernel | Root exploits (rare now, but privilege escalation is the jackpot) |
-| HAL | Camera/mic/sensor access — mostly reached via framework APIs, not directly |
+| HAL | Camera/mic/sensor access - mostly reached via framework APIs, not directly |
 | Native libs | **Hiding logic.** Moving code from Java to native `.so` defeats `jadx`. Klopatra and GodFather both did this (Cleafy 2025; Cyble). |
 | ART | Dynamic code loading, reflection, hooking evasion → [Ch 03](03-android-runtime.md) |
 | Framework | The actual attack surface: Accessibility, WindowManager overlays, NotificationListener, SMS |
@@ -108,7 +108,7 @@ Three forces shaped it:
 
 > **⚙️ Engineering Note:** When you see a large `.so` in `lib/` and a suspiciously thin
 > `classes.dex`, the logic has been pushed native. That is a **weighted signal**, not a
-> verdict — game engines, ML SDKs, and DRM libraries do this legitimately. But combined
+> verdict - game engines, ML SDKs, and DRM libraries do this legitimately. But combined
 > with a commercial packer fingerprint (Virbox, Jiagu, Bangcle) it becomes strong.
 
 ---
@@ -161,7 +161,7 @@ Android. An app that declares:
 
 ...with `<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>`
 will be woken on every reboot. Every persistent banking trojan does this. It maps to
-**MITRE ATT&CK Mobile T1624 — Event Triggered Execution**.
+**MITRE ATT&CK Mobile T1624 - Event Triggered Execution**.
 
 > **🚨 Misconception:** "Rebooting the phone will kill the malware." It will not. It is
 > often the *first* thing the malware wants, because reboot restores it to a clean
@@ -186,7 +186,7 @@ For forensics ([→ Ch 17](../digital-forensics/17-digital-forensics.md)):
 
 **Zygote** is a process started at boot that has already loaded and initialised the core
 framework classes and resources. Every app process on the device is created by **forking
-Zygote** — never by a fresh `exec`.
+Zygote** - never by a fresh `exec`.
 
 ```
                     ┌─────────────────┐
@@ -238,8 +238,7 @@ AMS schedules Activity launch ◄───────────────�
 
 The security-critical moment is the child's setup: **UID assignment, SELinux domain
 transition, and seccomp filter installation all happen after the fork and before any app
-code runs.** This is why an app cannot escape its sandbox by exploiting startup ordering
-— by the time `onCreate()` executes, the box is already closed.
+code runs.** This is why an app cannot escape its sandbox by exploiting startup ordering - by the time `onCreate()` executes, the box is already closed.
 
 ### WHY attackers care
 
@@ -299,7 +298,7 @@ most Android system services as threads. Key residents:
 
 Historical and practical: these services need to coordinate constantly and share state,
 and Binder calls between them would be expensive. The cost is that `system_server` is a
-huge, high-value target — a memory corruption bug there is effectively system compromise.
+huge, high-value target - a memory corruption bug there is effectively system compromise.
 Google Project Zero has published repeatedly on this attack surface.
 
 ### HOW to interrogate it (your daily commands)
@@ -338,8 +337,8 @@ $ adb shell dumpsys activity activities | grep mResumedActivity
 ### WHAT
 
 **Binder** is Android's primary inter-process communication mechanism. Practically every
-interesting thing an app does — starting an activity, sending an SMS, taking a photo,
-querying installed packages — is a Binder transaction to a system service.
+interesting thing an app does - starting an activity, sending an SMS, taking a photo,
+querying installed packages - is a Binder transaction to a system service.
 
 It is implemented as a kernel driver exposed at `/dev/binder` (plus `/dev/hwbinder` and
 `/dev/vndbinder` after Project Treble split vendor and framework domains).
@@ -351,7 +350,7 @@ gives three things they don't, all at once:
 
 1. **Identity.** The kernel driver reliably tells the receiver the **calling UID and PID**
    (`Binder.getCallingUid()`). It cannot be spoofed by the caller. *This is the foundation
-   of the entire Android permission model* — when you call `sendTextMessage()`, the SMS
+   of the entire Android permission model* - when you call `sendTextMessage()`, the SMS
    service asks the kernel "who is actually calling?" and checks whether that UID holds
    `SEND_SMS`.
 2. **Object references, not just bytes.** Binder can pass a reference to a remote object
@@ -361,7 +360,7 @@ gives three things they don't, all at once:
    copies a socket would need.
 
 > **⚙️ Engineering Note:** Internalise this: **`Binder.getCallingUid()` is why Android
-> permissions work.** Permission checks are not enforced in your app's process — they're
+> permissions work.** Permission checks are not enforced in your app's process - they're
 > enforced in the *service's* process, using kernel-supplied caller identity. That's why
 > you cannot bypass a permission check by patching the client-side SDK. You can patch
 > your own copy of `checkSelfPermission()` all day; the SMS service still asks the kernel.
@@ -407,7 +406,7 @@ exactly on ordering and types. Historically this has been a rich bug class:
 - **Parcel mismatch / "bundle mismatch" bugs**, where an object serialises to a different
   size than it deserialises to, allowing an attacker to smuggle extra data past a
   security check. Several launcher/settings privilege-escalation bugs have used this shape.
-- **Binder transaction size limit (~1 MB per process, shared)** — exceeding it throws
+- **Binder transaction size limit (~1 MB per process, shared)** - exceeding it throws
   `TransactionTooLargeException`. Malware sometimes triggers this deliberately to crash
   security tooling, and analysts hit it accidentally when dumping large data over Binder.
 
@@ -463,7 +462,7 @@ start independently. This exists so the system can compose functionality across 
 Why an analyst cares: overlay malware typically hooks the *foreground app change* event
 (via Accessibility) rather than any activity callback of its own, then launches its own
 Activity or adds a `TYPE_APPLICATION_OVERLAY` window on top. So when tracing, don't just
-look at the malware's activities — look at what it does when *another* app resumes.
+look at the malware's activities - look at what it does when *another* app resumes.
 
 ### Services and the foreground-service tightening
 
@@ -472,9 +471,9 @@ Background execution has been progressively restricted:
 | Android | Change | Effect on malware |
 |---|---|---|
 | 8 (API 26) | Background execution limits; implicit broadcast restrictions | Forced malware toward foreground services with visible notifications |
-| 9 (API 28) | `FOREGROUND_SERVICE` permission required | Trivial to obtain, but now declared in manifest — a static signal |
+| 9 (API 28) | `FOREGROUND_SERVICE` permission required | Trivial to obtain, but now declared in manifest - a static signal |
 | 12 (API 31) | Cannot start foreground services from background (mostly) | Pushed persistence toward `BOOT_COMPLETED` + a11y-driven restart |
-| 13 (API 33) | `POST_NOTIFICATIONS` runtime permission | Malware must ask for notification permission — visible to the user |
+| 13 (API 33) | `POST_NOTIFICATIONS` runtime permission | Malware must ask for notification permission - visible to the user |
 | 14 (API 34) | **Foreground service types mandatory** (`android:foregroundServiceType`) | Declared types are now a static-analysis signal; `mediaProjection` type is a screen-capture tell |
 
 > **⚙️ Engineering Note:** `android:foregroundServiceType="mediaProjection"` in a manifest
@@ -483,15 +482,15 @@ Background execution has been progressively restricted:
 > `MediaProjection` is documented in SpyNote and used across the Hidden-VNC families
 > (Vultur, Klopatra, BingoMod).
 
-### ContentProviders — the underrated surface
+### ContentProviders - the underrated surface
 
 A `ContentProvider` exposes data at a `content://` URI. If exported without permission, any
 app on the device can read it. Two failure modes matter:
 
-1. **Leaky providers in legitimate apps** — a banking app that exports a provider with
+1. **Leaky providers in legitimate apps** - a banking app that exports a provider with
    session tokens is a direct target. This maps to OWASP **MASVS-STORAGE** and **MASVS-PLATFORM**.
 2. **Path traversal in providers** (`openFile` implementations that don't canonicalise
-   paths) — allows arbitrary file read from the app sandbox.
+   paths) - allows arbitrary file read from the app sandbox.
 
 ```bash
 # Enumerate exported providers of an installed app
@@ -508,8 +507,8 @@ $ adb shell content query --uri content://com.target.provider/items
 
 An **Intent** is a message object describing an operation. Two kinds:
 
-- **Explicit** — names the target component (`setClassName("com.bank","com.bank.Login")`).
-- **Implicit** — describes an action; the system resolves candidates by intent filter
+- **Explicit** - names the target component (`setClassName("com.bank","com.bank.Login")`).
+- **Implicit** - describes an action; the system resolves candidates by intent filter
   (`ACTION_VIEW` with a `https://` URI).
 
 ### WHY the exported flag is the whole story
@@ -521,7 +520,7 @@ any component with an intent filter, or the app fails to install. This was a maj
 hardening step and it means:
 
 > **⚙️ Engineering Note:** When you decompile an app targeting API < 31 and see a receiver
-> with an intent filter and no explicit `exported` attribute — **it is exported.** Do not
+> with an intent filter and no explicit `exported` attribute - **it is exported.** Do not
 > assume it's private. This is a frequent analysis error and a frequent real vulnerability
 > in older banking apps.
 
@@ -542,9 +541,9 @@ hardening step and it means:
 
 ### Deep links and app links
 
-- **Deep link** — an implicit intent with a custom scheme (`myapp://pay?to=...`). Any app
+- **Deep link** - an implicit intent with a custom scheme (`myapp://pay?to=...`). Any app
   can claim the scheme. Not verifiable.
-- **App Link** — an `https://` link verified against `/.well-known/assetlinks.json` on the
+- **App Link** - an `https://` link verified against `/.well-known/assetlinks.json` on the
   developer's domain, tying the link to the app's **signing certificate**. This is
   verifiable, and it's a nice concrete demonstration of why signer identity matters
   ([→ Ch 06](../security/06-certificates.md)).
@@ -559,7 +558,7 @@ hardening step and it means:
 |---|---|---|
 | ≤ Android 9 | `READ/WRITE_EXTERNAL_STORAGE` gave broad access to shared storage | One granted permission → read every app's files on SD card, all photos, all downloads |
 | Android 10 (API 29) | **Scoped storage** introduced (opt-out via `requestLegacyExternalStorage`) | Transition pain |
-| Android 11 (API 30) | Scoped storage **enforced**; `MANAGE_EXTERNAL_STORAGE` created as a special, Play-restricted permission | Malware now asks for `MANAGE_EXTERNAL_STORAGE` — which is itself a signal |
+| Android 11 (API 30) | Scoped storage **enforced**; `MANAGE_EXTERNAL_STORAGE` created as a special, Play-restricted permission | Malware now asks for `MANAGE_EXTERNAL_STORAGE` - which is itself a signal |
 | Android 13 (API 33) | Granular media permissions: `READ_MEDIA_IMAGES` / `_VIDEO` / `_AUDIO` | Finer-grained, better user signal |
 | Android 14 (API 34) | Partial photo/video access (user picks specific items) | Reduces blast radius further |
 
@@ -577,9 +576,9 @@ hardening step and it means:
 /sdcard/ (a.k.a. /storage/emulated/0)  ← shared storage, scoped since A10
 ```
 
-> **⚙️ Engineering Note — the WAL trap:** SQLite databases in modern Android use
+> **⚙️ Engineering Note - the WAL trap:** SQLite databases in modern Android use
 > Write-Ahead Logging. **If you copy only `foo.db` and not `foo.db-wal`, you lose the most
-> recent transactions** — which are exactly the ones you care about in a fraud
+> recent transactions** - which are exactly the ones you care about in a fraud
 > investigation. Always acquire the `-wal` and `-shm` siblings. This single mistake
 > invalidates a shocking amount of amateur mobile forensics.
 > → [Ch 17](../digital-forensics/17-digital-forensics.md)
@@ -633,7 +632,7 @@ mitre:
   - T1624    # Event Triggered Execution
 ```
 
-Note the explicit separation of `severity` and `confidence` — a core SUDARSHAN principle
+Note the explicit separation of `severity` and `confidence` - a core SUDARSHAN principle
 from [Ch 00 §2](../00-introduction.md#2-what-sudarshan-is), developed fully in
 [Ch 27 Risk Scoring](../sudarshan/27-risk-scoring.md).
 
@@ -674,16 +673,16 @@ and a dynamically loaded DEX from a remote host.
 
 ### Edge cases
 
-- **Work profiles / Android for Work** — the same package can exist twice with different
+- **Work profiles / Android for Work** - the same package can exist twice with different
   UIDs (`u0_a123` vs `u10_a123`). Forensic tooling must handle multi-user.
-- **Instant Apps** — run without full installation; different lifecycle assumptions.
-- **Split APKs / App Bundles** — the "app" is several APK files; `base.apk` alone is not
+- **Instant Apps** - run without full installation; different lifecycle assumptions.
+- **Split APKs / App Bundles** - the "app" is several APK files; `base.apk` alone is not
   the whole app. → [Ch 02](../apk/02-apk-architecture.md)
 
 ### Performance considerations
 
 Manifest parsing is cheap (milliseconds). Full decompilation is expensive (seconds to
-minutes). **Design the pipeline so cheap manifest signals gate expensive stages** — this is
+minutes). **Design the pipeline so cheap manifest signals gate expensive stages** - this is
 the core throughput argument of [Ch 23](../sudarshan/23-detection-pipeline.md).
 
 ---
@@ -708,7 +707,7 @@ the core throughput argument of [Ch 23](../sudarshan/23-detection-pipeline.md).
 **What judges ask:** *"Why does understanding Android internals matter for a malware
 platform? Isn't this just a file-scanning problem?"*
 
-**Perfect answer:** Because the malicious behaviour isn't in the file — it's in how the
+**Perfect answer:** Because the malicious behaviour isn't in the file - it's in how the
 file uses the platform. An APK's bytes are inert. The damage happens when an Accessibility
 Service starts receiving events from `AccessibilityManagerService`, when a
 `TYPE_APPLICATION_OVERLAY` window is added through `WindowManagerService`, when
@@ -716,8 +715,7 @@ Service starts receiving events from `AccessibilityManagerService`, when a
 file-format matching, and file-format matching is what packers exist to defeat.
 
 **Common mistake:** Describing Android as "just Linux." It gets you a follow-up you won't
-survive. The interesting security boundaries — permissions, components, Binder identity —
-are Android constructs layered *above* Linux, and the reason Android permissions are
+survive. The interesting security boundaries - permissions, components, Binder identity - are Android constructs layered *above* Linux, and the reason Android permissions are
 enforceable at all is that the Binder driver supplies unspoofable caller UID.
 
 **Follow-up questions to expect:**
@@ -729,8 +727,7 @@ enforceable at all is that the Binder driver supplies unspoofable caller UID.
 
 **Fact that impresses:** From Android 12, apps targeting API 31+ **fail to install** if a
 component has an intent filter without an explicit `android:exported`. So when analysing
-an older app, an intent-filtered component with no `exported` attribute *is exported* —
-a real and frequently-missed vulnerability in legacy banking apps.
+an older app, an intent-filtered component with no `exported` attribute *is exported* - a real and frequently-missed vulnerability in legacy banking apps.
 
 ---
 
@@ -740,7 +737,7 @@ a real and frequently-missed vulnerability in legacy banking apps.
 Senior answer covers all three drivers: unspoofable caller identity from the kernel
 (foundation of permission enforcement), remote object references (not just byte streams),
 and single-copy efficiency via the receiver's mmap'd buffer. Beginners describe it as
-"Android's IPC" and stop — that answer scores zero.
+"Android's IPC" and stop - that answer scores zero.
 
 **Q: "What is Zygote and why does it exist?"**
 Startup latency + copy-on-write memory sharing. Bonus points for noting that the child's
@@ -749,7 +746,7 @@ before app code runs.
 
 **Q: "An app declares a BroadcastReceiver with an intent filter but no exported attribute.
 Is it exported?"**
-Correct answer: *it depends on targetSdk.* Below API 31, yes — declaring an intent filter
+Correct answer: *it depends on targetSdk.* Below API 31, yes - declaring an intent filter
 makes it exported by default. At API 31+, the app wouldn't install without an explicit
 declaration. This question separates people who have read the docs from people who have
 read blog posts.
@@ -761,7 +758,7 @@ see you reach for observation before reverse engineering.
 
 **Beginner mistakes:**
 - Confusing Android *version* with *API level*.
-- Saying "the app checks the permission" — no, the *service* checks the caller's permission.
+- Saying "the app checks the permission" - no, the *service* checks the caller's permission.
 - Assuming one package = one process.
 - Forgetting `-wal` files when pulling SQLite databases.
 
@@ -770,15 +767,15 @@ see you reach for observation before reverse engineering.
 ## 15. Cross-references
 
 **Upstream (read first):**
-- [← Ch 00 Introduction](../00-introduction.md) — conventions, Master Lifecycle
+- [← Ch 00 Introduction](../00-introduction.md) - conventions, Master Lifecycle
 
 **Downstream (this enables):**
-- [→ Ch 02 APK Architecture](../apk/02-apk-architecture.md) — what gets installed
-- [→ Ch 03 Android Runtime](03-android-runtime.md) — how the forked process executes code
-- [→ Ch 04 Android Security Model](../security/04-android-security-model.md) — the sandbox Zygote sets up
-- [→ Ch 09 Package Manager](../apk/09-package-manager.md) — PMS in depth
-- [→ Ch 13 Android Malware](../malware/13-android-malware.md) — a11y, overlay, tapjacking in full
-- [→ Ch 17 Digital Forensics](../digital-forensics/17-digital-forensics.md) — the artifact paths in §3 and §9
+- [→ Ch 02 APK Architecture](../apk/02-apk-architecture.md) - what gets installed
+- [→ Ch 03 Android Runtime](03-android-runtime.md) - how the forked process executes code
+- [→ Ch 04 Android Security Model](../security/04-android-security-model.md) - the sandbox Zygote sets up
+- [→ Ch 09 Package Manager](../apk/09-package-manager.md) - PMS in depth
+- [→ Ch 13 Android Malware](../malware/13-android-malware.md) - a11y, overlay, tapjacking in full
+- [→ Ch 17 Digital Forensics](../digital-forensics/17-digital-forensics.md) - the artifact paths in §3 and §9
 
 **Related concepts:** Binder → permission enforcement → `Binder.getCallingUid()` →
 service-side checks → reflection into `ServiceManager` → non-SDK restrictions → Ch 03/04.
@@ -787,22 +784,22 @@ service-side checks → reflection into `ServiceManager` → non-SDK restriction
 
 ## 16. References
 
-1. Android Developers — *Platform Architecture*. https://developer.android.com/guide/platform
-2. AOSP — *Binder / AIDL* documentation. https://source.android.com/docs/core/architecture/hidl/binder-ipc
-3. AOSP — *Application Sandbox*. https://source.android.com/docs/security/app-sandbox
-4. Android Developers — *App startup and the Zygote process* (Platform docs).
-5. Android Developers — *Behavior changes: Apps targeting Android 12* (explicit `android:exported`). https://developer.android.com/about/versions/12/behavior-changes-12
-6. Android Developers — *Storage updates in Android 11* (scoped storage). https://developer.android.com/about/versions/11/privacy/storage
-7. Android Developers — *Foreground service types are required (Android 14)*. https://developer.android.com/about/versions/14/changes/fgs-types-required
-8. MITRE ATT&CK for Mobile — T1624 Event Triggered Execution; T1453 Abuse Accessibility Features. https://attack.mitre.org/matrices/mobile/
-9. Cleafy Labs — *Klopatra* analysis (2025) — Java→native code migration.
-10. Cyble Research and Intelligence Labs — GodFather variant analysis — native code migration.
-11. Google Project Zero — Android research archive. https://googleprojectzero.blogspot.com/
+1. Android Developers - *Platform Architecture*. https://developer.android.com/guide/platform
+2. AOSP - *Binder / AIDL* documentation. https://source.android.com/docs/core/architecture/hidl/binder-ipc
+3. AOSP - *Application Sandbox*. https://source.android.com/docs/security/app-sandbox
+4. Android Developers - *App startup and the Zygote process* (Platform docs).
+5. Android Developers - *Behavior changes: Apps targeting Android 12* (explicit `android:exported`). https://developer.android.com/about/versions/12/behavior-changes-12
+6. Android Developers - *Storage updates in Android 11* (scoped storage). https://developer.android.com/about/versions/11/privacy/storage
+7. Android Developers - *Foreground service types are required (Android 14)*. https://developer.android.com/about/versions/14/changes/fgs-types-required
+8. MITRE ATT&CK for Mobile - T1624 Event Triggered Execution; T1453 Abuse Accessibility Features. https://attack.mitre.org/matrices/mobile/
+9. Cleafy Labs - *Klopatra* analysis (2025) - Java→native code migration.
+10. Cyble Research and Intelligence Labs - GodFather variant analysis - native code migration.
+11. Google Project Zero - Android research archive. https://googleprojectzero.blogspot.com/
 
 ### Further reading
 - *Android Internals: A Confectioner's Cookbook*, Jonathan Levin
 - AOSP source: `frameworks/base/services/core/java/com/android/server/`
-- OWASP MASTG — platform interaction test cases (MASVS-PLATFORM)
+- OWASP MASTG - platform interaction test cases (MASVS-PLATFORM)
 
 ---
 

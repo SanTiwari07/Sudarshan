@@ -78,7 +78,7 @@ function APKMetadata({ data }: { data: FraudCardData }) {
     { label: 'Critical Permissions', value: `${data.technical_view.permissions_fired.length}`, mono: false, highlight: data.technical_view.permissions_fired.length > 0 },
     { label: 'Dangerous APIs', value: data.technical_view.apis_fired.length > 0 ? data.technical_view.apis_fired.join(', ') : 'None detected', mono: true },
     { label: 'Network Indicators', value: `${data.hardcoded_urls_ips.length} hardcoded URL(s)/IP(s)`, mono: false },
-    { label: 'Banking Targeting', value: data.targets_indian_banks ? 'YES — Target Package Found' : 'No', mono: false, highlight: data.targets_indian_banks },
+    { label: 'Banking Targeting', value: data.targets_indian_banks ? 'YES - Target Package Found' : 'No', mono: false, highlight: data.targets_indian_banks },
     { label: 'Final Score', value: `${data.final_risk_score.toFixed(2)} / 100`, mono: true, highlight: data.final_risk_score > 30 },
   ];
 
@@ -293,8 +293,8 @@ function NetworkCapturePanel({ networkLogs }: { networkLogs?: any[] }) {
             {networkLogs.map((req, i) => (
               <tr key={i} className={req.is_suspicious ? '!bg-red-50/50' : ''}>
                 <td className="font-semibold">{req.method || 'GET'}</td>
-                <td className="break-all">{req.domain || req.ip || '—'}</td>
-                <td className="max-w-[14rem] truncate" title={req.url || undefined}>{req.url || '—'}</td>
+                <td className="break-all">{req.domain || req.ip || '-'}</td>
+                <td className="max-w-[14rem] truncate" title={req.url || undefined}>{req.url || '-'}</td>
                 <td className="font-semibold tabular-nums">{req.response_status || 200}</td>
               </tr>
             ))}
@@ -525,7 +525,7 @@ function CodeFindingsPanel({ data }: { data: FraudCardData }) {
         <SectionHeader
           icon={<Code className="h-4 w-4" />}
           title="Static Code Security Findings"
-          subtitle={`${findings.length} finding(s) from source analysis — with MASVS/CWE/OWASP`}
+          subtitle={`${findings.length} finding(s) from source analysis - with MASVS/CWE/OWASP`}
           action={open ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
         />
       </button>
@@ -613,7 +613,7 @@ function ExportedComponentsPanel({ data }: { data: FraudCardData }) {
       <button onClick={() => setOpen(o => !o)} className="w-full">
         <SectionHeader
           icon={<Shield className="h-4 w-4" />}
-          title="Exported Components — Attack Surface"
+          title="Exported Components - Attack Surface"
           subtitle={`${total} exported component(s) accessible by external apps / intents`}
           action={open ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
         />
@@ -666,7 +666,7 @@ function BinaryAnalysisPanel({ data }: { data: FraudCardData }) {
         <SectionHeader
           icon={<Database className="h-4 w-4" />}
           title="Native Binary Analysis"
-          subtitle={`${bins.length} native library (SO) file(s) — NX, Stack Canary, RELRO, RPATH`}
+          subtitle={`${bins.length} native library (SO) file(s) - NX, Stack Canary, RELRO, RPATH`}
           action={open ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
         />
       </button>
@@ -686,12 +686,12 @@ function BinaryAnalysisPanel({ data }: { data: FraudCardData }) {
             <tbody>
               {bins.map((b, i) => (
                 <tr key={i}>
-                  <td className="font-mono break-all">{b.name || '—'}</td>
-                  <td className={`text-center font-mono ${flagStyle(b.nx)}`}>{String(b.nx ?? '—')}</td>
-                  <td className={`text-center font-mono ${flagStyle(b.stack_canary)}`}>{String(b.stack_canary ?? '—')}</td>
-                  <td className={`text-center font-mono ${flagStyle(b.relro)}`}>{String(b.relro ?? '—')}</td>
-                  <td className={`text-center font-mono ${b.rpath && String(b.rpath) !== 'False' ? 'text-red-600 font-bold' : 'text-emerald-600'}`}>{String(b.rpath ?? '—')}</td>
-                  <td className={`text-center font-mono ${flagStyle(b.fortify)}`}>{String(b.fortify ?? '—')}</td>
+                  <td className="font-mono break-all">{b.name || '-'}</td>
+                  <td className={`text-center font-mono ${flagStyle(b.nx)}`}>{String(b.nx ?? '-')}</td>
+                  <td className={`text-center font-mono ${flagStyle(b.stack_canary)}`}>{String(b.stack_canary ?? '-')}</td>
+                  <td className={`text-center font-mono ${flagStyle(b.relro)}`}>{String(b.relro ?? '-')}</td>
+                  <td className={`text-center font-mono ${b.rpath && String(b.rpath) !== 'False' ? 'text-red-600 font-bold' : 'text-emerald-600'}`}>{String(b.rpath ?? '-')}</td>
+                  <td className={`text-center font-mono ${flagStyle(b.fortify)}`}>{String(b.fortify ?? '-')}</td>
                 </tr>
               ))}
             </tbody>
@@ -803,7 +803,7 @@ function SecretsPanel({ data }: { data: FraudCardData }) {
         <SectionHeader
           icon={<Key className="h-4 w-4" />}
           title="Hardcoded Secrets & Credentials"
-          subtitle={`${secrets.length} secret(s) found — API keys, tokens, Firebase configs, JWT`}
+          subtitle={`${secrets.length} secret(s) found - API keys, tokens, Firebase configs, JWT`}
           action={open ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
         />
       </button>
@@ -855,7 +855,7 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
           <div className="min-w-0">
             <h1 className="text-xl font-semibold text-slate-900 tracking-tight">Live Analysis</h1>
             <p className="text-sm text-slate-500 mt-1 leading-relaxed truncate sm:whitespace-normal">
-              Verified evidence and inspection detail — {data.package_name || `${data.sha256.slice(0, 16)}…`}
+              Verified evidence and inspection detail - {data.package_name || `${data.sha256.slice(0, 16)}…`}
             </p>
           </div>
         </div>

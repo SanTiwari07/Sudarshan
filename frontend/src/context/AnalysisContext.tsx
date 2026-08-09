@@ -21,6 +21,11 @@ interface AnalysisContextType {
 
 const AnalysisContext = createContext<AnalysisContextType | undefined>(undefined);
 
+/** Normalize legacy risk-engine SOC strings that used an em dash after the verb phrase. */
+function normalizeRecommendedAction(text: string): string {
+  return text.replace(/\s*\u2014\s*/g, ' - ');
+}
+
 function mapCaseDetailToFraudCard(caseDetail: Record<string, unknown>): FraudCardData {
   const dyn = (caseDetail.dynamic_analysis || caseDetail.dynamic_result) as FraudCardData['dynamic_analysis'];
   return {
@@ -34,10 +39,12 @@ function mapCaseDetailToFraudCard(caseDetail: Record<string, unknown>): FraudCar
     final_risk_score: Number(caseDetail.final_risk_score ?? 0),
     risk_band: String(caseDetail.risk_band || 'Safe'),
     confidence: Number(caseDetail.confidence ?? 70),
-    recommended_action: String(
-      caseDetail.recommended_action ||
-        (caseDetail.intelligence_report as { recommended_actions?: string[] })?.recommended_actions?.[0] ||
-        'Monitor application',
+    recommended_action: normalizeRecommendedAction(
+      String(
+        caseDetail.recommended_action ||
+          (caseDetail.intelligence_report as { recommended_actions?: string[] })?.recommended_actions?.[0] ||
+          'Monitor application',
+      ),
     ),
     frs_breakdown: caseDetail.frs_breakdown as FraudCardData['frs_breakdown'],
     risk_explanation: caseDetail.risk_explanation as FraudCardData['risk_explanation'],
@@ -81,8 +88,9 @@ function mapCaseDetailToFraudCard(caseDetail: Record<string, unknown>): FraudCar
       plain_english_narrative:
         (caseDetail.intelligence_report as { plain_english_narrative?: string })?.plain_english_narrative ||
         'Analysis completed.',
-      recommended_actions:
-        (caseDetail.intelligence_report as { recommended_actions?: string[] })?.recommended_actions || [],
+      recommended_actions: (
+        (caseDetail.intelligence_report as { recommended_actions?: string[] })?.recommended_actions || []
+      ).map(normalizeRecommendedAction),
       customer_advisory_draft:
         (caseDetail.intelligence_report as { customer_advisory_draft?: string })?.customer_advisory_draft || '',
     },

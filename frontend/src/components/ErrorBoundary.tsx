@@ -29,7 +29,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    // Keep the stack in the console — this is the only diagnostic an analyst
+    // Keep the stack in the console - this is the only diagnostic an analyst
     // can hand back when a specific sample breaks a view.
     console.error(`[ErrorBoundary${this.props.label ? ` · ${this.props.label}` : ''}]`, error, info.componentStack);
   }
@@ -51,8 +51,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
         <div className="p-5 space-y-4">
           <p className="text-sm text-gray-600">
-            This view could not be displayed. The rest of the application is unaffected —
-            other views and the case history remain available.
+            This view could not be displayed. The rest of the application is unaffected - other views and the case history remain available.
           </p>
 
           <pre className="text-xs bg-gray-50 border border-gray-200 rounded-lg p-3 overflow-x-auto text-gray-700">

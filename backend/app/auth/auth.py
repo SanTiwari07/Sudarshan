@@ -2,13 +2,13 @@
 Sudarshan JWT Auth Engine
 ==========================
 Provides:
-  POST /api/v1/auth/register  — create new analyst account
-  POST /api/v1/auth/login     — returns JWT access_token
+  POST /api/v1/auth/register - create new analyst account
+  POST /api/v1/auth/login - returns JWT access_token
 
 Roles:
-  analyst   — can upload APKs and view their own cases
-  soc_lead  — can view all cases + threat intel
-  admin     — full access + user management
+  analyst - can upload APKs and view their own cases
+  soc_lead - can view all cases + threat intel
+  admin - full access + user management
 
 Dependencies:
   pip install python-jose[cryptography] passlib[bcrypt]
@@ -170,8 +170,7 @@ class UserInfo(BaseModel):
 @limiter.limit("10/hour")
 async def register(request: Request, req: RegisterRequest):
     """
-    Register a new account. Always created with the 'analyst' role —
-    privilege is granted by an admin afterwards, never self-assigned.
+    Register a new account. Always created with the 'analyst' role - privilege is granted by an admin afterwards, never self-assigned.
     """
     if not public_registration_allowed():
         raise HTTPException(
@@ -203,7 +202,7 @@ async def set_user_role(
     admin: dict = Depends(require_admin),
 ):
     """
-    Grant or revoke a role. Admin only — this is the ONLY way to create a
+    Grant or revoke a role. Admin only - this is the ONLY way to create a
     soc_lead or admin, replacing the self-assignment hole in /register.
     """
     if req.role not in ASSIGNABLE_ROLES:

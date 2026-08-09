@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Dynamic Analysis Session Manager
+SUDARSHAN - Dynamic Analysis Session Manager
 =============================================
 Manages session lifecycle, sandbox process timeouts, and state transitions
 (INITIALIZING -> RUNNING -> WAITING -> RECOVERING -> FINISHED / TIMEOUT / FAILED).

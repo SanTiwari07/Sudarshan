@@ -1,5 +1,5 @@
 """
-SUDARSHAN — APKTool Static Analysis Engine
+SUDARSHAN - APKTool Static Analysis Engine
 ==========================================
 Wraps the APKTool CLI to decompile an APK's resources and extract a
 decoded AndroidManifest.xml when MobSF is unavailable.
@@ -21,9 +21,9 @@ Usage::
 
     engine = ApktoolEngine()
     result = engine.analyze(apk_path)
-    # result.decoded_manifest_xml  — raw XML string (or empty if apktool unavailable)
-    # result.suspicious_resources  — list of suspicious resource file paths
-    # result.resource_strings      — list of strings extracted from resources
+    # result.decoded_manifest_xml - raw XML string (or empty if apktool unavailable)
+    # result.suspicious_resources - list of suspicious resource file paths
+    # result.resource_strings - list of strings extracted from resources
 """
 
 from __future__ import annotations

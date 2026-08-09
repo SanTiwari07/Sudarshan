@@ -13,7 +13,7 @@ ADMIN_PASS = "Sudarshan@2026"
 APK_PATH = r"d:\Projects\Sudarshan BOI\test apk\Vulnerable\InsecureBankv2.apk"
 
 print("=" * 60)
-print("SUDARSHAN — End-to-End Pipeline Test")
+print("SUDARSHAN - End-to-End Pipeline Test")
 print("APK:", APK_PATH)
 print("=" * 60)
 

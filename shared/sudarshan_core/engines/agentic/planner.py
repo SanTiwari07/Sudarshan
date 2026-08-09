@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Agentic Planner (LLM + FallbackPlanner)
+SUDARSHAN - Agentic Planner (LLM + FallbackPlanner)
 =====================================================
 The Planner receives a structured Observation + Memory + Goal context and
 returns a validated, registry-checked tool action for execution.
@@ -25,8 +25,7 @@ LLM Budget Management:
   - Maximum ONE LLM call per agent iteration.
   - Vision (screenshot) is requested from the Observation, not the planner.
   - Planner receives the screenshot path but vision analysis is always secondary.
-  - Response is cached by (package, planner_version, screen_hash, goal_name) —
-    if the same screen+goal pair recurs within the SAME analysis, the cached
+  - Response is cached by (package, planner_version, screen_hash, goal_name) - if the same screen+goal pair recurs within the SAME analysis, the cached
     action is reused without an LLM call. The cache is per-planner-instance and
     LRU-bounded, so it can neither bleed between samples nor grow unbounded.
   - Cache is invalidated for a screen when an action on it fails, via
@@ -79,7 +78,7 @@ logger = logging.getLogger(__name__)
 
 # SUDARSHAN_AGENT_MODEL is the legacy name, still honoured if GEMINI_MODEL is unset.
 GEMINI_MODEL: str = os.getenv("GEMINI_MODEL") or os.getenv("SUDARSHAN_AGENT_MODEL", "gemini-2.5-flash")
-MAX_OUTPUT_TOKENS: int = 512    # Agent actions are compact JSON — no need for large output
+MAX_OUTPUT_TOKENS: int = 512    # Agent actions are compact JSON - no need for large output
 
 # ─── Cache and budget ─────────────────────────────────────────────────────────
 
@@ -142,7 +141,7 @@ FALLBACK_MAX_CONSECUTIVE_FAILURES: int = 3
 
 # How many backtrack attempts the loop-breaker gets on a stuck screen before the
 # consecutive-failure stop takes over. Without a bound, loop recovery preempted
-# the stop condition indefinitely — see decide().
+# the stop condition indefinitely - see decide().
 MAX_LOOP_BREAK_ATTEMPTS: int = 2
 
 
@@ -197,7 +196,7 @@ class AgentPlanner:
         # This was previously a module-level dict shared by every analysis in
         # the process, keyed on (screen_hash, goal_name) only. Because
         # screen_hash does not include the package, one APK could be served an
-        # action cached while analysing a DIFFERENT APK — with no LLM call and
+        # action cached while analysing a DIFFERENT APK - with no LLM call and
         # no trace in the audit log. Scoping it to the instance and putting the
         # package in the key removes that cross-sample path entirely.
         self._action_cache: "OrderedDict[Tuple[str, str, str, str], Dict[str, Any]]" = OrderedDict()
@@ -210,9 +209,9 @@ class AgentPlanner:
                 self._client = genai.Client(api_key=api_key)
                 logger.info(f"[Planner] Gemini client initialized (model: {GEMINI_MODEL})")
             except Exception as e:
-                logger.warning(f"[Planner] Gemini init failed: {e} — FallbackPlanner active")
+                logger.warning(f"[Planner] Gemini init failed: {e} - FallbackPlanner active")
         else:
-            logger.warning("[Planner] No GEMINI_API_KEY — FallbackPlanner active")
+            logger.warning("[Planner] No GEMINI_API_KEY - FallbackPlanner active")
 
     # ── Action cache ───────────────────────────────────────────────────────────
 
@@ -229,7 +228,7 @@ class AgentPlanner:
         """
         Return a COPY of the cached action, or None.
 
-        Copying is not an optimisation detail — handing out the stored dict
+        Copying is not an optimisation detail - handing out the stored dict
         lets any caller mutate the cache in place and poison later iterations.
         """
         with self._cache_lock:
@@ -293,7 +292,7 @@ class AgentPlanner:
             target = cached.get("text") or str(cached.get("x", ""))
             if not memory.is_action_loop(tool, target):
                 logger.debug(f"[Planner] Cache hit for {cache_key}")
-                cached["_source"] = "cache"   # already a copy — see _cache_get
+                cached["_source"] = "cache"   # already a copy - see _cache_get
                 return cached
 
         # ── 2. LLM call ────────────────────────────────────────────────────────
@@ -358,7 +357,7 @@ class AgentPlanner:
                     ]
                     logger.debug(f"[Planner] Attached screenshot bytes ({len(img_bytes)} bytes) to Gemini prompt")
             except Exception as e:
-                logger.warning(f"[Planner] Could not load screenshot bytes ({e}) — proceeding text-only")
+                logger.warning(f"[Planner] Could not load screenshot bytes ({e}) - proceeding text-only")
 
         try:
             response = await asyncio.to_thread(
@@ -390,8 +389,8 @@ class AgentPlanner:
         """
         Record one LLM request and its token usage against the benchmark.
 
-        Token counts were previously discarded entirely — `response.usage_metadata`
-        was never read — so a run's LLM cost could not be reconstructed.
+        Token counts were previously discarded entirely - `response.usage_metadata`
+        was never read - so a run's LLM cost could not be reconstructed.
 
         Never allowed to disturb the decision path: metrics accounting must not
         turn a usable LLM response into a failure.
@@ -409,7 +408,7 @@ class AgentPlanner:
         except Exception as exc:
             logger.warning(
                 f"[Planner] Failed to record LLM usage "
-                f"({type(exc).__name__}: {exc}) — metrics only, decision unaffected"
+                f"({type(exc).__name__}: {exc}) - metrics only, decision unaffected"
             )
 
     # ── Prompt construction ────────────────────────────────────────────────────
@@ -423,7 +422,7 @@ class AgentPlanner:
         Application content only appears in the user context, tagged UNTRUSTED.
         """
         from sudarshan_core.engines.agentic.tool_registry import prompt_tool_catalog
-        return f"""You are SUDARSHAN AGENT — an autonomous Android security analysis tool.
+        return f"""You are SUDARSHAN AGENT - an autonomous Android security analysis tool.
 
 YOUR ROLE:
   You control the navigation of an Android application running in a security sandbox.
@@ -468,7 +467,7 @@ STRATEGY:
   6. If you are stuck → try scroll(down) then press_back.
   7. If you see a WebView or canvas → the perception pipeline handles screenshots; you just tap.
   8. Never repeat the same action on the same screen more than twice.
-  9. Confidence below 0.5 means you are guessing — prefer fallback actions in that case.
+  9. Confidence below 0.5 means you are guessing - prefer fallback actions in that case.
 
 {prompt_tool_catalog()}
 """
@@ -598,7 +597,7 @@ STRATEGY:
         # Bounds come from the REAL device, not from a hardcoded constant.
         # Validating a 1080x2400 phone against a hardcoded 1080x1920 rejected
         # every action in the bottom 480px as out-of-bounds, wasting an LLM
-        # retry and then falling back — on 20% of the screen.
+        # retry and then falling back - on 20% of the screen.
         screen_width, screen_height = self._screen_bounds()
         for coord, limit, name in [
             ("x",  screen_width,  "screen width"),
@@ -646,7 +645,7 @@ class FallbackPlanner:
         self._consecutive_failures: int = 0
         self._scroll_attempts:      int = 0
         # Backtrack attempts spent on the current stuck screen. Bounded so loop
-        # recovery cannot preempt the stop condition forever — see decide().
+        # recovery cannot preempt the stop condition forever - see decide().
         self._loop_break_attempts:  int = 0
         self._last_screen_hash:     str = ""
 
@@ -701,17 +700,17 @@ class FallbackPlanner:
 
         self._last_screen_hash = obs.screen_hash
 
-        # Loop recovery, then stop — in that order, but BOUNDED.
+        # Loop recovery, then stop - in that order, but BOUNDED.
         #
         # These two conditions co-occur by construction: being stuck on one
         # screen is what produces consecutive failures. The loop-breaker used to
         # return unconditionally and came first, so it emitted press_back
         # forever and the stop below was unreachable in exactly the state it
-        # exists for — the agent spent its whole action budget backtracking on a
+        # exists for - the agent spent its whole action budget backtracking on a
         # screen it could not escape instead of signalling "no progress
         # possible" and letting the run wrap up.
         #
-        # Backtracking is a legitimate recovery, so it still gets to run — but
+        # Backtracking is a legitimate recovery, so it still gets to run - but
         # only MAX_LOOP_BREAK_ATTEMPTS times per stuck screen. Once backtracking
         # has demonstrably not worked, the stop wins.
         looping = self.world_model.screen_graph.is_loop_detected(
@@ -721,7 +720,7 @@ class FallbackPlanner:
         if looping and self._loop_break_attempts < MAX_LOOP_BREAK_ATTEMPTS:
             self._loop_break_attempts += 1
             logger.warning(
-                f"[FallbackPlanner] Loop detected on screen {shash[:6]} — "
+                f"[FallbackPlanner] Loop detected on screen {shash[:6]} - "
                 f"triggering backtrack action "
                 f"({self._loop_break_attempts}/{MAX_LOOP_BREAK_ATTEMPTS})"
             )
@@ -739,7 +738,7 @@ class FallbackPlanner:
             logger.warning(
                 f"[FallbackPlanner] {self._consecutive_failures} consecutive failures "
                 f"with no progress ({self._loop_break_attempts} backtrack attempt(s) "
-                f"made) — signalling stop."
+                f"made) - signalling stop."
             )
             return None
 
@@ -816,23 +815,23 @@ class FallbackPlanner:
         # ── No node matched: try scroll ────────────────────────────────────────
         if self._scroll_attempts < 2:
             self._scroll_attempts += 1
-            logger.info(f"[FallbackPlanner] No match — scrolling down (attempt {self._scroll_attempts})")
+            logger.info(f"[FallbackPlanner] No match - scrolling down (attempt {self._scroll_attempts})")
             return {
                 "tool":       "scroll",
                 "direction":  "down",
                 "goal":       goal_name,
-                "reasoning":  "No matching UI elements — scrolling to reveal more",
+                "reasoning":  "No matching UI elements - scrolling to reveal more",
                 "confidence": 0.3,
                 "_source":    "fallback",
             }
 
         # ── Scroll exhausted: press back ───────────────────────────────────────
         self._scroll_attempts = 0
-        logger.info("[FallbackPlanner] Scroll exhausted — pressing back")
+        logger.info("[FallbackPlanner] Scroll exhausted - pressing back")
         return {
             "tool":       "press_back",
             "goal":       goal_name,
-            "reasoning":  "No progress after scrolling — navigating back",
+            "reasoning":  "No progress after scrolling - navigating back",
             "confidence": 0.2,
             "_source":    "fallback",
         }

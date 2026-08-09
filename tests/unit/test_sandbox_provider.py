@@ -2,7 +2,7 @@
 Sandbox abstraction layer verification tests.
 
 Covers device detection, ADB connection, root, Frida, provider selection,
-structured errors, and Genymotion vs Android Studio state profiles — without
+structured errors, and Genymotion vs Android Studio state profiles - without
 requiring a live device (subprocess/ADB mocked).
 """
 

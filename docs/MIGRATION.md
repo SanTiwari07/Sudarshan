@@ -28,7 +28,7 @@ graph TD
 | DAE ↔ device | Hardcoded ADB / `emulator-5554` assumptions | **`SandboxProvider` abstraction** |
 | Device selection | First `adb devices` entry | `adb devices` + optional `DEVICE_SERIAL` |
 | State simulation | `adb emu` only | Provider-specific (Genymotion: dumpsys/shell; Studio: `adb emu`) |
-| Analysis / Risk / AI / MobSF | — | **Unchanged** |
+| Analysis / Risk / AI / MobSF | - | **Unchanged** |
 
 ### New package
 
@@ -53,7 +53,7 @@ SANDBOX_PROVIDER=genymotion   # or android_studio | corellium | waydroid | physi
 # Android Studio AVD from Docker: ADB_HOST=host.docker.internal is common.
 ADB_HOST=
 ADB_PORT=5555
-DEVICE_SERIAL=                # e.g. 192.168.56.101:5555 — recommended when multiple devices are online
+DEVICE_SERIAL=                # e.g. 192.168.56.101:5555 - recommended when multiple devices are online
 FRIDA_PORT=27055
 AUTO_CONNECT=true
 ROOT_REQUIRED=true
@@ -77,13 +77,13 @@ SANDBOX_PROVIDER=android_studio
 DEVICE_SERIAL=emulator-5554   # optional pin
 ```
 
-Restart `start.ps1` / `docker compose up`. No code rollback required — the Android Studio provider remains fully supported.
+Restart `start.ps1` / `docker compose up`. No code rollback required - the Android Studio provider remains fully supported.
 
 ### Potential breaking changes
 
-1. **Default provider is Genymotion** — operators who previously assumed Android Studio must set `SANDBOX_PROVIDER=android_studio` or start Genymotion.
+1. **Default provider is Genymotion** - operators who previously assumed Android Studio must set `SANDBOX_PROVIDER=android_studio` or start Genymotion.
 2. **Error messages** no longer say “Start an AVD in Android Studio”; they reference the configured provider / structured `error_code`.
-3. **Multi-stage GPS/battery/SMS** on Genymotion use shell/dumpsys instead of `adb emu` — behaviour is equivalent for analysis triggers but not byte-identical to the emulator console.
+3. **Multi-stage GPS/battery/SMS** on Genymotion use shell/dumpsys instead of `adb emu` - behaviour is equivalent for analysis triggers but not byte-identical to the emulator console.
 4. Empty `device_serial` defaults in `session_manager` / `ioc_collector` no longer hardcode `emulator-5554`.
 
 ### Compatibility
@@ -129,7 +129,7 @@ backend\.venv\Scripts\python.exe -m pytest tests/unit/test_sandbox_provider.py t
 - [ ] `python scripts/setup_dynamic_analysis.py` completes root + Frida
 - [ ] `whoami` returns `root`
 - [ ] `frida-ps` / device `ps` shows frida-server / `sudarshan_agent_srv`
-- [ ] `docker compose up` — analysis-engine `/status` shows sandbox ready
+- [ ] `docker compose up` - analysis-engine `/status` shows sandbox ready
 - [ ] APK upload → install → launch → agentic explorer → runtime events
 - [ ] Screenshots written under artifact dir
 - [ ] mitmproxy HAR ingest when proxy configured

@@ -12,8 +12,8 @@ Provides relevant context from:
  - Known Indian Banking Malware Families
 
 Works in two modes:
-  1. ChromaDB mode  — full semantic similarity search (requires pip install chromadb)
-  2. Static mode    — keyword-based lookup (zero-dependency fallback)
+  1. ChromaDB mode - full semantic similarity search (requires pip install chromadb)
+  2. Static mode - keyword-based lookup (zero-dependency fallback)
 """
 
 import json
@@ -160,7 +160,7 @@ def build_rag_context(
         tech_lines = []
         for t in techniques[:5]:  # Cap at 5 for token efficiency
             tech_lines.append(
-                f"  • {t['id']} {t['name']} (Tactic: {t['tactic']}) — "
+                f"  • {t['id']} {t['name']} (Tactic: {t['tactic']}) - "
                 f"Banking relevance: {t['banking_relevance']}"
             )
         sections.append("MITRE ATT&CK FOR MOBILE TECHNIQUES:\n" + "\n".join(tech_lines))
@@ -170,7 +170,7 @@ def build_rag_context(
         family_ctx = get_malware_family_context(family)
         if family_ctx:
             sections.append(
-                f"CONFIRMED MALWARE FAMILY — {family_ctx['name']}:\n"
+                f"CONFIRMED MALWARE FAMILY - {family_ctx['name']}:\n"
                 f"  Type: {family_ctx['type']}\n"
                 f"  Last Active: {family_ctx['last_active']}\n"
                 f"  Targeted Banks: {', '.join(family_ctx['targeted_banks'][:5])}\n"
@@ -185,7 +185,7 @@ def build_rag_context(
         reg_lines = []
         for reg in regulatory[:2]:
             reg_lines.append(
-                f"  • {reg['source']} {reg['id']} — {reg['title']}\n"
+                f"  • {reg['source']} {reg['id']} - {reg['title']}\n"
                 f"    Relevance: {reg['relevance']}"
             )
         sections.append("REGULATORY CONTEXT:\n" + "\n".join(reg_lines))

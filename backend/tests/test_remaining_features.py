@@ -92,7 +92,7 @@ def test_workspace_local_tools_detection():
     analysis-engine image, not the backend one, so the assertion failed in the
     backend container by design rather than because anything was broken.
 
-    What actually matters is that detection agrees with reality — the engines
+    What actually matters is that detection agrees with reality - the engines
     must report True when the binary is resolvable and False when it is not.
     """
     import shutil

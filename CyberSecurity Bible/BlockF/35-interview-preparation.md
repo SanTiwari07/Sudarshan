@@ -1,4 +1,4 @@
-# 35 — Interview Preparation
+# 35 - Interview Preparation
 
 > **Chapter ID:** `CH35` · **Block:** F (Reference) · **Status:** Stable
 > **Tags:** `#interview` `#questions` `#preparation` `#careers` `#answers`
@@ -34,13 +34,13 @@ Four things, in roughly this order of weight:
 | 1 | **Depth vs recall** | Follow-ups. Everyone knows the definition; few know *why*. |
 | 2 | **Practical experience** | Details only hands-on work teaches (`-wal` files, inlining, `apktool -s`) |
 | 3 | **Calibrated honesty** | Whether you say "I don't know" or invent |
-| 4 | **Reasoning under uncertainty** | "The sandbox showed nothing — what do you conclude?" |
+| 4 | **Reasoning under uncertainty** | "The sandbox showed nothing - what do you conclude?" |
 
 ```
    Junior answer:  "Static analysis examines code without running it."
    Mid answer:     + "It's fast and scalable but can't see dynamic behaviour."
    Senior answer:  + "And specifically it's blind to droppers, because the
-                     payload isn't in the file at analysis time — Anatsa's
+                     payload isn't in the file at analysis time - Anatsa's
                      Play droppers were genuinely clean at review. So the
                      architectural consequence is that you must escalate on
                      *inability to analyse*, not just on findings."
@@ -117,7 +117,7 @@ the leaked-source problem · vendor naming divergence
 
 ## 3. Answer frameworks
 
-### Framework 1 — WHAT / WHY / LIMIT
+### Framework 1 - WHAT / WHY / LIMIT
 
 For any "explain X" question.
 
@@ -125,23 +125,23 @@ For any "explain X" question.
 > **LIMIT** (where it breaks)
 
 *"Certificate pinning makes an app refuse connections unless the server's key matches a pinned
-value. It exists because the CA system is a weak link — a rogue or compromised CA, or a
+value. It exists because the CA system is a weak link - a rogue or compromised CA, or a
 user-installed CA, would otherwise be trusted. Its limit is that it protects data **in transit**;
 accessibility-based malware reads the plaintext off the screen before TLS is involved, so pinning is
 the wrong layer for that threat."*
 
-### Framework 2 — DEFINITION → CONSEQUENCE
+### Framework 2 - DEFINITION → CONSEQUENCE
 
 For "what's the difference between X and Y."
 
 > Both definitions → the *operational* consequence of the difference
 
 *"A hash identifies a specific file; a signer certificate identifies who signed it. The consequence
-is that hashes are useless for identity — an adversary changes one byte, and Play itself produces
-multiple hashes per version through split APKs — whereas the signer survives rebuilds because they
+is that hashes are useless for identity - an adversary changes one byte, and Play itself produces
+multiple hashes per version through split APKs - whereas the signer survives rebuilds because they
 need that key to update their own victims."*
 
-### Framework 3 — LAYERS
+### Framework 3 - LAYERS
 
 For "how does X work."
 
@@ -150,10 +150,10 @@ For "how does X work."
 *"Permission enforcement: the app calls an SDK method, which is a Binder proxy. The kernel's Binder
 driver records the caller's UID unspoofably. The system service receives the transaction and calls
 `Binder.getCallingUid()`, then checks whether that UID holds the permission. That's why patching
-your own client-side `checkSelfPermission()` achieves nothing — the check happens in the service,
+your own client-side `checkSelfPermission()` achieves nothing - the check happens in the service,
 not in your process."*
 
-### Framework 4 — THE HONEST NEGATIVE
+### Framework 4 - THE HONEST NEGATIVE
 
 For "the analysis showed nothing" / "how do you know."
 
@@ -180,7 +180,7 @@ Certificate = **who signed** (identity, survives rebuilds). Signature = **integr
 (new every build). Hash = **which file** (changes on any byte). Punchline: **identity is the
 certificate; the hash is only an IOC.** → [Ch 06 §9](../security/06-certificates.md#9-certificate--signature--hash)
 
-### Q3. "Static or dynamic analysis — which matters more?"
+### Q3. "Static or dynamic analysis - which matters more?"
 A trap. Neither, because the blind spots are **complementary**: static can't see droppers, packed
 code, or conditional behaviour; dynamic can't see unexecuted paths, evaded runs, or anything if the
 C2 is dead. Give one concrete example of each. → [Ch 12 §1](../dynamic-analysis/12-dynamic-analysis.md#1-why-dynamic-analysis-exists)
@@ -198,21 +198,20 @@ qualify. Ask for the **cluster**, the signer reputation, the installer, and the 
 → [Ch 32 M9](32-common-misconceptions.md#-m9--a-dangerous-permission-means-malware)
 
 ### Q6. "Explain Janus."
-A file can be a valid ZIP **and** a valid DEX — ZIP is parsed from the end, DEX from offset 0.
+A file can be a valid ZIP **and** a valid DEX - ZIP is parsed from the end, DEX from offset 0.
 Prepend a malicious DEX to a v1-signed APK: the signature verifier sees the untouched archive and
 passes; ART loads the prepended DEX. **CVE-2017-13156**, Android 5.0–8.0, **v1-only**, patched
 December 2017, structurally impossible under v2's whole-file digest.
 → [Ch 07 §9](../security/07-apk-signing.md#9-the-three-classic-attacks)
 
 ### Q7. "How does Android enforce permissions?"
-Not in the calling app — in the **service**, using `Binder.getCallingUid()`, which the kernel
+Not in the calling app - in the **service**, using `Binder.getCallingUid()`, which the kernel
 supplies and the caller cannot spoof. → [Ch 01 §6](../android/01-android-internals.md#6-binder-ipc)
 
 ### Q8. "How would you unpack a packed APK?"
 The principle: **the runtime must see plaintext DEX to execute it.** Hook `InMemoryDexClassLoader`
 and `DexClassLoader` and dump at that moment; failing that, memory-scan for DEX magic and carve;
-failing that, extract from `.vdex`; failing that, reverse the native unpacker at `JNI_OnLoad` —
-checking `.init_array` first, because constructors run before it.
+failing that, extract from `.vdex`; failing that, reverse the native unpacker at `JNI_OnLoad` - checking `.init_array` first, because constructors run before it.
 → [Ch 10 §9](../reverse-engineering/10-reverse-engineering.md#9-unpacking-strategy)
 
 ### Q9. "The sandbox ran the sample and nothing happened. Conclusion?"
@@ -223,7 +222,7 @@ confidence ceiling and requeue. *This question tests analytical honesty more tha
 ### Q10. "How would you remove this from a customer's device?"
 **Isolate → acquire → remediate**, never reordered. Airplane mode (BRATA and BingoMod wipe on
 detection); acquire evidence; **Safe Mode** (disables third-party apps and their accessibility
-services); revoke device admin; uninstall; verify; **then** credential reset — because resetting on
+services); revoke device admin; uninstall; verify; **then** credential reset - because resetting on
 an infected device hands the attacker the new credentials.
 → [Ch 20 §10](../incident-response/20-incident-response.md#10-the-device-remediation-runbook)
 
@@ -231,18 +230,18 @@ an infected device hands the attacker the new credentials.
 
 ## 5. Level-separating questions
 
-These distinguish mid from senior. The junior answer isn't *wrong* — it's incomplete.
+These distinguish mid from senior. The junior answer isn't *wrong* - it's incomplete.
 
 | Question | Junior | Senior |
 |---|---|---|
-| "Is obfuscation suspicious?" | "It can be." | "No — R8 is on by default, every Play app is obfuscated including the client's bank app. Discriminate on signer, capability cluster, and behaviour." |
+| "Is obfuscation suspicious?" | "It can be." | "No - R8 is on by default, every Play app is obfuscated including the client's bank app. Discriminate on signer, capability cluster, and behaviour." |
 | "How do you identify a malware family?" | "Hashes and signatures." | "Signer cert first, then DEX-level TLSH, then infrastructure. And after the Cerberus, Octo, SpyNote, and ERMAC leaks, code similarity means *lineage*, not actor." |
-| "What's VirusTotal for?" | "Checking if a file is malicious." | "Enrichment — first-seen, submission geography, related samples, Retrohunt. It's an aggregator; fresh droppers score 0/70 and engines copy each other's labels." |
-| "Why did your Frida hook not fire?" | "Maybe it detected Frida." | "Inlining first, then wrong overload, then a different process, then a different class loader — *then* Frida detection." |
-| "How do you evaluate an ML malware model?" | "Accuracy on a test set." | "Temporal split, never random — a random split leaks same-family variants and measures memorisation. And check the hard-negative corpus." |
+| "What's VirusTotal for?" | "Checking if a file is malicious." | "Enrichment - first-seen, submission geography, related samples, Retrohunt. It's an aggregator; fresh droppers score 0/70 and engines copy each other's labels." |
+| "Why did your Frida hook not fire?" | "Maybe it detected Frida." | "Inlining first, then wrong overload, then a different process, then a different class loader - *then* Frida detection." |
+| "How do you evaluate an ML malware model?" | "Accuracy on a test set." | "Temporal split, never random - a random split leaks same-family variants and measures memorisation. And check the hard-negative corpus." |
 | "You pulled an app's database and it's empty." | "Maybe there's no data." | "You missed the `-wal` file. WAL means recent transactions live there until checkpointed." |
 | "Does 2FA stop this?" | "It helps." | "Four routes past it: SMS interception, notification-listener reading, accessibility reading the authenticator code off screen, and tapping Approve. Per-transaction biometric is the control that holds." |
-| "How fast should analysis be?" | "As fast as possible." | "Against the money clock, not a generic SLA — funds are through a mule chain in minutes, so we stream partial results and let containment act on medium confidence." |
+| "How fast should analysis be?" | "As fast as possible." | "Against the money clock, not a generic SLA - funds are through a mule chain in minutes, so we stream partial results and let containment act on medium confidence." |
 
 ---
 
@@ -253,7 +252,7 @@ Many interviews hand you a sample or a scenario. The structure below works for a
 ### "Here's an APK. Analyse it."
 
 ```
- SAY OUT LOUD AS YOU GO — they're scoring your process, not just your finding.
+ SAY OUT LOUD AS YOU GO - they're scoring your process, not just your finding.
 
  1. "First, identity."      sha256 + apksigner --print-certs
                             → is the signer known? does it match the claimed package?
@@ -263,7 +262,7 @@ Many interviews hand you a sample or a scenario. The structure below works for a
                             → canRetrieveWindowContent + canPerformGestures = read+write over all UI
  4. "What's it targeting?"  grep package names in resources
  5. "Anything hidden?"      assets/ entropy, lib/ packer fingerprints, dex/so ratio
- 6. "Strings."              const-string grep — if empty, strings are encrypted → go dynamic
+ 6. "Strings."              const-string grep - if empty, strings are encrypted → go dynamic
  7. "Decide."               "I'd escalate to detonation because [cluster + staging machinery]"
 ```
 
@@ -288,7 +287,7 @@ check locale/timezone matched the target region, confirm C2 reachability, and re
                       · cost gradient (10ms → hours) · complementary blind spots
  2. TIERED PIPELINE   T0-T2 on 100%, gate T3 (~20%), gate T4 (~5%), T5 (<1%)
                       ★ gates biased toward escalation; escalate on INABILITY to analyse
- 3. DATA MODEL        graph — investigation is traversal (signer → samples → key → C2)
+ 3. DATA MODEL        graph - investigation is traversal (signer → samples → key → C2)
                       + separate columnar store for corpus hunting
  4. SCORING           two axes; cluster gate; confidence ceiling; evidence pointers
  5. RECURSION         dumped/installed artifacts re-enter the pipeline; score propagates UP
@@ -303,7 +302,7 @@ multi-tenancy?" (share indicators, isolate submissions, enforce with RLS).
 ### "How would you detect [technique] at scale?"
 
 Structure: **cheap static signal → escalation gate → dynamic confirmation → what would make it a
-false positive → how you'd tune.** Always include the false-positive population — omitting it is the
+false positive → how you'd tune.** Always include the false-positive population - omitting it is the
 most common failure in this question.
 
 ---
@@ -314,7 +313,7 @@ most common failure in this question.
 
 > "I don't know. My instinct is [X] because [reason]. I'd verify by [method]."
 
-**Why it scores well:** it demonstrates reasoning, honesty, and a verification instinct — three
+**Why it scores well:** it demonstrates reasoning, honesty, and a verification instinct - three
 things the interview is actually testing. Fabricating fails all three and is usually detected.
 
 ### Adjacent recovery
@@ -363,7 +362,7 @@ These signal seriousness and give you real information.
 
 ## 10. The 48-hour revision plan
 
-### Day 1 — Foundations (6h)
+### Day 1 - Foundations (6h)
 
 | Block | Chapters | Focus |
 |---|---|---|
@@ -373,7 +372,7 @@ These signal seriousness and give you real information.
 **Must be able to recite:** the three-column certificate/signature/hash table · the capability
 cluster · v1–v4 with API levels · the version gate table.
 
-### Day 2 — Craft and operations (6h)
+### Day 2 - Craft and operations (6h)
 
 | Block | Chapters | Focus |
 |---|---|---|
@@ -389,7 +388,7 @@ cluster · v1–v4 with API levels · the version gate table.
    self-escalation → enumeration → overlay/VNC → OTP → ODF
  ✓ Draw the lineage map from memory
  ✓ Recite the three-column cert/signature/hash table
- ✓ Rehearse "I don't know" out loud once — it's harder than it sounds
+ ✓ Rehearse "I don't know" out loud once - it's harder than it sounds
  ✓ Pick your three facts (Ch 34 §6) and know their dates and vendors
 ```
 

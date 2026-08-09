@@ -1,5 +1,5 @@
 """
-BOI Hackathon demo accounts — idempotent startup seed.
+BOI Hackathon demo accounts - idempotent startup seed.
 
 Enable with SUDARSHAN_SEED_DEMO_USERS=true (see .env.example).
 Does not reset passwords for existing users.
@@ -27,10 +27,10 @@ def _truthy(name: str) -> bool:
 
 async def _ensure_user(username: str, plain_password: str, role: str) -> None:
     if not username or not plain_password:
-        logger.warning("[DemoSeed] Skipping user %r — username or password empty", username)
+        logger.warning("[DemoSeed] Skipping user %r - username or password empty", username)
         return
     if len(plain_password) < 8:
-        logger.warning("[DemoSeed] Skipping user %r — password must be at least 8 characters", username)
+        logger.warning("[DemoSeed] Skipping user %r - password must be at least 8 characters", username)
         return
 
     if await username_exists(username):

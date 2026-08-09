@@ -75,7 +75,7 @@ export default function RuntimeBehaviourDetail({
                         className="text-left text-xs text-blue-800 hover:underline w-full"
                       >
                         <span className="font-semibold">{ev.title}</span>
-                        {ev.severity && <span className="text-slate-500"> — {ev.severity}</span>}
+                        {ev.severity && <span className="text-slate-500"> - {ev.severity}</span>}
                       </button>
                     </li>
                   ))}

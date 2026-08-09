@@ -1,5 +1,5 @@
 """
-Deterministic verdict fixtures — shared by the replay regression test.
+Deterministic verdict fixtures - shared by the replay regression test.
 
 These fixtures pin a set of representative inputs to the Risk Engine so that
 any change to the planner, perception, executor or memory layers can be proven
@@ -16,7 +16,7 @@ from typing import Any, Dict, List
 
 # ─── Frozen input scenarios ───────────────────────────────────────────────────
 # Each scenario is (name, kwargs for calculate_risk_score).
-# Values are literals only — never derived from the environment, clock or RNG,
+# Values are literals only - never derived from the environment, clock or RNG,
 # so the replay is reproducible on any machine.
 
 BENIGN_FLAGS: Dict[str, Any] = {
@@ -43,7 +43,7 @@ TROJAN_FLAGS: Dict[str, Any] = {
     "has_dynamic_loading": True,
 }
 
-# A recorded dynamic result — mirrors the shape frida_sandbox.py emits.
+# A recorded dynamic result - mirrors the shape frida_sandbox.py emits.
 RECORDED_DYNAMIC: Dict[str, Any] = {
     "available": True,
     "engine": "frida",

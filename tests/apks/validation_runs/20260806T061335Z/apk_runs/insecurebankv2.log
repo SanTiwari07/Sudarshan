@@ -25,8 +25,8 @@
 2026-08-06 11:43:51,975 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.constraints
 2026-08-06 11:43:51,975 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.defaults
 2026-08-06 11:43:51,975 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.comments
-2026-08-06 11:44:01,016 [INFO] sudarshan_core.engines.permission_orchestrator: [PermissionOrchestrator] No accessibility service declared in 'com.android.insecurebankv2' manifest — this sample does not use accessibility abuse via a bound service.
-2026-08-06 11:44:01,024 [WARNING] sudarshan_core.engines.frida_sandbox: [Frida] YARA scanning DISABLED — no .yar/.yara rules found in D:\Projects\Sudarshan BOI\shared\sudarshan_core\engines\yara_rules. Set SUDARSHAN_YARA_RULES_DIR to enable it.
+2026-08-06 11:44:01,016 [INFO] sudarshan_core.engines.permission_orchestrator: [PermissionOrchestrator] No accessibility service declared in 'com.android.insecurebankv2' manifest - this sample does not use accessibility abuse via a bound service.
+2026-08-06 11:44:01,024 [WARNING] sudarshan_core.engines.frida_sandbox: [Frida] YARA scanning DISABLED - no .yar/.yara rules found in D:\Projects\Sudarshan BOI\shared\sudarshan_core\engines\yara_rules. Set SUDARSHAN_YARA_RULES_DIR to enable it.
 2026-08-06 11:44:01,026 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Connecting to device 192.168.56.101:5555
 2026-08-06 11:44:02,463 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] TCP remote device connected: 127.0.0.1:27055
 2026-08-06 11:44:02,463 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Waking up device screen...
@@ -34,7 +34,7 @@
 2026-08-06 11:44:05,852 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] RESOLVE_ACTIVITY → LAUNCHING (issuing launch intents)
 2026-08-06 11:44:05,852 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Launch step 1: am start -W -n com.android.insecurebankv2/com.android.insecurebankv2.LoginActivity
 2026-08-06 11:44:11,953 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Stability monitor: waiting up to 12s for com.android.insecurebankv2 (requires 5s of continuous PID presence, polling every 250ms)
-2026-08-06 11:44:17,235 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] PID 5687 stable for 5.2s (>= 5s required) — process confirmed alive for com.android.insecurebankv2
+2026-08-06 11:44:17,235 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] PID 5687 stable for 5.2s (>= 5s required) - process confirmed alive for com.android.insecurebankv2
 2026-08-06 11:44:17,236 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Launch step 'am_start_main_activity' produced stable PID 5687
 2026-08-06 11:44:17,236 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] App launched and stable via 'am_start_main_activity' (PID=5687)
 2026-08-06 11:44:22,263 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] LAUNCHING → ATTACH_FRIDA (attaching to stable PID)
@@ -47,50 +47,50 @@
 2026-08-06 11:44:23,938 [INFO] sudarshan_core.engines.frida_sandbox: [Frida DIAG] {'type': 'diag', 'msg': 'deoptimizeEverything_success', 'ts': 1785995778543}
 2026-08-06 11:44:23,950 [INFO] sudarshan_core.engines.frida_sandbox: [Frida DIAG] {'type': 'diag', 'msg': 'deoptimizeBootImage_success', 'ts': 1785995778550}
 2026-08-06 11:44:23,957 [INFO] sudarshan_core.engines.frida_sandbox: [Frida DIAG] {'type': 'diag', 'msg': 'package_detected', 'package': 'com.android.insecurebankv2'}
-2026-08-06 11:44:24,243 [WARNING] sudarshan_core.engines.frida_sandbox: [Frida] Hook failed: OkHttp — java.lang.ClassNotFoundException: Didn't find class "okhttp3.internal.connection.RealCall" on path: DexPathList[[zip file "/data/app/~~6g4tTY53lfgBxMrCVh4QYQ==/com.android.insecurebankv2-u6d2RW4f5vtZ5DvYHrY50A==/base.apk"],nativeLibraryDirectories=[/data/app/~~6g4tTY53lfgBxMrCVh4QYQ==/com.android.insecurebankv2-u6d2RW4f5vtZ5DvYHrY50A==/lib/x86_64, /system/lib64, /system/product/lib64, /system/vendor/lib64]]
-2026-08-06 11:44:24,245 [WARNING] sudarshan_core.engines.frida_sandbox: [Frida] Hook failed: Retrofit.OkHttpCall.execute — java.lang.ClassNotFoundException: Didn't find class "retrofit2.OkHttpCall" on path: DexPathList[[zip file "/data/app/~~6g4tTY53lfgBxMrCVh4QYQ==/com.android.insecurebankv2-u6d2RW4f5vtZ5DvYHrY50A==/base.apk"],nativeLibraryDirectories=[/data/app/~~6g4tTY53lfgBxMrCVh4QYQ==/com.android.insecurebankv2-u6d2RW4f5vtZ5DvYHrY50A==/lib/x86_64, /system/lib64, /system/product/lib64, /system/vendor/lib64]]
-2026-08-06 11:44:24,267 [WARNING] sudarshan_core.engines.frida_sandbox: [Frida] Hook failed: JobScheduler.schedule — java.lang.ClassNotFoundException: Didn't find class "android.app.JobScheduler" on path: DexPathList[[zip file "/data/app/~~6g4tTY53lfgBxMrCVh4QYQ==/com.android.insecurebankv2-u6d2RW4f5vtZ5DvYHrY50A==/base.apk"],nativeLibraryDirectories=[/data/app/~~6g4tTY53lfgBxMrCVh4QYQ==/com.android.insecurebankv2-u6d2RW4f5vtZ5DvYHrY50A==/lib/x86_64, /system/lib64, /system/product/lib64, /system/vendor/lib64]]
-2026-08-06 11:44:24,297 [INFO] sudarshan_core.engines.evidence_store: [EvidenceStore] [HIGH] [EVID-001] Build.<static fields> — Emulator-identifying Build fields replaced: FINGERPRINT="google/vbox86p/vbox86p:
+2026-08-06 11:44:24,243 [WARNING] sudarshan_core.engines.frida_sandbox: [Frida] Hook failed: OkHttp - java.lang.ClassNotFoundException: Didn't find class "okhttp3.internal.connection.RealCall" on path: DexPathList[[zip file "/data/app/~~6g4tTY53lfgBxMrCVh4QYQ==/com.android.insecurebankv2-u6d2RW4f5vtZ5DvYHrY50A==/base.apk"],nativeLibraryDirectories=[/data/app/~~6g4tTY53lfgBxMrCVh4QYQ==/com.android.insecurebankv2-u6d2RW4f5vtZ5DvYHrY50A==/lib/x86_64, /system/lib64, /system/product/lib64, /system/vendor/lib64]]
+2026-08-06 11:44:24,245 [WARNING] sudarshan_core.engines.frida_sandbox: [Frida] Hook failed: Retrofit.OkHttpCall.execute - java.lang.ClassNotFoundException: Didn't find class "retrofit2.OkHttpCall" on path: DexPathList[[zip file "/data/app/~~6g4tTY53lfgBxMrCVh4QYQ==/com.android.insecurebankv2-u6d2RW4f5vtZ5DvYHrY50A==/base.apk"],nativeLibraryDirectories=[/data/app/~~6g4tTY53lfgBxMrCVh4QYQ==/com.android.insecurebankv2-u6d2RW4f5vtZ5DvYHrY50A==/lib/x86_64, /system/lib64, /system/product/lib64, /system/vendor/lib64]]
+2026-08-06 11:44:24,267 [WARNING] sudarshan_core.engines.frida_sandbox: [Frida] Hook failed: JobScheduler.schedule - java.lang.ClassNotFoundException: Didn't find class "android.app.JobScheduler" on path: DexPathList[[zip file "/data/app/~~6g4tTY53lfgBxMrCVh4QYQ==/com.android.insecurebankv2-u6d2RW4f5vtZ5DvYHrY50A==/base.apk"],nativeLibraryDirectories=[/data/app/~~6g4tTY53lfgBxMrCVh4QYQ==/com.android.insecurebankv2-u6d2RW4f5vtZ5DvYHrY50A==/lib/x86_64, /system/lib64, /system/product/lib64, /system/vendor/lib64]]
+2026-08-06 11:44:24,297 [INFO] sudarshan_core.engines.evidence_store: [EvidenceStore] [HIGH] [EVID-001] Build.<static fields> - Emulator-identifying Build fields replaced: FINGERPRINT="google/vbox86p/vbox86p:
 2026-08-06 11:44:24,297 [WARNING] sudarshan_core.engines.anti_analysis_detector: [AntiAnalysis] Detected evasion attempt: unknown via Build.<static fields>
-2026-08-06 11:44:24,312 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] SUDARSHAN Frida hooks v4 (Frida17-native) loaded — 56 hooks installed, 3 errors
+2026-08-06 11:44:24,312 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] SUDARSHAN Frida hooks v4 (Frida17-native) loaded - 56 hooks installed, 3 errors
 2026-08-06 11:44:24,362 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] App launched successfully via 'am_start_main_activity'
 2026-08-06 11:44:24,362 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] OPEN: waiting up to 8s for com.android.insecurebankv2 to finish starting...
 2026-08-06 11:44:25,648 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] App window settled.
 2026-08-06 11:44:26,217 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Screenshot captured: 01_app_opened
 2026-08-06 11:44:26,218 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] ANALYSE: monitoring com.android.insecurebankv2 for 30s...
 2026-08-06 11:44:26,218 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] VERIFY_HOOKS → CAPTURE_RUNTIME (exploration window)
-2026-08-06 11:44:26,241 [WARNING] sudarshan_core.engines.agentic.planner: [Planner] No GEMINI_API_KEY — FallbackPlanner active
+2026-08-06 11:44:26,241 [WARNING] sudarshan_core.engines.agentic.planner: [Planner] No GEMINI_API_KEY - FallbackPlanner active
 2026-08-06 11:44:26,241 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] AgenticExplorer selected.
 2026-08-06 11:44:26,241 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] CAPTURE_RUNTIME → START_EXPLORER (AgenticExplorer)
-2026-08-06 11:44:26,890 [INFO] sudarshan_core.engines.evidence_store: [EvidenceStore] [HIGH] [EVID-004] AccessibilityManager.sendAccessibilityEvent — AccessibilityManager event dispatched (possible ATS relay)
+2026-08-06 11:44:26,890 [INFO] sudarshan_core.engines.evidence_store: [EvidenceStore] [HIGH] [EVID-004] AccessibilityManager.sendAccessibilityEvent - AccessibilityManager event dispatched (possible ATS relay)
 2026-08-06 11:44:28,488 [INFO] sudarshan_core.engines.agentic.planner: [Planner] Activating FallbackPlanner
 2026-08-06 11:44:28,496 [INFO] sudarshan_core.engines.agentic.planner: [FallbackPlanner] Goal-driven action: Enable Accessibility Service for malware execution (priority=95)
-2026-08-06 11:44:28,980 [INFO] sudarshan_core.engines.evidence_store: [EvidenceStore] [HIGH] [EVID-005] AccessibilityManager.sendAccessibilityEvent — AccessibilityManager event dispatched (possible ATS relay)
+2026-08-06 11:44:28,980 [INFO] sudarshan_core.engines.evidence_store: [EvidenceStore] [HIGH] [EVID-005] AccessibilityManager.sendAccessibilityEvent - AccessibilityManager event dispatched (possible ATS relay)
 2026-08-06 11:44:30,897 [INFO] sudarshan_core.engines.agentic.perception: [Perception] Screenshot captured (reason: previous_action_failed)
 2026-08-06 11:44:30,898 [INFO] sudarshan_core.engines.agentic.goal_tracker: [GoalTracker] 'Launch Application' → COMPLETED (foreground package confirmed 2x)
 2026-08-06 11:44:30,898 [INFO] sudarshan_core.engines.agentic.goal_tracker: [GoalTracker] Goal 'Accessibility Abuse' → IN_PROGRESS (Frida category: accessibility)
 2026-08-06 11:44:30,898 [INFO] sudarshan_core.engines.agentic.goal_tracker: [GoalTracker] Goal 'Background Services' → IN_PROGRESS (Frida category: accessibility)
 2026-08-06 11:44:30,898 [INFO] sudarshan_core.engines.agentic.planner: [Planner] Activating FallbackPlanner
 2026-08-06 11:44:30,898 [INFO] sudarshan_core.engines.agentic.planner: [FallbackPlanner] Goal-driven action: Enable Accessibility Service for malware execution (priority=95)
-2026-08-06 11:44:31,346 [INFO] sudarshan_core.engines.evidence_store: [EvidenceStore] [HIGH] [EVID-006] AccessibilityManager.sendAccessibilityEvent — AccessibilityManager event dispatched (possible ATS relay)
+2026-08-06 11:44:31,346 [INFO] sudarshan_core.engines.evidence_store: [EvidenceStore] [HIGH] [EVID-006] AccessibilityManager.sendAccessibilityEvent - AccessibilityManager event dispatched (possible ATS relay)
 2026-08-06 11:44:32,916 [INFO] sudarshan_core.engines.agentic.planner: [Planner] Activating FallbackPlanner
-2026-08-06 11:44:32,916 [WARNING] sudarshan_core.engines.agentic.planner: [FallbackPlanner] Loop detected on screen b9479e — triggering backtrack action (1/2)
+2026-08-06 11:44:32,916 [WARNING] sudarshan_core.engines.agentic.planner: [FallbackPlanner] Loop detected on screen b9479e - triggering backtrack action (1/2)
 2026-08-06 11:44:38,443 [INFO] sudarshan_core.engines.agentic.planner: [Planner] Activating FallbackPlanner
 2026-08-06 11:44:38,444 [INFO] sudarshan_core.engines.agentic.planner: [FallbackPlanner] Goal-driven action: Enable Accessibility Service for malware execution (priority=95)
 2026-08-06 11:44:41,196 [INFO] sudarshan_core.engines.agentic.perception: [Perception] Screenshot captured (reason: previous_action_failed)
 2026-08-06 11:44:41,196 [INFO] sudarshan_core.engines.agentic.planner: [Planner] Activating FallbackPlanner
 2026-08-06 11:44:41,196 [INFO] sudarshan_core.engines.agentic.planner: [FallbackPlanner] Goal-driven action: Enable Accessibility Service for malware execution (priority=95)
 2026-08-06 11:44:44,096 [INFO] sudarshan_core.engines.agentic.planner: [Planner] Activating FallbackPlanner
-2026-08-06 11:44:44,096 [WARNING] sudarshan_core.engines.agentic.planner: [FallbackPlanner] Loop detected on screen 4fb2c4 — triggering backtrack action (1/2)
+2026-08-06 11:44:44,096 [WARNING] sudarshan_core.engines.agentic.planner: [FallbackPlanner] Loop detected on screen 4fb2c4 - triggering backtrack action (1/2)
 2026-08-06 11:44:48,977 [INFO] sudarshan_core.engines.agentic.planner: [Planner] Activating FallbackPlanner
-2026-08-06 11:44:48,977 [WARNING] sudarshan_core.engines.agentic.planner: [FallbackPlanner] Loop detected on screen 4fb2c4 — triggering backtrack action (2/2)
+2026-08-06 11:44:48,977 [WARNING] sudarshan_core.engines.agentic.planner: [FallbackPlanner] Loop detected on screen 4fb2c4 - triggering backtrack action (2/2)
 2026-08-06 11:44:53,786 [INFO] sudarshan_core.engines.agentic.planner: [Planner] Activating FallbackPlanner
 2026-08-06 11:44:53,787 [INFO] sudarshan_core.engines.agentic.planner: [FallbackPlanner] Goal-driven action: Enable Accessibility Service for malware execution (priority=95)
-2026-08-06 11:44:55,645 [WARNING] sudarshan_core.engines.agentic_explorer: [AgenticExplorer] Goal 'Grant Runtime Permissions' exhausted 8 attempts — marking FAILED
+2026-08-06 11:44:55,645 [WARNING] sudarshan_core.engines.agentic_explorer: [AgenticExplorer] Goal 'Grant Runtime Permissions' exhausted 8 attempts - marking FAILED
 2026-08-06 11:44:55,645 [WARNING] sudarshan_core.engines.agentic.goal_tracker: [GoalTracker] 'Grant Runtime Permissions' → FAILED (max attempts)
 2026-08-06 11:44:55,645 [INFO] sudarshan_core.engines.agentic.planner: [Planner] Activating FallbackPlanner
-2026-08-06 11:44:55,646 [WARNING] sudarshan_core.engines.agentic.planner: [FallbackPlanner] 3 consecutive failures with no progress (2 backtrack attempt(s) made) — signalling stop.
-2026-08-06 11:44:55,646 [INFO] sudarshan_core.engines.agentic_explorer: [AgenticExplorer] SC6: Planner returned None — no progress possible
+2026-08-06 11:44:55,646 [WARNING] sudarshan_core.engines.agentic.planner: [FallbackPlanner] 3 consecutive failures with no progress (2 backtrack attempt(s) made) - signalling stop.
+2026-08-06 11:44:55,646 [INFO] sudarshan_core.engines.agentic_explorer: [AgenticExplorer] SC6: Planner returned None - no progress possible
 2026-08-06 11:44:55,646 [INFO] sudarshan_core.engines.agentic_explorer: [AgenticExplorer] Completed. Actions=8, Screens=2, GoalsCompleted=1/15
 2026-08-06 11:44:56,756 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Screenshot captured: 99_final_screen
 2026-08-06 11:44:56,757 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] CLOSE: force-stopping com.android.insecurebankv2

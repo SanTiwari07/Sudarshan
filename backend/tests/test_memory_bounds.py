@@ -2,7 +2,7 @@
 Regression tests for AgentMemory capacity limits.
 
 Root defect: five collections grew without bound for the lifetime of an
-analysis — `visited_screens`, `_screen_action_counts` (both the dict AND each
+analysis - `visited_screens`, `_screen_action_counts` (both the dict AND each
 inner list), `network_events`, `failed_actions` and `_frida_event_counts`.
 The analysed application decides how many unique screens and URLs exist, so
 these were attacker-influenced and could be driven to exhaust memory.
@@ -115,7 +115,7 @@ def test_network_set_and_list_never_disagree(memory):
 
 
 def test_evicted_url_can_be_recorded_again(memory):
-    """Consequence of keeping set and list in sync — not a leak."""
+    """Consequence of keeping set and list in sync - not a leak."""
     memory.record_frida_events(
         [{"category": "network", "data": {"url": "http://first.example"}}],
         goal_name="Network / C2",
@@ -128,7 +128,7 @@ def test_evicted_url_can_be_recorded_again(memory):
 def test_hundred_thousand_network_events_stay_bounded_and_fast(memory, count):
     """
     §4 matrix: 100k events including duplicates. Guards both the capacity limit
-    and the O(1) dedupe — the previous O(n) scan made this quadratic.
+    and the O(1) dedupe - the previous O(n) scan made this quadratic.
     """
     events = _net_events(count // 2) * 2          # every URL appears twice
     start = time.monotonic()
@@ -139,7 +139,7 @@ def test_hundred_thousand_network_events_stay_bounded_and_fast(memory, count):
     assert set(memory.network_events) == memory._network_seen
     # Generous ceiling: the point is to catch quadratic regression, not to
     # benchmark the machine.
-    assert elapsed < 30.0, f"dedupe took {elapsed:.1f}s — suspect O(n) scan regression"
+    assert elapsed < 30.0, f"dedupe took {elapsed:.1f}s - suspect O(n) scan regression"
 
 
 # ─── failed_actions ───────────────────────────────────────────────────────────

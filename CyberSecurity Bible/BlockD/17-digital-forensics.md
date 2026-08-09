@@ -1,4 +1,4 @@
-# 17 — Digital Forensics
+# 17 - Digital Forensics
 
 > **Chapter ID:** `CH17` · **Block:** D (Operations) · **Status:** Stable
 > **Tags:** `#forensics` `#acquisition` `#bfu-afu` `#artifacts` `#chain-of-custody` `#aleapp` `#cert-in` `#dpdp`
@@ -11,7 +11,7 @@
 
 1. [Why forensics, when you already have the APK](#1-why-forensics-when-you-already-have-the-apk)
 2. [The golden rules](#2-the-golden-rules)
-3. [BFU vs AFU — the variable that decides everything](#3-bfu-vs-afu--the-variable-that-decides-everything)
+3. [BFU vs AFU - the variable that decides everything](#3-bfu-vs-afu--the-variable-that-decides-everything)
 4. [Acquisition tiers](#4-acquisition-tiers)
 5. [The artifact map](#5-the-artifact-map)
 6. [Reconstructing the attack timeline](#6-reconstructing-the-attack-timeline)
@@ -79,7 +79,7 @@ Six rules. Violating any of them can destroy the case.
  2. KEEP THE DEVICE POWERED ON AND UNLOCKED (AFU).
     Powering off drops it to BFU and can render data unrecoverable.  → §3
 
- 3. ISOLATE THE NETWORK — but do not power off.
+ 3. ISOLATE THE NETWORK - but do not power off.
     Airplane mode / Faraday bag. Prevents remote wipe and further exfil.
 
  4. HASH EVERYTHING, IMMEDIATELY.
@@ -91,14 +91,14 @@ Six rules. Violating any of them can destroy the case.
     "I ran adb" is not documentation. Command, timestamp, output hash is.
 ```
 
-> **⚙️ Engineering Note — rules 1 and 3 are in tension, and rule 3 wins.** You need the network
+> **⚙️ Engineering Note - rules 1 and 3 are in tension, and rule 3 wins.** You need the network
 > off to prevent a remote wipe command reaching the device, and you need the device *on* to keep
 > CE keys in memory. Airplane mode or a Faraday bag achieves both. Pulling the battery achieves
 > neither and loses you the AFU state.
 
 ---
 
-## 3. BFU vs AFU — the variable that decides everything
+## 3. BFU vs AFU - the variable that decides everything
 
 From [Ch 05 §6](../security/05-android-cryptography.md#6-disk-encryption-fde--fbe): **File-Based
 Encryption** splits storage into two classes.
@@ -113,7 +113,7 @@ Encryption** splits storage into two classes.
        │
        ▼
    ┌──────────────────────────────────────────┐
-   │ BFU — Before First Unlock                │
+   │ BFU - Before First Unlock                │
    │  • DE storage readable                   │
    │  • CE data CRYPTOGRAPHICALLY INACCESSIBLE│
    │  • App sandboxes: unreadable             │
@@ -122,7 +122,7 @@ Encryption** splits storage into two classes.
                        │ user unlocks
                        ▼
    ┌──────────────────────────────────────────┐
-   │ AFU — After First Unlock                 │
+   │ AFU - After First Unlock                 │
    │  • CE keys resident in memory            │
    │  • App data readable (with root/tooling) │
    │  → FULL forensic yield                   │
@@ -132,7 +132,7 @@ Encryption** splits storage into two classes.
                   back to BFU  ☠️
 ```
 
-> **⚙️ Engineering Note — this belongs on page one of any device-seizure runbook.** If a device
+> **⚙️ Engineering Note - this belongs on page one of any device-seizure runbook.** If a device
 > arrives powered on and unlocked, **keep it that way**: disable auto-lock, keep it charged,
 > isolate the network, and acquire immediately. A responder who "safely powers it down for
 > transport" has, in one action, potentially converted a recoverable case into an unrecoverable
@@ -144,10 +144,10 @@ Encryption** splits storage into two classes.
 
 | Tier | What you get | Access needed | Forensic soundness |
 |---|---|---|---|
-| **Manual** | Photographs of screens | Unlocked device | Low — but zero-risk and fast |
+| **Manual** | Photographs of screens | Unlocked device | Low - but zero-risk and fast |
 | **Logical** | Backups, ADB-accessible data, `bugreport` | USB debugging | Medium |
 | **File system** | `/data` tree | **Root** or exploit/vendor tooling | High |
-| **Physical** | Bit-for-bit image | Bootloader/chip-level access | Highest — rarely achievable on modern devices |
+| **Physical** | Bit-for-bit image | Bootloader/chip-level access | Highest - rarely achievable on modern devices |
 
 ### Reality check on modern devices
 
@@ -156,7 +156,7 @@ achievable** without vendor-grade tooling (Cellebrite, MSAB, Magnet) and often n
 depending on chipset and patch level. Most real bank-fraud casework runs on **logical +
 file-system acquisition of an AFU device with the customer's consent**.
 
-### Logical acquisition — the practical commands
+### Logical acquisition - the practical commands
 
 ```bash
 # ---- 0. document the device and the moment -------------------------------
@@ -183,15 +183,14 @@ $ adb bugreport bugreport_$(date -u +%Y%m%dT%H%M%SZ).zip
 # ---- 4. logs -------------------------------------------------------------
 $ adb logcat -d -b all > logcat_all.txt
 
-# ---- 5. pull the suspect APK(s) — ALL splits -----------------------------
+# ---- 5. pull the suspect APK(s) - ALL splits -----------------------------
 $ adb shell pm path com.suspect | sed 's/package://' | while read p; do adb pull "$p"; done
 
 # ---- 6. hash everything NOW ----------------------------------------------
 $ sha256sum * > acquisition_manifest.sha256
 ```
 
-> **⚙️ Engineering Note:** `adb backup` is **deprecated** and unreliable on modern Android —
-> many apps set `allowBackup="false"` and Android 12+ restricts it further. Don't build a
+> **⚙️ Engineering Note:** `adb backup` is **deprecated** and unreliable on modern Android - > many apps set `allowBackup="false"` and Android 12+ restricts it further. Don't build a
 > workflow on it. Use `bugreport`, `dumpsys`, and direct pulls, and file-system acquisition
 > where root or tooling permits.
 
@@ -216,7 +215,7 @@ $ sha256sum * > acquisition_manifest.sha256
 | 11 | Profiles | `/data/misc/profiles/cur/0/<pkg>/primary.prof` | **Which methods actually executed** ★ |
 | 12 | Wi-Fi / network | `/data/misc/wifi/`, connectivity logs | Location inference |
 
-### `packages.xml` — the single richest artifact
+### `packages.xml` - the single richest artifact
 
 ```xml
 <package name="com.suspect.app"
@@ -237,7 +236,7 @@ $ sha256sum * > acquisition_manifest.sha256
 ```
 
 ```python
-# Convert the hex timestamps — analysts get this wrong constantly
+# Convert the hex timestamps - analysts get this wrong constantly
 from datetime import datetime, timezone
 ms = int("18f2a1b3c00", 16)
 print(datetime.fromtimestamp(ms/1000, tz=timezone.utc).isoformat())
@@ -246,7 +245,7 @@ print(datetime.fromtimestamp(ms/1000, tz=timezone.utc).isoformat())
 > **⚙️ Engineering Note:** The `<cert>` element persists the signer certificate **even after the
 > APK is deleted**. So if the malware self-removed, `packages.xml` (or its backup at
 > `packages-backup.xml`) may still prove which signer was installed and when. Also always check
-> `/data/system/packages-backup.xml` — it sometimes retains an earlier state the live file no
+> `/data/system/packages-backup.xml` - it sometimes retains an earlier state the live file no
 > longer shows. → [Ch 06](../security/06-certificates.md)
 
 ### The accessibility artifact
@@ -261,7 +260,7 @@ print(datetime.fromtimestamp(ms/1000, tz=timezone.utc).isoformat())
 **This is the proof of compromise mechanism.** Combined with the install time from
 `packages.xml`, it establishes when the device became controllable.
 
-### Usage stats — the underused timeline source
+### Usage stats - the underused timeline source
 
 `/data/system/usagestats/` records app foreground events with timestamps. For an ODF case this
 lets you show: *malware installed at T, accessibility enabled at T+2min, banking app foregrounded
@@ -280,7 +279,7 @@ The deliverable. Everything above serves this.
 
 ```
  ┌────────────────────────────────────────────────────────────────────┐
- │  ANDROID BANKING FRAUD — RECONSTRUCTED TIMELINE                    │
+ │  ANDROID BANKING FRAUD - RECONSTRUCTED TIMELINE                    │
  ├──────────────┬─────────────────────────────────────────────────────┤
  │ T-3d 14:02   │ Dropper "PDF Reader Pro" installed                  │
  │              │   source: packages.xml ft= · installer=com.android. │
@@ -299,13 +298,13 @@ The deliverable. Everything above serves this.
  │ T-0  09:31   │ Banking app foregrounded (usagestats)               │
  │ T-0  09:32   │ Overlay window created (logcat, if still resident)  │
  │ T-0  09:34   │ ★ DISPUTED TRANSACTION (bank records)               │
- │ T-0  09:34   │ Inbound SMS — OTP (bank records; device SMS absent) │
+ │ T-0  09:34   │ Inbound SMS - OTP (bank records; device SMS absent) │
  └──────────────┴─────────────────────────────────────────────────────┘
 ```
 
-> **⚙️ Engineering Note — the strongest single forensic argument.** Look at the permission grant
+> **⚙️ Engineering Note - the strongest single forensic argument.** Look at the permission grant
 > timestamps. Three dangerous permissions granted within **60 seconds**, immediately after an
-> accessibility service was enabled, is **not** a pattern a human produces — a person navigating
+> accessibility service was enabled, is **not** a pattern a human produces - a person navigating
 > permission dialogs takes longer and rarely grants a full cluster consecutively. That timing
 > signature is machine-driven self-escalation
 > ([Ch 13 §3](../malware/13-android-malware.md#3-accessibility-service-abuse--the-hinge)), and it
@@ -328,18 +327,18 @@ The deliverable. Everything above serves this.
 
 | Tool | Type | Use |
 |---|---|---|
-| **ALEAPP** | Open source | **Android Logs Events And Protobuf Parser** — parses the artifacts in §5 into an HTML/timeline report. Start here. |
+| **ALEAPP** | Open source | **Android Logs Events And Protobuf Parser** - parses the artifacts in §5 into an HTML/timeline report. Start here. |
 | **Autopsy** + Sleuth Kit | Open source | File-system forensics, timeline, keyword search |
 | **Cellebrite UFED / Physical Analyzer** | Commercial | Widest device support, exploit-based acquisition |
 | **MSAB XRY** | Commercial | Strong logical/physical acquisition |
 | **Magnet AXIOM** | Commercial | Artifact parsing + timeline, strong reporting |
 | **adb + dumpsys** | Built-in | Fast triage; scriptable |
-| **SQLite tooling** (`sqlite3`, DB Browser) | Open source | App databases — **remember WAL** |
+| **SQLite tooling** (`sqlite3`, DB Browser) | Open source | App databases - **remember WAL** |
 | **libimobiledevice** | Open source | iOS equivalent (out of scope) |
 
-> **⚙️ Engineering Note — the WAL trap, again.** SQLite on modern Android uses Write-Ahead
+> **⚙️ Engineering Note - the WAL trap, again.** SQLite on modern Android uses Write-Ahead
 > Logging. Copying only `foo.db` and not `foo.db-wal` and `foo.db-shm` **loses the most recent
-> transactions** — precisely the ones covering the fraud window. This single mistake invalidates
+> transactions** - precisely the ones covering the fraud window. This single mistake invalidates
 > a large amount of amateur mobile forensics. Always acquire the sibling files, and check them
 > before concluding a table is empty.
 > → [Ch 01 §9](../android/01-android-internals.md#9-storage-from-wild-west-to-scoped)
@@ -378,7 +377,7 @@ $ python3 build_timeline.py --packages packages.json --usagestats usagestats.jso
 
 > **⚙️ Engineering Note:** The counter to nearly every row is the same: **isolate the network
 > first, acquire second, remediate third.** Sequence is the whole discipline. Most mobile
-> anti-forensics assumes the device stays online — cut that and most of it fails.
+> anti-forensics assumes the device stays online - cut that and most of it fails.
 
 ---
 
@@ -415,16 +414,16 @@ gaps), **repeatability** (tool + version recorded so another examiner can reprod
 | **RBI Cyber Security Framework for Banks** | Bank incident handling, reporting, and controls |
 | **DPDP Act 2023** | **Constrains what victim data may be collected, stored, and processed** |
 
-> **🏛️ Enterprise Insight — the DPDP constraint is a design constraint, not a footnote.** A
+> **🏛️ Enterprise Insight - the DPDP constraint is a design constraint, not a footnote.** A
 > forensic image of a customer's phone contains their photos, messages, contacts, and health
-> data — almost none of which is relevant to the fraud investigation. Under DPDP principles of
+> data - almost none of which is relevant to the fraud investigation. Under DPDP principles of
 > purpose limitation and data minimisation, SUDARSHAN should **scope acquisition to the artifacts
 > in §5**, not take a full image by default, and should apply retention limits and access
 > controls to whatever it does hold. Build targeted collection profiles rather than
 > "acquire everything and filter later." → [Ch 20](../incident-response/20-incident-response.md)
 
 > **⚙️ Engineering Note:** The certification requirements for electronic evidence under the
-> Bharatiya Sakshya Adhiniyam matter operationally — a technically perfect acquisition that
+> Bharatiya Sakshya Adhiniyam matter operationally - a technically perfect acquisition that
 > lacks the required certification may be inadmissible. **Involve legal counsel in designing the
 > acquisition workflow**, not after an incident. This is not a detail an engineering team can
 > resolve alone, and this document is not legal advice.
@@ -472,14 +471,14 @@ device_forensics:
 
 | Rule | Evidence | Strength |
 |---|---|---|
-| **Third-party app installed another app** | `packages.xml` `installer=` | **Very strong** — dropper proof |
+| **Third-party app installed another app** | `packages.xml` `installer=` | **Very strong** - dropper proof |
 | **Accessibility enabled for a non-store app** | `settings_secure.xml` + installer | **Very strong** |
-| **Permission grant burst < 2 min after a11y enable** | `packages.xml` grant flags + timestamps | **Very strong** — self-escalation |
+| **Permission grant burst < 2 min after a11y enable** | `packages.xml` grant flags + timestamps | **Very strong** - self-escalation |
 | Signer not in the bank's canonical registry for its package | `<cert>` vs registry | **Deterministic** ([Ch 06](../security/06-certificates.md)) |
 | App with no launcher entry | Package + component analysis | Strong |
 | Device admin held by a non-MDM app | `device_policies.xml` | Strong |
 | Banking app foregrounded immediately before disputed txn | `usagestats` | Supporting |
-| SMS absent on device but sent per bank records | Bank + device comparison | **Strong — interception evidence** |
+| SMS absent on device but sent per bank records | Bank + device comparison | **Strong - interception evidence** |
 
 > **🏛️ Enterprise Insight:** The top three rules together produce a finding a fraud committee
 > can act on without any malware analysis at all: *"an app installed by another third-party app
@@ -497,7 +496,7 @@ device_forensics:
 - **BFU devices yield very little.** Often the case is effectively closed at seizure.
 - **Root or vendor tooling is usually required** for file-system access.
 - **Locked bootloader + current patch level** blocks most physical acquisition.
-- **Timestamps can be manipulated** — corroborate across independent artifacts.
+- **Timestamps can be manipulated** - corroborate across independent artifacts.
 - **Consent and legal authority are prerequisites**, not formalities.
 
 ### False positives
@@ -509,7 +508,7 @@ device_forensics:
 | Device admin | Corporate MDM enrolment |
 | Overlay permission | Chat heads, screen recorder, blue-light filter |
 | Icon not in launcher | Some legitimate system/companion apps have no launcher entry |
-| Rapid permission grants | A user tapping through quickly — **check the interval distribution**, not just the count |
+| Rapid permission grants | A user tapping through quickly - **check the interval distribution**, not just the count |
 
 > **🚨 Misconception:** "Accessibility was enabled, therefore the customer was compromised."
 > Perhaps they use a password manager. The forensic finding is the **combination**: non-store
@@ -520,7 +519,7 @@ device_forensics:
 
 | Case | Handling |
 |---|---|
-| Multi-user / work profile | Artifacts exist per user (`users/0/`, `users/10/`) — check all |
+| Multi-user / work profile | Artifacts exist per user (`users/0/`, `users/10/`) - check all |
 | Factory reset after fraud | Very limited yield; cloud backups may help (separate legal basis) |
 | Device already wiped by malware | Bank-side records and network telemetry become primary |
 | Customer-owned device, no consent | **Stop.** Legal basis first. |
@@ -532,14 +531,14 @@ device_forensics:
 
 1. **Acquire before remediation. Always.** Wipe-capable families exist.
 2. **Keep the device AFU.** Never power it off "for transport."
-3. **Isolate the network immediately** — airplane mode or Faraday.
+3. **Isolate the network immediately** - airplane mode or Faraday.
 4. **Run the high-value trio first**: `enabled_accessibility_services`,
    `enabled_notification_listeners`, `pm list packages -f -i -3`.
-5. **Parse `packages.xml` hex timestamps correctly** — a very common error.
+5. **Parse `packages.xml` hex timestamps correctly** - a very common error.
 6. **Check `packages-backup.xml`** for prior state.
 7. **Pull SQLite `-wal` and `-shm` siblings.**
-8. **Look for the permission-grant burst** — the self-escalation signature.
-9. **Scope acquisition to relevant artifacts** — DPDP data minimisation.
+8. **Look for the permission-grant burst** - the self-escalation signature.
+9. **Scope acquisition to relevant artifacts** - DPDP data minimisation.
 10. **Hash at acquisition and verify at every handoff.**
 11. **Record tool versions**, or your work isn't reproducible.
 12. **Involve legal counsel in workflow design**, not after the incident.
@@ -555,12 +554,12 @@ themselves?"*
 single piece is the permission-grant timing. `packages.xml` gives us install time and installer
 attribution; `settings_secure.xml` tells us exactly when the accessibility service was enabled;
 appops and the permission flags give us grant times. In a typical ODF case you see a dropper
-install, then a payload installed *by that dropper* — which `packages.xml` proves via the
-`installer=` field — then accessibility enabled, then three or four dangerous permissions
+install, then a payload installed *by that dropper* - which `packages.xml` proves via the
+`installer=` field - then accessibility enabled, then three or four dangerous permissions
 granted within about sixty seconds. A human navigating permission dialogs doesn't produce that
 pattern; that timing signature is machine-driven self-escalation via `canPerformGestures`. Line
 that up against the bank's transaction timestamp and you have a narrative a fraud committee and
-a regulator can both follow — and it doesn't require any malware analysis at all, which means
+a regulator can both follow - and it doesn't require any malware analysis at all, which means
 it's fast.
 
 **Common mistakes:**
@@ -570,8 +569,8 @@ it's fast.
 - Not knowing the BFU/AFU distinction.
 
 **Follow-ups to expect:**
-- *"What if the malware wiped the device?"* → It's a documented capability — BRATA and BingoMod
-  both do it — which is exactly why the runbook is isolate, acquire, *then* remediate. If it
+- *"What if the malware wiped the device?"* → It's a documented capability - BRATA and BingoMod
+  both do it - which is exactly why the runbook is isolate, acquire, *then* remediate. If it
   already wiped, we fall back to bank-side session records and network telemetry.
 - *"Is this admissible?"* → That depends on chain of custody and on the certification
   requirements for electronic evidence under the Bharatiya Sakshya Adhiniyam. We design the
@@ -579,10 +578,10 @@ it's fast.
   acquisition and verify at every handoff.
 - *"What about the customer's privacy?"* → We use targeted collection profiles, not full images.
   Under DPDP purpose limitation and data minimisation, we collect the package registry,
-  accessibility state, appops, and usage stats — not photos, messages, or health data.
+  accessibility state, appops, and usage stats - not photos, messages, or health data.
 
 **Fact that impresses:** File-Based Encryption means a phone that gets powered off drops from
-AFU to BFU, and Credential Encrypted storage — essentially all app data — becomes
+AFU to BFU, and Credential Encrypted storage - essentially all app data - becomes
 cryptographically inaccessible until the next unlock. So a well-meaning responder who powers a
 seized device down for transport can single-handedly convert a recoverable case into an
 unrecoverable one. It's the highest-consequence, most-violated rule in mobile forensics.
@@ -592,18 +591,18 @@ unrecoverable one. It's the highest-consequence, most-violated rule in mobile fo
 ## 14. Interview Insights
 
 **Q: "What's the first thing you do with a suspected compromised Android device?"**
-Isolate the network without powering off — airplane mode or a Faraday bag — because wipe-capable
+Isolate the network without powering off - airplane mode or a Faraday bag - because wipe-capable
 malware exists and because powering off drops you from AFU to BFU. Then document the state,
 then acquire, then remediate. Sequence is the answer.
 
 **Q: "Explain BFU vs AFU."**
-Before First Unlock: only Device Encrypted storage is readable; Credential Encrypted data — the
-app sandboxes — is cryptographically inaccessible. After First Unlock: CE keys are in memory and
+Before First Unlock: only Device Encrypted storage is readable; Credential Encrypted data - the
+app sandboxes - is cryptographically inaccessible. After First Unlock: CE keys are in memory and
 app data is readable with root or vendor tooling. Powering off returns the device to BFU.
 
 **Q: "Which single Android artifact would you want most?"**
 `/data/system/packages.xml`. It gives install time, **installer attribution**, the signer
-certificate — which survives APK deletion — and granted permissions. Runner-up:
+certificate - which survives APK deletion - and granted permissions. Runner-up:
 `settings_secure.xml` for `enabled_accessibility_services`.
 
 **Q: "How do you show the user didn't grant permissions themselves?"**
@@ -617,7 +616,7 @@ Always pull `-wal` and `-shm` alongside the `.db`.
 
 **Q: "Can you do a physical acquisition of a modern Android phone?"**
 Usually not, on a current locked device with an up-to-date patch level, without commercial
-exploit-based tooling — and often not even then. Most real casework is logical plus file-system
+exploit-based tooling - and often not even then. Most real casework is logical plus file-system
 acquisition of a consented AFU device.
 
 **Beginner mistakes:**
@@ -632,16 +631,16 @@ acquisition of a consented AFU device.
 ## 15. Cross-references
 
 **Upstream:**
-- [← Ch 05 Android Cryptography](../security/05-android-cryptography.md) — FBE, BFU/AFU
-- [← Ch 09 Package Manager](../apk/09-package-manager.md) — `packages.xml`, installer attribution
-- [← Ch 13 Android Malware](../malware/13-android-malware.md) — anti-removal, wipe capability
+- [← Ch 05 Android Cryptography](../security/05-android-cryptography.md) - FBE, BFU/AFU
+- [← Ch 09 Package Manager](../apk/09-package-manager.md) - `packages.xml`, installer attribution
+- [← Ch 13 Android Malware](../malware/13-android-malware.md) - anti-removal, wipe capability
 
 **Downstream:**
-- [→ Ch 18 Mobile Threat Hunting](../soc/18-mobile-threat-hunting.md) — artifacts as hunt telemetry
-- [→ Ch 19 Enterprise SOC](../soc/19-enterprise-soc-operations.md) — device telemetry at scale
-- [→ Ch 20 Incident Response](../incident-response/20-incident-response.md) — the runbook this feeds
-- [→ Ch 25 Investigation Engine](../sudarshan/25-investigation-engine.md) — evidence linking
-- [→ Ch 29 Investigation Reports](../sudarshan/29-investigation-reports.md) — timeline as deliverable
+- [→ Ch 18 Mobile Threat Hunting](../soc/18-mobile-threat-hunting.md) - artifacts as hunt telemetry
+- [→ Ch 19 Enterprise SOC](../soc/19-enterprise-soc-operations.md) - device telemetry at scale
+- [→ Ch 20 Incident Response](../incident-response/20-incident-response.md) - the runbook this feeds
+- [→ Ch 25 Investigation Engine](../sudarshan/25-investigation-engine.md) - evidence linking
+- [→ Ch 29 Investigation Reports](../sudarshan/29-investigation-reports.md) - timeline as deliverable
 
 **Related chain:** Seizure → isolation → AFU acquisition → artifact parsing → timeline →
 bank correlation → liability determination → regulatory filing.
@@ -650,26 +649,26 @@ bank correlation → liability determination → regulatory filing.
 
 ## 16. References
 
-1. NIST SP 800-101 Rev. 1 — *Guidelines on Mobile Device Forensics*.
-2. NIST SP 800-86 — *Guide to Integrating Forensic Techniques into Incident Response*.
-3. AOSP — *File-Based Encryption*. https://source.android.com/docs/security/features/encryption/file-based
-4. Android Developers — `adb` and `dumpsys` documentation. https://developer.android.com/tools/adb
-5. ALEAPP — Android Logs Events And Protobuf Parser. https://github.com/abrignoni/ALEAPP
+1. NIST SP 800-101 Rev. 1 - *Guidelines on Mobile Device Forensics*.
+2. NIST SP 800-86 - *Guide to Integrating Forensic Techniques into Incident Response*.
+3. AOSP - *File-Based Encryption*. https://source.android.com/docs/security/features/encryption/file-based
+4. Android Developers - `adb` and `dumpsys` documentation. https://developer.android.com/tools/adb
+5. ALEAPP - Android Logs Events And Protobuf Parser. https://github.com/abrignoni/ALEAPP
 6. Autopsy / The Sleuth Kit. https://www.autopsy.com/
-7. Magnet Forensics AXIOM; Cellebrite UFED; MSAB XRY — vendor documentation.
-8. SQLite — Write-Ahead Logging. https://www.sqlite.org/wal.html
-9. Cleafy Labs — *BRATA* (2021–2022) — factory-reset kill switch.
-10. Cleafy Labs — *BingoMod* (July 31, 2024) — device wipe after fraud.
-11. CERT-In — Directions of April 28, 2022 (6-hour incident reporting, log retention).
-12. Reserve Bank of India — Cyber Security Framework for Banks.
+7. Magnet Forensics AXIOM; Cellebrite UFED; MSAB XRY - vendor documentation.
+8. SQLite - Write-Ahead Logging. https://www.sqlite.org/wal.html
+9. Cleafy Labs - *BRATA* (2021–2022) - factory-reset kill switch.
+10. Cleafy Labs - *BingoMod* (July 31, 2024) - device wipe after fraud.
+11. CERT-In - Directions of April 28, 2022 (6-hour incident reporting, log retention).
+12. Reserve Bank of India - Cyber Security Framework for Banks.
 13. Digital Personal Data Protection Act, 2023 (India).
-14. Bharatiya Sakshya Adhiniyam, 2023 (India) — electronic evidence.
+14. Bharatiya Sakshya Adhiniyam, 2023 (India) - electronic evidence.
 15. Information Technology Act, 2000 (India).
 
 ### Further reading
-- Brigs / Alexis Brignoni — mobile forensics artifact research blog
-- SANS FOR585 — Advanced Smartphone Forensics course materials
-- AOSP `frameworks/base/services/core/java/com/android/server/pm/` — `packages.xml` writer
+- Brigs / Alexis Brignoni - mobile forensics artifact research blog
+- SANS FOR585 - Advanced Smartphone Forensics course materials
+- AOSP `frameworks/base/services/core/java/com/android/server/pm/` - `packages.xml` writer
 
 ---
 

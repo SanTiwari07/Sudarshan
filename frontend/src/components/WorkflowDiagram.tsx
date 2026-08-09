@@ -195,7 +195,7 @@ export default function WorkflowDiagram({ workflow }: { workflow: FraudWorkflow 
     return (
       <div className="flex items-center gap-2 px-4 py-3 text-sm text-green-700 bg-green-50 rounded-lg border border-green-200">
         <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
-        <span>No dynamic analysis data — workflow reconstruction requires Frida runtime data.</span>
+        <span>No dynamic analysis data - workflow reconstruction requires Frida runtime data.</span>
       </div>
     );
   }

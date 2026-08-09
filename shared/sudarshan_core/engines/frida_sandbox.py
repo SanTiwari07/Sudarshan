@@ -1,6 +1,6 @@
 # backend/app/engines/frida_sandbox.py
 """
-SUDARSHAN — Frida Dynamic Analysis Sandbox Controller
+SUDARSHAN - Frida Dynamic Analysis Sandbox Controller
 ======================================================
 Drives an Android sandbox (via SandboxProvider) to perform runtime
 behavioral analysis of a suspicious APK using Frida hooks.
@@ -8,7 +8,7 @@ behavioral analysis of a suspicious APK using Frida hooks.
 The emulator backend is abstracted: Genymotion Desktop is the default
 provider; Android Studio AVD remains optional via SANDBOX_PROVIDER.
 This module talks only to SandboxProvider for device/ADB/root/Frida
-lifecycle — analysis logic (install, launch, hooks, explorer) is unchanged.
+lifecycle - analysis logic (install, launch, hooks, explorer) is unchanged.
 
 Prerequisites:
   1. Sandbox running (Genymotion Desktop by default, or Android Studio AVD).
@@ -116,7 +116,7 @@ _HOOKS_BUNDLE = _HOOKS_DIR / "banking_trojan.bundle.js"
 # Prefer the COMPILED BUNDLE.
 #
 # The previous line here was `_HOOKS_SCRIPT = _HOOKS_SOURCE`, justified as
-# "Frida 17+ uses the built-in Java global directly — CommonJS bundle is
+# "Frida 17+ uses the built-in Java global directly - CommonJS bundle is
 # deprecated". That is backwards, and measured on frida 17.16.4 against a live
 # device:
 #
@@ -127,7 +127,7 @@ _HOOKS_BUNDLE = _HOOKS_DIR / "banking_trojan.bundle.js"
 # `frida-java-bridge` module and must be linked in at build time.
 # backend/requirements.txt says exactly this. Loading the raw source therefore
 # meant EVERY Java hook failed the availability guard and silently installed
-# nothing — which is why every BFCI component reads 0.0 on every sample.
+# nothing - which is why every BFCI component reads 0.0 on every sample.
 #
 # Build the bundle with:   cd frida_hooks && npm install && npm run build
 _MIN_BUNDLE_BYTES = 50_000   # a real bundle is ~540 KB; the old stub was 168 B
@@ -137,7 +137,7 @@ def _select_hooks_script() -> Path:
     """
     Return the compiled bundle. There is no usable fallback.
 
-    banking_trojan.js is an ES module — it `import`s frida-java-bridge, which is
+    banking_trojan.js is an ES module - it `import`s frida-java-bridge, which is
     the only way the bundler will keep the dependency (a dynamic require inside
     a try/catch got tree-shaken out, producing a bundle that loaded but had no
     Java bridge at all). So the raw source is NOT a valid classic script:
@@ -155,7 +155,7 @@ def _select_hooks_script() -> Path:
         pass
     logger.error(
         "[Frida] Compiled hook bundle missing or stub-sized at %s. Dynamic "
-        "analysis CANNOT run without it — the raw source is an ES module and is "
+        "analysis CANNOT run without it - the raw source is an ES module and is "
         "not loadable as a Frida script. Build it with:  cd %s && npm install "
         "&& npm run build",
         _HOOKS_BUNDLE, _HOOKS_DIR,
@@ -171,7 +171,7 @@ _HOOKS_SCRIPT = _select_hooks_script()
 # The random input fuzzer, and the hybrid mode that ran it alongside the agent,
 # have both been REMOVED. Reasons, in order of weight:
 #
-#   1. It corrupted evidence — random taps produced UI events indistinguishable
+#   1. It corrupted evidence - random taps produced UI events indistinguishable
 #      in the timeline from behaviour the SAMPLE chose to perform.
 #   2. It contended with the agent for the single ADB socket.
 #   3. Its device-side process outlived the session and could inject input into
@@ -186,7 +186,7 @@ try:
 except ImportError:
     UIExplorer = None
     logger.warning(
-        "[Frida] ui_explorer module not found — AgenticExplorer has no rollback target."
+        "[Frida] ui_explorer module not found - AgenticExplorer has no rollback target."
     )
 
 # Default analysis duration in seconds
@@ -243,7 +243,7 @@ ADB_PORT = os.getenv("ADB_PORT", "5555")
 DEVICE_SERIAL = os.getenv("DEVICE_SERIAL", "")
 SANDBOX_PROVIDER_NAME = os.getenv("SANDBOX_PROVIDER", "genymotion")
 
-# BFCI_WEIGHTS is now imported from bfci_scorer — kept as a re-export for
+# BFCI_WEIGHTS is now imported from bfci_scorer - kept as a re-export for
 # callers that import it directly from this module (backwards compatibility).
 # Do not redefine it here.
 
@@ -456,7 +456,7 @@ def _adb_install_apk(apk_path: str, device: str) -> Tuple[bool, str, Dict[str, A
 
     # ── Stage 2b: Re-sign when signature block is invalid (payload intact) ───
     if any(m in last_out for m in _CERT_FAIL_MARKERS):
-        logger.info("[Frida] Invalid APK signatures — re-signing original payload for sandbox install")
+        logger.info("[Frida] Invalid APK signatures - re-signing original payload for sandbox install")
         res_ok, res_path, res_prov = resign_apk_preserving_payload(apk_path)
         if res_ok and os.path.exists(res_path):
             pkg_to_uninstall = None
@@ -479,8 +479,7 @@ def _adb_install_apk(apk_path: str, device: str) -> Tuple[bool, str, Dict[str, A
     # Teabot and similar samples deliberately malform their manifest to evade
     # static scanners (INSTALL_PARSE_FAILED_UNEXPECTED_EXCEPTION).  We detect
     # this, repair the derivative copy, re-sign, and retry.  The repair step
-    # is logged prominently in both the console and the provenance record —
-    # this is a disclosed methodological step, not evidence tampering.
+    # is logged prominently in both the console and the provenance record - # this is a disclosed methodological step, not evidence tampering.
     _PARSE_FAIL_MARKERS = _MANIFEST_REPAIR_MARKERS
     if any(m in last_out for m in _PARSE_FAIL_MARKERS):
         logger.warning(
@@ -596,8 +595,8 @@ def _extract_apk_info(apk_path: str) -> Tuple[Optional[str], Optional[str]]:
     """Extract package name and main activity from APK.
 
     Strategy (in order):
-      1. aapt2 / aapt  — fastest, requires Android SDK build-tools in PATH
-      2. androguard    — pure-Python fallback, always available (in requirements.txt)
+      1. aapt2 / aapt - fastest, requires Android SDK build-tools in PATH
+      2. androguard - pure-Python fallback, always available (in requirements.txt)
     """
     import shutil
     package_name, main_activity = None, None
@@ -643,7 +642,7 @@ def _extract_apk_info(apk_path: str) -> Tuple[Optional[str], Optional[str]]:
             logger.debug(f"[Frida] Extracted via androguard: {package_name} / {main_activity}")
             return package_name, main_activity
     except ImportError:
-        logger.warning("[Frida] androguard not installed — install it: pip install androguard")
+        logger.warning("[Frida] androguard not installed - install it: pip install androguard")
     except Exception as e:
         logger.warning(f"[Frida] androguard failed to parse APK: {e}")
 
@@ -774,7 +773,7 @@ def _foreground_package(device: str) -> str:
 
 
 def _launch_failure_is_process_crash(reason: str) -> bool:
-    """True only when a PID existed and died — not when launch intent never started."""
+    """True only when a PID existed and died - not when launch intent never started."""
     r = (reason or "").lower()
     if "never appeared" in r or "launch failed" in r:
         return False
@@ -823,7 +822,7 @@ def _dismiss_permission_review_screen(device: str) -> bool:
                 time.sleep(0.75)
                 return True
 
-    logger.info("[Frida] ReviewPermissionsActivity visible — using fallback CONTINUE tap")
+    logger.info("[Frida] ReviewPermissionsActivity visible - using fallback CONTINUE tap")
     _adb("-s", device, "shell", "input tap 507 1127", timeout=10)
     time.sleep(0.75)
     return True
@@ -995,22 +994,22 @@ def _poll_pid_until_stable(
                 )
             elif (now - stable_since) >= stable_min:
                 logger.info(
-                    "[Frida] PID %d stable for %.1fs (>= %.0fs required) — "
+                    "[Frida] PID %d stable for %.1fs (>= %.0fs required) - "
                     "process confirmed alive for %s",
                     pid, now - stable_since, stable_min, package_name,
                 )
                 return True, pid, f"PID {pid} stable for {now - stable_since:.1f}s"
         else:
             if stable_since is not None:
-                # PID was alive but disappeared — the app crashed.
+                # PID was alive but disappeared - the app crashed.
                 lived_for = now - stable_since
                 msg = (
                     f"Process {package_name} (last PID={last_pid}) "
-                    f"exited after {lived_for:.1f}s — app crashed before becoming stable"
+                    f"exited after {lived_for:.1f}s - app crashed before becoming stable"
                 )
                 logger.error("[Frida] %s", msg)
                 return False, last_pid, msg
-            # PID not yet seen — permission review UI blocks process visibility.
+            # PID not yet seen - permission review UI blocks process visibility.
             if last_pid is None and (now - last_review_dismiss) >= 1.5:
                 if _dismiss_permission_review_screen(device):
                     last_review_dismiss = now
@@ -1022,14 +1021,14 @@ def _poll_pid_until_stable(
     if last_pid is None:
         reason = (
             f"{package_name} never appeared in the process list within "
-            f"{total_timeout:.0f}s — launch failed or package name mismatch"
+            f"{total_timeout:.0f}s - launch failed or package name mismatch"
         )
     else:
         # PID appeared but never stable for long enough.
         lived = (time.monotonic() - (stable_since or time.monotonic()))
         reason = (
             f"{package_name} (PID={last_pid}) appeared but only survived "
-            f"{lived:.1f}s (required {stable_min:.0f}s) — app is unstable"
+            f"{lived:.1f}s (required {stable_min:.0f}s) - app is unstable"
         )
     logger.error("[Frida] Stability timeout: %s", reason)
     return False, last_pid, reason
@@ -1061,7 +1060,7 @@ def _collect_crash_diagnostics(
       - Native tombstones (/data/tombstones/)
       - Device environment (Android version, ABI, page size)
 
-    All fields default to None/[] when the datum cannot be obtained — nothing
+    All fields default to None/[] when the datum cannot be obtained - nothing
     is fabricated.
     """
     report = CrashReport(
@@ -1283,7 +1282,7 @@ def _generate_crash_recommendation(report: CrashReport) -> str:
     """Return a one-sentence actionable recommendation given a classified CrashReport."""
     if report.is_instrumentation_issue:
         return (
-            "SELinux denial detected — run 'adb shell setenforce 0' on the "
+            "SELinux denial detected - run 'adb shell setenforce 0' on the "
             "emulator to allow Frida to ptrace the target process."
         )
     if report.is_emulator_compat_issue:
@@ -1294,7 +1293,7 @@ def _generate_crash_recommendation(report: CrashReport) -> str:
         )
     if report.is_apk_repair_issue:
         return (
-            "The repaired derivative fails bytecode verification — the repair "
+            "The repaired derivative fails bytecode verification - the repair "
             "step damaged a dex file. Try running the analysis on the original "
             "APK directly (set SKIP_REPAIR=1) or report the repair failure."
         )
@@ -1307,7 +1306,7 @@ def _generate_crash_recommendation(report: CrashReport) -> str:
     if report.is_manifest_issue:
         return (
             "ActivityNotFoundException or manifest parse failure. The declared "
-            "launcher activity does not exist in the APK — inspect the manifest "
+            "launcher activity does not exist in the APK - inspect the manifest "
             "with 'aapt dump badging' and verify the component name."
         )
     if report.is_launch_logic_issue and report.exception_type:
@@ -1357,10 +1356,10 @@ def _verify_launch_readiness(
     # Check 2: Launcher activity resolves
     component = _resolve_launcher_activity(device, package_name)
     if not component:
-        # Not a hard failure — some samples have no LAUNCHER intent but are
+        # Not a hard failure - some samples have no LAUNCHER intent but are
         # runnable via broadcast (Cerberus-style). Log a warning, continue.
         logger.warning(
-            "[LaunchGate] Check 2 WARN: no LAUNCHER activity for %s — "
+            "[LaunchGate] Check 2 WARN: no LAUNCHER activity for %s - "
             "packed/dropper sample; continuing without activity validation",
             package_name,
         )
@@ -1383,14 +1382,14 @@ def _verify_launch_readiness(
     if current_pid is None:
         return False, (
             f"Check 3 FAIL: PID {stable_pid} for '{package_name}' disappeared "
-            "between stability confirmation and readiness gate — app crashed"
+            "between stability confirmation and readiness gate - app crashed"
         )
     logger.debug("[LaunchGate] Check 3 PASS: PID %d still alive", current_pid)
 
     # Check 4: Same PID (no silent restart)
     if current_pid != stable_pid:
         logger.warning(
-            "[LaunchGate] Check 4 WARN: PID changed from %d to %d — "
+            "[LaunchGate] Check 4 WARN: PID changed from %d to %d - "
             "process restarted; proceeding with new PID",
             stable_pid, current_pid,
         )
@@ -1405,7 +1404,7 @@ def _verify_launch_readiness(
     )
     if not ok or "UI_DUMP_OK" not in dump_out:
         return False, (
-            f"Check 5 FAIL: uiautomator dump failed — UI is not ready. "
+            f"Check 5 FAIL: uiautomator dump failed - UI is not ready. "
             f"Output: {dump_out[:200]}"
         )
     logger.debug("[LaunchGate] Check 5 PASS: uiautomator dump succeeded")
@@ -1417,11 +1416,11 @@ def _verify_launch_readiness(
         timeout=15,
     )
     if ok and win_out and package_name not in win_out:
-        # Not necessarily fatal — some apps start in the background then bring
+        # Not necessarily fatal - some apps start in the background then bring
         # a window forward; log and continue rather than aborting.
         logger.warning(
             "[LaunchGate] Check 6 WARN: foreground window does not mention %s "
-            "(found: %s) — app may be launching in the background",
+            "(found: %s) - app may be launching in the background",
             package_name, win_out.strip()[:120],
         )
     else:
@@ -1435,13 +1434,13 @@ def _collect_observed_activities(session: "FridaSession") -> List[str]:
     Collect the real set of activity class names observed during the session.
 
     Source of truth (in priority order):
-      1. ``session.reports["agent_memory"]["visited_screens"]`` — the
+      1. ``session.reports["agent_memory"]["visited_screens"]`` - the
          AgenticExplorer's perception layer records the foreground activity
          name on every Observe cycle.  These are real dumpsys values,
          never synthesised.
       2. Any ``category="activity"`` events on the EventBus runtime log
          (set by the perception pipeline's ``update_from_foreground`` call).
-      3. Empty list — explicitly NOT ``[session.package_name]``, which was
+      3. Empty list - explicitly NOT ``[session.package_name]``, which was
          the previous fabricated placeholder.
 
     This function never raises and never invents data: on any parse error
@@ -1497,7 +1496,7 @@ def _collect_observed_activities(session: "FridaSession") -> List[str]:
             f"[Frida] _collect_observed_activities failed gracefully: {exc}"
         )
 
-    # Source 3: empty list — no observed activities, do not fabricate
+    # Source 3: empty list - no observed activities, do not fabricate
     return []
 
 
@@ -1527,7 +1526,7 @@ def calculate_bfci(
     """
     Backwards-compatible wrapper around bfci_scorer.calculate_bfci_v2.
 
-    Returns (bfci_score, component_scores, evidence_list) — same signature
+    Returns (bfci_score, component_scores, evidence_list) - same signature
     as v1 so all call sites are unaffected. detected_sequences is embedded
     in the evidence_list for v1 callers; use calculate_bfci_v2 directly for
     the full 4-tuple return.
@@ -1579,7 +1578,7 @@ def artifact_dir_for(apk_path: str) -> Path:
     except OSError as exc:
         logger.error(
             f"[Frida] Cannot create artifact dir {target} ({type(exc).__name__}: {exc}) "
-            f"— falling back to the APK's own folder"
+            f" - falling back to the APK's own folder"
         )
         return resolved_path.parent
     return target
@@ -1609,7 +1608,7 @@ class FridaSession:
         # _on_message, so a category present in the agent but missing here is
         # silently misfiled rather than dropped.
         #
-        # Only the first six are scored — see bfci_scorer.BFCI_WEIGHTS. The rest
+        # Only the first six are scored - see bfci_scorer.BFCI_WEIGHTS. The rest
         # are collected as evidence and contribute nothing to BFCI, which is what
         # keeps ordinary application behaviour out of the fraud score.
         self.collected_events: Dict[str, List[Dict]] = {
@@ -1651,7 +1650,7 @@ class FridaSession:
         # component name is used in 'settings put secure enabled_accessibility_services'.
         self.accessibility_service_class: Optional[str] = None
         # True when the package was still alive after `am force-stop` at the end
-        # of the session — a persistence signal (watchdog service, restart
+        # of the session - a persistence signal (watchdog service, restart
         # receiver), surfaced in the result rather than swallowed.
         self.survived_force_stop: bool = False
         # True when lifecycle screenshots were taken while another package owned
@@ -1749,8 +1748,8 @@ class FridaSession:
                 tracker.event_counters.received += 1
 
                 # Hook telemetry. This previously imported
-                # app.routes.runtime_api — from sudarshan_core UP into the
-                # backend — inside a bare `except: pass`. The analysis engine
+                # app.routes.runtime_api - from sudarshan_core UP into the
+                # backend - inside a bare `except: pass`. The analysis engine
                 # has no such package, so on the primary (delegated) path every
                 # one of these raised and was swallowed, and the hook counters
                 # the dashboard reads stayed at zero while instrumentation was
@@ -1826,7 +1825,7 @@ class FridaSession:
 
 
             elif msg_type == "hook_error":
-                err = f"Hook failed: {payload.get('hook')} — {payload.get('error')}"
+                err = f"Hook failed: {payload.get('hook')} - {payload.get('error')}"
                 self.hook_errors.append(err)
                 logger.warning(f"[Frida] {err}")
                 self.hook_error_counts[payload.get('hook', '?')] = (
@@ -1836,7 +1835,7 @@ class FridaSession:
             elif msg_type == "ready":
                 hooks_count = payload.get("hooks_installed", 0)
                 logger.info(
-                    f"[Frida] {payload.get('message')} — "
+                    f"[Frida] {payload.get('message')} - "
                     f"{hooks_count} hooks installed, "
                     f"{payload.get('hook_errors', 0)} errors"
                 )
@@ -1861,7 +1860,7 @@ class FridaSession:
                 logger.error(f"[Frida] {err}")
 
         elif message.get("type") == "error":
-            # Frida's own runtime envelope — a hook body that threw.
+            # Frida's own runtime envelope - a hook body that threw.
             err = f"Script error: {message.get('description')}"
             self.hook_errors.append(err)
             logger.error(f"[Frida] {err}")
@@ -1897,7 +1896,7 @@ class FridaSession:
             if pkg == self.package_name:
                 return True
             logger.warning(
-                "[Frida] Foreground is %r (want %s) — bringing target forward "
+                "[Frida] Foreground is %r (want %s) - bringing target forward "
                 "(attempt %d/%d)",
                 pkg or "unknown",
                 self.package_name,
@@ -1913,7 +1912,7 @@ class FridaSession:
 
         Polls mCurrentFocus and requires two consecutive identical samples
         while the target package owns the foreground window.
-        Returns True if the UI was seen to settle. Never raises — a settling
+        Returns True if the UI was seen to settle. Never raises - a settling
         wait that can fail the run would be worse than the crash it prevents.
         """
         deadline = time.monotonic() + timeout
@@ -1949,7 +1948,7 @@ class FridaSession:
             time.sleep(APP_SETTLE_POLL_SECONDS)
 
         logger.warning(
-            "[Frida] App did not settle within %.1fs — continuing anyway.", timeout
+            "[Frida] App did not settle within %.1fs - continuing anyway.", timeout
         )
         return False
 
@@ -1987,7 +1986,7 @@ class FridaSession:
         except Exception as exc:
             logger.warning(
                 f"[Frida] Lifecycle screenshot '{label}' failed "
-                f"({type(exc).__name__}: {exc}) — continuing."
+                f"({type(exc).__name__}: {exc}) - continuing."
             )
 
     def _close_app(self) -> None:
@@ -1999,7 +1998,7 @@ class FridaSession:
         services and alarms alive) into the NEXT sample's analysis. Any
         behaviour it produced then was attributed to the wrong APK.
 
-        Best-effort — a sample that resists force-stop is itself worth noting,
+        Best-effort - a sample that resists force-stop is itself worth noting,
         but it must not fail the run.
         """
         import shlex as _shlex
@@ -2017,7 +2016,7 @@ class FridaSession:
         time.sleep(1.0)
         if self._resolve_pid() is not None:
             logger.warning(
-                f"[Frida] {self.package_name} still running after force-stop — "
+                f"[Frida] {self.package_name} still running after force-stop - "
                 f"possible persistence mechanism (watchdog service / restart receiver)."
             )
             self.survived_force_stop = True
@@ -2123,7 +2122,7 @@ class FridaSession:
                                     device = frida.get_device_manager().add_remote_device(
                                         f"{frida_host}:{f_port}"
                                     )
-                                    # add_remote_device is lazy — it can return a
+                                    # add_remote_device is lazy - it can return a
                                     # device object that fails on first real use.
                                     # Force a round trip so a dead endpoint is
                                     # rejected here rather than at attach time.
@@ -2191,7 +2190,7 @@ class FridaSession:
             #
             # If the process appears and then disappears (crash), the stability
             # monitor returns False immediately and we run crash diagnostics and
-            # abort — Frida is NEVER attached to a dying process.
+            # abort - Frida is NEVER attached to a dying process.
             #
             # Step 1: am start -W with manifest-declared launcher activity
             # Step 2: resolved LAUNCHER activity via cmd package resolve-activity
@@ -2248,7 +2247,7 @@ class FridaSession:
 
                 # Process crashed or never appeared.
                 logger.error(
-                    "[Frida] Launch step '%s' failed: %s — collecting crash diagnostics",
+                    "[Frida] Launch step '%s' failed: %s - collecting crash diagnostics",
                     step_label, reason,
                 )
                 self._last_launch_reason = reason  # type: ignore[attr-defined]
@@ -2276,7 +2275,7 @@ class FridaSession:
                     )
                 else:
                     logger.warning(
-                        "[Frida] Launch step '%s' did not start process (not a crash) — "
+                        "[Frida] Launch step '%s' did not start process (not a crash) - "
                         "trying next launch strategy",
                         step_label,
                     )
@@ -2286,7 +2285,7 @@ class FridaSession:
             launched = False
             _crash_on_step: Optional[str] = None
 
-            # Step 1 — manifest-declared launcher activity (am start -W)
+            # Step 1 - manifest-declared launcher activity (am start -W)
             if self.main_activity:
                 component = _format_activity_component(
                     self.package_name, self.main_activity,
@@ -2303,7 +2302,7 @@ class FridaSession:
                 elif self.crash_report is not None:
                     _crash_on_step = "step1_am_start_main_activity"
 
-            # Step 1b — MAIN + LAUNCHER implicit intent (PackageManager resolver)
+            # Step 1b - MAIN + LAUNCHER implicit intent (PackageManager resolver)
             if not launched and _crash_on_step is None:
                 logger.info(
                     "[Frida] Launch step 1b: MAIN/LAUNCHER intent for %s",
@@ -2319,7 +2318,7 @@ class FridaSession:
                 elif self.crash_report is not None:
                     _crash_on_step = "step1b_main_launcher_intent"
 
-            # Step 2 — resolved LAUNCHER activity via cmd package resolve-activity
+            # Step 2 - resolved LAUNCHER activity via cmd package resolve-activity
             # Never falls back to Monkey. Uses the platform resolver directly.
             if not launched and _crash_on_step is None:
                 logger.info(
@@ -2344,7 +2343,7 @@ class FridaSession:
                         "(expected for packed droppers)"
                     )
 
-            # Step 3 — enumerate all exported activities from manifest/pm dump
+            # Step 3 - enumerate all exported activities from manifest/pm dump
             if not launched and _crash_on_step is None:
                 logger.info(
                     "[Frida] Launch step 3: trying all exported activities for %s",
@@ -2398,7 +2397,7 @@ class FridaSession:
                         _crash_on_step = f"step3_exported_activity:{act}"
                         break
 
-            # Step 4 — BOOT_COMPLETED + PACKAGE_ADDED broadcasts
+            # Step 4 - BOOT_COMPLETED + PACKAGE_ADDED broadcasts
             if not launched and _crash_on_step is None:
                 logger.info(
                     "[Frida] Launch step 4: simulating boot/install broadcasts for %s",
@@ -2423,7 +2422,7 @@ class FridaSession:
                 elif self.crash_report is not None:
                     _crash_on_step = "step4_boot_broadcast"
 
-            # Step 5 — deep link via URI scheme declared in manifest
+            # Step 5 - deep link via URI scheme declared in manifest
             if not launched and _crash_on_step is None:
                 logger.info(
                     "[Frida] Launch step 5: attempting URI scheme deep link for %s",
@@ -2465,7 +2464,7 @@ class FridaSession:
                     elif self.crash_report is not None:
                         _crash_on_step = f"step5_deep_link:{uri_scheme}"
 
-            # Step 6 — force-stop then retry resolved launcher (cold start)
+            # Step 6 - force-stop then retry resolved launcher (cold start)
             if not launched and _crash_on_step is None:
                 logger.info(
                     "[Frida] Launch step 6: force-stop + resolved launcher for %s",
@@ -2493,7 +2492,7 @@ class FridaSession:
                 elif self.crash_report is not None:
                     _crash_on_step = "step6_force_stop_retry"
 
-            # Step 7 — Monkey launcher
+            # Step 7 - Monkey launcher
             if not launched and _crash_on_step is None:
                 logger.info(
                     "[Frida] Launch step 7: monkey LAUNCHER for %s",
@@ -2516,7 +2515,7 @@ class FridaSession:
                     # crash_report already populated and written to disk.
                     self.launch_method_used = "failed"
                     logger.error(
-                        "[Frida] Application crashed during %s — "
+                        "[Frida] Application crashed during %s - "
                         "NOT attaching Frida. See crash_report.json for details.",
                         _crash_on_step,
                     )
@@ -2542,7 +2541,7 @@ class FridaSession:
 
             # ── Pre-Frida Readiness Gate ──────────────────────────────────────
             # Six checks that confirm the app is genuinely ready for attachment.
-            # If any check fails we stop here — never attach to a dying process.
+            # If any check fails we stop here - never attach to a dying process.
             _art_dir_gate = getattr(self, "artifact_dir", Path("."))
             gate_ok, gate_reason = _verify_launch_readiness(
                 self.device_serial,
@@ -2555,7 +2554,7 @@ class FridaSession:
                 self.launch_method_used = "failed"
                 self.last_error = f"READINESS_GATE_FAIL: {gate_reason}"
                 logger.error("[Frida] %s", self.last_error)
-                # Collect crash diagnostics — the gate may have caught a crash
+                # Collect crash diagnostics - the gate may have caught a crash
                 # that the stability monitor missed (race between stable check
                 # and readiness check).
                 if self.crash_report is None:
@@ -2594,14 +2593,14 @@ class FridaSession:
             # At this point:
             #   * _poll_pid_until_stable() confirmed PID was alive for ≥5 s
             #   * _verify_launch_readiness() confirmed all 6 checks passed
-            # We attach by the stable PID — no polling retry needed.
+            # We attach by the stable PID - no polling retry needed.
             self.launch_timeline["frida_attach"] = time.monotonic()
             self.dae.transition(DAEStage.ATTACH_FRIDA, "attaching to stable PID")
 
             self._session = None
             for attempt in range(ATTACH_MAX_ATTEMPTS):
                 # Use the stable PID first; fall back to a fresh pidof only if
-                # the session attach raises (rare — the process is verified alive).
+                # the session attach raises (rare - the process is verified alive).
                 pid = self._stable_pid or self._resolve_pid()
                 try:
                     if pid:
@@ -2611,7 +2610,7 @@ class FridaSession:
                             self.package_name, pid, attempt + 1,
                         )
                         break
-                    # No PID — should not happen after gate passed; try by name
+                    # No PID - should not happen after gate passed; try by name
                     # as a last resort (rare frida enumeration quirk).
                     self._session = device.attach(self.package_name)
                     logger.info(
@@ -2621,7 +2620,7 @@ class FridaSession:
                     break
                 except frida.ProcessNotFoundError:
                     logger.warning(
-                        "[Frida] %s not found at attempt %d/%d — "
+                        "[Frida] %s not found at attempt %d/%d - "
                         "process may have crashed after readiness gate",
                         self.package_name, attempt + 1, ATTACH_MAX_ATTEMPTS,
                     )
@@ -2652,7 +2651,7 @@ class FridaSession:
                     hint = ""
                     if "Enforcing" in (enforce or ""):
                         hint = (" SELinux is Enforcing, which blocks Frida from attaching "
-                                "even as root — run 'adb shell setenforce 0'.")
+                                "even as root - run 'adb shell setenforce 0'.")
                     elif running:
                         hint = (f" The process IS running (pid={running}) but could not be "
                                 "attached, so this is an injection/permission problem, "
@@ -2704,7 +2703,7 @@ class FridaSession:
 
 
             # ══════════════════════════════════════════════════════════════════
-            # PHASE 2 of 3 — ANALYSE
+            # PHASE 2 of 3 - ANALYSE
             #
             # The session runs as three explicit phases:
             #
@@ -2734,7 +2733,7 @@ class FridaSession:
             explorer = None
             explorer_thread = None
 
-            # ── Agentic Explorer (primary) — falls back to UIExplorer on error ──
+            # ── Agentic Explorer (primary) - falls back to UIExplorer on error ──
             try:
                 from sudarshan_core.engines.agentic_explorer import AgenticExplorer
                 explorer = AgenticExplorer(
@@ -2757,7 +2756,7 @@ class FridaSession:
                 # explorer rather than abandoning exploration entirely.
                 logger.error(
                     f"[Frida] AgenticExplorer unavailable "
-                    f"({type(exc).__name__}: {exc}) — attempting rollback",
+                    f"({type(exc).__name__}: {exc}) - attempting rollback",
                     exc_info=True,
                 )
                 if UIExplorer is not None:
@@ -2802,7 +2801,7 @@ class FridaSession:
                             f"[Frida] Explorer thread crashed: {self.explorer_error}",
                             exc_info=True,
                         )
-                        # Nothing further can be explored — release the main
+                        # Nothing further can be explored - release the main
                         # wait immediately instead of idling for the rest of
                         # the window.
                         self._stop_event.set()
@@ -2828,7 +2827,7 @@ class FridaSession:
             if explorer_thread is not None and explorer_thread.is_alive():
                 # Ask the explorer to wind down BEFORE waiting on it. Without
                 # this the thread runs to its own deadline while we block, and
-                # artifacts get flushed mid-iteration — the goal summary and
+                # artifacts get flushed mid-iteration - the goal summary and
                 # benchmark counters are written before the explorer computes
                 # them, reporting goals_completed=0 for a run that did progress.
                 if explorer is not None and hasattr(explorer, "stop"):
@@ -2838,7 +2837,7 @@ class FridaSession:
                     logger.warning(
                         f"[Frida] Explorer did not finish within "
                         f"{EXPLORER_JOIN_GRACE_SECONDS}s of being asked to stop "
-                        f"— artifacts may be incomplete"
+                        f" - artifacts may be incomplete"
                     )
 
             # ── CLOSE: final screen, then stop the app ────────────────────────
@@ -2868,7 +2867,7 @@ class FridaSession:
                     if ui_xml:
                         self.last_ui_hierarchy_xml = ui_xml
                     # Flush agentic-only artifacts (audit_log.json, benchmark.json)
-                    # UIExplorer does not have flush_artifacts() — guarded by hasattr.
+                    # UIExplorer does not have flush_artifacts() - guarded by hasattr.
                     if hasattr(explorer, 'flush_artifacts'):
                         explorer.flush_artifacts(self.artifact_dir)
                 except Exception as exc:
@@ -2981,7 +2980,7 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
     # There is exactly ONE emulator and it was taken with no lock, while the
     # engine allows MAX_CONCURRENT_ANALYSES=2. Two dynamic runs could therefore
     # interleave `adb install`, `am start`, `pidof` and Frida attach against the
-    # same device — and _adb_install_apk performs an `adb uninstall` on the
+    # same device - and _adb_install_apk performs an `adb uninstall` on the
     # signature-mismatch path, which could uninstall the package another run was
     # actively instrumenting. That is a correctness hazard, not a throughput
     # limit: whichever run lost the race reported behaviour that never happened.
@@ -3015,7 +3014,7 @@ def _build_root_cause_analysis(
             "is_launch_logic": False,
             "is_manifest": False,
             "is_instrumentation": False,
-            "fix_applied": "Session completed successfully — no crash detected.",
+            "fix_applied": "Session completed successfully - no crash detected.",
         }
 
     why = None
@@ -3078,7 +3077,7 @@ async def _run_device_session(
     # Without this, frida-server runs happily and every attach still fails with
     #     PermissionDeniedError: unable to access process with pid <pid>
     # because SELinux (Enforcing by default on Android 15+) denies the ptrace
-    # that injection requires — even for uid 0. The old code only checked that
+    # that injection requires - even for uid 0. The old code only checked that
     # frida-server was alive, so the failure surfaced as the misleading
     # "Ensure frida-server is running on emulator", which it was.
     #
@@ -3092,7 +3091,7 @@ async def _run_device_session(
     )
     if "Enforcing" in (enforce or ""):
         logger.warning(
-            "[Frida] SELinux is Enforcing — Frida cannot attach to app processes. "
+            "[Frida] SELinux is Enforcing - Frida cannot attach to app processes. "
             "Setting the sandbox emulator to Permissive."
         )
         await loop.run_in_executor(
@@ -3161,7 +3160,7 @@ async def _run_device_session(
         None, _verify_package_installed, device_serial, package_name
     ):
         logger.warning(
-            "[Frida] Install reported success but pm path missing — reinstalling once"
+            "[Frida] Install reported success but pm path missing - reinstalling once"
         )
         session.dae.metrics["launch_retries"] = (
             int(session.dae.metrics.get("launch_retries", 0)) + 1
@@ -3283,7 +3282,7 @@ async def _run_device_session(
     if YARAScanner is not None:
         # YARA rules directory.
         #
-        # This was Path("yara_rules") — RELATIVE, so it resolved against the
+        # This was Path("yara_rules") - RELATIVE, so it resolved against the
         # process working directory, which differs between the gateway and the
         # analysis engine. No directory of that name exists anywhere in the
         # repository, so the scanner had nothing to load and YARA scanning was
@@ -3301,7 +3300,7 @@ async def _run_device_session(
         else:
             session.yara_scanner = None
             logger.warning(
-                f"[Frida] YARA scanning DISABLED — no .yar/.yara rules found in "
+                f"[Frida] YARA scanning DISABLED - no .yar/.yara rules found in "
                 f"{rules_dir}. Set SUDARSHAN_YARA_RULES_DIR to enable it."
             )
 
@@ -3349,7 +3348,7 @@ async def _run_device_session(
         logger.error(
             "[Frida] NO Java hooks installed (%d native only; bridge: %s). "
             "Accessibility, SMS, overlay and banking hooks could never fire, so "
-            "this run is INSTRUMENTATION_FAILED, not 'no behaviour observed' — "
+            "this run is INSTRUMENTATION_FAILED, not 'no behaviour observed' - "
             "the sample is not being credited with doing nothing.",
             session.native_hooks_installed,
             session.java_bridge_source or "unknown",
@@ -3362,7 +3361,7 @@ async def _run_device_session(
     # ── Step 6: Build structured result ───────────────────────────────────────
     # Flatten API calls for risk_engine.py compatibility
     # Flattened view of every hook that fired. This is a REPORTING surface, not a
-    # scoring one — risk_engine only consumes it on the MobSF path, and
+    # scoring one - risk_engine only consumes it on the MobSF path, and
     # _dynamic_run_was_conclusive counts it to decide whether the sandbox saw
     # anything at all. It therefore spans scored AND unscored categories: an event
     # that is excluded from BFCI (a device-identity read, say) is still real
@@ -3398,7 +3397,7 @@ async def _run_device_session(
         "package_name": package_name,
         "device": device_serial,
 
-        # Exploration provenance — additive fields so a reviewer can tell which
+        # Exploration provenance - additive fields so a reviewer can tell which
         # explorer produced this evidence, and whether it crashed part-way.
         # Deliberately NOT consumed by risk_engine: provenance never scores.
         "explorer_used":       session.explorer_used,
@@ -3411,11 +3410,11 @@ async def _run_device_session(
         "launch_method_used":  session.launch_method_used,
         "foreground_mismatch": session.foreground_mismatch,
 
-        # Launch diagnostics (Requirement 6) — timestamps for all 10 milestones.
+        # Launch diagnostics (Requirement 6) - timestamps for all 10 milestones.
         # Offsets are seconds since apk_install (None = milestone not reached).
         "launch_timeline": _timeline_to_seconds(session.launch_timeline),
 
-        # Crash report (Requirement 7) — None when app launched successfully.
+        # Crash report (Requirement 7) - None when app launched successfully.
         "crash_report": session.crash_report.to_dict() if session.crash_report else None,
 
         # Root cause analysis (Requirement 10)
@@ -3431,8 +3430,8 @@ async def _run_device_session(
         "api_calls": list(set(api_calls))[:30],
         "network_logs": network_logs[:20],
         "files_accessed": list(set(files_accessed))[:20],
-        # Screenshots WERE being captured — the ScreenshotManager subscribes to
-        # the event bus and fires on CRITICAL/overlay/anti_analysis events — but
+        # Screenshots WERE being captured - the ScreenshotManager subscribes to
+        # the event bus and fires on CRITICAL/overlay/anti_analysis events - but
         # this field was hardcoded to [] with a "not implemented" comment, so
         # every captured image was invisible to the API, the report and the
         # analyst. The manifest is now surfaced here and flushed to disk below.
@@ -3446,8 +3445,7 @@ async def _run_device_session(
         "survived_force_stop": session.survived_force_stop,
         # Real activities observed during the session, derived from the
         # agentic explorer's visited-screen memory. If no explorer ran, or
-        # if the memory contains no activity data, this is an empty list —
-        # never [package_name], which was a fabricated placeholder that
+        # if the memory contains no activity data, this is an empty list - # never [package_name], which was a fabricated placeholder that
         # incorrectly counted toward _dynamic_run_was_conclusive.
         "activities_triggered": _collect_observed_activities(session),
 

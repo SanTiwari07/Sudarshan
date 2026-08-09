@@ -1,12 +1,12 @@
 """
-SUDARSHAN — Structured Evidence Store
+SUDARSHAN - Structured Evidence Store
 ======================================
 Subscribes to the RuntimeEventBus and builds rich, structured
 EvidenceRecord objects from every Frida hook event.
 
 Each record captures:
   - finding_id   : sequential EVID-NNN identifier for report cross-referencing
-  - timestamp_ms : Unix milliseconds (from Frida) — used by the report renderer
+  - timestamp_ms : Unix milliseconds (from Frida) - used by the report renderer
   - api, class_name, method, args, return_value
   - severity (LOW / MED / HIGH / CRITICAL)
   - mitre_technique_id / mitre_technique_name / mitre_tactic
@@ -16,7 +16,7 @@ Each record captures:
   - human_description : plain-English event summary for the report timeline
 
 Design rules:
-  - Pure subscriber — no side effects outside this module
+  - Pure subscriber - no side effects outside this module
   - BFCI scoring logic is never touched
   - flush() is idempotent and thread-safe
   - Every public method is unit-testable with mock events
@@ -45,7 +45,7 @@ from sudarshan_core.engines.event_bus import RuntimeEventBus
 import logging
 logger = logging.getLogger(__name__)
 
-# ─── MITRE lookup (mirrors mitre_mapper.py — duplicated here so evidence_store
+# ─── MITRE lookup (mirrors mitre_mapper.py - duplicated here so evidence_store
 # ─── has zero runtime dependency on mitre_mapper and is fully self-contained) ──
 
 HOOK_TO_MITRE: dict = {
@@ -92,20 +92,20 @@ class EvidenceRecord:
     ------------------------
     The following fields are consumed by report_generator.py's dynamic timeline:
 
-      finding_id          — EVID-NNN cross-reference label
-      timestamp_ms        — Unix ms integer (used for display timestamp)
-      api                 — Hook name shown in timeline header
-      description         — Human-readable event description
-      human_description   — Alias for description (renderer checks both)
-      severity            — LOW / MED / HIGH / CRITICAL
-      mitre_technique_id  — e.g. "T1417.001" (used for MITRE column)
-      screenshot_ref      — relative path to linked screenshot PNG
+      finding_id - EVID-NNN cross-reference label
+      timestamp_ms - Unix ms integer (used for display timestamp)
+      api - Hook name shown in timeline header
+      description - Human-readable event description
+      human_description - Alias for description (renderer checks both)
+      severity - LOW / MED / HIGH / CRITICAL
+      mitre_technique_id - e.g. "T1417.001" (used for MITRE column)
+      screenshot_ref - relative path to linked screenshot PNG
     """
 
-    id:                   str           # UUID4 — unique per record
+    id:                   str           # UUID4 - unique per record
     finding_id:           str           # EVID-NNN sequential cross-reference
     timestamp:            str           # ISO-8601 UTC
-    timestamp_ms:         int           # Unix milliseconds (from Frida) — used by renderer
+    timestamp_ms:         int           # Unix milliseconds (from Frida) - used by renderer
     category:             str           # accessibility / sms / overlay / ...
     severity:             str           # LOW / MED / HIGH / CRITICAL
     api:                  str           # e.g. "AccessibilityService.onAccessibilityEvent"
@@ -116,7 +116,7 @@ class EvidenceRecord:
     thread_id:            int           # OS thread ID from Frida
     stack_trace:          list          # Up to 6 Java stack frames
     description:          str           # Human-readable hook description
-    human_description:    str           # Alias for description — explicit for renderer
+    human_description:    str           # Alias for description - explicit for renderer
     mitre_technique_id:   str           # e.g. "T1417.001" (empty string if unmapped)
     mitre_technique_name: str           # e.g. "Input Capture: GUI"
     screenshot_ref:       str           # Populated by ScreenshotManager.attach()
@@ -361,7 +361,7 @@ class EvidenceStore:
             if record.severity in ("HIGH", "CRITICAL"):
                 logger.info(
                     f"[EvidenceStore] [{record.severity}] [{record.finding_id}] {record.api} "
-                    f"— {record.description[:80]}"
+                    f" - {record.description[:80]}"
                 )
         except Exception as exc:
             logger.error(f"[EvidenceStore] Failed to build record: {exc}")

@@ -112,7 +112,7 @@ def _extract_declared_permissions(manifest_xml: str, out_dir: str) -> List[str]:
       1. the decoded manifest text, if APKTool produced one
       2. a byte-level scan of the raw AndroidManifest.xml string pool
 
-    Returns a de-duplicated, order-stable list. Never raises — an empty list
+    Returns a de-duplicated, order-stable list. Never raises - an empty list
     means "could not recover", and the caller must NOT substitute a guess.
     """
     found: List[str] = []
@@ -430,7 +430,7 @@ def repair_obfuscated_apk(original_apk_path: str) -> Tuple[bool, str, Dict]:
     # Step 4: Build the repaired manifest.
     #
     # ─────────────────────────────────────────────────────────────────────────
-    # EVIDENTIARY INTEGRITY — read before changing this block.
+    # EVIDENTIARY INTEGRITY - read before changing this block.
     #
     # This manifest previously GRANTED a fixed permission set regardless of what
     # the sample declared:
@@ -441,7 +441,7 @@ def repair_obfuscated_apk(original_apk_path: str) -> Tuple[bool, str, Dict]:
     # Those are precisely the five signals the scoring model weights most
     # heavily (CT axis +40/+35/+25; BFCI accessibility 0.35, sms 0.25, overlay
     # 0.20). The repaired derivative is what gets INSTALLED and DYNAMICALLY
-    # ANALYSED — so a dynamic finding of "SMS interception observed" could be an
+    # ANALYSED - so a dynamic finding of "SMS interception observed" could be an
     # observation of a capability WE added, on an artifact the sample never
     # asked for. Combined with android:debuggable="true" and
     # usesCleartextTraffic="true", the runtime behaviour being measured was not
@@ -457,7 +457,7 @@ def repair_obfuscated_apk(original_apk_path: str) -> Tuple[bool, str, Dict]:
     # INTERNET / ACCESS_NETWORK_STATE are the only additions, and only so the
     # sandbox can observe network behaviour at all. Both are normal-protection
     # permissions granted at install to essentially every app, and NEITHER is
-    # scored by any axis — so adding them cannot move a verdict.
+    # scored by any axis - so adding them cannot move a verdict.
     _SANDBOX_REQUIRED = [
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE",

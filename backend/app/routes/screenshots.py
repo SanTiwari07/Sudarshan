@@ -3,7 +3,7 @@ Serve runtime screenshot PNGs from per-sample artifact directories.
 
 GET /api/v1/screenshots/{sha256}/{filename}
 
-Requires JWT (img tags cannot send Authorization — the dashboard loads these
+Requires JWT (img tags cannot send Authorization - the dashboard loads these
 via fetch + blob URLs). Paths are resolved only under the case's artifact_dir
 with traversal checks.
 """
@@ -262,7 +262,7 @@ def _infer_failure_reason(
         return "Screenshot pipeline failed"
 
     if not artifact_dir:
-        return "Screenshot pipeline failed — artifact directory not found"
+        return "Screenshot pipeline failed - artifact directory not found"
 
     if dyn.get("available") is False and not dyn.get("screenshots"):
         if "instrumentation" in status.lower() or "INSTRUMENTATION" in status:

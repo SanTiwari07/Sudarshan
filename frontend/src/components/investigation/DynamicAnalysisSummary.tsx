@@ -102,7 +102,7 @@ export default function DynamicAnalysisSummary({ data }: { data: FraudCardData }
         {status === 'RUNNING' && (
           <p className="text-xs text-slate-500 flex items-center gap-1">
             <Terminal className="h-3.5 w-3.5" />
-            Sandbox still running — refresh to update runtime evidence.
+            Sandbox still running - refresh to update runtime evidence.
           </p>
         )}
       </div>

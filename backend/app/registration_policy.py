@@ -33,7 +33,7 @@ def public_registration_allowed() -> bool:
         return True
     if norm in _FALSY:
         return False
-    # Unknown value — fail secure in production.
+    # Unknown value - fail secure in production.
     return not is_production_env()
 
 
@@ -45,5 +45,5 @@ def log_registration_policy_at_startup() -> None:
         )
     elif is_production_env() and public_registration_allowed():
         logger.warning(
-            "[Security] SUDARSHAN_ALLOW_REGISTRATION=true — public signup is enabled in production."
+            "[Security] SUDARSHAN_ALLOW_REGISTRATION=true - public signup is enabled in production."
         )

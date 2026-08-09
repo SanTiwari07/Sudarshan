@@ -1,5 +1,5 @@
 """
-SandboxProvider — abstract emulator/device backend.
+SandboxProvider - abstract emulator/device backend.
 
 The Dynamic Analysis Engine talks only to this interface. Concrete
 providers (Genymotion, Android Studio AVD, future Corellium/Waydroid/
@@ -162,7 +162,7 @@ class SandboxProvider(ABC):
 
         if len(devices) > 1:
             logger.warning(
-                "[%s] Multiple devices online %s — selecting first. "
+                "[%s] Multiple devices online %s - selecting first. "
                 "Set DEVICE_SERIAL to pin one.",
                 self.name,
                 [d.serial for d in devices],
@@ -238,7 +238,7 @@ class SandboxProvider(ABC):
         )
         if self.config.root_required:
             raise RootUnavailable(msg, details={"serial": serial, "whoami": who})
-        logger.warning("[%s] %s (ROOT_REQUIRED=false — continuing)", self.name, msg)
+        logger.warning("[%s] %s (ROOT_REQUIRED=false - continuing)", self.name, msg)
 
     def verify_root(self, serial: str) -> bool:
         try:
@@ -253,7 +253,7 @@ class SandboxProvider(ABC):
         mode = (enforce or "unknown").strip()
         if "Enforcing" in mode:
             logger.warning(
-                "[%s] SELinux Enforcing on %s — setting Permissive for Frida attach",
+                "[%s] SELinux Enforcing on %s - setting Permissive for Frida attach",
                 self.name,
                 serial,
             )
@@ -320,7 +320,7 @@ class SandboxProvider(ABC):
         """
         host_version = ""
         try:
-            import frida as _frida  # local import — optional at import time
+            import frida as _frida  # local import - optional at import time
 
             host_version = getattr(_frida, "__version__", "") or ""
         except ImportError:
@@ -349,7 +349,7 @@ class SandboxProvider(ABC):
             raise FridaUnavailable(status.message, details=status.to_dict())
 
         # Attempt restart from known paths
-        logger.info("[%s] frida-server not running on %s — attempting start", self.name, serial)
+        logger.info("[%s] frida-server not running on %s - attempting start", self.name, serial)
         started = False
         for remote in self._frida_remote_paths():
             # Check existence

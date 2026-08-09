@@ -202,7 +202,7 @@ export type FraudCardData = {
   hardcoded_secrets: string[];
   appsec_score?: string | number;
   mobsf_scan_hash?: string;
-  // MobSF enrichment fields (optional — populated only in MobSF mode)
+  // MobSF enrichment fields (optional - populated only in MobSF mode)
   providers?: string[];
   exported_activities?: string[];
   exported_services?: string[];

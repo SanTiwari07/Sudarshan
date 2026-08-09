@@ -1,4 +1,4 @@
-# BOI Hackathon — Demo login credentials
+# BOI Hackathon - Demo login credentials
 
 Set these in your **local `.env`** (never commit `.env`). Restart the backend after changes.
 

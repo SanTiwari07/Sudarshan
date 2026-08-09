@@ -39,21 +39,21 @@ export default function ScreenshotDiagnosticsCard({
   const reason =
     runtime?.failureReason || inferFailureReasonFromCase(data, captured) || 'Screenshots unavailable';
 
-  const expected = runtime?.expected ?? '—';
+  const expected = runtime?.expected ?? '-';
   const reported = runtime?.reportedCaptured ?? runtime?.captured ?? 0;
   const interval =
-    runtime?.captureIntervalSeconds != null ? `${runtime.captureIntervalSeconds}s` : '—';
+    runtime?.captureIntervalSeconds != null ? `${runtime.captureIntervalSeconds}s` : '-';
   const duration =
     runtime?.dynamicDurationSeconds != null
       ? `${Math.round(runtime.dynamicDurationSeconds)}s`
       : (data.dynamic_analysis as { duration_seconds?: number } | undefined)?.duration_seconds != null
         ? `${Math.round(Number((data.dynamic_analysis as { duration_seconds?: number }).duration_seconds))}s`
-        : '—';
+        : '-';
   const lastCapture = runtime?.lastCaptureTimestampMs
     ? formatScreenshotTime(runtime.lastCaptureTimestampMs)
     : runtime?.lastCaptureIso
       ? new Date(runtime.lastCaptureIso).toLocaleTimeString()
-      : '—';
+      : '-';
 
   return (
     <div

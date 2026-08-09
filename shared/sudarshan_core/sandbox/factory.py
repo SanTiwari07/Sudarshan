@@ -72,7 +72,7 @@ def get_sandbox_provider(
         cls = _PROVIDERS.get(cfg.provider)
         if cls is None:
             logger.warning(
-                "Unknown SANDBOX_PROVIDER=%r — falling back to genymotion. "
+                "Unknown SANDBOX_PROVIDER=%r - falling back to genymotion. "
                 "Known: %s",
                 cfg.provider,
                 sorted(set(_PROVIDERS)),

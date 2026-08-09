@@ -1,4 +1,4 @@
-# 05 — AI Investigation Engine & RAG Specification
+# 05 - AI Investigation Engine & RAG Specification
 
 ```yaml
 Module Title:        AI Investigation Engine & RAG Core

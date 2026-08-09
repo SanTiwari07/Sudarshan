@@ -6,15 +6,15 @@ Implements the full Fraud Risk Score (FRS) formula from the Sudarshan proposal:
 
   FRS = 0.25 × STEI + 0.35 × Dynamic + 0.20 × Correlation + 0.20 × BankingImpact
 
-STEI — 5-axis formula (PDF spec):
+STEI - 5-axis formula (PDF spec):
   STEI = 0.60 × CT  +  0.20 × BT  +  0.10 × PR  +  0.05 × OB  +  0.05 × IR
 
   Where:
-    CT  — Credential Theft axis       (accessibility + SMS + overlay signals)
-    BT  — Banking Targeting axis      (Indian bank package matches)
-    PR  — Permission Risk axis        (dangerous permission set size)
-    OB  — Obfuscation axis            (DexClassLoader + reflection + entropy)
-    IR  — Infrastructure Risk axis    (hardcoded URLs / IPs)
+    CT - Credential Theft axis       (accessibility + SMS + overlay signals)
+    BT - Banking Targeting axis      (Indian bank package matches)
+    PR - Permission Risk axis        (dangerous permission set size)
+    OB - Obfuscation axis            (DexClassLoader + reflection + entropy)
+    IR - Infrastructure Risk axis    (hardcoded URLs / IPs)
 
 All components are normalized to 0–100 before applying weights.
 Final score is capped at 100.
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 # ─── Malware Family Severity Weights ─────────────────────────────────────────
 
 FAMILY_BANKING_WEIGHT: Dict[str, float] = {
-    "Drinik":    1.0,   # Primary Indian banking trojan — full weight
+    "Drinik":    1.0,   # Primary Indian banking trojan - full weight
     "Xenomorph": 1.0,   # ATS-enabled, 400+ bank targets
     "Cerberus":  1.0,   # Full overlay + RAT
     "Anubis":    0.9,
@@ -41,7 +41,7 @@ FAMILY_BANKING_WEIGHT: Dict[str, float] = {
     "Unknown":   0.5,
 }
 
-# ─── STEI — 5-Axis Formula (PDF Spec) ────────────────────────────────────────
+# ─── STEI - 5-Axis Formula (PDF Spec) ────────────────────────────────────────
 
 def _axis_ct(flags: Dict[str, Any]) -> Tuple[float, List[str]]:
     """
@@ -52,17 +52,17 @@ def _axis_ct(flags: Dict[str, Any]) -> Tuple[float, List[str]]:
     evidence: List[str] = []
     score = 0.0
 
-    # Accessibility service — OTP tap injection and screen scraping
+    # Accessibility service - OTP tap injection and screen scraping
     if flags.get("has_accessibility_abuse"):
         score += 40.0
         evidence.append("BIND_ACCESSIBILITY_SERVICE: screen-scraping / tap-injection vector (+40 CT)")
 
-    # SMS interception — OTP theft
+    # SMS interception - OTP theft
     if flags.get("has_sms_read_write"):
         score += 35.0
         evidence.append("READ/RECEIVE_SMS: OTP interception via SMS (+35 CT)")
 
-    # Overlay windows — fake login phishing
+    # Overlay windows - fake login phishing
     if flags.get("has_system_alert_window"):
         score += 25.0
         evidence.append("SYSTEM_ALERT_WINDOW: phishing overlay capability (+25 CT)")
@@ -173,7 +173,7 @@ def _axis_ob(flags: Dict[str, Any]) -> Tuple[float, List[str]]:
         score += e_contrib
         evidence.append(f"String entropy {entropy:.2f} → obfuscated strings (+{e_contrib:.1f} OB)")
 
-    # Concealed payload — a nested APK/DEX or encrypted blob shipped as an asset.
+    # Concealed payload - a nested APK/DEX or encrypted blob shipped as an asset.
     # Weighted highest in this axis because it defeats static analysis outright:
     # the manifest describes a stub, not the code that will actually run. Three
     # trojans in the labelled corpus (Anubis, Hook, Drinik) declared 4, 1 and 16
@@ -260,7 +260,7 @@ def build_threat_scenario_table(flags: Dict[str, Any]) -> List[Dict[str, Any]]:
             "credential_theft_risk": "High",
             "c2_risk": "Low",
             "persistence_risk": "Medium",
-            "evidence": "BIND_ACCESSIBILITY_SERVICE — enables programmatic tap injection",
+            "evidence": "BIND_ACCESSIBILITY_SERVICE - enables programmatic tap injection",
             "confidence": 85,
         })
 
@@ -272,19 +272,19 @@ def build_threat_scenario_table(flags: Dict[str, Any]) -> List[Dict[str, Any]]:
             "credential_theft_risk": "Critical",
             "c2_risk": "Medium",
             "persistence_risk": "Low",
-            "evidence": "READ_SMS / RECEIVE_SMS — bank OTP messages readable before user sees them",
+            "evidence": "READ_SMS / RECEIVE_SMS - bank OTP messages readable before user sees them",
             "confidence": 95,
         })
 
     if flags.get("has_system_alert_window"):
         rows.append({
             "indicator": "Overlay Window Capability",
-            "threat_scenario": "Phishing Overlay — Fake Banking Login Screen",
+            "threat_scenario": "Phishing Overlay - Fake Banking Login Screen",
             "overlay_risk": "Critical",
             "credential_theft_risk": "High",
             "c2_risk": "Low",
             "persistence_risk": "Medium",
-            "evidence": "SYSTEM_ALERT_WINDOW — draws UI layer over any banking app",
+            "evidence": "SYSTEM_ALERT_WINDOW - draws UI layer over any banking app",
             "confidence": 88,
         })
 
@@ -306,7 +306,7 @@ def build_threat_scenario_table(flags: Dict[str, Any]) -> List[Dict[str, Any]]:
     if "DexClassLoader" in apis or "PathClassLoader" in apis:
         rows.append({
             "indicator": "Dynamic Code Loading",
-            "threat_scenario": "Stage-2 Payload Drop — Evades Static Scanners",
+            "threat_scenario": "Stage-2 Payload Drop - Evades Static Scanners",
             "overlay_risk": "Medium",
             "credential_theft_risk": "High",
             "c2_risk": "High",
@@ -342,12 +342,12 @@ def build_threat_scenario_table(flags: Dict[str, Any]) -> List[Dict[str, Any]]:
     if "System.loadLibrary" in apis:
         rows.append({
             "indicator": "Native Library Loading",
-            "threat_scenario": "Native Code Execution — Bypasses Java Analysis",
+            "threat_scenario": "Native Code Execution - Bypasses Java Analysis",
             "overlay_risk": "Low",
             "credential_theft_risk": "Medium",
             "c2_risk": "Medium",
             "persistence_risk": "High",
-            "evidence": "System.loadLibrary — loads .so native binary at runtime",
+            "evidence": "System.loadLibrary - loads .so native binary at runtime",
             "confidence": 78,
         })
 
@@ -382,12 +382,12 @@ def build_threat_scenario_table(flags: Dict[str, Any]) -> List[Dict[str, Any]]:
 # ─── BFCI Weights (matches Sudarshan proposal) ────────────────────────────────
 
 _BFCI_WEIGHTS = {
-    "accessibility": 0.35,   # wa — present in 87% of banking trojans (ThreatFabric 2024)
-    "sms":           0.25,   # ws — OTP interception
-    "overlay":       0.20,   # wo — phishing overlay attacks
-    "banking":       0.10,   # wb — confirms banking app targeting
-    "network":       0.05,   # wn — C2 communication
-    "persistence":   0.05,   # wp — device admin / lockdown
+    "accessibility": 0.35,   # wa - present in 87% of banking trojans (ThreatFabric 2024)
+    "sms":           0.25,   # ws - OTP interception
+    "overlay":       0.20,   # wo - phishing overlay attacks
+    "banking":       0.10,   # wb - confirms banking app targeting
+    "network":       0.05,   # wn - C2 communication
+    "persistence":   0.05,   # wp - device admin / lockdown
 }
 
 
@@ -409,15 +409,15 @@ def _coerce_score(value: Any, field: str, lo: float = 0.0, hi: float = 100.0) ->
         score = float(value)
     except (TypeError, ValueError):
         if value is not None:
-            logger.warning(f"[RiskEngine] Non-numeric {field}={value!r} — treated as 0.0")
+            logger.warning(f"[RiskEngine] Non-numeric {field}={value!r} - treated as 0.0")
         return 0.0
 
     if not math.isfinite(score):
-        logger.warning(f"[RiskEngine] Non-finite {field}={value!r} — treated as 0.0")
+        logger.warning(f"[RiskEngine] Non-finite {field}={value!r} - treated as 0.0")
         return 0.0
 
     if score < lo or score > hi:
-        logger.warning(f"[RiskEngine] {field}={score} outside [{lo}, {hi}] — clamped")
+        logger.warning(f"[RiskEngine] {field}={score} outside [{lo}, {hi}] - clamped")
         return max(lo, min(score, hi))
     return score
 
@@ -441,7 +441,7 @@ def _calculate_bfci_from_frida(dynamic: Dict) -> Tuple[float, List[str]]:
 
     BFCI = (wa × A) + (ws × S) + (wo × O) + (wb × B) + (wn × N) + (wp × P)
     """
-    # Validate at the boundary — see _coerce_score. The sandbox is the only
+    # Validate at the boundary - see _coerce_score. The sandbox is the only
     # current writer, but the verdict must not depend on that staying true.
     components = _validated_components(dynamic.get("bfci_components", {}))
     raw_evidence = dynamic.get("bfci_evidence", [])
@@ -493,15 +493,15 @@ def _dynamic_run_was_conclusive(dynamic: Optional[Dict]) -> bool:
     # Two defects lived here, and together they made evasion pay:
     #
     #   1. `evidence` was counted. That field carries harness commentary
-    #      ("process started"), not sample behaviour — so a trojan that
+    #      ("process started"), not sample behaviour - so a trojan that
     #      detected Frida and deliberately did nothing still produced one
     #      "observed" item and was rated CONCLUSIVE.
     #   2. The threshold was `>= 1`, while _MIN_DYNAMIC_EVENTS (=3) sat
     #      directly above this function, unused. The declared policy and the
     #      implemented policy disagreed.
     #
-    # Consequence: a dormant sample took the dynamic axis — the LARGEST weight
-    # at 0.35 — at a near-zero value, diluting strong static evidence. Measured
+    # Consequence: a dormant sample took the dynamic axis - the LARGEST weight
+    # at 0.35 - at a near-zero value, diluting strong static evidence. Measured
     # on the regression fixture, a trojan scoring 42.22 static-only dropped to
     # 23.75 after a sandbox run that observed nothing. The better a sample's
     # evasion, the safer this engine rated it, which is precisely the regression
@@ -541,7 +541,7 @@ def _calculate_dynamic_score(dynamic: Optional[Dict]) -> Tuple[float, List[str]]
     - If not available: returns 0 (static-only mode, STEI weight is redistributed)
     """
     if not dynamic or not dynamic.get("available"):
-        return 0.0, ["Dynamic analysis not available — using static-only mode"]
+        return 0.0, ["Dynamic analysis not available - using static-only mode"]
 
     engine = dynamic.get("engine", "mobsf")
 
@@ -558,17 +558,17 @@ def _calculate_dynamic_score(dynamic: Optional[Dict]) -> Tuple[float, List[str]]
     # Accessibility (wa = 0.35 → maps to +35 at full confidence)
     if "accessibilityservice" in api_calls_str.lower():
         score += 35.0
-        evidence.append("Runtime Accessibility abuse confirmed — MobSF (BFCI component A, wa=0.35, +35)")
+        evidence.append("Runtime Accessibility abuse confirmed - MobSF (BFCI component A, wa=0.35, +35)")
 
     # SMS interception (ws = 0.25 → +25)
     if "readtext" in api_calls_str.lower() or "sms" in api_calls_str.lower():
         score += 25.0
-        evidence.append("Runtime SMS/OTP interception confirmed — MobSF (BFCI component S, ws=0.25, +25)")
+        evidence.append("Runtime SMS/OTP interception confirmed - MobSF (BFCI component S, ws=0.25, +25)")
 
     # Overlay (wo = 0.20 → +20)
     if "windowmanager" in api_calls_str.lower() or "overlay" in api_calls_str.lower():
         score += 20.0
-        evidence.append("Runtime overlay window confirmed — MobSF (BFCI component O, wo=0.20, +20)")
+        evidence.append("Runtime overlay window confirmed - MobSF (BFCI component O, wo=0.20, +20)")
 
     # Network C2 (wn = 0.05 → up to +5)
     network_logs = dynamic.get("network_logs", [])
@@ -590,11 +590,11 @@ def _calculate_dynamic_score(dynamic: Optional[Dict]) -> Tuple[float, List[str]]
             f"(BFCI component P, wp=0.05, +{min(len(suspicious_paths), 5):.0f})"
         )
 
-    # Screenshots — not in BFCI formula, added as bonus
+    # Screenshots - not in BFCI formula, added as bonus
     screenshots = dynamic.get("screenshots", [])
     if screenshots:
         score += 10.0
-        evidence.append(f"Screen capture observed — {len(screenshots)} screenshot(s) (+10 bonus)")
+        evidence.append(f"Screen capture observed - {len(screenshots)} screenshot(s) (+10 bonus)")
 
     return min(round(score, 2), 100.0), evidence
 
@@ -647,12 +647,12 @@ def _calculate_banking_impact(
         evidence.append(f"Malware family {family} (severity weight {family_weight}) (+{family_score:.0f})")
     else:
         score += 20.0  # Unknown but flagged
-        evidence.append("Unknown family — moderate banking impact assumed (+20)")
+        evidence.append("Unknown family - moderate banking impact assumed (+20)")
 
-    # Regulatory risk — banks are mandated to act on these
+    # Regulatory risk - banks are mandated to act on these
     if flags.get("has_sms_read_write") and flags.get("targets_indian_banks"):
         score += 20.0
-        evidence.append("RBI MDS-2021 OTP interception violation — regulatory risk (+20)")
+        evidence.append("RBI MDS-2021 OTP interception violation - regulatory risk (+20)")
 
     # Campaign attribution from correlation
     if correlation and correlation.get("campaign"):
@@ -748,13 +748,13 @@ def calculate_risk_score(
     # corpus, Teabot scored 30.8 with correlation forced to 0, versus 41.1
     # when the axis is properly excluded and the remaining weights renormalised.
     #
-    # The author already knew this pattern — the old code redistributed the
-    # dynamic weight — it just was not applied to correlation.
+    # The author already knew this pattern - the old code redistributed the
+    # dynamic weight - it just was not applied to correlation.
     correlation_available = bool(correlation_result and correlation_result.get("available"))
 
     # A sandbox run that observed nothing is INCONCLUSIVE, not clean.
     #
-    # Evasive malware is built to stay dormant under analysis — banking trojans
+    # Evasive malware is built to stay dormant under analysis - banking trojans
     # routinely fingerprint ADB, Frida and emulator properties and suppress
     # behaviour. Scoring "no events captured" as a near-zero dynamic value meant
     # the axis with the LARGEST weight actively diluted strong static evidence,
@@ -764,7 +764,7 @@ def calculate_risk_score(
     # captured 0 API calls and 0 network events, the dynamic axis took 0.437 of
     # the weight at a value of 5.0 and pulled the verdict down to 23.98 "Safe".
     #
-    # This is NOT "dynamic may only ever raise the score" — a run with real
+    # This is NOT "dynamic may only ever raise the score" - a run with real
     # coverage that observes benign behaviour is legitimate evidence and still
     # lowers it. The distinction is whether the sandbox actually observed
     # anything to reason about.
@@ -830,7 +830,7 @@ def calculate_risk_score(
     # permission, 0 services, a nested assets/base.apk) both scored below a file
     # manager for exactly this reason.
     #
-    # This does NOT assert the sample is malicious — the score is left untouched.
+    # This does NOT assert the sample is malicious - the score is left untouched.
     # It refuses to certify as safe something that was never actually analysed,
     # and says so in the evidence. Dynamic analysis, which sees the unpacked
     # payload, is what resolves the ambiguity; if it ran, the score stands on its
@@ -842,7 +842,7 @@ def calculate_risk_score(
         stei_evidence.append(
             "VERDICT FLOORED: payload is concealed and no dynamic analysis was "
             "available, so static analysis could not observe the code that will "
-            "actually run. Not rated Safe — run dynamic analysis to resolve."
+            "actually run. Not rated Safe - run dynamic analysis to resolve."
         )
 
     # ── Confidence ───────────────────────────────────────────────────────────
@@ -879,7 +879,7 @@ def calculate_risk_score(
             "banking_impact": round(banking_score, 2),
             "formula_used": "full_frs" if dynamic_available else "static_only_frs",
             # Which axes actually contributed, and at what renormalised weight.
-            # An excluded axis is one with no data — it is not scored as benign.
+            # An excluded axis is one with no data - it is not scored as benign.
             "axes_used": axes_used,
             "axes_excluded": axes_excluded,
             "concealed_payload": bool(flags_dict.get("has_concealed_payload")),
@@ -920,12 +920,28 @@ def calculate_risk_score(
 
 def _get_recommended_action(band: str, family: str, flags: Dict) -> str:
     """Return primary SOC recommended action based on risk band."""
+    sep = " - "
     if band == "Critical":
         if family != "Unknown":
-            return f"IMMEDIATE BLOCK — {family} confirmed. Isolate all affected devices. Engage IR team. Issue customer advisory per RBI CPG-2022."
-        return "IMMEDIATE BLOCK — Critical behavioral signature. Isolate devices, revoke banking sessions, escalate to CISO."
+            return (
+                f"IMMEDIATE BLOCK{sep}{family} confirmed. Isolate all affected devices. "
+                "Engage IR team. Issue customer advisory per RBI CPG-2022."
+            )
+        return (
+            f"IMMEDIATE BLOCK{sep}Critical behavioral signature. Isolate devices, "
+            "revoke banking sessions, escalate to CISO."
+        )
     if band == "High Risk":
-        return "BLOCK & INVESTIGATE — Do not deploy. Submit to dynamic sandbox. Notify SOC lead. Consider customer advisory."
+        return (
+            f"BLOCK & INVESTIGATE{sep}Do not deploy. Submit to dynamic sandbox. "
+            "Notify SOC lead. Consider customer advisory."
+        )
     if band == "Suspicious":
-        return "QUARANTINE — Further analysis required. Do not approve for enterprise deployment. Monitor network traffic."
-    return "MONITOR — Low risk. Approved for deployment under standard monitoring. Re-scan on next version update."
+        return (
+            f"QUARANTINE{sep}Further analysis required. Do not approve for enterprise "
+            "deployment. Monitor network traffic."
+        )
+    return (
+        f"MONITOR{sep}Low risk. Approved for deployment under standard monitoring. "
+        "Re-scan on next version update."
+    )

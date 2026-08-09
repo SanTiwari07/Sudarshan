@@ -54,7 +54,7 @@ export default function ApplicationInfoCard({ data }: { data: FraudCardData }) {
       </div>
       <div className="px-5 py-3">
         <InfoRow icon={<Box className="h-4 w-4" />} label="Package Name">
-          <span className="font-mono">{data.package_name || '—'}</span>
+          <span className="font-mono">{data.package_name || '-'}</span>
         </InfoRow>
         <InfoRow icon={<Hash className="h-4 w-4" />} label="SHA256" copy={data.sha256}>
           <span className="font-mono">{data.sha256}</span>

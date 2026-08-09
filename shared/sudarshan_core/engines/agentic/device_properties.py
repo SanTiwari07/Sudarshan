@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Device Properties Provider
+SUDARSHAN - Device Properties Provider
 ========================================
 THE single source of truth for physical device characteristics.
 
@@ -10,18 +10,18 @@ Screen dimensions were previously defined in two places that disagreed:
   * ``tool_executor``  read ``SUDARSHAN_SCREEN_WIDTH/HEIGHT`` from the
     environment, defaulting to 1080x1920.
   * ``tool_registry``  hardcoded ``DEFAULT_SCREEN_WIDTH/HEIGHT`` = 1080x1920,
-    and the planner validated LLM coordinates against those constants — with a
+    and the planner validated LLM coordinates against those constants - with a
     comment claiming an environment override that was never implemented there.
 
 On the project's own Pixel_6 AVD (1080x2400) that mismatch rejected EVERY action
-targeting the bottom 480 pixels — 20% of the screen — as ``Step5_OutOfBounds``,
+targeting the bottom 480 pixels - 20% of the screen - as ``Step5_OutOfBounds``,
 burning an LLM retry and then forcing the FallbackPlanner. Setting the
 environment variable could not fix it, because the validator never read it.
 
 Resolution order (first hit wins):
-  1. ``SUDARSHAN_SCREEN_WIDTH`` / ``SUDARSHAN_SCREEN_HEIGHT`` — explicit operator override
-  2. ``adb shell wm size``                                    — the real device
-  3. ``FALLBACK_SCREEN_WIDTH`` / ``FALLBACK_SCREEN_HEIGHT``   — last resort
+  1. ``SUDARSHAN_SCREEN_WIDTH`` / ``SUDARSHAN_SCREEN_HEIGHT`` - explicit operator override
+  2. ``adb shell wm size`` - the real device
+  3. ``FALLBACK_SCREEN_WIDTH`` / ``FALLBACK_SCREEN_HEIGHT`` - last resort
 
 The device is queried at most once per (adb_path, serial) and cached, because
 resolution does not change mid-analysis and ADB round-trips are expensive.
@@ -133,7 +133,7 @@ def get_screen_size(
                 # Accept cached value only if:
                 #   1. It has not expired, AND
                 #   2. It is not the fallback (which may have been cached due to a
-                #      transient ADB failure — re-query to get the real dimensions)
+                #      transient ADB failure - re-query to get the real dimensions)
                 is_fallback = (cached_w == FALLBACK_SCREEN_WIDTH and cached_h == FALLBACK_SCREEN_HEIGHT)
                 if age < _CACHE_TTL_SECONDS and not is_fallback:
                     return (cached_w, cached_h)
@@ -151,7 +151,7 @@ def get_screen_size(
     except Exception as exc:
         logger.warning(
             f"[DeviceProps] Could not query device resolution "
-            f"({type(exc).__name__}: {exc}) — using "
+            f"({type(exc).__name__}: {exc}) - using "
             f"{FALLBACK_SCREEN_WIDTH}x{FALLBACK_SCREEN_HEIGHT}"
         )
 

@@ -12,7 +12,7 @@ class StaticAnalysisFlags(BaseModel):
     hardcoded_urls_ips: List[str] = Field(default_factory=list)
     targets_indian_banks: bool = False
     indian_bank_packages_found: List[str] = Field(default_factory=list)
-    # Obfuscation / reflection signals — used by 5-axis STEI
+    # Obfuscation / reflection signals - used by 5-axis STEI
     obfuscation_score: float = 0.0   # 0.0–1.0 Shannon entropy ratio
     has_reflection: bool = False      # Class.forName / getDeclaredMethod / invoke
 
@@ -57,7 +57,7 @@ class FraudCardTechnicalView(BaseModel):
 # ─── FRS Breakdown ────────────────────────────────────────────────────────────
 
 class RiskExplanation(BaseModel):
-    """Deterministic score justification — ledger lines from the risk engine."""
+    """Deterministic score justification - ledger lines from the risk engine."""
     evidence_lines: List[str] = Field(default_factory=list)
     component_evidence: Dict[str, List[str]] = Field(default_factory=dict)
     stei_evidence_by_axis: Dict[str, List[str]] = Field(default_factory=dict)
@@ -75,7 +75,7 @@ class FRSBreakdown(BaseModel):
 
     # Scoring provenance. FastAPI's response_model silently drops any key not
     # declared here, so omitting these made the API report `null` for fields the
-    # engine had actually computed — the analyst could not see WHY a verdict was
+    # engine had actually computed - the analyst could not see WHY a verdict was
     # reached, or that an axis had been excluded for lack of evidence.
     axes_used: Dict[str, float] = Field(default_factory=dict)
     axes_excluded: List[str] = Field(default_factory=list)
@@ -85,7 +85,7 @@ class FRSBreakdown(BaseModel):
     verdict_floored_for_visibility: bool = False
 
     # Distinguishes "the sandbox ran and saw nothing" from "the sandbox ran and
-    # observed real behaviour" — only the latter is scored.
+    # observed real behaviour" - only the latter is scored.
     dynamic_ran: bool = False
     dynamic_conclusive: bool = False
 
@@ -211,7 +211,7 @@ class CodeFinding(BaseModel):
     title: str
     description: str
     files: List[str] = Field(default_factory=list)
-    # MobSF enrichment — compliance mappings and rule identity
+    # MobSF enrichment - compliance mappings and rule identity
     rule_id: str = ""
     masvs: str = ""     # e.g. "MSTG-NETWORK-3"
     cwe: str = ""       # e.g. "CWE-295"
@@ -264,7 +264,7 @@ class AnalysisResponse(BaseModel):
     dynamic_analysis: Optional[DynamicAnalysisResult] = None
     dynamic_available: bool = False
 
-    # MobSF enrichment (optional — None if Androguard mode)
+    # MobSF enrichment (optional - None if Androguard mode)
     manifest_findings: List[ManifestFinding] = Field(default_factory=list)
     code_findings: List[CodeFinding] = Field(default_factory=list)
     dangerous_permissions: List[Any] = Field(default_factory=list)
@@ -277,7 +277,7 @@ class AnalysisResponse(BaseModel):
     appsec_score: Optional[Any] = None
     mobsf_scan_hash: Optional[str] = None
 
-    # MobSF enrichment — previously discarded fields
+    # MobSF enrichment - previously discarded fields
     providers: List[str] = Field(default_factory=list)
     exported_activities: List[str] = Field(default_factory=list)
     exported_services: List[str] = Field(default_factory=list)
@@ -301,7 +301,7 @@ class AnalysisResponse(BaseModel):
     # Fraud Workflow Reconstruction (from WorkflowReconstructor)
     fraud_workflow: Optional[FraudWorkflow] = None
 
-    # Visual impersonation (VIDE) — deterministic baseline compare output
+    # Visual impersonation (VIDE) - deterministic baseline compare output
     vide: Optional[Dict[str, Any]] = None
 
     # Legacy view compatibility (kept for existing frontend)

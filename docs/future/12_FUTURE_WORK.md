@@ -1,4 +1,4 @@
-# 12 — Future Work & Architectural Roadmap
+# 12 - Future Work & Architectural Roadmap
 
 ## Purpose
 

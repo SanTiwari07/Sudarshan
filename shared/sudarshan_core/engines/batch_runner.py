@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Batch Runner
+SUDARSHAN - Batch Runner
 =========================
 A CLI utility to run Sudarshan on a directory of APKs automatically,
 using the MultiStageEngine.

@@ -164,7 +164,7 @@ export default function InvestigationProgressPanel({
       id: 'risk',
       label: 'Risk',
       state: riskDone ? 'complete' : 'pending',
-      value: riskDone ? `${data.final_risk_score.toFixed(0)} / 100` : '—',
+      value: riskDone ? `${data.final_risk_score.toFixed(0)} / 100` : '-',
       icon: <Shield className="h-4 w-4" aria-hidden />,
     },
     {

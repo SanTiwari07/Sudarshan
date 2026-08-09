@@ -1,4 +1,4 @@
-# 03 — Android Runtime (ART)
+# 03 - Android Runtime (ART)
 
 > **Chapter ID:** `CH03` · **Block:** A (Foundations) · **Status:** Stable
 > **Tags:** `#art` `#dalvik` `#dex2oat` `#classloader` `#reflection` `#dynamic-code-loading` `#jni` `#hidden-api`
@@ -14,7 +14,7 @@
 3. [Compilation: dex2oat, JIT, AOT, and profiles](#3-compilation-dex2oat-jit-aot-and-profiles)
 4. [The compiled artifacts: .oat, .vdex, .art](#4-the-compiled-artifacts-oat-vdex-art)
 5. [Class loading](#5-class-loading)
-6. [Dynamic code loading — the technique that breaks static analysis](#6-dynamic-code-loading--the-technique-that-breaks-static-analysis)
+6. [Dynamic code loading - the technique that breaks static analysis](#6-dynamic-code-loading--the-technique-that-breaks-static-analysis)
 7. [Reflection](#7-reflection)
 8. [Non-SDK (hidden API) restrictions](#8-non-sdk-hidden-api-restrictions)
 9. [JNI and native code](#9-jni-and-native-code)
@@ -59,7 +59,7 @@ Chain them and you get the standard evasion pipeline:
 ```
 
 If you cannot explain that diagram to a judge, you cannot explain why static analysis alone
-is insufficient — which is the central architectural argument for SUDARSHAN's fused
+is insufficient - which is the central architectural argument for SUDARSHAN's fused
 pipeline. → [Ch 23](../sudarshan/23-detection-pipeline.md)
 
 ---
@@ -75,9 +75,9 @@ pipeline. → [Ch 23](../sudarshan/23-detection-pipeline.md)
 | Artifact | `.odex` (optimised DEX) | `.oat` + `.vdex` + `.art` |
 | Startup | Slower (JIT warm-up) | Faster (pre-compiled hot paths) |
 | Battery/CPU | Recompiles constantly | Compile once, reuse |
-| Install time | Fast | Slow on 5.0/6.0 (full AOT) — fixed in 7.0 |
+| Install time | Fast | Slow on 5.0/6.0 (full AOT) - fixed in 7.0 |
 
-Both are **register-based** VMs executing **DEX bytecode** — this is the key difference
+Both are **register-based** VMs executing **DEX bytecode** - this is the key difference
 from the JVM, which is stack-based. That's why you can't run a `.class` file on Android and
 why `d8` exists.
 
@@ -85,7 +85,7 @@ why `d8` exists.
 
 Dalvik's JIT meant every app paid a warm-up cost on every launch, forever. ART's original
 answer (Android 5.0) was: compile everything to native code at install time. That worked
-but made installs and OTA updates brutally slow — a full system update recompiled every app
+but made installs and OTA updates brutally slow - a full system update recompiled every app
 on the device, sometimes for 20+ minutes.
 
 Android 7.0 (Nougat) introduced the **hybrid** model that still stands: install fast with
@@ -95,7 +95,7 @@ AOT-compile only those in the background when the device is idle and charging. B
 ### WHY you still care about Dalvik
 
 - Legacy samples and old research reference `.odex` files and Dalvik-era behaviour.
-- The DEX format itself hasn't fundamentally changed — everything you learn about DEX
+- The DEX format itself hasn't fundamentally changed - everything you learn about DEX
   applies across both.
 - **Deprecated but still seen:** documentation and tools referring to `dexopt` in the
   Dalvik sense (producing `.odex`) versus the modern `dex2oat`. Know which era a source
@@ -179,7 +179,7 @@ $ adb shell ls -la /data/app/*/com.example.app*/oat/arm64/
 
 | File | Contains | Analyst use |
 |---|---|---|
-| **`.vdex`** | The **verified DEX** — essentially the original DEX plus verification metadata (quickening info) | **You can extract DEX from a `.vdex`.** This is how you recover code from an installed app whose APK you can't get, and one route around some packers. |
+| **`.vdex`** | The **verified DEX** - essentially the original DEX plus verification metadata (quickening info) | **You can extract DEX from a `.vdex`.** This is how you recover code from an installed app whose APK you can't get, and one route around some packers. |
 | **`.oat`** | ELF containing AOT-compiled native code plus a reference to the DEX | Native code corresponding to Java methods |
 | **`.art`** | Pre-initialised heap image for faster startup | Rarely directly useful |
 
@@ -191,13 +191,13 @@ the `.odex` extension for historical reasons even under ART).
 $ adb shell su -c 'ls /data/app/*/com.suspect*/oat/arm64/'
 $ adb pull /data/app/~~x/com.suspect-y/oat/arm64/base.vdex
 
-# Extract DEX from vdex — vdexExtractor (community tool) or:
+# Extract DEX from vdex - vdexExtractor (community tool) or:
 $ python3 -m androguard ...       # some versions handle vdex
 # Alternatively use `oatdump` on device (AOSP tool, often present on userdebug builds)
 $ adb shell oatdump --oat-file=/data/app/.../oat/arm64/base.odex | head -50
 ```
 
-> **⚙️ Engineering Note — the anti-packer play:** Many commercial packers keep the real DEX
+> **⚙️ Engineering Note - the anti-packer play:** Many commercial packers keep the real DEX
 > encrypted in `assets/` and only decrypt into memory at runtime. But if the app has been
 > *installed and run*, portions may have been materialised and compiled. Combined with
 > memory dumping ([Ch 12](../dynamic-analysis/12-dynamic-analysis.md)), the runtime is often
@@ -221,7 +221,7 @@ $ adb shell oatdump --oat-file=/data/app/.../oat/arm64/base.odex | head -50
 ```
 
 Android uses **parent-first delegation**: a loader asks its parent before loading a class
-itself. That's why you can't override `java.lang.String` — `BootClassLoader` answers first.
+itself. That's why you can't override `java.lang.String` - `BootClassLoader` answers first.
 
 ### The loader types
 
@@ -229,7 +229,7 @@ itself. That's why you can't override `java.lang.String` — `BootClassLoader` a
 |---|---|---|
 | `PathClassLoader` | APK/DEX already on the filesystem | The app's default loader |
 | `DexClassLoader` | A DEX/JAR/APK path you specify, with an optimised-output dir | **Historic dynamic-loading workhorse** |
-| `InMemoryDexClassLoader` | A `ByteBuffer` — **never touches disk** | API 26+. The modern evasion favourite. |
+| `InMemoryDexClassLoader` | A `ByteBuffer` - **never touches disk** | API 26+. The modern evasion favourite. |
 | `BaseDexClassLoader` | Base class of the above | Hooking target for analysis |
 
 ### Why `InMemoryDexClassLoader` changed the game
@@ -254,19 +254,19 @@ c.getMethod("run", Context.class).invoke(c.newInstance(), this);
 > **⚙️ Engineering Note:** When you see **any** of `DexClassLoader`,
 > `InMemoryDexClassLoader`, `PathClassLoader` constructed with a non-default path, or
 > `dalvik.system.DexFile`, stop and trace where the bytes come from. This is one of the
-> highest-value static signals in Android analysis — far more meaningful than any single
+> highest-value static signals in Android analysis - far more meaningful than any single
 > permission.
 
 ---
 
-## 6. Dynamic code loading — the technique that breaks static analysis
+## 6. Dynamic code loading - the technique that breaks static analysis
 
 ### WHAT / WHY it exists legitimately
 
 Real, non-malicious uses:
 - **Plugin architectures** and modular apps
 - **A/B testing** and feature flags shipping code
-- **Play Feature Delivery** (dynamic feature modules) — Google's *supported* mechanism
+- **Play Feature Delivery** (dynamic feature modules) - Google's *supported* mechanism
 - **Game engines** and scripting layers
 - **Hot-fix frameworks** (very common in the Chinese app ecosystem: Tinker, Sophix, Qzone)
 
@@ -281,7 +281,7 @@ Real, non-malicious uses:
 | Defeats hash-based blocking | The dropper hash stays constant and clean |
 
 **Anatsa is the canonical case study.** ThreatFabric and Zscaler ThreatLabz documented
-droppers on Google Play — one reached the **#4 spot in Play's Top Free Tools category by
+droppers on Google Play - one reached the **#4 spot in Play's Top Free Tools category by
 June 29, 2025**, roughly six weeks after a clean May 7, 2025 release, before shipping the
 malicious update. Notably, Zscaler ThreatLabz (August 2025) reported Anatsa **moved away
 from loading remote DEX toward directly installing the payload**, streamlining delivery.
@@ -295,7 +295,7 @@ staged payload."
 | 8.0 (API 26) | `optimizedDirectory` for `DexClassLoader` deprecated; writable-then-executable DEX discouraged | Nudge away from world-writable payload dirs |
 | 10 (API 29) | **Writable + executable DEX blocked** in many paths; `W^X` enforcement for app code | Can't just drop a DEX in a writable dir and run it |
 | 11 (API 30) | Further app-storage restrictions | Fewer viable drop locations |
-| 14 (API 34) | Dynamic code loading from **world-writable** files blocked; files must be marked read-only | Documented in Android 14 behaviour changes — a genuine hardening step |
+| 14 (API 34) | Dynamic code loading from **world-writable** files blocked; files must be marked read-only | Documented in Android 14 behaviour changes - a genuine hardening step |
 
 > **🚨 Misconception:** "Android 14 blocked dynamic code loading." It did **not**. It blocked
 > loading code from *world-writable* files. An app can still load DEX from its own private,
@@ -304,7 +304,7 @@ staged payload."
 
 ### Detection strategies
 
-**Static** — find the loader construction and trace the byte source:
+**Static** - find the loader construction and trace the byte source:
 
 ```bash
 # after apktool
@@ -312,10 +312,10 @@ $ grep -rn "InMemoryDexClassLoader\|DexClassLoader\|dalvik/system/DexFile" work/
 # in jadx search, look for these plus the decryption routine feeding them
 ```
 
-**Dynamic** — hook the loaders and dump what they load. This is the reliable method:
+**Dynamic** - hook the loaders and dump what they load. This is the reliable method:
 
 ```javascript
-// Frida — dump every DEX handed to a class loader
+// Frida - dump every DEX handed to a class loader
 Java.perform(function () {
   var IMDCL = Java.use('dalvik.system.InMemoryDexClassLoader');
   IMDCL.$init.overload('java.nio.ByteBuffer', 'java.lang.ClassLoader')
@@ -380,7 +380,7 @@ even the target name is unreadable statically.
   red flag
 - Reflection density far above baseline for the app's size
 
-**Dynamic** — hook `Method.invoke` and log every resolved target:
+**Dynamic** - hook `Method.invoke` and log every resolved target:
 
 ```javascript
 Java.perform(function () {
@@ -393,11 +393,11 @@ Java.perform(function () {
 });
 ```
 
-This reconstructs the *real* call graph — the one static analysis couldn't build.
+This reconstructs the *real* call graph - the one static analysis couldn't build.
 
 > **🚨 Misconception:** "Reflection means malware." Absolutely not. Retrofit, Gson, Jackson,
 > Dagger, Room, and every compatibility shim in AndroidX use reflection heavily. It is a
-> weighted contextual signal — reflection whose *target string is decrypted at runtime* is
+> weighted contextual signal - reflection whose *target string is decrypted at runtime* is
 > the meaningful variant, not reflection per se.
 
 ---
@@ -415,7 +415,7 @@ Lists:
 | List | Behaviour |
 |---|---|
 | **SDK** (allowlist) | Public, supported |
-| **blocked** | Access denied — `NoSuchMethodError` / `NoSuchFieldException` |
+| **blocked** | Access denied - `NoSuchMethodError` / `NoSuchFieldException` |
 | **max-target-X** (conditionally blocked) | Allowed only if the app's `targetSdkVersion` ≤ X. Tightens as targetSdk rises. |
 | **unsupported** (formerly greylist) | Allowed for now, warned in logcat |
 
@@ -426,18 +426,18 @@ many hidden APIs are privileged surface that shouldn't be app-reachable at all.
 
 ### WHY it matters for detection
 
-**Malware wants hidden APIs** — to enumerate packages, manipulate windows, reach telephony
+**Malware wants hidden APIs** - to enumerate packages, manipulate windows, reach telephony
 internals, or hide itself. So malware needs bypasses. The known families of bypass:
 
 1. **Keeping `targetSdkVersion` low** to stay under `max-target-X` gates. This is one of
-   several reasons low targetSdk is a malware signal — and precisely why Android 14 (API 34)
+   several reasons low targetSdk is a malware signal - and precisely why Android 14 (API 34)
    introduced a **hard install block for apps targeting below API 23**, and Android 15 raised
    it to API 24. → [Ch 04](../security/04-android-security-model.md)
-2. **Double reflection** — reflecting into `Class.getDeclaredMethod` itself, so the
+2. **Double reflection** - reflecting into `Class.getDeclaredMethod` itself, so the
    *caller* of the restricted lookup appears to be framework code rather than app code.
    This works because the enforcement checks the caller's class loader.
 3. **JNI / native access** to bypass the Java-layer enforcement.
-4. **`setHiddenApiExemptions`** via `VMRuntime` — reflectively disabling the restriction.
+4. **`setHiddenApiExemptions`** via `VMRuntime` - reflectively disabling the restriction.
 
 ```bash
 # Watch for hidden-API access in logcat during detonation
@@ -450,7 +450,7 @@ $ adb logcat | grep -i "Accessing hidden"
 > **⚙️ Engineering Note:** `adb logcat | grep "Accessing hidden"` during dynamic analysis is
 > a cheap, high-signal detection. Legitimate apps trip it occasionally (old SDKs, compat
 > shims). Malware trips it *deliberately and repeatedly*, often right after startup. Log the
-> count and the specific APIs — the API list tells you the intent.
+> count and the specific APIs - the API list tells you the intent.
 
 ---
 
@@ -501,7 +501,7 @@ Documented examples: **Klopatra** (Cleafy, Aug 2025) shifted logic from Java to 
 used the commercial **Virbox** protector; **GodFather** variants migrated to native code
 (Cyble). Both are cited in [Ch 14](../banking-malware/14-banking-malware.md).
 
-### `RegisterNatives` — the mapping you need
+### `RegisterNatives` - the mapping you need
 
 Instead of relying on name-mangled `Java_com_pkg_Class_method` symbols, code can call
 `RegisterNatives()` at runtime to bind arbitrary C functions to Java method signatures.
@@ -529,7 +529,7 @@ practical facts:
    enumerates live instances of a class on the heap) is the better tool.
 
    ```javascript
-   // Find live instances — beats raw memory scanning
+   // Find live instances - beats raw memory scanning
    Java.perform(function () {
      Java.choose('com.suspect.CryptoUtil', {
        onMatch: function (inst) { console.log('key=' + inst.mKey.value); },
@@ -549,7 +549,7 @@ practical facts:
    ```
 
 > **⚙️ Engineering Note:** Heap dumping after the malware has contacted C2 frequently yields
-> the plaintext C2 URL, the AES key, and the target-app list — even when all three are
+> the plaintext C2 URL, the AES key, and the target-app list - even when all three are
 > encrypted in the APK. Time your dump: **after network activity, before the app clears
 > state.** → [Ch 26](../sudarshan/26-ioc-extraction.md)
 
@@ -576,7 +576,7 @@ practical facts:
 
 | Instrumentation | Yields |
 |---|---|
-| Hook `DexClassLoader` / `InMemoryDexClassLoader` | **Dump the real payload** — then re-run the full static pipeline on the dumped DEX |
+| Hook `DexClassLoader` / `InMemoryDexClassLoader` | **Dump the real payload** - then re-run the full static pipeline on the dumped DEX |
 | Hook `Method.invoke` | Reconstructed real call graph |
 | `logcat \| grep "Accessing hidden"` | Hidden-API bypass attempts + which APIs |
 | `jnitrace` | JNI call trace, `RegisterNatives` map |
@@ -587,7 +587,7 @@ practical facts:
 
 > **⚙️ Architecture decision for SUDARSHAN:** When dynamic analysis dumps a DEX from a class
 > loader hook, that DEX **must be fed back into the static pipeline as a new artifact**,
-> linked to the parent sample. This recursion is not optional — for staged malware, the
+> linked to the parent sample. This recursion is not optional - for staged malware, the
 > child artifact is where all the real capability lives, and treating it as "just a log
 > line" throws away the entire finding.
 >
@@ -621,19 +621,19 @@ practical facts:
 
 ### False negatives
 
-- Payload delivered only to specific geographies/devices — your sandbox gets nothing.
+- Payload delivered only to specific geographies/devices - your sandbox gets nothing.
 - Time-delayed activation (dormant for days).
 - Payload requires C2 that is offline at analysis time → **the sample looks benign**. Record
   "C2 unreachable" as an explicit analysis-quality flag, don't silently score it clean.
-- Anatsa-style direct install of the payload instead of DEX loading — no loader hook fires.
+- Anatsa-style direct install of the payload instead of DEX loading - no loader hook fires.
 
 ### Edge cases
 
 - **ART Mainline version differences** across devices reporting the same OS version.
-- **Multidex** — hook must handle multiple DEX per loader.
-- **`InMemoryDexClassLoader` with a `ByteBuffer[]`** overload (API 29+) — hook both overloads
+- **Multidex** - hook must handle multiple DEX per loader.
+- **`InMemoryDexClassLoader` with a `ByteBuffer[]`** overload (API 29+) - hook both overloads
   or you miss half the samples.
-- Apps that detect Frida and behave benignly — hence static+dynamic fusion.
+- Apps that detect Frida and behave benignly - hence static+dynamic fusion.
 
 ### Performance
 
@@ -647,7 +647,7 @@ it by default in a throughput-sensitive pipeline; do it when troubleshooting hoo
 1. **Hook class loaders first, always.** It's the highest-yield single instrumentation in
    Android analysis.
 2. **Feed dumped DEX back through static analysis.** Recursion is mandatory.
-3. **`grep "Accessing hidden"` in logcat** during every detonation — free signal.
+3. **`grep "Accessing hidden"` in logcat** during every detonation - free signal.
 4. **Use `Java.choose()` over raw memory scanning** because the collector moves objects.
 5. **Heap-dump after C2 contact.** Best time to catch plaintext.
 6. **Start native reversing at `JNI_OnLoad`, but check `.init_array` first.**
@@ -662,11 +662,11 @@ it by default in a throughput-sensitive pipeline; do it when troubleshooting hoo
 possibly detect it?"*
 
 **Perfect answer:** We don't rely on the shipped code being the running code. Statically we
-look for the *machinery* of staged delivery — class loaders like `InMemoryDexClassLoader`,
+look for the *machinery* of staged delivery - class loaders like `InMemoryDexClassLoader`,
 reflection driven by decrypted strings, hidden-API bypasses, and a native/Java code balance
 that suggests hidden logic. Then dynamically we hook the class loaders and **dump the
 payload the moment the runtime materialises it**, because the runtime has to see plaintext
-bytecode to execute it — that's an unavoidable property of ART, not a bug we're exploiting.
+bytecode to execute it - that's an unavoidable property of ART, not a bug we're exploiting.
 The dumped payload is then fed back through the full static pipeline as a linked child
 artifact, and its findings attach to the parent sample.
 
@@ -680,7 +680,7 @@ technically correct, and demonstrably works.
   a re-detonation schedule. Honesty here impresses more than bluffing.
 - *"What if it detects your sandbox?"* → Real devices over emulators, plus static signals
   that don't depend on execution. Fusion. → [Ch 12](../dynamic-analysis/12-dynamic-analysis.md)
-- *"Didn't Android 14 stop dynamic code loading?"* → **No** — it blocked loading from
+- *"Didn't Android 14 stop dynamic code loading?"* → **No** - it blocked loading from
   world-writable files. Knowing this precisely is a strong signal of depth.
 
 **Fact that impresses:** ART has been a **Mainline module updatable via Google Play since
@@ -694,7 +694,7 @@ overclaiming.
 
 **Q: "Dalvik vs ART?"**
 Register-based VM in both; the difference is compilation strategy. Dalvik: interpret + JIT.
-ART 5.0: full AOT at install (slow installs, slow OTAs). ART 7.0+: hybrid — install fast,
+ART 5.0: full AOT at install (slow installs, slow OTAs). ART 7.0+: hybrid - install fast,
 JIT, profile hot methods, background AOT with `speed-profile`. Mention the Nougat pivot; it
 shows you know *why*, not just *what*.
 
@@ -704,8 +704,7 @@ no disk artifact. Then the security angle: this is why static analysis alone is 
 and why Android 14 restricted loading from world-writable files.
 
 **Q: "What is `.vdex` and why would you care?"**
-Verified DEX plus verification metadata. You care because you can extract DEX from it —
-useful when you have an installed app but not its APK, and sometimes a route around packers.
+Verified DEX plus verification metadata. You care because you can extract DEX from it - useful when you have an installed app but not its APK, and sometimes a route around packers.
 
 **Q: "Reflection is used everywhere legitimately. How do you use it as a signal?"**
 The right answer names the *combination*: reflection whose target is a runtime-decrypted
@@ -728,17 +727,17 @@ and/or dump the heap. Add: `.init_array` and `JNI_OnLoad` for native unpacking s
 ## 16. Cross-references
 
 **Upstream:**
-- [← Ch 01 Android Internals](01-android-internals.md) — Zygote, process model
-- [← Ch 02 APK Architecture](../apk/02-apk-architecture.md) — where DEX and `.so` live
+- [← Ch 01 Android Internals](01-android-internals.md) - Zygote, process model
+- [← Ch 02 APK Architecture](../apk/02-apk-architecture.md) - where DEX and `.so` live
 
 **Downstream:**
-- [→ Ch 04 Android Security Model](../security/04-android-security-model.md) — targetSdk gates, install blocks
-- [→ Ch 08 APK File Format](../apk/08-apk-file-format.md) — DEX internals in bytes
-- [→ Ch 10 Reverse Engineering](../reverse-engineering/10-reverse-engineering.md) — packers, obfuscation, native RE
-- [→ Ch 11 Static Analysis](../static-analysis/11-static-analysis.md) — automating the static signals
-- [→ Ch 12 Dynamic Analysis](../dynamic-analysis/12-dynamic-analysis.md) — Frida hooks, jnitrace, heap dumps
-- [→ Ch 13 Android Malware](../malware/13-android-malware.md) — dropper technique in context
-- [→ Ch 25 Investigation Engine](../sudarshan/25-investigation-engine.md) — recursive artifact analysis
+- [→ Ch 04 Android Security Model](../security/04-android-security-model.md) - targetSdk gates, install blocks
+- [→ Ch 08 APK File Format](../apk/08-apk-file-format.md) - DEX internals in bytes
+- [→ Ch 10 Reverse Engineering](../reverse-engineering/10-reverse-engineering.md) - packers, obfuscation, native RE
+- [→ Ch 11 Static Analysis](../static-analysis/11-static-analysis.md) - automating the static signals
+- [→ Ch 12 Dynamic Analysis](../dynamic-analysis/12-dynamic-analysis.md) - Frida hooks, jnitrace, heap dumps
+- [→ Ch 13 Android Malware](../malware/13-android-malware.md) - dropper technique in context
+- [→ Ch 25 Investigation Engine](../sudarshan/25-investigation-engine.md) - recursive artifact analysis
 
 **Related concept chain:** Reflection → Dynamic Code Loading → Frida → Runtime Hooking →
 ART → Obfuscation → Packers.
@@ -747,25 +746,25 @@ ART → Obfuscation → Packers.
 
 ## 17. References
 
-1. AOSP — *Android Runtime (ART) and Dalvik*. https://source.android.com/docs/core/runtime
-2. AOSP — *Configuring ART / compiler filters*. https://source.android.com/docs/core/runtime/configure
-3. Android Developers — *Restrictions on non-SDK interfaces*. https://developer.android.com/guide/app-compatibility/restrictions-non-sdk-interfaces
-4. Android Developers — *Behavior changes: Android 14* (dynamic code loading restrictions). https://developer.android.com/about/versions/14/behavior-changes-all
-5. Android Developers — `InMemoryDexClassLoader`, `DexClassLoader` reference. https://developer.android.com/reference/dalvik/system/InMemoryDexClassLoader
-6. Android Developers — *JNI tips*. https://developer.android.com/training/articles/perf-jni
-7. Android Developers — *ART as a Mainline module* / Google Play system updates. https://source.android.com/docs/core/ota/modular-system/art
-8. ThreatFabric — Anatsa Google Play dropper campaign (July 2025).
-9. Zscaler ThreatLabz — *Anatsa's Latest Updates* (August 2025) — shift from remote DEX loading to direct install.
-10. Cleafy Labs — *Klopatra* (August 2025) — Java→native migration, Virbox protector.
-11. Cyble Research and Intelligence Labs — GodFather variant native-code migration.
-12. Frida documentation — Java API (`Java.use`, `Java.choose`, `Java.perform`). https://frida.re/docs/javascript-api/
-13. `jnitrace` project — JNI API tracing for Android.
-14. MITRE ATT&CK for Mobile — T1407 (Download New Code at Runtime), T1406 (Obfuscated Files or Information). https://attack.mitre.org/matrices/mobile/
+1. AOSP - *Android Runtime (ART) and Dalvik*. https://source.android.com/docs/core/runtime
+2. AOSP - *Configuring ART / compiler filters*. https://source.android.com/docs/core/runtime/configure
+3. Android Developers - *Restrictions on non-SDK interfaces*. https://developer.android.com/guide/app-compatibility/restrictions-non-sdk-interfaces
+4. Android Developers - *Behavior changes: Android 14* (dynamic code loading restrictions). https://developer.android.com/about/versions/14/behavior-changes-all
+5. Android Developers - `InMemoryDexClassLoader`, `DexClassLoader` reference. https://developer.android.com/reference/dalvik/system/InMemoryDexClassLoader
+6. Android Developers - *JNI tips*. https://developer.android.com/training/articles/perf-jni
+7. Android Developers - *ART as a Mainline module* / Google Play system updates. https://source.android.com/docs/core/ota/modular-system/art
+8. ThreatFabric - Anatsa Google Play dropper campaign (July 2025).
+9. Zscaler ThreatLabz - *Anatsa's Latest Updates* (August 2025) - shift from remote DEX loading to direct install.
+10. Cleafy Labs - *Klopatra* (August 2025) - Java→native migration, Virbox protector.
+11. Cyble Research and Intelligence Labs - GodFather variant native-code migration.
+12. Frida documentation - Java API (`Java.use`, `Java.choose`, `Java.perform`). https://frida.re/docs/javascript-api/
+13. `jnitrace` project - JNI API tracing for Android.
+14. MITRE ATT&CK for Mobile - T1407 (Download New Code at Runtime), T1406 (Obfuscated Files or Information). https://attack.mitre.org/matrices/mobile/
 
 ### Further reading
-- AOSP `art/` source tree — `runtime/class_linker.cc`, `dex2oat/`
-- `vdexExtractor` — community tool for DEX recovery from `.vdex`
-- OWASP MASTG — MASVS-RESILIENCE test cases (anti-tampering, anti-hooking)
+- AOSP `art/` source tree - `runtime/class_linker.cc`, `dex2oat/`
+- `vdexExtractor` - community tool for DEX recovery from `.vdex`
+- OWASP MASTG - MASVS-RESILIENCE test cases (anti-tampering, anti-hooking)
 
 ---
 

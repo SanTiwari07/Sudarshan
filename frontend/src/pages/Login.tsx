@@ -95,7 +95,7 @@ export default function Login() {
           <p className="text-sm text-blue-300 mt-1 font-mono uppercase tracking-widest">
             Banking Threat Intelligence Platform
           </p>
-          <p className="text-xs text-blue-400/70 mt-2">Bank of India — Cyber Security Operations</p>
+          <p className="text-xs text-blue-400/70 mt-2">Bank of India - Cyber Security Operations</p>
         </div>
 
         {/* Card */}
@@ -225,7 +225,7 @@ export default function Login() {
               )}
             </button>
 
-            {/* Never print credentials here — this screen is reachable by
+            {/* Never print credentials here - this screen is reachable by
                 anyone who can reach the app. The admin password is set via
                 ADMIN_PASSWORD, or generated once at first boot and written to
                 the backend log. */}
@@ -233,7 +233,7 @@ export default function Login() {
         </div>
 
         <p className="text-center text-xs text-blue-400/40 mt-6">
-          Protected by JWT — all sessions expire after 12 hours
+          Protected by JWT - all sessions expire after 12 hours
         </p>
       </div>
     </div>

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SUDARSHAN — Dynamic Pipeline Self-Test & Automated Verification
+SUDARSHAN - Dynamic Pipeline Self-Test & Automated Verification
 ================================================================
 Executes a full end-to-end self-test of the dynamic analysis pipeline across all 11 stages:
   1. ADB Device Connected
@@ -40,7 +40,7 @@ logger = logging.getLogger("pipeline_verifier")
 
 
 def _run_live_prerequisites(device_serial: str, adb_path: str) -> list:
-    """Phase 2 emulator health checks — only when a device serial is available."""
+    """Phase 2 emulator health checks - only when a device serial is available."""
     from sudarshan_core.engines.frida_sandbox import _adb
 
     checks = []
@@ -105,7 +105,7 @@ def _run_live_prerequisites(device_serial: str, adb_path: str) -> list:
 
 def run_pipeline_verification() -> bool:
     print("\n" + "=" * 70)
-    print(" SUDARSHAN — AUTOMATED DYNAMIC PIPELINE SELF-TEST & DIAGNOSTICS")
+    print(" SUDARSHAN - AUTOMATED DYNAMIC PIPELINE SELF-TEST & DIAGNOSTICS")
     print("=" * 70 + "\n")
 
     live_device_serial: str = ""
@@ -153,7 +153,7 @@ def run_pipeline_verification() -> bool:
                 stages[1] = (
                     "Frida Server Running",
                     True,
-                    f"Device agent up; host Frida v{frida.__version__} — {st.message}",
+                    f"Device agent up; host Frida v{frida.__version__} - {st.message}",
                 )
             else:
                 stages[1] = (
@@ -165,7 +165,7 @@ def run_pipeline_verification() -> bool:
             stages[1] = (
                 "Frida Server Running",
                 False,
-                "Skipped — no ADB device (host frida package alone is not sufficient)",
+                "Skipped - no ADB device (host frida package alone is not sufficient)",
             )
     except Exception as e:
         stages[1] = ("Frida Server Running", False, str(e))
@@ -356,7 +356,7 @@ def run_pipeline_verification() -> bool:
         print("\nOVERALL: LIVE DYNAMIC ANALYSIS CAN BE ATTEMPTED; OFFLINE STAGES OK\n")
     elif offline_sim_passed and not live_stages_passed:
         print(
-            "\nOVERALL: OFFLINE STAGES OK — LIVE DAE NOT VERIFIED "
+            "\nOVERALL: OFFLINE STAGES OK - LIVE DAE NOT VERIFIED "
             "(start emulator + frida-server, then re-run)\n"
         )
     else:

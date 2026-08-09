@@ -278,7 +278,7 @@ Failed --> Dashboard
 | **Storage & Queue** | Persistent Case Store | SQLite (`sudarshan.db`), Async Worker Pool, File Artifact Store |
 | **Shared Package** | Sudarshan Core | [`shared/sudarshan_core/`](shared/sudarshan_core/) mounted via `PYTHONPATH=/app:/opt/sudarshan-core` |
 | **Static Analysis** | Decompilation Engines | MobSF Docker (Port 8008), Native `apk_analyzer.py`, APKTool CLI, JADX CLI, YARA Scanner |
-| **Visual Impersonation** | VIDE pipeline | `shared/sudarshan_core/engines/vide/` — UI profiles, baseline compare, `VIDE-F001`, risk-engine hooks |
+| **Visual Impersonation** | VIDE pipeline | `shared/sudarshan_core/engines/vide/` - UI profiles, baseline compare, `VIDE-F001`, risk-engine hooks |
 | **Dynamic Sandbox** | Execution Environment | Genymotion Desktop (default) or Android Studio AVD via `SandboxProvider`, ADB TCP (Port 5555), Frida 17.16.4 |
 | **Network Intercept**| Transparent Proxy | mitmproxy Docker Sidecar (Port 8080), HAR Dump Parser |
 | **Risk & Scoring** | Math Scoring Engine | 5-Axis STEI, Volume Logarithmic BFCI v2, 4-Axis FRS, Threat Scenario Matrix |
@@ -380,7 +380,7 @@ The FastAPI backend exposes versioned REST API endpoints (`/api/v1`):
 
 ### Prerequisites
 - **Docker**: Docker Desktop with Docker Compose
-- **Android Sandbox**: Genymotion Desktop (default) with a rooted Android 10/11 (API 29/30) x86/x86_64 image — or optionally an Android Studio AVD (`SANDBOX_PROVIDER=android_studio`)
+- **Android Sandbox**: Genymotion Desktop (default) with a rooted Android 10/11 (API 29/30) x86/x86_64 image - or optionally an Android Studio AVD (`SANDBOX_PROVIDER=android_studio`)
 - **ADB**: Installed and on PATH, or Genymotion's bundled tools (`adb tcpip 5555`)
 - **Python** *(Optional for dev/tests)*: Version 3.10+ (`pytest backend/tests`)
 - **Node.js** *(Optional for UI dev)*: Version 18.x or higher & `npm`
@@ -421,18 +421,18 @@ The detailed documentation portal is available under [`docs/`](docs/README.md):
 | Guide / Document | Summary |
 | :--- | :--- |
 | [**Docs Portal Index**](docs/README.md) | Central entry point, component inventory, data flow specifications. |
-| [**01 — Introduction**](docs/01_INTRODUCTION.md) | Problem statement, threat model, target banking operational scope. |
-| [**02 — System Overview**](docs/02_SYSTEM_OVERVIEW.md) | Platform architecture, microservices layout, container topology. |
-| [**03 — Static Threat Intelligence**](docs/architecture/03_STATIC_THREAT_INTELLIGENCE.md) | APKTool, JADX, MobSF, Androguard, Manifest serialization, STEI formula, VIDE static UI profiles. |
-| [**VIDE — Visual Impersonation**](docs/architecture/VIDE.md) | Deterministic UI baseline compare, VIDE-F001, signer registry, FRS escalation. |
-| [**04 — Dynamic Analysis Engine**](docs/architecture/04_DYNAMIC_ANALYSIS_ENGINE.md) | Frida 17 PID attach, ART deopt, mitmproxy HAR, Agentic Explorer 15-stage DAG. |
-| [**05 — AI Investigation Engine**](docs/architecture/05_AI_INVESTIGATION_ENGINE.md) | RAG graph index, Gemini 2.5 Flash, prompt sanitization. |
-| [**06 — Evidence Processing**](docs/architecture/06_EVIDENCE_PROCESSING.md) | EventBus, EvidenceStore, WorkflowReconstructor causal chain engine. |
-| [**07 — Fraud Intelligence Engine**](docs/architecture/07_FRAUD_INTELLIGENCE_ENGINE.md) | Threat correlation (VirusTotal/OTX/AbuseIPDB) & family classifier. |
-| [**08 — Deterministic Risk Engine**](docs/architecture/08_DETERMINISTIC_RISK_ENGINE.md) | Math formulas for 5-axis STEI, BFCI v2, FRS, Threat Scenario Matrix. |
-| [**09 — AI Report Generation**](docs/architecture/09_AI_REPORT_GENERATION.md) | HTML security reports, PDF report exporter, JSON report feed. |
-| [**10 — Analyst Dashboard**](docs/dashboard/10_DASHBOARD.md) | React 18 SPA, `InvestigationShell`, Executive Fraud Card, Technical View, VIDE panels, Workflow UI. |
-| [**11 — Evaluation Strategy**](docs/evaluation/11_EVALUATION.md) | Automated testing suite (**526** tests in `pytest tests/ backend/tests`), benchmarks, determinism baselines. |
+| [**01 - Introduction**](docs/01_INTRODUCTION.md) | Problem statement, threat model, target banking operational scope. |
+| [**02 - System Overview**](docs/02_SYSTEM_OVERVIEW.md) | Platform architecture, microservices layout, container topology. |
+| [**03 - Static Threat Intelligence**](docs/architecture/03_STATIC_THREAT_INTELLIGENCE.md) | APKTool, JADX, MobSF, Androguard, Manifest serialization, STEI formula, VIDE static UI profiles. |
+| [**VIDE - Visual Impersonation**](docs/architecture/VIDE.md) | Deterministic UI baseline compare, VIDE-F001, signer registry, FRS escalation. |
+| [**04 - Dynamic Analysis Engine**](docs/architecture/04_DYNAMIC_ANALYSIS_ENGINE.md) | Frida 17 PID attach, ART deopt, mitmproxy HAR, Agentic Explorer 15-stage DAG. |
+| [**05 - AI Investigation Engine**](docs/architecture/05_AI_INVESTIGATION_ENGINE.md) | RAG graph index, Gemini 2.5 Flash, prompt sanitization. |
+| [**06 - Evidence Processing**](docs/architecture/06_EVIDENCE_PROCESSING.md) | EventBus, EvidenceStore, WorkflowReconstructor causal chain engine. |
+| [**07 - Fraud Intelligence Engine**](docs/architecture/07_FRAUD_INTELLIGENCE_ENGINE.md) | Threat correlation (VirusTotal/OTX/AbuseIPDB) & family classifier. |
+| [**08 - Deterministic Risk Engine**](docs/architecture/08_DETERMINISTIC_RISK_ENGINE.md) | Math formulas for 5-axis STEI, BFCI v2, FRS, Threat Scenario Matrix. |
+| [**09 - AI Report Generation**](docs/architecture/09_AI_REPORT_GENERATION.md) | HTML security reports, PDF report exporter, JSON report feed. |
+| [**10 - Analyst Dashboard**](docs/dashboard/10_DASHBOARD.md) | React 18 SPA, `InvestigationShell`, Executive Fraud Card, Technical View, VIDE panels, Workflow UI. |
+| [**11 - Evaluation Strategy**](docs/evaluation/11_EVALUATION.md) | Automated testing suite (**526** tests in `pytest tests/ backend/tests`), benchmarks, determinism baselines. |
 | [**How to Run Guide**](docs/HOW_TO_RUN.md) | Comprehensive installation, configuration, and execution guide. |
 | [**DAE Current State**](docs/DAE_CURRENT_STATE.md) | Complete resolution audit and technical current state document. |
 | [**Documentation Audit Report**](docs/DOCUMENTATION_AUDIT_REPORT.md) | Formal documentation audit, file mapping, and verification report. |

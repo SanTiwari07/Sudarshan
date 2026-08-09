@@ -1,4 +1,4 @@
-# 16 — Threat Intelligence
+# 16 - Threat Intelligence
 
 > **Chapter ID:** `CH16` · **Block:** C (The Adversary) · **Status:** Stable
 > **Tags:** `#threat-intelligence` `#mitre-attack` `#d3fend` `#diamond-model` `#pyramid-of-pain` `#stix` `#taxii` `#misp` `#attribution`
@@ -37,16 +37,16 @@
 That definition is doing real work. A list of ten thousand malicious hashes is **data**. A
 statement that *"Anatsa's current campaign targets 831 financial institutions including three of
 your client banks, delivered via Play droppers, so your Play-install allowlist assumption is
-wrong"* is **intelligence** — it changes what someone does.
+wrong"* is **intelligence** - it changes what someone does.
 
 ### The distinction, made concrete
 
 | | Data | Information | Intelligence |
 |---|---|---|---|
 | Example | `3a1f…b92c` | "That hash is Anatsa" | "Anatsa is on Play, targets your bank, and your allowlist assumption fails" |
-| Answers | — | What is it? | **What do I do?** |
+| Answers | - | What is it? | **What do I do?** |
 | Consumer | Machine | Analyst | **Decision-maker** |
-| Perishability | High | Medium | Lower — drives strategy |
+| Perishability | High | Medium | Lower - drives strategy |
 
 > **⚙️ Engineering Note:** Most "threat intel platforms" are data platforms with a feed
 > subscription. The test for SUDARSHAN: **does the output change a bank's action in the next
@@ -106,7 +106,7 @@ matrix.
 2. **Coverage measurement.** Map your detections to techniques and your **gaps become visible**.
    You cannot manage coverage you cannot see.
 3. **Behaviour outlives infrastructure.** Techniques sit at the top of the Pyramid of Pain (§7).
-4. **It's the lingua franca of vendor reports** — which is most of [Ch 14](../banking-malware/14-banking-malware.md).
+4. **It's the lingua franca of vendor reports** - which is most of [Ch 14](../banking-malware/14-banking-malware.md).
 
 ### The techniques that matter for Android banking malware
 
@@ -122,7 +122,7 @@ matrix.
 | Defense Evasion | Download New Code at Runtime | T1407 | Staging → [Ch 03](../android/03-android-runtime.md) |
 | Defense Evasion | User Evasion | T1618 | Icon hiding, black overlay |
 | Discovery | Software Discovery | T1418 | `QUERY_ALL_PACKAGES` |
-| **Collection** | **Abuse Accessibility Features** | **T1453** | ★ The hinge — nearly every family |
+| **Collection** | **Abuse Accessibility Features** | **T1453** | ★ The hinge - nearly every family |
 | Collection | Input Capture: Keylogging | T1417.001 | a11y node text |
 | Collection | Input Capture: GUI Input Capture | T1417.002 | Overlays |
 | Collection | Screen Capture | T1513 | Hidden VNC |
@@ -132,7 +132,7 @@ matrix.
 | Credential Access | Adversary-in-the-Middle | T1638 | OTP interception |
 | Command and Control | Encrypted Channel / Web Service | T1521 / T1481 | AES C2, Telegram dead drops |
 
-*Technique IDs are revised across ATT&CK versions — **pin the ATT&CK version** in your mappings.
+*Technique IDs are revised across ATT&CK versions - **pin the ATT&CK version** in your mappings.
 
 MITRE also now publishes **detection strategies** (e.g. `DET0697` for accessibility abuse),
 which are worth reading as a sanity check against your own rule coverage.
@@ -143,18 +143,18 @@ which are worth reading as a sanity check against your own rule coverage.
 > ([Ch 19](../soc/19-enterprise-soc-operations.md)) and instant alignment with every vendor
 > report you cite.
 
-### Coverage heatmap — the honest version
+### Coverage heatmap - the honest version
 
 ```
   TACTIC              SUDARSHAN COVERAGE
   ──────              ──────────────────
-  Initial Access      ▓▓▓░░  partial — we see the sample, not the delivery
+  Initial Access      ▓▓▓░░  partial - we see the sample, not the delivery
   Execution           ▓▓▓▓░  static + dynamic
   Persistence         ▓▓▓▓▓  manifest + runtime
   Priv. Escalation    ▓▓▓▓▓  a11y + device admin
   Defense Evasion     ▓▓▓░░  packers detected; native logic partial
   Discovery           ▓▓▓▓▓  package enumeration
-  Collection          ▓▓▓▓▓  ★ strongest — the core capability cluster
+  Collection          ▓▓▓▓▓  ★ strongest - the core capability cluster
   C2                  ▓▓▓▓░  dynamic; blind if C2 offline
   Exfiltration        ▓▓▓▓░  network capture
   Impact              ▓▓▓░░  ATS/VNC observed; fraud outcome is bank-side
@@ -167,7 +167,7 @@ myth.
 
 ## 4. MITRE D3FEND
 
-ATT&CK catalogues **offense**. **D3FEND** catalogues **defense** — a taxonomy of defensive
+ATT&CK catalogues **offense**. **D3FEND** catalogues **defense** - a taxonomy of defensive
 techniques (Harden, Detect, Isolate, Deceive, Evict) with mappings back to ATT&CK.
 
 | D3FEND tactic | SUDARSHAN / bank example |
@@ -178,8 +178,7 @@ techniques (Harden, Detect, Isolate, Deceive, Evict) with mappings back to ATT&C
 | **Deceive** | Decoy apps in the analysis lab ([Ch 12 §3](../dynamic-analysis/12-dynamic-analysis.md#3-detonation-methodology)) |
 | **Evict** | Safe Mode removal runbook ([Ch 13 §8](../malware/13-android-malware.md#8-device-admin-abuse-and-anti-removal)) |
 
-> **⚙️ Engineering Note:** D3FEND is less mature and less used than ATT&CK, and that's fine —
-> its practical value is as a **checklist against one-sidedness**. Teams over-invest in Detect
+> **⚙️ Engineering Note:** D3FEND is less mature and less used than ATT&CK, and that's fine - > its practical value is as a **checklist against one-sidedness**. Teams over-invest in Detect
 > and under-invest in Harden and Evict. If your D3FEND mapping is all Detect, your recommendation
 > section is probably missing the cheap wins the bank actually controls.
 
@@ -203,12 +202,12 @@ Every intrusion has four vertices; **pivoting means moving between them.**
         (bank customers, banks)
 ```
 
-### Worked example — Octo2
+### Worked example - Octo2
 
 | Vertex | Value |
 |---|---|
 | Adversary | Actor **"Architect"** (ThreatFabric), original Octo author |
-| Capability | Octo2 — RAT, DGA, anti-analysis, Android 13+ bypass |
+| Capability | Octo2 - RAT, DGA, anti-analysis, Android 13+ bypass |
 | Infrastructure | DGA-generated C2; Zombinder as delivery |
 | Victim | Bank customers in Europe, US, Canada, Middle East, Singapore, Australia |
 
@@ -234,7 +233,7 @@ Lockheed Martin's chain was written for network intrusions. The Android banking-
 | **Actions on Objectives** | ATS / VNC transfer → mule chain | Transaction controls; session hold |
 
 > **⚙️ Engineering Note:** The **Exploitation** row is where this chain differs most from the
-> classic model — there is no software exploit. The "exploitation" is a **user decision**, which
+> classic model - there is no software exploit. The "exploitation" is a **user decision**, which
 > is why the strongest single mitigation is behavioural education (*"no legitimate app requires
 > you to enable Accessibility"*) rather than a technical control. Uncomfortable, but true, and
 > worth saying plainly to a bank rather than implying technology alone closes it.
@@ -267,7 +266,7 @@ given indicator type?
 
 ### The strategic consequence
 
-**Most detection programmes invert this pyramid** — they consume hash and IP feeds because those
+**Most detection programmes invert this pyramid** - they consume hash and IP feeds because those
 are cheap and abundant, and they detect the things that cost the adversary nothing.
 
 SUDARSHAN's design deliberately weights the top:
@@ -281,12 +280,12 @@ SUDARSHAN's design deliberately weights the top:
 | Hashes | Extracted, deduplicated, expired fast |
 
 > **⚖️ Judge Tip:** The Pyramid of Pain is the cleanest framing for *why* SUDARSHAN is built the
-> way it is. One sentence: *"We deliberately detect at the top of the pyramid — behaviour and
-> capability clusters — because a hash costs the adversary a minute to change and a working
+> way it is. One sentence: *"We deliberately detect at the top of the pyramid - behaviour and
+> capability clusters - because a hash costs the adversary a minute to change and a working
 > attack pattern costs them months to redesign."* It reframes the whole platform from
 > "another scanner" to "a detection strategy."
 
-**Note the honest caveat:** hashes and IPs still matter operationally — they're what a SIEM can
+**Note the honest caveat:** hashes and IPs still matter operationally - they're what a SIEM can
 block *today*. The point is weighting and expiry, not abandonment.
 
 ---
@@ -327,7 +326,7 @@ indicator:
   tlp: "TLP:AMBER"
 ```
 
-**Confidence and severity are separate axes** — the same principle as the risk score
+**Confidence and severity are separate axes** - the same principle as the risk score
 ([Ch 27](../sudarshan/27-risk-scoring.md)). A high-severity indicator you're unsure about is a
 *review* item, not a *block* item.
 
@@ -340,14 +339,14 @@ indicator:
               confidence set                           periodically  auto-block
 ```
 
-> **⚙️ Engineering Note — expiry is a correctness requirement.** Domains get re-registered
+> **⚙️ Engineering Note - expiry is a correctness requirement.** Domains get re-registered
 > legitimately; IPs get recycled; hosts get sinkholed by researchers and law enforcement. An
 > IOC database that only grows becomes a **false-positive engine**, and eventually it blocks
 > something a customer needs. Worse, sinkholed infrastructure means *contact with a known-bad IP*
 > may indicate a researcher, not a compromise. Build expiry and re-verification in from day one.
 > → [Ch 26](../sudarshan/26-ioc-extraction.md), [Ch 30](../threat-intelligence/30-threat-intelligence-database.md)
 
-### TLP — Traffic Light Protocol
+### TLP - Traffic Light Protocol
 
 | Level | Sharing |
 |---|---|
@@ -356,7 +355,7 @@ indicator:
 | **TLP:GREEN** | Community |
 | **TLP:CLEAR** | Public |
 
-Bank-derived indicators are frequently **AMBER+STRICT** — customer-linked data cannot be shared
+Bank-derived indicators are frequently **AMBER+STRICT** - customer-linked data cannot be shared
 freely, and in India the **DPDP Act 2023** constrains this directly
 ([Ch 14 §8](../banking-malware/14-banking-malware.md#8-india-and-the-upi-fraud-ecosystem)).
 
@@ -366,7 +365,7 @@ freely, and in India the **DPDP Act 2023** constrains this directly
 
 | Standard/tool | What it is |
 |---|---|
-| **STIX 2.1** | JSON data model for threat intel — objects (Indicator, Malware, Campaign, Threat-Actor, Infrastructure) plus relationships |
+| **STIX 2.1** | JSON data model for threat intel - objects (Indicator, Malware, Campaign, Threat-Actor, Infrastructure) plus relationships |
 | **TAXII 2.1** | Transport protocol for exchanging STIX |
 | **MISP** | Open-source sharing platform; event-based; large community feed ecosystem |
 | **OpenCTI** | Open-source knowledge-graph platform; STIX-native; strong for relationship modelling |
@@ -395,12 +394,12 @@ freely, and in India the **DPDP Act 2023** constrains this directly
 }
 ```
 
-> **⚙️ Engineering Note:** Note `aliases` on the malware object — that is where the naming
+> **⚙️ Engineering Note:** Note `aliases` on the malware object - that is where the naming
 > divergence from [Ch 14 §9](../banking-malware/14-banking-malware.md#9-naming-divergence) gets
 > modelled properly. Store aliases **with the naming vendor and first-report date**, not as bare
 > strings, or correlation fragments the first time two vendors disagree.
 >
-> Also note `valid_until` — STIX has expiry built in. **Use it.**
+> Also note `valid_until` - STIX has expiry built in. **Use it.**
 
 ### The interoperability reality
 
@@ -432,7 +431,7 @@ attribution needs capabilities no commercial platform has.
 | Evidence | Strength | Caveat |
 |---|---|---|
 | Signer certificate match | **Strong** | MaaS affiliates use different keys |
-| Code similarity (DEX-level) | **Strong** | **Leaked source weakens it** — post-leak, similarity indicates lineage, not actor |
+| Code similarity (DEX-level) | **Strong** | **Leaked source weakens it** - post-leak, similarity indicates lineage, not actor |
 | Shared C2 infrastructure | Strong | Shared hosting; delivery services serve many actors |
 | Hardcoded key reuse | Strong | |
 | Protocol + command set | Medium-Strong | |
@@ -447,10 +446,9 @@ attribution needs capabilities no commercial platform has.
 > **🚨 Misconception:** "Turkish comments in the code mean Turkish authors." Language artifacts,
 > build timezones, and CIS geofencing are **weak circumstantial indicators, deliberately
 > spoofable, and a documented false-flag technique.** Vendors report them because they are
-> observations. Report them the same way — as observations with hedged language ("consistent
+> observations. Report them the same way - as observations with hedged language ("consistent
 > with," "assessed as"), never as conclusions. Cleafy assessed Klopatra's operators as
-> Turkish-speaking and ThreatFabric assessed Crocodilus's author similarly; note the verb —
-> *assessed*, not *proved*.
+> Turkish-speaking and ThreatFabric assessed Crocodilus's author similarly; note the verb - > *assessed*, not *proved*.
 
 ### The leaked-source problem
 
@@ -473,7 +471,7 @@ Use estimative language and mean it:
 | "We assess with high confidence" | Multiple strong, independent evidence types |
 | "We assess with moderate confidence" | Some strong evidence, gaps remain |
 | "We assess with low confidence" | Circumstantial or single-source |
-| "It is possible that" | Speculation — label it |
+| "It is possible that" | Speculation - label it |
 | "Consistent with" | Compatible, **not** proof |
 
 ---
@@ -487,14 +485,14 @@ Use estimative language and mean it:
 | **Multi-engine platforms** | VirusTotal / Google Threat Intelligence | Breadth, retrohunt | **Aggregator, not verdict** |
 | **Government/CERT** | CERT-In, I4C, national CERTs | Authoritative, local | Slower, less technical |
 | **Community** | MISP feeds, abuse.ch, OTX | Fast, free | Variable quality |
-| **Secondary press** | BleepingComputer, The Hacker News, SecurityWeek | Timely | Derivative — **cite the primary** |
+| **Secondary press** | BleepingComputer, The Hacker News, SecurityWeek | Timely | Derivative - **cite the primary** |
 
 ### The rules
 
 1. **Cite the primary source**, not the article about it.
 2. **Attach vendor + date to every claim** ([Ch 14](../banking-malware/14-banking-malware.md)).
 3. **Treat telemetry figures as that vendor's visibility**, not global truth.
-4. **Distinguish observation from prediction** — ThreatFabric's "Octo2 will become more
+4. **Distinguish observation from prediction** - ThreatFabric's "Octo2 will become more
    widespread" is a forecast.
 5. **Flag single-vendor claims** as such.
 
@@ -515,7 +513,7 @@ threat_intel:
   family:
     name: "Anatsa"
     aliases: [{name: "TeaBot", vendor: "Cleafy"}, {name: "Toddler", vendor: "-"}]
-    lineage: []                      # empty — no known parent
+    lineage: []                      # empty - no known parent
     source_leaked: false             # ★ gates attribution confidence
     first_reported: {date: "2021-01", vendor: "Cleafy"}
   attribution:
@@ -580,8 +578,8 @@ threat_intel:
 | Hardcoded key matches a known family | High | High |
 | DEX TLSH within threshold of a known family | High | Medium-High |
 | Behavioural string matches a family fingerprint | High | Medium-High |
-| Hash matches a known sample | High | High (but **low value** — top of pipeline, bottom of pyramid) |
-| Indicator expired / possibly sinkholed | — | **Suppress; require re-verification** |
+| Hash matches a known sample | High | High (but **low value** - top of pipeline, bottom of pyramid) |
+| Indicator expired / possibly sinkholed | - | **Suppress; require re-verification** |
 
 ---
 
@@ -590,7 +588,7 @@ threat_intel:
 ### Limitations
 
 - **Intelligence is always retrospective.** It describes what was seen. Novel campaigns have no
-  intel by definition — which is why TTP-level detection matters more than feeds.
+  intel by definition - which is why TTP-level detection matters more than feeds.
 - **Vendor visibility bias** shapes what "the landscape" looks like.
 - **Attribution beyond family/campaign is out of reach** for a commercial platform.
 - **Feeds vary wildly in quality**; unvetted ingestion imports someone else's false positives.
@@ -615,7 +613,7 @@ threat_intel:
 
 | Case | Handling |
 |---|---|
-| **Sinkholed C2** | Contact indicates a researcher/LE host, **not** active compromise — suppress or reclassify |
+| **Sinkholed C2** | Contact indicates a researcher/LE host, **not** active compromise - suppress or reclassify |
 | Re-registered domain | Expire and re-verify before acting |
 | Family renamed by a vendor | Alias modelling handles it |
 | Post-leak lineage | Downgrade actor-attribution confidence automatically |
@@ -626,16 +624,16 @@ threat_intel:
 ## 14. Engineering tips
 
 1. **Map rules to ATT&CK at authoring time, and pin the ATT&CK version.**
-2. **Weight the top of the Pyramid of Pain** — TTPs and tools over hashes and IPs.
+2. **Weight the top of the Pyramid of Pain** - TTPs and tools over hashes and IPs.
 3. **Every indicator carries confidence, severity, source, TTL, and TLP.**
 4. **Expire indicators.** Growth-only databases become false-positive engines.
 5. **Model family aliases with the naming vendor**, never as bare strings.
 6. **Flag leaked-source families** and auto-downgrade actor attribution for them.
 7. **Cite primary sources**, not the press coverage of them.
 8. **Separate observation from prediction** when quoting vendor reports.
-9. **Use estimative language** — "assessed with moderate confidence," not "is."
+9. **Use estimative language** - "assessed with moderate confidence," not "is."
 10. **Never attribute from language artifacts or VT labels.**
-11. **Produce all three tiers** — tactical, operational, strategic — from one investigation.
+11. **Produce all three tiers** - tactical, operational, strategic - from one investigation.
 12. **Account for vendor visibility bias**, especially for India-focused coverage.
 
 ---
@@ -644,10 +642,10 @@ threat_intel:
 
 **What judges ask:** *"Aren't you just reselling threat feeds?"*
 
-**Perfect answer:** No — and the Pyramid of Pain explains why. Most detection programmes consume
+**Perfect answer:** No - and the Pyramid of Pain explains why. Most detection programmes consume
 hash and IP feeds because they're cheap and abundant, which means they detect exactly the things
 that cost an adversary nothing: a hash takes a minute to change, an IP takes hours. We
-deliberately detect at the top of the pyramid — behaviour and capability clusters like
+deliberately detect at the top of the pyramid - behaviour and capability clusters like
 accessibility abuse driving an overlay on a foreground-app change, which costs the adversary
 months to redesign because it *is* the attack. Feeds are one enrichment input, ingested with
 provenance, confidence, and a TTL, never auto-blocked. And critically we *produce* intelligence
@@ -663,10 +661,10 @@ external feed has visibility into that bank's customer base.
 
 **Follow-ups to expect:**
 - *"How do you avoid stale indicators?"* → Type-based TTLs, periodic re-verification, and
-  explicit handling of sinkholed infrastructure — contact with a sinkholed host indicates a
+  explicit handling of sinkholed infrastructure - contact with a sinkholed host indicates a
   researcher, not a compromise. Expiry is a correctness requirement, not housekeeping.
 - *"Can you tell us who's behind it?"* → Family and campaign, yes, with stated confidence.
-  Operator, rarely. Nation-state, no — and anyone claiming otherwise from an APK is overselling.
+  Operator, rarely. Nation-state, no - and anyone claiming otherwise from an APK is overselling.
   Also, after source leaks like Cerberus, Octo, SpyNote, and ERMAC 3.0, code similarity indicates
   **lineage, not actor**, so we automatically downgrade actor confidence for leaked families.
 - *"Why MITRE mapping?"* → Shared vocabulary with every vendor report and the client's SOC, plus
@@ -684,7 +682,7 @@ that's an argument for building our own telemetry, not a reason to assume safety
 
 **Q: "What's the difference between data, information, and intelligence?"**
 Data is a hash. Information is "that hash is Anatsa." Intelligence is "Anatsa targets your bank,
-arrives via Play droppers, so your Play-install allowlist assumption fails — here's what to
+arrives via Play droppers, so your Play-install allowlist assumption fails - here's what to
 change." **Intelligence changes a decision.**
 
 **Q: "Explain the Pyramid of Pain."**
@@ -700,18 +698,18 @@ version**, because technique IDs get revised.
 
 **Q: "How confident can you be in attribution?"**
 Family and campaign: reasonably, from signer, code similarity, and infrastructure. Operator: hard,
-needs sustained tracking. Nation-state: not from an APK. Then the key caveat — leaked source
+needs sustained tracking. Nation-state: not from an APK. Then the key caveat - leaked source
 (Cerberus, SpyNote, Octo, ERMAC 3.0) means code similarity shows lineage rather than actor, and
 language artifacts and timezones are spoofable false-flag material.
 
 **Q: "What are STIX and TAXII?"**
-STIX 2.1 is the JSON data model — Indicator, Malware, Campaign, Infrastructure objects plus
+STIX 2.1 is the JSON data model - Indicator, Malware, Campaign, Infrastructure objects plus
 relationships. TAXII 2.1 is the transport protocol. Add realism: adoption is uneven, many feeds
 are still CSV or prose PDFs, so build a normaliser.
 
 **Q: "An IP is in your threat feed and a customer connected to it. Compromised?"**
 Not necessarily. Check whether it's shared hosting, whether the address was recycled, and
-critically whether it's been **sinkholed** — contact with a sinkholed host means a researcher or
+critically whether it's been **sinkholed** - contact with a sinkholed host means a researcher or
 law enforcement operates it, not that the customer is compromised. Verify before acting.
 
 **Beginner mistakes:**
@@ -726,17 +724,17 @@ law enforcement operates it, not that the customer is compromised. Verify before
 ## 17. Cross-references
 
 **Upstream:**
-- [← Ch 13 Android Malware](../malware/13-android-malware.md) — the techniques being mapped
-- [← Ch 14 Banking Malware](../banking-malware/14-banking-malware.md) — families, aliases, naming divergence
-- [← Ch 15 Malware Infrastructure](../malware/15-malware-infrastructure.md) — the pivot graph
+- [← Ch 13 Android Malware](../malware/13-android-malware.md) - the techniques being mapped
+- [← Ch 14 Banking Malware](../banking-malware/14-banking-malware.md) - families, aliases, naming divergence
+- [← Ch 15 Malware Infrastructure](../malware/15-malware-infrastructure.md) - the pivot graph
 
 **Downstream:**
-- [→ Ch 18 Mobile Threat Hunting](../soc/18-mobile-threat-hunting.md) — intel-driven hunting
-- [→ Ch 19 Enterprise SOC](../soc/19-enterprise-soc-operations.md) — ATT&CK coverage, detection engineering
-- [→ Ch 26 IOC Extraction](../sudarshan/26-ioc-extraction.md) — indicator typing and TTLs
-- [→ Ch 28 Campaign Correlation](../sudarshan/28-campaign-correlation.md) — Diamond Model in practice
-- [→ Ch 29 Investigation Reports](../sudarshan/29-investigation-reports.md) — the three tiers as output
-- [→ Ch 30 TI Database](../threat-intelligence/30-threat-intelligence-database.md) — schema, aliases, leak flags
+- [→ Ch 18 Mobile Threat Hunting](../soc/18-mobile-threat-hunting.md) - intel-driven hunting
+- [→ Ch 19 Enterprise SOC](../soc/19-enterprise-soc-operations.md) - ATT&CK coverage, detection engineering
+- [→ Ch 26 IOC Extraction](../sudarshan/26-ioc-extraction.md) - indicator typing and TTLs
+- [→ Ch 28 Campaign Correlation](../sudarshan/28-campaign-correlation.md) - Diamond Model in practice
+- [→ Ch 29 Investigation Reports](../sudarshan/29-investigation-reports.md) - the three tiers as output
+- [→ Ch 30 TI Database](../threat-intelligence/30-threat-intelligence-database.md) - schema, aliases, leak flags
 
 **Related chain:** Sample → indicators → enrichment → correlation → ATT&CK mapping →
 tactical/operational/strategic output.
@@ -746,26 +744,26 @@ tactical/operational/strategic output.
 ## 18. References
 
 1. MITRE ATT&CK for Mobile. https://attack.mitre.org/matrices/mobile/
-2. MITRE ATT&CK — detection strategies (e.g. DET0697, Abuse Accessibility Features).
+2. MITRE ATT&CK - detection strategies (e.g. DET0697, Abuse Accessibility Features).
 3. MITRE D3FEND. https://d3fend.mitre.org/
-4. Caltagirone, Pendergast, Betz — *The Diamond Model of Intrusion Analysis* (2013).
-5. Lockheed Martin — *Cyber Kill Chain*.
-6. David Bianco — *The Pyramid of Pain* (2013).
-7. OASIS — STIX 2.1 and TAXII 2.1 specifications. https://oasis-open.github.io/cti-documentation/
-8. MISP — Open Source Threat Intelligence Platform. https://www.misp-project.org/
+4. Caltagirone, Pendergast, Betz - *The Diamond Model of Intrusion Analysis* (2013).
+5. Lockheed Martin - *Cyber Kill Chain*.
+6. David Bianco - *The Pyramid of Pain* (2013).
+7. OASIS - STIX 2.1 and TAXII 2.1 specifications. https://oasis-open.github.io/cti-documentation/
+8. MISP - Open Source Threat Intelligence Platform. https://www.misp-project.org/
 9. OpenCTI. https://www.filigran.io/en/products/opencti/
-10. FIRST — Traffic Light Protocol (TLP) 2.0. https://www.first.org/tlp/
-11. Google Security Blog — *How we kept the Google Play & Android app ecosystems safe in 2024*.
-12. Zimperium zLabs — *Banking Heist Report* (March 19, 2026).
-13. Zscaler ThreatLabz — *Anatsa's Latest Updates* (August 2025).
-14. ThreatFabric — Octo2 (September 2024), Crocodilus (March 29, 2025), Chameleon (December 2023).
-15. Cleafy Labs — ToxicPanda (October 2024), Klopatra (August 2025), BingoMod (July 31, 2024).
-16. Hunt.io — ERMAC 3.0 source leak (published August 2025).
-17. CERT-In — Directions of April 28, 2022 (incident reporting).
-18. NIST SP 800-150 — *Guide to Cyber Threat Information Sharing*.
+10. FIRST - Traffic Light Protocol (TLP) 2.0. https://www.first.org/tlp/
+11. Google Security Blog - *How we kept the Google Play & Android app ecosystems safe in 2024*.
+12. Zimperium zLabs - *Banking Heist Report* (March 19, 2026).
+13. Zscaler ThreatLabz - *Anatsa's Latest Updates* (August 2025).
+14. ThreatFabric - Octo2 (September 2024), Crocodilus (March 29, 2025), Chameleon (December 2023).
+15. Cleafy Labs - ToxicPanda (October 2024), Klopatra (August 2025), BingoMod (July 31, 2024).
+16. Hunt.io - ERMAC 3.0 source leak (published August 2025).
+17. CERT-In - Directions of April 28, 2022 (incident reporting).
+18. NIST SP 800-150 - *Guide to Cyber Threat Information Sharing*.
 
 ### Further reading
-- Sherman Kent / ODNI — estimative language and analytic confidence standards
+- Sherman Kent / ODNI - estimative language and analytic confidence standards
 - abuse.ch projects (MalwareBazaar, URLhaus, ThreatFox)
 - Certificate Transparency logs as an infrastructure-discovery source
 
@@ -781,6 +779,6 @@ Chapters 13–16 cover the adversary: the technique playbook, the banking-malwar
 their lineages, the infrastructure and criminal supply chain behind them, and the
 threat-intelligence frameworks that organise all of it.
 
-**Block D (Chapters 17–21)** turns to operations — digital forensics, mobile threat hunting,
-enterprise SOC, incident response, and AI-assisted analysis — where this knowledge becomes a
+**Block D (Chapters 17–21)** turns to operations - digital forensics, mobile threat hunting,
+enterprise SOC, incident response, and AI-assisted analysis - where this knowledge becomes a
 response inside the fraud window.

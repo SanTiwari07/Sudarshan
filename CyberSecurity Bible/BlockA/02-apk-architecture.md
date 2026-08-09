@@ -1,4 +1,4 @@
-# 02 — APK Architecture
+# 02 - APK Architecture
 
 > **Chapter ID:** `CH02` · **Block:** A (Foundations) · **Status:** Stable
 > **Tags:** `#apk` `#manifest` `#aab` `#splits` `#build-pipeline` `#static-analysis`
@@ -12,7 +12,7 @@
 1. [What an APK actually is](#1-what-an-apk-actually-is)
 2. [The anatomy](#2-the-anatomy)
 3. [The build pipeline](#3-the-build-pipeline)
-4. [AndroidManifest.xml — the app's declaration of intent](#4-androidmanifestxml--the-apps-declaration-of-intent)
+4. [AndroidManifest.xml - the app's declaration of intent](#4-androidmanifestxml--the-apps-declaration-of-intent)
 5. [Resources and resources.arsc](#5-resources-and-resourcesarsc)
 6. [Native libraries](#6-native-libraries)
 7. [App Bundles, split APKs, and why "the APK" is a lie](#7-app-bundles-split-apks-and-why-the-apk-is-a-lie)
@@ -57,22 +57,21 @@ Archive:  suspicious.apk
 > **⚙️ Engineering Note:** Those `1981-01-01` timestamps are not a bug. Modern Android
 > build tooling normalises ZIP entry timestamps to make builds reproducible. **If you see
 > *real* varied timestamps in an APK, it was likely repackaged by hand or by a tool like
-> `apktool b` — a genuine repackaging signal.** It's weak on its own (many legitimate
+> `apktool b` - a genuine repackaging signal.** It's weak on its own (many legitimate
 > pipelines re-zip), but it's free to compute and worth recording.
 
 ### WHY the format is what it is
 
 ZIP was chosen because it's ubiquitous, streamable, supports per-entry compression, and
 allows random access to individual entries without decompressing the whole archive.
-Android needs the last property badly — the runtime memory-maps `classes.dex` and
+Android needs the last property badly - the runtime memory-maps `classes.dex` and
 `resources.arsc` directly out of the APK rather than extracting them.
 
 This has a direct consequence you must internalise:
 
 > **`classes.dex` and `resources.arsc` are stored *uncompressed and aligned*** (4-byte
 > alignment historically; 16 KB page alignment for native libs on newer devices) so they
-> can be `mmap`'d in place. That's what `zipalign` does. It's not an optimisation nicety —
-> it's a runtime requirement.
+> can be `mmap`'d in place. That's what `zipalign` does. It's not an optimisation nicety - > it's a runtime requirement.
 
 ### The three things an APK simultaneously is
 
@@ -86,7 +85,7 @@ This trips people up, so be explicit:
 
 > **🚨 Misconception:** "An APK is a compiled binary." No. It's a container. The *bytecode*
 > inside is compiled (DEX), but the APK itself is an archive. This matters because it means
-> you can inspect and modify parts of it without touching others — which is exactly what
+> you can inspect and modify parts of it without touching others - which is exactly what
 > repackaging attacks do, and exactly what signature scheme v2+ was built to prevent.
 
 ---
@@ -131,7 +130,7 @@ suspicious.apk  (ZIP container)
 ├── kotlin/                      ← Kotlin metadata (presence = written in Kotlin)
 ├── DebugProbesKt.bin            ← coroutines debug artifact
 │
-└── [APK Signing Block]          ← v2/v3/v3.1 signatures — NOT a ZIP entry.
+└── [APK Signing Block]          ← v2/v3/v3.1 signatures - NOT a ZIP entry.
                                     Sits between file data and Central Directory. → Ch 07/08
 ```
 
@@ -141,13 +140,13 @@ suspicious.apk  (ZIP container)
 |---|---|---|
 | 1 | `AndroidManifest.xml` | Capabilities, entry points, targetSdk, exported surface. Cheapest, highest yield. |
 | 2 | `res/xml/*accessibility*` | If an a11y service is declared, its config tells you what it can capture |
-| 3 | Signer certificate | Identity — the durable pivot for campaign correlation ([Ch 06](../security/06-certificates.md)) |
+| 3 | Signer certificate | Identity - the durable pivot for campaign correlation ([Ch 06](../security/06-certificates.md)) |
 | 4 | `assets/` | Uncompiled payloads, encrypted DEX, config blobs, overlay HTML |
 | 5 | `lib/*.so` | Packer fingerprints, native logic |
-| 6 | `classes*.dex` | The actual code (expensive to analyse — gate this stage) |
+| 6 | `classes*.dex` | The actual code (expensive to analyse - gate this stage) |
 | 7 | `res/xml/network_security_config.xml` | Cleartext allowances, custom CA trust |
 
-> **⚙️ Engineering Note — the `assets/` blind spot:** `assets/` is a raw passthrough
+> **⚙️ Engineering Note - the `assets/` blind spot:** `assets/` is a raw passthrough
 > directory. Nothing validates it, nothing compiles it, and many static analysers
 > under-inspect it. Encrypted second-stage DEX, `.jar` payloads, overlay HTML templates,
 > and C2 config have all been found there across families. Klopatra fetched overlay HTML
@@ -253,7 +252,7 @@ signed-repacked.apk  ← different signer cert → different identity
 **The critical security fact:** repackaging always changes the signer, because the attacker
 doesn't have the original private key. So the repacked app has a **different certificate
 fingerprint** and Android will refuse to install it as an *update* over the genuine app
-(`INSTALL_FAILED_UPDATE_INCOMPATIBLE`). It must be installed fresh — which is why fake
+(`INSTALL_FAILED_UPDATE_INCOMPATIBLE`). It must be installed fresh - which is why fake
 banking apps are distributed via smishing to users who don't have the real app, or which
 masquerade under a different package name entirely.
 
@@ -265,7 +264,7 @@ masquerade under a different package name entirely.
 
 ---
 
-## 4. AndroidManifest.xml — the app's declaration of intent
+## 4. AndroidManifest.xml - the app's declaration of intent
 
 ### WHY it's the highest-value file
 
@@ -329,7 +328,7 @@ get a capability profile in milliseconds without decompiling anything.
 |---|---|---|
 | ① | `package` | **Not identity.** Attacker-chosen. See §8. |
 | ② | `targetSdkVersion` | Gates behaviour. Low targetSdk = evasion attempt. Android 14 blocks < API 23, Android 15 blocks < API 24. → [Ch 04](../security/04-android-security-model.md) |
-| ③ | `QUERY_ALL_PACKAGES` | Lets the app enumerate every installed package — how overlay malware knows *which* banking apps you have. Play-restricted; rare in legit apps. **Strong signal.** |
+| ③ | `QUERY_ALL_PACKAGES` | Lets the app enumerate every installed package - how overlay malware knows *which* banking apps you have. Play-restricted; rare in legit apps. **Strong signal.** |
 | ④ | `allowBackup="true"` | Data extractable via backup; a data-leak finding (OWASP MASVS-STORAGE) |
 | ⑤ | `debuggable="true"` | In a production app: critical finding. Lets anyone attach a debugger and read memory. |
 | ⑥ | `usesCleartextTraffic="true"` | Plaintext HTTP allowed. Combined with a permissive `network_security_config`, an MITM finding |
@@ -338,7 +337,7 @@ get a capability profile in milliseconds without decompiling anything.
 | ⑨ | `foregroundServiceType="mediaProjection"` | Screen capture. Mandatory declaration since Android 14. |
 | ⑩ | `BOOT_COMPLETED` | Persistence. MITRE T1624. |
 
-### The accessibility config — read it, always
+### The accessibility config - read it, always
 
 When you find an a11y service, the `@xml/accessibility_config` resource tells you what it
 actually asked for:
@@ -359,10 +358,10 @@ Decoded:
 | Attribute | Benign use | Abuse implication |
 |---|---|---|
 | `typeAllMask` | Rare | Wants **every** event on the device |
-| `canRetrieveWindowContent="true"` | Screen readers need it | **Can read text from any app's screen** — including your banking balance and typed credentials |
-| `canPerformGestures="true"` | Switch access, motor assistance | **Can inject taps and swipes** — this is what auto-grants permissions and drives ATS transfers |
+| `canRetrieveWindowContent="true"` | Screen readers need it | **Can read text from any app's screen** - including your banking balance and typed credentials |
+| `canPerformGestures="true"` | Switch access, motor assistance | **Can inject taps and swipes** - this is what auto-grants permissions and drives ATS transfers |
 | `packageNames` absent/empty | Broad utilities | Not scoped to specific apps → targets everything |
-| `notificationTimeout="0-100"` | Responsive UI | Wants events with minimal delay — real-time capture |
+| `notificationTimeout="0-100"` | Responsive UI | Wants events with minimal delay - real-time capture |
 
 > **⚖️ Judge Tip:** Being able to read an `accessibility-service` config out loud and
 > explain exactly which line enables credential theft (`canRetrieveWindowContent`) and
@@ -375,7 +374,7 @@ Decoded:
 - Runtime permissions are **requested**, not granted, at install (Android 6+). Declaration
   ≠ possession. Check `dumpsys package` on a live device for actual grants.
 - Code loaded dynamically can use capabilities the manifest declares but the static code
-  never touches — and *cannot* use undeclared permissions. (Permissions are a hard ceiling;
+  never touches - and *cannot* use undeclared permissions. (Permissions are a hard ceiling;
   dynamic loading can't exceed the manifest.)
 - Native code behaviour is invisible here.
 
@@ -416,7 +415,7 @@ table does that.
 2. **Localisation reveals targeting.** An APK with `values-tr/`, `values-es/`, and
    `values-it/` and nothing else is telling you its victim geography. Antidot was
    documented (Cyble, May 2024) with German, French, Spanish, Russian, Portuguese,
-   Romanian, and English overlay support — the resource set *is* the target list.
+   Romanian, and English overlay support - the resource set *is* the target list.
 
 3. **`resources.arsc` manipulation is an evasion technique.** Malformed or non-standard
    resource tables have been used to crash or confuse parsers (including `apktool` and some
@@ -436,7 +435,7 @@ table does that.
 
 `lib/<abi>/*.so` holds ELF shared objects loaded via `System.loadLibrary()`. Reasons apps
 use native code: performance (codecs, games, ML), reuse of existing C/C++ libraries,
-and — relevantly — **hiding logic from decompilers**.
+and - relevantly - **hiding logic from decompilers**.
 
 Common ABIs: `arm64-v8a` (dominant), `armeabi-v7a` (legacy 32-bit), `x86`/`x86_64`
 (emulators, some Chromebooks).
@@ -445,7 +444,7 @@ Common ABIs: `arm64-v8a` (dominant), `armeabi-v7a` (legacy 32-bit), `x86`/`x86_6
 
 | Observation | Meaning |
 |---|---|
-| Only `x86`/`x86_64`, no ARM | Built for emulators — unusual for real-world distribution; sometimes a test build or analysis bait |
+| Only `x86`/`x86_64`, no ARM | Built for emulators - unusual for real-world distribution; sometimes a test build or analysis bait |
 | Only `arm64-v8a` | Modern, real-device targeting (most current malware) |
 | `libjiagu.so`, `libDexHelper.so`, `libshella*.so`, `libtprt.so` | **Commercial packer fingerprints** (360 Jiagu, Bangcle/SecNeo, Virbox, Tencent) → [Ch 10](../reverse-engineering/10-reverse-engineering.md) |
 | Huge `.so` + tiny `classes.dex` | Logic pushed native. Klopatra (Cleafy, Aug 2025) and GodFather variants (Cyble) both did this. |
@@ -465,7 +464,7 @@ $ nm -D work/lib/arm64-v8a/libnative.so | grep -i 'JNI_OnLoad\|Java_'
 
 > **⚙️ Engineering Note:** `JNI_OnLoad` is the first native code that runs when the library
 > loads. Packers do their unpacking there. When you open a native library in Ghidra, start
-> at `JNI_OnLoad` — not at `main`, which doesn't exist in a shared object.
+> at `JNI_OnLoad` - not at `main`, which doesn't exist in a shared object.
 
 ---
 
@@ -505,7 +504,7 @@ Developer uploads:   app.aab   (signed with the UPLOAD key)
 be missing native libraries, resources, and even code (dynamic feature modules).
 
 ```bash
-# List ALL apk paths for a package — note the multiple lines
+# List ALL apk paths for a package - note the multiple lines
 $ adb shell pm path com.example.app
 package:/data/app/~~aBc/com.example.app-XyZ/base.apk
 package:/data/app/~~aBc/com.example.app-XyZ/split_config.arm64_v8a.apk
@@ -530,8 +529,8 @@ holding base + splits). MobSF supports these; plain `jadx` on a single split wil
 
 > **🚨 Misconception:** "I downloaded the app from Play, so the certificate I see is the
 > developer's." With Play App Signing (mandatory for AAB), you're seeing the key Google
-> holds and signs with. This is fine — it's still a stable identity for *that app on Play*
-> — but you must not describe it as "the developer's signing key" in a report.
+> holds and signs with. This is fine - it's still a stable identity for *that app on Play*
+> - but you must not describe it as "the developer's signing key" in a report.
 
 ---
 
@@ -542,7 +541,7 @@ real analytical failures. It is the seed of [Ch 32](../appendix/32-common-miscon
 
 | Concept | What it is | Who controls it | Is it identity? |
 |---|---|---|---|
-| **Package name** | The `package` attribute in the manifest; also the Java root package historically | The developer — or **any attacker who types it** | ❌ No |
+| **Package name** | The `package` attribute in the manifest; also the Java root package historically | The developer - or **any attacker who types it** | ❌ No |
 | **Application ID** | Gradle's `applicationId`; what actually ends up as the installed package identifier | The developer's build config | ❌ No |
 | **Signer certificate** | The X.509 cert whose private key signed the APK | Only whoever holds the private key | ✅ **Yes** |
 | **File hash (SHA-256)** | Digest of these exact bytes | Anyone (change one byte → new hash) | ❌ Identifies an *artifact*, not an app |
@@ -561,13 +560,13 @@ Practical outcome: build variants (`com.bank.app`, `com.bank.app.debug`,
 ### Why this matters for malware
 
 **Package names are free.** Crocodilus masqueraded as Google Chrome using the package
-`quizzical.washbowl.calamity` (ThreatFabric, March 2025) — arbitrary, meaningless, chosen
+`quizzical.washbowl.calamity` (ThreatFabric, March 2025) - arbitrary, meaningless, chosen
 to be unmemorable. Anatsa rotates package names between campaigns as a matter of routine.
 Conversely, malware often *impersonates* legitimate package names to appear on allowlists.
 
 > **⚖️ Judge Tip:** If a judge asks how you identify malware families, and you say
 > "package names," you have lost the room. The answer is **signer certificate fingerprint,
-> code similarity, and infrastructure overlap** — with package name recorded as a
+> code similarity, and infrastructure overlap** - with package name recorded as a
 > *campaign* attribute, useful for clustering but never for identity.
 
 ### The correct identity hierarchy
@@ -714,7 +713,7 @@ proceed on the normal queue. This gating is the throughput argument of
 | `assets/` high-entropy blobs | entropy scan | Encrypted stage-2 candidate |
 | Packer library name in `lib/` | filename match | Virbox/Jiagu/Bangcle/SecNeo |
 | Locale resource set | `res/values-*/` enumeration | **Victim geography inference** |
-| Referenced bank package names in resources | regex over decoded resources | **Overlay target list** — extremely high value |
+| Referenced bank package names in resources | regex over decoded resources | **Overlay target list** - extremely high value |
 
 > **🏛️ Enterprise Insight:** That last one is the killer feature for a bank. If SUDARSHAN
 > extracts the malware's target list and the client bank's package name is on it, that
@@ -760,7 +759,7 @@ proceed on the normal queue. This gating is the throughput argument of
 
 - Payload downloaded post-install (Anatsa's model).
 - Logic entirely in native code.
-- Behaviour gated on geography, time, or C2 command — nothing static reveals it.
+- Behaviour gated on geography, time, or C2 command - nothing static reveals it.
 
 ---
 
@@ -771,8 +770,7 @@ proceed on the normal queue. This gating is the throughput argument of
 3. **Index the signer fingerprint, not the file hash**, as your primary key.
 4. **Grep resources, not just DEX.** Strings hide in `resources.arsc`.
 5. **Enumerate `assets/` every single time.** It's the most under-inspected directory.
-6. **Record ZIP structural anomalies** rather than letting your parser normalise them away
-   — the anomaly is itself intelligence.
+6. **Record ZIP structural anomalies** rather than letting your parser normalise them away - the anomaly is itself intelligence.
 7. **Extract the locale set and the referenced package list.** Cheap, and they answer
    "who is being targeted?" which is the question the bank actually has.
 
@@ -783,7 +781,7 @@ proceed on the normal queue. This gating is the throughput argument of
 **What judges ask:** *"How do you know two APKs are the same malware family if the hashes
 are different?"*
 
-**Perfect answer:** Hashes identify a file, not an app or a family — change one byte and
+**Perfect answer:** Hashes identify a file, not an app or a family - change one byte and
 the hash changes, which adversaries do routinely (Anatsa rotates package names and install
 hashes between campaigns). We correlate on durable properties: the **signer certificate
 SHA-256 fingerprint** (survives recompilation; the attacker keeps their key because they
@@ -798,7 +796,7 @@ haven't handled real samples.
 **Follow-ups to expect:**
 - *"What if they rotate signing keys too?"* → Then key rotation itself becomes the signal,
   and we fall back to code similarity and infrastructure. Also: v3 key rotation carries a
-  **proof-of-rotation lineage** that links old key to new — which is a gift for
+  **proof-of-rotation lineage** that links old key to new - which is a gift for
   attribution. → [Ch 07](../security/07-apk-signing.md)
 - *"Why not just use VirusTotal?"* → VT gives engine verdicts, not capability or targeting.
   It also won't tell the bank that its own package name is in the overlay target list.
@@ -829,7 +827,7 @@ certificate.
 
 **Q: "Why is `classes.dex` stored uncompressed?"**
 So ART can memory-map it directly from the APK without extraction. Same reason
-`resources.arsc` is uncompressed and aligned — and since Android 11, a compressed
+`resources.arsc` is uncompressed and aligned - and since Android 11, a compressed
 `resources.arsc` causes install failure.
 
 **Q: "You're handed an APK. First five minutes?"**
@@ -842,7 +840,7 @@ Aligns uncompressed entries so they can be mmap'd. Run it **before** signing wit
 because v2 signs the whole file.
 
 **Beginner mistakes:**
-- Reading `AndroidManifest.xml` with `cat` and being confused by binary garbage — it's AXML.
+- Reading `AndroidManifest.xml` with `cat` and being confused by binary garbage - it's AXML.
 - Analysing `base.apk` and missing splits.
 - Treating declared permissions as granted permissions.
 - Calling obfuscation malicious.
@@ -853,17 +851,17 @@ because v2 signs the whole file.
 ## 15. Cross-references
 
 **Upstream:**
-- [← Ch 01 Android Internals](../android/01-android-internals.md) — components, exported surface
+- [← Ch 01 Android Internals](../android/01-android-internals.md) - components, exported surface
 
 **Downstream:**
-- [→ Ch 03 Android Runtime](../android/03-android-runtime.md) — how DEX becomes executing code
-- [→ Ch 06 Certificates](../security/06-certificates.md) — the signer identity introduced in §8
-- [→ Ch 07 APK Signing](../security/07-apk-signing.md) — the signing block, v1–v4
-- [→ Ch 08 APK File Format](08-apk-file-format.md) — byte-level ZIP/AXML/DEX structure
-- [→ Ch 09 Package Manager](09-package-manager.md) — how this file gets installed
-- [→ Ch 10 Reverse Engineering](../reverse-engineering/10-reverse-engineering.md) — packers, obfuscation
-- [→ Ch 11 Static Analysis](../static-analysis/11-static-analysis.md) — automating §9
-- [→ Ch 32 Common Misconceptions](../appendix/32-common-misconceptions.md) — §8 in full
+- [→ Ch 03 Android Runtime](../android/03-android-runtime.md) - how DEX becomes executing code
+- [→ Ch 06 Certificates](../security/06-certificates.md) - the signer identity introduced in §8
+- [→ Ch 07 APK Signing](../security/07-apk-signing.md) - the signing block, v1–v4
+- [→ Ch 08 APK File Format](08-apk-file-format.md) - byte-level ZIP/AXML/DEX structure
+- [→ Ch 09 Package Manager](09-package-manager.md) - how this file gets installed
+- [→ Ch 10 Reverse Engineering](../reverse-engineering/10-reverse-engineering.md) - packers, obfuscation
+- [→ Ch 11 Static Analysis](../static-analysis/11-static-analysis.md) - automating §9
+- [→ Ch 32 Common Misconceptions](../appendix/32-common-misconceptions.md) - §8 in full
 
 **Related concepts:** APK → manifest → accessibility config → overlay target list →
 campaign correlation → Ch 28.
@@ -872,24 +870,24 @@ campaign correlation → Ch 28.
 
 ## 16. References
 
-1. Android Developers — *Application Fundamentals* / *App Manifest Overview*. https://developer.android.com/guide/topics/manifest/manifest-intro
-2. Android Developers — *Android App Bundle*. https://developer.android.com/guide/app-bundle
-3. Android Developers — *Configure the app module / applicationId vs package name*. https://developer.android.com/build/configure-app-module
-4. Android Developers — *AccessibilityService configuration reference*. https://developer.android.com/reference/android/accessibilityservice/AccessibilityService
-5. Android Developers — *zipalign* and *apksigner* build-tool docs. https://developer.android.com/tools/zipalign
-6. Android Developers — *Behavior changes: Android 11* (uncompressed `resources.arsc`). https://developer.android.com/about/versions/11/behavior-changes-all
-7. Android Developers — *Foreground service types* (Android 14). https://developer.android.com/about/versions/14/changes/fgs-types-required
-8. ThreatFabric — *Crocodilus* analysis (March 29, 2025) — package masquerading.
-9. Zscaler ThreatLabz — *Anatsa's Latest Updates* (August 2025) — package/hash rotation.
-10. Cyble Research and Intelligence Labs — *Antidot* analysis (May 16, 2024) — multi-locale overlay targeting.
-11. Cleafy Labs — *Klopatra* (August 2025) — Virbox packing, native-code migration.
-12. MITRE ATT&CK for Mobile — T1453, T1624, T1417.001. https://attack.mitre.org/matrices/mobile/
-13. OWASP MASTG — *Android Platform APIs* and *Data Storage* test cases. https://mas.owasp.org/MASTG/
+1. Android Developers - *Application Fundamentals* / *App Manifest Overview*. https://developer.android.com/guide/topics/manifest/manifest-intro
+2. Android Developers - *Android App Bundle*. https://developer.android.com/guide/app-bundle
+3. Android Developers - *Configure the app module / applicationId vs package name*. https://developer.android.com/build/configure-app-module
+4. Android Developers - *AccessibilityService configuration reference*. https://developer.android.com/reference/android/accessibilityservice/AccessibilityService
+5. Android Developers - *zipalign* and *apksigner* build-tool docs. https://developer.android.com/tools/zipalign
+6. Android Developers - *Behavior changes: Android 11* (uncompressed `resources.arsc`). https://developer.android.com/about/versions/11/behavior-changes-all
+7. Android Developers - *Foreground service types* (Android 14). https://developer.android.com/about/versions/14/changes/fgs-types-required
+8. ThreatFabric - *Crocodilus* analysis (March 29, 2025) - package masquerading.
+9. Zscaler ThreatLabz - *Anatsa's Latest Updates* (August 2025) - package/hash rotation.
+10. Cyble Research and Intelligence Labs - *Antidot* analysis (May 16, 2024) - multi-locale overlay targeting.
+11. Cleafy Labs - *Klopatra* (August 2025) - Virbox packing, native-code migration.
+12. MITRE ATT&CK for Mobile - T1453, T1624, T1417.001. https://attack.mitre.org/matrices/mobile/
+13. OWASP MASTG - *Android Platform APIs* and *Data Storage* test cases. https://mas.owasp.org/MASTG/
 
 ### Further reading
-- AOSP `frameworks/base/tools/aapt2/` — resource compiler source
-- Google Play Console documentation — Play App Signing
-- MobSF static analyser source — reference implementation of manifest capability extraction
+- AOSP `frameworks/base/tools/aapt2/` - resource compiler source
+- Google Play Console documentation - Play App Signing
+- MobSF static analyser source - reference implementation of manifest capability extraction
 
 ---
 

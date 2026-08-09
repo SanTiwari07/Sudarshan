@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Runtime Event Bus
+SUDARSHAN - Runtime Event Bus
 ==============================
 Lightweight asynchronous Pub/Sub event bus for decoupling dynamic analysis subsystems.
 
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 #
 # Process-wide callbacks invoked for every event, regardless of which bus
 # instance published it. This exists so an outer layer (the API gateway) can
-# observe runtime telemetry WITHOUT sudarshan_core importing that layer — the
+# observe runtime telemetry WITHOUT sudarshan_core importing that layer - the
 # dependency runs downward only, which is what lets the same package run in a
 # service that has no such layer at all.
 _TELEMETRY_SINKS: List[Callable[[Dict[str, Any]], None]] = []
@@ -162,7 +162,7 @@ class RuntimeEventBus:
                 # Auto-forward to any registered telemetry sink.
                 #
                 # This used to import the gateway's runtime-telemetry module
-                # directly — an import from sudarshan_core UP into the
+                # directly - an import from sudarshan_core UP into the
                 # backend, inside a bare `except: pass`. The analysis engine has
                 # no `app.routes` package, so in the process that actually runs
                 # the instrumentation the import raised ModuleNotFoundError on
@@ -171,7 +171,7 @@ class RuntimeEventBus:
                 # real analyses was discarded, and the dashboard read counters
                 # from a process that never saw them.
                 #
-                # The bus already had the right mechanism — subscribers. The
+                # The bus already had the right mechanism - subscribers. The
                 # gateway registers itself; the engine simply has no sink.
                 for sink in list(_TELEMETRY_SINKS):
                     try:
@@ -206,7 +206,7 @@ class RuntimeEventBus:
         Block until the event queue is empty and all subscribers have run.
 
         Returns True if drained within *timeout_seconds*, False on timeout.
-        Screenshot threads and other async work may still be in flight — use
+        Screenshot threads and other async work may still be in flight - use
         ScreenshotManager.wait_pending() after this when flushing artifacts.
         """
         deadline = time.time() + max(0.1, timeout_seconds)

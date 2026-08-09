@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Agentic Goal Tracker
+SUDARSHAN - Agentic Goal Tracker
 ==================================
 Implements the 15-stage fraud goal dependency graph defined in the Agentic
 Explorer specification.
@@ -9,12 +9,12 @@ Design rules:
   - The planner uses `next_priority_goal()` to always drive toward the most
     important incomplete goal.
   - Goals can be SKIPPED when Frida evidence proves they are not applicable
-    (e.g., no SMS hooks fired after Stage 3 — accessibility — is complete).
-  - Goal status is updated ONLY from observed device state — Frida events
+    (e.g., no SMS hooks fired after Stage 3 - accessibility - is complete).
+  - Goal status is updated ONLY from observed device state - Frida events
     (`update_from_frida_events`) or the foreground window
     (`update_from_foreground`). The LLM cannot mark a goal complete; it can
     only choose actions and wait for the device to report the result.
-  - This module NEVER makes malware verdicts — it only tracks exploration progress.
+  - This module NEVER makes malware verdicts - it only tracks exploration progress.
 
 Usage::
 
@@ -67,7 +67,7 @@ class FraudGoal:
 
     Attributes:
         name:               Short identifier (used in prompts and logs).
-        stage:              Dependency order — lower stages must complete first.
+        stage:              Dependency order - lower stages must complete first.
         description:        What the agent should do to trigger this goal.
         frida_categories:   Frida event categories that signal this goal is active.
         frida_hooks:        Specific hook names that confirm goal completion.
@@ -97,7 +97,7 @@ class FraudGoal:
         """Compact string representation for inclusion in agent prompts."""
         evidence_count = len(self.evidence_collected)
         return (
-            f"[Stage {self.stage}] {self.name} — {self.status.value} "
+            f"[Stage {self.stage}] {self.name} - {self.status.value} "
             f"(evidence: {evidence_count}, attempts: {self.attempts}): {self.description}"
         )
 
@@ -229,7 +229,7 @@ def _build_default_goals() -> List[FraudGoal]:
                 "Look for list screens showing bank names or payment apps."
             ),
             # PackageManager enumeration moved to device_fingerprint when the
-            # BFCI categories were de-contaminated — enumeration alone is
+            # BFCI categories were de-contaminated - enumeration alone is
             # reconnaissance, not proof of banking targeting. Completion is still
             # hook-driven; this preserves the IN_PROGRESS transition.
             frida_categories=["banking", "device_fingerprint"],
@@ -500,13 +500,13 @@ class GoalTracker:
             lines.append(">>> ALL GOALS COMPLETED OR SKIPPED")
         return "\n".join(lines)
 
-    # ── Evidence ingestion (deterministic — no AI involved) ───────────────────
+    # ── Evidence ingestion (deterministic - no AI involved) ───────────────────
 
     def update_from_frida_events(self, events: List[Dict]) -> List[str]:
         """
         Scan a batch of Frida events and update goal evidence + status.
 
-        This is the ONLY deterministic path into goal state — the LLM never
+        This is the ONLY deterministic path into goal state - the LLM never
         directly marks a goal as complete. Frida evidence does.
 
         Returns list of goal names whose status changed this cycle.
@@ -557,8 +557,8 @@ class GoalTracker:
         """
         Deterministic completion path for Stage 1 ("Launch Application").
 
-        Stage 1 cannot be confirmed by a Frida hook — it is the precondition for
-        hooks firing at all — so it is confirmed by observing that the target
+        Stage 1 cannot be confirmed by a Frida hook - it is the precondition for
+        hooks firing at all - so it is confirmed by observing that the target
         package owns the foreground window for LAUNCH_CONFIRMATIONS_REQUIRED
         consecutive observations. Requiring consecutive readings prevents a
         single transient sample (splash screen, launcher hand-off) from
@@ -575,7 +575,7 @@ class GoalTracker:
             return changed
 
         # An unreadable foreground or unknown target is not evidence of failure
-        # OR success — it breaks the streak rather than counting toward it.
+        # OR success - it breaks the streak rather than counting toward it.
         if not foreground_package or not target_package:
             self._launch_confirmations = 0
             return changed

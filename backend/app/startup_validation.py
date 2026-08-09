@@ -45,7 +45,7 @@ def validate_production_environment() -> None:
     mobsf_key = os.getenv("MOBSF_API_KEY", "").strip()
     if not mobsf_key:
         logger.error(
-            "[Security] MOBSF_API_KEY is not set in production — set a dedicated API key."
+            "[Security] MOBSF_API_KEY is not set in production - set a dedicated API key."
         )
     elif mobsf_key == DEFAULT_MOBSF_API_KEY:
         raise RuntimeError(

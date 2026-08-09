@@ -1,4 +1,4 @@
-# 06 — Evidence Processing & Workflow Reconstruction Specification
+# 06 - Evidence Processing & Workflow Reconstruction Specification
 
 ```yaml
 Module Title:        Runtime Evidence Processing & Workflow Reconstruction Engine

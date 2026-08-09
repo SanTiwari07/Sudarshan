@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Sudarshan Dynamic Validation Framework — entry point.
+Sudarshan Dynamic Validation Framework - entry point.
 
   python validate_dynamic_pipeline.py [--fetch] [--stress 10,20] [--recovery]
 
@@ -69,7 +69,7 @@ async def _main_async(args: argparse.Namespace) -> int:
         f"preflight_ok={preflight_ok}\n", encoding="utf-8"
     )
     if not preflight_ok and not args.force:
-        logger.error("Preflight failed — fix sandbox or use --force to run anyway")
+        logger.error("Preflight failed - fix sandbox or use --force to run anyway")
         return 2
 
     results = await validate_all(entries, out_dir / "apk_runs")
@@ -82,7 +82,7 @@ async def _main_async(args: argparse.Namespace) -> int:
     )
     for n in stress_counts:
         if not stress_apk:
-            logger.warning("No APK for stress test — skip")
+            logger.warning("No APK for stress test - skip")
             break
         logger.info("Stress test: %d iterations on %s", n, stress_apk.id)
         sr = await run_stress(stress_apk, n)

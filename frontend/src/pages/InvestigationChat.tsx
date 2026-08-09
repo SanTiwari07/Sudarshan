@@ -643,9 +643,9 @@ export default function InvestigationChat({ data }: { data: FraudCardData | null
 
   const ledgerSummary = investigationBundle
     ? `Deterministic ledger: ${investigationBundle.counts.evidenceRecords} evidence records, ` +
-      `STEI ${data.frs_breakdown?.stei?.toFixed(1) ?? '—'}, ` +
-      `Dynamic ${data.frs_breakdown?.dynamic?.toFixed(1) ?? '—'}, ` +
-      `Correlation ${data.frs_breakdown?.correlation?.toFixed(1) ?? '—'}.`
+      `STEI ${data.frs_breakdown?.stei?.toFixed(1) ?? '-'}, ` +
+      `Dynamic ${data.frs_breakdown?.dynamic?.toFixed(1) ?? '-'}, ` +
+      `Correlation ${data.frs_breakdown?.correlation?.toFixed(1) ?? '-'}.`
     : '';
 
   const [messages, setMessages] = useState<Message[]>([

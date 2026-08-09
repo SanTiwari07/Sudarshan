@@ -29,7 +29,7 @@ type StageCardProps = {
   icon: keyof typeof ICONS;
   status?: StageStatus;
   compact?: boolean;
-  /** Upload page pipeline grid — larger, equal-height cards */
+  /** Upload page pipeline grid - larger, equal-height cards */
   overview?: boolean;
 };
 

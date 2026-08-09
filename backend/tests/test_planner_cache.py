@@ -4,7 +4,7 @@ Regression tests for the planner action cache.
 Root defect: `_ACTION_CACHE` was a module-level dict, never cleared and never
 bounded, keyed only on `(screen_hash, goal_name)`. Because `screen_hash` does
 not include the package name, an action cached while analysing one APK could be
-served to a completely different APK — with no LLM call and no audit trail.
+served to a completely different APK - with no LLM call and no audit trail.
 In a long-lived FastAPI worker the dict also grew forever.
 
 The cache is now per-instance, package- and version-scoped, and LRU-bounded.
@@ -105,7 +105,7 @@ def test_stored_entry_is_decoupled_from_caller_dict():
 # ─── Bounding / LRU ───────────────────────────────────────────────────────────
 
 def test_cache_is_bounded():
-    """A hostile app can mint unlimited unique screens — memory must not grow."""
+    """A hostile app can mint unlimited unique screens - memory must not grow."""
     p = _planner()
     for i in range(ACTION_CACHE_MAX_ENTRIES * 3):
         p._cache_put(p._cache_key(f"screen{i}", "goal"), ACTION)

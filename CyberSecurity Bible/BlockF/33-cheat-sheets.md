@@ -1,4 +1,4 @@
-# 33 — Cheat Sheets
+# 33 - Cheat Sheets
 
 > **Chapter ID:** `CH33` · **Block:** F (Reference) · **Status:** Stable
 > **Tags:** `#cheatsheet` `#commands` `#reference` `#quickref` `#workflows`
@@ -12,7 +12,7 @@
 
 1. [10-minute triage](#1-10-minute-triage)
 2. [adb command reference](#2-adb-command-reference)
-3. [Device triage — the high-value trio](#3-device-triage--the-high-value-trio)
+3. [Device triage - the high-value trio](#3-device-triage--the-high-value-trio)
 4. [Analysis toolchain](#4-analysis-toolchain)
 5. [Frida hook library](#5-frida-hook-library)
 6. [Android version gates](#6-android-version-gates)
@@ -54,7 +54,7 @@
 ### Packages
 ```bash
 adb shell pm list packages -f -i -3          # ★ path + INSTALLER, third-party only
-adb shell pm path com.suspect                # ★ ALL splits — pull every one
+adb shell pm path com.suspect                # ★ ALL splits - pull every one
 adb shell dumpsys package com.suspect        # perms, signer, install times
 adb shell pm uninstall --user 0 com.suspect
 adb shell pm install --bypass-low-target-sdk-block old.apk   # A14+ legacy
@@ -102,7 +102,7 @@ adb shell cmd package compile --reset com.suspect        # if Frida hooks won't 
 
 ---
 
-## 3. Device triage — the high-value trio
+## 3. Device triage - the high-value trio
 
 > **The three commands that answer most Android banking-fraud triage questions.**
 
@@ -178,7 +178,7 @@ jnitrace -m libnative.so com.suspect
 ```javascript
 Java.perform(function () {
 
-  // 1 ★ CLASS LOADERS — dumps packers AND droppers. Hook BOTH overloads.
+  // 1 ★ CLASS LOADERS - dumps packers AND droppers. Hook BOTH overloads.
   const IM = Java.use('dalvik.system.InMemoryDexClassLoader');
   IM.$init.overload('java.nio.ByteBuffer','java.lang.ClassLoader')
     .implementation = function(b,p){ console.log('[DEX] '+b.remaining()); return this.$init(b,p); };
@@ -188,7 +188,7 @@ Java.perform(function () {
   DCL.$init.overload('java.lang.String','java.lang.String','java.lang.String','java.lang.ClassLoader')
     .implementation = function(a,b,c,d){ console.log('[DEX] '+a); return this.$init(a,b,c,d); };
 
-  // 2 CRYPTO — recovers C2 URLs and keys
+  // 2 CRYPTO - recovers C2 URLs and keys
   const C = Java.use('javax.crypto.Cipher');
   C.doFinal.overload('[B').implementation = function(i){
     const o = this.doFinal(i);
@@ -199,18 +199,18 @@ Java.perform(function () {
   K.$init.overload('[B','java.lang.String').implementation = function(k,a){
     console.log('[key] '+a); return this.$init(k,a); };
 
-  // 3 REFLECTION — rebuilds the real call graph
+  // 3 REFLECTION - rebuilds the real call graph
   const M = Java.use('java.lang.reflect.Method');
   M.invoke.overload('java.lang.Object','[Ljava.lang.Object;').implementation = function(o,a){
     console.log('[refl] '+this.getDeclaringClass().getName()+'.'+this.getName());
     return this.invoke(o,a); };
 
-  // 4 NETWORK — endpoints regardless of TLS
+  // 4 NETWORK - endpoints regardless of TLS
   const U = Java.use('java.net.URL');
   U.$init.overload('java.lang.String').implementation = function(s){
     console.log('[net] '+s); return this.$init(s); };
 
-  // 5 ★ OVERLAY — type 2038 over another app = the attack, observed
+  // 5 ★ OVERLAY - type 2038 over another app = the attack, observed
   const W = Java.use('android.view.WindowManagerImpl');
   W.addView.implementation = function(v,p){
     console.log('[OVERLAY] type='+p.type.value); return this.addView(v,p); };
@@ -244,11 +244,11 @@ different class loader → Frida detected.
 
 | Scheme | Android | Covers | Stored | Block ID |
 |---|---|---|---|---|
-| v1 (JAR) | all | ZIP **entries** | `META-INF/` | — |
+| v1 (JAR) | all | ZIP **entries** | `META-INF/` | - |
 | **v2** | 7.0 (24) | **whole file** | Signing Block | `0x7109871a` |
 | **v3** | 9 (28) | whole file + **rotation lineage** | Signing Block | `0xf05368c0` |
 | v3.1 | 13 era | SDK-targeted rotation | Signing Block | `0x1b93ad61` |
-| v4 | 11 (30) | Merkle tree | **`.apk.idsig`** | — |
+| v4 | 11 (30) | Merkle tree | **`.apk.idsig`** | - |
 
 **Rules:** v1-only rejected from API 30 · v4 requires v2/v3 alongside · higher scheme wins, v1 not
 checked if v2+ verifies · **align before signing**.
@@ -257,9 +257,9 @@ checked if v2+ verifies · **align before signing**.
 
 | Attack | Trick | Fixed by |
 |---|---|---|
-| **Master Key** (2013) | Duplicate ZIP filenames — verifier and installer read different files | v2 |
+| **Master Key** (2013) | Duplicate ZIP filenames - verifier and installer read different files | v2 |
 | **Fake ID** (2014) | Certificate chain claim not cryptographically validated | Chain validation fix |
-| **Janus** (CVE-2017-13156) | File is a valid ZIP *and* a valid DEX — prepend DEX, v1 signature still valid. Android 5.0–8.0, **v1-only**, patched Dec 2017 | **v2 (whole-file digest)** |
+| **Janus** (CVE-2017-13156) | File is a valid ZIP *and* a valid DEX - prepend DEX, v1 signature still valid. Android 5.0–8.0, **v1-only**, patched Dec 2017 | **v2 (whole-file digest)** |
 
 ---
 
@@ -313,7 +313,7 @@ packageNames=""                   → unscoped: targets everything
 | User Evasion | T1618 |
 | Foreground Persistence | T1541 |
 
-*Pin your ATT&CK version — IDs get revised.*
+*Pin your ATT&CK version - IDs get revised.*
 
 ---
 
@@ -382,7 +382,7 @@ TLSH match → review only. IP match → nothing on its own (shared hosting).
 ╠════════════════════════════════════════════════════════════════════╣
 ║ 1. ISOLATE     airplane mode / Faraday bag                         ║
 ╠════════════════════════════════════════════════════════════════════╣
-║ 2. CONTAIN (parallel, account-side, minutes — medium confidence OK)║
+║ 2. CONTAIN (parallel, account-side, minutes - medium confidence OK)║
 ║    session hold · block pending txns · freeze beneficiary          ║
 ║    ★ SWEEP customer base by SIGNER                                 ║
 ╠════════════════════════════════════════════════════════════════════╣
@@ -394,7 +394,7 @@ TLSH match → review only. IP match → nothing on its own (shared hosting).
 ║ 5. REMEDIATE   ★ SAFE MODE (kills 3rd-party apps + their a11y)     ║
 ║                → revoke device admin → uninstall → verify          ║
 ╠════════════════════════════════════════════════════════════════════╣
-║ 6. ERADICATE   credential reset — ONLY AFTER the device is clean   ║
+║ 6. ERADICATE   credential reset - ONLY AFTER the device is clean   ║
 ║                (else the attacker reads the new credentials)       ║
 ╠════════════════════════════════════════════════════════════════════╣
 ║ 7. RECOVER     graduated limits · 30-90d monitoring · fund recovery║
@@ -418,7 +418,7 @@ TLSH match → review only. IP match → nothing on its own (shared hosting).
 
 | Code | Meaning |
 |---|---|
-| `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | **Signer mismatch** — repackaged clone |
+| `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | **Signer mismatch** - repackaged clone |
 | `INSTALL_FAILED_DEPRECATED_SDK_VERSION` | targetSdk below floor (A14: <23, A15: <24) |
 | `INSTALL_PARSE_FAILED_NO_CERTIFICATES` | Unsigned / broken signature |
 | `INSTALL_PARSE_FAILED_RESOURCES_ARSC_COMPRESSED` | Pre-A11 build on A11+ |
@@ -450,11 +450,11 @@ TLSH match → review only. IP match → nothing on its own (shared hosting).
 ### Inside an APK
 ```
 AndroidManifest.xml        binary AXML
-classes*.dex               ★ GLOB — never just classes.dex
+classes*.dex               ★ GLOB - never just classes.dex
 resources.arsc             uncompressed + aligned (required A11+)
 res/xml/*accessib*         ★ the capability config
 res/xml/network_security_config.xml
-assets/                    ★ raw passthrough — payload hiding place
+assets/                    ★ raw passthrough - payload hiding place
 lib/<abi>/*.so             native; packer fingerprints
 META-INF/*.{RSA,DSA,EC}    v1 signature (not always CERT.RSA)
 [APK Signing Block]        ★ not a ZIP entry; magic "APK Sig Block 42"

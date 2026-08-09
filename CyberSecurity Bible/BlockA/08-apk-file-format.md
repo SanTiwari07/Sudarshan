@@ -1,4 +1,4 @@
-# 08 — APK File Format
+# 08 - APK File Format
 
 > **Chapter ID:** `CH08` · **Block:** A (Foundations) · **Status:** Stable
 > **Tags:** `#file-format` `#zip` `#axml` `#resources-arsc` `#dex` `#parser-differential` `#bytes`
@@ -38,13 +38,13 @@ what it *is*, byte for byte. You need that for four reasons:
    disagreeing about the same bytes. You cannot detect that by reading decompiled Java.
 2. **Tools lie by omission.** When `apktool` fails and the app still installs, the answer is
    in the bytes. Your tooling normalises; the adversary exploits what it normalised away.
-3. **Detection at this layer is cheap and deterministic.** No ML, no heuristics — read eight
+3. **Detection at this layer is cheap and deterministic.** No ML, no heuristics - read eight
    bytes, get an answer. These are the highest-precision rules SUDARSHAN will ever ship.
 4. **You will write parsers.** SUDARSHAN's intake stage is, fundamentally, a set of format
    parsers. Building them on wrong assumptions is how you get a platform that misses the
    samples that matter most.
 
-> **⚙️ Engineering Note — the governing principle of this chapter:**
+> **⚙️ Engineering Note - the governing principle of this chapter:**
 > **Record anomalies; do not normalise them away.** Every mature analysis pipeline eventually
 > learns this the hard way. A tolerant parser that "helpfully" fixes a duplicate ZIP entry has
 > just destroyed the single most important fact about the sample.
@@ -75,7 +75,7 @@ offset 0
 │  ★ APK SIGNING BLOCK (v2/v3/v3.1)  → Ch 07 §4              │
 │    ends with magic "APK Sig Block 42"                      │
 ├────────────────────────────────────────────────────────────┤
-│  Central Directory  (PK\x01\x02) — one record per entry    │
+│  Central Directory  (PK\x01\x02) - one record per entry    │
 │    filename, compression, CRC-32, sizes,                   │
 │    ★ OFFSET OF LOCAL HEADER  ← the authoritative pointer   │
 │    external attrs, comment                                 │
@@ -96,7 +96,7 @@ offset 0
   5. Read the local header, then the file data
 ```
 
-**Everything before the first local file header is never read.** That is not a bug — it is
+**Everything before the first local file header is never read.** That is not a bug - it is
 how self-extracting archives work (an executable stub followed by a ZIP). It is also exactly
 what Janus abuses.
 
@@ -109,11 +109,11 @@ what Janus abuses.
 | **Compressed / uncompressed size** | LFH + CD | Also duplicated; also a mismatch opportunity |
 | **Offset of local header** | CD only | The authoritative pointer. Two CD records can point to the same or overlapping data |
 | **Filename** | LFH + CD | Duplicated; **mismatch is the Master Key class of bug** |
-| **General purpose bit flag** | LFH | Bit 3 = "sizes in data descriptor after data" — a parser-divergence surface |
+| **General purpose bit flag** | LFH | Bit 3 = "sizes in data descriptor after data" - a parser-divergence surface |
 | **Extra field** | LFH + CD | Alignment padding lives here; also a hiding place for data |
 | **Archive comment** | EOCD | Arbitrary trailing bytes, unprotected by v1 |
 
-> **⚙️ Engineering Note:** Nearly every ZIP field exists **twice** — once in the local file
+> **⚙️ Engineering Note:** Nearly every ZIP field exists **twice** - once in the local file
 > header and once in the central directory. The specification does not require them to agree,
 > and different parsers trust different copies. **That redundancy is the root cause of an
 > entire vulnerability class.** When you write a parser, read both and diff them.
@@ -137,7 +137,7 @@ $ grep -abo -m1 $'PK\x03\x04' app.apk | head -1
 # Locate the signing block
 $ grep -abo "APK Sig Block 42" app.apk
 
-# First 8 bytes — DEX magic check
+# First 8 bytes - DEX magic check
 $ xxd -l 8 app.apk
 00000000: 504b 0304 1400 0800                      PK......      # normal ZIP
 # vs
@@ -161,13 +161,13 @@ into detection rules.
 | **Overlapping entries** | Two CD offsets → overlapping ranges | Malformed by design |
 | **Appended data after EOCD** | Bytes beyond EOCD + comment length | Hidden payload; unprotected by v1 |
 | **Oversized extra field** | Extra field length ≫ alignment need | Data smuggling |
-| **Compressed `classes.dex`** | Method = 8 | Cannot be `mmap`'d — either very old or deliberately odd |
+| **Compressed `classes.dex`** | Method = 8 | Cannot be `mmap`'d - either very old or deliberately odd |
 | **Compressed `resources.arsc`** | Method = 8 | **Install fails on Android 11+** (`INSTALL_PARSE_FAILED_RESOURCES_ARSC_COMPRESSED`). Dating signal. |
-| **Directory traversal in names** | `../` in a filename | Zip-Slip; affects careless extractors — **including yours** |
+| **Directory traversal in names** | `../` in a filename | Zip-Slip; affects careless extractors - **including yours** |
 | **Non-normalised timestamps** | Varied DOS timestamps | Hand-repackaged (build tools normalise to 1981-01-01) |
 | **ZIP64 records** | ZIP64 EOCD locator present | Legal for >4 GB; ensure your parser handles it |
 
-### Zip-Slip — the one that attacks *you*
+### Zip-Slip - the one that attacks *you*
 
 ```
   Entry name: ../../../../home/analyst/.ssh/authorized_keys
@@ -178,7 +178,7 @@ This is not a theoretical concern for a malware analysis platform: **you extract
 archives for a living.**
 
 ```python
-# SAFE extraction — canonicalise and verify containment
+# SAFE extraction - canonicalise and verify containment
 import os, zipfile
 
 def safe_extract(apk_path, dest):
@@ -195,7 +195,7 @@ def safe_extract(apk_path, dest):
 ```
 
 > **⚙️ Engineering Note:** Also cap **total** decompressed size and entry count, not just
-> per-entry size — a zip bomb is many small entries or one entry with an enormous expansion
+> per-entry size - a zip bomb is many small entries or one entry with an enormous expansion
 > ratio. And run extraction inside the sandbox, never on the orchestrator host.
 > → [Ch 24](../sudarshan/24-threat-intake.md)
 
@@ -221,7 +221,7 @@ def safe_extract(apk_path, dest):
 
 ### WHAT
 
-`AndroidManifest.xml` and everything under `res/` that is XML are stored in **AXML** — a
+`AndroidManifest.xml` and everything under `res/` that is XML are stored in **AXML** - a
 compiled binary form, not text. `cat` gives you garbage. This surprises every beginner once.
 
 ### The structure
@@ -260,24 +260,24 @@ are typed (`TYPE_STRING`, `TYPE_INT_BOOLEAN`, `TYPE_REFERENCE`, `TYPE_INT_DEC`..
 └────────────────────────────────────────┘
 ```
 
-> **⚙️ Engineering Note — the UTF-8 flag trap:** AXML string pools may be UTF-8 or UTF-16
+> **⚙️ Engineering Note - the UTF-8 flag trap:** AXML string pools may be UTF-8 or UTF-16
 > depending on a single flag bit. Some obfuscators set the flag inconsistently or emit
 > lengths that disagree with the data. Android's parser is tolerant; third-party parsers
-> often are not — which is precisely why some samples defeat `apktool` while installing
+> often are not - which is precisely why some samples defeat `apktool` while installing
 > perfectly. **If `apktool` fails on the manifest, fall back to a tolerant parser
 > (Androguard's AXML parser, or `aapt2 dump xmltree`) and record the failure as a signal.**
 
 ### Reading AXML
 
 ```bash
-# aapt2 — closest to what Android itself does
+# aapt2 - closest to what Android itself does
 $ aapt2 dump xmltree app.apk --file AndroidManifest.xml | head -40
 $ aapt2 dump badging app.apk           # summarised: package, sdk, perms, launchable activity
 
-# apktool — decodes to readable XML on disk
+# apktool - decodes to readable XML on disk
 $ apktool d -s app.apk -o work/ && head -40 work/AndroidManifest.xml
 
-# Androguard — scriptable, most tolerant
+# Androguard - scriptable, most tolerant
 $ python3 -c "
 from androguard.core.bytecodes.apk import APK
 a = APK('app.apk')
@@ -289,11 +289,11 @@ print(a.get_android_manifest_axml().get_xml().decode()[:2000])
 
 Known tricks that exploit tolerant-vs-strict parsing:
 
-- **Oversized/invalid string-pool lengths** — crashes strict parsers, tolerated by Android.
-- **Extra chunks** of unknown type — Android skips by `size`, some parsers choke.
-- **Duplicate attributes** on one element — Android takes one; tools may take the other.
-- **Namespace confusion** — attributes in unexpected namespaces.
-- **`headerSize`/`size` inconsistency** — deliberate chunk-walking desync.
+- **Oversized/invalid string-pool lengths** - crashes strict parsers, tolerated by Android.
+- **Extra chunks** of unknown type - Android skips by `size`, some parsers choke.
+- **Duplicate attributes** on one element - Android takes one; tools may take the other.
+- **Namespace confusion** - attributes in unexpected namespaces.
+- **`headerSize`/`size` inconsistency** - deliberate chunk-walking desync.
 
 > **🚨 Misconception:** "`apktool` failed, so the APK is corrupt." Frequently the opposite:
 > the APK is fine *for Android* and deliberately hostile to tools. Treat tool failure as
@@ -336,10 +336,10 @@ RES_TABLE_TYPE (0x0002)
 2. **The configuration list is a targeting map.** `values-tr/`, `values-es/`, `values-it/`
    tells you the victim geography. Cyble's *Antidot* analysis (May 16, 2024) documented
    overlay support across German, French, Spanish, Russian, Portuguese, Romanian, and
-   English — the resource set *was* the target list.
+   English - the resource set *was* the target list.
 3. **Package ID `0x7F` is the app's own.** Non-standard package IDs (used by some resource
    obfuscators and by dynamic-loading frameworks) are unusual and worth recording.
-4. **Must be uncompressed and 4-byte aligned since Android 11** — otherwise
+4. **Must be uncompressed and 4-byte aligned since Android 11** - otherwise
    `INSTALL_PARSE_FAILED_RESOURCES_ARSC_COMPRESSED`.
 
 ```bash
@@ -349,7 +349,7 @@ $ aapt2 dump configurations app.apk        # ← the targeting map
 ```
 
 > **🏛️ Enterprise Insight:** Extracting the locale set and any referenced package names from
-> `resources.arsc` answers the question a bank actually asks — *"is this aimed at us?"* — in
+> `resources.arsc` answers the question a bank actually asks - *"is this aimed at us?"* - in
 > under a second, with no decompilation. Make it a first-class field in the intake record.
 > → [Ch 24](../sudarshan/24-threat-intake.md), [Ch 29](../sudarshan/29-investigation-reports.md)
 
@@ -425,7 +425,7 @@ offset  size  field
 
 | Magic | DEX version | Introduced | Adds |
 |---|---|---|---|
-| `dex\n035\0` | 035 | Original | — |
+| `dex\n035\0` | 035 | Original | - |
 | `dex\n037\0` | 037 | Android 7.0 (API 24) | `invoke-polymorphic`, method handles |
 | `dex\n038\0` | 038 | Android 8.0 (API 26) | `invoke-custom`, call sites |
 | `dex\n039\0` | 039 | Android 9 (API 28) | `const-method-handle`, hidden-API metadata support |
@@ -433,7 +433,7 @@ offset  size  field
 > **⚙️ Engineering Note:** DEX magic is a **cheap dating signal**. A `dex\n039\0` file cannot
 > have been produced by a 2016 toolchain. Combined with the signature-scheme profile from
 > [Ch 07 §11](../security/07-apk-signing.md#11-detection-logic-for-sudarshan) and ZIP
-> timestamp normalisation, you get a decent build-era fingerprint for free — useful for
+> timestamp normalisation, you get a decent build-era fingerprint for free - useful for
 > spotting samples that *claim* to be old, and for clustering builds within a campaign.
 
 ### The checksum and signature fields
@@ -441,7 +441,7 @@ offset  size  field
 - `checksum` is **Adler-32** over everything after it.
 - `signature` is **SHA-1** over everything after it.
 
-Neither is a security control — an attacker who modifies the DEX simply recomputes both.
+Neither is a security control - an attacker who modifies the DEX simply recomputes both.
 They exist for **integrity against corruption**, not tampering. But they are useful to you:
 
 > **⚙️ Engineering Note:** **A DEX whose stored Adler-32 or SHA-1 does not match its content
@@ -517,13 +517,13 @@ naively get wrong or unusable results while ART resolves correctly. Variants see
 | **Overlapping `string_data_item`s** | One byte range serves two entries; tolerant readers diverge |
 | **Non-standard ULEB128 encoding** | Redundant continuation bytes; strict parsers reject, ART accepts |
 | **Invalid MUTF-8 sequences** | Renders as garbage in tools; ART tolerates |
-| **Section offsets disagreeing with `map_list`** | Header says one thing, map says another — which does your parser trust? |
+| **Section offsets disagreeing with `map_list`** | Header says one thing, map says another - which does your parser trust? |
 | **Unusual class names** | Unicode, extremely long, or reserved-looking names that break UI display |
 
 > **⚙️ Engineering Note:** Parse `map_list` (`map_off`) **and** the header offsets, then
 > **diff them**. They should agree. Disagreement is a deliberate anti-analysis signal and
 > costs you one extra read to detect. This is the DEX-level equivalent of diffing local file
-> headers against the central directory in §2 — the same defensive pattern, one layer down.
+> headers against the central directory in §2 - the same defensive pattern, one layer down.
 
 ### MUTF-8, briefly
 
@@ -540,7 +540,7 @@ Native libraries under `lib/<abi>/` are standard **ELF** shared objects. What ma
 
 | ELF feature | Analyst relevance |
 |---|---|
-| `.init_array` | **Constructors run before `JNI_OnLoad`** — anti-analysis often hides here |
+| `.init_array` | **Constructors run before `JNI_OnLoad`** - anti-analysis often hides here |
 | `JNI_OnLoad` | First JNI entry point; **packers unpack here** |
 | `.dynsym` / `.dynamic` | Exported symbols; `Java_*` mangled names |
 | Section entropy | High entropy = packed/encrypted payload |
@@ -558,7 +558,7 @@ $ strings -n 8 work/lib/arm64-v8a/libnative.so | grep -Ei 'http|/api/|token'
 
 **Packer fingerprints by filename** (from [Ch 02 §6](02-apk-architecture.md#6-native-libraries)):
 `libjiagu.so` (360 Jiagu), `libDexHelper.so` (SecNeo/Bangcle), `libshella*.so`, `libtprt.so`
-(Tencent), and Virbox artifacts — the protector documented by Cleafy in **Klopatra**
+(Tencent), and Virbox artifacts - the protector documented by Cleafy in **Klopatra**
 (August 2025). Full treatment in [Ch 10](../reverse-engineering/10-reverse-engineering.md).
 
 ---
@@ -584,8 +584,8 @@ A consolidated table. Each row is a rule you can implement.
 | Native packer | ELF | Runs | `jadx` empty | Library name + entropy + thin DEX |
 
 > **🔬 Research Gap:** There is no canonical, maintained corpus of Android format-confusion
-> test cases equivalent to what exists for PE/PDF. Building one — a set of APKs exercising
-> each row above, with known-correct expected parses — would be a genuinely valuable
+> test cases equivalent to what exists for PE/PDF. Building one - a set of APKs exercising
+> each row above, with known-correct expected parses - would be a genuinely valuable
 > contribution and would let SUDARSHAN regression-test its parsers.
 > → [Ch 31](../appendix/31-future-research.md)
 
@@ -646,7 +646,7 @@ structural_analysis:
 
 | Rule | Logic | Severity | Confidence |
 |---|---|---|---|
-| **Janus format** | DEX magic at offset 0 **and** valid ZIP | Critical | **High** — deterministic |
+| **Janus format** | DEX magic at offset 0 **and** valid ZIP | Critical | **High** - deterministic |
 | **Duplicate ZIP entries** | any | High | High |
 | **Zip-Slip entry name** | `../` in any name | High | High |
 | **DEX checksum/SHA-1 mismatch** | recomputed ≠ stored | High | High |
@@ -658,7 +658,7 @@ structural_analysis:
 | **Non-normalised timestamps** | varied DOS times | Low | Low |
 | **Data after EOCD** | > 0 bytes | Medium | Medium |
 
-> **⚙️ Engineering Note — why these rules are disproportionately valuable:** every rule above
+> **⚙️ Engineering Note - why these rules are disproportionately valuable:** every rule above
 > is **deterministic, cheap, and explainable**. In a bank's regulated environment,
 > "`classes.dex` declares SHA-1 `abc…` but its content hashes to `def…`, therefore it was
 > modified after compilation" is an argument that survives audit. A model confidence score is
@@ -715,7 +715,7 @@ only the tolerant one.
 
 ### False negatives
 
-- Well-formed malware. **Most banking trojans are structurally perfect** — they don't need
+- Well-formed malware. **Most banking trojans are structurally perfect** - they don't need
   format tricks because they rely on user consent. Structural analysis is a high-precision,
   **low-recall** layer. Do not oversell it.
 - Payload arrives post-install ([Ch 03 §6](../android/03-android-runtime.md#6-dynamic-code-loading--the-technique-that-breaks-static-analysis)).
@@ -754,9 +754,9 @@ the expensive tier. → [Ch 23](../sudarshan/23-detection-pipeline.md)
 2. **Run strict and tolerant parsers; the diff is the signal.**
 3. **Recompute DEX Adler-32 and SHA-1.** Cheap, deterministic hand-edit detection.
 4. **Diff LFH against CD, and DEX header against `map_list`.** Same defensive pattern, two layers.
-5. **Check the first 8 bytes for DEX magic** at intake — the Janus check.
+5. **Check the first 8 bytes for DEX magic** at intake - the Janus check.
 6. **Canonicalise paths before extraction** and cap sizes/counts. You extract hostile archives.
-7. **Extract locales and referenced package names from `resources.arsc`** — highest business
+7. **Extract locales and referenced package names from `resources.arsc`** - highest business
    value per millisecond in the whole pipeline.
 8. **Use a MUTF-8-aware decoder** for DEX strings.
 9. **Log which parser succeeded** in the artifact record, for reproducibility.
@@ -771,7 +771,7 @@ normal antivirus can't?"*
 
 **Perfect answer:** Structural anomalies at the byte level, deterministically. We parse the
 APK with both a strict spec-exact parser and a tolerant one, and the *divergence between them*
-is the detection — because that divergence is exactly what format-confusion attacks depend on.
+is the detection - because that divergence is exactly what format-confusion attacks depend on.
 Concretely: we recompute the Adler-32 and SHA-1 stored in the DEX header, so we can prove a
 DEX was hand-edited after compilation; we diff ZIP local file headers against the central
 directory, which catches the Master Key class of bug; we check whether the first eight bytes
@@ -782,12 +782,11 @@ score.
 
 **Common mistakes:**
 - Overselling it. Structural analysis is **high precision, low recall**. Most banking trojans
-  are structurally perfect because they rely on user consent, not format tricks. Say so —
-  judges respect calibrated claims and punish overreach.
+  are structurally perfect because they rely on user consent, not format tricks. Say so - judges respect calibrated claims and punish overreach.
 - Not knowing why the checks work (i.e. not being able to explain Janus).
 
 **Follow-ups to expect:**
-- *"How often does that actually fire?"* → Rarely, and that's the point — it's a precision
+- *"How often does that actually fire?"* → Rarely, and that's the point - it's a precision
   layer, not a recall layer. The capability-cluster and behavioural layers carry recall.
 - *"Couldn't the attacker just fix the checksums?"* → Yes, trivially. Which is why it's one
   cheap layer among many, and why we never present it as the primary control.
@@ -795,7 +794,7 @@ score.
   gates the expensive stages.
 
 **Fact that impresses:** The DEX header stores an Adler-32 checksum and a SHA-1 signature over
-its own contents. Neither is a security control — an attacker recomputes them — but legitimate
+its own contents. Neither is a security control - an attacker recomputes them - but legitimate
 toolchains always get them right, so **a mismatch is deterministic evidence of manual
 patching by a tool that didn't fix them up.** It costs one pass over the file.
 
@@ -804,11 +803,11 @@ patching by a tool that didn't fix them up.** It costs one pass over the file.
 ## 14. Interview Insights
 
 **Q: "Why is `AndroidManifest.xml` unreadable when you extract an APK?"**
-It's compiled binary XML (AXML) — a chunked format with a string pool, where elements and
+It's compiled binary XML (AXML) - a chunked format with a string pool, where elements and
 attributes reference strings by index. Use `aapt2 dump xmltree`, `apktool`, or Androguard.
 
 **Q: "Where does ZIP parsing start?"**
-At the **end** — scan backward for the EOCD, read the central directory offset, then walk the
+At the **end** - scan backward for the EOCD, read the central directory offset, then walk the
 records. That's why bytes before the first local file header are ignored, and that's the
 precondition for Janus.
 
@@ -848,15 +847,15 @@ structural anomalies, and `apktool`-rebuild artifacts.
 ## 15. Cross-references
 
 **Upstream:**
-- [← Ch 02 APK Architecture](02-apk-architecture.md) — the conceptual layout
-- [← Ch 07 APK Signing](../security/07-apk-signing.md) — the signing block; Janus/Master Key/Fake ID
+- [← Ch 02 APK Architecture](02-apk-architecture.md) - the conceptual layout
+- [← Ch 07 APK Signing](../security/07-apk-signing.md) - the signing block; Janus/Master Key/Fake ID
 
 **Downstream:**
-- [→ Ch 09 Package Manager](09-package-manager.md) — how Android parses these bytes at install
-- [→ Ch 10 Reverse Engineering](../reverse-engineering/10-reverse-engineering.md) — smali, packers, native RE
-- [→ Ch 11 Static Analysis](../static-analysis/11-static-analysis.md) — automating §10
-- [→ Ch 24 Threat Intake](../sudarshan/24-threat-intake.md) — safe extraction, artifact records
-- [→ Ch 31 Future Research](../appendix/31-future-research.md) — the missing format-confusion corpus
+- [→ Ch 09 Package Manager](09-package-manager.md) - how Android parses these bytes at install
+- [→ Ch 10 Reverse Engineering](../reverse-engineering/10-reverse-engineering.md) - smali, packers, native RE
+- [→ Ch 11 Static Analysis](../static-analysis/11-static-analysis.md) - automating §10
+- [→ Ch 24 Threat Intake](../sudarshan/24-threat-intake.md) - safe extraction, artifact records
+- [→ Ch 31 Future Research](../appendix/31-future-research.md) - the missing format-confusion corpus
 
 **Related chain:** ZIP structure → parser differential → Janus/Master Key → v2 signing →
 structural detection.
@@ -865,25 +864,25 @@ structural detection.
 
 ## 16. References
 
-1. AOSP — *Dalvik Executable format*. https://source.android.com/docs/core/runtime/dex-format
-2. AOSP — *Dalvik bytecode reference*. https://source.android.com/docs/core/runtime/dalvik-bytecode
-3. AOSP — *Application Signing* (APK Signing Block layout). https://source.android.com/docs/security/features/apksigning
-4. PKWARE — *.ZIP File Format Specification* (APPNOTE.TXT).
-5. Google Cloud / Mandiant — *Delving into Dalvik: A Look Inside the DEX File Format* — string-index manipulation by obfuscators.
-6. AOSP — `frameworks/base/tools/aapt2/` — resource compiler and `ResTable` format source.
-7. AOSP — `libziparchive` — Android's ZIP reader implementation.
-8. Androguard documentation — AXML, ARSC, and DVM parsers. https://androguard.readthedocs.io/
-9. Android Developers — `aapt2` reference. https://developer.android.com/tools/aapt2
-10. Android Developers — *Behavior changes: Android 11* (uncompressed `resources.arsc`). https://developer.android.com/about/versions/11/behavior-changes-all
-11. Android Security Bulletin — December 2017 (CVE-2017-13156, Janus). https://source.android.com/docs/security/bulletin/2017-12-01
-12. Snyk — *Zip Slip* vulnerability research (archive path traversal).
-13. Cyble Research and Intelligence Labs — *Antidot* (May 16, 2024) — multi-locale overlay resources.
-14. Cleafy Labs — *Klopatra* (August 2025) — Virbox native protection.
+1. AOSP - *Dalvik Executable format*. https://source.android.com/docs/core/runtime/dex-format
+2. AOSP - *Dalvik bytecode reference*. https://source.android.com/docs/core/runtime/dalvik-bytecode
+3. AOSP - *Application Signing* (APK Signing Block layout). https://source.android.com/docs/security/features/apksigning
+4. PKWARE - *.ZIP File Format Specification* (APPNOTE.TXT).
+5. Google Cloud / Mandiant - *Delving into Dalvik: A Look Inside the DEX File Format* - string-index manipulation by obfuscators.
+6. AOSP - `frameworks/base/tools/aapt2/` - resource compiler and `ResTable` format source.
+7. AOSP - `libziparchive` - Android's ZIP reader implementation.
+8. Androguard documentation - AXML, ARSC, and DVM parsers. https://androguard.readthedocs.io/
+9. Android Developers - `aapt2` reference. https://developer.android.com/tools/aapt2
+10. Android Developers - *Behavior changes: Android 11* (uncompressed `resources.arsc`). https://developer.android.com/about/versions/11/behavior-changes-all
+11. Android Security Bulletin - December 2017 (CVE-2017-13156, Janus). https://source.android.com/docs/security/bulletin/2017-12-01
+12. Snyk - *Zip Slip* vulnerability research (archive path traversal).
+13. Cyble Research and Intelligence Labs - *Antidot* (May 16, 2024) - multi-locale overlay resources.
+14. Cleafy Labs - *Klopatra* (August 2025) - Virbox native protection.
 
 ### Further reading
 - ELF specification (System V ABI) and ARM64 supplement
-- `dexdump` / `dexlib2` (smali project) source — practical DEX parsing references
-- OWASP MASTG — reverse engineering and tampering test cases
+- `dexdump` / `dexlib2` (smali project) source - practical DEX parsing references
+- OWASP MASTG - reverse engineering and tampering test cases
 
 ---
 

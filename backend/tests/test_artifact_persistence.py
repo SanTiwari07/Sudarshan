@@ -4,7 +4,7 @@ Per-sample forensic artifact persistence.
 Root defect: `frida_sandbox` read `getattr(self, '_apk_dir', '.')` but never
 assigned `_apk_dir`, so `audit_log.json` and `benchmark.json` were always
 written to the process working directory and every scan destroyed the previous
-sample's record. The "working" path was no better — it used
+sample's record. The "working" path was no better - it used
 `Path(apk_path).parent`, which collides for any two APKs in the same folder.
 
 §4 matrix: sample1 → sample2 → sample1 again; both directories must survive.
@@ -63,7 +63,7 @@ def test_same_stem_in_different_folders_does_not_collide(tmp_path):
     ["../escape.apk", "we;rd na@me.apk", "..\\win.apk", "a" * 200 + ".apk", "🙂.apk"],
 )
 def test_hostile_filenames_stay_inside_the_root(tmp_path, name):
-    """An APK filename is attacker-chosen — it must not escape the root."""
+    """An APK filename is attacker-chosen - it must not escape the root."""
     apk = tmp_path / "holder.apk"
     apk.write_bytes(b"x")
     target = artifact_dir_for(str(apk.parent / name))
@@ -72,9 +72,9 @@ def test_hostile_filenames_stay_inside_the_root(tmp_path, name):
     # The real property: the directory stays under the artifact root, inside the
     # sample's own folder. A name may CONTAIN dots ("..\\win" sanitises to
     # ".._win"); what matters is that it is one literal component and never the
-    # parent reference itself — the digest suffix guarantees that.
+    # parent reference itself - the digest suffix guarantees that.
     # Artifacts always land beside the file's REAL location, under the artifact
-    # root — a traversal component in the name cannot redirect them elsewhere.
+    # root - a traversal component in the name cannot redirect them elsewhere.
     real_parent = (apk.parent / name).resolve().parent
     assert ARTIFACT_ROOT_DIRNAME in resolved.parts or resolved == real_parent
     assert target.name not in ("..", ".")

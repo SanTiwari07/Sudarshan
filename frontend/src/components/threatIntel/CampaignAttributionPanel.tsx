@@ -73,7 +73,7 @@ export default function CampaignAttributionPanel({
         </dl>
         {campaign === 'Unknown' && (
           <p className={`${INTEL.caption} mt-4`}>
-            Campaign not identified — no OTX or correlator attribution for this case.
+            Campaign not identified - no OTX or correlator attribution for this case.
           </p>
         )}
       </IntelCardBody>

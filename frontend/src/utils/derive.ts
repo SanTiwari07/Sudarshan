@@ -56,7 +56,7 @@ export function exportLedgerCSV(data: FraudCardData, lines: LedgerLine[]): void 
 // ─── Formatting Helpers ─────────────────────────────────────────────────────────
 
 export function fmtScore(score: number | null | undefined): string {
-  if (score === null || score === undefined) return '—';
+  if (score === null || score === undefined) return '-';
   return score.toFixed(1);
 }
 

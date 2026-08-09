@@ -58,7 +58,7 @@ export default function FraudRiskHero({ data }: { data: FraudCardData }) {
             </h2>
             <p className="text-sm text-slate-600 mt-2 max-w-md leading-relaxed">
               <HelpTerm term="Risk Score">Weighted score</HelpTerm> from verified static, runtime, and threat
-              intelligence — not a malware verdict alone.
+              intelligence - not a malware verdict alone.
             </p>
             <button
               type="button"

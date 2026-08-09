@@ -1,4 +1,4 @@
-# 27 — Risk Scoring
+# 27 - Risk Scoring
 
 > **Chapter ID:** `CH27` · **Block:** E · **Status:** Stable
 > **Tags:** `#risk-scoring` `#calibration` `#confidence` `#severity` `#explainability` `#false-positives`
@@ -46,9 +46,9 @@ The three things a score must support:
 
 | Requirement | Consequence |
 |---|---|
-| **Ordering** — which sample does an analyst look at first? | Comparable across samples |
-| **Action triggering** — should SOAR hold sessions? | Thresholds mapped to actions |
-| **Defence** — can we justify this to RBI in nine months? | Deterministic + evidence-linked (**P3**) |
+| **Ordering** - which sample does an analyst look at first? | Comparable across samples |
+| **Action triggering** - should SOAR hold sessions? | Thresholds mapped to actions |
+| **Defence** - can we justify this to RBI in nine months? | Deterministic + evidence-linked (**P3**) |
 
 ---
 
@@ -76,10 +76,10 @@ needs.
 *Critical severity, low confidence* is the state a packed, un-unpacked, C2-offline sample lands
 in ([Ch 23 §7](23-detection-pipeline.md#7-failure-handling)). A single-number score would render
 it as "medium" and it would sit in a queue. Two axes render it as **"potentially catastrophic,
-we cannot yet tell — escalate"**, which is the correct handling.
+we cannot yet tell - escalate"**, which is the correct handling.
 
 > **⚙️ Engineering Note:** This is the operational face of **P4**. A system that cannot express
-> "very bad if true, unknown" will always understate the samples that most resist analysis — which
+> "very bad if true, unknown" will always understate the samples that most resist analysis - which
 > are, by design, the ones the adversary most wants you to under-prioritise.
 
 ---
@@ -161,7 +161,7 @@ def score(analysis) -> Verdict:
 
 ## 4. Signal weights
 
-Illustrative starting values — **calibrate against a real corpus** (§9).
+Illustrative starting values - **calibrate against a real corpus** (§9).
 
 ### Capability signals ([Ch 04 §11](../security/04-android-security-model.md#11-detection-logic-for-sudarshan))
 
@@ -191,7 +191,7 @@ Illustrative starting values — **calibrate against a real corpus** (§9).
 | Packer fingerprint | 10 |
 | Parser fallback required | 10 |
 
-### Behavioural signals (T4 — highest weight)
+### Behavioural signals (T4 - highest weight)
 
 | Signal | Weight |
 |---|---|
@@ -255,7 +255,7 @@ cluster_gate:
 | Screen recorder (mediaProjection) → high | Capped |
 | App store (`REQUEST_INSTALL_PACKAGES`) → high | Capped |
 | Chat app (overlay) → high | Capped |
-| **Banking trojan** (all five) → high | **High — correctly** |
+| **Banking trojan** (all five) → high | **High - correctly** |
 
 > **🚨 Misconception:** "Sum the permissions and threshold it." That model flags every large,
 > legitimate app and misses every dropper. Droppers declare almost nothing
@@ -292,10 +292,9 @@ rule: effective_confidence = min(computed_confidence, min(applicable_ceilings))
         → bank acts on it. Cost: undetected fraud. ☠️
 ```
 
-> **⚙️ Engineering Note:** The ceiling **never raises** a score and **never lowers severity** — it
+> **⚙️ Engineering Note:** The ceiling **never raises** a score and **never lowers severity** - it
 > only caps *confidence*. A packed sample with a critical capability cluster stays critical
-> severity; we simply admit we're less sure. That combination — high severity, capped confidence —
-> lands in the top-left quadrant of §2 and routes to investigation rather than to closure. That
+> severity; we simply admit we're less sure. That combination - high severity, capped confidence - > lands in the top-left quadrant of §2 and routes to investigation rather than to closure. That
 > is exactly the behaviour you want.
 
 ---
@@ -306,8 +305,8 @@ Rules so precise they bypass the weighted model entirely.
 
 | Rule | Verdict | Confidence | Basis |
 |---|---|---|---|
-| **Signer impersonation** — claims a protected package, signer not in canonical registry | Critical | **1.0** | Cryptographic ([Ch 06 §11](../security/06-certificates.md#11-detection-logic-for-sudarshan)) |
-| **Janus shape** — DEX magic at offset 0 on a valid ZIP | Critical | 0.95 | Deterministic byte check |
+| **Signer impersonation** - claims a protected package, signer not in canonical registry | Critical | **1.0** | Cryptographic ([Ch 06 §11](../security/06-certificates.md#11-detection-logic-for-sudarshan)) |
+| **Janus shape** - DEX magic at offset 0 on a valid ZIP | Critical | 0.95 | Deterministic byte check |
 | **Known-malicious signer** in the TI database | Critical | 0.95 | Identity match |
 | **Duplicate ZIP entries** | High | 0.9 | Structural |
 | **DEX checksum mismatch** | High | 0.9 | Recomputed |
@@ -361,7 +360,7 @@ Rules so precise they bypass the weighted model entirely.
 }
 ```
 
-> **⚙️ Engineering Note:** The `contributions` array **is** the explanation — no separate
+> **⚙️ Engineering Note:** The `contributions` array **is** the explanation - no separate
 > "explanation module" is needed or wanted. Generating a natural-language rationale from this
 > structure is a rendering task ([Ch 29](29-investigation-reports.md)); the *authoritative*
 > explanation is the structured record, because that is what an auditor can verify line by line.
@@ -391,13 +390,13 @@ Weights are hypotheses. Calibrate them or they are guesses with decimal places.
 | Critical | ≥ 120 | Auto-escalate; recommend containment | **< 1%** |
 | High | 80–119 | Analyst review within SLA | < 5% |
 | Medium | 40–79 | Queue; monitor | < 20% |
-| Low | < 40 | Log only | — |
+| Low | < 40 | Log only | - |
 
 > **⚙️ Engineering Note:** Set the FP target **by action cost**, not globally
 > ([Ch 20 §13](../incident-response/20-incident-response.md#13-limitations-edge-cases-false-positives)).
 > Critical triggers customer-visible containment, so it needs sub-1% precision. Medium triggers a
 > queue entry, so 20% is tolerable. A single global threshold either drowns analysts or misses
-> threats — there is no setting at which one number serves both.
+> threats - there is no setting at which one number serves both.
 
 ### Regression testing
 
@@ -407,11 +406,11 @@ scoring_tests:
     - {sha256: "...", note: "confirmed Anatsa"}
     - {sha256: "...", note: "signer impersonation of client bank"}
   must_not_exceed_medium:                 # ★ the hard negatives
-    - {sha256: "...", note: "1Password — a11y autofill"}
-    - {sha256: "...", note: "TeamViewer — a11y + screen capture + input"}
-    - {sha256: "...", note: "client bank's own app — pinning, RASP, obfuscation"}
-    - {sha256: "...", note: "F-Droid — REQUEST_INSTALL_PACKAGES"}
-    - {sha256: "...", note: "MDM agent — device admin + install"}
+    - {sha256: "...", note: "1Password - a11y autofill"}
+    - {sha256: "...", note: "TeamViewer - a11y + screen capture + input"}
+    - {sha256: "...", note: "client bank's own app - pinning, RASP, obfuscation"}
+    - {sha256: "...", note: "F-Droid - REQUEST_INSTALL_PACKAGES"}
+    - {sha256: "...", note: "MDM agent - device admin + install"}
   run_on: every_ruleset_change
 ```
 
@@ -424,7 +423,7 @@ The most important dataset in the product, and the one teams skip.
 | Category | Why it's hard | Examples |
 |---|---|---|
 | **Password managers** | a11y + autofill | 1Password, Bitwarden |
-| **Remote support** | a11y + MediaProjection + input injection — **the Hidden VNC profile** | TeamViewer, AnyDesk |
+| **Remote support** | a11y + MediaProjection + input injection - **the Hidden VNC profile** | TeamViewer, AnyDesk |
 | **Screen readers / assistive** | a11y with full capability | TalkBack alternatives |
 | **Automation** | a11y + gestures | Tasker, MacroDroid |
 | **App stores** | `REQUEST_INSTALL_PACKAGES` + session install | F-Droid, Amazon Appstore |
@@ -453,7 +452,7 @@ The most important dataset in the product, and the one teams skip.
 
 > **⚙️ Engineering Note:** Do not expose raw scores or per-signal weights on a public API. An
 > adversary with score feedback can perform boundary probing and tune samples to land just below
-> a threshold — a model-extraction attack against a rule system
+> a threshold - a model-extraction attack against a rule system
 > ([Ch 21 §6](../ai-malware-analysis/21-ai-assisted-malware-analysis.md#6-adversarial-machine-learning)).
 > Expose severity buckets and evidence to authenticated tenants; keep the arithmetic internal.
 
@@ -484,7 +483,7 @@ The most important dataset in the product, and the one teams skip.
 1. **Two axes always.** Never collapse severity and confidence.
 2. **Cluster gate before weighted sum.** No cluster, no critical.
 3. **Behavioural weights > capability weights.** Observation beats declaration.
-4. **Ceilings cap confidence only** — never severity, never upward.
+4. **Ceilings cap confidence only** - never severity, never upward.
 5. **Deterministic overrides bypass everything** and carry near-1.0 confidence.
 6. **The `contributions` array is the explanation.** No separate module.
 7. **Version every verdict** with the ruleset that produced it.
@@ -500,13 +499,13 @@ The most important dataset in the product, and the one teams skip.
 
 **What judges ask:** *"How do you know your risk score is right?"*
 
-**Perfect answer:** We don't treat it as a truth value — it exists to order a queue and trigger an
+**Perfect answer:** We don't treat it as a truth value - it exists to order a queue and trigger an
 action, and it's built so both are defensible. Three properties. First, two axes: severity and
 confidence stay separate, because "potentially catastrophic but we can't yet tell" is a real and
 important state that a single number renders as "medium" and buries. Second, cluster gating: no
 single signal can produce a high score, so a password manager with an accessibility service caps
 at medium while a sample with accessibility plus overlay plus install capability plus SMS access
-reaches critical. Third, and most importantly, a **confidence ceiling** — if the sample was packed
+reaches critical. Third, and most importantly, a **confidence ceiling** - if the sample was packed
 and we couldn't unpack it, or its C2 was offline, confidence is capped and the verdict is
 inconclusive, never clean. And we calibrate against a hard-negative corpus that deliberately
 includes password managers, TeamViewer, MDM agents, and the client bank's own production app,
@@ -516,25 +515,25 @@ failure.
 **Common mistakes:**
 - Presenting a single 0–100 number as the output.
 - Summing permissions. It flags every super-app and misses every dropper.
-- Scoring obfuscation or root detection as malicious — that's the client's own banking app.
+- Scoring obfuscation or root detection as malicious - that's the client's own banking app.
 
 **Follow-ups to expect:**
 - *"What's your false positive rate?"* → It depends on the action, deliberately. Critical triggers
   customer-visible containment so we target under 1%; medium just queues, so 20% is tolerable. A
   single global threshold either drowns analysts or misses threats.
 - *"Could an attacker tune a sample to score just under your threshold?"* → Yes, which is why we
-  don't expose raw scores or weights externally — that's boundary probing, a model-extraction
+  don't expose raw scores or weights externally - that's boundary probing, a model-extraction
   attack against a rule system. Tenants see severity buckets and evidence, not the arithmetic.
 - *"Why not use ML for the score?"* → Because a bank has to explain a held session to a regulator
   nine months later. "The model said 0.87" fails; "the accessibility config declares
   `canPerformGestures` at line 6, and the app drew an overlay over a banking app at 14:32:07,
   detonation log line 4821" survives. ML orders the queue; rules decide.
 
-**Fact that impresses:** The confidence ceiling is deliberately asymmetric — it caps confidence but
+**Fact that impresses:** The confidence ceiling is deliberately asymmetric - it caps confidence but
 never lowers severity. So a packed sample we couldn't open stays *critical severity with 0.5
 confidence*, which routes it to investigation rather than closure. The alternative design, where
 inability to analyse quietly produces a low score, means the samples that most resist analysis are
-the ones the system most under-prioritises — which is exactly what a packer is for.
+the ones the system most under-prioritises - which is exactly what a packer is for.
 
 ---
 
@@ -551,7 +550,7 @@ actions, and a single number renders both as "medium." The critical-low-confiden
 where unanalysable samples land, and it must escalate.
 
 **Q: "An app has ten dangerous permissions. High risk?"**
-Not necessarily — super-apps and MDM agents legitimately do, and droppers declare almost nothing.
+Not necessarily - super-apps and MDM agents legitimately do, and droppers declare almost nothing.
 The cluster *shape* matters, not the count.
 
 **Q: "How do you make a score explainable?"**
@@ -565,7 +564,7 @@ per-action FP targets, measure per-rule precision, and regression-test on every 
 
 **Q: "What goes in your negative corpus?"**
 Password managers, remote-support apps, screen readers, automation tools, app stores, MDM agents,
-regional super-apps — and the client bank's own production app, which is obfuscated, pinned, and
+regional super-apps - and the client bank's own production app, which is obfuscated, pinned, and
 root-detecting.
 
 **Beginner mistakes:**
@@ -589,13 +588,13 @@ root-detecting.
 
 ## 16. References
 
-1. NIST SP 800-30 Rev. 1 — *Guide for Conducting Risk Assessments*.
-2. FIRST — CVSS specification (severity/exploitability separation as a design precedent).
+1. NIST SP 800-30 Rev. 1 - *Guide for Conducting Risk Assessments*.
+2. FIRST - CVSS specification (severity/exploitability separation as a design precedent).
 3. MITRE ATT&CK for Mobile. https://attack.mitre.org/matrices/mobile/
 4. OWASP MASVS v2.1.0. https://mas.owasp.org/MASVS/
-5. MobSF scoring methodology (as a contrast case — hygiene, not maliciousness). https://mobsf.github.io/docs/
-6. Pendlebury et al. — *TESSERACT* (USENIX Security 2019) — evaluation bias.
-7. Reserve Bank of India — model risk and explainability expectations in financial services.
+5. MobSF scoring methodology (as a contrast case - hygiene, not maliciousness). https://mobsf.github.io/docs/
+6. Pendlebury et al. - *TESSERACT* (USENIX Security 2019) - evaluation bias.
+7. Reserve Bank of India - model risk and explainability expectations in financial services.
 
 ---
 

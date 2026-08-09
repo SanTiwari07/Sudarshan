@@ -1,5 +1,5 @@
 """
-Deterministic verdict replay — the guard rail for every other change.
+Deterministic verdict replay - the guard rail for every other change.
 
 The architectural invariant is that the Risk Engine alone decides the verdict:
 planner, perception, memory, executor and goal-tracker changes may alter WHICH
@@ -10,7 +10,7 @@ score, band, severity or recommendation.
 any refactor shifts a verdict field for identical recorded input, that is a
 determinism regression and this test fails.
 
-Regenerating the baseline is a deliberate act — do it only when a verdict change
+Regenerating the baseline is a deliberate act - do it only when a verdict change
 is intended and reviewed, never to make this test pass.
 """
 
@@ -73,7 +73,7 @@ def test_repeated_evaluation_is_stable(scenario):
 
 def test_agentic_imports_do_not_perturb_the_verdict():
     """
-    Importing the AI stack must not change scoring — no monkey-patching, no
+    Importing the AI stack must not change scoring - no monkey-patching, no
     global state, no import-time side effects reaching the engine.
     """
     kwargs = dict(replay_scenarios()[-1])

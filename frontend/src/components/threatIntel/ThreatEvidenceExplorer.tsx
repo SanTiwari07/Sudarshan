@@ -24,7 +24,7 @@ export default function ThreatEvidenceExplorer({ groups }: { groups: Group[] }) 
       <SectionHeader
         icon={<FileSearch className="h-4 w-4" />}
         title="Evidence explorer"
-        subtitle="View evidence behind each claim — full-width registry"
+        subtitle="View evidence behind each claim - full-width registry"
       />
       <div className="divide-y divide-slate-100">
         {groups.map((g) => {
@@ -64,7 +64,7 @@ export default function ThreatEvidenceExplorer({ groups }: { groups: Group[] }) 
                                 disabled={disabled}
                                 className="text-[11px] font-semibold text-blue-700 hover:text-blue-900 disabled:text-slate-400 disabled:cursor-default"
                               >
-                                {disabled ? '—' : 'Open'}
+                                {disabled ? '-' : 'Open'}
                               </button>
                             </td>
                           </tr>

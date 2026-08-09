@@ -1,4 +1,4 @@
-"""VIDE orchestration — static + dynamic profile merge and compare."""
+"""VIDE orchestration - static + dynamic profile merge and compare."""
 
 from __future__ import annotations
 
@@ -157,7 +157,7 @@ def safe_run_vide_analysis(
     baselines: Optional[List[InstitutionBaseline]] = None,
     apktool_available: bool = True,
 ) -> Dict[str, Any]:
-    """Run VIDE; never raise — distinguish UNAVAILABLE / ERROR / OK."""
+    """Run VIDE; never raise - distinguish UNAVAILABLE / ERROR / OK."""
     has_static = bool(
         suspect_profile
         and (suspect_profile.strings or suspect_profile.view_sequence)

@@ -1,4 +1,4 @@
-# 23 — Detection Pipeline
+# 23 - Detection Pipeline
 
 > **Chapter ID:** `CH23` · **Block:** E · **Status:** Stable
 > **Tags:** `#pipeline` `#tiering` `#gating` `#sla` `#orchestration` `#throughput` `#partial-results`
@@ -41,7 +41,7 @@ One fact drives everything: **analysis cost varies by four orders of magnitude.*
 ```
 
 If every sample ran every tier, a 10,000-sample day would need roughly **2,000 device-hours** of
-detonation. Nobody has that. So the pipeline's job is not to analyse — it is to **decide what
+detonation. Nobody has that. So the pipeline's job is not to analyse - it is to **decide what
 deserves analysis**.
 
 ```
@@ -53,7 +53,7 @@ deserves analysis**.
    └──────────────────────┘         └──────────────────────┘
 ```
 
-> **⚙️ Engineering Note — the gating asymmetry.** A gate that wrongly *escalates* costs compute.
+> **⚙️ Engineering Note - the gating asymmetry.** A gate that wrongly *escalates* costs compute.
 > A gate that wrongly *declines* to escalate produces a false negative on a sample nobody will
 > look at again. **These costs are not symmetric**, so gates must be biased toward escalation and
 > every gate decision must be recorded so it can be audited and tuned later
@@ -74,7 +74,7 @@ deserves analysis**.
 
 ### The enrichment tier that runs alongside
 
-**TE — Intelligence enrichment** (~200 ms, 100%): signer lookup in the TI database, hash lookup,
+**TE - Intelligence enrichment** (~200 ms, 100%): signer lookup in the TI database, hash lookup,
 known-infrastructure match. Runs concurrently with T0–T2 because it's I/O-bound and can
 short-circuit everything.
 
@@ -82,7 +82,7 @@ short-circuit everything.
         ┌─────────────────────────────────────────┐
         │  T0 ─► T1 ─► T2   (sequential, CPU)     │
         │   ╲                                     │
-        │    ╲   TE  (parallel, I/O — TI lookups) │
+        │    ╲   TE  (parallel, I/O - TI lookups) │
         │     ╲   │                               │
         │      ▼  ▼                               │
         │      merged signal set → gate           │
@@ -90,7 +90,7 @@ short-circuit everything.
 ```
 
 > **⚙️ Engineering Note:** A known-malicious signer hit in TE can produce a **high-confidence
-> verdict in under 300 ms** without any code analysis at all — because signer identity is durable
+> verdict in under 300 ms** without any code analysis at all - because signer identity is durable
 > ([Ch 06 §10](../security/06-certificates.md#10-certificates-as-a-correlation-pivot)). That's the
 > fastest path in the whole system, and it's why TE runs in parallel rather than after static.
 
@@ -156,7 +156,7 @@ packed-and-unopened, decompilation failure, and static-inconclusive. This is
 
 > **⚙️ Engineering Note:** The natural instinct is to route unanalysable samples to a "failed"
 > queue that nobody reads. **Resist it.** Samples that resist analysis are disproportionately
-> likely to be the ones that matter — that's the entire purpose of a packer. Route failure to
+> likely to be the ones that matter - that's the entire purpose of a packer. Route failure to
 > *more* analysis, and if it still fails, route it to a human with the reason attached.
 
 ---
@@ -171,7 +171,7 @@ two lanes.
 | **URGENT** | Active fraud, IR request, SOC escalation | **10 s** | **3 min** | Bypasses gating; dedicated device; partial streaming |
 | **HIGH** | Client package targeted; known-bad signer | 30 s | 15 min | Priority queue |
 | **NORMAL** | Routine submission | 2 min | 60 min | Standard gating |
-| **BULK** | Feed ingestion, corpus backfill | — | 24 h | T0–T2 only unless gated up |
+| **BULK** | Feed ingestion, corpus backfill | - | 24 h | T0–T2 only unless gated up |
 
 ```
    URGENT ──────────────────────────► [dedicated device pool]
@@ -184,7 +184,7 @@ two lanes.
 
 > **⚙️ Engineering Note:** Reserve a **dedicated detonation device** (or two) for the urgent lane
 > that is never used for bulk work. Under load, a shared pool means an urgent sample queues
-> behind a 15-minute bulk detonation — which is the exact failure the SLA exists to prevent.
+> behind a 15-minute bulk detonation - which is the exact failure the SLA exists to prevent.
 > The cost of an idle device is trivial compared to a missed fraud window.
 
 ---
@@ -229,7 +229,7 @@ Waiting for completeness wastes the recovery window.
 
 > **⚙️ Engineering Note:** `confidence_ceiling` and `ceiling_reason` must appear on **every**
 > partial. A consumer must be able to distinguish "0.6 because the evidence is weak" from "0.6
-> because we haven't finished yet." Those imply different actions — the second warrants waiting
+> because we haven't finished yet." Those imply different actions - the second warrants waiting
 > or provisionally containing; the first warrants deprioritising.
 
 ---
@@ -275,7 +275,7 @@ recursion:
 ```
 
 > **⚙️ Engineering Note:** Without depth limits and cycle detection, a malformed or deliberately
-> crafted sample can produce unbounded recursion — a self-referential DEX, or a payload that
+> crafted sample can produce unbounded recursion - a self-referential DEX, or a payload that
 > re-emits its parent. Cap depth at 3, detect cycles by hash, and **make the cap a recorded
 > finding** rather than a silent truncation, because hitting it is itself unusual.
 
@@ -294,9 +294,9 @@ recursion:
 | Sandbox escape attempt detected | **Halt, quarantine, alert** | Critical finding |
 | TI enrichment unavailable | Proceed without; flag degraded | Minor ceiling |
 
-> **⚙️ Engineering Note — every failure path must produce a *recorded* outcome, never silence.**
+> **⚙️ Engineering Note - every failure path must produce a *recorded* outcome, never silence.**
 > The dangerous state is an analysis that quietly ends with no verdict and no ticket. Enumerate
-> the failure modes, assign each an outcome, and monitor their rates — a rising unpack-failure
+> the failure modes, assign each an outcome, and monitor their rates - a rising unpack-failure
 > rate is an early signal that a new packer has entered the ecosystem.
 
 ---
@@ -308,8 +308,8 @@ recursion:
 ```
   T0–T2:  CPU-bound, horizontally scalable, ~cents per 1,000 samples
   T3:     CPU + memory, scalable, minutes of CPU
-  T4:     ★ DEVICE-BOUND — fixed pool, 15 min per sample
-  T5:     ★ HUMAN-BOUND — the scarcest resource
+  T4:     ★ DEVICE-BOUND - fixed pool, 15 min per sample
+  T5:     ★ HUMAN-BOUND - the scarcest resource
 ```
 
 ### Sizing
@@ -330,7 +330,7 @@ recursion:
 
 > **⚙️ Engineering Note:** `g4` is the lever with the most leverage in the entire system. Moving
 > the T4 escalation rate from 5% to 10% doubles the hardware bill. **That is why T1's capability
-> extraction quality matters so much** — better cheap gating directly reduces expensive
+> extraction quality matters so much** - better cheap gating directly reduces expensive
 > detonation. Invest in the accessibility-config parser before buying devices.
 
 ---
@@ -347,11 +347,11 @@ recursion:
 | C2-unreachable rate | Infrastructure health / evasion | Sudden change |
 | Parser fallback rate | Anti-analysis prevalence | Increase |
 | Verdict distribution | Drift / calibration | Shift |
-| Recursion depth histogram | Staged-malware prevalence | — |
+| Recursion depth histogram | Staged-malware prevalence | - |
 | Rule fire rate + FP rate | [Ch 19 §7](../soc/19-enterprise-soc-operations.md#7-detection-engineering) | FP > threshold |
 
 > **⚙️ Engineering Note:** *Unpack failure rate* and *parser fallback rate* are the two
-> underrated ones. Both are **leading indicators of adversary tooling change** — a week-over-week
+> underrated ones. Both are **leading indicators of adversary tooling change** - a week-over-week
 > rise in unpack failures usually means a new commercial protector has entered circulation, as
 > happened with Virbox in Klopatra (Cleafy, Aug 2025). Treat them as intelligence, not just ops
 > metrics.
@@ -370,7 +370,7 @@ recursion:
 | Sample with no DEX | Legal; analyse what exists |
 | Non-Android file submitted | Reject at intake with a clear reason |
 
-> **⚙️ Engineering Note — cache invalidation on ruleset change is easy to get wrong.** A verdict
+> **⚙️ Engineering Note - cache invalidation on ruleset change is easy to get wrong.** A verdict
 > is only valid for the ruleset that produced it. Store `ruleset_version` and `tool_versions` on
 > every verdict; when rules update, mark affected verdicts stale and feed them into the
 > retro-hunt queue ([Ch 18 §6](../soc/18-mobile-threat-hunting.md#6-hunting-the-sample-corpus))
@@ -382,13 +382,13 @@ recursion:
 
 1. **Bias gates toward escalation** and record every gate decision.
 2. **Escalate on inability to analyse**, not only on positive findings.
-3. **Run TI enrichment in parallel** — a signer hit can end the analysis in 300 ms.
+3. **Run TI enrichment in parallel** - a signer hit can end the analysis in 300 ms.
 4. **Reserve dedicated devices for the urgent lane.**
 5. **Stream partials with `confidence_ceiling` and `ceiling_reason` on every one.**
 6. **Use a durable workflow engine.** Retries, restarts, and audit come free.
 7. **Cap recursion depth, detect cycles by hash, and record when the cap is hit.**
 8. **Every failure path produces a recorded outcome.**
-9. **Watch `g4` — it sets the hardware bill.**
+9. **Watch `g4` - it sets the hardware bill.**
 10. **Treat unpack-failure and parser-fallback rates as intelligence.**
 11. **Version verdicts with the ruleset and tool versions that produced them.**
 
@@ -398,11 +398,11 @@ recursion:
 
 **What judges ask:** *"How does this scale? You can't detonate every APK."*
 
-**Perfect answer:** No, and we don't try — the design assumption is that analysis cost varies by
+**Perfect answer:** No, and we don't try - the design assumption is that analysis cost varies by
 four orders of magnitude, from about ten milliseconds for structural checks to fifteen minutes
 for detonation. So the cheap tiers run on 100% of samples and their only job is to decide what
 deserves the expensive ones. Structural checks, capability extraction, and resource mining run in
-about a second and a half combined, and threat-intel enrichment runs in parallel — a known-bad
+about a second and a half combined, and threat-intel enrichment runs in parallel - a known-bad
 signer can produce a high-confidence verdict in under 300 milliseconds without any code analysis.
 Roughly 20% reaches code analysis and about 5% reaches detonation, which for ten thousand samples
 a day is around nine devices plus two reserved for the urgent lane. And critically the gates are
@@ -418,7 +418,7 @@ revisits, whereas a gate that wrongly escalates just costs compute.
 **Follow-ups to expect:**
 - *"What happens when a sample can't be unpacked?"* → It escalates. Three separate gates trigger
   on inability to analyse rather than on findings, because the samples that resist analysis are
-  disproportionately the ones that matter — that's what packers are for. If it still fails, a
+  disproportionately the ones that matter - that's what packers are for. If it still fails, a
   human gets it with the reason attached, and the verdict carries a confidence ceiling so we
   never report "clean" on something we couldn't read.
 - *"How fast for an active fraud case?"* → There's a dedicated urgent lane with reserved devices
@@ -426,12 +426,12 @@ revisits, whereas a gate that wrongly escalates just costs compute.
   stream partial results, so a capability-cluster finding at 250 milliseconds can trigger a
   session hold rather than waiting nine minutes for the detonation.
 - *"What's your biggest cost lever?"* → The T4 escalation rate. Moving it from 5% to 10% doubles
-  the device fleet, which is why we invest in better cheap-tier gating — specifically the
-  accessibility config parser — before buying hardware.
+  the device fleet, which is why we invest in better cheap-tier gating - specifically the
+  accessibility config parser - before buying hardware.
 
 **Fact that impresses:** Rising unpack-failure and parser-fallback rates are leading indicators
 of adversary tooling change, not just ops noise. A week-over-week rise in unpack failures usually
-means a new commercial protector has entered circulation — which is exactly what Virbox adoption
+means a new commercial protector has entered circulation - which is exactly what Virbox adoption
 in Klopatra looked like in August 2025. We alert on those metrics as intelligence.
 
 ---
@@ -440,7 +440,7 @@ in Klopatra looked like in August 2025. We alert on those metrics as intelligenc
 
 **Q: "Design a scalable malware analysis pipeline."**
 Lead with the cost gradient, then tiering with gating, then the numbers: coverage per tier and
-the device-count formula. Then the two subtleties that show depth — gates biased toward
+the device-count formula. Then the two subtleties that show depth - gates biased toward
 escalation because the error costs are asymmetric, and escalation on *inability to analyse*.
 
 **Q: "What's your bottleneck?"**
@@ -454,8 +454,7 @@ full certainty wastes the fund-recovery window.
 
 **Q: "How do you handle a sample that times out?"**
 Retain partial results, apply a confidence ceiling with the reason recorded, requeue where
-appropriate, and never emit a clean verdict. Every failure path produces a recorded outcome —
-silence is the dangerous state.
+appropriate, and never emit a clean verdict. Every failure path produces a recorded outcome - silence is the dangerous state.
 
 **Q: "Why a workflow engine rather than a queue?"**
 Long-running analyses with recursion, survival across worker restarts, typed retries with
@@ -485,11 +484,11 @@ and audit is a regulatory requirement here.
 
 ## 15. References
 
-1. OWASP MASTG — static and dynamic analysis workflow. https://mas.owasp.org/MASTG/
-2. MobSF — pipeline architecture reference. https://mobsf.github.io/docs/
+1. OWASP MASTG - static and dynamic analysis workflow. https://mas.owasp.org/MASTG/
+2. MobSF - pipeline architecture reference. https://mobsf.github.io/docs/
 3. Temporal / durable workflow execution documentation.
-4. Cleafy Labs — *Klopatra* (August 2025) — Virbox adoption as a tooling-shift example.
-5. NIST SP 800-163 Rev. 1 — *Vetting the Security of Mobile Applications*.
+4. Cleafy Labs - *Klopatra* (August 2025) - Virbox adoption as a tooling-shift example.
+5. NIST SP 800-163 Rev. 1 - *Vetting the Security of Mobile Applications*.
 
 ---
 

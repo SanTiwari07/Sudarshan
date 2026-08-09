@@ -63,7 +63,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # allow_origins=["*"] together with allow_credentials=True is invalid per the
 # Fetch standard; Starlette resolves it by reflecting the caller's Origin, which
 # means every site on the internet becomes a trusted origin. Use an explicit
-# allow-list instead — override with CORS_ALLOW_ORIGINS (comma-separated).
+# allow-list instead - override with CORS_ALLOW_ORIGINS (comma-separated).
 _DEFAULT_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
 CORS_ALLOW_ORIGINS = [
     o.strip()
@@ -122,7 +122,7 @@ async def startup():
         if generated:
             logger.warning(
                 "[Startup] ADMIN_PASSWORD was not set. Seeded admin '%s' with a "
-                "generated password: %s  — store it now; it is not recoverable "
+                "generated password: %s - store it now; it is not recoverable "
                 "and will not be shown again.",
                 admin_user, admin_pass,
             )
@@ -139,7 +139,7 @@ async def startup():
     # 3. Install the persistent IOC reputation cache.
     #    The ioc_cache table and its 24h-TTL accessors already existed and were
     #    never called, so every analysis re-queried VirusTotal / OTX / AbuseIPDB
-    #    from scratch — up to 14 requests against a 4-req/min free tier.
+    #    from scratch - up to 14 requests against a 4-req/min free tier.
     #    sudarshan_core cannot import app.db (the analysis engine has no such
     #    package), so the accessors are injected here instead.
     try:
@@ -152,7 +152,7 @@ async def startup():
 
     # 4. Register the runtime-telemetry sink on the shared event bus.
     #    sudarshan_core used to import this module directly, which fails in the
-    #    analysis engine (no app package) and was swallowed — so all hook and
+    #    analysis engine (no app package) and was swallowed - so all hook and
     #    event telemetry from the delegated path went nowhere. Registering a
     #    sink keeps the dependency pointing downward.
     try:

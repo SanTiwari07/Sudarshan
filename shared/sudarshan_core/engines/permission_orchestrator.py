@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Permission Orchestrator
+SUDARSHAN - Permission Orchestrator
 ====================================
 Automatically navigates Android Settings to grant dangerous permissions 
 required by malware (Accessibility, Overlay, Device Admin, etc.).
@@ -29,7 +29,7 @@ def extract_accessibility_service_class(
     manifest, or None if no accessibility service is declared.
 
     Reuses the already-imported Androguard analyzer (same dependency used in
-    apk_analyzer.py) — does NOT re-parse if the caller already has an `apk`
+    apk_analyzer.py) - does NOT re-parse if the caller already has an `apk`
     object, but we cannot assume that here because the orchestrator is called
     from a different module boundary. Parsing is cheap compared to ADB round
     trips; the result should be cached by the caller if called in a tight loop.
@@ -39,7 +39,7 @@ def extract_accessibility_service_class(
       2. Has an <intent-filter> with action
          "android.accessibilityservice.AccessibilityService"
 
-    If no such element is found we return None — this is itself a finding
+    If no such element is found we return None - this is itself a finding
     (the sample does not use accessibility abuse via a declared service).
 
     Never raises: any parse failure degrades to None.
@@ -106,14 +106,14 @@ def extract_accessibility_service_class(
         if has_accessibility_action:
             # Resolve the class name: may be fully-qualified or relative
             if svc_name.startswith(package_name):
-                # Fully qualified — convert to relative (.ClassName)
+                # Fully qualified - convert to relative (.ClassName)
                 class_name = svc_name[len(package_name):]
                 if not class_name.startswith("."):
                     class_name = "." + class_name.lstrip(".")
             elif svc_name.startswith("."):
                 class_name = svc_name
             else:
-                # Unknown package prefix — use as-is
+                # Unknown package prefix - use as-is
                 class_name = svc_name
 
             logger.info(
@@ -125,7 +125,7 @@ def extract_accessibility_service_class(
     # No qualifying service found
     logger.info(
         f"[PermissionOrchestrator] No accessibility service declared in "
-        f"'{package_name}' manifest — this sample does not use accessibility abuse "
+        f"'{package_name}' manifest - this sample does not use accessibility abuse "
         f"via a bound service."
     )
     return None
@@ -202,12 +202,12 @@ class PermissionOrchestrator:
         )
 
         # If no class was provided by the caller, check that a service
-        # actually exists before writing to settings — writing a non-existent
+        # actually exists before writing to settings - writing a non-existent
         # component name silently fails and wastes the 0.35-weight BFCI slot.
         if service_class is None:
             logger.info(
                 f"[PermissionOrchestrator] No service_class provided; "
-                f"skipping settings put — caller should pass the manifest-parsed "
+                f"skipping settings put - caller should pass the manifest-parsed "
                 f"class name via extract_accessibility_service_class()."
             )
             self._log_action("accessibility", "grant", False)

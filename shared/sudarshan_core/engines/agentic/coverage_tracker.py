@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Exploration Coverage Metrics Suite
+SUDARSHAN - Exploration Coverage Metrics Suite
 ===============================================
 Calculates research-grade metrics on dynamic UI exploration coverage:
   - Unique screens discovered & visited

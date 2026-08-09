@@ -28,7 +28,7 @@ OUTPUT_JSON = BACKEND_DIR / "dynamic_result.json"
 async def run():
     try:
         print("=" * 60)
-        print("SUDARSHAN — Frida Dynamic Analysis (Windows Native Mode)")
+        print("SUDARSHAN - Frida Dynamic Analysis (Windows Native Mode)")
         print("=" * 60)
 
         import frida
@@ -52,7 +52,7 @@ async def run():
         if not APK_PATH.exists():
             print(f"\n[!] No APK found at: {APK_PATH}")
             print(f"    Copy a test APK to: {APK_PATH}")
-            print("    Skipping dynamic analysis — testing device connectivity only.")
+            print("    Skipping dynamic analysis - testing device connectivity only.")
             return
 
         print(f"[*] APK path      : {APK_PATH}")

@@ -49,7 +49,7 @@ WORKDIR /app
 COPY analysis-engine/requirements.txt .
 RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
 
-# 4b. Shared analysis layer — the same package the backend installs, so the two
+# 4b. Shared analysis layer - the same package the backend installs, so the two
 #     services can no longer drift.
 COPY shared/ /opt/sudarshan-core/
 # Editable so the ./shared bind mount in docker-compose.yml gives the same

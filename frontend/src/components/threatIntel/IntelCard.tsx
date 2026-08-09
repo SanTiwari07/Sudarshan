@@ -8,7 +8,7 @@ type IntelCardProps = {
   bodyClassName?: string;
 };
 
-/** Full-height intel panel shell — pairs with grid `items-stretch` */
+/** Full-height intel panel shell - pairs with grid `items-stretch` */
 export function IntelCard({ children, className = '', bodyClassName = '' }: IntelCardProps) {
   return (
     <SocCard className={`flex flex-col h-full min-h-0 shadow-sm hover:shadow-md transition-shadow duration-200 ${className}`}>

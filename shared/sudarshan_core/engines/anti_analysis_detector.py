@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Anti-Analysis Detector
+SUDARSHAN - Anti-Analysis Detector
 ===================================
 Listens for 'anti_analysis' events from the RuntimeEventBus. These events are
 emitted by Frida hooks when malware tries to probe for an emulator, debugger,

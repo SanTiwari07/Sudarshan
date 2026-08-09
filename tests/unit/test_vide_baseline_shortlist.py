@@ -1,4 +1,4 @@
-"""VIDE baseline shortlist — no arbitrary bank fallback."""
+"""VIDE baseline shortlist - no arbitrary bank fallback."""
 
 from sudarshan_core.engines.vide.baseline_store import InstitutionBaseline, shortlist_baselines
 from sudarshan_core.engines.vide.ui_profile import UIProfile

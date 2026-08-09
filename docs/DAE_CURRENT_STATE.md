@@ -1,4 +1,4 @@
-# Dynamic Analysis Engine — Current Operational State & Resolution Audit
+# Dynamic Analysis Engine - Current Operational State & Resolution Audit
 
 **Audience:** Sudarshan Core Engineering & Threat Research Team  
 **Version:** `v2.5.0-STABLE`  
@@ -29,16 +29,16 @@
 9. **Network Interception**: Sidecar container runs `mitmproxy`, with [`network_capture.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/network_capture.py) parsing HAR dumps and merging full HTTPS headers/responses with Frida socket hooks.
 10. **Analyst Dashboard**: [`WorkflowDiagram.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/components/WorkflowDiagram.tsx) and [`FraudCard.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/pages/FraudCard.tsx) render interactive causal workflow chains and executive risk views directly in the React frontend.
 11. **Sandbox Provider Abstraction**: [`shared/sudarshan_core/sandbox/`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/sandbox/) (`get_sandbox_provider()`, Genymotion default, Android Studio optional) is the only supported path from DAE to ADB/install/launch.
-12. **Sandbox containment (P0)**: [`shared/sudarshan_core/security/`](../shared/sudarshan_core/security/) — `adb_gateway.run_adb` choke point, `sandbox_containment` policy, analysis-engine internal token middleware, gateway dynamic path blocked by default. Regression: `tests/unit/test_sandbox_containment.py`, `tests/unit/test_adb_policy_bypass.py`, `backend/tests/test_gateway_dynamic_blocker.py`.
+12. **Sandbox containment (P0)**: [`shared/sudarshan_core/security/`](../shared/sudarshan_core/security/) - `adb_gateway.run_adb` choke point, `sandbox_containment` policy, analysis-engine internal token middleware, gateway dynamic path blocked by default. Regression: `tests/unit/test_sandbox_containment.py`, `tests/unit/test_adb_policy_bypass.py`, `backend/tests/test_gateway_dynamic_blocker.py`.
 13. **Dynamic Validation Framework**: [`validate_dynamic_pipeline.py`](../validate_dynamic_pipeline.py) and [`shared/sudarshan_core/validation/`](../shared/sudarshan_core/validation/) run corpus APKs, stress/recovery suites, and engineering reports under `tests/apks/validation_runs/`.
 14. **VIDE (Visual Impersonation Detection Engine)**: [`shared/sudarshan_core/engines/vide/`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/vide/) compares suspect UI fingerprints against lab baselines (`data/ui_baselines/`, `bank_signer_registry.json`); merges static Apktool/HTML profiles with Frida WebView HTML from `banking_trojan` hooks; feeds deterministic rule **VIDE-F001** and FRS escalations in [`risk_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/risk_engine.py). Orchestrated in [`analysis-engine/app/main.py`](file:///d:/Projects/Sudarshan%20BOI/analysis-engine/app/main.py). See [`architecture/VIDE.md`](architecture/VIDE.md). Live device WebView path: **device verification required** (`scripts/verify_vide_webview_device.md`).
 
 ### Known limitations (documented gaps, not hidden)
-- **Per-session ephemeral artifact roots**: Containment helpers exist (`session_artifact_root`); full per-session isolation on disk is not complete — see [`security/P0_RED_TEAM_PENETRATION_REPORT.md`](security/P0_RED_TEAM_PENETRATION_REPORT.md).
+- **Per-session ephemeral artifact roots**: Containment helpers exist (`session_artifact_root`); full per-session isolation on disk is not complete - see [`security/P0_RED_TEAM_PENETRATION_REPORT.md`](security/P0_RED_TEAM_PENETRATION_REPORT.md).
 
 ---
 
-## Part 1 — Verified Operational Foundations
+## Part 1 - Verified Operational Foundations
 
 ### 1. The Determinism Invariant Holds
 AI controls UI exploration; deterministic engines control scoring. The `RiskEngine` computes the final score ($FRS$) from four independent inputs ($STEI$, $BFCI$, $ThreatIntel$, $BankingImpact$). LLM narrative generation runs strictly downstream.
@@ -59,7 +59,7 @@ AI controls UI exploration; deterministic engines control scoring. The `RiskEngi
 
 ---
 
-## Part 2 — Remediation Scorecard
+## Part 2 - Remediation Scorecard
 
 | Identified Defect | Resolution Strategy | Location / Artifact | Audit Status |
 |---|---|---|---|
@@ -77,7 +77,7 @@ AI controls UI exploration; deterministic engines control scoring. The `RiskEngi
 
 ---
 
-## Part 3 — Verification Metrics
+## Part 3 - Verification Metrics
 
 ```powershell
 # Run full automated pytest test suite

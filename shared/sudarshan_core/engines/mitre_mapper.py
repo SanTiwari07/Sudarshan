@@ -1,5 +1,5 @@
 """
-SUDARSHAN — MITRE ATT&CK Mobile Mapper
+SUDARSHAN - MITRE ATT&CK Mobile Mapper
 =======================================
 Maps dynamic behaviors (Frida hooks) to MITRE ATT&CK Mobile techniques.
 Subscribes to the RuntimeEventBus and produces a mapping file compatible

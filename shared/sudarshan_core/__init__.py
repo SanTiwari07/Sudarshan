@@ -3,8 +3,8 @@ Sudarshan Core
 ==============
 The analysis layer shared by both services:
 
-    backend          — API gateway, auth, case store, RAG/LLM orchestration
-    analysis-engine  — containerised APKTool/JADX/Androguard/Frida executor
+    backend - API gateway, auth, case store, RAG/LLM orchestration
+    analysis-engine - containerised APKTool/JADX/Androguard/Frida executor
 
 Why this package exists
 -----------------------
@@ -17,7 +17,7 @@ Rules for anything added here
 -----------------------------
 - It must be importable by BOTH services. In particular it must never import
   ``app.db``, ``app.auth``, ``app.ai``, ``app.rag``, ``app.routes`` or
-  ``app.workers`` — those exist only in the backend, and an import of one would
+  ``app.workers`` - those exist only in the backend, and an import of one would
   crash the analysis engine at startup. CI enforces this.
 - It owns no process-wide state. Both services import it concurrently.
 """

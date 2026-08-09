@@ -1,9 +1,9 @@
 """
-SUDARSHAN — Agentic Benchmark Collector
+SUDARSHAN - Agentic Benchmark Collector
 =========================================
 Collects metrics during Agentic Explorer runs.
 
-IMPORTANT — Benchmark Framework Scope:
+IMPORTANT - Benchmark Framework Scope:
   This module performs DATA COLLECTION only.
 
   The acceptance gate specified in the requirements (corpus comparison across
@@ -169,7 +169,7 @@ class BenchmarkCollector:
                 "redundant_actions":       self._redundant_actions,
 
                 # Frida
-                # Additive LLM cost fields — never rename or remove existing keys.
+                # Additive LLM cost fields - never rename or remove existing keys.
                 "llm_prompt_tokens":        self._prompt_tokens,
                 "llm_output_tokens":        self._output_tokens,
                 "llm_total_tokens":         self._total_tokens,

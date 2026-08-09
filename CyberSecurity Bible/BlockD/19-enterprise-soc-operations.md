@@ -1,4 +1,4 @@
-# 19 — Enterprise SOC Operations
+# 19 - Enterprise SOC Operations
 
 > **Chapter ID:** `CH19` · **Block:** D (Operations) · **Status:** Stable
 > **Tags:** `#soc` `#siem` `#soar` `#mtd` `#mdm` `#detection-engineering` `#sigma` `#alert-fatigue` `#triage`
@@ -11,7 +11,7 @@
 
 1. [What a SOC actually is](#1-what-a-soc-actually-is)
 2. [Tiers and the triage funnel](#2-tiers-and-the-triage-funnel)
-3. [Alert fatigue — the real enemy](#3-alert-fatigue--the-real-enemy)
+3. [Alert fatigue - the real enemy](#3-alert-fatigue--the-real-enemy)
 4. [The technology stack](#4-the-technology-stack)
 5. [Mobile-specific tooling: MTD, MDM, UEM](#5-mobile-specific-tooling-mtd-mdm-uem)
 6. [Where SUDARSHAN plugs in](#6-where-sudarshan-plugs-in)
@@ -31,14 +31,14 @@
 ## 1. What a SOC actually is
 
 A **Security Operations Centre** is the function that turns telemetry into decisions,
-continuously. Not a room, not a tool — a **process with people and an SLA**.
+continuously. Not a room, not a tool - a **process with people and an SLA**.
 
 For a bank, the mobile-fraud slice of the SOC has a defining property that most SOC literature
 doesn't address:
 
 > **The clock is not "mean time to detect." The clock is "before the money is gone."**
 
-Under real-time rails — UPI in India especially — funds disperse through mule chains within
+Under real-time rails - UPI in India especially - funds disperse through mule chains within
 minutes ([Ch 15 §10](../malware/15-malware-infrastructure.md#10-the-money-side-mule-chains)).
 A 4-hour MTTD is a normal SOC metric and a **total failure** in mobile banking fraud.
 
@@ -64,9 +64,9 @@ A 4-hour MTTD is a normal SOC metric and a **total failure** in mobile banking f
 
 | Tier | Role | Typical time per item |
 |---|---|---|
-| **T1 — Triage** | Validate, enrich, close obvious FPs, escalate | 2–10 min |
-| **T2 — Investigation** | Scope, correlate, determine impact | 30 min – hours |
-| **T3 — Hunt / IR / Detection Engineering** | Novel threats, rule development, incident lead | Hours – days |
+| **T1 - Triage** | Validate, enrich, close obvious FPs, escalate | 2–10 min |
+| **T2 - Investigation** | Scope, correlate, determine impact | 30 min – hours |
+| **T3 - Hunt / IR / Detection Engineering** | Novel threats, rule development, incident lead | Hours – days |
 
 ### The funnel, with realistic numbers
 
@@ -118,20 +118,20 @@ order of magnitude, T1 drowns and quality collapses.**
     │        ▼
     │   ESCALATE T2 (medium)
     ▼
-  ★ ESCALATE T2 — HIGH PRIORITY
+  ★ ESCALATE T2 - HIGH PRIORITY
     (dropper chain + a11y = the playbook)
     → hold sessions pending review
 ```
 
 > **⚙️ Engineering Note:** Every branch of that tree is answerable from data SUDARSHAN already
-> produces — allowlist, signer TI lookup, capability vector, installer attribution. **That means
+> produces - allowlist, signer TI lookup, capability vector, installer attribution. **That means
 > the tree can be automated end to end**, with T1 reviewing the *escalations* rather than
 > performing the walk. Automating triage logic that a human would perform identically is the
 > highest-ROI SOAR work available. → [Ch 25](../sudarshan/25-investigation-engine.md)
 
 ---
 
-## 3. Alert fatigue — the real enemy
+## 3. Alert fatigue - the real enemy
 
 More SOCs fail from noise than from missing detections.
 
@@ -153,7 +153,7 @@ More SOCs fail from noise than from missing detections.
   ★ The one true positive is closed with the rest
         │
         ▼
-  Breach — and the detection technically "worked"
+  Breach - and the detection technically "worked"
 ```
 
 ### The countermeasures
@@ -167,7 +167,7 @@ More SOCs fail from noise than from missing detections.
 | **Retire rules** | Track per-rule FP rate; kill rules above threshold |
 | **Own every rule** | Unowned rules rot |
 
-> **⚙️ Engineering Note — the single biggest lever is enrichment, not filtering.** An alert that
+> **⚙️ Engineering Note - the single biggest lever is enrichment, not filtering.** An alert that
 > arrives with the answer attached ("app X, signer not in registry, a11y + overlay + SMS,
 > installed by app Y which is itself unknown, 340 other customers affected") is triaged in
 > seconds. The same alert as a bare package name takes ten minutes and gets deprioritised.
@@ -190,12 +190,12 @@ More SOCs fail from noise than from missing detections.
  └────────────────────────────┬─────────────────────────────────────┘
                               ▼
  ┌──────────────────────────────────────────────────────────────────┐
- │ SIEM — collection, normalisation, correlation, retention         │
+ │ SIEM - collection, normalisation, correlation, retention         │
  │  Splunk · Elastic · Sentinel · QRadar · Chronicle                │
  └────────────────────────────┬─────────────────────────────────────┘
                               ▼
  ┌──────────────────────────────────────────────────────────────────┐
- │ SOAR — enrichment, automated triage, case management, response   │
+ │ SOAR - enrichment, automated triage, case management, response   │
  │  ★ where the §2 decision tree runs                               │
  └────────────────────────────┬─────────────────────────────────────┘
                               ▼
@@ -210,13 +210,13 @@ More SOCs fail from noise than from missing detections.
 | **SOAR** | Automate enrichment and response | Runs the triage tree; executes session holds |
 | **TIP** | Threat intel management | Feeds signer/C2 lookups ([Ch 30](../threat-intelligence/30-threat-intelligence-database.md)) |
 | **Case management** | Investigation record | Chain of custody, regulatory evidence |
-| **EDR** | Endpoint detection | **Corporate endpoints only — not customer phones** |
+| **EDR** | Endpoint detection | **Corporate endpoints only - not customer phones** |
 | **MTD** | Mobile threat defence | See §5 |
 
 > **⚙️ Engineering Note:** SUDARSHAN is an **enrichment and analysis service**, not a SIEM
 > replacement. Design the integration as: SIEM/SOAR calls SUDARSHAN's API with a sample or a
 > package identifier; SUDARSHAN returns a structured verdict with evidence; SOAR renders it into
-> the case. Trying to *be* the SOC console is a common product mistake — banks already have one,
+> the case. Trying to *be* the SOC console is a common product mistake - banks already have one,
 > and displacing it is a multi-year procurement fight you don't need.
 
 ---
@@ -227,7 +227,7 @@ More SOCs fail from noise than from missing detections.
 |---|---|---|
 | **MDM / EMM / UEM** | Device enrolment, policy, app allow/blocklists, remote wipe | **Managed** devices (employees, corporate) |
 | **MTD** (Mobile Threat Defence) | On-device malware/network/phishing detection | Managed devices, or consumer if the bank ships an SDK |
-| **In-app security SDK** | Signals from within the bank's own app | ★ **Customer devices — the only scalable option** |
+| **In-app security SDK** | Signals from within the bank's own app | ★ **Customer devices - the only scalable option** |
 
 Vendors in this space include Zimperium (z9/MTD) and Lookout on the MTD side, and Appdome,
 Promon, Guardsquare, Verimatrix, and Build38 on the in-app hardening/RASP side.
@@ -250,7 +250,7 @@ Promon, Guardsquare, Verimatrix, and Build38 on the in-app hardening/RASP side.
 > **🏛️ Enterprise Insight:** Most mobile-security vendor material addresses the left column
 > because that's the enterprise-IT budget. **The bank's fraud losses come from the right
 > column.** A bank cannot MDM-enrol its customers. The only scalable telemetry is what the
-> bank's own app can observe about its own environment — which is exactly the minimal signal set
+> bank's own app can observe about its own environment - which is exactly the minimal signal set
 > in [Ch 18 §3](18-mobile-threat-hunting.md#3-telemetry-what-you-can-actually-hunt-in), and it is
 > why in-app SDK instrumentation is the highest-leverage investment a bank can make.
 
@@ -309,8 +309,8 @@ POST /api/v1/analyze
 ```
 
 > **⚙️ Engineering Note:** The `evidence` array is the difference between an alert an analyst
-> trusts and one they don't. Every claim links to a specific artifact — a file path, a log line,
-> a timestamp — so a T2 analyst (or an auditor six months later) can verify it rather than
+> trusts and one they don't. Every claim links to a specific artifact - a file path, a log line,
+> a timestamp - so a T2 analyst (or an auditor six months later) can verify it rather than
 > trusting a score. **Never emit a claim without a pointer to its evidence.**
 > → [Ch 29](../sudarshan/29-investigation-reports.md)
 
@@ -363,8 +363,7 @@ metadata:
 
 ### ATT&CK coverage as a management artifact
 
-Mapping every rule to a technique gives you a heatmap that shows **gaps, not just coverage** —
-and the honest version from [Ch 16 §3](../threat-intelligence/16-threat-intelligence.md#3-mitre-attck-for-mobile)
+Mapping every rule to a technique gives you a heatmap that shows **gaps, not just coverage** - and the honest version from [Ch 16 §3](../threat-intelligence/16-threat-intelligence.md#3-mitre-attck-for-mobile)
 is the one to publish internally.
 
 > **⚙️ Engineering Note:** Beware coverage theatre. "We cover 47 techniques" is meaningless if
@@ -377,7 +376,7 @@ is the one to publish internally.
 ## 8. The bank SOC ↔ fraud ops relationship
 
 These are usually **different teams with different tooling, different vocabulary, and different
-reporting lines** — and mobile banking malware sits exactly on the seam.
+reporting lines** - and mobile banking malware sits exactly on the seam.
 
 | | SOC | Fraud Operations |
 |---|---|---|
@@ -406,7 +405,7 @@ reporting lines** — and mobile banking malware sits exactly on the seam.
 ```
 
 > **🏛️ Enterprise Insight:** This organisational seam is where SUDARSHAN creates the most
-> value — and it is a **process problem before it is a technology problem**. The platform's
+> value - and it is a **process problem before it is a technology problem**. The platform's
 > output must be legible to both audiences: MITRE-mapped technical evidence for the SOC, and
 > customer/session/transaction impact for fraud ops, generated from the same investigation.
 > Practically: agree a **joint escalation path and a shared case ID** before deployment, or the
@@ -431,7 +430,7 @@ reporting lines** — and mobile banking malware sits exactly on the seam.
 | Rules past review cadence | Decay indicator | ★ Underused |
 
 > **⚙️ Engineering Note:** "Alerts handled per analyst" is a **throughput** metric that
-> deteriorates quality when used as a target — analysts close faster, not better. Pair it with
+> deteriorates quality when used as a target - analysts close faster, not better. Pair it with
 > alert-to-incident ratio and per-rule FP rate, and be explicit internally that it's a capacity
 > planning number, not a performance one.
 
@@ -492,7 +491,7 @@ POST /api/v1/triage
 
 - **No agent on customer devices.** Telemetry is limited to what the bank's app reports.
 - **SOC ≠ fraud ops.** Organisational integration is a prerequisite, not an afterthought.
-- **Automation can't replace judgement** on ambiguous cases — and shouldn't be claimed to.
+- **Automation can't replace judgement** on ambiguous cases - and shouldn't be claimed to.
 - **Privacy constraints bind** what can be collected and correlated
   ([Ch 17 §9](../digital-forensics/17-digital-forensics.md#9-chain-of-custody-and-legal-context)).
 
@@ -501,24 +500,24 @@ POST /api/v1/triage
 At millions of customers, even a 0.1% FP rate is thousands of alerts. The mitigations:
 
 1. **Allowlists first** (accessibility, known stores, MDM agents).
-2. **Cluster into cases** — one case per campaign, not per device.
+2. **Cluster into cases** - one case per campaign, not per device.
 3. **Auto-close the confidently benign**, with the reason logged.
 4. **Route by confidence**, not just severity.
 
-> **🚨 Misconception:** "We can't auto-close alerts — what if we're wrong?" You are already
+> **🚨 Misconception:** "We can't auto-close alerts - what if we're wrong?" You are already
 > effectively auto-closing them, just manually and at random, because a drowning T1 queue gets
 > triaged by whatever is on top. **Deliberate, logged, reviewable auto-closure is strictly safer
-> than implicit neglect** — and it's auditable, which implicit neglect is not.
+> than implicit neglect** - and it's auditable, which implicit neglect is not.
 
 ### Edge cases
 
 | Case | Handling |
 |---|---|
 | Customer using genuine assistive tech | Allowlist; **never auto-restrict on a11y alone** ([Ch 18 §10](18-mobile-threat-hunting.md#10-limitations-edge-cases-false-positives)) |
-| Shared family device | Attribution ambiguous — widen the review |
+| Shared family device | Attribution ambiguous - widen the review |
 | Enterprise-managed customer device | MDM legitimately installs and holds admin |
 | Bank's own app on an MDM-managed fleet | Different baseline entirely |
-| VIP / high-value customer | Separate escalation path — usually required by policy |
+| VIP / high-value customer | Separate escalation path - usually required by policy |
 
 ---
 
@@ -526,14 +525,14 @@ At millions of customers, even a 0.1% FP rate is thousands of alerts. The mitiga
 
 1. **Design SLAs against the money clock**, not generic MTTD benchmarks.
 2. **Enrich alerts so they explain themselves.** Bigger lever than more detections.
-3. **Automate the triage tree** — every branch is answerable from existing data.
+3. **Automate the triage tree** - every branch is answerable from existing data.
 4. **Track FP rate per rule and retire the worst.**
 5. **Own every rule; set a review cadence; act on it.**
-6. **Calibrate severity honestly** — over-severe rules get muted.
+6. **Calibrate severity honestly** - over-severe rules get muted.
 7. **Measure *effective* ATT&CK coverage**, not raw technique count.
 8. **Agree a shared case ID with fraud ops before deployment.**
 9. **Integrate with the SIEM; don't try to replace it.**
-10. **Log auto-closures with reasons** — auditable beats implicit.
+10. **Log auto-closures with reasons** - auditable beats implicit.
 11. **Ship both outputs from one investigation**: technical for SOC, impact for fraud ops.
 
 ---
@@ -544,12 +543,12 @@ At millions of customers, even a 0.1% FP rate is thousands of alerts. The mitiga
 
 **Perfect answer:** Precisely on the seam between them, which is where this threat class lives.
 The SOC sees "a malicious app" but has no visibility into the transaction. Fraud ops sees "an
-anomalous transaction from a known, trusted device" — and under On-Device Fraud, every
+anomalous transaction from a known, trusted device" - and under On-Device Fraud, every
 device-centric control they have says the customer is legitimate, because it is the customer's
 phone. Neither team has the full picture, and the malware sits on a customer device that is
 neither team's traditional turf. We produce one investigation with two renderings: MITRE-mapped
 technical evidence with artifact pointers for the SOC, and customer, session, and transaction
-impact for fraud ops — under a shared case ID. And every SLA is designed against the money
+impact for fraud ops - under a shared case ID. And every SLA is designed against the money
 clock, not against generic SOC benchmarks, because under UPI the funds are through a mule chain
 in minutes. A correct verdict in four hours is correct and useless.
 
@@ -557,7 +556,7 @@ in minutes. A correct verdict in four hours is correct and useless.
 - Positioning as a SIEM replacement. Banks have one; displacing it is a procurement fight you
   don't need and don't win.
 - Claiming to eliminate analyst work. Claim to make each alert triageable in seconds instead of
-  minutes — that's credible and measurable.
+  minutes - that's credible and measurable.
 - Ignoring the SOC/fraud-ops organisational split, which is a process problem before it's a
   technology one.
 
@@ -567,17 +566,17 @@ in minutes. A correct verdict in four hours is correct and useless.
   triaged in seconds. We also cluster into one case per campaign rather than one alert per
   device, and we track false-positive rate per rule and retire the worst.
 - *"Can you auto-close alerts?"* → Yes, deliberately and with logged reasons. The alternative
-  isn't careful review — a drowning T1 queue is already auto-closing implicitly and at random.
+  isn't careful review - a drowning T1 queue is already auto-closing implicitly and at random.
   Deliberate closure is auditable; neglect isn't.
 - *"What's your MTTD?"* → Wrong metric for this problem. The one that matters is time from
   detection to session hold, because that's what's measured against fund dispersal.
 
-**Fact that impresses:** Most mobile security tooling — MDM, MTD, EDR — assumes a *managed*
+**Fact that impresses:** Most mobile security tooling - MDM, MTD, EDR - assumes a *managed*
 device. A bank cannot enrol its customers' phones in MDM, so all of it addresses the employee
 population while the fraud losses come from the customer population. The only scalable telemetry
 on a customer device is what the bank's own app can observe about its own environment, which is
 why in-app SDK instrumentation is the highest-leverage security investment a retail bank can
-make — and why it must be scoped to accessibility and overlay signals rather than the full app
+make - and why it must be scoped to accessibility and overlay signals rather than the full app
 inventory, for DPDP reasons.
 
 ---
@@ -607,10 +606,10 @@ the bank's own app.
 
 **Q: "How do you measure a SOC?"**
 Time to containment (for banking fraud: time to session hold), per-rule false-positive rate,
-alert-to-incident ratio, effective ATT&CK coverage, and business outcome — prevented loss. Flag
+alert-to-incident ratio, effective ATT&CK coverage, and business outcome - prevented loss. Flag
 that "alerts handled per analyst" is a capacity metric that degrades quality if used as a target.
 
-**Q: "Detection-as-code — what does that mean in practice?"**
+**Q: "Detection-as-code - what does that mean in practice?"**
 Rules live in version control with tests: true-positive samples that must fire and benign samples
 that must not. PR review, backtest against historical data, deploy, then monitor FP rate with a
 review cadence and a named owner.
@@ -627,16 +626,16 @@ review cadence and a named owner.
 ## 15. Cross-references
 
 **Upstream:**
-- [← Ch 16 Threat Intelligence](../threat-intelligence/16-threat-intelligence.md) — ATT&CK mapping, IOC quality
-- [← Ch 17 Digital Forensics](../digital-forensics/17-digital-forensics.md) — evidence and custody
-- [← Ch 18 Mobile Threat Hunting](18-mobile-threat-hunting.md) — where new rules come from
+- [← Ch 16 Threat Intelligence](../threat-intelligence/16-threat-intelligence.md) - ATT&CK mapping, IOC quality
+- [← Ch 17 Digital Forensics](../digital-forensics/17-digital-forensics.md) - evidence and custody
+- [← Ch 18 Mobile Threat Hunting](18-mobile-threat-hunting.md) - where new rules come from
 
 **Downstream:**
-- [→ Ch 20 Incident Response](../incident-response/20-incident-response.md) — what happens after escalation
-- [→ Ch 21 AI-assisted Analysis](../ai-malware-analysis/21-ai-assisted-malware-analysis.md) — automating triage
-- [→ Ch 23 Detection Pipeline](../sudarshan/23-detection-pipeline.md) — SLAs and throughput
-- [→ Ch 25 Investigation Engine](../sudarshan/25-investigation-engine.md) — evidence arrays
-- [→ Ch 29 Investigation Reports](../sudarshan/29-investigation-reports.md) — dual-audience output
+- [→ Ch 20 Incident Response](../incident-response/20-incident-response.md) - what happens after escalation
+- [→ Ch 21 AI-assisted Analysis](../ai-malware-analysis/21-ai-assisted-malware-analysis.md) - automating triage
+- [→ Ch 23 Detection Pipeline](../sudarshan/23-detection-pipeline.md) - SLAs and throughput
+- [→ Ch 25 Investigation Engine](../sudarshan/25-investigation-engine.md) - evidence arrays
+- [→ Ch 29 Investigation Reports](../sudarshan/29-investigation-reports.md) - dual-audience output
 
 **Related chain:** Telemetry → SIEM → SOAR enrichment (SUDARSHAN) → automated triage → T1/T2 →
 fraud ops session hold → IR.
@@ -645,22 +644,22 @@ fraud ops session hold → IR.
 
 ## 16. References
 
-1. NIST SP 800-61 Rev. 2 — *Computer Security Incident Handling Guide*.
-2. NIST SP 800-137 — *Information Security Continuous Monitoring*.
-3. MITRE ATT&CK for Mobile — coverage mapping. https://attack.mitre.org/matrices/mobile/
-4. SigmaHQ — Sigma rule format and rule repository. https://github.com/SigmaHQ/sigma
-5. Splunk — PEAK framework and detection engineering practice.
-6. Zimperium — MTD product documentation and *Banking Heist Report* (March 19, 2026).
-7. Lookout — mobile threat defence documentation.
-8. Appdome, Promon, Guardsquare, Verimatrix, Build38 — in-app protection/RASP vendor documentation.
-9. Reserve Bank of India — Cyber Security Framework for Banks (incident reporting, SOC expectations).
-10. CERT-In — Directions of April 28, 2022 (6-hour reporting, log retention).
-11. FIRST — CSIRT Services Framework.
+1. NIST SP 800-61 Rev. 2 - *Computer Security Incident Handling Guide*.
+2. NIST SP 800-137 - *Information Security Continuous Monitoring*.
+3. MITRE ATT&CK for Mobile - coverage mapping. https://attack.mitre.org/matrices/mobile/
+4. SigmaHQ - Sigma rule format and rule repository. https://github.com/SigmaHQ/sigma
+5. Splunk - PEAK framework and detection engineering practice.
+6. Zimperium - MTD product documentation and *Banking Heist Report* (March 19, 2026).
+7. Lookout - mobile threat defence documentation.
+8. Appdome, Promon, Guardsquare, Verimatrix, Build38 - in-app protection/RASP vendor documentation.
+9. Reserve Bank of India - Cyber Security Framework for Banks (incident reporting, SOC expectations).
+10. CERT-In - Directions of April 28, 2022 (6-hour reporting, log retention).
+11. FIRST - CSIRT Services Framework.
 
 ### Further reading
-- MITRE — *11 Strategies of a World-Class Cybersecurity Operations Center*
+- MITRE - *11 Strategies of a World-Class Cybersecurity Operations Center*
 - Detection Engineering community resources (Detection Engineering Weekly, DeTT&CT)
-- OWASP MASVS — MASVS-RESILIENCE controls relevant to in-app SDK design
+- OWASP MASVS - MASVS-RESILIENCE controls relevant to in-app SDK design
 
 ---
 

@@ -19,8 +19,8 @@ from app.rag.knowledge_base import build_rag_context, get_cert_in_recommendation
 logger = logging.getLogger(__name__)
 
 
-# Substrings that mark a failure as transient. Anything else — a bad key, a
-# revoked project, a malformed request — will fail identically on every retry,
+# Substrings that mark a failure as transient. Anything else - a bad key, a
+# revoked project, a malformed request - will fail identically on every retry,
 # so retrying only adds latency to a call that cannot succeed.
 _RETRYABLE_MARKERS = (
     "timeout", "timed out", "deadline",
@@ -35,14 +35,14 @@ def _is_retryable(exc: Exception) -> bool:
     if isinstance(exc, (TimeoutError, ConnectionError, asyncio.TimeoutError)):
         return True
     if isinstance(exc, (json.JSONDecodeError, ValueError)):
-        # Malformed / non-conforming model output — a resample may well fix it.
+        # Malformed / non-conforming model output - a resample may well fix it.
         return True
     text = f"{type(exc).__name__}: {exc}".lower()
     return any(marker in text for marker in _RETRYABLE_MARKERS)
 
 # ─── RAG-Grounded Prompt Template ─────────────────────────────────────────────
 
-RAG_PROMPT_TEMPLATE = """You are SUDARSHAN — a senior banking malware intelligence analyst at the Bank of India Cyber Security Operations Centre.
+RAG_PROMPT_TEMPLATE = """You are SUDARSHAN - a senior banking malware intelligence analyst at the Bank of India Cyber Security Operations Centre.
 
 Your analysis is STRICTLY grounded in the verified evidence provided below.
 You MUST NOT invent or guess any information not present in the evidence.
@@ -65,7 +65,7 @@ Using ONLY the above verified evidence and retrieved knowledge context, produce 
 
 IMPORTANT RULES:
 1. Plain English Narrative: 2–4 sentences explaining what this app does and why it is dangerous, in terms a non-technical banking executive can understand.
-2. Fraud Objective: One sentence — what specific fraud this app enables (e.g., "OTP theft enabling unauthorized UPI transfers").
+2. Fraud Objective: One sentence - what specific fraud this app enables (e.g., "OTP theft enabling unauthorized UPI transfers").
 3. Affected Banking Apps: List only apps mentioned in the evidence.
 4. MITRE Mapping: Use only techniques present in the retrieved context.
 5. Banking Impact: Reference RBI/NPCI rules only from the provided regulatory context.
@@ -80,7 +80,7 @@ You MUST respond with strictly valid JSON. No markdown. No code blocks. No extra
     "plain_english_narrative": "...",
     "fraud_objective": "...",
     "affected_banking_apps": ["..."],
-    "mitre_techniques_used": ["T1411 — ...", "..."],
+    "mitre_techniques_used": ["T1411 - ...", "..."],
     "banking_impact_assessment": "...",
     "cert_in_recommendations": ["...", "...", "..."],
     "recommended_actions": ["...", "...", "..."],
@@ -120,7 +120,7 @@ def _build_evidence_dict(
     dynamic: Optional[Dict] = None,
     vide_result: Optional[Dict] = None,
 ) -> Dict[str, Any]:
-    """Build structured evidence dict for Gemini — strictly grounded data."""
+    """Build structured evidence dict for Gemini - strictly grounded data."""
     evidence: Dict[str, Any] = {
         "Package": package_name,
         "Family": family,
@@ -173,7 +173,7 @@ def _to_str_list(val: Any) -> List[str]:
 def _validate_report_json(parsed: Dict[str, Any], cert_recs: List[str]) -> Dict[str, Any]:
     """Validate and sanitize JSON output from Gemini."""
     if not isinstance(parsed, dict) or not parsed.get("plain_english_narrative"):
-        raise ValueError("Invalid report structure — missing plain_english_narrative")
+        raise ValueError("Invalid report structure - missing plain_english_narrative")
 
     for field in ("affected_banking_apps", "mitre_techniques_used", "cert_in_recommendations", "recommended_actions"):
         parsed[field] = _to_str_list(parsed.get(field))
@@ -283,7 +283,7 @@ async def analyze_with_llm(
     # (`client.aio.models` is the async one), and `time.sleep` blocks outright.
     # Called directly from this `async def` they pinned the event loop for the
     # whole round trip plus up to 0.5+1.0+2.0 = 3.5 s of backoff, during which
-    # the gateway served nothing — not /health, not another analyst's request.
+    # the gateway served nothing - not /health, not another analyst's request.
     # This is called on both pipeline paths (delegated and local).
     #
     # The engine already does this correctly for every blocking step it has;

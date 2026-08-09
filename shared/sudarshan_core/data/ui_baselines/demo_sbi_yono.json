@@ -1,6 +1,6 @@
 {
   "institution_id": "demo_sbi_yono",
-  "display_name": "State Bank of India (YONO — lab baseline)",
+  "display_name": "State Bank of India (YONO - lab baseline)",
   "package_names": ["com.sbi.lotus", "com.sbi.lotusintouch"],
   "allowed_signers_sha256": [],
   "version": "1.0.0-hackathon",

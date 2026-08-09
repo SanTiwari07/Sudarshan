@@ -55,9 +55,9 @@ CREATE TABLE IF NOT EXISTS cases (
     -- Full analysis result as JSON.
     --
     -- The 15 typed columns above are a SUMMARY: they are what /cases needs to
-    -- render a list. Everything else the pipeline computed — permissions, IOCs,
+    -- render a list. Everything else the pipeline computed - permissions, IOCs,
     -- manifest and code findings, components, certificate, dynamic result,
-    -- fraud workflow, enrichment — was discarded at save time. Three visible
+    -- fraud workflow, enrichment - was discarded at save time. Three visible
     -- consequences: reopening a case rendered a different, emptier case than
     -- the one just analysed; the export endpoints could not be rebuilt from the
     -- database and 404'd after any restart; and the RAG chat index could not be
@@ -145,7 +145,7 @@ async def _connect() -> AsyncIterator[aiosqlite.Connection]:
 # ─── Additive migrations ──────────────────────────────────────────────────────
 #
 # `CREATE TABLE IF NOT EXISTS` is a no-op on an existing table, so it cannot add
-# a column — a schema change would silently not apply to any database that
+# a column - a schema change would silently not apply to any database that
 # already existed, and the first INSERT naming the new column would fail.
 #
 # This handles the only migration shape SQLite makes safe and idempotent:
@@ -192,7 +192,7 @@ async def save_case(sha256: str, result: Dict[str, Any], analyst_id: Optional[in
     intel_json = json.dumps(result.get("intelligence_report") or {})
 
     # Full record. Serialised defensively: a value that will not serialise must
-    # not take the whole save down — a case row with a summary is far better
+    # not take the whole save down - a case row with a summary is far better
     # than no case row at all.
     try:
         raw_json = json.dumps(result, default=str)
@@ -282,7 +282,7 @@ def _row_to_case(row: Dict) -> Dict[str, Any]:
     Deserialize a SQLite row into the full analysis result.
 
     When `raw_result` is present it is expanded and the typed summary columns
-    are layered ON TOP — the columns are authoritative for the fields they
+    are layered ON TOP - the columns are authoritative for the fields they
     cover (they are what queries filter and sort on), while raw_result supplies
     everything the summary omits. That makes a restored case identical to the
     one originally returned, which is what the export endpoints, the RAG index

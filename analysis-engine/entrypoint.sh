@@ -9,7 +9,7 @@ java -version 2>&1 | head -n 1
 apktool --version 2>&1 | head -n 1
 jadx --version 2>&1 | head -n 1
 
-# ADB warm-up / connect — policy-validated via adb_gateway (not raw shell adb).
+# ADB warm-up / connect - policy-validated via adb_gateway (not raw shell adb).
 echo "[Analysis Engine] Starting background ADB bootstrap (validated)..."
 (
     python -m app.adb_bootstrap || true

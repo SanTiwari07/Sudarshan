@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Device State Simulator
+SUDARSHAN - Device State Simulator
 ===================================
 Simulates real-device conditions (e.g. WiFi, Battery, Location, SMS) via
 the active SandboxProvider so multi-stage profiles work on Genymotion

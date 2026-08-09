@@ -1,11 +1,11 @@
-# Changelog — Sudarshan Enterprise Platform
+# Changelog - Sudarshan Enterprise Platform
 
 All notable changes to this project are documented in this file.
 
 ## 2026-08-08
 
 ### Added
-- **VIDE (Visual Impersonation Detection Engine)**: `shared/sudarshan_core/engines/vide/` — static/dynamic UI profiling, baseline compare, rule **VIDE-F001**, CH06 signer registry; integrated in `analysis-engine/app/main.py` via `safe_run_vide_analysis()`; `vide` field on analysis and case payloads; dashboard `VisualImpersonationPanel` / `VisualImpersonationExecutiveCard`; unit tests `tests/unit/test_vide_*.py`.
+- **VIDE (Visual Impersonation Detection Engine)**: `shared/sudarshan_core/engines/vide/` - static/dynamic UI profiling, baseline compare, rule **VIDE-F001**, CH06 signer registry; integrated in `analysis-engine/app/main.py` via `safe_run_vide_analysis()`; `vide` field on analysis and case payloads; dashboard `VisualImpersonationPanel` / `VisualImpersonationExecutiveCard`; unit tests `tests/unit/test_vide_*.py`.
 - **Investigation shell UI**: `frontend/src/components/investigation/InvestigationShell.tsx` wraps fraud-card, technical, threat-intel, chat, and `/history/:sha256` routes with shared `CaseHeader`, `ScoreLedgerSlideOver`, `EvidenceDrawer`, and `AnalystNotesPanel`; `useInvestigationModel` merges static + runtime evidence for the drawer.
 - **Cases API expansion**: `GET/POST /api/v1/cases/{sha256}/notes`, `GET /api/v1/cases/{sha256}/evidence` (Frida `evidence.json` via `evidence_loader.py`); role-scoped case list for `analyst`; `GET /api/v1/cases/{sha256}` returns full persisted record including `vide`.
 
@@ -30,7 +30,7 @@ All notable changes to this project are documented in this file.
 ### Documentation
 - Synchronized `/docs` with containment architecture, corrected FRS formula and risk bands to match `risk_engine.py`, updated test metrics to **486**, documented hardened deployment in `HOW_TO_RUN.md` and `ARCHITECTURE.md` §12.
 
-## [2.5.0-STABLE] — 2026-08-05
+## [2.5.0-STABLE] - 2026-08-05
 
 ### Documentation
 - **Master Documentation Audit & Zero-Drift Synchronization**: Comprehensive synchronization across all 24 documentation files in `/docs`, root `README.md`, `CHANGELOG.md`, and `DOCUMENTATION_AUDIT_REPORT.md` against active codebase implementation (`SanTiwari07/Sudarshan`).
@@ -38,7 +38,7 @@ All notable changes to this project are documented in this file.
 - **System Architecture Alignment**: Verified microservices topology (`frontend:5173`, `backend:8000`, `analysis-engine:8001`, `mobsf:8008`, `mitmproxy:8080`), 24h SQLite IOC reputation cache, Frida 17 Java bridge sub-probes, and runtime telemetry endpoints.
 - **Second-pass drift remediation (same date)**: Corrected gateway paths (`POST /api/v1/analyze`, `/analyze/async`, `GET /intelligence/{sha256}`), dashboard routes (`/fraud-card`, `/threat-intel`), removed Ollama/Gemini-3.6 references not present in code, documented `validate_dynamic_pipeline.py` / `shared/sudarshan_core/validation/`, and recorded Technical View screenshot URL gap.
 
-## [2.5.0-STABLE] — 2026-08-03
+## [2.5.0-STABLE] - 2026-08-03
 
 ### Added
 - **Persistent IOC Reputation Cache (24h TTL)**: SQLite-backed caching (`ioc_cache` table) in `backend/app/main.py` and `shared/sudarshan_core/services/threat_correlator.py` preventing API rate limit exhaustion across VirusTotal, OTX, and AbuseIPDB.
@@ -57,7 +57,7 @@ All notable changes to this project are documented in this file.
 
 ---
 
-## [2.4.0-STABLE] — 2026-07-29
+## [2.4.0-STABLE] - 2026-07-29
 
 ### Runtime Telemetry API & Frida 17 Banking Malware Instrumentation Suite
 - **Runtime Telemetry REST Endpoints**: Implemented `/api/runtime/*` route suite (`backend/app/routes/runtime_api.py`) exposing live pipeline health, Frida hook inventory/metrics, ring-buffered telemetry stream (max 500 events), pipeline state machine status, and evidence snapshots.
@@ -70,7 +70,7 @@ All notable changes to this project are documented in this file.
 
 ---
 
-## [2.3.0-STABLE] — 2026-07-29
+## [2.3.0-STABLE] - 2026-07-29
 
 ### Enterprise Documentation Portal Zero-Drift Audit & Release Synchronization
 - **Zero-Drift Synchronization**: Comprehensive audit and update of all 24 markdown documentation files in `/docs` and root repository files (`README.md`, `CHANGELOG.md`) to reflect active codebase implementation (`SanTiwari07/Sudarshan`).
@@ -85,7 +85,7 @@ All notable changes to this project are documented in this file.
 
 ---
 
-## [2.3.0-STABLE] — 2026-07-27
+## [2.3.0-STABLE] - 2026-07-27
 
 ### Frida 17.16.4 Project-Wide Migration & Standardization
 - **Full Frida Upgrade (17.16.0 → 17.16.4)**: Standardized Frida client, server, and tooling across the entire repository on Frida `17.16.4`.
@@ -95,7 +95,7 @@ All notable changes to this project are documented in this file.
 
 ---
 
-## [RC-2] — 2026-07-25
+## [RC-2] - 2026-07-25
 
 ### Key Updates & Infrastructure Alignment
 
@@ -122,7 +122,7 @@ All notable changes to this project are documented in this file.
 
 ---
 
-## [RC-1] — 2026-07-19
+## [RC-1] - 2026-07-19
 
 ### Bug Fixes
 
@@ -131,7 +131,7 @@ All notable changes to this project are documented in this file.
 - **Problem:** The backend used `adb shell su -c '/data/local/tmp/frida-server &'`
   to automatically start `frida-server` on the Android emulator. On emulators
   where the `su` binary does not support the `-c` argument (`su: invalid uid/gid '-c'`),
-  this command silently failed — meaning `frida-server` was never running and all
+  this command silently failed - meaning `frida-server` was never running and all
   dynamic analysis was skipped without any visible error in the UI.
 - **Fix:** Replaced `su -c` with `nohup /data/local/tmp/frida-server > /dev/null 2>&1 &`.
   Since `adbd` is already running as root (`adb root`), direct execution is portable
@@ -165,7 +165,7 @@ All notable changes to this project are documented in this file.
 
 ---
 
-## [Beta] — 2026-07-18
+## [Beta] - 2026-07-18
 
 ### Features Implemented
 
@@ -178,9 +178,9 @@ All notable changes to this project are documented in this file.
 - SQLite case persistence
 
 #### React Frontend
-- Upload page — drag-and-drop APK upload with real-time progress
-- Fraud Analyst Card — executive risk summary with BFCI gauge
-- SOC / Technical View — full static and dynamic evidence panels
-- Threat Intel View — IOC reputation, MITRE ATT&CK mapping
-- Case History — paginated list of all past analyses
-- JWT Authentication — role-based (analyst / soc_lead / admin)
+- Upload page - drag-and-drop APK upload with real-time progress
+- Fraud Analyst Card - executive risk summary with BFCI gauge
+- SOC / Technical View - full static and dynamic evidence panels
+- Threat Intel View - IOC reputation, MITRE ATT&CK mapping
+- Case History - paginated list of all past analyses
+- JWT Authentication - role-based (analyst / soc_lead / admin)

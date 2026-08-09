@@ -1,4 +1,4 @@
-# 08 — Deterministic Risk Engine Specification
+# 08 - Deterministic Risk Engine Specification
 
 ```yaml
 Module Title:        Deterministic Risk Engine & Mathematical Models
@@ -24,7 +24,7 @@ Test Suite:          backend/tests/test_risk_engine.py, backend/tests/test_bfci_
 
 ## 1. Executive Overview
 
-The **Deterministic Risk Engine** ([`risk_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/risk_engine.py)) provides the core mathematical risk scoring logic of the Sudarshan platform. To maintain regulatory compliance and auditability, numerical risk scores ($0.0 - 100.0$) are derived strictly from mathematical formulas and observable evidence—never from LLM predictions.
+The **Deterministic Risk Engine** ([`risk_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/risk_engine.py)) provides the core mathematical risk scoring logic of the Sudarshan platform. To maintain regulatory compliance and auditability, numerical risk scores ($0.0 - 100.0$) are derived strictly from mathematical formulas and observable evidence - never from LLM predictions.
 
 ---
 
@@ -85,7 +85,7 @@ $$\text{base\_frs} = \frac{\sum_{a \in \text{live}} w_a \cdot s_a}{\sum_{a \in \
 
 $$\text{final\_risk\_score} = \min(\text{base\_frs} \times \text{ai\_confidence\_multiplier}, 100.0)$$
 
-The `ai_confidence_multiplier` is rule-derived (family classifier / correlation), clamped to `[0.5, 1.5]` — not LLM output.
+The `ai_confidence_multiplier` is rule-derived (family classifier / correlation), clamped to `[0.5, 1.5]` - not LLM output.
 
 Response field `frs_breakdown.axes_used` lists the **renormalized** weights; `axes_excluded` lists omitted axes.
 
@@ -102,7 +102,7 @@ Response field `frs_breakdown.axes_used` lists the **renormalized** weights; `ax
 
 ## 6. Dynamic axis exclusion (static-only and inconclusive runs)
 
-There is no separate fixed-weight “static fallback” formula. When dynamic analysis is unavailable or **inconclusive** (sandbox ran but captured no observable behavior), the `dynamic` axis is excluded and the remaining weights renormalize — the same mechanism used when threat-intel keys are unset and `correlation` is excluded.
+There is no separate fixed-weight “static fallback” formula. When dynamic analysis is unavailable or **inconclusive** (sandbox ran but captured no observable behavior), the `dynamic` axis is excluded and the remaining weights renormalize - the same mechanism used when threat-intel keys are unset and `correlation` is excluded.
 
 ---
 

@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Agentic Dynamic Analysis Package
+SUDARSHAN - Agentic Dynamic Analysis Package
 =============================================
 Goal-driven AI exploration engine
 with structured, evidence-maximizing agent behaviour.

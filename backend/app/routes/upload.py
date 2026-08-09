@@ -6,10 +6,10 @@ Full pipeline:
   APK → MobSF (or Androguard fallback) → Frida (if ready) → Threat Correlation → Risk Engine → RAG → Gemini 2.5 Flash → Response
 
 Endpoints:
-  POST /api/v1/analyze        — sync analysis (returns full result immediately)
-  POST /api/v1/analyze/async  — async analysis (returns job_id; poll /status/{job_id})
-  GET  /api/v1/status/{job_id}— poll async job
-  GET  /api/v1/sandbox/status — Frida sandbox status
+  POST /api/v1/analyze - sync analysis (returns full result immediately)
+  POST /api/v1/analyze/async - async analysis (returns job_id; poll /status/{job_id})
+  GET  /api/v1/status/{job_id} - poll async job
+  GET  /api/v1/sandbox/status - Frida sandbox status
 """
 
 import hashlib
@@ -215,7 +215,7 @@ _UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 #
 # When this was 310 s and the engine budget was 600 s, any analysis that
 # legitimately ran longer than 310 s made httpx give up, _call_analysis_engine
-# return None, and the gateway silently re-run the WHOLE pipeline locally — in
+# return None, and the gateway silently re-run the WHOLE pipeline locally - in
 # the unhardened container, while the engine was still running the first one.
 # Two concurrent analyses of one sample, both contending for the single
 # emulator, and only the second reported. With MobSF configured (300 s) plus
@@ -263,7 +263,7 @@ async def _call_analysis_engine(temp_path: str, sha256_hash: str) -> Optional[Di
         # the logs.
         logger.warning(
             f"[Orchestrator] Analysis engine unavailable ({type(e).__name__}: {e}); "
-            f"falling back to the LOCAL pipeline — no APKTool/JADX, no container limits."
+            f"falling back to the LOCAL pipeline - no APKTool/JADX, no container limits."
         )
     return None
 
@@ -428,7 +428,7 @@ async def _enrich_engine_result(
     result["manifest_findings"] = _coerce_manifest_findings(result.get("manifest_findings"))
     result["dangerous_perms"] = _coerce_dangerous_permissions(result.get("dangerous_perms"))
 
-    # Family classification — the engine reports one, but only the gateway has
+    # Family classification - the engine reports one, but only the gateway has
     # the rule set that also yields `matched_rule`.
     family = result.get("family_classification") or "Unknown"
     matched_rule = result.get("matched_rule") or "None"
@@ -446,7 +446,7 @@ async def _enrich_engine_result(
     result["family_classification"] = family
     result["matched_rule"] = matched_rule
 
-    # LLM/RAG synthesis — the engine has no LLM, which is why returning its
+    # LLM/RAG synthesis - the engine has no LLM, which is why returning its
     # result raw produced KeyError: 'intelligence_report'.
     from sudarshan_core.engines.pipeline_timing import OrchestratorStage
 
@@ -561,7 +561,7 @@ async def _run_analysis_pipeline(
     appsec_score = None
     mobsf_scan_hash: Optional[str] = None
     suspicious_strings: list = []
-    # MobSF enrichment — initialized to safe defaults (Androguard fallback leaves empty)
+    # MobSF enrichment - initialized to safe defaults (Androguard fallback leaves empty)
     providers: list = []
     exported_activities: list = []
     exported_services: list = []
@@ -634,7 +634,7 @@ async def _run_analysis_pipeline(
                     pass
             logger.info(f"MobSF analysis complete: pkg={package_name}")
         elif androguard_output:
-            logger.warning("MobSF failed — using Androguard primary output")
+            logger.warning("MobSF failed - using Androguard primary output")
             mobsf_available = False
 
     if not mobsf_available or not mobsf_report:
@@ -739,7 +739,7 @@ async def _run_analysis_pipeline(
     timer.set_orchestrator_stage(OrchestratorStage.DYNAMIC_ANALYSIS)
 
     if frida_status["ready"]:
-        logger.info("Frida sandbox ready — running dynamic behavioral analysis")
+        logger.info("Frida sandbox ready - running dynamic behavioral analysis")
         timer.stage_started("AGENTIC_EXPLORER", "Frida sandbox and Agentic Explorer")
         try:
             use_multistage = os.getenv("SUDARSHAN_MULTISTAGE", "false").lower() == "true"
@@ -976,7 +976,7 @@ def _to_str_list(val: Any) -> List[str]:
 # ─── Upload intake ────────────────────────────────────────────────────────────
 
 # Real banking APKs top out around 150 MB. Mirrors MAX_UPLOAD_BYTES in the
-# analysis engine — the engine enforced this on ITS upload endpoint, which the
+# analysis engine - the engine enforced this on ITS upload endpoint, which the
 # gateway never calls (it posts a path), so the limit did not apply to the path
 # users actually hit.
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(200 * 1024 * 1024)))
@@ -996,7 +996,7 @@ async def _receive_apk(file: UploadFile) -> tuple[str, str]:
          when a multipart part carried no filename. The engine guarded this
          (`if not filename or not ...`); the gateway did not.
       2. No size limit, so a single request could fill the volume that is the
-         ONLY channel between the gateway and the engine — taking analysis down
+         ONLY channel between the gateway and the engine - taking analysis down
          for everyone, not just the caller.
       3. No magic-byte check, so arbitrary content reached androguard, APKTool,
          JADX and zipfile.
@@ -1016,7 +1016,7 @@ async def _receive_apk(file: UploadFile) -> tuple[str, str]:
         # Written to the volume SHARED with analysis-engine so delegation can
         # resolve it. Previously this was the container-private /tmp, so every
         # delegation attempt 400d and the gateway silently ran the pipeline
-        # itself — without APKTool/JADX and without the engine's limits.
+        # itself - without APKTool/JADX and without the engine's limits.
         with tempfile.NamedTemporaryFile(delete=False, suffix=".apk", dir=_UPLOADS_DIR) as tmp:
             temp_path = tmp.name
             first = True
@@ -1041,7 +1041,7 @@ async def _receive_apk(file: UploadFile) -> tuple[str, str]:
                     )
 
                 hasher.update(chunk)
-                # Blocking write — must not run on the event loop.
+                # Blocking write - must not run on the event loop.
                 await asyncio.to_thread(tmp.write, chunk)
 
             if first:
@@ -1177,7 +1177,7 @@ async def analyze_upload(
     user: dict = Depends(require_analyst),
 ):
     """
-    Synchronous APK analysis — waits for full result before returning.
+    Synchronous APK analysis - waits for full result before returning.
     Requires JWT Bearer token (any analyst role).
     """
     temp_path, sha256_hash = await _receive_apk(file)
@@ -1218,7 +1218,7 @@ async def analyze_upload_async(
     user: dict = Depends(require_analyst),
 ):
     """
-    Asynchronous APK analysis — returns job_id immediately.
+    Asynchronous APK analysis - returns job_id immediately.
     Poll GET /api/v1/status/{job_id} to get result.
     """
     temp_path, sha256_hash = await _receive_apk(file)
@@ -1281,7 +1281,7 @@ async def sandbox_debug(case_id: str, user: dict = Depends(require_analyst)):
     Returns live pipeline state machine diagnostics, telemetry, SLA budgets, and hook coverage.
 
     READ-ONLY. This previously called `get_tracker(case_id)`, which CREATES and
-    stores a PipelineTracker when the key is absent — in a module-global dict
+    stores a PipelineTracker when the key is absent - in a module-global dict
     whose eviction helper had no callers. So `GET /sandbox/debug/<random>` in a
     loop grew that dict by one tracker per request until the process OOMed,
     reachable with any analyst token. Look the tracker up; do not mint one.

@@ -1,5 +1,5 @@
 """
-SUDARSHAN — IOC Collector
+SUDARSHAN - IOC Collector
 ==========================
 Collects Indicators of Compromise (IOCs) dynamically during analysis.
 Gathers domains, URLs, IPs, dropped DEX paths, and executes static sweeps 

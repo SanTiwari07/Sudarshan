@@ -1,5 +1,5 @@
 """
-SUDARSHAN — YARA Scanner
+SUDARSHAN - YARA Scanner
 =========================
 Runtime YARA matching against in-memory strings and pulled artifacts.
 """

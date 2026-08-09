@@ -87,5 +87,5 @@ $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytes
 ## 5. Submitting Pull Requests
 
 1. Run formatting and lint checks.
-2. Ensure all automated pytest test cases pass (`pytest tests/ backend/tests` — **519 tests collected**).
+2. Ensure all automated pytest test cases pass (`pytest tests/ backend/tests` - **519 tests collected**).
 3. Push to your branch and submit a Pull Request against `main`. Include a clear summary of changes and reference updated documentation.

@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Pipeline State Machine, SLA Tracker & Diagnostic Telemetry
+SUDARSHAN - Pipeline State Machine, SLA Tracker & Diagnostic Telemetry
 ========================================================================
 Manages explicit pipeline execution states, SLA performance budgets,
 version metadata, event loss counters, and structured JSON telemetry.
@@ -238,7 +238,7 @@ class PipelineTracker:
 #
 # This is process-lifetime state with no natural end point: nothing called
 # remove_tracker(), so the dict only ever grew. It is now bounded by insertion
-# order — oldest evicted first — so a long-running process cannot leak, and a
+# order - oldest evicted first - so a long-running process cannot leak, and a
 # caller that can reach get_tracker() cannot exhaust memory.
 #
 # The read-only accessor peek_tracker() exists because the HTTP diagnostics

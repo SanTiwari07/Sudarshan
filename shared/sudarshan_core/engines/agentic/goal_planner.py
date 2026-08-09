@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Goal Hierarchy & Planner Goals
+SUDARSHAN - Goal Hierarchy & Planner Goals
 ============================================
 Defines explicit goal classes for autonomous investigation:
   - GOAL_GRANT_PERMISSIONS

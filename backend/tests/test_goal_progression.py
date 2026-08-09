@@ -5,7 +5,7 @@ Root defect these cover: stage 1 ("Launch Application") had `frida_hooks=[]`
 and `skip_if_missing=False`, and the only method that could complete it
 (`mark_completed`) was never called in production. Because every other goal
 declares `depends_on=[1, ...]`, the entire 15-stage graph was permanently
-blocked — a live run produced `goals_completed: 0` with every action still on
+blocked - a live run produced `goals_completed: 0` with every action still on
 stage 1.
 
 Stage 1 now completes from observed foreground state, which is device truth
@@ -47,7 +47,7 @@ def test_stage1_completes_from_foreground_observation(tracker):
 
 
 def test_stage1_has_no_frida_hooks_so_needs_the_foreground_path(tracker):
-    """Documents WHY the foreground path must exist — hooks can never do it."""
+    """Documents WHY the foreground path must exist - hooks can never do it."""
     goal = tracker.get_goal_by_name(LAUNCH_GOAL_NAME)
     assert goal.frida_hooks == []
     assert goal.skip_if_missing is False
@@ -115,7 +115,7 @@ def test_foreground_switches_away_resets_streak(tracker):
 
 
 def test_intermittent_unreadable_foreground_resets_streak(tracker):
-    """An unreadable reading is neither success nor failure — it breaks the run."""
+    """An unreadable reading is neither success nor failure - it breaks the run."""
     tracker.update_from_foreground(TARGET, TARGET)
     tracker.update_from_foreground("", TARGET)          # dumpsys unavailable
     goal = tracker.get_goal_by_name(LAUNCH_GOAL_NAME)
@@ -139,7 +139,7 @@ def test_app_relaunch_after_completion_is_idempotent(tracker):
 
 
 def test_llm_cannot_mark_a_goal_complete(tracker):
-    """The agent has no API to assert completion — device state decides."""
+    """The agent has no API to assert completion - device state decides."""
     assert not hasattr(tracker, "mark_completed")
 
 

@@ -1,4 +1,4 @@
-# 24 — Threat Intake
+# 24 - Threat Intake
 
 > **Chapter ID:** `CH24` · **Block:** E · **Status:** Stable
 > **Tags:** `#intake` `#normalisation` `#safe-extraction` `#dedup` `#sandbox` `#custody` `#zip-slip`
@@ -9,7 +9,7 @@
 
 ## Table of Contents
 
-1. [Intake's job — and what it must not do](#1-intakes-job--and-what-it-must-not-do)
+1. [Intake's job - and what it must not do](#1-intakes-job--and-what-it-must-not-do)
 2. [Sources and trust levels](#2-sources-and-trust-levels)
 3. [Format handling](#3-format-handling)
 4. [Safe extraction](#4-safe-extraction)
@@ -28,13 +28,13 @@
 
 ---
 
-## 1. Intake's job — and what it must not do
+## 1. Intake's job - and what it must not do
 
 **Job:** turn whatever arrives into a canonical, safely-stored, uniquely-identified artifact
 record that the pipeline can process.
 
 **Must not:** analyse it. The moment intake starts interpreting content, it needs the same
-sandboxing, the same parsers, and the same failure handling as the analysis tiers — and the
+sandboxing, the same parsers, and the same failure handling as the analysis tiers - and the
 separation that keeps hostile input away from the orchestrator collapses.
 
 ```
@@ -50,7 +50,7 @@ separation that keeps hostile input away from the orchestrator collapses.
                           store under custody               (Ch 23)
 ```
 
-> **⚙️ Engineering Note — the one rule that matters most in this chapter:** **intake parses
+> **⚙️ Engineering Note - the one rule that matters most in this chapter:** **intake parses
 > attacker-controlled bytes.** `unzip`, ZIP parsers, and signature readers have all had
 > vulnerabilities. Every parsing step runs in an **ephemeral, network-restricted sandbox with
 > resource caps**, never in the API process. If an attacker can crash or exploit your intake,
@@ -71,12 +71,12 @@ separation that keeps hostile input away from the orchestrator collapses.
 | **Public repositories** (MalwareBazaar etc.) | Medium | BULK | Corpus enrichment |
 | **Anonymous / unauthenticated** | **Low** | BULK, rate-limited | ★ Poisoning risk |
 
-> **⚙️ Engineering Note — provenance is a security control, not metadata.** Two reasons.
+> **⚙️ Engineering Note - provenance is a security control, not metadata.** Two reasons.
 > **Poisoning:** unvetted submissions must never feed training data
 > ([Ch 21 §6](../ai-malware-analysis/21-ai-assisted-malware-analysis.md#6-adversarial-machine-learning)).
 > **Reachback:** when a verdict changes on retro-hunt, you must know who to notify
 > ([Ch 18 §6](../soc/18-mobile-threat-hunting.md#6-hunting-the-sample-corpus)). Record source,
-> submitter, tenant, and timestamp on every artifact — immutably.
+> submitter, tenant, and timestamp on every artifact - immutably.
 
 ---
 
@@ -87,9 +87,9 @@ separation that keeps hostile input away from the orchestrator collapses.
 | `.apk` | Direct artifact |
 | **`.xapk` / `.apks` / `.apkm`** | **Explode**; base + splits become one logical analysis unit |
 | `.aab` | Publishing format; note it, extract what's analysable |
-| `.dex` (bare) | Artifact — commonly a dumped payload ([Ch 12 §5](../dynamic-analysis/12-dynamic-analysis.md#5-the-essential-hook-library)) |
+| `.dex` (bare) | Artifact - commonly a dumped payload ([Ch 12 §5](../dynamic-analysis/12-dynamic-analysis.md#5-the-essential-hook-library)) |
 | `.so` | Native library artifact |
-| `.zip` / `.7z` / `.rar` | Container — explode, then classify members |
+| `.zip` / `.7z` / `.rar` | Container - explode, then classify members |
 | URL | Fetch **in the sandbox**, with egress logging |
 | Hash only | TI DB lookup; no analysis without bytes |
 | Non-Android | Reject with a clear reason |
@@ -100,10 +100,7 @@ separation that keeps hostile input away from the orchestrator collapses.
   base.apk + split_config.arm64_v8a.apk + split_config.xxhdpi.apk
         │
         ▼
-  ONE logical artifact (an "artifact set")
-  — signer verified on every member
-  — capability vector computed across the union
-  — analysing base.apk alone is a KNOWN FALSE-NEGATIVE MODE
+  ONE logical artifact (an "artifact set") - signer verified on every member - capability vector computed across the union - analysing base.apk alone is a KNOWN FALSE-NEGATIVE MODE
 ```
 
 > **🚨 Misconception:** "The APK is the app." Since App Bundles became mandatory for new Play
@@ -168,7 +165,7 @@ def safe_extract(path, dest):
 ```
 
 > **⚙️ Engineering Note:** A path-traversal entry in a submitted APK is not just a malformed
-> archive — it is plausibly **an attack aimed at your analysis pipeline**. Record it, alert on
+> archive - it is plausibly **an attack aimed at your analysis pipeline**. Record it, alert on
 > it, and treat repeated occurrences from one source as a signal about that source.
 
 ### Sandbox profile
@@ -195,8 +192,8 @@ identity:
   sha256: "..."          # ★ canonical artifact ID
   sha1: "..."            # feed compatibility
   md5: "..."             # legacy feed compatibility
-  tlsh_file: "..."       # fuzzy — whole file
-  tlsh_dex: "..."        # ★ fuzzy — DEX only; tracks CODE lineage
+  tlsh_file: "..."       # fuzzy - whole file
+  tlsh_dex: "..."        # ★ fuzzy - DEX only; tracks CODE lineage
   ssdeep: "..."          # legacy fuzzy
   size_bytes: 0
   signer_cert_sha256: "..."     # ★★ PRIMARY IDENTITY (P5)
@@ -252,7 +249,7 @@ Two identity concepts, deliberately distinct:
   (different tenant, different time, different context)
 ```
 
-> **⚙️ Engineering Note — dedup must not lose the submission event.** The same SHA-256 submitted
+> **⚙️ Engineering Note - dedup must not lose the submission event.** The same SHA-256 submitted
 > by three different banks on three different days is **one artifact and three submissions**, and
 > the three submissions are exactly what tells you a campaign is multi-institution. Model them as
 > separate entities: `artifact` (immutable, hash-keyed) and `submission` (append-only, with
@@ -309,7 +306,7 @@ priority_rules:
     - source == device_forensics
     - identity.signer_cert_sha256 IN ti.malicious_signers     # ★ known-bad signer
     - claimed_package IN client_registry AND signer NOT IN canonical_signers[package]
-      # ★ impersonation — detectable AT INTAKE, before any analysis
+      # ★ impersonation - detectable AT INTAKE, before any analysis
   normal:
     - source IN [app_store_monitoring, manual_submission]
   bulk:
@@ -317,7 +314,7 @@ priority_rules:
     - source == anonymous          # + rate limiting
 ```
 
-> **⚙️ Engineering Note — the impersonation check runs at intake, not in analysis.** Extracting
+> **⚙️ Engineering Note - the impersonation check runs at intake, not in analysis.** Extracting
 > the signer certificate takes milliseconds and requires no decompilation. If the artifact claims
 > a protected package name with a non-canonical signer, that is a **critical finding available
 > before the sample enters the pipeline at all**
@@ -337,14 +334,14 @@ Handling live malware carries obligations.
 | **No accidental execution** | Stored without executable permissions; never on a general-purpose host |
 | **Password-protected export** | Standard `infected` convention for any analyst download |
 | **Retention** | Policy-driven; deletion honoured across replicas |
-| **Tenant isolation** | Bank A cannot read bank B's samples — hard boundary |
+| **Tenant isolation** | Bank A cannot read bank B's samples - hard boundary |
 | **Chain of custody** | Preserved when forensically acquired ([Ch 17 §9](../digital-forensics/17-digital-forensics.md#9-chain-of-custody-and-legal-context)) |
 | **Legal/export** | Malware handling and cross-border transfer reviewed with counsel |
 
 > **🏛️ Enterprise Insight:** A bank's own security team will audit this before deployment.
 > Storing live banking trojans on infrastructure the bank contracts for is a governance question
 > as much as a technical one. Have documented answers on encryption, retention, access control,
-> tenant isolation, and deletion **before** the first procurement conversation — not during it.
+> tenant isolation, and deletion **before** the first procurement conversation - not during it.
 
 ---
 
@@ -388,7 +385,7 @@ context={"case_id":"INC-2026-0805-014","active_fraud":true,
 > case those milliseconds are worth having.
 
 > **🏛️ Enterprise Insight:** Note `customer_ref` is pseudonymised. Intake should accept a
-> tenant-side reference token, not customer PII — SUDARSHAN doesn't need to know who the customer
+> tenant-side reference token, not customer PII - SUDARSHAN doesn't need to know who the customer
 > is to analyse the APK, and not holding the identifier is the cleanest DPDP posture
 > ([Ch 17 §9](../digital-forensics/17-digital-forensics.md#9-chain-of-custody-and-legal-context)).
 
@@ -398,7 +395,7 @@ context={"case_id":"INC-2026-0805-014","active_fraud":true,
 
 | Case | Handling |
 |---|---|
-| Corrupt/truncated file | Reject with a specific reason; record — truncation can be deliberate |
+| Corrupt/truncated file | Reject with a specific reason; record - truncation can be deliberate |
 | Password-protected archive | Accept a password parameter; otherwise reject clearly |
 | Nested containers | Explode with a depth cap (3); record depth |
 | Same file, different splits | Artifact set identity is the ordered member hash set |
@@ -409,8 +406,7 @@ context={"case_id":"INC-2026-0805-014","active_fraud":true,
 
 > **🚨 Misconception:** "Intake is plumbing." Intake is where **identity, provenance, custody,
 > and the fastest detection in the system** are established. Get the artifact/submission
-> distinction wrong, or the signer extraction wrong, and every downstream capability —
-> correlation, retro-hunt notification, impersonation detection — is degraded. It is the highest
+> distinction wrong, or the signer extraction wrong, and every downstream capability - > correlation, retro-hunt notification, impersonation detection - is degraded. It is the highest
 > leverage-per-line code in the platform.
 
 ---
@@ -419,7 +415,7 @@ context={"case_id":"INC-2026-0805-014","active_fraud":true,
 
 1. **Never parse untrusted input outside the sandbox.**
 2. **Record extraction anomalies as findings**, not as warnings.
-3. **Model artifact sets**, not files — splits are one logical unit.
+3. **Model artifact sets**, not files - splits are one logical unit.
 4. **Separate `artifact` from `submission`.** Dedup must not lose the event.
 5. **Extract the signer at intake** and run the impersonation check immediately.
 6. **TLSH the DEX separately** from the whole file.
@@ -435,11 +431,10 @@ context={"case_id":"INC-2026-0805-014","active_fraud":true,
 **What judges ask:** *"What's actually hard about accepting a file upload?"*
 
 **Perfect answer:** Three things, and they're all security-critical. First, intake parses
-attacker-controlled bytes — `unzip` and ZIP parsers have real vulnerabilities, so every parsing
+attacker-controlled bytes - `unzip` and ZIP parsers have real vulnerabilities, so every parsing
 step runs in an ephemeral, network-isolated sandbox with resource caps. A submitted APK with a
 path-traversal entry name isn't just malformed; it's plausibly Zip-Slip aimed at our own
-platform, so we record it as a finding rather than silently normalising it away. Second, identity
-— the file hash identifies a file, but the *app* identity is the signer certificate, and getting
+platform, so we record it as a finding rather than silently normalising it away. Second, identity - the file hash identifies a file, but the *app* identity is the signer certificate, and getting
 that distinction wrong breaks correlation, impersonation detection, and retro-hunt notification
 downstream. Third, and this is the one people miss, the fastest detection in the whole system
 runs here: extracting the signer takes milliseconds, so if a sample claims a client bank's
@@ -449,7 +444,7 @@ package name with a certificate outside their canonical registry, we return a cr
 **Common mistakes:**
 - Treating intake as plumbing. It establishes identity, provenance, custody, and the fastest
   detection.
-- Using a tolerant extractor that "helpfully" fixes anomalies — destroying the most important
+- Using a tolerant extractor that "helpfully" fixes anomalies - destroying the most important
   fact about the sample.
 - Deduplicating by hash and losing the submission event, which is what reveals multi-bank
   campaigns.
@@ -469,7 +464,7 @@ package name with a certificate outside their canonical registry, we return a cr
 **Fact that impresses:** Extraction anomalies are intelligence, not just guardrails. Duplicate ZIP
 entries are the Master Key class of parser differential; a DEX magic at offset zero on a valid ZIP
 is the Janus shape; a `../` in an entry name is Zip-Slip aimed at the analysis platform itself. A
-tolerant extractor silently discards all three — which is why we use a strict one and record what
+tolerant extractor silently discards all three - which is why we use a strict one and record what
 it refused.
 
 ---
@@ -490,7 +485,7 @@ Whole-APK fuzzy hashes are dominated by resources and assets, which vary per cam
 TLSH tracks code lineage, which is what family clustering needs.
 
 **Q: "What's the fastest detection you can do?"**
-Extract the signer certificate — milliseconds, no decompilation — and compare against a canonical
+Extract the signer certificate - milliseconds, no decompilation - and compare against a canonical
 registry of expected signers per protected package name. Deterministic, near-zero false positives,
 and available on the upload response.
 
@@ -520,13 +515,13 @@ malware custody obligations. Provenance is a security control, not metadata.
 
 ## 16. References
 
-1. Snyk — *Zip Slip* archive path-traversal research.
-2. PKWARE — *.ZIP File Format Specification* (APPNOTE.TXT).
-3. AOSP — *Application Signing*. https://source.android.com/docs/security/features/apksigning
-4. TLSH — Trend Micro Locality Sensitive Hash. https://github.com/trendmicro/tlsh
-5. Android Developers — *Android App Bundle* and split APKs. https://developer.android.com/guide/app-bundle
-6. Digital Personal Data Protection Act, 2023 (India) — data minimisation.
-7. MalwareBazaar / abuse.ch — sample-sharing conventions (password-protected export).
+1. Snyk - *Zip Slip* archive path-traversal research.
+2. PKWARE - *.ZIP File Format Specification* (APPNOTE.TXT).
+3. AOSP - *Application Signing*. https://source.android.com/docs/security/features/apksigning
+4. TLSH - Trend Micro Locality Sensitive Hash. https://github.com/trendmicro/tlsh
+5. Android Developers - *Android App Bundle* and split APKs. https://developer.android.com/guide/app-bundle
+6. Digital Personal Data Protection Act, 2023 (India) - data minimisation.
+7. MalwareBazaar / abuse.ch - sample-sharing conventions (password-protected export).
 
 ---
 

@@ -1,4 +1,4 @@
-# 09 — Package Manager
+# 09 - Package Manager
 
 > **Chapter ID:** `CH09` · **Block:** A (Foundations) · **Status:** Stable
 > **Tags:** `#package-manager` `#pms` `#packageinstaller` `#sessions` `#droppers` `#install-pipeline` `#sideloading`
@@ -13,11 +13,11 @@
 2. [The cast: who installs what](#2-the-cast-who-installs-what)
 3. [The full install pipeline](#3-the-full-install-pipeline)
 4. [Session-based installs](#4-session-based-installs)
-5. [Installer attribution — the underused signal](#5-installer-attribution--the-underused-signal)
+5. [Installer attribution - the underused signal](#5-installer-attribution--the-underused-signal)
 6. [Install sources and the sideloading boundary](#6-install-sources-and-the-sideloading-boundary)
 7. [Droppers: the technique in full](#7-droppers-the-technique-in-full)
 8. [Uninstall, and resisting it](#8-uninstall-and-resisting-it)
-9. [`packages.xml` — the forensic goldmine](#9-packagesxml--the-forensic-goldmine)
+9. [`packages.xml` - the forensic goldmine](#9-packagesxml--the-forensic-goldmine)
 10. [Detection logic for SUDARSHAN](#10-detection-logic-for-sudarshan)
 11. [Limitations, edge cases, false positives](#11-limitations-edge-cases-false-positives)
 12. [Engineering tips](#12-engineering-tips)
@@ -33,7 +33,7 @@
 Everything in Block A converges here. The APK format ([Ch 02](02-apk-architecture.md),
 [Ch 08](08-apk-file-format.md)), the signature ([Ch 07](../security/07-apk-signing.md)), the
 certificate identity ([Ch 06](../security/06-certificates.md)), the sandbox and permission
-gates ([Ch 04](../security/04-android-security-model.md)) — all of it is consumed by one
+gates ([Ch 04](../security/04-android-security-model.md)) - all of it is consumed by one
 subsystem at one moment: **install time**.
 
 And that moment is where the adversary spends most of their engineering effort. Recall from
@@ -43,7 +43,7 @@ versus 2.36 million policy-violating apps blocked *inside* Play. Banking malware
 arrives through the install pipeline's side door.
 
 > **⚙️ Engineering Note:** If you remember one thing from this chapter: **the question "who
-> installed this app?" is nearly as valuable as "what does this app do?"** — and it is far
+> installed this app?" is nearly as valuable as "what does this app do?"** - and it is far
 > cheaper to answer. Installer attribution is the most under-used signal in mobile security
 > operations.
 
@@ -54,7 +54,7 @@ arrives through the install pipeline's side door.
 | Component | Where it runs | Role |
 |---|---|---|
 | **PackageManagerService (PMS)** | `system_server`, UID 1000 | The authority. Parses, verifies, assigns UID, grants permissions, writes `packages.xml`. |
-| **PackageInstaller (system app)** | Its own process | The **UI** — the "Do you want to install this app?" dialog |
+| **PackageInstaller (system app)** | Its own process | The **UI** - the "Do you want to install this app?" dialog |
 | **`PackageInstaller` API** | In the calling app | The **programmatic** interface (`Session`, `SessionParams`) |
 | **`installd`** | Native daemon, root | Creates data directories, runs `dex2oat`, deletes data on uninstall |
 | **Play Store / Play Services** | Privileged | Holds `INSTALL_PACKAGES`; installs without the confirmation dialog |
@@ -65,12 +65,12 @@ arrives through the install pipeline's side door.
 | Permission | Level | Who has it | What it means |
 |---|---|---|---|
 | `INSTALL_PACKAGES` | `signature\|privileged` | Play Store, system updaters, some OEM/carrier apps | Install **silently**, no user dialog |
-| `REQUEST_INSTALL_PACKAGES` | `normal`-ish (per-app toggle since Android 8) | Any app that asks | **Request** an install — user still sees the dialog |
+| `REQUEST_INSTALL_PACKAGES` | `normal`-ish (per-app toggle since Android 8) | Any app that asks | **Request** an install - user still sees the dialog |
 
 > **🚨 Misconception:** "`REQUEST_INSTALL_PACKAGES` lets malware install apps silently." It
 > does **not**. It lets the app *launch the installer UI*. The user still taps Install.
 >
-> That correction matters — but do not over-correct into complacency. The malware's answer is
+> That correction matters - but do not over-correct into complacency. The malware's answer is
 > to first obtain **Accessibility**, and then use `canPerformGestures` to *tap the Install
 > button itself* ([Ch 04 §5](../security/04-android-security-model.md#5-the-special-permissions-that-matter)).
 > The dialog appears and is dismissed faster than a user can read it. Consent theatre.
@@ -83,7 +83,7 @@ arrives through the install pipeline's side door.
 Pre-Android 8, "Unknown Sources" was a **single global toggle**: on or off for the whole
 device. From **Android 8.0 (API 26)** it became **per-app**: each app that wants to trigger
 installs must be individually permitted under *Install unknown apps*. Better, but it also
-normalised the flow — users now grant it to whichever app asks, in context, which feels
+normalised the flow - users now grant it to whichever app asks, in context, which feels
 reasonable and usually isn't.
 
 ---
@@ -214,18 +214,17 @@ Three real needs, none of them malicious:
    must be installed **atomically as one unit** ([Ch 02 §7](02-apk-architecture.md#7-app-bundles-split-apks-and-why-the-apk-is-a-lie)).
    A file-path API cannot express that.
 2. **Streaming.** Install can begin before download completes (and with v4 signatures,
-   *execution* can begin before download completes — [Ch 07 §7](../security/07-apk-signing.md#7-v4--incremental--streaming-install)).
+   *execution* can begin before download completes - [Ch 07 §7](../security/07-apk-signing.md#7-v4--incremental--streaming-install)).
 3. **Third-party app stores.** F-Droid, Amazon Appstore, Samsung Galaxy Store, and enterprise
    MDM agents all need a first-class install API.
 
 ### WHY it became a security problem
 
-Because Android had to distinguish "a real app store" from "a browser handing off a file" —
-and it chose **which API you used** as the proxy.
+Because Android had to distinguish "a real app store" from "a browser handing off a file" - and it chose **which API you used** as the proxy.
 
 From **Android 15 (API 35)**, Restricted Settings are extended: apps installed by browsers,
 messaging apps, or file managers are denied Accessibility and Notification Listener access.
-Apps installed via the **session-based API** — i.e. by something behaving like a store — are
+Apps installed via the **session-based API** - i.e. by something behaving like a store - are
 exempt.
 
 So the adversary's move is obvious and cheap: **use the session-based API.**
@@ -249,18 +248,18 @@ So the adversary's move is obvious and cheap: **use the session-based API.**
 
 ThreatFabric documented exactly this bypass in **Octo2** (September 2024) and **Crocodilus**
 (March 29, 2025). Octo2's first stage used **Zombinder**, presenting a decoy app that asks the
-user to install an "additional plugin" — the actual payload.
+user to install an "additional plugin" - the actual payload.
 
 > **🔬 Research Gap:** There is no published, robust way for the platform to distinguish a
 > legitimate third-party store from a dropper impersonating one, absent a trust anchor
 > (allowlisted store signers, attestation of the installer, or a store-registration scheme).
 > This is the most likely target for the next Android hardening iteration, and it is why
-> **SUDARSHAN treats installer identity — not merely install *method* — as a first-class
+> **SUDARSHAN treats installer identity - not merely install *method* - as a first-class
 > signal today.** → [Ch 31](../appendix/31-future-research.md)
 
 ---
 
-## 5. Installer attribution — the underused signal
+## 5. Installer attribution - the underused signal
 
 ### WHAT
 
@@ -304,8 +303,8 @@ Programmatically, `PackageManager.getInstallSourceInfo()` (API 30+) distinguishe
 > > *"Which apps on this customer's device were installed by another third-party app, and does
 > > any of them hold Accessibility?"*
 >
-> Two cheap lookups, one join. That combination — **non-store installer + accessibility
-> enabled** — is close to a definition of the current Android banking-malware playbook. It
+> Two cheap lookups, one join. That combination - **non-store installer + accessibility
+> enabled** - is close to a definition of the current Android banking-malware playbook. It
 > requires no root, no decompilation, and no ML. Ship it early.
 > → [Ch 19](../soc/19-enterprise-soc-operations.md), [Ch 20](../incident-response/20-incident-response.md)
 
@@ -314,7 +313,7 @@ Programmatically, `PackageManager.getInstallSourceInfo()` (API 30+) distinguishe
 - The installer field is **advisory metadata**, not a security boundary. A privileged
   installer can set it.
 - It is not tamper-evident.
-- `null` covers both ADB installs and some sideload paths — not automatically suspicious on a
+- `null` covers both ADB installs and some sideload paths - not automatically suspicious on a
   developer's device, quite suspicious on a customer's.
 
 ---
@@ -366,7 +365,7 @@ services for C2.
 
 > **🏛️ Enterprise Insight:** For an Indian bank, the install-source question has a
 > locally-specific shape: **WhatsApp-delivered APKs**. Files arriving via messaging are
-> installed with the messenger as initiator, which — post-Android 15 — falls under Restricted
+> installed with the messenger as initiator, which - post-Android 15 - falls under Restricted
 > Settings, which is precisely why campaigns have moved to dropper-plus-session-API delivery.
 > Customer education framed as "never install an APK sent on WhatsApp" is necessary and no
 > longer sufficient. → [Ch 14](../banking-malware/14-banking-malware.md)
@@ -385,7 +384,7 @@ A dropper solves the adversary's hardest problem: **distribution through a revie
   Submit trojan to Play                Submit a genuinely clean utility to Play
         │                                    │
         ▼                                    ▼
-  Static + dynamic review              Passes review — because it IS clean
+  Static + dynamic review              Passes review - because it IS clean
         │                                    │
         ▼                                    ▼
       REJECTED                          Published, gains installs, gains ratings
@@ -416,8 +415,7 @@ The best-documented example, with dates:
 - Zscaler ThreatLabz (August 2025): Anatsa's target scope expanded to **more than 831
   financial institutions** globally, adding **more than 150 new banking and cryptocurrency
   applications** (up from ~650), including Germany and South Korea. ThreatLabz also documented
-  Anatsa **moving away from remote DEX loading toward directly installing the payload** —
-  streamlining delivery and reducing detectable runtime behaviour.
+  Anatsa **moving away from remote DEX loading toward directly installing the payload** - streamlining delivery and reducing detectable runtime behaviour.
 - Earlier Anatsa/TeaBot dropper campaigns used PDF readers, QR scanners, and file managers;
   one file-manager campaign reached **220,000+ installs**.
 
@@ -430,13 +428,13 @@ The best-documented example, with dates:
 
 ### The dropper capability profile
 
-What a dropper looks like statically — deliberately unremarkable:
+What a dropper looks like statically - deliberately unremarkable:
 
 | Attribute | Dropper | Payload |
 |---|---|---|
 | Permissions | Few. `INTERNET`, `REQUEST_INSTALL_PACKAGES`, maybe `QUERY_ALL_PACKAGES` | The full banking-trojan cluster |
 | Accessibility service | **Usually absent** | Present |
-| Obfuscation | Light — it needs to look normal | Heavy |
+| Obfuscation | Light - it needs to look normal | Heavy |
 | Functionality | Genuinely works (a real PDF reader) | Overlay, keylog, VNC, ATS |
 | Play presence | Often yes | Never |
 | Review outcome | Passes | Never submitted |
@@ -454,8 +452,7 @@ a legitimate-looking application, producing a first-stage that asks the user to 
 "additional plugin." ThreatFabric documented Zombinder distributing **Octo2**, and it has also
 been observed distributing **Chameleon** alongside **Hook**.
 
-This service model means **the dropper and the payload often come from different actors** —
-which has a direct consequence for attribution: dropper infrastructure clusters may not map
+This service model means **the dropper and the payload often come from different actors** - which has a direct consequence for attribution: dropper infrastructure clusters may not map
 cleanly onto payload-family clusters. Record them as separate nodes in the investigation graph.
 → [Ch 15](../malware/15-malware-infrastructure.md), [Ch 28](../sudarshan/28-campaign-correlation.md)
 
@@ -474,7 +471,7 @@ cleanly onto payload-family clusters. Record them as separate nodes in the inves
         ▼
  6. Install        ★ PackageInstaller SESSION  → escapes Restricted Settings
         ▼
- 7. User taps      "Install" — or accessibility taps it, if already obtained
+ 7. User taps      "Install" - or accessibility taps it, if already obtained
         ▼
  8. Payload runs   Requests Accessibility with a plausible pretext
         ▼
@@ -483,7 +480,7 @@ cleanly onto payload-family clusters. Record them as separate nodes in the inves
 10. Fraud          Overlay + keylog + OTP intercept + VNC → ODF/DTO  → Ch 14
 ```
 
-**Detection opportunities exist at 2, 5, 6, 8, and 9** — and SUDARSHAN should instrument all
+**Detection opportunities exist at 2, 5, 6, 8, and 9** - and SUDARSHAN should instrument all
 five, because each alone is evadable.
 
 ---
@@ -505,12 +502,11 @@ installd: delete /data/data/<pkg>, /data/app/<pkg>, oat artifacts
 UID retired (not immediately reused)
 ```
 
-`adb shell pm uninstall -k --user 0 <pkg>` removes for the current user while keeping data —
-useful in labs, and also the mechanism behind "uninstall for this user" on shipped devices.
+`adb shell pm uninstall -k --user 0 <pkg>` removes for the current user while keeping data - useful in labs, and also the mechanism behind "uninstall for this user" on shipped devices.
 
 ### How malware resists removal
 
-Mapped to **MITRE ATT&CK Mobile T1629.001 — Impair Defenses: Prevent Application Removal**.
+Mapped to **MITRE ATT&CK Mobile T1629.001 - Impair Defenses: Prevent Application Removal**.
 
 | Technique | Mechanism | Counter |
 |---|---|---|
@@ -519,19 +515,19 @@ Mapped to **MITRE ATT&CK Mobile T1629.001 — Impair Defenses: Prevent Applicati
 | **Overlay obstruction** | Draws over the uninstall dialog | Safe Mode |
 | **Watchdog process pair** | Two processes restart each other ([Ch 01 §4](../android/01-android-internals.md#4-zygote-the-process-factory)) | Safe Mode / ADB |
 | **Icon hiding** | No launcher entry, so the user can't find it | `pm list packages -3`; Settings → Apps |
-| **Device wipe on detection** | Factory reset to destroy evidence — documented in **BRATA** (Cleafy) and **BingoMod** (Cleafy, July 31, 2024) | Acquire forensic image **before** attempting removal |
+| **Device wipe on detection** | Factory reset to destroy evidence - documented in **BRATA** (Cleafy) and **BingoMod** (Cleafy, July 31, 2024) | Acquire forensic image **before** attempting removal |
 
-> **⚙️ Engineering Note — the IR sequencing rule:** because BRATA and BingoMod wipe the device
+> **⚙️ Engineering Note - the IR sequencing rule:** because BRATA and BingoMod wipe the device
 > when they detect removal attempts or analysis, **forensic acquisition must precede
 > remediation**. Get the image, then clean. A responder who uninstalls first may destroy the
-> only evidence of how the fraud occurred — and with it, the bank's ability to reconstruct
+> only evidence of how the fraud occurred - and with it, the bank's ability to reconstruct
 > the transaction chain. Put this in the runbook in bold.
 > → [Ch 17](../digital-forensics/17-digital-forensics.md), [Ch 20](../incident-response/20-incident-response.md)
 
 ### The reliable removal path
 
 ```
-1. FORENSIC ACQUISITION FIRST (device is powered on and unlocked — keep it AFU → Ch 05 §6)
+1. FORENSIC ACQUISITION FIRST (device is powered on and unlocked - keep it AFU → Ch 05 §6)
 2. Reboot into Safe Mode (disables third-party apps and their accessibility services)
 3. Settings → Security → Device admin apps → revoke
 4. Settings → Apps → uninstall
@@ -542,7 +538,7 @@ Mapped to **MITRE ATT&CK Mobile T1629.001 — Impair Defenses: Prevent Applicati
 
 ---
 
-## 9. `packages.xml` — the forensic goldmine
+## 9. `packages.xml` - the forensic goldmine
 
 `/data/system/packages.xml` is PMS's persistent state. It is one of the highest-value artifacts
 on an Android device.
@@ -572,18 +568,18 @@ on an Android device.
 
 | Field | Investigative value |
 |---|---|
-| `installer` | **Who dropped it** — §5 |
-| `<cert>` | **Signer identity**, even if the APK is gone — [Ch 06](../security/06-certificates.md) |
+| `installer` | **Who dropped it** - §5 |
+| `<cert>` | **Signer identity**, even if the APK is gone - [Ch 06](../security/06-certificates.md) |
 | `ft` / `it` / `ut` | **Timeline**. Correlate install time against the fraudulent transaction time. |
 | `userId` | Map to `/data/data` ownership and to process listings |
 | `<perms granted="...">` | **Actually granted** permissions, not merely declared |
-| `codePath` | Where the APK lives — pull it |
+| `codePath` | Where the APK lives - pull it |
 
 Companion artifacts:
 
 | File | Contents |
 |---|---|
-| `/data/system/packages.list` | `package uid debuggable dataDir seinfo ...` — quick UID mapping |
+| `/data/system/packages.list` | `package uid debuggable dataDir seinfo ...` - quick UID mapping |
 | `/data/system/users/0/settings_secure.xml` | `enabled_accessibility_services`, `enabled_notification_listeners` ★ |
 | `/data/system/users/0/package-restrictions.xml` | Per-user enable/disable state |
 | `/data/system/device_policies.xml` | Device admin registrations |
@@ -591,7 +587,7 @@ Companion artifacts:
 
 > **⚙️ Engineering Note:** The combination of **`packages.xml`** (installer + install time +
 > signer) and **`settings_secure.xml`** (`enabled_accessibility_services`) reconstructs the
-> attack timeline from a single logical acquisition — no memory forensics required. That pair
+> attack timeline from a single logical acquisition - no memory forensics required. That pair
 > should be the first thing any Android fraud-response script pulls.
 > → [Ch 17](../digital-forensics/17-digital-forensics.md)
 
@@ -611,7 +607,7 @@ Companion artifacts:
 | URL fetch → file write → session install chain | **Very High** | Full dropper machinery |
 | `targetSdk` below the platform floor | Medium-High | Install-blocked on A14/A15 ([Ch 04 §6](../security/04-android-security-model.md#6-version-gates-the-arms-race-dated)) |
 
-### Dynamic signals (detonation) — **mandatory**
+### Dynamic signals (detonation) - **mandatory**
 
 ```yaml
 detonation_checks:
@@ -633,11 +629,11 @@ detonation_checks:
     - collect: any newly installed APK → RECURSIVE ANALYSIS as a child artifact
 ```
 
-> **⚙️ Engineering Note — the two mandatory diffs.** From [Ch 03](../android/03-android-runtime.md)
+> **⚙️ Engineering Note - the two mandatory diffs.** From [Ch 03](../android/03-android-runtime.md)
 > you already hook class loaders to catch in-memory payloads. From this chapter you must
 > **also diff the installed-package list**, because Anatsa moved to direct installation and
 > class-loader hooks won't fire. **Two different staging mechanisms, two different detections,
-> both required.** Missing either one produces a confident false negative — the worst kind.
+> both required.** Missing either one produces a confident false negative - the worst kind.
 
 ### Device-side signals (MTD / agent integration)
 
@@ -683,7 +679,7 @@ response: immediate_analyst_review + customer_session_hold
 | Device admin | Every corporate MDM enrolment |
 
 > **🚨 Misconception:** "Sideloaded = malicious." Sideloading is legal, common, and in some
-> markets normal — F-Droid users, enterprise-managed devices, regions with limited Play
+> markets normal - F-Droid users, enterprise-managed devices, regions with limited Play
 > availability, and privacy-conscious users all sideload routinely. **The signal is the
 > installer's identity and the installed app's capability profile, not the install method.**
 > A tool that flags all sideloading is unusable in India, where third-party stores and direct
@@ -694,7 +690,7 @@ response: immediate_analyst_review + customer_session_hold
 - Dropper never activates in the sandbox (geofenced, time-delayed, C2 offline). **Flag as
   inconclusive, never clean.**
 - Payload delivered by a *later app update* rather than by an install (the Anatsa Play
-  pattern) — the sample you have genuinely contains nothing.
+  pattern) - the sample you have genuinely contains nothing.
 - Legitimate-looking installer chain (compromised or malicious app on an allowlist).
 - Installer field spoofed by a privileged installer.
 
@@ -703,7 +699,7 @@ response: immediate_analyst_review + customer_session_hold
 | Case | Handling |
 |---|---|
 | **Split APK sessions** | One session, many APKs. Treat as one logical install. |
-| **Work profile installs** | Managed profile, different user ID — expected for enterprise |
+| **Work profile installs** | Managed profile, different user ID - expected for enterprise |
 | **Instant Apps** | Run without a conventional install; different artifact trail |
 | **Pre-installed apps** | Not "installed" in this sense; supply-chain compromise is a separate problem class |
 | **Multi-user devices** | Package present for one user, not another |
@@ -712,7 +708,7 @@ response: immediate_analyst_review + customer_session_hold
 ### Performance
 
 Package-list and installer queries are milliseconds. Detonation with pre/post diffing costs
-minutes of wall-clock per sample and is the pipeline's throughput bottleneck — which is
+minutes of wall-clock per sample and is the pipeline's throughput bottleneck - which is
 exactly why the cheap static gate from [Ch 02](02-apk-architecture.md) and
 [Ch 08](08-apk-file-format.md) decides *what* gets detonated.
 → [Ch 23](../sudarshan/23-detection-pipeline.md)
@@ -727,8 +723,8 @@ exactly why the cheap static gate from [Ch 02](02-apk-architecture.md) and
    ([Ch 03 §11](../android/03-android-runtime.md#11-detection-logic-for-sudarshan)).
 4. **Join installer attribution with accessibility state.** That join *is* the detection.
 5. **Never flag sideloading alone.** Flag the installer identity + capability cluster.
-6. **Acquire forensics before remediation** — BRATA and BingoMod wipe on detection.
-7. **Parse `packages.xml` for installer, signer, and timestamps** — it survives APK deletion.
+6. **Acquire forensics before remediation** - BRATA and BingoMod wipe on detection.
+7. **Parse `packages.xml` for installer, signer, and timestamps** - it survives APK deletion.
 8. **Record the failure code** when an install fails; `INSTALL_FAILED_UPDATE_INCOMPATIBLE` is
    a repackaging finding, not a nuisance.
 9. **Treat "C2 unreachable" as inconclusive**, and schedule re-detonation.
@@ -740,13 +736,13 @@ exactly why the cheap static gate from [Ch 02](02-apk-architecture.md) and
 **What judges ask:** *"If the malware was on the Google Play Store, doesn't that mean Google's
 review failed?"*
 
-**Perfect answer:** Not exactly — it means point-in-time review has a structural limit. The
+**Perfect answer:** Not exactly - it means point-in-time review has a structural limit. The
 app Google reviewed was genuinely clean; it was a working utility with no malicious code.
 Anatsa's dropper reached the **#4 spot in Play's Top Free Tools category by June 29, 2025**
 and only turned malicious in an update roughly six weeks after its clean May 7 release. You
 cannot statically detect a payload that doesn't exist yet. Google's answer is continuous
-scanning — Play Protect scans about 200 billion apps daily and found over 13 million malicious
-apps outside Play in 2024 — but the window between a malicious update and its detection is
+scanning - Play Protect scans about 200 billion apps daily and found over 13 million malicious
+apps outside Play in 2024 - but the window between a malicious update and its detection is
 exactly where fraud happens, and the bank carries that loss. That's the gap SUDARSHAN closes:
 we analyse what a bank's customers actually have installed, we ask who installed it, and we
 detonate to see what it *does*, not just what it ships with.
@@ -754,18 +750,17 @@ detonate to see what it *does*, not just what it ships with.
 **Common mistakes:**
 - "Google should just review better." Shows you haven't understood the staging problem.
 - Claiming static analysis alone would catch it. For a dropper, the malware is not in the file.
-- Saying `REQUEST_INSTALL_PACKAGES` allows silent installs. It doesn't — but accessibility
+- Saying `REQUEST_INSTALL_PACKAGES` allows silent installs. It doesn't - but accessibility
   tapping the button does, and that nuance is what a good judge is listening for.
 
 **Follow-ups to expect:**
 - *"So how do YOU detect a clean dropper?"* → Capability profile (install capability that
   doesn't match stated purpose), installer attribution on the device, detonation with
-  package-list diffing, and threat-intel correlation on the signer and infrastructure. Layered
-  — no single one is sufficient, and I'd rather say that than overclaim.
+  package-list diffing, and threat-intel correlation on the signer and infrastructure. Layered - no single one is sufficient, and I'd rather say that than overclaim.
 - *"Didn't Android 13 and 15 fix this?"* → They raised the cost. Android 13 added Restricted
   Settings; Android 15 blocked accessibility for apps not installed via the session-based
   install API. Malware answered by adopting the session-based API to look like a legitimate
-  store — ThreatFabric documented Octo2 and Crocodilus doing exactly this. It's an arms race,
+  store - ThreatFabric documented Octo2 and Crocodilus doing exactly this. It's an arms race,
   not a fix.
 - *"What's the one signal you'd keep if you could only have one?"* → Installer attribution
   joined with accessibility state. Two cheap queries, no root, no ML, and together they
@@ -774,7 +769,7 @@ detonate to see what it *does*, not just what it ships with.
 **Fact that impresses:** Zscaler ThreatLabz reported in August 2025 that Anatsa **stopped
 using remote DEX loading and now directly installs its payload**. That's operationally
 important, not trivia: any detection built only on class-loader hooks would silently miss
-current Anatsa. It's why we diff the installed-package list *and* hook class loaders — two
+current Anatsa. It's why we diff the installed-package list *and* hook class loaders - two
 staging mechanisms, two detections.
 
 ---
@@ -789,7 +784,7 @@ dexopt → register in `packages.xml` + broadcast. Naming the failure codes at e
 separates a strong answer from an adequate one.
 
 **Q: "Difference between `INSTALL_PACKAGES` and `REQUEST_INSTALL_PACKAGES`?"**
-`INSTALL_PACKAGES` is `signature|privileged` — Play Store and system updaters — and installs
+`INSTALL_PACKAGES` is `signature|privileged` - Play Store and system updaters - and installs
 silently. `REQUEST_INSTALL_PACKAGES` is available to ordinary apps and only launches the
 installer UI; the user still confirms. Then the nuance: malware defeats that confirmation by
 first obtaining Accessibility and tapping the button itself.
@@ -806,7 +801,7 @@ the caveat: advisory metadata, not a security boundary.
 
 **Q: "An app can't be uninstalled. What's happening?"**
 Device admin active, an accessibility service intercepting the uninstall flow, or an overlay
-obstructing the dialog. Boot to Safe Mode, revoke device admin, then uninstall — **but acquire
+obstructing the dialog. Boot to Safe Mode, revoke device admin, then uninstall - **but acquire
 forensics first**, because BRATA and BingoMod wipe the device on detection.
 
 **Q: "Why did Android 15 tie accessibility restrictions to the install API?"**
@@ -825,19 +820,19 @@ or messenger." Session-based install was that proxy. Droppers then adopted the s
 ## 15. Cross-references
 
 **Upstream:**
-- [← Ch 04 Android Security Model](../security/04-android-security-model.md) — Restricted Settings, targetSdk gates, Play Protect
-- [← Ch 06 Certificates](../security/06-certificates.md) — TOFU, signer identity
-- [← Ch 07 APK Signing](../security/07-apk-signing.md) — verification step 4
-- [← Ch 08 APK File Format](08-apk-file-format.md) — the parse step
+- [← Ch 04 Android Security Model](../security/04-android-security-model.md) - Restricted Settings, targetSdk gates, Play Protect
+- [← Ch 06 Certificates](../security/06-certificates.md) - TOFU, signer identity
+- [← Ch 07 APK Signing](../security/07-apk-signing.md) - verification step 4
+- [← Ch 08 APK File Format](08-apk-file-format.md) - the parse step
 
 **Downstream:**
-- [→ Ch 11 Static Analysis](../static-analysis/11-static-analysis.md) — dropper capability profiling
-- [→ Ch 12 Dynamic Analysis](../dynamic-analysis/12-dynamic-analysis.md) — detonation and package diffing
-- [→ Ch 13 Android Malware](../malware/13-android-malware.md) — accessibility abuse, anti-removal
-- [→ Ch 14 Banking Malware](../banking-malware/14-banking-malware.md) — Anatsa, Octo2, Crocodilus campaigns
-- [→ Ch 15 Malware Infrastructure](../malware/15-malware-infrastructure.md) — Zombinder, DaaS
-- [→ Ch 17 Digital Forensics](../digital-forensics/17-digital-forensics.md) — `packages.xml`, acquisition-before-remediation
-- [→ Ch 20 Incident Response](../incident-response/20-incident-response.md) — the removal runbook
+- [→ Ch 11 Static Analysis](../static-analysis/11-static-analysis.md) - dropper capability profiling
+- [→ Ch 12 Dynamic Analysis](../dynamic-analysis/12-dynamic-analysis.md) - detonation and package diffing
+- [→ Ch 13 Android Malware](../malware/13-android-malware.md) - accessibility abuse, anti-removal
+- [→ Ch 14 Banking Malware](../banking-malware/14-banking-malware.md) - Anatsa, Octo2, Crocodilus campaigns
+- [→ Ch 15 Malware Infrastructure](../malware/15-malware-infrastructure.md) - Zombinder, DaaS
+- [→ Ch 17 Digital Forensics](../digital-forensics/17-digital-forensics.md) - `packages.xml`, acquisition-before-remediation
+- [→ Ch 20 Incident Response](../incident-response/20-incident-response.md) - the removal runbook
 
 **Related chain:** Dropper → session install → Restricted Settings bypass → accessibility →
 permission auto-grant → overlay → OTP theft → ODF.
@@ -846,27 +841,27 @@ permission auto-grant → overlay → OTP theft → ODF.
 
 ## 16. References
 
-1. Android Developers — `PackageInstaller` / `PackageInstaller.Session` reference. https://developer.android.com/reference/android/content/pm/PackageInstaller
-2. Android Developers — `PackageManager.getInstallSourceInfo()` reference (API 30+).
-3. Android Developers — *Behavior changes: all apps (Android 14)* — `INSTALL_FAILED_DEPRECATED_SDK_VERSION`. https://developer.android.com/about/versions/14/behavior-changes-all
-4. Android Developers — *Behavior changes (Android 15)* — Restricted Settings and the session-install distinction. https://developer.android.com/about/versions/15/behavior-changes-all
-5. Android Developers — *Install unknown apps* / per-app unknown sources (Android 8.0+).
-6. AOSP — `PackageManagerService` and `installd` source. https://source.android.com/
-7. Google Security Blog — *How we kept the Google Play & Android app ecosystems safe in 2024* — 13 M sideloaded malicious apps; install-blocking pilot figures. https://security.googleblog.com/
-8. ThreatFabric — Anatsa Google Play dropper campaign, "Hybrid Cars Simulator, Drift & Racing" (July 2025).
-9. Zscaler ThreatLabz — *Anatsa's Latest Updates* (August 2025) — 831 institutions; shift from remote DEX loading to direct install.
-10. ThreatFabric — *Octo2* (September 2024) — Zombinder first stage, Android 13+ restriction bypass.
-11. ThreatFabric — *Crocodilus* (March 29, 2025) — dropper bypassing Android 13+ restrictions.
-12. Cleafy Labs — *BRATA* evolution analyses (2021–2022) — factory-reset kill switch.
-13. Cleafy Labs — *BingoMod* (published July 31, 2024) — device wipe after fraud.
-14. McAfee — "PM Surya Ghar: Muft Bijli Yojana" India campaign analysis — GitHub-hosted APKs, Firebase C2, UPI credential harvesting.
-15. CYFIRMA — droppers impersonating Indian banking apps using cloud services as C2.
-16. MITRE ATT&CK for Mobile — T1629.001 (Prevent Application Removal), T1626.001 (Device Administrator Permissions), T1453, T1638. https://attack.mitre.org/matrices/mobile/
+1. Android Developers - `PackageInstaller` / `PackageInstaller.Session` reference. https://developer.android.com/reference/android/content/pm/PackageInstaller
+2. Android Developers - `PackageManager.getInstallSourceInfo()` reference (API 30+).
+3. Android Developers - *Behavior changes: all apps (Android 14)* - `INSTALL_FAILED_DEPRECATED_SDK_VERSION`. https://developer.android.com/about/versions/14/behavior-changes-all
+4. Android Developers - *Behavior changes (Android 15)* - Restricted Settings and the session-install distinction. https://developer.android.com/about/versions/15/behavior-changes-all
+5. Android Developers - *Install unknown apps* / per-app unknown sources (Android 8.0+).
+6. AOSP - `PackageManagerService` and `installd` source. https://source.android.com/
+7. Google Security Blog - *How we kept the Google Play & Android app ecosystems safe in 2024* - 13 M sideloaded malicious apps; install-blocking pilot figures. https://security.googleblog.com/
+8. ThreatFabric - Anatsa Google Play dropper campaign, "Hybrid Cars Simulator, Drift & Racing" (July 2025).
+9. Zscaler ThreatLabz - *Anatsa's Latest Updates* (August 2025) - 831 institutions; shift from remote DEX loading to direct install.
+10. ThreatFabric - *Octo2* (September 2024) - Zombinder first stage, Android 13+ restriction bypass.
+11. ThreatFabric - *Crocodilus* (March 29, 2025) - dropper bypassing Android 13+ restrictions.
+12. Cleafy Labs - *BRATA* evolution analyses (2021–2022) - factory-reset kill switch.
+13. Cleafy Labs - *BingoMod* (published July 31, 2024) - device wipe after fraud.
+14. McAfee - "PM Surya Ghar: Muft Bijli Yojana" India campaign analysis - GitHub-hosted APKs, Firebase C2, UPI credential harvesting.
+15. CYFIRMA - droppers impersonating Indian banking apps using cloud services as C2.
+16. MITRE ATT&CK for Mobile - T1629.001 (Prevent Application Removal), T1626.001 (Device Administrator Permissions), T1453, T1638. https://attack.mitre.org/matrices/mobile/
 
 ### Further reading
 - AOSP `frameworks/base/services/core/java/com/android/server/pm/`
-- Android Developers — *Play Feature Delivery* (legitimate dynamic modules)
-- OWASP MASTG — app installation and update integrity test cases
+- Android Developers - *Play Feature Delivery* (legitimate dynamic modules)
+- OWASP MASTG - app installation and update integrity test cases
 
 ---
 
@@ -877,7 +872,6 @@ permission auto-grant → overlay → OTP theft → ODF.
 ## ✅ Block A complete
 
 Chapters 00–09 establish the foundation: the platform, the package, the runtime, the security
-model, and the install pipeline. **Block B (Chapters 10–12)** turns to the analysis craft —
-reverse engineering, static analysis, and dynamic analysis — building directly on the format
+model, and the install pipeline. **Block B (Chapters 10–12)** turns to the analysis craft - reverse engineering, static analysis, and dynamic analysis - building directly on the format
 knowledge from [Ch 08](08-apk-file-format.md) and the runtime behaviour from
 [Ch 03](../android/03-android-runtime.md).

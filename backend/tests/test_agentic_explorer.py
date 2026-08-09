@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Agentic Explorer Smoke Test + Unit Tests
+SUDARSHAN - Agentic Explorer Smoke Test + Unit Tests
 ======================================================
 Run with:
     cd "d:/Projects/Sudarshan BOI/backend"
@@ -148,7 +148,7 @@ class TestGoalTracker(unittest.TestCase):
     def test_blocked_goals_not_returned_as_next(self):
         """Goals with unmet dependencies must not be returned as next priority."""
         next_g = self.tracker.next_priority_goal()
-        # Stage 1 has no deps — must be first
+        # Stage 1 has no deps - must be first
         self.assertEqual(next_g.stage, 1)
 
     def test_frida_event_triggers_goal_in_progress(self):
@@ -209,7 +209,7 @@ class TestAgentMemory(unittest.TestCase):
         self.assertFalse(result)
 
     def test_credential_key_stored_not_value(self):
-        """Credential VALUE must never be stored — only the key name."""
+        """Credential VALUE must never be stored - only the key name."""
         self.memory.record_action(
             tool="type_text",
             target="input_password",
@@ -337,7 +337,7 @@ class TestToolRegistry(unittest.TestCase):
 
 
 # ==============================================================================
-# PART 5: Perception Unit Tests (pure functions — no ADB needed)
+# PART 5: Perception Unit Tests (pure functions - no ADB needed)
 # ==============================================================================
 
 class TestPerception(unittest.TestCase):
@@ -352,7 +352,7 @@ class TestPerception(unittest.TestCase):
         self.UINode = UINode
         self.THRESHOLD = LABELED_NODE_FRACTION_THRESHOLD
         self.MIN_NODES = MIN_ACTIONABLE_NODES
-        # Pipeline with dummy ADB — not connected; only testing pure functions
+        # Pipeline with dummy ADB - not connected; only testing pure functions
         self.pipeline = PerceptionPipeline("emulator-5554", "com.test", "adb")
 
     def _make_node(self, text="", desc="", resource_id="", is_input=False):
@@ -477,7 +477,7 @@ class TestPlannerValidation(unittest.TestCase):
     def setUp(self):
         from sudarshan_core.engines.agentic.planner import AgentPlanner
         from sudarshan_core.engines.agentic.perception import Observation
-        # Planner without API key — testing validation only (no LLM calls)
+        # Planner without API key - testing validation only (no LLM calls)
         self.planner = AgentPlanner(
             api_key=None,
             device_serial="emulator-5554",
@@ -521,7 +521,7 @@ class TestPlannerValidation(unittest.TestCase):
                            "x": 540, "y": 960})
         action, err = self._validate(raw)
         self.assertIsNone(err if err else None)
-        if action:  # might fail on step 4 range — that's fine, we check type acceptance
+        if action:  # might fail on step 4 range - that's fine, we check type acceptance
             self.assertIsInstance(action.get("confidence"), float)
 
     def test_step3_unknown_tool_rejected(self):
@@ -541,7 +541,7 @@ class TestPlannerValidation(unittest.TestCase):
             self.assertIsNone(action, f"Tool '{bad_tool}' should be rejected")
 
     def test_step4_missing_required_param_rejected(self):
-        """tap requires x and y — missing y must fail."""
+        """tap requires x and y - missing y must fail."""
         raw = json.dumps({"tool": "tap", "goal": "test",
                            "reasoning": "test", "confidence": 0.8, "x": 540})
         action, err = self._validate(raw)
@@ -761,10 +761,10 @@ class TestFallbackPlanner(unittest.TestCase):
         # Build up failures
         for _ in range(self.LIMIT - 1):
             self.planner.decide(obs_stuck, memory, goals)
-        # New screen arrives — streak resets
+        # New screen arrives - streak resets
         self.planner._last_screen_hash = "stuck"
         action = self.planner.decide(obs_new, memory, goals)
-        # Should not be None — should have reset and matched "Allow"
+        # Should not be None - should have reset and matched "Allow"
         self.assertIsNotNone(action)
 
 
@@ -775,7 +775,7 @@ class TestFallbackPlanner(unittest.TestCase):
 class TestAgenticExplorerInterface(unittest.TestCase):
     """
     Verifies the public interface matches UIExplorer exactly.
-    Does NOT actually connect to ADB — purely structural.
+    Does NOT actually connect to ADB - purely structural.
     """
 
     def test_start_method_exists_and_is_coroutine(self):

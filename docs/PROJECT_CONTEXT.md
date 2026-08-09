@@ -1,4 +1,4 @@
-# Sudarshan — Full Project Context
+# Sudarshan - Full Project Context
 
 **Purpose of this document.** A single, evidence-based reference describing what Sudarshan is,
 how it works, what is verified to work, what is verified to be broken, and where the open
@@ -18,15 +18,15 @@ Do not cite **[CLAIMED]** items as fact. Several are recorded here precisely bec
 
 ## 1. Project Identity
 
-**Sudarshan** — a banking-focused Android malware intelligence platform, submitted for the Bank of India / IIT Hyderabad hackathon (BOI Hackathon 2026).
+**Sudarshan** - a banking-focused Android malware intelligence platform, submitted for the Bank of India / IIT Hyderabad hackathon (BOI Hackathon 2026).
 
 **Thesis.** Existing tools answer *"is this malware?"*. Sudarshan aims to answer *"who is targeted, what is at risk, and what should the fraud team do?"* The project frames itself as solving an **intelligence translation** problem rather than a malware detection problem: a malicious APK can compromise an account in under 90 seconds, while a fraud analyst typically begins investigating days later.
 
 **Stated design principles** (from [`README.md`](file:///d:/Projects/Sudarshan%20BOI/README.md)):
 
-1. *Deterministic Detection, Explainable Intelligence* — AI explains decisions, it does not make them.
-2. *Human Judgment, Machine Scale* — machines process evidence, humans make accountable decisions.
-3. *Fraud-First, Not Malware-First* — the output is a fraud-operations decision, not a technical report.
+1. *Deterministic Detection, Explainable Intelligence* - AI explains decisions, it does not make them.
+2. *Human Judgment, Machine Scale* - machines process evidence, humans make accountable decisions.
+3. *Fraud-First, Not Malware-First* - the output is a fraud-operations decision, not a technical report.
 
 **The core invariant** (architecturally central, and the property most worth protecting):
 
@@ -121,7 +121,7 @@ Sudarshan BOI/
 
 **[VERIFIED]** All formulas and constants below were read from [`risk_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/risk_engine.py) and confirmed by executing the test suite.
 
-### 4.1 STEI — Static Threat Exposure Index
+### 4.1 STEI - Static Threat Exposure Index
 
 ```text
 STEI = 0.60·CT + 0.20·BT + 0.10·PR + 0.05·OB + 0.05·IR
@@ -135,7 +135,7 @@ STEI = 0.60·CT + 0.20·BT + 0.10·PR + 0.05·OB + 0.05·IR
 | OB | 0.05 | Obfuscation | DexClassLoader + reflection + entropy |
 | IR | 0.05 | Infrastructure Risk | 10 points per hardcoded URL/IP; cap 100 |
 
-### 4.2 BFCI — Behavioral Fraud Confidence Index
+### 4.2 BFCI - Behavioral Fraud Confidence Index
 
 ```text
 BFCI = 0.35·A + 0.25·S + 0.20·O + 0.10·B + 0.05·N + 0.05·P
@@ -143,14 +143,14 @@ BFCI = 0.35·A + 0.25·S + 0.20·O + 0.10·B + 0.05·N + 0.05·P
 
 | Component | Weight | Signal |
 |---|---:|---|
-| A — Accessibility abuse | 0.35 | Screen scraping, tap injection |
-| S — SMS interception | 0.25 | OTP theft |
-| O — Overlay attack | 0.20 | Phishing overlays |
-| B — Banking interaction | 0.10 | Target enumeration |
-| N — Network C2 | 0.05 | Command-and-control traffic |
-| P — Persistence | 0.05 | Device admin, boot persistence |
+| A - Accessibility abuse | 0.35 | Screen scraping, tap injection |
+| S - SMS interception | 0.25 | OTP theft |
+| O - Overlay attack | 0.20 | Phishing overlays |
+| B - Banking interaction | 0.10 | Target enumeration |
+| N - Network C2 | 0.05 | Command-and-control traffic |
+| P - Persistence | 0.05 | Device admin, boot persistence |
 
-### 4.3 FRS — Fraud Risk Score
+### 4.3 FRS - Fraud Risk Score
 
 ```text
 dynamic conclusive:  nominal weights 0.25·STEI + 0.35·Dynamic + 0.20·Correlation + 0.20·BankingImpact

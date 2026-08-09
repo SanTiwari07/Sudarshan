@@ -1,4 +1,4 @@
-# 02 — System Overview & Platform Architecture
+# 02 - System Overview & Platform Architecture
 
 ## Purpose
 

@@ -44,7 +44,7 @@ export default function ThreatInfrastructurePanel({ infra }: { infra: Infrastruc
         <ListBlock title="Hosting providers" items={infra.hosting} />
       </div>
       {!hasGeo && (
-        <p className="px-4 pb-4 text-[10px] text-slate-500">Map unavailable — no geolocation coordinates in correlated IOC data.</p>
+        <p className="px-4 pb-4 text-[10px] text-slate-500">Map unavailable - no geolocation coordinates in correlated IOC data.</p>
       )}
     </SocCard>
   );

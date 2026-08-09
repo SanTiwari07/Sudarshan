@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Sudarshan Platform Health Check — startup validation for all subsystems.
+Sudarshan Platform Health Check - startup validation for all subsystems.
 
 Verifies:
   ✓ Docker       (docker daemon + compose services)
@@ -143,7 +143,7 @@ def check_mobsf(quick: bool = False):
         return
 
     if quick:
-        _check("MobSF upload/scan", SKIP, "Quick mode — skipping scan")
+        _check("MobSF upload/scan", SKIP, "Quick mode - skipping scan")
         return
 
     # Upload test APK
@@ -194,7 +194,7 @@ def check_analysis_engine():
         _check("Analysis Engine", SKIP, "requests not installed")
         return
 
-    # The engine is not exposed externally in docker-compose — check via backend proxy
+    # The engine is not exposed externally in docker-compose - check via backend proxy
     # Try direct localhost:8001 (works when running locally, not when only in Docker)
     r = _http_get(f"{ENGINE_HOST}/health", timeout=5)
     if r and r.status_code == 200:
@@ -266,7 +266,7 @@ def check_emulator(devices: List[str]):
     provider = os.environ.get("SANDBOX_PROVIDER", "genymotion")
     preferred = os.environ.get("DEVICE_SERIAL", "").strip()
     if not devices:
-        _check("Sandbox running", WARN, f"No device connected — start {provider} (Android 10/11+, x86_64)")
+        _check("Sandbox running", WARN, f"No device connected - start {provider} (Android 10/11+, x86_64)")
         _check("Boot completed", SKIP, "No device")
         _check("ADB root", SKIP, "No device")
         _check("SELinux mode", SKIP, "No device")
@@ -294,14 +294,14 @@ def check_emulator(devices: List[str]):
     ok, out = _run([ADB_BIN, "-s", device, "shell", "getenforce"])
     enforce = out.strip()
     _check("SELinux mode", PASS if "Permissive" in enforce else WARN,
-           f"{enforce} — {'OK for Frida' if 'Permissive' in enforce else 'run: adb shell setenforce 0'}")
+           f"{enforce} - {'OK for Frida' if 'Permissive' in enforce else 'run: adb shell setenforce 0'}")
 
     # frida-server
     ok, out = _run([ADB_BIN, "-s", device, "shell", "ps -A | grep frida-server"], timeout=15)
     if "frida-server" in out:
         _check("frida-server running", PASS, "Process found")
     else:
-        _check("frida-server running", WARN, "Not running — push frida-server and start it")
+        _check("frida-server running", WARN, "Not running - push frida-server and start it")
 
 
 def check_frida():
@@ -377,7 +377,7 @@ def check_jadx():
 def check_mitmproxy():
     print("\n[mitmproxy]")
     r = _http_get("http://localhost:8080/", timeout=3)
-    # mitmproxy returns 502 to non-proxied connections — that means it's running
+    # mitmproxy returns 502 to non-proxied connections - that means it's running
     if r is not None:
         _check("mitmproxy proxy port", PASS, f"HTTP {r.status_code} (proxy responding)")
     else:
@@ -394,7 +394,7 @@ def check_frida_hooks():
         size = os.path.getsize(bundle)
         _check("banking_trojan.bundle.js", PASS, f"{size // 1024} KB (pre-compiled with frida-java-bridge)")
     else:
-        _check("banking_trojan.bundle.js", WARN, "Bundle not found — Frida 17 requires compiled bundle")
+        _check("banking_trojan.bundle.js", WARN, "Bundle not found - Frida 17 requires compiled bundle")
 
     if os.path.exists(source):
         size = os.path.getsize(source)
@@ -423,13 +423,13 @@ def print_summary():
 
     if critical_failures:
         print(f"\n{'─' * 70}")
-        print("CRITICAL FAILURES — Platform NOT operational until resolved:")
+        print("CRITICAL FAILURES - Platform NOT operational until resolved:")
         for r in critical_failures:
             print(f"  ❌ {r['name']}: {r['detail']}")
 
     if warnings:
         print(f"\n{'─' * 70}")
-        print("WARNINGS — Platform partially operational:")
+        print("WARNINGS - Platform partially operational:")
         for r in warnings:
             print(f"  ⚠️  {r['name']}: {r['detail']}")
 
@@ -443,7 +443,7 @@ def print_summary():
             print("✅ Platform is FULLY OPERATIONAL")
     else:
         print(f"\n{'─' * 70}")
-        print("❌ Platform is NOT OPERATIONAL — resolve critical failures above")
+        print("❌ Platform is NOT OPERATIONAL - resolve critical failures above")
 
     print("=" * 70)
 
@@ -471,7 +471,7 @@ def main():
 
     print("=" * 70)
     print("SUDARSHAN BANKING THREAT INTELLIGENCE PLATFORM")
-    print("Complete Health Check — All Subsystems")
+    print("Complete Health Check - All Subsystems")
     print("=" * 70)
 
     check_docker()

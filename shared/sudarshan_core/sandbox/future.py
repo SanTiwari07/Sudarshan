@@ -72,7 +72,7 @@ class PhysicalDeviceProvider(FutureProvider):
     Physical rooted device stub.
 
     When implemented, this can reuse most of SandboxProvider's ADB/root/Frida
-    logic — only device discovery and state simulation differ.
+    logic - only device discovery and state simulation differ.
     """
 
     name = "physical"

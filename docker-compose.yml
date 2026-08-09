@@ -149,7 +149,7 @@ services:
     # Publish only if an external sandbox must reach the proxy. Prefer binding to
     # loopback so it is not exposed on the LAN.
     ports:
-      - "127.0.0.1:8080:8080"    # Proxy port — point Genymotion/AVD to this
+      - "127.0.0.1:8080:8080"    # Proxy port - point Genymotion/AVD to this
     command: >
       mitmdump
       --listen-host 0.0.0.0
@@ -169,7 +169,7 @@ services:
       - MOBSF_API_KEY=${MOBSF_API_KEY:-sudarshan_mobsf_api_key_2026}
     healthcheck:
       # /api_docs requires auth and may redirect (302/401), which fails curl -f.
-      # The root URL (/) always returns 200 once Django is up — use that.
+      # The root URL (/) always returns 200 once Django is up - use that.
       test: ["CMD-SHELL", "curl -f http://localhost:8000/ || exit 1"]
       interval: 15s
       timeout: 10s

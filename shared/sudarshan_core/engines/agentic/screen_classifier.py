@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Rule-Based Semantic Screen Classifier
+SUDARSHAN - Rule-Based Semantic Screen Classifier
 ===================================================
 Classifies Android UI screen states into security-relevant categories
 without requiring external LLM API calls.

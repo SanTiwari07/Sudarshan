@@ -134,7 +134,7 @@ export default function IntelligenceSourcesPanel({
       <IntelSectionHeader
         icon={<Database className="h-4 w-4" />}
         title="Threat Intelligence Sources"
-        subtitle="Where correlations came from — not raw feed metrics"
+        subtitle="Where correlations came from - not raw feed metrics"
       />
       <IntelCardBody compact>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">

@@ -12,7 +12,7 @@ export const INTEL = {
   eyebrow: 'text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500',
 } as const;
 
-/** Sudarshan BOI theme — align with FraudCard / CaseHeader (blue-700, slate surfaces) */
+/** Sudarshan BOI theme - align with FraudCard / CaseHeader (blue-700, slate surfaces) */
 export const INTEL_THEME = {
   accent: 'bg-blue-700',
   accentHover: 'hover:bg-blue-800',

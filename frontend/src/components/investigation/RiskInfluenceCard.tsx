@@ -101,7 +101,7 @@ export default function RiskInfluenceCard({ data, embedded = false }: { data: Fr
           <p className="text-xs text-slate-600 mt-2 leading-relaxed">{row.summary}</p>
           {row.key === 'dynamic' && !row.included && row.score > 0 && (
             <p className="text-[10px] text-amber-800 mt-2">
-              Observed runtime score {row.score.toFixed(1)} / 100 — excluded from final FRS because evidence was
+              Observed runtime score {row.score.toFixed(1)} / 100 - excluded from final FRS because evidence was
               inconclusive.
             </p>
           )}
@@ -137,7 +137,7 @@ export default function RiskInfluenceCard({ data, embedded = false }: { data: Fr
       <SectionHeader
         icon={<BarChart2 className="h-4 w-4" />}
         title="What influenced the score?"
-        subtitle="Analyst view — open the score ledger for raw weights and contributions."
+        subtitle="Analyst view - open the score ledger for raw weights and contributions."
       />
       {body}
     </SocCard>

@@ -1,4 +1,4 @@
-# Production-oriented overlay — use with:
+# Production-oriented overlay - use with:
 #   docker compose -f docker-compose.yml -f docker-compose.hardened.yml up -d
 #
 # Removes dev bind-mounts, enables read-only rootfs, drops capabilities, and
@@ -20,7 +20,7 @@ services:
     volumes:
       - uploads:/app/uploads
       - ./.env:/app/.env:ro
-    # Dev bind-mounts removed — image-baked code only.
+    # Dev bind-mounts removed - image-baked code only.
 
   analysis-engine:
     read_only: true
@@ -39,7 +39,7 @@ services:
       - uploads:/app/uploads
       - ./.env:/app/.env:ro
       - mitmproxy_har:/mitmproxy_har:ro
-    # Do NOT mount ~/.android in production — host keystore exposure.
+    # Do NOT mount ~/.android in production - host keystore exposure.
 
   mitmproxy:
     ports:

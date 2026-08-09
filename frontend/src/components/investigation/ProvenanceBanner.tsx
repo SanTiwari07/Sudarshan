@@ -8,7 +8,7 @@ export default function ProvenanceBanner({ data }: { data: FraudCardData }) {
   const flags: string[] = [];
   if (frs.verdict_floored_for_visibility) flags.push('Verdict floored for visibility');
   if (frs.concealed_payload) flags.push('Concealed payload detected');
-  if (frs.dynamic_ran && !frs.dynamic_conclusive) flags.push('Runtime inconclusive — sandbox evidence not used in score');
+  if (frs.dynamic_ran && !frs.dynamic_conclusive) flags.push('Runtime inconclusive - sandbox evidence not used in score');
   if (excluded.length) flags.push(`Axes excluded: ${excluded.join(', ')}`);
 
   if (!flags.length) return null;

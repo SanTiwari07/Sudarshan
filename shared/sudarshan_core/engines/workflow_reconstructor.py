@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Fraud Workflow Reconstructor
+SUDARSHAN - Fraud Workflow Reconstructor
 ==========================================
 Deterministic causal chain engine that converts raw EvidenceStore records
 into a structured FraudWorkflow.
@@ -11,7 +11,7 @@ module implements it.
 
 Design principles
 -----------------
-1. Fully deterministic — no LLM, no randomness.
+1. Fully deterministic - no LLM, no randomness.
 2. Rule-based: causal chain rules defined as a declarative table, not
    hardcoded if/else branches. New rules require only a new table entry.
 3. Consumes EvidenceRecord objects from EvidenceStore (or a plain dict list
@@ -98,7 +98,7 @@ class FraudWorkflow:
             duration_s = (stage.end_ms - stage.start_ms) / 1000
             lines.append(
                 f"  Stage {i}: {stage.label} [{stage.technique_id}] "
-                f"— {stage.description} "
+                f" - {stage.description} "
                 f"({len(stage.evidence_ids)} events, {duration_s:.1f}s duration, "
                 f"confidence={stage.confidence:.0%})"
             )
@@ -315,7 +315,7 @@ class WorkflowReconstructor:
         Records from EvidenceStore.get_all_records() already have this shape.
 
         Returns:
-            FraudWorkflow — always non-None. fraud_sequence_detected=False
+            FraudWorkflow - always non-None. fraud_sequence_detected=False
             when no evidence is present or no rules fire.
         """
         if not evidence_records:

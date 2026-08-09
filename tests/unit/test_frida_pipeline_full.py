@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Frida Dynamic Analysis Pipeline Full Test Suite
+SUDARSHAN - Frida Dynamic Analysis Pipeline Full Test Suite
 ============================================================
 Phase 13 Compliance Verification:
   1. Hooks script syntax & loading validation (Frida 17 built-in Java global)
@@ -53,7 +53,7 @@ from app.routes.runtime_api import record_event, record_hook
 class TestFridaHooksScript(unittest.TestCase):
     def test_source_imports_bridge_and_is_a_module(self):
         """
-        Frida 17 removed the global `Java` object — it lives in the external
+        Frida 17 removed the global `Java` object - it lives in the external
         `frida-java-bridge` module. Verified on-device: `typeof Java` is
         `undefined` in an unbundled Frida 17 script, so the source MUST pull the
         bridge in as an ES module `import` (a bare classic-script
@@ -65,7 +65,7 @@ class TestFridaHooksScript(unittest.TestCase):
 
         # Must import the bridge as an ES module (this is what survives bundling).
         self.assertIn("import JavaBridgeModule from 'frida-java-bridge'", src)
-        # Must NOT ship a runtime require() — that was the original Fatal Bug #1.
+        # Must NOT ship a runtime require() - that was the original Fatal Bug #1.
         self.assertNotIn("require('frida-java-bridge')", src)
         self.assertNotIn('require("frida-java-bridge")', src)
 
@@ -77,7 +77,7 @@ class TestFridaHooksScript(unittest.TestCase):
     def test_bundle_is_built_and_inlines_the_bridge(self):
         """
         `_HOOKS_SCRIPT` (what actually gets loaded on-device) must be the
-        frida-compile bundle, not the raw ES-module source — create_script can
+        frida-compile bundle, not the raw ES-module source - create_script can
         only run a bundled classic script. The bundle must be real (hundreds of
         KB, not a stub) and must contain the inlined bridge, proven by an ART
         internal string that only exists inside frida-java-bridge's android.js.
@@ -87,7 +87,7 @@ class TestFridaHooksScript(unittest.TestCase):
         self.assertTrue(_HOOKS_BUNDLE.exists(), f"Bundle not built at {_HOOKS_BUNDLE}")
         size = _HOOKS_BUNDLE.stat().st_size
         self.assertGreaterEqual(size, _MIN_BUNDLE_BYTES,
-                                f"Bundle is stub-sized ({size} B) — run `npm run build`")
+                                f"Bundle is stub-sized ({size} B) - run `npm run build`")
         bundle = _HOOKS_BUNDLE.read_text(encoding="utf-8")
         # Inlined frida-java-bridge marker (ART method-copy heuristic string).
         self.assertIn("Unable to find copied methods", bundle,

@@ -62,7 +62,7 @@ export default function IntelligentOverview({
               Intelligent Overview
             </h2>
             <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-              Evidence-backed case summary — derived only from static analysis, runtime analysis, threat correlation,
+              Evidence-backed case summary - derived only from static analysis, runtime analysis, threat correlation,
               and the deterministic risk engine.
             </p>
           </div>

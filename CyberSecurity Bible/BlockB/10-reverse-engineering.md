@@ -1,4 +1,4 @@
-# 10 — Reverse Engineering
+# 10 - Reverse Engineering
 
 > **Chapter ID:** `CH10` · **Block:** B (Analysis Craft) · **Status:** Stable
 > **Tags:** `#reverse-engineering` `#apktool` `#jadx` `#smali` `#obfuscation` `#packers` `#ghidra` `#unpacking`
@@ -11,10 +11,10 @@
 
 1. [What reverse engineering is for](#1-what-reverse-engineering-is-for)
 2. [The toolchain](#2-the-toolchain)
-3. [apktool — resources and smali](#3-apktool--resources-and-smali)
-4. [jadx — the daily driver](#4-jadx--the-daily-driver)
+3. [apktool - resources and smali](#3-apktool--resources-and-smali)
+4. [jadx - the daily driver](#4-jadx--the-daily-driver)
 5. [Reading smali](#5-reading-smali)
-6. [Androguard — scriptable analysis](#6-androguard--scriptable-analysis)
+6. [Androguard - scriptable analysis](#6-androguard--scriptable-analysis)
 7. [Obfuscation](#7-obfuscation)
 8. [Packers](#8-packers)
 9. [Unpacking strategy](#9-unpacking-strategy)
@@ -40,21 +40,21 @@ Static capability extraction ([Ch 11](../static-analysis/11-static-analysis.md))
 app *can* read SMS. Dynamic analysis ([Ch 12](../dynamic-analysis/12-dynamic-analysis.md))
 tells you it *did* read SMS on one particular run. Reverse engineering tells you **under what
 conditions it reads SMS, what it does with the contents, where it sends them, and what the
-decryption key is** — the logic, not just the surface or a single trace.
+decryption key is** - the logic, not just the surface or a single trace.
 
 ### When to reach for it
 
 | Situation | RE needed? |
 |---|---|
-| Triage: is this worth investigating? | ❌ No — manifest and capability profile suffice |
-| Bulk pipeline classification | ❌ No — too slow, doesn't scale |
+| Triage: is this worth investigating? | ❌ No - manifest and capability profile suffice |
+| Bulk pipeline classification | ❌ No - too slow, doesn't scale |
 | "What is this sample's C2 protocol?" | ✅ Yes |
 | "What triggers the payload?" | ✅ Yes |
 | "Write a YARA rule for this family" | ✅ Yes |
-| "The sandbox showed nothing — why?" | ✅ Yes |
+| "The sandbox showed nothing - why?" | ✅ Yes |
 | "Is this a variant of Anatsa or something new?" | ✅ Yes |
 
-> **⚙️ Engineering Note — the economics.** Manifest parsing costs ~50 ms. Full decompilation
+> **⚙️ Engineering Note - the economics.** Manifest parsing costs ~50 ms. Full decompilation
 > costs seconds to minutes. Human reverse engineering costs **hours to days**. SUDARSHAN's
 > job is to make sure the expensive human tier only ever sees samples that deserve it. That
 > economic gradient is the entire architecture of [Ch 23](../sudarshan/23-detection-pipeline.md).
@@ -67,7 +67,7 @@ Three habits that separate productive analysts from people who stare at decompil
 1. **Start from a question, not from `MainActivity`.** "Where does the C2 URL come from?" is
    a plan. "Let me read this app" is not.
 2. **Work backwards from the interesting API.** Find `sendTextMessage`, `getInstalledPackages`,
-   `InMemoryDexClassLoader` — then walk up the call graph to the trigger.
+   `InMemoryDexClassLoader` - then walk up the call graph to the trigger.
 3. **When static gets hard, go dynamic.** Obfuscation is designed to waste your time. The
    runtime has to produce plaintext eventually ([Ch 03](../android/03-android-runtime.md)).
    Switching layers is a skill, not a defeat.
@@ -109,13 +109,13 @@ $ sdkmanager "build-tools;34.0.0"
 ```
 
 > **⚙️ Engineering Note:** Pin tool versions in your analysis environment and record them in
-> the artifact metadata. Decompiler output changes between versions — a rule or a finding that
+> the artifact metadata. Decompiler output changes between versions - a rule or a finding that
 > depended on jadx 1.4 output may not reproduce on 1.5. Reproducibility matters when a bank's
 > report has to survive an audit six months later.
 
 ---
 
-## 3. apktool — resources and smali
+## 3. apktool - resources and smali
 
 ### WHAT it does
 
@@ -126,10 +126,10 @@ Decodes an APK into a rebuildable project tree: binary AXML → readable XML,
 # Full decode
 $ apktool d suspicious.apk -o work/
 
-# ★ Resources + manifest ONLY — skip smali. 10-50x faster.
+# ★ Resources + manifest ONLY - skip smali. 10-50x faster.
 $ apktool d -s suspicious.apk -o work/
 
-# Rebuild (lab only — output is unsigned, v2 invalidated → Ch 07)
+# Rebuild (lab only - output is unsigned, v2 invalidated → Ch 07)
 $ apktool b work/ -o rebuilt.apk
 ```
 
@@ -166,12 +166,11 @@ $ grep -rEoh 'https?://[^"<]+' work/res/ | sort -u | head -20
 > **⚙️ Engineering Note:** When `apktool` fails but the app installs and runs, that is
 > **evidence**, not an obstacle ([Ch 08 §9](../apk/08-apk-file-format.md#9-format-level-anti-analysis)).
 > Log the failure mode, fall back to `aapt2 dump` or Androguard, and score the divergence.
-> Deliberately malformed AXML and `resources.arsc` are documented anti-analysis techniques —
-> Android's parser is tolerant, `apktool` is not.
+> Deliberately malformed AXML and `resources.arsc` are documented anti-analysis techniques - > Android's parser is tolerant, `apktool` is not.
 
 ---
 
-## 4. jadx — the daily driver
+## 4. jadx - the daily driver
 
 jadx decompiles DEX straight to Java. It is the tool you will spend the most hours in.
 
@@ -182,7 +181,7 @@ $ jadx -d out/ suspicious.apk
 # Keep going despite errors (essential on obfuscated samples)
 $ jadx -d out/ --no-res --show-bad-code suspicious.apk
 
-# GUI — where the real work happens
+# GUI - where the real work happens
 $ jadx-gui suspicious.apk
 ```
 
@@ -191,12 +190,12 @@ $ jadx-gui suspicious.apk
 | Feature | Shortcut | Why |
 |---|---|---|
 | **Text search** | `Ctrl+Shift+F` | Find API calls, strings, URLs across the whole app |
-| **Find usage** | `X` on a symbol | Walk the call graph backwards — your primary navigation |
+| **Find usage** | `X` on a symbol | Walk the call graph backwards - your primary navigation |
 | **Go to declaration** | `Ctrl+Click` | Follow forwards |
 | **Deobfuscation** | Preferences → Deobfuscation | Stable synthetic names for mangled classes |
 | **Show smali** | Right-click → Show bytecode | When Java output is wrong or missing |
-| **Rename** | `N` | Annotate as you understand — build your own map |
-| **Save project** | — | **Persist your renames.** Losing an afternoon of naming hurts. |
+| **Rename** | `N` | Annotate as you understand - build your own map |
+| **Save project** | - | **Persist your renames.** Losing an afternoon of naming hurts. |
 
 ### The search terms that find banking malware fast
 
@@ -221,8 +220,7 @@ HttpURLConnection · OkHttpClient · Socket · WebSocket · MqttClient
 api.telegram.org · firebaseio.com
 ```
 
-> **⚙️ Engineering Note:** jadx sometimes emits wrong Java for heavily obfuscated code —
-> silently. If control flow looks impossible (unreachable code, mismatched types, missing
+> **⚙️ Engineering Note:** jadx sometimes emits wrong Java for heavily obfuscated code - > silently. If control flow looks impossible (unreachable code, mismatched types, missing
 > method bodies), **switch to the smali view.** Smali is a faithful rendering of the bytecode;
 > Java is an interpretation. When they disagree, smali is right.
 
@@ -243,7 +241,7 @@ Type descriptors:
 |---|---|
 | `V` | void |
 | `Z` `B` `S` `C` `I` `J` `F` `D` | boolean, byte, short, char, int, long, float, double |
-| `Ljava/lang/String;` | Object type — `L` + path + `;` |
+| `Ljava/lang/String;` | Object type - `L` + path + `;` |
 | `[I` | `int[]` |
 | `[Ljava/lang/String;` | `String[]` |
 
@@ -287,10 +285,10 @@ eight instructions.
 | `invoke-direct` | Private / constructor |
 | `invoke-static` | Static method |
 | `invoke-interface` | Interface method |
-| `move-result{,-object,-wide}` | **Capture the return value** — always follows an invoke |
+| `move-result{,-object,-wide}` | **Capture the return value** - always follows an invoke |
 | `iget/iput{,-object}` | Instance field read/write |
 | `sget/sput{,-object}` | Static field read/write |
-| `const-string` | **String literal** — where unencrypted secrets live |
+| `const-string` | **String literal** - where unencrypted secrets live |
 | `new-instance` / `new-array` | Allocation |
 | `if-eqz` / `if-nez` | Branch on zero / non-zero |
 | `check-cast` | Cast |
@@ -298,7 +296,7 @@ eight instructions.
 > **⚙️ Engineering Note:** `const-string` is your friend. `grep -rn "const-string" smali/ |
 > grep -Ei 'http|token|key'` finds unencrypted URLs and secrets in seconds. When it returns
 > nothing on a sample that clearly talks to a C2, you have just learned the strings are
-> encrypted — which is itself a finding, and tells you to go dynamic
+> encrypted - which is itself a finding, and tells you to go dynamic
 > ([Ch 05 §9](../security/05-android-cryptography.md#9-how-malware-uses-cryptography)).
 
 ### baksmali / smali directly
@@ -313,7 +311,7 @@ on resources but the DEX is fine.
 
 ---
 
-## 6. Androguard — scriptable analysis
+## 6. Androguard - scriptable analysis
 
 `jadx` is for humans. **Androguard is for pipelines.** SUDARSHAN's static stage is built on
 this shape of code.
@@ -363,7 +361,7 @@ for s in d[0].get_strings():
 `sendTextMessage`" into "this app calls `sendTextMessage` from a `BroadcastReceiver`
 triggered by `SMS_RECEIVED`." The first is noise; the second is a finding.
 
-> **⚙️ Engineering Note — the reflection caveat.** Androguard's call graph is built from
+> **⚙️ Engineering Note - the reflection caveat.** Androguard's call graph is built from
 > *direct* invocations. Reflection ([Ch 03 §7](../android/03-android-runtime.md#7-reflection))
 > creates edges it cannot see. **A clean call graph on a sample that heavily uses
 > `Method.invoke` is a false negative, not a clean bill of health.** Always report call-graph
@@ -378,7 +376,7 @@ triggered by `SMS_RECEIVED`." The first is noise; the second is a finding.
 > **🚨 Misconception:** "Obfuscated = malicious." **Practically every app on Google Play is
 > obfuscated.** R8 is enabled by default in release builds. Every major bank's app uses
 > ProGuard/R8 at minimum and frequently a commercial protector. Flagging obfuscation as
-> malicious means flagging the entire Play Store — and, embarrassingly, flagging your own
+> malicious means flagging the entire Play Store - and, embarrassingly, flagging your own
 > client's hardened banking app as the most suspicious thing on the device
 > ([Ch 05 §11](../security/05-android-cryptography.md#11-limitations-edge-cases-false-positives)).
 
@@ -417,7 +415,7 @@ You cannot do it from obfuscation alone. You do it from **context**:
   What does it DO at runtime?  → C2 beacon + overlay injection?     → verdict
 ```
 
-That ordering — signer, then capability, then behaviour — is the discriminator. Obfuscation is
+That ordering - signer, then capability, then behaviour - is the discriminator. Obfuscation is
 never the first question.
 
 ### Working through name mangling
@@ -428,7 +426,7 @@ $ jadx --deobf --deobf-min 3 --deobf-max 64 -d out/ app.apk
 ```
 
 Practical technique: **rename as you go** in jadx-gui (`N`), starting from the entry points
-you care about. Obfuscation removes *names*, not *structure* — the call graph, string
+you care about. Obfuscation removes *names*, not *structure* - the call graph, string
 constants, API calls, and control flow all survive. You are rebuilding a map, not decrypting
 a cipher.
 
@@ -439,7 +437,7 @@ a cipher.
 ### WHAT a packer does
 
 Encrypts or hides the real DEX, ships a small loader stub, and reconstructs the real code at
-runtime — usually in native code, often inside `JNI_OnLoad`
+runtime - usually in native code, often inside `JNI_OnLoad`
 ([Ch 03 §9](../android/03-android-runtime.md#9-jni-and-native-code)).
 
 ```
@@ -458,10 +456,10 @@ runtime — usually in native code, often inside `JNI_OnLoad`
 | **Jiagu** | 360 | `libjiagu.so`, `libjiagu_art.so`, `libjiagu_x86.so` |
 | **SecNeo / Bangcle** | SecNeo | `libDexHelper.so`, `libsecexe.so`, `assets/classes0.jar` |
 | **Tencent Legu** | Tencent | `libshella-*.so`, `libtup.so`, `libtprt.so` |
-| **Virbox** | SenseShield | Virbox runtime artifacts — documented by Cleafy in **Klopatra** (Aug 2025) |
+| **Virbox** | SenseShield | Virbox runtime artifacts - documented by Cleafy in **Klopatra** (Aug 2025) |
 | **Alibaba/Ali** | Alibaba | `libmobisec.so` |
 | **Baidu** | Baidu | `libbaiduprotect.so` |
-| **ApkProtect** | — | `libAPKProtect.so` |
+| **ApkProtect** | - | `libAPKProtect.so` |
 
 ```bash
 # One-line packer check
@@ -479,7 +477,7 @@ $ unzip -l app.apk | awk '/classes.*\.dex/ {d+=$1} /\.so$/ {s+=$1} END {print "d
 ### Why malware packs, and why banks pack
 
 Both use the same products. **Klopatra** (Cleafy, August 2025) used the commercial **Virbox**
-protector *and* shifted logic from Java to native — a leading-edge example of a banking trojan
+protector *and* shifted logic from Java to native - a leading-edge example of a banking trojan
 adopting enterprise-grade protection. **GodFather** variants likewise migrated to native code
 (Cyble).
 
@@ -493,13 +491,13 @@ for exactly the same reasons. **The tool does not distinguish intent.** Signer a
 ### The governing principle
 
 > **The runtime must eventually see plaintext DEX in order to execute it.** No packer can
-> avoid this. Therefore the reliable unpacking method is not static decryption — it is
+> avoid this. Therefore the reliable unpacking method is not static decryption - it is
 > **catching the moment of materialisation**.
 
 This is the same principle as [Ch 03 §6](../android/03-android-runtime.md#6-dynamic-code-loading--the-technique-that-breaks-static-analysis),
 applied to packers instead of droppers.
 
-### The ladder — try in this order
+### The ladder - try in this order
 
 ```
  1. Is it actually packed?         unzip -l | packer fingerprint; dex/so ratio
@@ -523,7 +521,7 @@ applied to packers instead of droppers.
 ### Step 2 in practice
 
 ```javascript
-// Frida — universal DEX dumper. Covers packers AND droppers.
+// Frida - universal DEX dumper. Covers packers AND droppers.
 Java.perform(function () {
   function dump(bytes, tag) {
     var path = '/data/local/tmp/dump_' + tag + '_' + Date.now() + '.dex';
@@ -532,7 +530,7 @@ Java.perform(function () {
   }
 
   var IMDCL = Java.use('dalvik.system.InMemoryDexClassLoader');
-  // BOTH overloads — single buffer and array. Missing one loses half the samples.
+  // BOTH overloads - single buffer and array. Missing one loses half the samples.
   IMDCL.$init.overload('java.nio.ByteBuffer', 'java.lang.ClassLoader')
     .implementation = function (buf, p) {
       console.log('[!] InMemoryDexClassLoader size=' + buf.remaining());
@@ -553,7 +551,7 @@ Java.perform(function () {
 });
 ```
 
-### Step 3 — memory carving
+### Step 3 - memory carving
 
 ```javascript
 // Scan for DEX magic in RW memory and carve
@@ -615,12 +613,12 @@ $ strings -n 8 libnative.so | grep -Ei 'http|/api/|frida|ptrace|/proc/self'
 4. Apply the **JNI type library** so `JNIEnv*` calls become readable
    (`env->FindClass(...)` instead of `(*(code **)(*param_1 + 24))(...)`). This single step
    transforms readability.
-5. Look for `RegisterNatives` — its arguments are an array of
+5. Look for `RegisterNatives` - its arguments are an array of
    `{name, signature, fnPtr}`, which hands you the Java↔native mapping.
 
 > **⚙️ Engineering Note:** Without the JNI type library applied, Ghidra's decompilation of
 > JNI code is nearly unreadable offset arithmetic. With it, it reads like C. If you take one
-> practical tip from this section, take that one — it is the difference between an hour and a
+> practical tip from this section, take that one - it is the difference between an hour and a
 > day.
 
 ### Recovering `RegisterNatives` dynamically
@@ -649,7 +647,7 @@ argument values without reversing the registration code.
 | **Integrity self-check** | Verifies its own signature / DEX CRC | Hook the check ([Ch 07](../security/07-apk-signing.md)) |
 | **Time checks** | Detects slow execution under instrumentation | Hook time APIs |
 | **Geofencing** | Skips execution outside target countries; **ERMAC excludes CIS nations** | Spoof locale/SIM/IP |
-| **C2 gating** | No payload unless C2 responds | **Flag as inconclusive** — never "clean" |
+| **C2 gating** | No payload unless C2 responds | **Flag as inconclusive** - never "clean" |
 
 ### The two structural weaknesses of all anti-analysis
 
@@ -657,12 +655,12 @@ argument values without reversing the registration code.
    device you own. It can be hooked, patched, or removed.
 2. **Detection logic is itself a fingerprint.** An app that checks for `frida-server`, scans
    `/proc/self/maps`, and enumerates Magisk packages has told you a great deal about its
-   intent — and that *combination* is far rarer in benign apps than any single check.
+   intent - and that *combination* is far rarer in benign apps than any single check.
 
 > **🚨 Misconception:** "Anti-analysis present → malware." Every serious banking app ships
 > RASP with exactly these checks. Root detection, emulator detection, and anti-Frida are
 > *industry-standard hardening*. The signal is the combination with a malicious capability
-> cluster and an unknown signer — never the anti-analysis alone.
+> cluster and an unknown signer - never the anti-analysis alone.
 > → [Ch 32](../appendix/32-common-misconceptions.md)
 
 ---
@@ -738,7 +736,7 @@ argument values without reversing the registration code.
         └────────────────────────────────────────────┘
 ```
 
-> **⚙️ Engineering Note — always produce artifacts.** An RE session that ends with
+> **⚙️ Engineering Note - always produce artifacts.** An RE session that ends with
 > understanding but no YARA rule, no IOCs, and no MITRE mapping has produced knowledge that
 > dies with the analyst. **Every RE session must emit machine-consumable output** that feeds
 > the platform. That requirement is what makes a team's analysis capability compound over
@@ -760,7 +758,7 @@ argument values without reversing the registration code.
 | **Reflection into `ServiceManager`** | Androguard xref | **High** | Hidden-API bypass intent |
 | **Anti-Frida / anti-debug strings** | `strings` on `.so` + smali | Low alone | **High** combined with malicious cluster |
 | **Empty Java methods + large `.so`** | Method body analysis | Medium | Logic pushed native |
-| **Call-graph coverage** | Resolved vs unresolved edges | — | **Report as analysis-quality metadata** |
+| **Call-graph coverage** | Resolved vs unresolved edges | - | **Report as analysis-quality metadata** |
 
 ### The analysis-quality contract
 
@@ -778,11 +776,11 @@ analysis_quality:
   confidence_ceiling: float         # ← caps the risk score
 ```
 
-> **⚙️ Engineering Note — the confidence ceiling.** If a sample is packed and unpacking
+> **⚙️ Engineering Note - the confidence ceiling.** If a sample is packed and unpacking
 > failed, **the static analysis cannot produce a high-confidence clean verdict, ever.** The
 > pipeline must enforce this structurally: `confidence ≤ ceiling` where the ceiling is set by
 > analysis quality. A platform that reports "low risk" on a sample it could not actually read
-> is worse than one that reports "unable to assess" — because a bank will act on the first.
+> is worse than one that reports "unable to assess" - because a bank will act on the first.
 > → [Ch 27](../sudarshan/27-risk-scoring.md)
 
 ### What to automate vs. what to leave to humans
@@ -812,7 +810,7 @@ analysis_quality:
 | Trigger | Innocent cause |
 |---|---|
 | Heavy obfuscation | R8 default; every commercial app |
-| Commercial packer | Banks, games, DRM — same products |
+| Commercial packer | Banks, games, DRM - same products |
 | Anti-debug / anti-Frida / root detection | **Standard banking-app RASP** |
 | Native-heavy code | Games, ML, codecs, DRM |
 | Reflection | Gson, Retrofit, Dagger, Room, AndroidX compat |
@@ -830,9 +828,9 @@ analysis_quality:
 | Case | Handling |
 |---|---|
 | Multidex | Decompile all `classes*.dex`; jadx handles this, home-grown scripts often don't |
-| Split APKs | Merge or analyse together — a split may hold the interesting code |
+| Split APKs | Merge or analyse together - a split may hold the interesting code |
 | Kotlin | `kotlin/` metadata, `Intrinsics` null-checks everywhere; coroutines produce state machines that look obfuscated but aren't |
-| React Native | Logic is in `assets/index.android.bundle` (JS), **not** in DEX — a very common miss |
+| React Native | Logic is in `assets/index.android.bundle` (JS), **not** in DEX - a very common miss |
 | Flutter | Logic in `libapp.so` as compiled Dart; needs specialised tooling (`reFlutter`) |
 | Cordova/WebView apps | Logic in `assets/www/` HTML/JS |
 
@@ -848,7 +846,7 @@ analysis_quality:
 
 1. **`apktool d -s` first.** Capability profile in seconds before committing to decompilation.
 2. **Start from a question**, not from `MainActivity`.
-3. **Use "Find usage" (`X`) constantly** — backwards navigation beats forwards reading.
+3. **Use "Find usage" (`X`) constantly** - backwards navigation beats forwards reading.
 4. **Rename as you understand, and save the jadx project.**
 5. **When Java looks impossible, read the smali.** Smali is ground truth.
 6. **`grep const-string` for unencrypted secrets.** Empty result = strings are encrypted = go
@@ -867,12 +865,12 @@ analysis_quality:
 **What judges ask:** *"If the malware is packed and obfuscated, how do you analyse it at all?"*
 
 **Perfect answer:** Packing has one unavoidable weakness: the runtime has to see plaintext
-bytecode in order to execute it. So we don't try to decrypt the packer statically — we hook
+bytecode in order to execute it. So we don't try to decrypt the packer statically - we hook
 the class loaders and dump the DEX at the moment ART materialises it, then feed that dumped
 payload back through the full static pipeline as a linked child artifact. If the packer loads
 natively and never touches a Java class loader, we scan process memory for DEX magic and carve
 it out. If both fail, we reverse the unpacker in Ghidra starting at `JNI_OnLoad`. And
-critically — if none of that works, we don't guess. The sample carries an analysis-quality
+critically - if none of that works, we don't guess. The sample carries an analysis-quality
 record with a **confidence ceiling**, so the platform structurally cannot report "low risk" on
 something it couldn't read. For a bank, "unable to assess, escalate" is a far safer output than
 a confident wrong answer.
@@ -886,7 +884,7 @@ a confident wrong answer.
 
 **Follow-ups to expect:**
 - *"What if it detects Frida?"* → Rename the server, non-default port, or use frida-gadget.
-  And the detection logic itself is a fingerprint — an app checking for Frida, scanning
+  And the detection logic itself is a fingerprint - an app checking for Frida, scanning
   `/proc/self/maps`, and enumerating Magisk packages has told us a lot about its intent.
 - *"Isn't the bank's own app also packed and obfuscated?"* → Yes, and that's exactly why we
   never score obfuscation as malicious. We discriminate on signer identity first, capability
@@ -894,7 +892,7 @@ a confident wrong answer.
 - *"How long does this take?"* → Automated stages are seconds to minutes; human RE is hours.
   Which is why the pipeline's job is to make sure only samples that deserve a human get one.
 
-**Fact that impresses:** Klopatra — documented by Cleafy in August 2025 — uses **Virbox**, a
+**Fact that impresses:** Klopatra - documented by Cleafy in August 2025 - uses **Virbox**, a
 commercial software protector, and migrated its logic from Java to native code. That's a
 banking trojan adopting the same enterprise-grade protection that banks buy to defend their
 own apps. The tooling is symmetrical; only intent differs, which is precisely why detection
@@ -913,10 +911,10 @@ when strings are encrypted.
 **Q: "What's smali?"**
 Human-readable assembly for Dalvik bytecode. Register-based (`v` locals, `p` params, `p0` is
 `this`), with type descriptors like `Ljava/lang/String;`. You read it when the decompiler's
-Java output is wrong or absent — smali is faithful to the bytecode, Java is an interpretation.
+Java output is wrong or absent - smali is faithful to the bytecode, Java is an interpretation.
 
 **Q: "How do you handle an obfuscated app?"**
-First: obfuscation is normal — R8 is on by default and every bank app is obfuscated, so it's
+First: obfuscation is normal - R8 is on by default and every bank app is obfuscated, so it's
 not a signal by itself. Structure survives obfuscation even when names don't: call graphs,
 string constants, API calls, control flow. Use jadx `--deobf`, rename as you go, and navigate
 by API usage rather than by class names.
@@ -924,18 +922,18 @@ by API usage rather than by class names.
 **Q: "How would you unpack a packed APK?"**
 The principle: the runtime must see plaintext DEX to run it. Hook class loaders with Frida and
 dump; failing that, memory-scan for DEX magic and carve; failing that, extract from `.vdex`;
-failing that, reverse the native unpacker starting at `JNI_OnLoad` — and check `.init_array`
+failing that, reverse the native unpacker starting at `JNI_OnLoad` - and check `.init_array`
 first, because constructors run before it.
 
 **Q: "You decompile an app and the methods are empty. What's happening?"**
 Either native implementation (check `lib/`, look for `System.loadLibrary` and `JNI_OnLoad`), or
-a packer stub, or it's a cross-platform app — React Native logic lives in
+a packer stub, or it's a cross-platform app - React Native logic lives in
 `assets/index.android.bundle`, Flutter in `libapp.so`. Mentioning the cross-platform case
 unprompted is a strong signal of practical experience.
 
 **Q: "Difference between apktool and jadx?"**
-apktool decodes resources and produces smali, and can **rebuild** — it's for resources and
-repackaging. jadx decompiles DEX to Java and cannot rebuild — it's for reading logic. You use
+apktool decodes resources and produces smali, and can **rebuild** - it's for resources and
+repackaging. jadx decompiles DEX to Java and cannot rebuild - it's for reading logic. You use
 both, for different jobs.
 
 **Beginner mistakes:**
@@ -951,17 +949,17 @@ both, for different jobs.
 ## 18. Cross-references
 
 **Upstream:**
-- [← Ch 02 APK Architecture](../apk/02-apk-architecture.md) — what you're pulling apart
-- [← Ch 03 Android Runtime](../android/03-android-runtime.md) — class loaders, reflection, JNI
-- [← Ch 08 APK File Format](../apk/08-apk-file-format.md) — DEX/ELF structure, format anomalies
+- [← Ch 02 APK Architecture](../apk/02-apk-architecture.md) - what you're pulling apart
+- [← Ch 03 Android Runtime](../android/03-android-runtime.md) - class loaders, reflection, JNI
+- [← Ch 08 APK File Format](../apk/08-apk-file-format.md) - DEX/ELF structure, format anomalies
 
 **Downstream:**
-- [→ Ch 11 Static Analysis](../static-analysis/11-static-analysis.md) — automating what's manual here
-- [→ Ch 12 Dynamic Analysis](../dynamic-analysis/12-dynamic-analysis.md) — where RE hands off when static stalls
-- [→ Ch 13 Android Malware](../malware/13-android-malware.md) — the techniques you'll find
-- [→ Ch 26 IOC Extraction](../sudarshan/26-ioc-extraction.md) — RE outputs as indicators
-- [→ Ch 27 Risk Scoring](../sudarshan/27-risk-scoring.md) — the confidence ceiling
-- [→ Ch 28 Campaign Correlation](../sudarshan/28-campaign-correlation.md) — code similarity
+- [→ Ch 11 Static Analysis](../static-analysis/11-static-analysis.md) - automating what's manual here
+- [→ Ch 12 Dynamic Analysis](../dynamic-analysis/12-dynamic-analysis.md) - where RE hands off when static stalls
+- [→ Ch 13 Android Malware](../malware/13-android-malware.md) - the techniques you'll find
+- [→ Ch 26 IOC Extraction](../sudarshan/26-ioc-extraction.md) - RE outputs as indicators
+- [→ Ch 27 Risk Scoring](../sudarshan/27-risk-scoring.md) - the confidence ceiling
+- [→ Ch 28 Campaign Correlation](../sudarshan/28-campaign-correlation.md) - code similarity
 
 **Related chain:** Packer → class-loader hook → DEX dump → recursive static analysis →
 capability profile → YARA rule → family attribution.
@@ -970,26 +968,26 @@ capability profile → YARA rule → family attribution.
 
 ## 19. References
 
-1. `jadx` — Dex to Java decompiler. https://github.com/skylot/jadx
-2. `Apktool` — reverse engineering tool for Android apps. https://apktool.org/
+1. `jadx` - Dex to Java decompiler. https://github.com/skylot/jadx
+2. `Apktool` - reverse engineering tool for Android apps. https://apktool.org/
 3. Androguard documentation. https://androguard.readthedocs.io/
-4. `smali`/`baksmali` — assembler/disassembler for DEX. https://github.com/google/smali
-5. AOSP — *Dalvik bytecode reference*. https://source.android.com/docs/core/runtime/dalvik-bytecode
-6. AOSP — *Dalvik Executable format*. https://source.android.com/docs/core/runtime/dex-format
-7. NSA — Ghidra software reverse engineering framework. https://ghidra-sre.org/
-8. `jnitrace` — JNI API tracing for Android. https://github.com/chame1eon/jnitrace
-9. Frida documentation — JavaScript API. https://frida.re/docs/javascript-api/
-10. Guardsquare — ProGuard and DexGuard documentation (obfuscation and RASP techniques).
-11. Cleafy Labs — *Klopatra* (August 2025) — Virbox protector, Java→native migration.
-12. Cyble Research and Intelligence Labs — GodFather variant analysis — native-code migration.
-13. ThreatFabric — ERMAC analyses — CIS-nation exclusion / geofencing behaviour.
-14. OWASP MASTG — reverse engineering and tampering test cases (MASVS-RESILIENCE). https://mas.owasp.org/MASTG/
-15. `reFlutter` — Flutter application reverse engineering framework.
+4. `smali`/`baksmali` - assembler/disassembler for DEX. https://github.com/google/smali
+5. AOSP - *Dalvik bytecode reference*. https://source.android.com/docs/core/runtime/dalvik-bytecode
+6. AOSP - *Dalvik Executable format*. https://source.android.com/docs/core/runtime/dex-format
+7. NSA - Ghidra software reverse engineering framework. https://ghidra-sre.org/
+8. `jnitrace` - JNI API tracing for Android. https://github.com/chame1eon/jnitrace
+9. Frida documentation - JavaScript API. https://frida.re/docs/javascript-api/
+10. Guardsquare - ProGuard and DexGuard documentation (obfuscation and RASP techniques).
+11. Cleafy Labs - *Klopatra* (August 2025) - Virbox protector, Java→native migration.
+12. Cyble Research and Intelligence Labs - GodFather variant analysis - native-code migration.
+13. ThreatFabric - ERMAC analyses - CIS-nation exclusion / geofencing behaviour.
+14. OWASP MASTG - reverse engineering and tampering test cases (MASVS-RESILIENCE). https://mas.owasp.org/MASTG/
+15. `reFlutter` - Flutter application reverse engineering framework.
 
 ### Further reading
 - *Android Internals: A Confectioner's Cookbook*, Jonathan Levin
 - *The Ghidra Book*, Chris Eagle & Kara Nance
-- Google Cloud / Mandiant — *Delving into Dalvik* (DEX string-index manipulation)
+- Google Cloud / Mandiant - *Delving into Dalvik* (DEX string-index manipulation)
 
 ---
 

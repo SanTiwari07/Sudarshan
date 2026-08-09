@@ -1,4 +1,4 @@
-# 26 — IOC Extraction
+# 26 - IOC Extraction
 
 > **Chapter ID:** `CH26` · **Block:** E · **Status:** Stable
 > **Tags:** `#ioc` `#indicators` `#ttl` `#stix` `#pyramid-of-pain` `#expiry` `#export`
@@ -46,7 +46,7 @@ not to fire on benign traffic, (b) **durable** enough to still be true when it a
                     severity, source, TTL, TLP, context
 ```
 
-> **⚙️ Engineering Note — the failure mode is volume without discipline.** A platform that emits
+> **⚙️ Engineering Note - the failure mode is volume without discipline.** A platform that emits
 > ten thousand hashes per day and no context has produced data, not intelligence
 > ([Ch 16 §1](../threat-intelligence/16-threat-intelligence.md#1-what-threat-intelligence-actually-is)).
 > Every indicator must carry provenance and an expiry, or the consuming blocklist eventually
@@ -62,7 +62,7 @@ Ordered by **durability**, which is the Pyramid of Pain applied to output
 | Indicator | Type | Durability | Default TTL | Notes |
 |---|---|---|---|---|
 | **Signer cert SHA-256** | `x509-certificate:hashes` | **Indefinite** | none | ★ App identity (P5) |
-| **DGA generator** | custom | Indefinite | none | Predictive — enumerate future domains |
+| **DGA generator** | custom | Indefinite | none | Predictive - enumerate future domains |
 | **Behavioural rule (TTP)** | Sigma / custom | Indefinite | none | Top of the pyramid |
 | **YARA rule** | yara | Months–years | none | Family/capability |
 | **Hardcoded crypto key** | custom | Months | 365 d | ★ Under-used pivot |
@@ -78,7 +78,7 @@ Ordered by **durability**, which is the Pyramid of Pain applied to output
 
 ### The two special cases
 
-**Target package list.** Not a classical IOC — you don't block on it — but it is the single most
+**Target package list.** Not a classical IOC - you don't block on it - but it is the single most
 business-relevant output ([Ch 11 §5](../static-analysis/11-static-analysis.md#5-tier-2--resource-and-asset-mining)).
 Emit it as a distinct object type: *"this sample hunts for these apps."*
 
@@ -100,16 +100,16 @@ makes it directly actionable by the bank in a way a C2 domain is not.
 | **T4 dynamic** | ★ **C2 endpoints, resolved DNS, JA3/JA4, protocol + encryption mode, decrypted keys, panel paths, dumped child hashes** |
 | **Correlation** | campaign linkage, actor node, similarity clusters |
 
-> **⚙️ Engineering Note — dynamic extraction is where the good indicators come from.** Statically
+> **⚙️ Engineering Note - dynamic extraction is where the good indicators come from.** Statically
 > you get what the author left in plaintext. Dynamically you get what the runtime had to
 > materialise: the decrypted C2, the AES key, the real target list. That asymmetry is another
-> argument for the fused pipeline — and it means indicator *quality* correlates with how far up
+> argument for the fused pipeline - and it means indicator *quality* correlates with how far up
 > the tier ladder a sample went.
 
 ### Concrete extraction points
 
 ```python
-# T4 — the highest-yield hooks (Ch 12 §5)
+# T4 - the highest-yield hooks (Ch 12 §5)
 #   Cipher.doFinal          → decrypted C2 URLs, config, target lists
 #   SecretKeySpec.<init>    → ★ hardcoded keys (durable pivot)
 #   URL.<init> / OkHttp     → endpoints regardless of TLS
@@ -157,7 +157,7 @@ indicator:
 
 ## 5. Confidence, severity, and action class
 
-Three axes, not one — because a consumer's action should depend on all three.
+Three axes, not one - because a consumer's action should depend on all three.
 
 ```
                  CONFIDENCE
@@ -177,7 +177,7 @@ Three axes, not one — because a consumer's action should depend on all three.
 | **alert** | Raise for review; don't enforce | C2 domain with medium confidence |
 | **enrich_only** | Context only; never fires an alert | Package name; shared-hosting IP |
 
-> **⚙️ Engineering Note — never emit a bare list.** If SUDARSHAN hands a bank a flat CSV of
+> **⚙️ Engineering Note - never emit a bare list.** If SUDARSHAN hands a bank a flat CSV of
 > domains and the bank blocks them all, one re-registered domain takes down a legitimate service
 > and trust in the feed is gone permanently. **The action class is the contract** that says which
 > indicators are safe to enforce, and it should be conservative by default.
@@ -188,7 +188,7 @@ Three axes, not one — because a consumer's action should depend on all three.
 
 ```yaml
 default_ttls:
-  signer_cert_sha256: none          # identity — never expires
+  signer_cert_sha256: none          # identity - never expires
   dga_generator:      none          # predictive
   behavioural_rule:   none          # TTP
   yara_rule:          none
@@ -200,7 +200,7 @@ default_ttls:
   panel_path:         120d
   domain:             90d
   package_name:       60d
-  ip_address:         14d           # ★ shortest — rotates and gets recycled
+  ip_address:         14d           # ★ shortest - rotates and gets recycled
   file_hash:          30d
 ```
 
@@ -220,7 +220,7 @@ default_ttls:
                                      removed from ENFORCEMENT feeds
 ```
 
-> **⚙️ Engineering Note — expiry is a correctness requirement, not housekeeping
+> **⚙️ Engineering Note - expiry is a correctness requirement, not housekeeping
 > ([Ch 16 §8](../threat-intelligence/16-threat-intelligence.md#8-iocs-types-quality-lifecycle)).**
 > Domains get re-registered by legitimate businesses; IPs get recycled by hosting providers. An
 > indicator database that only grows becomes a false-positive engine, and the first time it blocks
@@ -235,7 +235,7 @@ Two cases that invert the meaning of a hit.
 
 | Case | What a hit actually means |
 |---|---|
-| **Sinkholed domain** | The host is now operated by a researcher or law enforcement. Contact means a *previously infected* device is beaconing — useful signal, but **not** active adversary infrastructure. |
+| **Sinkholed domain** | The host is now operated by a researcher or law enforcement. Contact means a *previously infected* device is beaconing - useful signal, but **not** active adversary infrastructure. |
 | **Re-registered domain** | A legitimate business now owns it. Contact means **nothing**. |
 | **Recycled IP** | A different tenant now uses it. Contact means nothing. |
 | **CDN-fronted C2** | The IP is the CDN's. Blocking it blocks the CDN. |
@@ -249,8 +249,8 @@ indicator_status:
   last_verified_utc: "..."
 ```
 
-> **⚙️ Engineering Note:** A sinkhole hit is genuinely valuable — it identifies still-infected
-> devices — but it must be **reclassified, not treated as compromise-in-progress**. Reporting a
+> **⚙️ Engineering Note:** A sinkhole hit is genuinely valuable - it identifies still-infected
+> devices - but it must be **reclassified, not treated as compromise-in-progress**. Reporting a
 > sinkhole contact as an active C2 connection produces an incident response to an event that
 > already ended, and it burns analyst time. Track sinkhole status explicitly.
 
@@ -264,7 +264,7 @@ indicator_status:
 | **MISP event** | MISP instances | Community sharing |
 | **Sigma** | SIEM | Behavioural detections |
 | **YARA** | File scanning, retro-hunt | Family/capability rules |
-| **CSV / JSON** | Ad-hoc, firewall imports | ⚠ Loses context — mark `action_class` prominently |
+| **CSV / JSON** | Ad-hoc, firewall imports | ⚠ Loses context - mark `action_class` prominently |
 | **OpenIOC** | Legacy tooling | On request |
 
 ### A STIX 2.1 fragment
@@ -297,8 +297,7 @@ Plus the relationship that makes it intelligence rather than a string:
 
 > **⚙️ Engineering Note:** Always emit the **relationship objects**, not just indicators. An
 > indicator without a link to the malware, campaign, and attack-pattern it belongs to is a string
-> in a list. The relationships are what let the consumer answer "why am I blocking this?" —
-> which is the question that arises the moment something breaks.
+> in a list. The relationships are what let the consumer answer "why am I blocking this?" - > which is the question that arises the moment something breaks.
 
 ---
 
@@ -339,7 +338,7 @@ Plus the relationship that makes it intelligence rather than a string:
 |---|---|
 | IP address | Shared hosting, CDN, recycled allocation |
 | Domain | Re-registered, sinkholed, parked |
-| File hash | None (exact match) — but near-zero recall on active campaigns |
+| File hash | None (exact match) - but near-zero recall on active campaigns |
 | Package name | Attacker-chosen; may collide with legitimate apps |
 | TLSH similarity | Shared libraries; leaked source reused by unrelated actors |
 | YARA capability rule | Legitimate apps with the same capability |
@@ -357,7 +356,7 @@ Plus the relationship that makes it intelligence rather than a string:
 ```
 
 > **🚨 Misconception:** "More IOCs means better coverage." Coverage comes from the **top of the
-> pyramid** — behavioural rules and durable identity — not from hash volume. A thousand hashes
+> pyramid** - behavioural rules and durable identity - not from hash volume. A thousand hashes
 > from last month's campaign is a large number and near-zero recall against this month's builds.
 
 ---
@@ -367,9 +366,9 @@ Plus the relationship that makes it intelligence rather than a string:
 1. **Emit an `action_class` on every indicator.** Never hand over a bare list.
 2. **Defang in all human-readable output.** Analysts click links.
 3. **TTL by type**, and expire from enforcement while retaining history.
-4. **Track sinkhole and shared-hosting status** — they invert or void a hit.
+4. **Track sinkhole and shared-hosting status** - they invert or void a hit.
 5. **Extract hardcoded keys as indicators**, not just as crypto findings.
-6. **Emit the target package list** as a distinct object — it's the business-relevant output.
+6. **Emit the target package list** as a distinct object - it's the business-relevant output.
 7. **Always emit STIX relationships**, not orphan indicators.
 8. **Redact tenant-identifying impact** before cross-tenant sharing.
 9. **Prefer domain and certificate pivots over IP pivots.**
@@ -379,14 +378,14 @@ Plus the relationship that makes it intelligence rather than a string:
 
 ## 12. Judge Insights
 
-**What judges ask:** *"You extract IOCs — so does everyone. What's different?"*
+**What judges ask:** *"You extract IOCs - so does everyone. What's different?"*
 
 **Perfect answer:** Three things. First, we type indicators by **durability and expire them
-accordingly** — a signer certificate never expires because it's an identity, a hardcoded AES key
+accordingly** - a signer certificate never expires because it's an identity, a hardcoded AES key
 gets a year, a domain gets ninety days, an IP gets fourteen. An indicator database that only grows
 becomes a false-positive engine, and the first time it blocks a customer's payment gateway the
-bank stops consuming it. Second, every indicator carries an **action class** — block, alert, or
-enrich-only — so we're explicit about which are safe to enforce automatically. Handing a bank a
+bank stops consuming it. Second, every indicator carries an **action class** - block, alert, or
+enrich-only - so we're explicit about which are safe to enforce automatically. Handing a bank a
 flat CSV of domains is how you take down a legitimate service. Third, we extract the indicators
 most people don't: **hardcoded crypto keys**, which are far more durable than domains because
 rotating one means rebuilding the panel, and the **target package list**, which isn't blockable at
@@ -399,7 +398,7 @@ all but tells the bank whether it's specifically being hunted.
 
 **Follow-ups to expect:**
 - *"What's the most valuable indicator you extract?"* → Signer certificate hash, because it's the
-  durable app identity and it survives rebuilds — the adversary keeps their key because they need
+  durable app identity and it survives rebuilds - the adversary keeps their key because they need
   it to update their own installed base. After that, hardcoded keys, for the same economic reason.
 - *"How do you avoid blocking legitimate infrastructure?"* → Action classes, shared-hosting flags
   that suppress IP enforcement, sinkhole tracking, and TTLs with re-verification. And we prefer
@@ -411,7 +410,7 @@ all but tells the bank whether it's specifically being hunted.
   about being attacked, not ours to distribute.
 
 **Fact that impresses:** Hardcoded encryption keys sit *above* domains and well above hashes on
-the durability scale, and almost nobody extracts them as indicators — they get filed as "crypto
+the durability scale, and almost nobody extracts them as indicators - they get filed as "crypto
 hygiene findings." Adversaries rotate domains weekly and rebuild binaries daily, but rotating a
 key means rebuilding the panel and re-flashing the installed base, so keys persist for months. A
 `SecretKeySpec` hook during detonation makes them essentially free to collect.
@@ -422,23 +421,23 @@ key means rebuilding the panel and re-flashing the installed base, so keys persi
 
 **Q: "Why is hash-based blocking ineffective?"**
 A hash identifies one build. Anatsa rotates package names and install hashes between campaigns, so
-by the time a hash is distributed it's stale. Frame it with the Pyramid of Pain — hashes cost the
+by the time a hash is distributed it's stale. Frame it with the Pyramid of Pain - hashes cost the
 adversary minutes, domains days, TTPs months.
 
 **Q: "What makes a good IOC?"**
 Specific enough not to fire on benign traffic, durable enough to still be true on arrival, and
-actionable by the consumer. Plus provenance, confidence, severity, TTL, and TLP — an indicator
+actionable by the consumer. Plus provenance, confidence, severity, TTL, and TLP - an indicator
 without context is a string.
 
 **Q: "An IP in your feed is contacted by a customer. Compromised?"**
 Check shared hosting, whether the address was recycled, and critically whether the destination is
-**sinkholed** — a sinkhole hit identifies a previously infected device beaconing, not an active
+**sinkholed** - a sinkhole hit identifies a previously infected device beaconing, not an active
 adversary connection. Different response entirely.
 
 **Q: "How long should indicators live?"**
 By type: signer certificates and behavioural rules indefinitely, keys around a year, domains
 ninety days, IPs about two weeks, hashes thirty. Expire from enforcement, retain for history and
-correlation — two different stores.
+correlation - two different stores.
 
 **Q: "What's an under-used indicator type?"**
 Hardcoded crypto keys. High durability, cheap to extract dynamically, and they link samples with
@@ -466,16 +465,16 @@ Hardcoded crypto keys. High durability, cheap to extract dynamically, and they l
 
 ## 15. References
 
-1. OASIS — STIX 2.1 / TAXII 2.1. https://oasis-open.github.io/cti-documentation/
-2. FIRST — Traffic Light Protocol 2.0. https://www.first.org/tlp/
-3. David Bianco — *The Pyramid of Pain* (2013).
-4. MISP — indicator and event model. https://www.misp-project.org/
-5. SigmaHQ — Sigma rule format. https://github.com/SigmaHQ/sigma
-6. Cleafy Labs — *ToxicPanda* (October 2024) — `dksu[.]top`, `mixcom[.]one`, AES-ECB.
-7. Cleafy Labs — *Klopatra* (August 2025) — `adsservices.uk`, `adsservice2.org`.
-8. Cyble — *Antidot* (May 16, 2024) — `46[.]228.205.159:5055`.
-9. Hunt.io — ERMAC 3.0 leak (August 2025) — `141.164.62[.]236`.
-10. ThreatFabric — *Crocodilus* (March 29, 2025) — command `TRU9MMRHBCRO`.
+1. OASIS - STIX 2.1 / TAXII 2.1. https://oasis-open.github.io/cti-documentation/
+2. FIRST - Traffic Light Protocol 2.0. https://www.first.org/tlp/
+3. David Bianco - *The Pyramid of Pain* (2013).
+4. MISP - indicator and event model. https://www.misp-project.org/
+5. SigmaHQ - Sigma rule format. https://github.com/SigmaHQ/sigma
+6. Cleafy Labs - *ToxicPanda* (October 2024) - `dksu[.]top`, `mixcom[.]one`, AES-ECB.
+7. Cleafy Labs - *Klopatra* (August 2025) - `adsservices.uk`, `adsservice2.org`.
+8. Cyble - *Antidot* (May 16, 2024) - `46[.]228.205.159:5055`.
+9. Hunt.io - ERMAC 3.0 leak (August 2025) - `141.164.62[.]236`.
+10. ThreatFabric - *Crocodilus* (March 29, 2025) - command `TRU9MMRHBCRO`.
 
 ---
 

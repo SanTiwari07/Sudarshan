@@ -1,14 +1,14 @@
 """
-SUDARSHAN — Agentic Perception Pipeline
+SUDARSHAN - Agentic Perception Pipeline
 =========================================
 Implements the 5-level priority observation system for the Agentic Explorer.
 
 Priority order (lower number = higher priority, tried first):
-  Level 1 — UI XML via uiautomator dump  (primary, always attempted)
-  Level 2 — Current Activity name        (always captured)
-  Level 3 — Frida runtime events         (received from EventBus since last observation)
-  Level 4 — Logcat tail                  (captured when no XML actionable nodes found)
-  Level 5 — Screenshot + Vision          (ONLY when screenshot_needed() returns True)
+  Level 1 - UI XML via uiautomator dump  (primary, always attempted)
+  Level 2 - Current Activity name        (always captured)
+  Level 3 - Frida runtime events         (received from EventBus since last observation)
+  Level 4 - Logcat tail                  (captured when no XML actionable nodes found)
+  Level 5 - Screenshot + Vision          (ONLY when screenshot_needed() returns True)
 
 Screenshot (Level 5) is ONLY triggered when any of:
   - UI XML is empty or parse failed
@@ -42,7 +42,7 @@ from sudarshan_core.sandbox import get_sandbox_provider
 
 logger = logging.getLogger(__name__)
 
-# ─── Perception thresholds (all named — unit-testable) ────────────────────────
+# ─── Perception thresholds (all named - unit-testable) ────────────────────────
 
 # Minimum fraction of UI nodes that must have a non-empty text or content-desc
 # label for the XML to be considered "human-readable".
@@ -53,7 +53,7 @@ LABELED_NODE_FRACTION_THRESHOLD: float = 0.20
 # required for XML to be considered usable. Below this → Vision triggered.
 MIN_ACTIONABLE_NODES: int = 1
 
-# Activity class substrings that indicate a WebView or browser — trigger Vision.
+# Activity class substrings that indicate a WebView or browser - trigger Vision.
 WEBVIEW_ACTIVITY_PATTERNS: List[str] = [
     "WebViewActivity",
     "BrowserActivity",
@@ -132,7 +132,7 @@ class Observation:
         lines = [f"Activity: {sanitize(self.activity)}", "UI Elements:"]
         for n in self.ui_nodes[:max_nodes]:
             # Every one of these is chosen by the analysed app and is therefore
-            # hostile input — a label may attempt to close the untrusted fence.
+            # hostile input - a label may attempt to close the untrusted fence.
             label = n.text or n.desc or n.resource_id or f"[{n.class_name}]"
             kind  = "INPUT" if n.is_input else ("SCROLL" if n.is_scrollable else "BTN")
             lines.append(
@@ -158,7 +158,7 @@ class Observation:
         if self.logcat:
             lines.append("")
             lines.append("--- Recent Logcat (last 10 lines) ---")
-            # Logcat is written by the app under analysis — fully attacker
+            # Logcat is written by the app under analysis - fully attacker
             # controlled, and historically injected verbatim.
             for line in sanitize_block(self.logcat, max_lines=10).splitlines():
                 lines.append(f"  {line}")
@@ -191,8 +191,7 @@ _COMPONENT_RE = r'[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*/[A-Za-z0-9_.$]+'
 #   mResumedActivity: ActivityRecord{a1b2c3 u0 com.pkg/.MainActivity t42}
 #   topResumedActivity=ActivityRecord{a1b2c3 u0 com.pkg/.MainActivity t42}
 # The component is preceded by the user id ("u0") and followed by the task id.
-# Anchoring on the component shape — rather than on whitespace before "}" —
-# is what keeps the trailing " t42}" from being captured instead.
+# Anchoring on the component shape - rather than on whitespace before "}" - # is what keeps the trailing " t42}" from being captured instead.
 _ACTIVITY_PATTERNS = (
     # Android <= 12 prints "mResumedActivity:"; Android 13+ prints "ResumedActivity:".
     # \b keeps this from matching inside "topResumedActivity", handled separately.
@@ -213,7 +212,7 @@ def parse_foreground_activity(dumpsys_output: str) -> str:
 
     Returns "<package>/<activity>", or "unknown" when no component is present.
 
-    Pure function — no device access — so it is unit-testable against captured
+    Pure function - no device access - so it is unit-testable against captured
     dumpsys text from portrait, landscape, split-screen and foldable devices.
     """
     if not dumpsys_output:
@@ -312,7 +311,7 @@ class PerceptionPipeline:
                 self._last_vision_hash = obs.screen_hash
                 logger.info(f"[Perception] Screenshot captured (reason: {reason})")
             else:
-                logger.debug("[Perception] Screenshot skipped — screen unchanged since last vision")
+                logger.debug("[Perception] Screenshot skipped - screen unchanged since last vision")
 
         # ── Level 4: Logcat (when XML provides no actionable information) ────
         if obs.is_empty_ui or obs.is_webview:
@@ -403,7 +402,7 @@ class PerceptionPipeline:
     def _compute_screen_hash(self, nodes: List[UINode], activity: str) -> str:
         """
         Compute a stable hash representing the current interactive screen state.
-        Based on class, text, desc, resource_id, and activity — not raw positions.
+        Based on class, text, desc, resource_id, and activity - not raw positions.
         """
         parts = [activity]
         for n in nodes:
@@ -422,7 +421,7 @@ class PerceptionPipeline:
         except Exception as e:
             logger.warning(
                 f"[Perception] Activity fetch failed ({type(e).__name__}: {e}) "
-                f"— returning 'unknown'"
+                f" - returning 'unknown'"
             )
         return "unknown"
 
@@ -439,7 +438,7 @@ class PerceptionPipeline:
         Returns a non-empty reason string if a screenshot should be taken,
         or empty string if XML is sufficient.
 
-        All triggers map to named constants — this method is fully unit-testable.
+        All triggers map to named constants - this method is fully unit-testable.
         """
         if obs.ui_xml_raw == "":
             return "ui_xml_empty"
@@ -484,7 +483,7 @@ class PerceptionPipeline:
         except Exception as e:
             logger.warning(
                 f"[Perception] Logcat capture failed "
-                f"({type(e).__name__}: {e}) — observation continues without it"
+                f"({type(e).__name__}: {e}) - observation continues without it"
             )
             return ""
 

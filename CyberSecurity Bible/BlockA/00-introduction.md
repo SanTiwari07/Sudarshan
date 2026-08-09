@@ -1,4 +1,4 @@
-# 00 — Introduction
+# 00 - Introduction
 
 > **Chapter ID:** `CH00` · **Block:** A (Foundations) · **Status:** Stable
 > **Tags:** `#introduction` `#conventions` `#sudarshan` `#roadmap`
@@ -33,10 +33,10 @@ from the blog post you are stranded.
 This knowledge base refuses both failure modes. Every concept here is explained three
 times, in this order:
 
-1. **Intuition** — what problem does this solve, explained the way a senior engineer
+1. **Intuition** - what problem does this solve, explained the way a senior engineer
    explains it at a whiteboard.
-2. **Implementation** — the actual bytes, the actual API, the actual command.
-3. **Enterprise relevance** — why a bank's SOC cares, and what SUDARSHAN must do about it.
+2. **Implementation** - the actual bytes, the actual API, the actual command.
+3. **Enterprise relevance** - why a bank's SOC cares, and what SUDARSHAN must do about it.
 
 If you finish a section and cannot explain it to a colleague without looking at the page,
 that section failed you. Open an issue.
@@ -147,8 +147,7 @@ Two things should jump out.
 
 **First**, the 13 million figure. Play Protect finds an order of magnitude more malware
 *outside* Google Play than the 2.36 million it blocks inside it. The sideloading channel
-is where banking malware lives. This is why Chapter 09 (Package Manager) matters so much
-— the install pipeline is the battlefield.
+is where banking malware lives. This is why Chapter 09 (Package Manager) matters so much - the install pipeline is the battlefield.
 
 **Second**, the Indian numbers. UPI fraud is not a subset of global mobile fraud; it is a
 distinct ecosystem with its own lures ("PM Surya Ghar: Muft Bijli Yojana" campaigns),
@@ -188,7 +187,7 @@ Strip away the family names and the 2020–2026 landscape converges on a single 
 
 That last box is why traditional bank fraud controls fail. Device fingerprinting passes.
 Geolocation passes. Behavioural biometrics *can* catch it but often don't. The
-transaction is genuinely coming from the customer's phone — because the criminal is
+transaction is genuinely coming from the customer's phone - because the criminal is
 driving the customer's phone.
 
 **Accessibility Service abuse is the single highest-value detection target in this
@@ -276,19 +275,19 @@ teaches.
 
 ### Reading paths
 
-**Path 1 — New engineer onboarding (4–6 weeks).**
+**Path 1 - New engineer onboarding (4–6 weeks).**
 `00 → 01 → 02 → 03 → 04 → 06 → 07 → 08 → 09` then `10 → 11 → 12`, then `13 → 14`, then
 `22 → 27`. Skip Blocks D and F on first pass.
 
-**Path 2 — I have an APK on my desk right now.**
+**Path 2 - I have an APK on my desk right now.**
 Ch 33 (Cheat Sheets) → Ch 11 (Static Analysis) → Ch 12 (Dynamic Analysis) →
 Ch 26 (IOC Extraction) → Ch 29 (Report). Come back for theory later.
 
-**Path 3 — I'm presenting to judges tomorrow.**
+**Path 3 - I'm presenting to judges tomorrow.**
 Quick Revision Guide, then Ch 32 (Misconceptions), then Ch 34 (Judge Prep). The
 misconceptions chapter is the single highest-return-per-minute chapter in the document.
 
-**Path 4 — I'm interviewing next week.**
+**Path 4 - I'm interviewing next week.**
 Ch 35, plus the *Interview Insights* section at the end of every chapter. Those sections
 are written from real question patterns, not invented.
 
@@ -329,15 +328,15 @@ References
 
 ### Callout types
 
-> **⚙️ Engineering Note** — a practical detail that will bite you in code.
+> **⚙️ Engineering Note** - a practical detail that will bite you in code.
 
-> **🏛️ Enterprise Insight** — why a bank, regulator, or SOC lead cares.
+> **🏛️ Enterprise Insight** - why a bank, regulator, or SOC lead cares.
 
-> **⚖️ Judge Tip** — the thing that impresses in a five-minute demo Q&A.
+> **⚖️ Judge Tip** - the thing that impresses in a five-minute demo Q&A.
 
-> **🚨 Misconception** — a widely believed wrong thing. Full list in Ch 32.
+> **🚨 Misconception** - a widely believed wrong thing. Full list in Ch 32.
 
-> **🔬 Research Gap** — genuinely unsolved. Do not claim we solved it.
+> **🔬 Research Gap** - genuinely unsolved. Do not claim we solved it.
 
 ### Notation
 
@@ -364,7 +363,7 @@ should have read first) and *downstream* (what this enables).
 
 Every file carries `Version: MAJOR.MINOR.PATCH` and `Last Updated`. Bump MINOR when
 adding a section, PATCH for corrections, MAJOR when the chapter's structure changes.
-Threat-intel content ages fastest — anything in Blocks C and D older than 12 months
+Threat-intel content ages fastest - anything in Blocks C and D older than 12 months
 should be treated as needing re-verification.
 
 ---
@@ -373,14 +372,13 @@ should be treated as needing re-verification.
 
 The same artifact means ten different things to ten different readers. Training yourself
 to switch between these is what separates an analyst from a tool operator. This table
-recurs throughout the document; here is the canonical version using a single example —
-**an app requesting `BIND_ACCESSIBILITY_SERVICE`**.
+recurs throughout the document; here is the canonical version using a single example - **an app requesting `BIND_ACCESSIBILITY_SERVICE`**.
 
 | Perspective | How it sees a11y request |
 |---|---|
 | **Android (the OS)** | A legitimate API for users with disabilities. Gated behind a settings toggle and, since Android 13, behind Restricted Settings for non-session-installed apps. |
 | **Google (the platform owner)** | A policy-controlled surface. Play policy requires justification; misuse is grounds for removal and developer-account ban. |
-| **An Antivirus** | A signature/heuristic input. On its own, near-worthless — thousands of legitimate apps use it. |
+| **An Antivirus** | A signature/heuristic input. On its own, near-worthless - thousands of legitimate apps use it. |
 | **VirusTotal** | Not directly visible. VT reports *engine verdicts*, not capability. You must read the behavioural/details tabs. |
 | **MobSF** | A flagged permission in the static report, contributing to the security score. Contributes noise if read alone. |
 | **Malware Analyst** | The hinge. First question: what does the `accessibilityservice` XML config declare, and what does `onAccessibilityEvent` actually do? |
@@ -398,7 +396,7 @@ recurs throughout the document; here is the canonical version using a single exa
 
 ## 8. Chapter map
 
-### Block A — Foundations (this block)
+### Block A - Foundations (this block)
 
 | # | Chapter | One-line purpose |
 |---|---|---|
@@ -413,7 +411,7 @@ recurs throughout the document; here is the canonical version using a single exa
 | 08 | [APK File Format](apk/08-apk-file-format.md) | Byte level: ZIP, AXML, resources.arsc, DEX. |
 | 09 | [Package Manager](apk/09-package-manager.md) | Install pipeline, sessions, dropper abuse. |
 
-### Blocks B–F — forthcoming
+### Blocks B–F - forthcoming
 
 | # | Chapter | Block |
 |---|---|---|
@@ -432,7 +430,7 @@ recurs throughout the document; here is the canonical version using a single exa
 **Perfect answer:** VirusTotal tells you *whether* engines think a file is bad. It does
 not tell you what the malware does to *our* customers, whether it belongs to a campaign
 we've seen, or what the fraud team should do in the next thirty minutes. SUDARSHAN
-produces an investigation, not a verdict — capability mapping to MITRE ATT&CK Mobile,
+produces an investigation, not a verdict - capability mapping to MITRE ATT&CK Mobile,
 extracted C2 infrastructure, campaign linkage by signer fingerprint and code similarity,
 and an explainable risk score a regulator can audit. Also: VirusTotal is a multi-engine
 aggregator, not an antivirus, and treating its detection count as a verdict is one of the
@@ -440,7 +438,7 @@ most common errors in the field.
 
 **Common mistake:** Saying "we use AI to detect malware." Judges hear this fifty times a
 day. Say instead what the AI *specifically* does (triage summarisation of decompiled code,
-IOC extraction, report drafting — always human-in-the-loop) and what it explicitly does
+IOC extraction, report drafting - always human-in-the-loop) and what it explicitly does
 *not* do (produce the verdict autonomously, because banks operate under explainability
 requirements).
 
@@ -454,7 +452,7 @@ requirements).
   the fraud loss regardless.
 
 **Fact that impresses:** Anatsa reached the **#4 spot in Google Play's Top Free Tools
-category** (ThreatFabric, June 2025) before pushing its malicious update — roughly six
+category** (ThreatFabric, June 2025) before pushing its malicious update - roughly six
 weeks after a clean release. Droppers ship clean, then update. That is why one-time
 store review cannot be the only control.
 
@@ -471,8 +469,8 @@ dexopt → first launch via Zygote fork. Named stages beat vague description eve
 
 **Q: "How would you tell if an APK is malicious?"**
 Beginner mistake: listing permissions. Senior answer: "No single indicator is sufficient.
-I'd look for a capability *cluster* — accessibility service plus overlay plus SMS or
-notification access plus dynamic code loading — then corroborate with signer reputation,
+I'd look for a capability *cluster* - accessibility service plus overlay plus SMS or
+notification access plus dynamic code loading - then corroborate with signer reputation,
 install-source, and C2 behaviour under detonation. Then I'd check whether the signer
 certificate or the C2 infrastructure links to a known campaign."
 
@@ -493,9 +491,9 @@ is a weighted signal in context, never a verdict.
 ## 11. Cross-references
 
 **Downstream (this chapter enables):**
-- [→ Ch 01 Android Internals](android/01-android-internals.md) — the stack the lifecycle runs on
-- [→ Ch 32 Common Misconceptions](appendix/32-common-misconceptions.md) — the design principles of §2 in full
-- [→ Ch 22 Building SUDARSHAN](sudarshan/22-building-sudarshan.md) — the architecture sketched in §2
+- [→ Ch 01 Android Internals](android/01-android-internals.md) - the stack the lifecycle runs on
+- [→ Ch 32 Common Misconceptions](appendix/32-common-misconceptions.md) - the design principles of §2 in full
+- [→ Ch 22 Building SUDARSHAN](sudarshan/22-building-sudarshan.md) - the architecture sketched in §2
 
 **Related concepts:**
 - Accessibility abuse → Ch 13 · Overlay attacks → Ch 13 · ODF/DTO → Ch 14
@@ -505,21 +503,21 @@ is a weighted signal in context, never a verdict.
 
 ## 12. References
 
-1. Google Security Blog — *How we kept the Google Play & Android app ecosystems safe in 2024* (2025). https://security.googleblog.com/
-2. Zimperium zLabs — *Banking Heist Report* (March 19, 2026).
-3. Zscaler ThreatLabz — *Anatsa's Latest Updates* (August 2025).
-4. ThreatFabric — Anatsa Google Play dropper campaign analysis (July 2025).
-5. Lok Sabha, Ministry of Finance (MoS Pankaj Chaudhary) — UPI fraud statistics, winter session (disclosed Nov 25, 2024).
-6. Indian Cyber Crime Coordination Centre (I4C) — cybercrime loss figures (2024).
-7. Android Developers — *Platform Architecture*. https://developer.android.com/guide/platform
+1. Google Security Blog - *How we kept the Google Play & Android app ecosystems safe in 2024* (2025). https://security.googleblog.com/
+2. Zimperium zLabs - *Banking Heist Report* (March 19, 2026).
+3. Zscaler ThreatLabz - *Anatsa's Latest Updates* (August 2025).
+4. ThreatFabric - Anatsa Google Play dropper campaign analysis (July 2025).
+5. Lok Sabha, Ministry of Finance (MoS Pankaj Chaudhary) - UPI fraud statistics, winter session (disclosed Nov 25, 2024).
+6. Indian Cyber Crime Coordination Centre (I4C) - cybercrime loss figures (2024).
+7. Android Developers - *Platform Architecture*. https://developer.android.com/guide/platform
 8. MITRE ATT&CK for Mobile. https://attack.mitre.org/matrices/mobile/
 9. OWASP MASVS v2.1.0 (January 18, 2024). https://mas.owasp.org/MASVS/
 
 ### Further reading
 - OWASP Mobile Application Security Testing Guide (MASTG)
-- NIST SP 800-163 Rev.1 — *Vetting the Security of Mobile Applications*
-- Google Project Zero blog — Android research archive
+- NIST SP 800-163 Rev.1 - *Vetting the Security of Mobile Applications*
+- Google Project Zero blog - Android research archive
 
 ---
 
-*Next: [Chapter 01 — Android Internals →](android/01-android-internals.md)*
+*Next: [Chapter 01 - Android Internals →](android/01-android-internals.md)*

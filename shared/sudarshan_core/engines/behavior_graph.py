@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Runtime Behavior Graph Infrastructure
+SUDARSHAN - Runtime Behavior Graph Infrastructure
 ===================================================
 Subscribes to RuntimeEventBus events (UI_ACTION, NETWORK_EVENT, FRIDA_EVENT, THREAT_DETECTED)
 and constructs a causal Directed Acyclic Graph (DAG) representing attack progression.

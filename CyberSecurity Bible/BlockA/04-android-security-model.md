@@ -1,4 +1,4 @@
-# 04 — Android Security Model
+# 04 - Android Security Model
 
 > **Chapter ID:** `CH04` · **Block:** A (Foundations) · **Status:** Stable
 > **Tags:** `#security-model` `#sandbox` `#selinux` `#permissions` `#play-protect` `#play-integrity` `#verified-boot` `#version-gates`
@@ -10,9 +10,9 @@
 ## Table of Contents
 
 1. [The model in one picture](#1-the-model-in-one-picture)
-2. [Layer 1 — The application sandbox](#2-layer-1--the-application-sandbox)
-3. [Layer 2 — SELinux and seccomp](#3-layer-2--selinux-and-seccomp)
-4. [Layer 3 — Permissions](#4-layer-3--permissions)
+2. [Layer 1 - The application sandbox](#2-layer-1--the-application-sandbox)
+3. [Layer 2 - SELinux and seccomp](#3-layer-2--selinux-and-seccomp)
+4. [Layer 3 - Permissions](#4-layer-3--permissions)
 5. [The special permissions that matter](#5-the-special-permissions-that-matter)
 6. [Version gates: the arms race, dated](#6-version-gates-the-arms-race-dated)
 7. [Verified Boot and the hardware root of trust](#7-verified-boot-and-the-hardware-root-of-trust)
@@ -52,7 +52,7 @@ ones below it may fail.
 └───────────────────────────────────────────────────────────────────┘
 ```
 
-> **⚙️ Engineering Note — the single most important sentence in this chapter:**
+> **⚙️ Engineering Note - the single most important sentence in this chapter:**
 > **Banking malware defeats none of these layers.** It does not exploit the kernel. It does
 > not bypass SELinux. It does not forge signatures. It gets the *user* to grant it
 > Accessibility, and then operates entirely within the rules. The security model is working
@@ -63,7 +63,7 @@ ones below it may fail.
 
 ---
 
-## 2. Layer 1 — The application sandbox
+## 2. Layer 1 - The application sandbox
 
 ### WHAT
 
@@ -103,7 +103,7 @@ Uninstall ──► UID retired, data directory removed
 UIDs are **not immediately reused** after uninstall, which prevents a new app from
 inheriting a predecessor's leftover file access.
 
-### `sharedUserId` — deprecated, still seen
+### `sharedUserId` - deprecated, still seen
 
 Historically two apps signed by the **same certificate** could declare
 `android:sharedUserId` and share a UID and data directory. This was used legitimately by
@@ -111,7 +111,7 @@ OEM app suites, and abusively by malware families shipping cooperating component
 
 **Deprecated as of Android 10 (API 29)**, and migrating away is non-trivial once shipped
 (you cannot change it without breaking updates). If you see `sharedUserId` in a modern
-sample, note it — it is unusual, it implies same-signer multi-app design, and it is worth
+sample, note it - it is unusual, it implies same-signer multi-app design, and it is worth
 investigating as a multi-component malware pattern.
 
 > **🚨 Misconception:** "The sandbox stops malware from stealing my banking data." It stops
@@ -123,11 +123,11 @@ investigating as a multi-component malware pattern.
 
 ---
 
-## 3. Layer 2 — SELinux and seccomp
+## 3. Layer 2 - SELinux and seccomp
 
 ### SELinux on Android
 
-**Discretionary Access Control (DAC)** — the UID model above — is discretionary: the owner
+**Discretionary Access Control (DAC)** - the UID model above - is discretionary: the owner
 of a file can change its permissions. **Mandatory Access Control (MAC)** is not: the policy
 is fixed at build time and even root cannot violate it.
 
@@ -186,7 +186,7 @@ Linux fails on Android.
 
 ---
 
-## 4. Layer 3 — Permissions
+## 4. Layer 3 - Permissions
 
 ### The evolution
 
@@ -215,7 +215,7 @@ Linux fails on Android.
 > "were these two APKs signed by the same key?" Not the package name. Not the developer name
 > in the cert (which is self-asserted and meaningless). The **key**. → [Ch 06](06-certificates.md)
 
-### `INTERNET` is `normal` — and that surprises people
+### `INTERNET` is `normal` - and that surprises people
 
 `android.permission.INTERNET` is protection level `normal`, auto-granted at install with no
 prompt. Every app can talk to the network. This is the reason "the app has internet access"
@@ -244,13 +244,13 @@ only. → [Ch 11](../static-analysis/11-static-analysis.md)
 
 ## 5. The special permissions that matter
 
-These are the ones banking malware needs. Learn them cold — this table is the backbone of
+These are the ones banking malware needs. Learn them cold - this table is the backbone of
 SUDARSHAN's capability scoring.
 
 | Permission / capability | What it enables | Legit users | Malware use | MITRE |
 |---|---|---|---|---|
 | **`BIND_ACCESSIBILITY_SERVICE`** | Read screen content, inject taps/gestures, observe every UI event | Screen readers, password managers, automation, remote support | **The hinge.** Auto-grant other permissions, keylog, drive ATS transfers, detect foreground app | **T1453**, T1417.001 |
-| **`SYSTEM_ALERT_WINDOW`** | Draw windows over other apps | Chat bubbles, floating players, screen dimmers | **Overlay phishing** — fake login on top of the real bank app | T1417.002 |
+| **`SYSTEM_ALERT_WINDOW`** | Draw windows over other apps | Chat bubbles, floating players, screen dimmers | **Overlay phishing** - fake login on top of the real bank app | T1417.002 |
 | **`REQUEST_INSTALL_PACKAGES`** | Prompt to install another APK | App stores, updaters, MDM | **Dropper installs the payload** | T1401-adjacent |
 | **`QUERY_ALL_PACKAGES`** | Enumerate every installed package | Launchers, AV, backup, app managers | **Discover which banking apps you have**, then fetch matching overlays | T1418 |
 | **`RECEIVE_SMS` / `READ_SMS`** | Read incoming/stored SMS | SMS apps, OTP autofill | **OTP interception** | T1636.004, T1638 |
@@ -307,19 +307,19 @@ API level. It is also directly relevant to why droppers behave as they do.
 | 15 | 35 | **Min targetSdk raised to API 24**; Restricted Settings extended |
 | 16 | 36 | Min installable targetSdk **not** raised beyond 24 |
 
-### Android 13 (API 33) — Restricted Settings
+### Android 13 (API 33) - Restricted Settings
 
 **What it does:** If an app was installed from a source Android considers "sideloaded," the
 user cannot simply toggle on Accessibility or Notification Listener access for it. Settings
 shows a dialog explaining the setting is restricted for that app; enabling requires an extra
 deliberate path.
 
-**Why it exists:** Directly targeted at exactly the banking-malware playbook — the "please
+**Why it exists:** Directly targeted at exactly the banking-malware playbook - the "please
 enable Accessibility" step.
 
-**How malware answered:** By not being "sideloaded" in the technical sense — see Android 15.
+**How malware answered:** By not being "sideloaded" in the technical sense - see Android 15.
 
-### Android 14 (API 34) — the minimum targetSdk install block
+### Android 14 (API 34) - the minimum targetSdk install block
 
 **What it does:** Apps targeting **below API 23 (Android 6.0)** cannot be installed at all.
 The installer returns `INSTALL_FAILED_DEPRECATED_SDK_VERSION`. This applies regardless of
@@ -330,7 +330,7 @@ $ adb install --bypass-low-target-sdk-block old-app.apk
 ```
 
 **Why it exists:** AOSP's stated rationale is that malware deliberately targets old API
-levels — commonly targetSdk 22 — specifically to opt out of the runtime permission model
+levels - commonly targetSdk 22 - specifically to opt out of the runtime permission model
 introduced in API 23, so that permissions are granted wholesale at install time with no
 runtime prompts.
 
@@ -340,14 +340,13 @@ runtime prompts.
 > `INSTALL_FAILED_DEPRECATED_SDK_VERSION`, because malware was targeting API 22 to escape
 > runtime permissions" is a sentence that ends the doubt about whether you know the platform.
 
-### Android 15 (API 35) — the session-install distinction
+### Android 15 (API 35) - the session-install distinction
 
 Two changes:
 
 1. Minimum installable `targetSdkVersion` raised to **API 24 (Android 7.0)**.
 2. **Restricted Settings extended.** Apps installed by browsers, messaging apps, or file
-   managers — i.e. anything **not** using the purpose-built **session-based install API** —
-   are denied Accessibility and Notification Listener access. Third-party app stores that
+   managers - i.e. anything **not** using the purpose-built **session-based install API** - are denied Accessibility and Notification Listener access. Third-party app stores that
    *do* use the session-based API are exempt, because Android needs legitimate alternative
    stores to work.
 
@@ -406,7 +405,7 @@ immutable hardware up through the OS:
   vbmeta / boot / system images
         │  dm-verity: per-block hash tree verified ON READ
         ▼
-  Running system — any modified block is detected at access time
+  Running system - any modified block is detected at access time
 ```
 
 **Rollback protection** prevents flashing an older, vulnerable image by tracking a version
@@ -418,18 +417,18 @@ counter in tamper-evident storage.
 |---|---|
 | **GREEN** | Locked bootloader, verified with the OEM key |
 | **YELLOW** | Locked, verified with a **user-supplied** key (custom ROM, locked) |
-| **ORANGE** | **Unlocked** bootloader — no verification |
-| **RED** | Verification failed — device won't boot normally |
+| **ORANGE** | **Unlocked** bootloader - no verification |
+| **RED** | Verification failed - device won't boot normally |
 
 ### WHY it matters to a bank
 
 A rooted or unlocked device breaks the assumption that the OS is enforcing anything.
-Detecting boot state is therefore a genuine risk input — but see the misconception below.
+Detecting boot state is therefore a genuine risk input - but see the misconception below.
 
 > **🚨 Misconception:** "Root detection = malware detection." Completely different questions.
 > A rooted device is a *risk posture* signal about the device. It says nothing about whether
 > a specific APK is malicious. Meanwhile most real banking-malware victims are on
-> **stock, locked, unrooted devices** — the malware never needed root. Conversely, developers,
+> **stock, locked, unrooted devices** - the malware never needed root. Conversely, developers,
 > researchers, and enthusiasts root their own devices routinely. Treating root as malware
 > gives you a huge false-positive population and misses the actual threat.
 > → [Ch 32](../appendix/32-common-misconceptions.md)
@@ -474,8 +473,8 @@ outside Google Play than the 2.36 million it blocks inside it.** Sideloading is 
 banking malware lives. That is the whole justification for a bank-side detection platform.
 
 > **🚨 Misconception:** "Play Protect catches everything." It is a strong layer and it is not
-> complete. Anatsa droppers have repeatedly reached Google Play — one reaching **#4 in Top
-> Free Tools** (ThreatFabric, June 2025) — because they are genuinely clean at review time
+> complete. Anatsa droppers have repeatedly reached Google Play - one reaching **#4 in Top
+> Free Tools** (ThreatFabric, June 2025) - because they are genuinely clean at review time
 > and turn malicious via a later update. Static review cannot detect a payload that doesn't
 > exist yet. Play Protect is a layer; the bank still carries the fraud loss.
 
@@ -498,7 +497,7 @@ apps that hadn't migrated.
 |---|---|
 | `deviceIntegrity` | `MEETS_BASIC_INTEGRITY`, `MEETS_DEVICE_INTEGRITY`, `MEETS_STRONG_INTEGRITY` |
 | `appIntegrity` | `PLAY_RECOGNIZED` (unmodified, Play-distributed), `UNRECOGNIZED_VERSION`, `UNEVALUATED` |
-| `accountDetails` | `LICENSED` / `UNLICENSED` — legitimate Play install for this account |
+| `accountDetails` | `LICENSED` / `UNLICENSED` - legitimate Play install for this account |
 | `environmentDetails` | e.g. app-access risk, Play Protect verdict (where available) |
 
 Notable specifics:
@@ -514,7 +513,7 @@ Notable specifics:
 
 > **⚙️ Engineering Note:** **Verify the verdict server-side.** The API returns a signed token;
 > the app must send it to the app's backend, which decrypts/verifies it with Google. Checking
-> the verdict on-device and branching on the result is trivially patchable — hook the boolean,
+> the verdict on-device and branching on the result is trivially patchable - hook the boolean,
 > return `true`, done. The most common real-world failure of SafetyNet was exactly this
 > client-side-only pattern. Banks repeat this mistake constantly; it is worth an explicit
 > check in any mobile app security review. → [Ch 12](../dynamic-analysis/12-dynamic-analysis.md)
@@ -531,7 +530,7 @@ yes. The problem is that a malicious Accessibility Service is driving the genuin
 
 > **⚖️ Judge Tip:** If a judge suggests Play Integrity solves mobile banking fraud, this is
 > your moment. "Play Integrity answers 'is the device compromised or the app modified?' In
-> the dominant fraud scenario — On-Device Fraud via Accessibility abuse — the device is
+> the dominant fraud scenario - On-Device Fraud via Accessibility abuse - the device is
 > stock, the bank app is unmodified and Play-installed, and integrity checks pass cleanly.
 > That's precisely why detection has to happen at the *behaviour and third-party-app* layer,
 > which is what SUDARSHAN does."
@@ -553,7 +552,7 @@ An honest inventory. Each row is a design input for SUDARSHAN.
 | **Integrity attestation is device-scoped** | Asks about the device/app, not about *other* apps | Blind to the malicious third app (§9) |
 | **Sideloading must remain possible** | Open platform commitment, regulatory pressure | 13 M malicious apps found outside Play in 2024 |
 
-> **🔬 Research Gap:** There is no good published solution to *scoped* accessibility — a way
+> **🔬 Research Gap:** There is no good published solution to *scoped* accessibility - a way
 > for a user to grant an app screen-reading for its own purposes without granting it read
 > access to a banking app's UI. Proposals exist (per-app a11y scoping, sensitive-window
 > flags, `FLAG_SECURE` extensions) but nothing shipped and general. This is arguably the most
@@ -570,7 +569,7 @@ This chapter supplies SUDARSHAN's primary static feature set. The design rule fr
 from confidence**.
 
 ```yaml
-# Capability weights — illustrative, calibrate against a real corpus (see Ch 27)
+# Capability weights - illustrative, calibrate against a real corpus (see Ch 27)
 capabilities:
   accessibility_service_declared:        { weight: 30, requires_context: true }
   a11y_can_retrieve_window_content:      { weight: 15 }
@@ -651,7 +650,7 @@ service, and a dynamically loaded DEX. **The cluster is the signal.**
 - **Preinstalled/system apps** hold permissions no third-party app could obtain; don't score
   them on the same scale. Supply-chain-compromised preinstalls are a real and separate
   problem class.
-- **`signature`-level permissions** granted to a same-signer sibling app — legitimate, but
+- **`signature`-level permissions** granted to a same-signer sibling app - legitimate, but
   worth mapping.
 - **OEM permission divergence** (Chinese OEM ROMs with custom autostart managers) changes
   observed behaviour in dynamic analysis.
@@ -671,7 +670,7 @@ no throughput reason not to compute every signal in this chapter on every sample
    any suspect device.
 4. **Version-gate every claim.** "Android blocks X" is almost always wrong without an API
    level attached.
-5. **Check for client-side-only integrity verification** in any bank app you review — it's
+5. **Check for client-side-only integrity verification** in any bank app you review - it's
    the most common real finding.
 6. **Log `avc: denied` and `Accessing hidden`** during every detonation. Free intelligence.
 7. **Treat root/emulator detection as device posture, never as malware verdict.**
@@ -685,7 +684,7 @@ and hardware attestation. Why is mobile banking fraud still growing 67% year ove
 
 **Perfect answer:** Because banking malware doesn't break any of those layers. It doesn't
 exploit the kernel, doesn't defeat SELinux, doesn't forge signatures, and typically doesn't
-need root. It asks the user to enable an Accessibility Service — a legitimate API — and then
+need root. It asks the user to enable an Accessibility Service - a legitimate API - and then
 operates entirely within the rules. `canRetrieveWindowContent` gives it read access to every
 app's screen and `canPerformGestures` gives it write access to every app's input. Read plus
 write over the UI is functionally remote control inside the victim's own authenticated
@@ -697,7 +696,7 @@ which is exactly the gap a bank-side detection platform has to fill.
 **Common mistakes:**
 - Saying "Android is insecure." It isn't; that answer reads as uninformed.
 - Claiming malware "roots the phone." Modern banking malware overwhelmingly doesn't need to.
-- Saying "Play Integrity would stop this." It wouldn't — the device and bank app are genuine.
+- Saying "Play Integrity would stop this." It wouldn't - the device and bank app are genuine.
 
 **Follow-ups to expect:**
 - *"Why doesn't Google just restrict Accessibility more?"* → They have, repeatedly (Android
@@ -726,18 +725,16 @@ insight: *most real Android malware defeats none of these; it uses consent.* Tha
 sentence is what distinguishes a memorised answer from an understood one.
 
 **Q: "How does Android enforce permissions?"**
-Not in the calling app. In the *service*, using `Binder.getCallingUid()` — kernel-supplied
+Not in the calling app. In the *service*, using `Binder.getCallingUid()` - kernel-supplied
 and unspoofable. That's why patching your own client-side `checkSelfPermission()` achieves
 nothing. → [Ch 01 §6](../android/01-android-internals.md#6-binder-ipc)
 
 **Q: "What's the difference between install-time, runtime, and special permissions?"**
 Install-time (`normal`) auto-granted, e.g. `INTERNET`. Runtime (`dangerous`) prompted at use,
-since API 23. Special/appop permissions require a dedicated Settings screen —
-`SYSTEM_ALERT_WINDOW`, accessibility binding, notification listener, `MANAGE_EXTERNAL_STORAGE`
-— and these are the ones banking malware needs.
+since API 23. Special/appop permissions require a dedicated Settings screen - `SYSTEM_ALERT_WINDOW`, accessibility binding, notification listener, `MANAGE_EXTERNAL_STORAGE` - and these are the ones banking malware needs.
 
 **Q: "Is a rooted device compromised?"**
-No — it's a device whose owner unlocked it, which is a *risk posture* signal, not a malware
+No - it's a device whose owner unlocked it, which is a *risk posture* signal, not a malware
 verdict. Most banking-malware victims run stock, locked, unrooted devices. Conflating the two
 produces false positives and misses real threats.
 
@@ -757,17 +754,17 @@ token server-side**, because client-side verdict checks are trivially patched.
 ## 16. Cross-references
 
 **Upstream:**
-- [← Ch 01 Android Internals](../android/01-android-internals.md) — Binder, UID assignment
-- [← Ch 03 Android Runtime](../android/03-android-runtime.md) — targetSdk gates, hidden APIs
+- [← Ch 01 Android Internals](../android/01-android-internals.md) - Binder, UID assignment
+- [← Ch 03 Android Runtime](../android/03-android-runtime.md) - targetSdk gates, hidden APIs
 
 **Downstream:**
-- [→ Ch 05 Android Cryptography](05-android-cryptography.md) — Keystore, TEE, attestation detail
-- [→ Ch 06 Certificates](06-certificates.md) — why signature permissions prove cert = identity
-- [→ Ch 09 Package Manager](../apk/09-package-manager.md) — session installs and the A15 gap
-- [→ Ch 13 Android Malware](../malware/13-android-malware.md) — accessibility abuse in full
-- [→ Ch 14 Banking Malware](../banking-malware/14-banking-malware.md) — ODF/DTO mechanics
-- [→ Ch 27 Risk Scoring](../sudarshan/27-risk-scoring.md) — calibrating the weights in §11
-- [→ Ch 32 Common Misconceptions](../appendix/32-common-misconceptions.md) — root, permissions, Play Protect
+- [→ Ch 05 Android Cryptography](05-android-cryptography.md) - Keystore, TEE, attestation detail
+- [→ Ch 06 Certificates](06-certificates.md) - why signature permissions prove cert = identity
+- [→ Ch 09 Package Manager](../apk/09-package-manager.md) - session installs and the A15 gap
+- [→ Ch 13 Android Malware](../malware/13-android-malware.md) - accessibility abuse in full
+- [→ Ch 14 Banking Malware](../banking-malware/14-banking-malware.md) - ODF/DTO mechanics
+- [→ Ch 27 Risk Scoring](../sudarshan/27-risk-scoring.md) - calibrating the weights in §11
+- [→ Ch 32 Common Misconceptions](../appendix/32-common-misconceptions.md) - root, permissions, Play Protect
 
 **Related chain:** Permission → Accessibility → Overlay → OTP theft → ODF → fraud loss.
 
@@ -775,26 +772,26 @@ token server-side**, because client-side verdict checks are trivially patched.
 
 ## 17. References
 
-1. AOSP — *Android Security Overview*. https://source.android.com/docs/security
-2. AOSP — *Application Sandbox*. https://source.android.com/docs/security/app-sandbox
-3. AOSP — *Security-Enhanced Linux in Android*. https://source.android.com/docs/security/features/selinux
-4. AOSP — *Verified Boot*. https://source.android.com/docs/security/features/verifiedboot
-5. Android Developers — *Permissions on Android*. https://developer.android.com/guide/topics/permissions/overview
-6. Android Developers — *Behavior changes: all apps (Android 14)* — minimum installable targetSdk. https://developer.android.com/about/versions/14/behavior-changes-all
-7. Android Developers — *Behavior changes (Android 15)* — Restricted Settings and targetSdk floor. https://developer.android.com/about/versions/15/behavior-changes-all
-8. Android Developers — *Play Integrity API* documentation. https://developer.android.com/google/play/integrity
-9. Google Security Blog — *How we kept the Google Play & Android app ecosystems safe in 2024*. https://security.googleblog.com/
-10. Google — SafetyNet Attestation deprecation and shutdown timeline (fully shut down Jan 31, 2025; transition ended May 20, 2025).
-11. ThreatFabric — *Octo2* analysis (September 2024) — Zombinder first stage, Android 13+ restriction bypass.
-12. ThreatFabric — *Crocodilus* analysis (March 29, 2025) — dropper bypassing Android 13+ restrictions.
-13. MITRE ATT&CK for Mobile — T1453, T1417.001, T1626.001, T1629.001, T1517, T1513, T1638. https://attack.mitre.org/matrices/mobile/
-14. OWASP MASVS v2.1.0 — MASVS-PLATFORM, MASVS-RESILIENCE. https://mas.owasp.org/MASVS/
-15. NIST SP 800-124 Rev. 2 — *Guidelines for Managing the Security of Mobile Devices*.
+1. AOSP - *Android Security Overview*. https://source.android.com/docs/security
+2. AOSP - *Application Sandbox*. https://source.android.com/docs/security/app-sandbox
+3. AOSP - *Security-Enhanced Linux in Android*. https://source.android.com/docs/security/features/selinux
+4. AOSP - *Verified Boot*. https://source.android.com/docs/security/features/verifiedboot
+5. Android Developers - *Permissions on Android*. https://developer.android.com/guide/topics/permissions/overview
+6. Android Developers - *Behavior changes: all apps (Android 14)* - minimum installable targetSdk. https://developer.android.com/about/versions/14/behavior-changes-all
+7. Android Developers - *Behavior changes (Android 15)* - Restricted Settings and targetSdk floor. https://developer.android.com/about/versions/15/behavior-changes-all
+8. Android Developers - *Play Integrity API* documentation. https://developer.android.com/google/play/integrity
+9. Google Security Blog - *How we kept the Google Play & Android app ecosystems safe in 2024*. https://security.googleblog.com/
+10. Google - SafetyNet Attestation deprecation and shutdown timeline (fully shut down Jan 31, 2025; transition ended May 20, 2025).
+11. ThreatFabric - *Octo2* analysis (September 2024) - Zombinder first stage, Android 13+ restriction bypass.
+12. ThreatFabric - *Crocodilus* analysis (March 29, 2025) - dropper bypassing Android 13+ restrictions.
+13. MITRE ATT&CK for Mobile - T1453, T1417.001, T1626.001, T1629.001, T1517, T1513, T1638. https://attack.mitre.org/matrices/mobile/
+14. OWASP MASVS v2.1.0 - MASVS-PLATFORM, MASVS-RESILIENCE. https://mas.owasp.org/MASVS/
+15. NIST SP 800-124 Rev. 2 - *Guidelines for Managing the Security of Mobile Devices*.
 
 ### Further reading
-- AOSP `system/sepolicy/` — the actual SELinux policy source
-- OWASP MASTG — platform and resilience test cases
-- Google Project Zero — Android privilege-escalation research archive
+- AOSP `system/sepolicy/` - the actual SELinux policy source
+- OWASP MASTG - platform and resilience test cases
+- Google Project Zero - Android privilege-escalation research archive
 
 ---
 

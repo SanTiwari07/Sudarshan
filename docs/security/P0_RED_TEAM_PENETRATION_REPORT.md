@@ -1,4 +1,4 @@
-# P0 Red Team Penetration Report — Sandbox Containment Validation
+# P0 Red Team Penetration Report - Sandbox Containment Validation
 
 **Date:** 2026-08-06  
 **Scope:** Post-containment implementation review (code-backed)  
@@ -99,7 +99,7 @@ flowchart TB
 
 ## 6. Findings
 
-### F-01 — ADB policy bypass via parallel subprocess wrappers
+### F-01 - ADB policy bypass via parallel subprocess wrappers
 
 | Field | Value |
 |-------|--------|
@@ -110,7 +110,7 @@ flowchart TB
 | **Exploitability** | Malware does not invoke these directly; **misconfiguration or malicious operator** could use unrestricted `adb tcpip` / `-H host.docker.internal` from explorer paths while provider appeared “hardened.” |
 | **Fix** | `adb_gateway.run_adb` + route agents through `get_sandbox_provider().adb`. Tests: `tests/unit/test_adb_policy_bypass.py`, extended `test_sandbox_containment.py`. |
 
-### F-02 — `adb -s SERIAL tcpip` subcommand parsing gap
+### F-02 - `adb -s SERIAL tcpip` subcommand parsing gap
 
 | Field | Value |
 |-------|--------|
@@ -120,7 +120,7 @@ flowchart TB
 | **Evidence** | Original `validate_adb_invocation` treated first non-flag token as subcommand → `emulator-5554` when args were `["-s", serial, "tcpip", ...]`. |
 | **Fix** | `_adb_global_subcommand()` in `sandbox_containment.py`. Test: `test_adb_tcpip_after_serial_is_blocked`. |
 
-### F-03 — `adb -H host.docker.internal` bridge bypass
+### F-03 - `adb -H host.docker.internal` bridge bypass
 
 | Field | Value |
 |-------|--------|
@@ -130,7 +130,7 @@ flowchart TB
 | **Evidence** | No `-H` validation before; connects client to remote ADB server on host. |
 | **Fix** | `_validate_adb_server_flag` for `-H`. Test: `test_adb_remote_server_host_flag_blocked`. |
 
-### F-04 — Frida LAN bind via `FRIDA_LISTEN_HOST`
+### F-04 - Frida LAN bind via `FRIDA_LISTEN_HOST`
 
 | Field | Value |
 |-------|--------|
@@ -140,7 +140,7 @@ flowchart TB
 | **Evidence** | Only `0.0.0.0` was rewritten; `192.168.x.x` would listen on guest LAN. `frida_listen_host()` in `sandbox_containment.py`. |
 | **Fix** | Strict mode allows only loopback; non-strict forces loopback with warning. Test: `test_frida_strict_rejects_lan_bind`. |
 
-### F-05 — Genymotion `ADB_HOST=127.0.0.1` false negative
+### F-05 - Genymotion `ADB_HOST=127.0.0.1` false negative
 
 | Field | Value |
 |-------|--------|
@@ -150,7 +150,7 @@ flowchart TB
 | **Evidence** | `_is_private_or_loopback_host` accepted loopback; container ADB never reaches VM. |
 | **Fix** | `GENYMOTION_ADB_HOST_LOOPBACK` finding. Test: `test_genymotion_rejects_loopback_adb_host`. |
 
-### F-06 — analysis-engine internal auth fail-open
+### F-06 - analysis-engine internal auth fail-open
 
 | Field | Value |
 |-------|--------|
@@ -160,7 +160,7 @@ flowchart TB
 | **Evidence** | `_InternalServiceAuthMiddleware` allowed all requests when token empty (`analysis-engine/app/main.py` before fix). Any container on `default` bridge could POST `/api/v1/analyze` with arbitrary `file_path` under `uploads`. |
 | **Fix** | Production returns **503** if token unset. **Residual:** non-`SUDARSHAN_ENV=production` still fail-open. |
 
-### F-07 — Gateway dynamic Frida fallback
+### F-07 - Gateway dynamic Frida fallback
 
 | Field | Value |
 |-------|--------|
@@ -170,7 +170,7 @@ flowchart TB
 | **Evidence** | `upload.py` `_run_analysis_pipeline` local path; `gateway_dynamic_allowed()` default false → HTTP 503. |
 | **Residual** | `SUDARSHAN_ALLOW_GATEWAY_DYNAMIC=true` re-enables risk. |
 
-### F-08 — MobSF published on all interfaces
+### F-08 - MobSF published on all interfaces
 
 | Field | Value |
 |-------|--------|
@@ -178,9 +178,9 @@ flowchart TB
 | **CVSS** | `AV:N/AC:L/PR:N/UI:N/S:C/C:L/I:L/A:L` → **8.2** |
 | **Status** | **Patched** (base compose) |
 | **Evidence** | `docker-compose.yml` `8008:8000` → now `127.0.0.1:8008:8000`. Default API key in compose env. |
-| **Residual** | Weak default `MOBSF_API_KEY` in compose — **Vulnerable** if unchanged in production. |
+| **Residual** | Weak default `MOBSF_API_KEY` in compose - **Vulnerable** if unchanged in production. |
 
-### F-09 — Android guest → host LAN (inherent)
+### F-09 - Android guest → host LAN (inherent)
 
 | Field | Value |
 |-------|--------|
@@ -188,9 +188,9 @@ flowchart TB
 | **CVSS** | `AV:A/AC:L/PR:N/UI:N/S:C/C:H/I:L/A:L` → **8.2** |
 | **Status** | **Vulnerable** (by design without host firewall) |
 | **Evidence** | Root + permissive SELinux documented in `provider.ensure_root`, `frida_sandbox._run_device_session`. Guest on Genymotion host-only can reach host gateway. |
-| **Mitigation** | Host firewall, snapshot revert, no shared folders — **Not Verified** in CI. |
+| **Mitigation** | Host firewall, snapshot revert, no shared folders - **Not Verified** in CI. |
 
-### F-10 — Dev bind mounts + `~/.android` mount
+### F-10 - Dev bind mounts + `~/.android` mount
 
 | Field | Value |
 |-------|--------|
@@ -199,7 +199,7 @@ flowchart TB
 | **Status** | **Vulnerable** (default compose) / **Patched** (hardened overlay removes mounts) |
 | **Evidence** | `docker-compose.yml` lines 60–64, 119–124. |
 
-### F-11 — `session_artifact_root` unused
+### F-11 - `session_artifact_root` unused
 
 | Field | Value |
 |-------|--------|
@@ -207,7 +207,7 @@ flowchart TB
 | **Status** | **Vulnerable** (dead code) |
 | **Evidence** | `session_artifact_root()` in `sandbox_containment.py`; `artifact_dir_for()` still used in `frida_sandbox.py`. Cross-analysis artifact reuse by path collision mitigated by digest; **no per-session ephemeral root**. |
 
-### F-12 — `entrypoint.sh` `adb start-server` outside policy
+### F-12 - `entrypoint.sh` `adb start-server` outside policy
 
 | Field | Value |
 |-------|--------|
@@ -215,7 +215,7 @@ flowchart TB
 | **Status** | **Accepted risk** |
 | **Evidence** | `analysis-engine/entrypoint.sh` invokes `adb start-server` directly; `start-server` blocked in analysis code paths only. |
 
-### F-13 — `scripts/setup_dynamic_analysis.py` calls `adb tcpip`
+### F-13 - `scripts/setup_dynamic_analysis.py` calls `adb tcpip`
 
 | Field | Value |
 |-------|--------|
@@ -223,7 +223,7 @@ flowchart TB
 | **Status** | **Vulnerable** if run against production VM |
 | **Evidence** | `scripts/setup_dynamic_analysis.py` line ~231 `provider.adb(..., "tcpip", ...)`. |
 
-### F-14 — Path traversal on engine `file_path`
+### F-14 - Path traversal on engine `file_path`
 
 | Field | Value |
 |-------|--------|
@@ -232,7 +232,7 @@ flowchart TB
 | **Evidence** | `_resolve_upload_path` uses `resolve()` + `is_relative_to(UPLOADS_DIR)` (`analysis-engine/app/main.py`). |
 | **Tests** | `backend/tests/test_artifact_persistence.py` (artifact paths). |
 
-### F-15 — Containment strict mode not default in dev compose
+### F-15 - Containment strict mode not default in dev compose
 
 | Field | Value |
 |-------|--------|
@@ -266,7 +266,7 @@ flowchart TB
 | **CIS Docker** | MobSF/mitmproxy user root; backend not capped CPU/mem in base file. |
 | **OWASP MASVS** | Analysis intentionally disables SELinux enforcement on guest (incompatible with L2 isolation). |
 | **Zero Trust** | Guest is fully trusted-compromised; network micro-segmentation not enforced in software. |
-| **MITRE ATT&CK Mobile** | T1623 (dynamic analysis evasion) — root/Frida expected; containment is operational. |
+| **MITRE ATT&CK Mobile** | T1623 (dynamic analysis evasion) - root/Frida expected; containment is operational. |
 
 ---
 
@@ -282,13 +282,13 @@ flowchart TB
 
 ## 10. Residual Risks
 
-1. **Host LAN egress from guest** — requires hypervisor/host firewall (out of repo).  
-2. **MOBSF_API_KEY default** in compose — rotate in production.  
-3. **Internal token optional in dev** — any compose-network client may call engine.  
-4. **`enforce_connectivity_policy` only raises when strict** — dev misconfig still runs dynamic analysis.  
-5. **Immutable artifacts / signed evidence** — not implemented.  
-6. **Snapshot verification** — not implemented.  
-7. **Live malware validation** — Not Verified.  
+1. **Host LAN egress from guest** - requires hypervisor/host firewall (out of repo).  
+2. **MOBSF_API_KEY default** in compose - rotate in production.  
+3. **Internal token optional in dev** - any compose-network client may call engine.  
+4. **`enforce_connectivity_policy` only raises when strict** - dev misconfig still runs dynamic analysis.  
+5. **Immutable artifacts / signed evidence** - not implemented.  
+6. **Snapshot verification** - not implemented.  
+7. **Live malware validation** - Not Verified.  
 
 ---
 

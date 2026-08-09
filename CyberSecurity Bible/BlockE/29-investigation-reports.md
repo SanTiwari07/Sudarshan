@@ -1,4 +1,4 @@
-# 29 — Investigation Reports
+# 29 - Investigation Reports
 
 > **Chapter ID:** `CH29` · **Block:** E · **Status:** Stable
 > **Tags:** `#reporting` `#multi-audience` `#evidence` `#regulatory` `#customer-comms` `#auditability`
@@ -30,7 +30,7 @@
 
 ## 1. The report is the product
 
-Everything upstream — intake, analysis, scoring, correlation — exists to produce **an artifact a
+Everything upstream - intake, analysis, scoring, correlation - exists to produce **an artifact a
 human acts on**. If the report doesn't change what someone does in the next thirty minutes, the
 analysis was academic.
 
@@ -49,7 +49,7 @@ analysis was academic.
 
 > **⚙️ Engineering Note:** The third test is where most security reporting fails. A MITRE-mapped
 > technical writeup is unreadable to a fraud-operations manager; a customer-impact summary is
-> useless to a detection engineer. **One investigation, multiple renderings** — generated from the
+> useless to a detection engineer. **One investigation, multiple renderings** - generated from the
 > same structured record, never written twice.
 
 ---
@@ -88,7 +88,7 @@ analysis was academic.
 ## 3. The SOC view
 
 ```markdown
-# INV-2026-0805-014 — Anatsa (TeaBot) — CRITICAL
+# INV-2026-0805-014 - Anatsa (TeaBot) - CRITICAL
 
 **Verdict** malicious · **Severity** critical · **Confidence** 0.92
 **Ruleset** 2026.08.01 · **Analysis** AN-2026-0805-0042
@@ -103,10 +103,10 @@ financial institutions including **com.clientbank.app**.
 | Capability | Technique | Evidence |
 |---|---|---|
 | Accessibility abuse | T1453 | res/xml/a11y_config.xml:6 `canPerformGestures="true"` |
-| Overlay phishing | T1417.002 | detonation.json:4821 — addView type=2038 over com.decoy.bank @14:32:07 |
-| Keylogging | T1417.001 | smali/com/x/A11y.smali:212 — node text capture |
+| Overlay phishing | T1417.002 | detonation.json:4821 - addView type=2038 over com.decoy.bank @14:32:07 |
+| Keylogging | T1417.001 | smali/com/x/A11y.smali:212 - node text capture |
 | SMS interception | T1636.004 | AndroidManifest.xml:22 + detonation.json:5044 |
-| Anti-removal | T1629.001 | device_policies diff — admin activated post-install |
+| Anti-removal | T1629.001 | device_policies diff - admin activated post-install |
 
 ## Attack chain
 dropper (com.fake.pdfreader) → session-install → payload → accessibility
@@ -136,7 +136,7 @@ static ✅ · dynamic ✅ · unpacked ✅ · C2 reached ✅ · **ceiling: none**
 Same investigation. Different language, different first line.
 
 ```markdown
-# CASE-2026-0805-014 — Mobile banking malware — ACTION REQUIRED
+# CASE-2026-0805-014 - Mobile banking malware - ACTION REQUIRED
 
 ## What this means for us
 A malicious app on customer devices can **read the screen and control the phone**,
@@ -153,41 +153,41 @@ Transactions will appear to come from the customer's genuine device and IP.
 | Earliest infection observed | 2026-08-02 09:14 IST |
 
 ## Immediate actions
-1. ☐ **Hold mobile sessions** — 340 customers (pre-authorised Tier 2)
-2. ☐ **Freeze beneficiary accounts** — 4 in-house *(requires Tier 3 sign-off)*
+1. ☐ **Hold mobile sessions** - 340 customers (pre-authorised Tier 2)
+2. ☐ **Freeze beneficiary accounts** - 4 in-house *(requires Tier 3 sign-off)*
 3. ☐ **Review transactions** since each customer's infection time
-4. ☐ **Contact customers by phone** — not via the app
-5. ☐ **Do not instruct uninstall yet** — device evidence first (see runbook)
+4. ☐ **Contact customers by phone** - not via the app
+5. ☐ **Do not instruct uninstall yet** - device evidence first (see runbook)
 
 ## What NOT to rely on
-- ❌ OTP — intercepted from SMS *and* notifications
-- ❌ Authenticator app — the code is read off the screen
-- ❌ Push approval — the malware taps "Approve"
-- ✅ **Per-transaction biometric** — the one control that still holds
+- ❌ OTP - intercepted from SMS *and* notifications
+- ❌ Authenticator app - the code is read off the screen
+- ❌ Push approval - the malware taps "Approve"
+- ✅ **Per-transaction biometric** - the one control that still holds
   *(caveat: watch for biometric→PIN downgrade)*
 
 ## Recovery window
 Funds typically disperse through mule chains within minutes of transfer.
 Beneficiary freezes are only effective very early. Set customer expectations
-accordingly — do not promise recovery.
+accordingly - do not promise recovery.
 ```
 
 > **🏛️ Enterprise Insight:** The *"What NOT to rely on"* section is the highest-value block in
 > this view. Fraud teams' mental models are built on classic account-takeover, where OTP and
 > device fingerprinting work. **Explicitly listing the controls that fail under On-Device Fraud**
-> — and the one that still holds — changes decisions faster than any amount of technical detail.
+> - and the one that still holds - changes decisions faster than any amount of technical detail.
 
 ---
 
 ## 5. The CISO view
 
 ```markdown
-# Mobile Banking Malware — Monthly Exposure Brief, August 2026
+# Mobile Banking Malware - Monthly Exposure Brief, August 2026
 
 ## Position
 Three active campaigns target our customers. Anatsa is the most significant:
-it reaches customers through **Google Play droppers** — apps that are genuinely
-clean at review and turn malicious weeks later — so "only install from Play"
+it reaches customers through **Google Play droppers** - apps that are genuinely
+clean at review and turn malicious weeks later - so "only install from Play"
 is no longer sufficient guidance.
 
 ## Figures
@@ -206,15 +206,15 @@ India: UPI fraud rose ~85% YoY to 13.42 lakh cases / ₹1,087 crore in FY2023-24
 (Lok Sabha, disclosed November 2024).
 
 ## Decisions requested
-1. **In-app accessibility detection** — engineering effort, highest single ROI
-2. **Per-transaction biometric** above ₹50,000 — product decision
-3. **`FLAG_SECURE`** on login and transaction screens — one-line change, not yet shipped
+1. **In-app accessibility detection** - engineering effort, highest single ROI
+2. **Per-transaction biometric** above ₹50,000 - product decision
+3. **`FLAG_SECURE`** on login and transaction screens - one-line change, not yet shipped
 ```
 
 > **⚙️ Engineering Note:** Lead with **what changed**, not what is. A CISO brief that restates the
 > threat landscape monthly gets skimmed; one that says "this control is no longer sufficient and
 > here are three decisions" gets read. And note that all three requests are things **the bank
-> controls** — that's what makes the brief actionable rather than alarming.
+> controls** - that's what makes the brief actionable rather than alarming.
 
 ---
 
@@ -225,12 +225,12 @@ regulatory_pack:
   incident_id: "INC-2026-0805-014"
   institution: "<bank>"
 
-  # ★ starts the CERT-In 6-hour clock — immutable
+  # ★ starts the CERT-In 6-hour clock - immutable
   detected_at_utc: "2026-08-05T09:14:22Z"
   detection_method: "automated analysis of customer-submitted APK"
   detection_system: "SUDARSHAN v2.4.1, ruleset 2026.08.01"
 
-  incident_type: "mobile banking malware — on-device fraud"
+  incident_type: "mobile banking malware - on-device fraud"
   malware:
     family: "Anatsa"
     aliases: ["TeaBot"]
@@ -263,13 +263,13 @@ regulatory_pack:
 
   # ★★ THE BOUNDARY
   compliance_assessment_required: true
-  reportability_determination: "NOT MADE BY THIS SYSTEM — refer to compliance/legal"
+  reportability_determination: "NOT MADE BY THIS SYSTEM - refer to compliance/legal"
 ```
 
 > **⚙️ Engineering Note:** That last field is deliberate and non-negotiable
 > ([Ch 20 §11](../incident-response/20-incident-response.md#11-regulatory-reporting)). SUDARSHAN
 > supplies **facts with timestamps and evidence pointers** and flags *potentially reportable*. It
-> must never assert that an incident is reportable under CERT-In, RBI, or DPDP — that is a legal
+> must never assert that an incident is reportable under CERT-In, RBI, or DPDP - that is a legal
 > determination, and a platform that makes it is both overstepping and creating liability. Encode
 > the boundary in the schema so it cannot be quietly crossed by a future feature.
 
@@ -290,7 +290,7 @@ customer_comms_facts:
   app_installed_from: "a link, not Google Play"
   what_we_did: [session_hold, credential_reset_required, transactions_under_review]
   what_customer_must_do:
-    - "Do not uninstall the app yet — our team needs to check the device first"
+    - "Do not uninstall the app yet - our team needs to check the device first"
     - "Do not enter your PIN or password on the device until we confirm it is clean"
     - "Call us on <number>; do not use links in messages"
   recovery_expectation: >
@@ -303,10 +303,10 @@ customer_comms_facts:
 ```
 
 > **🏛️ Enterprise Insight:** Two things make this section unusually important. First, **honesty
-> about recovery** — "we will get your money back" generates complaints and regulatory attention
+> about recovery** - "we will get your money back" generates complaints and regulatory attention
 > when it fails; the honest version is defensible. Second, the accessibility line is the single
 > most protective sentence a bank can put in customer education, because it targets the actual
-> attack step rather than the delivery channel — which keeps working even as delivery shifts from
+> attack step rather than the delivery channel - which keeps working even as delivery shifts from
 > WhatsApp APKs to Play droppers
 > ([Ch 14 §8](../banking-malware/14-banking-malware.md#8-india-and-the-upi-fraud-ecosystem)).
 
@@ -333,11 +333,11 @@ The app can inject taps into other applications.^[ev_01J8A3]
 | Fraud ops | Footnote references; raw detail on demand |
 | CISO | Summary only; full report linked |
 | Regulatory | **Full pointers mandatory** |
-| Customer | **None** — plain language only |
+| Customer | **None** - plain language only |
 
 > **⚙️ Engineering Note:** Never strip evidence from the *record* to simplify a *view*. The
 > customer-facing message has no citations, but the underlying investigation still carries every
-> pointer — because that same incident may be re-examined in a liability dispute where the
+> pointer - because that same incident may be re-examined in a liability dispute where the
 > customer's account of events is contested.
 
 ---
@@ -351,7 +351,7 @@ The app can inject taps into other applications.^[ev_01J8A3]
 | "We assess with high confidence" | Multiple strong independent evidence types | Signer + code + C2 agree |
 | "We assess with moderate confidence" | Some strong evidence, gaps remain | Code similarity only |
 | "We assess with low confidence" | Circumstantial or single-source | Language artifacts, timing |
-| "Consistent with" | Compatible — **not proof** | Similarity without confirmation |
+| "Consistent with" | Compatible - **not proof** | Similarity without confirmation |
 | "It is possible that" | Speculation, labelled | Hypotheses |
 
 ### Prohibited constructions
@@ -360,7 +360,7 @@ The app can inject taps into other applications.^[ev_01J8A3]
 |---|---|
 | "This is definitely Anatsa" | "We assess with high confidence this is Anatsa (basis: signer match, TLSH 31, shared C2)" |
 | "Turkish authors" | "Turkish-language artifacts present; note these are spoofable and a known false-flag technique" |
-| "This incident is reportable under CERT-In" | "Potentially reportable — refer to compliance" |
+| "This incident is reportable under CERT-In" | "Potentially reportable - refer to compliance" |
 | "The customer's device was hacked" | "An application on the device obtained accessibility permissions" |
 | "We will recover the funds" | "We have frozen the beneficiary account; recovery is not guaranteed" |
 | "VirusTotal shows 42/70" | "42 of 70 engines flagged the sample; engine labels are inconsistent and are corroborating context, not a verdict" |
@@ -380,7 +380,7 @@ The app can inject taps into other applications.^[ev_01J8A3]
         │
         ▼
   Deterministic rendering ──► SOC view, regulatory pack, IOC exports
-        │                     (templated — no LLM, fully reproducible)
+        │                     (templated - no LLM, fully reproducible)
         ▼
   LLM narration  ──────────► prose summaries for fraud-ops / CISO views
         │                     ★ grounded: every claim must cite an evidence id
@@ -400,13 +400,13 @@ The app can inject taps into other applications.^[ev_01J8A3]
 | SOC view | Summary only | Optional |
 | Fraud-ops view | Yes | **Required** |
 | CISO view | Yes | **Required** |
-| Regulatory pack | **No — templated** | **Required** |
-| Customer comms facts | **No — templated** | **Required** |
+| Regulatory pack | **No - templated** | **Required** |
+| Customer comms facts | **No - templated** | **Required** |
 | IOC exports | No | No |
 
 > **⚙️ Engineering Note:** The regulatory pack and customer-facing facts are **deterministically
 > templated, never LLM-generated**. Both may be quoted in a legal or regulatory proceeding, and
-> non-determinism is disqualifying there — the same investigation must render identically every
+> non-determinism is disqualifying there - the same investigation must render identically every
 > time. Use the LLM where prose quality matters and stakes are internal; use templates where
 > reproducibility is the requirement.
 
@@ -416,7 +416,7 @@ The app can inject taps into other applications.^[ev_01J8A3]
 
 | Case | Handling |
 |---|---|
-| Inconclusive verdict | Report it as inconclusive with the ceiling reason ([Ch 27 §6](27-risk-scoring.md#6-the-confidence-ceiling)) — never omit |
+| Inconclusive verdict | Report it as inconclusive with the ceiling reason ([Ch 27 §6](27-risk-scoring.md#6-the-confidence-ceiling)) - never omit |
 | Verdict changes on retro-hunt | Issue a **revision**, notify prior recipients ([Ch 18 §6](../soc/18-mobile-threat-hunting.md#6-hunting-the-sample-corpus)) |
 | Cross-tenant campaign | Share counts; redact institution identities ([Ch 28 §8](28-campaign-correlation.md#8-cross-tenant-correlation)) |
 | Analyst disagrees | Both automated and adjudicated verdicts appear |
@@ -453,12 +453,12 @@ The app can inject taps into other applications.^[ev_01J8A3]
 **Perfect answer:** Five renderings of one investigation, because the audiences need genuinely
 different things. The SOC analyst gets MITRE-mapped technical evidence with pointers to specific
 files, lines, and detonation log offsets, plus ready IOCs and Sigma rules. Fraud operations gets a
-different first line entirely: which 340 customers are affected, what actions to take, and — the
-section they value most — **which of their existing controls have failed**, because OTP,
+different first line entirely: which 340 customers are affected, what actions to take, and - the
+section they value most - **which of their existing controls have failed**, because OTP,
 authenticator apps, and push approval all break under on-device fraud while per-transaction
 biometric still holds. The CISO gets what changed and three decisions they can actually make. The
 regulatory pack is deterministically templated with immutable timestamps, because the CERT-In clock
-runs from detection — and it explicitly does *not* assert reportability, since that's a compliance
+runs from detection - and it explicitly does *not* assert reportability, since that's a compliance
 determination we're not entitled to make. And the customer-facing facts are plain language with no
 blame, honest about recovery not being guaranteed.
 
@@ -472,7 +472,7 @@ blame, honest about recovery not being guaranteed.
 - *"Is the report AI-generated?"* → Partly and deliberately not everywhere. Prose summaries for the
   fraud-ops and CISO views are LLM-drafted, grounded so every claim cites an evidence id, linted
   for prohibited constructions, and human-reviewed. The regulatory pack and customer-facing facts
-  are **templated, not generated** — they may be quoted in a proceeding, and non-determinism is
+  are **templated, not generated** - they may be quoted in a proceeding, and non-determinism is
   disqualifying there.
 - *"What if you're wrong and the verdict changes later?"* → We issue a versioned revision and
   notify prior recipients, because retro-hunting means a verdict is provisional rather than final.
@@ -482,8 +482,7 @@ blame, honest about recovery not being guaranteed.
   file path and line, or a log offset and timestamp, plus the rule, tool, and ruleset versions that
   produced it. They can check it rather than trust it.
 
-**Fact that impresses:** The most valuable single block in the whole report isn't the verdict —
-it's the fraud-ops "what NOT to rely on" list. Fraud teams' mental models come from classic account
+**Fact that impresses:** The most valuable single block in the whole report isn't the verdict - it's the fraud-ops "what NOT to rely on" list. Fraud teams' mental models come from classic account
 takeover, where OTP and device fingerprinting work. Explicitly stating that OTP is intercepted from
 both SMS and notifications, that authenticator codes are read off the screen, that push approval is
 tapped by the malware, and that per-transaction biometric is the one control still standing changes
@@ -499,18 +498,18 @@ failed controls), CISO (exposure, trend, decisions), compliance (facts and times
 (plain language). One structured investigation, multiple renderings.
 
 **Q: "How do you make findings defensible?"**
-Every claim carries an evidence pointer — file and line, or log offset and timestamp — plus the
+Every claim carries an evidence pointer - file and line, or log offset and timestamp - plus the
 rule, tool, and ruleset versions. Reports are immutably versioned, and corrections are revisions
 rather than edits.
 
 **Q: "Would you use an LLM to write the report?"**
-For internal prose views, yes — grounded with mandatory evidence citations, linted for overconfident
+For internal prose views, yes - grounded with mandatory evidence citations, linted for overconfident
 language, and human-reviewed. Not for the regulatory pack or customer-facing facts, which are
 templated because they may be quoted in a proceeding and must render identically every time.
 
 **Q: "Should the report say whether the incident is reportable?"**
 No. Supply facts, timestamps, scope, and the personal-data categories potentially accessed, and
-flag "potentially reportable — refer to compliance." Reportability is a legal determination.
+flag "potentially reportable - refer to compliance." Reportability is a legal determination.
 
 **Q: "How do you write about attribution?"**
 Estimative language with a stated basis: "we assess with high confidence, basis signer match plus
@@ -538,15 +537,15 @@ caveat.
 
 ## 16. References
 
-1. NIST SP 800-61 Rev. 2 — incident documentation and reporting.
-2. CERT-In — Directions of April 28, 2022 (6-hour reporting).
-3. Reserve Bank of India — Cyber Security Framework for Banks; customer protection framework.
+1. NIST SP 800-61 Rev. 2 - incident documentation and reporting.
+2. CERT-In - Directions of April 28, 2022 (6-hour reporting).
+3. Reserve Bank of India - Cyber Security Framework for Banks; customer protection framework.
 4. Digital Personal Data Protection Act, 2023 (India).
-5. FIRST — Traffic Light Protocol 2.0. https://www.first.org/tlp/
-6. OASIS — STIX 2.1 (structured export). https://oasis-open.github.io/cti-documentation/
-7. Zimperium zLabs — *Banking Heist Report* (March 19, 2026).
-8. Lok Sabha, Ministry of Finance — UPI fraud statistics (disclosed November 25, 2024).
-9. ODNI / Sherman Kent — analytic confidence and estimative language standards.
+5. FIRST - Traffic Light Protocol 2.0. https://www.first.org/tlp/
+6. OASIS - STIX 2.1 (structured export). https://oasis-open.github.io/cti-documentation/
+7. Zimperium zLabs - *Banking Heist Report* (March 19, 2026).
+8. Lok Sabha, Ministry of Finance - UPI fraud statistics (disclosed November 25, 2024).
+9. ODNI / Sherman Kent - analytic confidence and estimative language standards.
 
 ---
 

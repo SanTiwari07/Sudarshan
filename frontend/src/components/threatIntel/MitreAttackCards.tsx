@@ -26,7 +26,7 @@ export default function MitreAttackCards({ cards }: { cards: MitreCard[] }) {
             className="group p-3 rounded-lg border border-slate-200 bg-white hover:border-slate-400 hover:shadow-sm transition-all"
             title={c.evidence}
           >
-            <div className="text-[10px] font-mono text-blue-800">{c.techniqueId || '—'}</div>
+            <div className="text-[10px] font-mono text-blue-800">{c.techniqueId || '-'}</div>
             <div className="text-xs font-bold text-slate-900 mt-1">{c.technique}</div>
             <div className="mt-2 flex justify-between text-[10px] text-slate-500">
               <span>Confidence {c.confidence}%</span>

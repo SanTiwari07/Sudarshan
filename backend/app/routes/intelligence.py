@@ -286,7 +286,7 @@ async def get_threat_intelligence(
             sources_status.append(SourceStatus(
                 name="VirusTotal",
                 status="active",
-                message="API connected — hash not in VirusTotal yet (upload sample for vendor scan)"
+                message="API connected - hash not in VirusTotal yet (upload sample for vendor scan)"
             ))
             active_sources.append("VirusTotal")
         else:
@@ -416,7 +416,7 @@ async def get_threat_intelligence(
     #
     # For a benign sample with no family match that rendered as "exhibits
     # Unknown banking trojan characteristics ... Recommended immediate SOC
-    # quarantine" — an invented conclusion, in a field named `ai_summary`, with
+    # quarantine" - an invented conclusion, in a field named `ai_summary`, with
     # nothing marking it as a template. The rest of this codebase is careful
     # about exactly this (the engine explicitly removed a fabricated
     # appsec_score; _collect_observed_activities returns [] rather than a
@@ -431,7 +431,7 @@ async def get_threat_intelligence(
         facts = [
             f"Package {package_name} (SHA-256 {sha256_clean[:12]}…).",
             f"Deterministic risk score {rdict.get('final_risk_score', 0):.1f}/100"
-            f" — {rdict.get('risk_band') or 'not scored'}.",
+            f" - {rdict.get('risk_band') or 'not scored'}.",
         ]
         if vt_key and vt_total > 0:
             facts.append(f"VirusTotal: {vt_detections}/{vt_total} engines flagged this file.")

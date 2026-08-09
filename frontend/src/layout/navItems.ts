@@ -20,7 +20,7 @@ export type NavItem = {
   disabled?: boolean;
 };
 
-/** Legacy drawer list — kept for any deep links; primary nav is AppHeader bar. */
+/** Legacy drawer list - kept for any deep links; primary nav is AppHeader bar. */
 export const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Upload & analyze', shortLabel: 'Upload', icon: UploadCloud, matchPrefix: '/' },
   { to: '/fraud-card', label: 'Fraud analyst intelligence', shortLabel: 'Fraud card', icon: LayoutDashboard },

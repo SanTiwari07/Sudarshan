@@ -285,7 +285,7 @@ def print_summary(serial: Optional[str]):
     docker-compose up -d
 """)
     else:
-        warn("No device serial — setup may be incomplete")
+        warn("No device serial - setup may be incomplete")
 
 
 def main():
@@ -298,7 +298,7 @@ def main():
     args = parser.parse_args()
 
     print("=" * 60)
-    print("SUDARSHAN — Dynamic Analysis Environment Setup")
+    print("SUDARSHAN - Dynamic Analysis Environment Setup")
     print(f"Provider: {CFG.provider}")
     print("=" * 60)
 
@@ -356,7 +356,7 @@ def main():
         serial = result.device.serial
         ok(f"Connected: {result.device.to_dict()}")
     else:
-        warn(f"connect() reported: {result.error_code} — {result.error_message}")
+        warn(f"connect() reported: {result.error_code} - {result.error_message}")
         warn("Continuing with manual setup steps…")
 
     if not setup_device(serial, push_server=args.push_server):

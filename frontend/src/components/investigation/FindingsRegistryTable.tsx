@@ -117,7 +117,7 @@ export default function FindingsRegistryTable({
       )}
       {!embedded && (
         <div className="px-4 py-3 border-b border-slate-100 text-xs text-slate-600">
-          {bundle.evidenceRecords.length} verified records — evidence-backed findings only.
+          {bundle.evidenceRecords.length} verified records - evidence-backed findings only.
         </div>
       )}
 

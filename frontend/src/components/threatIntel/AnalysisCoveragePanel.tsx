@@ -44,7 +44,7 @@ export default function AnalysisCoveragePanel({
                   <li key={m.label} className="flex items-center gap-2 text-slate-600">
                     <XCircle className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                     {m.label}
-                    {m.detail && <span className="text-slate-400">— {m.detail}</span>}
+                    {m.detail && <span className="text-slate-400"> - {m.detail}</span>}
                   </li>
                 ))
               ) : (

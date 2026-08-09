@@ -5,13 +5,13 @@ Two root defects:
 
 1. `risk_engine` consumed `dynamic["bfci"]` verbatim from an untyped dict. The
    sandbox was the only writer, so isolation of the verdict rested on
-   convention rather than validation — a NaN, a string or an out-of-range score
+   convention rather than validation - a NaN, a string or an out-of-range score
    would have propagated straight into the FRS.
 
 2. Screen dimensions had two disagreeing sources: `tool_executor` read them
    from the environment while the planner validated against `tool_registry`'s
    hardcoded 1080x1920. On the project's 1080x2400 Pixel_6 that rejected every
-   action in the bottom 480px — 20% of the screen — as Step5_OutOfBounds.
+   action in the bottom 480px - 20% of the screen - as Step5_OutOfBounds.
 """
 
 import math

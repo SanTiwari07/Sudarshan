@@ -277,7 +277,7 @@ export default function EvidenceDrawer({
                       <dt className="text-slate-500">MITRE</dt>
                       <dd className="font-mono text-slate-800">
                         {evidence.mitreId}
-                        {evidence.mitreName ? ` — ${evidence.mitreName}` : ''}
+                        {evidence.mitreName ? ` - ${evidence.mitreName}` : ''}
                       </dd>
                     </div>
                   )}

@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Agentic Tool Registry
+SUDARSHAN - Agentic Tool Registry
 ===================================
 Centralized registry of every tool the Agentic Explorer is permitted to execute.
 
@@ -86,11 +86,11 @@ class ToolDef:
             f"{p.name}: {p.type}{'?' if not p.required else ''}"
             for p in self.params
         )
-        return f"{self.name}({param_str}) — {self.description}"
+        return f"{self.name}({param_str}) - {self.description}"
 
 
 # ─── Screen Dimension Constants ───────────────────────────────────────────────
-# Declarative DEFAULTS only — used for the per-parameter min/max metadata below
+# Declarative DEFAULTS only - used for the per-parameter min/max metadata below
 # and as documentation of a typical emulator.
 #
 # They are NOT the validation bounds: the planner validates coordinates against
@@ -228,7 +228,7 @@ TOOL_REGISTRY: Dict[str, ToolDef] = {
         min_android_api=21,
         notes=(
             "Actual values are resolved from FORM_VALUES dict. "
-            "Values are never stored in memory or audit logs — only field_hint is recorded."
+            "Values are never stored in memory or audit logs - only field_hint is recorded."
         ),
     ),
 
@@ -376,7 +376,7 @@ TOOL_REGISTRY: Dict[str, ToolDef] = {
         description=(
             "Clear application data and cache via ADB pm clear. "
             "Use to reset the app to a fresh state between analysis stages. "
-            "WARNING: Destructive — only use if explicitly required."
+            "WARNING: Destructive - only use if explicitly required."
         ),
         params=[
             ToolParam("package_name", "str", required=True,

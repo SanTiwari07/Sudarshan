@@ -1,11 +1,11 @@
 """
-SUDARSHAN — Network Capture
+SUDARSHAN - Network Capture
 ============================
 Captures network traffic from two sources and merges them into a unified
 flow list for evidence analysis:
 
   1. Frida OkHttp/URLConnection/Socket hooks (primary, always active)
-  2. mitmproxy HAR dump file (secondary — active when MITMPROXY_HAR_PATH is set)
+  2. mitmproxy HAR dump file (secondary - active when MITMPROXY_HAR_PATH is set)
 
 The mitmproxy HAR source provides decrypted full HTTPS request/response pairs,
 including bodies, headers, and response codes. This is significantly richer
@@ -88,7 +88,7 @@ class NetworkCapture:
         path = har_path or MITMPROXY_HAR_PATH
         if not path or not Path(path).exists():
             if path:
-                logger.debug(f"[NetworkCapture] mitmproxy HAR not found at {path} — skipping")
+                logger.debug(f"[NetworkCapture] mitmproxy HAR not found at {path} - skipping")
             return 0
 
         try:
@@ -124,7 +124,7 @@ class NetworkCapture:
                 }
 
                 if key in self._seen_urls:
-                    # mitmproxy entry is richer — update the existing frida hook entry
+                    # mitmproxy entry is richer - update the existing frida hook entry
                     for i, f in enumerate(self.flows):
                         if f.get("method") == method and f.get("url") == url:
                             self.flows[i].update({
@@ -156,7 +156,7 @@ class NetworkCapture:
 
         Called by frida_sandbox.py at the end of every analysis session.
         """
-        # Always attempt HAR ingest at flush time — mitmproxy may have captured
+        # Always attempt HAR ingest at flush time - mitmproxy may have captured
         # more flows during the analysis session than were visible mid-session.
         self.ingest_mitmproxy_har()
 

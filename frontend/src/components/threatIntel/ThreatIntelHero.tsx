@@ -27,7 +27,7 @@ function campaignMatchText(data: FraudCardData, intel: IntelApiPayload): string 
   if (attributed) return campaign;
   const family = intel.malware_family || data.family_classification;
   if (family && family !== 'Unknown') return `Patterns similar to ${family}`;
-  if (intel.alienvault.pulse_count > 0) return 'Pulses found — campaign not named';
+  if (intel.alienvault.pulse_count > 0) return 'Pulses found - campaign not named';
   return 'No known campaign match';
 }
 

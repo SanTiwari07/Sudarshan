@@ -1,5 +1,5 @@
 """
-Live VIDE WebView verification — Genymotion + InsecureBankv2 + vide_live_probe.
+Live VIDE WebView verification - Genymotion + InsecureBankv2 + vide_live_probe.
 
 Uses the same WebView.loadData hook/event shape as banking_trojan.js (network category).
 """

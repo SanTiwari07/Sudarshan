@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Report Generator v2
+SUDARSHAN - Report Generator v2
 =================================
 Generates a standalone, single-file HTML malware analysis report from the
 collected AnalysisResponse and per-sample JSON artifacts of a pipeline run.
@@ -8,7 +8,7 @@ Design principles:
   - Self-contained: inline CSS only, no external CDN, no JavaScript
   - State-aware: renders honestly whether dynamic evidence is full, empty, or absent
   - Evidence IDs: every finding is indexed [STAT-NNN], [INTEL-NNN], [EVID-NNN]
-  - No fabrication: dynamic section ALWAYS renders — either a timeline or an
+  - No fabrication: dynamic section ALWAYS renders - either a timeline or an
     explicit [DYNAMIC-STATUS: NO TELEMETRY CAPTURED] diagnostic panel
   - Print-ready: @media print light theme for PDF via browser Ctrl+P
 
@@ -35,7 +35,7 @@ from sudarshan_core.visual_evidence.report_sections import (
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# CSS — self-contained, dark screen theme + light print theme
+# CSS - self-contained, dark screen theme + light print theme
 # ---------------------------------------------------------------------------
 
 _CSS = """
@@ -768,7 +768,7 @@ def _build_dynamic(r: Dict, evidence_json: Optional[Dict], idx: _FindingIndex) -
     )
 
     if not has_any_dynamic:
-        # ── Diagnostic banner — mandatory when no dynamic evidence ──
+        # ── Diagnostic banner - mandatory when no dynamic evidence ──
         frs_bd = _get(r, "frs_breakdown") or {}
         dyn_ran = bool(_get(frs_bd, "dynamic_ran"))
 
@@ -810,7 +810,7 @@ def _build_dynamic(r: Dict, evidence_json: Optional[Dict], idx: _FindingIndex) -
                 try:
                     ts_str = datetime.fromtimestamp(float(ts_raw) / 1000, tz=timezone.utc).strftime("%H:%M:%S.%f")[:-3]
                 except Exception:
-                    ts_str = "—"
+                    ts_str = "-"
                 api = _esc(_get(rec, "api", default="Unknown API"))
                 desc = _esc(_get(rec, "description") or _get(rec, "human_description", default=""))
                 sev = str(_get(rec, "severity", default="LOW"))
@@ -880,7 +880,7 @@ def _load_screenshot_entries(
     Resolve screenshot manifest from every persisted location.
 
     Historical bug: manifests were flushed to screenshots.json at artifact root
-    while the report generator only read screenshots/manifest.json — gallery
+    while the report generator only read screenshots/manifest.json - gallery
     sections appeared empty despite PNGs on disk.
     """
     if report is None:

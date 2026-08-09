@@ -21,11 +21,11 @@ export default function CorrelationRulesPanel({ data }: { data: FraudCardData })
         <div className="grid grid-cols-2 gap-3">
           <div className="p-2 bg-slate-50 rounded border">
             <div className="text-slate-500">FRS correlation</div>
-            <div className="font-mono font-bold">{frs?.correlation?.toFixed(1) ?? '—'}</div>
+            <div className="font-mono font-bold">{frs?.correlation?.toFixed(1) ?? '-'}</div>
           </div>
           <div className="p-2 bg-slate-50 rounded border">
             <div className="text-slate-500">Intel threat_score</div>
-            <div className="font-mono font-bold">{corr?.threat_score?.toFixed(1) ?? '—'}</div>
+            <div className="font-mono font-bold">{corr?.threat_score?.toFixed(1) ?? '-'}</div>
           </div>
         </div>
         {sources.length > 0 && (
@@ -44,7 +44,7 @@ export default function CorrelationRulesPanel({ data }: { data: FraudCardData })
             <ul className="space-y-1 max-h-40 overflow-y-auto">
               {iocs.slice(0, 8).map((ioc) => (
                 <li key={ioc.indicator} className="font-mono text-[10px] truncate">
-                  {ioc.type}: {ioc.indicator} — {ioc.reputation} ({ioc.source})
+                  {ioc.type}: {ioc.indicator} - {ioc.reputation} ({ioc.source})
                 </li>
               ))}
             </ul>

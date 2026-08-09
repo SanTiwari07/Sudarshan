@@ -1,4 +1,4 @@
-# VIDE — Visual Impersonation Detection Engine
+# VIDE - Visual Impersonation Detection Engine
 
 ## Purpose
 
@@ -20,10 +20,10 @@ Dynamic → frida_events (WebView loadData / loadDataWithBaseURL) + optional ui_
 
 ## Scoring
 
-- **String Jaccard** — 40%
-- **View-tree similarity** — 35%
-- **Brand color overlap** — 25%
-- **Detection** — confidence ≥ 0.72 and (string Jaccard ≥ 0.08 or tree ≥ 0.35)
+- **String Jaccard** - 40%
+- **View-tree similarity** - 35%
+- **Brand color overlap** - 25%
+- **Detection** - confidence ≥ 0.72 and (string Jaccard ≥ 0.08 or tree ≥ 0.35)
 
 ## Critical escalation (unchanged)
 
@@ -35,8 +35,8 @@ Dynamic → frida_events (WebView loadData / loadDataWithBaseURL) + optional ui_
 
 ## Baselines and registry
 
-- UI baselines: `shared/sudarshan_core/data/ui_baselines/*.json` — **demo/lab only**, not production bank authority.
-- Signer registry: `shared/sudarshan_core/data/bank_signer_registry.json` — **demo/lab** SHA placeholders.
+- UI baselines: `shared/sudarshan_core/data/ui_baselines/*.json` - **demo/lab only**, not production bank authority.
+- Signer registry: `shared/sudarshan_core/data/bank_signer_registry.json` - **demo/lab** SHA placeholders.
 
 ## Frida
 
@@ -44,7 +44,7 @@ Runtime uses `banking_trojan.bundle.js` (built from `banking_trojan.js` via `npm
 
 ## Status fields
 
-`safe_run_vide_analysis()` sets `available` / `status`: `OK`, `UNAVAILABLE`, or `ERROR` — distinct from “no match.”
+`safe_run_vide_analysis()` sets `available` / `status`: `OK`, `UNAVAILABLE`, or `ERROR` - distinct from “no match.”
 
 ## Verification status (engineering)
 
@@ -52,8 +52,8 @@ Runtime uses `banking_trojan.bundle.js` (built from `banking_trojan.js` via `npm
 |-------|--------|
 | Static UI + `assets/*.html` via Apktool | **STATIC VERIFIED** (unit + integration tests) |
 | Frida hooks + bundle (`loadData` / `loadDataWithBaseURL`) | **DYNAMIC CODE VERIFIED** (source + bundle grep, unit extraction tests) |
-| Live emulator WebView → `frida_events` → VIDE | **DYNAMIC DEVICE** — run `scripts/verify_vide_webview_device.md` when frida-server is up |
-| UI baselines (SBI/HDFC/ICICI JSON) | **LAB / HACKATHON** — not production bank authority |
+| Live emulator WebView → `frida_events` → VIDE | **DYNAMIC DEVICE** - run `scripts/verify_vide_webview_device.md` when frida-server is up |
+| UI baselines (SBI/HDFC/ICICI JSON) | **LAB / HACKATHON** - not production bank authority |
 | Signer registry | **LAB / DEMO** placeholders |
 
 Do not describe lab baselines as production-authoritative bank data.

@@ -15,7 +15,7 @@ var vite_config_default = defineConfig({
       usePolling: true,
       interval: 300,
       binaryInterval: 600,
-      // Exclude heavy directories — polling them on every interval wastes CPU
+      // Exclude heavy directories - polling them on every interval wastes CPU
       // and can itself trigger stat errors on stale bind-mount inodes.
       ignored: ["**/node_modules/**", "**/.git/**", "**/dist/**"]
     },

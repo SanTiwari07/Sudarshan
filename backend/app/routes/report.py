@@ -3,12 +3,12 @@
 Sudarshan Report Export Endpoints
 ===================================
 Provides:
-  GET /api/v1/report/html/{sha256}  — Standalone CYFIRMA-style HTML report (primary)
-  GET /api/v1/report/stix/{sha256}  — STIX 2.1 JSON export
-  GET /api/v1/report/iocs/{sha256}  — IOC CSV export
-  GET /api/v1/report/pdf/{sha256}   — PDF stub (use browser print on the HTML report instead)
-  POST /api/v1/chat                 — AI chat endpoint (legacy, non-streaming)
-  POST /api/v1/chat/stream          — Gemini RAG SSE streaming endpoint (primary)
+  GET /api/v1/report/html/{sha256} - Standalone CYFIRMA-style HTML report (primary)
+  GET /api/v1/report/stix/{sha256} - STIX 2.1 JSON export
+  GET /api/v1/report/iocs/{sha256} - IOC CSV export
+  GET /api/v1/report/pdf/{sha256} - PDF stub (use browser print on the HTML report instead)
+  POST /api/v1/chat - AI chat endpoint (legacy, non-streaming)
+  POST /api/v1/chat/stream - Gemini RAG SSE streaming endpoint (primary)
 """
 
 import json
@@ -58,7 +58,7 @@ async def load_report(sha256: str) -> Optional[Any]:
 
     Every export endpoint used to consult ONLY the in-memory cache and return
     404 "Report not found. Analyze the APK first." on a miss. So after any
-    restart — or once the cache evicted — every historical case became
+    restart - or once the cache evicted - every historical case became
     permanently non-exportable, while GET /api/v1/cases/{sha} happily returned
     it. The error told the analyst to re-run an analysis that had already been
     run and was still on disk.
@@ -214,7 +214,7 @@ def _stix_id(obj_type: str, *parts: Any) -> str:
     Build a spec-compliant, DETERMINISTIC STIX 2.1 identifier.
 
     The previous IDs were hand-assembled from slices of the sha256 and, worse,
-    from `hash(url)` / `hash(campaign)` — and Python's hash() is SALTED PER
+    from `hash(url)` / `hash(campaign)` - and Python's hash() is SALTED PER
     PROCESS (PYTHONHASHSEED randomisation). So the same sample exported twice
     across a restart produced different indicator / attack-pattern /
     threat-actor IDs, and a TAXII consumer saw them as distinct objects rather
@@ -297,7 +297,7 @@ def _build_stix_bundle(report: Dict[str, Any]) -> Dict:
     intel = report.get("intelligence_report", {}) or {}
     mitre_techniques = intel.get("mitre_techniques_used", []) if isinstance(intel, dict) else []
     for tech in mitre_techniques[:3]:
-        tech_id = tech.split("—")[0].strip() if "—" in tech else tech
+        tech_id = tech.split("-")[0].strip() if "-" in tech else tech
         ap = {
             "type": "attack-pattern",
             "spec_version": "2.1",
@@ -424,7 +424,7 @@ async def export_yara_rule(sha256: str, user: dict = Depends(require_analyst)):
     # Both the rule NAME and the string VALUES come from the APK, so both must
     # be sanitised. Previously the package name only had '.' replaced (a hyphen
     # or any other non-identifier character produced an invalid YARA rule name),
-    # and URL values were interpolated raw — a single '"' or '\' in a hardcoded
+    # and URL values were interpolated raw - a single '"' or '\' in a hardcoded
     # URL broke the rule, and a non-ASCII byte broke it differently. Nothing
     # validated the output, so the endpoint happily served rules that will not
     # compile.
@@ -498,9 +498,9 @@ async def export_mitre_mapping(sha256: str, user: dict = Depends(require_analyst
         "matrix": "MITRE ATT&CK Mobile",
         "techniques": [
             {
-                "technique_id": t.split("—")[0].strip() if "—" in t else t,
+                "technique_id": t.split("-")[0].strip() if "-" in t else t,
                 "name": t,
-                "url": f"https://attack.mitre.org/techniques/{t.split('—')[0].strip().replace('.', '/')}/"
+                "url": f"https://attack.mitre.org/techniques/{t.split('-')[0].strip().replace('.', '/')}/"
             }
             for t in mitre_techs
         ]
@@ -537,17 +537,17 @@ class ChatResponse(BaseModel):
 @router.post("/chat/stream")
 async def analyst_chat_stream(req: ChatRequest, user: dict = Depends(require_analyst)):
     """
-    Gemini RAG streaming SSE endpoint — primary chat interface.
+    Gemini RAG streaming SSE endpoint - primary chat interface.
 
     Streams a 7-section structured investigation response in real-time.
     Evidence is retrieved from the per-investigation knowledge graph.
-    Gemini only explains — never decides.
+    Gemini only explains - never decides.
 
     Events:
-      sections — JSON array of evidence sections used
-      token    — response text chunk
-      done     — end of stream
-      error    — error message
+      sections - JSON array of evidence sections used
+      token - response text chunk
+      done - end of stream
+      error - error message
     """
     from app.ai.gemini_rag import stream_investigation_response, is_indexed, build_investigation_index
 

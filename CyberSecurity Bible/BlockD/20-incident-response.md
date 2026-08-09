@@ -1,4 +1,4 @@
-# 20 — Incident Response
+# 20 - Incident Response
 
 > **Chapter ID:** `CH20` · **Block:** D (Operations) · **Status:** Stable
 > **Tags:** `#incident-response` `#nist-800-61` `#picerl` `#playbook` `#cert-in` `#rbi` `#mule-chains` `#containment`
@@ -12,12 +12,12 @@
 1. [The frameworks](#1-the-frameworks)
 2. [What makes mobile banking fraud IR different](#2-what-makes-mobile-banking-fraud-ir-different)
 3. [The response clock](#3-the-response-clock)
-4. [Phase 1 — Preparation](#4-phase-1--preparation)
-5. [Phase 2 — Detection and Analysis](#5-phase-2--detection-and-analysis)
-6. [Phase 3 — Containment](#6-phase-3--containment)
-7. [Phase 4 — Eradication](#7-phase-4--eradication)
-8. [Phase 5 — Recovery](#8-phase-5--recovery)
-9. [Phase 6 — Post-Incident](#9-phase-6--post-incident)
+4. [Phase 1 - Preparation](#4-phase-1--preparation)
+5. [Phase 2 - Detection and Analysis](#5-phase-2--detection-and-analysis)
+6. [Phase 3 - Containment](#6-phase-3--containment)
+7. [Phase 4 - Eradication](#7-phase-4--eradication)
+8. [Phase 5 - Recovery](#8-phase-5--recovery)
+9. [Phase 6 - Post-Incident](#9-phase-6--post-incident)
 10. [The device remediation runbook](#10-the-device-remediation-runbook)
 11. [Regulatory reporting](#11-regulatory-reporting)
 12. [Detection logic for SUDARSHAN](#12-detection-logic-for-sudarshan)
@@ -52,7 +52,7 @@ containment, eradication, and recovery have genuinely distinct mechanics in mobi
 
 > **⚙️ Engineering Note:** The frameworks are correct and generic. **Their weakness for this
 > problem is that they assume you control the endpoint.** In mobile banking fraud you control
-> the *account* and the *app*, not the device — the device belongs to a customer who may be
+> the *account* and the *app*, not the device - the device belongs to a customer who may be
 > uncooperative, non-technical, or in a different time zone. Every playbook below is written
 > around that constraint, which is what makes it different from a standard IR playbook.
 
@@ -69,7 +69,7 @@ containment, eradication, and recovery have genuinely distinct mechanics in mobi
 | Evidence | Org-owned logs | Customer device + bank records |
 | Legal basis | Employment/AUP | **Consent required** |
 | Loss | Data, downtime | **Money, and often the bank's liability** |
-| Regulator | Sometimes | **Frequently — CERT-In, RBI** |
+| Regulator | Sometimes | **Frequently - CERT-In, RBI** |
 | "Eradication" | Remove malware | Remove malware **+ recover funds + reset trust** |
 
 ```
@@ -112,17 +112,17 @@ containment, eradication, and recovery have genuinely distinct mechanics in mobi
    └─ T+days    Customer dispute, liability determination, regulatory filing
 ```
 
-Under real-time rails — **UPI in India especially** — settlement is immediate and irreversible
+Under real-time rails - **UPI in India especially** - settlement is immediate and irreversible
 ([Ch 14 §8](../banking-malware/14-banking-malware.md#8-india-and-the-upi-fraud-ecosystem)).
 
-> **⚙️ Engineering Note — the two-track principle.** Because the money clock (minutes) and the
+> **⚙️ Engineering Note - the two-track principle.** Because the money clock (minutes) and the
 > investigation clock (hours) are incompatible, IR must run **two tracks in parallel**:
 >
 > ```
->  TRACK 1 — CONTAIN (minutes, automated, low-confidence-tolerant)
+>  TRACK 1 - CONTAIN (minutes, automated, low-confidence-tolerant)
 >    hold session · block transaction · freeze beneficiary · notify customer
 >
->  TRACK 2 — INVESTIGATE (hours, analytical, high-confidence-required)
+>  TRACK 2 - INVESTIGATE (hours, analytical, high-confidence-required)
 >    sample analysis · device forensics · campaign correlation · reporting
 > ```
 >
@@ -134,7 +134,7 @@ Under real-time rails — **UPI in India especially** — settlement is immediat
 
 ---
 
-## 4. Phase 1 — Preparation
+## 4. Phase 1 - Preparation
 
 Everything that must exist **before** an incident.
 
@@ -160,7 +160,7 @@ Everything that must exist **before** an incident.
 
 ---
 
-## 5. Phase 2 — Detection and Analysis
+## 5. Phase 2 - Detection and Analysis
 
 ### Entry points
 
@@ -180,7 +180,7 @@ Everything that must exist **before** an incident.
         TRACK 1: CONTAIN NOW           TRACK 2: INVESTIGATE
 ```
 
-### The ODF signature — what confirms it
+### The ODF signature - what confirms it
 
 | Evidence | Source |
 |---|---|
@@ -200,7 +200,7 @@ Everything that must exist **before** an incident.
 
 ---
 
-## 6. Phase 3 — Containment
+## 6. Phase 3 - Containment
 
 **Track 1. Minutes. Automated where possible.**
 
@@ -215,7 +215,7 @@ Everything that must exist **before** an incident.
 
   SHORT-TERM (minutes–hour)
    ├── Sweep: which other customers have this package/signer installed?
-   ├── Apply the same holds to that cohort — proportionately
+   ├── Apply the same holds to that cohort - proportionately
    ├── Block C2 infrastructure at the bank's network egress
    └── Push IOCs to SIEM/MTD/TIP
 
@@ -223,7 +223,7 @@ Everything that must exist **before** an incident.
    └── ★ ISOLATE, DO NOT REMEDIATE YET  → §10
 ```
 
-> **⚙️ Engineering Note — the sweep is the highest-value containment action.** One confirmed
+> **⚙️ Engineering Note - the sweep is the highest-value containment action.** One confirmed
 > infection tells you a package name and a signer fingerprint. Sweeping the customer base for
 > that signer converts a single-customer incident into a campaign-scale containment. It is also
 > where SUDARSHAN's corpus and the bank's telemetry combine most usefully:
@@ -248,7 +248,7 @@ Holding sessions for 340 customers is disruptive. Calibrate:
 
 ---
 
-## 7. Phase 4 — Eradication
+## 7. Phase 4 - Eradication
 
 ### Account side
 
@@ -260,9 +260,8 @@ Holding sessions for 340 customers is disruptive. Calibrate:
   └── Review and reverse where possible: all transactions since infection time
 ```
 
-> **⚙️ Engineering Note — sequencing trap.** Resetting credentials **while the malware is still
-> resident and accessibility is still enabled** simply hands the attacker the new credentials —
-> they can read the reset flow off the screen and tap through it. **Device remediation must
+> **⚙️ Engineering Note - sequencing trap.** Resetting credentials **while the malware is still
+> resident and accessibility is still enabled** simply hands the attacker the new credentials - > they can read the reset flow off the screen and tap through it. **Device remediation must
 > precede credential reset**, or the reset must be performed out-of-band on a different device.
 > This is a genuine, commonly-made error.
 
@@ -282,13 +281,13 @@ Never remediate first. **BRATA and BingoMod wipe the device** when they detect r
 
 ---
 
-## 8. Phase 5 — Recovery
+## 8. Phase 5 - Recovery
 
 | Action | Notes |
 |---|---|
 | Verify device is clean | `pm list packages -3`, `enabled_accessibility_services` re-checked |
 | Re-enrol device binding | Only after verification |
-| Restore transaction capability | Graduated — low limits first |
+| Restore transaction capability | Graduated - low limits first |
 | Enhanced monitoring | 30–90 days on the affected customer |
 | Fund recovery | Beneficiary freeze, inter-bank recall, law enforcement |
 | Customer communication | Clear, non-blaming, with prevention guidance |
@@ -308,7 +307,7 @@ and the I4C ecosystem.
 
 ---
 
-## 9. Phase 6 — Post-Incident
+## 9. Phase 6 - Post-Incident
 
 ### The lessons-learned review
 
@@ -316,7 +315,7 @@ Questions worth answering honestly:
 
 1. How long from infection to detection? What would have shortened it?
 2. Was the detection automated or customer-reported? (Customer-reported = a detection gap.)
-3. Did containment happen inside the money clock? If not, where was the delay — technical or
+3. Did containment happen inside the money clock? If not, where was the delay - technical or
    authority?
 4. Did SOC and fraud ops coordinate cleanly, or was there a handoff gap?
 5. What new detection came out of this? ([Ch 18 §7](../soc/18-mobile-threat-hunting.md#7-from-hunt-to-detection))
@@ -336,20 +335,20 @@ The operational core of this chapter. Print it.
 
 ```
 ╔══════════════════════════════════════════════════════════════════════╗
-║  ANDROID BANKING MALWARE — DEVICE REMEDIATION RUNBOOK                ║
+║  ANDROID BANKING MALWARE - DEVICE REMEDIATION RUNBOOK                ║
 ╠══════════════════════════════════════════════════════════════════════╣
-║ STEP 0 — DO NOT power off. DO NOT uninstall yet.                     ║
+║ STEP 0 - DO NOT power off. DO NOT uninstall yet.                     ║
 ║   Rationale: powering off drops AFU→BFU (Ch 05 §6, Ch 17 §3).        ║
 ║              Uninstall may trigger wipe (BRATA, BingoMod).           ║
 ╠══════════════════════════════════════════════════════════════════════╣
-║ STEP 1 — ISOLATE                                                     ║
+║ STEP 1 - ISOLATE                                                     ║
 ║   Airplane mode ON (or Faraday bag).                                 ║
 ║   Prevents remote wipe command and further exfiltration.             ║
 ╠══════════════════════════════════════════════════════════════════════╣
-║ STEP 2 — CONTAIN (account side, in parallel — Track 1)               ║
+║ STEP 2 - CONTAIN (account side, in parallel - Track 1)               ║
 ║   Session hold · block transactions · freeze beneficiary.            ║
 ╠══════════════════════════════════════════════════════════════════════╣
-║ STEP 3 — ACQUIRE (with consent, DPDP-scoped)                         ║
+║ STEP 3 - ACQUIRE (with consent, DPDP-scoped)                         ║
 ║   settings get secure enabled_accessibility_services                 ║
 ║   settings get secure enabled_notification_listeners                 ║
 ║   pm list packages -f -i -3                                          ║
@@ -358,13 +357,13 @@ The operational core of this chapter. Print it.
 ║   pull all APK paths (including splits)                              ║
 ║   adb bugreport ; hash everything                          (Ch 17 §4)║
 ╠══════════════════════════════════════════════════════════════════════╣
-║ STEP 4 — SUBMIT to SUDARSHAN                                          ║
+║ STEP 4 - SUBMIT to SUDARSHAN                                          ║
 ║   Sample → analysis; signer → TI lookup; targets → client impact.    ║
 ╠══════════════════════════════════════════════════════════════════════╣
-║ STEP 5 — SWEEP the customer base for the same package/signer.        ║
+║ STEP 5 - SWEEP the customer base for the same package/signer.        ║
 ║   ★ Converts one incident into campaign-scale containment.           ║
 ╠══════════════════════════════════════════════════════════════════════╣
-║ STEP 6 — REMEDIATE the device                                        ║
+║ STEP 6 - REMEDIATE the device                                        ║
 ║   6a. Boot into SAFE MODE                                            ║
 ║       → disables ALL third-party apps and their a11y services,       ║
 ║         defeating anti-uninstall, overlay obstruction, watchdogs.    ║
@@ -374,22 +373,22 @@ The operational core of this chapter. Print it.
 ║   6d. Disable any remaining unknown accessibility services           ║
 ║   6e. Reboot normally                                                ║
 ╠══════════════════════════════════════════════════════════════════════╣
-║ STEP 7 — VERIFY                                                      ║
+║ STEP 7 - VERIFY                                                      ║
 ║   pm list packages -3 -i        (is it gone? anything else odd?)     ║
 ║   settings get secure enabled_accessibility_services   (empty/known?)║
 ║   dumpsys device_policy         (no rogue admin?)                    ║
 ╠══════════════════════════════════════════════════════════════════════╣
-║ STEP 8 — ERADICATE (account side) — ONLY AFTER STEP 7 PASSES         ║
+║ STEP 8 - ERADICATE (account side) - ONLY AFTER STEP 7 PASSES         ║
 ║   Force credential reset (password, MPIN, UPI PIN)                   ║
 ║   Invalidate all sessions and device bindings; re-enrol              ║
 ║   ⚠ Resetting BEFORE the device is clean hands the attacker          ║
 ║     the new credentials.                                             ║
 ╠══════════════════════════════════════════════════════════════════════╣
-║ STEP 9 — RECOVER                                                     ║
+║ STEP 9 - RECOVER                                                     ║
 ║   Graduated limits · 30–90d enhanced monitoring · fund recovery ·    ║
 ║   customer guidance.                                                 ║
 ╠══════════════════════════════════════════════════════════════════════╣
-║ STEP 10 — POST-INCIDENT                                              ║
+║ STEP 10 - POST-INCIDENT                                              ║
 ║   New detection rule · corpus retro-hunt · lessons learned ·         ║
 ║   regulatory filing if applicable.                                   ║
 ╚══════════════════════════════════════════════════════════════════════╝
@@ -399,7 +398,7 @@ The operational core of this chapter. Print it.
     → re-enrol as a new device with fresh credentials
 ```
 
-> **⚙️ Engineering Note — why Safe Mode is the key step.** Safe Mode disables all third-party
+> **⚙️ Engineering Note - why Safe Mode is the key step.** Safe Mode disables all third-party
 > apps, which simultaneously defeats accessibility-based uninstall interception, overlay
 > obstruction of the uninstall dialog, and watchdog process pairs
 > ([Ch 13 §8](../malware/13-android-malware.md#8-device-admin-abuse-and-anti-removal)). It turns
@@ -419,7 +418,7 @@ The operational core of this chapter. Print it.
 | Cyber-security incident reporting | **RBI** (Cyber Security Framework for Banks) | Per framework timelines |
 | Customer fraud reporting | RBI customer-protection framework | Per circular timelines |
 | Personal data breach | **DPDP Act 2023** | Notification obligations to the Data Protection Board and affected principals |
-| Cybercrime complaint | National Cybercrime Reporting Portal / **1930** | ASAP — affects fund recovery |
+| Cybercrime complaint | National Cybercrime Reporting Portal / **1930** | ASAP - affects fund recovery |
 
 > **⚙️ Engineering Note:** The **6-hour CERT-In clock** runs from *noticing*, which means your
 > detection timestamp is legally significant. Log it precisely and immutably. A dispute about
@@ -427,9 +426,9 @@ The operational core of this chapter. Print it.
 > detection-time recording into the platform, not into a spreadsheet.
 
 > **🏛️ Enterprise Insight:** Reportability determination is a **legal and compliance decision**,
-> not an engineering one. SUDARSHAN's role is to supply the facts — what, when detected, how
-> many customers, what data was accessible — with timestamps and evidence pointers, and to flag
-> *"potentially reportable — refer to compliance"*. It should never assert reportability itself.
+> not an engineering one. SUDARSHAN's role is to supply the facts - what, when detected, how
+> many customers, what data was accessible - with timestamps and evidence pointers, and to flag
+> *"potentially reportable - refer to compliance"*. It should never assert reportability itself.
 > Encode that boundary in the product. This document is not legal advice.
 
 ### The reporting pack
@@ -514,21 +513,21 @@ ir_support:
 - **Fund recovery is largely outside your control** after the first minutes.
 - **Consent gates forensics.** No consent, no device evidence.
 - **Cross-border mule chains** exceed any single bank's reach.
-- **Customer capability varies** — Safe Mode instructions are not universally followable.
+- **Customer capability varies** - Safe Mode instructions are not universally followable.
 
-### False positives — the cost of over-containment
+### False positives - the cost of over-containment
 
 | Action | Cost if wrong |
 |---|---|
-| Session hold | Customer inconvenience — **reversible in minutes** |
+| Session hold | Customer inconvenience - **reversible in minutes** |
 | Credential reset | Moderate friction |
-| Transaction block | Failed legitimate payment — **material** |
+| Transaction block | Failed legitimate payment - **material** |
 | Beneficiary freeze | **Affects a third party who may be innocent** |
 | Customer-base sweep | Mass disruption if the indicator is wrong |
 
 > **⚙️ Engineering Note:** These costs are **asymmetric and the asymmetry favours acting**. A
 > wrongly held session costs a phone call; a completed ODF transfer is irrecoverable. That
-> justifies Track 1 acting on medium confidence — **but the asymmetry does not extend to
+> justifies Track 1 acting on medium confidence - **but the asymmetry does not extend to
 > beneficiary freezes**, which affect an uninvolved third party's access to their own funds and
 > deserve a higher bar. Encode different confidence thresholds per action type rather than one
 > global threshold.
@@ -539,7 +538,7 @@ ir_support:
 |---|---|
 | Customer refuses forensics | Proceed with account-side containment only; document the refusal |
 | Device already wiped by malware | Bank-side records become primary evidence |
-| Customer is the fraudster (first-party fraud) | Different investigation entirely — don't assume victimhood |
+| Customer is the fraudster (first-party fraud) | Different investigation entirely - don't assume victimhood |
 | Shared/family device | Multiple customers potentially affected |
 | Customer abroad / unreachable | Precautionary holds; extended monitoring |
 | Legitimate accessibility user | **Never restrict on a11y alone** ([Ch 18 §10](../soc/18-mobile-threat-hunting.md#10-limitations-edge-cases-false-positives)) |
@@ -548,14 +547,14 @@ ir_support:
 
 ## 14. Engineering tips
 
-1. **Run two tracks in parallel** — contain in minutes, investigate in hours.
+1. **Run two tracks in parallel** - contain in minutes, investigate in hours.
 2. **Different confidence thresholds per action.** Session hold ≠ beneficiary freeze.
 3. **Isolate → acquire → remediate.** Never reorder.
 4. **Safe Mode is the key remediation step.** Most advice omits it.
 5. **Remediate the device before resetting credentials**, or reset out-of-band.
-6. **Sweep by signer** — the highest-leverage containment action.
+6. **Sweep by signer** - the highest-leverage containment action.
 7. **Stream partial analysis results.** Don't hoard certainty while money moves.
-8. **Record the detection timestamp immutably** — the CERT-In clock starts there.
+8. **Record the detection timestamp immutably** - the CERT-In clock starts there.
 9. **Never self-assert regulatory reportability.** Supply facts; flag for compliance.
 10. **Pre-authorise graduated response tiers** so proportionality isn't decided at 2am.
 11. **Every incident produces a rule and a retro-hunt.**
@@ -570,42 +569,41 @@ customer."*
 
 **Perfect answer:** Two tracks in parallel, because the money clock and the investigation clock
 are incompatible. Track one is containment, in minutes and largely automated: hold the session,
-block pending transactions, freeze the beneficiary if it's in-house, and — the highest-leverage
-action — sweep the entire customer base for the same signer certificate, which turns a
+block pending transactions, freeze the beneficiary if it's in-house, and - the highest-leverage
+action - sweep the entire customer base for the same signer certificate, which turns a
 single-customer incident into campaign-scale containment. Track two is investigation over hours:
 sample analysis, consented device forensics, timeline reconstruction, campaign correlation.
 Critically, track one is allowed to act on *medium* confidence, because a wrongly held session
 costs a phone call and is reversible in minutes, whereas a completed on-device-fraud transfer is
-irrecoverable — under UPI the funds are through a mule chain in minutes. We also stream partial
+irrecoverable - under UPI the funds are through a mule chain in minutes. We also stream partial
 analysis results, so a capability-cluster finding available at five seconds can trigger a
 containment decision rather than waiting eight minutes for the full detonation.
 
 **Common mistakes:**
 - Waiting for high confidence before containing. The asymmetry justifies acting early.
-- Uninstalling the malware first. BRATA and BingoMod wipe on detection — you destroy the evidence
+- Uninstalling the malware first. BRATA and BingoMod wipe on detection - you destroy the evidence
   that determines liability.
-- Resetting credentials while the malware is still resident and accessibility is still enabled —
-  you've just handed the attacker the new credentials.
+- Resetting credentials while the malware is still resident and accessibility is still enabled - you've just handed the attacker the new credentials.
 
 **Follow-ups to expect:**
 - *"What if you're wrong and you've frozen a real customer?"* → Session holds are reversible in
   minutes and we treat that cost as acceptable. But we use different confidence thresholds per
-  action — a beneficiary freeze affects an uninvolved third party's access to their own money, so
+  action - a beneficiary freeze affects an uninvolved third party's access to their own money, so
   it needs a higher bar than a session hold. One global threshold is the wrong design.
 - *"You can't control the customer's phone. So what can you actually do?"* → Containment is
-  account-side and immediate — session, transaction, beneficiary. Device remediation is
+  account-side and immediate - session, transaction, beneficiary. Device remediation is
   customer-side, consent-dependent, and slower. The mistake teams make is waiting for device
   access before stopping the bleeding.
 - *"What about the regulator?"* → In India, CERT-In requires reporting within six hours of
   *noticing*, so our detection timestamp is legally significant and recorded immutably. But we
-  supply facts and flag "potentially reportable" — we never assert reportability ourselves,
+  supply facts and flag "potentially reportable" - we never assert reportability ourselves,
   because that's a compliance decision.
 
 **Fact that impresses:** Safe Mode is the single most effective device-remediation step and
 almost no consumer-facing advice mentions it. It disables all third-party apps and therefore
 their accessibility services simultaneously, which defeats uninstall interception, overlay
 obstruction of the uninstall dialog, and watchdog process pairs in one action. It's why customers
-report "it wouldn't let me uninstall it" — they were fighting an accessibility service that Safe
+report "it wouldn't let me uninstall it" - they were fighting an accessibility service that Safe
 Mode would have switched off.
 
 ---
@@ -615,18 +613,18 @@ Mode would have switched off.
 **Q: "Describe the incident response lifecycle."**
 NIST SP 800-61's four phases or SANS PICERL's six. Then add the domain point: these frameworks
 assume you control the endpoint, and in mobile banking fraud you control the account and the app
-but not the device — which is what reshapes the playbook.
+but not the device - which is what reshapes the playbook.
 
 **Q: "A customer reports an unauthorised UPI transfer. First actions?"**
 Two tracks. Immediately: hold the session, block pending transactions, freeze the beneficiary,
 contact the customer on a separate channel. In parallel: begin investigation. And do **not** tell
-them to uninstall the app yet — isolate the device with airplane mode, acquire evidence, then
+them to uninstall the app yet - isolate the device with airplane mode, acquire evidence, then
 remediate.
 
 **Q: "Why not just tell the customer to factory reset?"**
 It destroys the evidence that determines liability and regulatory position, and if they restore
 from a post-infection backup they may reinfect. Factory reset is the fallback when the device
-can't be cleaned — not the first move.
+can't be cleaned - not the first move.
 
 **Q: "The malware is still on the phone and you reset the password. What happens?"**
 The attacker reads the new password off the screen via accessibility and can tap through the
@@ -635,7 +633,7 @@ out-of-band on a different device.
 
 **Q: "How do you contain when you don't control the endpoint?"**
 Account-side: session hold, transaction block, beneficiary freeze, channel suspension, sweep by
-signer across the customer base. Endpoint control isn't a prerequisite for containment — it's a
+signer across the customer base. Endpoint control isn't a prerequisite for containment - it's a
 prerequisite for eradication.
 
 **Q: "What's your reporting obligation in India?"**
@@ -656,15 +654,15 @@ is a compliance call, not an engineering one.
 ## 17. Cross-references
 
 **Upstream:**
-- [← Ch 17 Digital Forensics](../digital-forensics/17-digital-forensics.md) — acquisition, timeline, legal
-- [← Ch 19 Enterprise SOC](../soc/19-enterprise-soc-operations.md) — triage, escalation, the SOC/fraud seam
-- [← Ch 13 Android Malware](../malware/13-android-malware.md) — anti-removal, wipe capability
+- [← Ch 17 Digital Forensics](../digital-forensics/17-digital-forensics.md) - acquisition, timeline, legal
+- [← Ch 19 Enterprise SOC](../soc/19-enterprise-soc-operations.md) - triage, escalation, the SOC/fraud seam
+- [← Ch 13 Android Malware](../malware/13-android-malware.md) - anti-removal, wipe capability
 
 **Downstream:**
-- [→ Ch 21 AI-assisted Analysis](../ai-malware-analysis/21-ai-assisted-malware-analysis.md) — automating IR support
-- [→ Ch 23 Detection Pipeline](../sudarshan/23-detection-pipeline.md) — urgent-path SLAs, partial results
-- [→ Ch 25 Investigation Engine](../sudarshan/25-investigation-engine.md) — case model, sweep
-- [→ Ch 29 Investigation Reports](../sudarshan/29-investigation-reports.md) — regulatory pack, customer comms facts
+- [→ Ch 21 AI-assisted Analysis](../ai-malware-analysis/21-ai-assisted-malware-analysis.md) - automating IR support
+- [→ Ch 23 Detection Pipeline](../sudarshan/23-detection-pipeline.md) - urgent-path SLAs, partial results
+- [→ Ch 25 Investigation Engine](../sudarshan/25-investigation-engine.md) - case model, sweep
+- [→ Ch 29 Investigation Reports](../sudarshan/29-investigation-reports.md) - regulatory pack, customer comms facts
 
 **Related chain:** Detection → parallel contain/investigate → isolate → acquire → sweep →
 remediate → eradicate → recover → rule + retro-hunt.
@@ -673,23 +671,23 @@ remediate → eradicate → recover → rule + retro-hunt.
 
 ## 18. References
 
-1. NIST SP 800-61 Rev. 2 — *Computer Security Incident Handling Guide*.
-2. NIST SP 800-86 — *Guide to Integrating Forensic Techniques into Incident Response*.
-3. SANS — PICERL incident handling process.
-4. CERT-In — Directions of April 28, 2022 (6-hour incident reporting; 180-day log retention).
-5. Reserve Bank of India — Cyber Security Framework for Banks; customer protection framework on unauthorised electronic banking transactions.
-6. Digital Personal Data Protection Act, 2023 (India) — breach notification obligations.
-7. Indian Cyber Crime Coordination Centre (I4C) — National Cybercrime Reporting Portal; helpline 1930.
-8. Cleafy Labs — *BRATA* (2021–2022) — factory-reset kill switch.
-9. Cleafy Labs — *BingoMod* (July 31, 2024) — device wipe after fraud.
-10. ThreatFabric — Anatsa, Octo2, Crocodilus analyses — attack chain reference.
-11. MITRE ATT&CK for Mobile — T1453, T1629.001, T1626.001. https://attack.mitre.org/matrices/mobile/
-12. FIRST — CSIRT Services Framework.
+1. NIST SP 800-61 Rev. 2 - *Computer Security Incident Handling Guide*.
+2. NIST SP 800-86 - *Guide to Integrating Forensic Techniques into Incident Response*.
+3. SANS - PICERL incident handling process.
+4. CERT-In - Directions of April 28, 2022 (6-hour incident reporting; 180-day log retention).
+5. Reserve Bank of India - Cyber Security Framework for Banks; customer protection framework on unauthorised electronic banking transactions.
+6. Digital Personal Data Protection Act, 2023 (India) - breach notification obligations.
+7. Indian Cyber Crime Coordination Centre (I4C) - National Cybercrime Reporting Portal; helpline 1930.
+8. Cleafy Labs - *BRATA* (2021–2022) - factory-reset kill switch.
+9. Cleafy Labs - *BingoMod* (July 31, 2024) - device wipe after fraud.
+10. ThreatFabric - Anatsa, Octo2, Crocodilus analyses - attack chain reference.
+11. MITRE ATT&CK for Mobile - T1453, T1629.001, T1626.001. https://attack.mitre.org/matrices/mobile/
+12. FIRST - CSIRT Services Framework.
 
 ### Further reading
 - NPCI circulars on UPI fraud handling and beneficiary freezes
-- ENISA — incident response maturity guidance
-- OWASP MASVS — MASVS-AUTH controls relevant to out-of-band credential reset
+- ENISA - incident response maturity guidance
+- OWASP MASVS - MASVS-AUTH controls relevant to out-of-band credential reset
 
 ---
 

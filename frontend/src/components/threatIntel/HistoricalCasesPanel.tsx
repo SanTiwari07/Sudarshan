@@ -34,11 +34,11 @@ export default function HistoricalCasesPanel({ data }: { data: FraudCardData }) 
           .map((c) => ({
             sha256: c.sha256,
             similarity: scoreCaseSimilarity(data, c),
-            verdict: c.risk_band || '—',
+            verdict: c.risk_band || '-',
             family: c.family_classification || 'Unknown',
             risk: c.final_risk_score ?? 0,
             confidence: c.confidence ?? 0,
-            analyst: '—',
+            analyst: '-',
           }))
           .filter((r) => r.similarity >= 15)
           .sort((a, b) => b.similarity - a.similarity)

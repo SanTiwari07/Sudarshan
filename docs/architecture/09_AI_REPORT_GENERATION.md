@@ -1,4 +1,4 @@
-# 09 — AI Report Generation & Export Specification
+# 09 - AI Report Generation & Export Specification
 
 ```yaml
 Module Title:        AI Report Generation & Export Engine

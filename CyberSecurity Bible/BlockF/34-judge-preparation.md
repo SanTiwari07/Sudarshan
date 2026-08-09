@@ -1,4 +1,4 @@
-# 34 — Judge Preparation
+# 34 - Judge Preparation
 
 > **Chapter ID:** `CH34` · **Block:** F (Reference) · **Status:** Stable
 > **Tags:** `#judges` `#demo` `#presentation` `#qa` `#hackathon` `#pitch`
@@ -108,14 +108,14 @@ Choreographed so the strongest thing happens first and the technical depth is *s
                money is gone. Today that takes a human analyst hours."
               One number: UPI fraud +85% YoY, ₹1,087 crore FY23-24.
 
- 0:45 ─ 1:45  ★ THE KILLER DEMO — signer impersonation
+ 0:45 ─ 1:45  ★ THE KILLER DEMO - signer impersonation
               Two APKs side by side. Same package name: com.clientbank.app.
               Different certificate fingerprints.
               → instant CRITICAL verdict, cryptographic justification, no ML.
               "Identity on Android is the signing key, not the package name.
                Anyone can type a package name; only the bank has the key."
 
- 1:45 ─ 3:00  THE REAL CASE — a dropper
+ 1:45 ─ 3:00  THE REAL CASE - a dropper
               Submit a clean-looking PDF reader. Static: benign.
               → detonate → package-list diff → NEW PACKAGE APPEARS
               → child artifact analysed → malicious
@@ -158,13 +158,13 @@ Choreographed so the strongest thing happens first and the technical depth is *s
 
 Rehearse this verbatim. Everything else can be adaptive; this cannot.
 
-> "A bank's fraud team gets an APK — pulled off a customer's phone after a disputed transfer. They
+> "A bank's fraud team gets an APK - pulled off a customer's phone after a disputed transfer. They
 > need to know four things: is it malicious, does it target *us*, which of our customers have it,
 > and what do we do right now. Under UPI the money is through a mule chain in minutes, so a correct
 > answer in four hours is correct and useless.
 >
 > Today a human analyst answers that with jadx and a VirusTotal tab, in hours, unreproducibly.
-> SUDARSHAN answers it in minutes, with every claim traceable to a file and a line — because the
+> SUDARSHAN answers it in minutes, with every claim traceable to a file and a line - because the
 > bank has to defend that answer to RBI nine months later.
 >
 > Let me show you the simplest case first."
@@ -179,7 +179,7 @@ demo inside ninety seconds.
 
 ## 5. Question patterns and how to handle them
 
-### Pattern A — "Isn't this just [existing tool]?"
+### Pattern A - "Isn't this just [existing tool]?"
 
 *MobSF · VirusTotal · antivirus · a SIEM*
 
@@ -187,24 +187,24 @@ demo inside ninety seconds.
 one concrete example.
 
 > "MobSF is genuinely good and we use it as a baseline. But it scores **security hygiene**, not
-> maliciousness, and those are frequently anti-correlated — a hardened bank app with pinning and
+> maliciousness, and those are frequently anti-correlated - a hardened bank app with pinning and
 > obfuscation grades badly, while a dropper with three permissions grades well because the payload
 > isn't there yet. The bank's question isn't 'is this app well-built', it's 'is our package name in
 > this malware's target list and which of our customers have it installed.'"
 
-### Pattern B — "Why can't Google/Android just fix this?"
+### Pattern B - "Why can't Google/Android just fix this?"
 
 **Structure:** they have tried, repeatedly → name the specific changes with versions → explain the
 structural reason it persists.
 
-> "They have — Android 13 added Restricted Settings, Android 15 tied accessibility eligibility to
+> "They have - Android 13 added Restricted Settings, Android 15 tied accessibility eligibility to
 > the session-based install API. Malware adapted both times; droppers simply adopted the session
 > API to look like a legitimate store. The structural problem is that accessibility genuinely needs
 > read and write over every app's UI for assistive technology, and there's no shipped mechanism for
 > scoped accessibility. Meanwhile Play Protect found 13 million malicious apps *outside* Play in
-> 2024 — six times what it blocked inside — and the bank carries the fraud loss regardless."
+> 2024 - six times what it blocked inside - and the bank carries the fraud loss regardless."
 
-### Pattern C — "How do you know it's accurate?" / "False positive rate?"
+### Pattern C - "How do you know it's accurate?" / "False positive rate?"
 
 **Structure:** reject the single-number framing → explain per-action calibration → name your hard
 negatives.
@@ -213,37 +213,37 @@ negatives.
 > target under 1%. Medium just queues something, so 20% is fine. A single global threshold either
 > drowns analysts or misses threats. And we calibrate against a hard-negative corpus that
 > deliberately includes password managers, TeamViewer, MDM agents, and the client bank's own
-> production app — because a scorer that flags the most-hardened app on the device is a predictable
+> production app - because a scorer that flags the most-hardened app on the device is a predictable
 > and embarrassing failure."
 
-### Pattern D — "What about the AI?"
+### Pattern D - "What about the AI?"
 
 **Structure:** state where it doesn't decide → state what it does → give the regulatory reason.
 
 > "The AI never produces the verdict. Deterministic rules do, with every point of score traced to a
 > file and line. ML does similarity clustering and queue ordering. LLMs summarise decompiled code
 > and draft reports, grounded with mandatory evidence citations. That's not caution for its own
-> sake — a bank has to explain a held session to a regulator, and 'the model said 0.87' fails while
+> sake - a bank has to explain a held session to a regulator, and 'the model said 0.87' fails while
 > 'the accessibility config declares canPerformGestures at line 6' survives."
 
-### Pattern E — "What can't you do?"
+### Pattern E - "What can't you do?"
 
 **Never deflect.** This is a gift.
 
-> "Three things. We can't detect a payload that doesn't exist yet — droppers are clean at analysis
+> "Three things. We can't detect a payload that doesn't exist yet - droppers are clean at analysis
 > time, which we handle with installer attribution and detonation-time package diffing rather than
 > pretending. We can't guarantee unpacking, so samples we couldn't read carry a confidence ceiling
-> and are reported inconclusive, never clean. And we don't do actor attribution — family and
+> and are reported inconclusive, never clean. And we don't do actor attribution - family and
 > campaign, yes; who the humans are, no. Anyone claiming that from an APK is overselling."
 
-### Pattern F — the hostile technical probe
+### Pattern F - the hostile technical probe
 
 *"You said X. But actually Y, doesn't that break it?"*
 
 **Structure:** if they're right, **concede immediately and precisely** → show you understand the
 implication → say what you'd do.
 
-> "You're right — Android 14 blocked loading from world-writable files specifically, not dynamic
+> "You're right - Android 14 blocked loading from world-writable files specifically, not dynamic
 > code loading generally. An app can still load DEX from its own private read-only storage or from
 > memory. That's exactly why we hook the class loaders rather than relying on the platform
 > restriction."
@@ -255,21 +255,21 @@ whether you know the boundary.
 
 ## 6. The twelve facts that land
 
-Deploy sparingly — one or two per answer, never a recital.
+Deploy sparingly - one or two per answer, never a recital.
 
 | # | Fact | Deploy when asked about |
 |---|---|---|
 | 1 | Anatsa's dropper reached **#4 in Play's Top Free Tools (June 29, 2025)** before turning malicious ~6 weeks after a clean May 7 release | Store review; droppers |
 | 2 | Play Protect found **13M+ malicious apps outside Play** in 2024 vs 2.36M blocked inside | "Why isn't Google enough?" |
 | 3 | **Android 14 blocks installing apps targeting below API 23** (`INSTALL_FAILED_DEPRECATED_SDK_VERSION`) because malware targeted API 22 to escape runtime permissions | Platform hardening |
-| 4 | **Janus (CVE-2017-13156):** a file can be a valid ZIP *and* a valid DEX — ZIP parses from the end, DEX from the start. v1-only, Android 5.0–8.0, patched Dec 2017 | Why v2 exists |
+| 4 | **Janus (CVE-2017-13156):** a file can be a valid ZIP *and* a valid DEX - ZIP parses from the end, DEX from the start. v1-only, Android 5.0–8.0, patched Dec 2017 | Why v2 exists |
 | 5 | Crocodilus command **`TRU9MMRHBCRO`** adds a fake "Bank Support" contact so vishing calls show a trusted name | Social engineering sophistication |
-| 6 | **ToxicPanda uses AES-ECB** — deterministic, so C2 traffic is fingerprintable *without the key* | Crypto; detection creativity |
+| 6 | **ToxicPanda uses AES-ECB** - deterministic, so C2 traffic is fingerprintable *without the key* | Crypto; detection creativity |
 | 7 | **ERMAC 3.0 source leaked** via an open directory (Hunt.io, Aug 2025) exposing a hardcoded JWT secret and default root credentials | Attribution; adversary opsec |
-| 8 | Zscaler (Aug 2025): **Anatsa dropped remote DEX loading for direct install** — so class-loader-only detection misses it | Why two staging detections |
-| 9 | **Vultur** (2021) was the first Android banker to drop overlays for VNC — an *economic* shift, not just technical | Technique evolution |
+| 8 | Zscaler (Aug 2025): **Anatsa dropped remote DEX loading for direct install** - so class-loader-only detection misses it | Why two staging detections |
+| 9 | **Vultur** (2021) was the first Android banker to drop overlays for VNC - an *economic* shift, not just technical | Technique evolution |
 | 10 | **MobSF's formula** penalises high-severity findings regardless of context, so a hardened bank app grades worse than a clean dropper | Tooling limits |
-| 11 | **Safe Mode** disables all third-party apps and their accessibility services — defeating uninstall interception, overlay obstruction, and watchdogs in one step | Remediation |
+| 11 | **Safe Mode** disables all third-party apps and their accessibility services - defeating uninstall interception, overlay obstruction, and watchdogs in one step | Remediation |
 | 12 | **ART and Conscrypt are Mainline modules** updated via Play, so two "Android 14" devices can behave differently | Reproducibility |
 
 ---
@@ -302,14 +302,14 @@ Deploy sparingly — one or two per answer, never a recital.
 
 ### You were wrong and they caught it
 
-> "You're right, I overstated that. What's actually true is [correction]. Thank you — that matters
+> "You're right, I overstated that. What's actually true is [correction]. Thank you - that matters
 > for [specific implication]."
 
 Concede fully, immediately, and precisely. Do not partially defend.
 
 ### The demo breaks
 
-> "That's the live path failing — let me show you the recorded run and explain what should happen."
+> "That's the live path failing - let me show you the recorded run and explain what should happen."
 
 Never debug on stage. Have a recorded fallback. Move on within fifteen seconds.
 

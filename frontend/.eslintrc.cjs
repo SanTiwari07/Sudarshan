@@ -1,5 +1,5 @@
 // The `lint` script and all these plugins were already in package.json, but no
-// config file was ever committed — so `npm run lint` failed with "couldn't find
+// config file was ever committed - so `npm run lint` failed with "couldn't find
 // a configuration file" and the script had never actually run.
 module.exports = {
   root: true,
@@ -26,7 +26,7 @@ module.exports = {
     '@typescript-eslint/no-unused-vars': 'off',
 
     // Pre-existing debt, surfaced rather than hidden. These are warnings, not
-    // errors, so CI stays meaningful instead of being red from day one — but
+    // errors, so CI stays meaningful instead of being red from day one - but
     // they stay visible so the count can be driven down.
     //   no-explicit-any        ~11 sites, mostly API response shapes
     //   react-hooks/exhaustive-deps  2 sites

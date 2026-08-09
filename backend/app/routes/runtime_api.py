@@ -1,16 +1,16 @@
 """
-SUDARSHAN — Runtime Telemetry API
+SUDARSHAN - Runtime Telemetry API
 ====================================
 Exposes live pipeline state, hook telemetry, event stream, and evidence
 snapshots for the analyst dashboard and health monitoring.
 
 Endpoints:
-  GET /api/runtime/status   — overall pipeline health summary
-  GET /api/runtime/hooks    — hook inventory, install counts, fire counts
-  GET /api/runtime/events   — recent runtime events (last N)
-  GET /api/runtime/pipeline — full pipeline state machine
-  GET /api/runtime/metrics  — events/sec, dropped events, error rates
-  GET /api/runtime/evidence — evidence store snapshot
+  GET /api/runtime/status - overall pipeline health summary
+  GET /api/runtime/hooks - hook inventory, install counts, fire counts
+  GET /api/runtime/events - recent runtime events (last N)
+  GET /api/runtime/pipeline - full pipeline state machine
+  GET /api/runtime/metrics - events/sec, dropped events, error rates
+  GET /api/runtime/evidence - evidence store snapshot
 
 These endpoints read from the in-process PipelineTracker registry and the
 analysis job store. They require no special permissions beyond a valid JWT.
@@ -93,7 +93,7 @@ _ARTIFACT_ROOTS = (
 )
 
 # Cache the rglob result briefly. This walks the ENTIRE artifact tree and stats
-# every hit, on the two endpoints a dashboard polls — and artifact directories
+# every hit, on the two endpoints a dashboard polls - and artifact directories
 # are never removed, so the cost grows with every sample ever analysed.
 _evidence_scan_cache: Dict[str, Any] = {"at": 0.0, "paths": []}
 _EVIDENCE_SCAN_TTL = float(os.getenv("SUDARSHAN_EVIDENCE_SCAN_TTL", "10.0"))
@@ -128,7 +128,7 @@ def _load_evidence_from_artifacts(case_id: Optional[str] = None) -> List[Dict]:
     `case_id` is matched against the artifact directory name, which
     frida_sandbox.artifact_dir_for builds as "<sample-stem>_<digest>".
 
-    Without it this returned whichever sample finished LAST, globally — so an
+    Without it this returned whichever sample finished LAST, globally - so an
     analyst looking at case A was shown case B's evidence whenever B completed
     more recently, and any authenticated caller could read evidence from cases
     they never submitted. The sibling routes already accept case_id; this one
@@ -168,7 +168,7 @@ async def runtime_health(current_user: dict = Depends(get_current_user)):
     AUTHENTICATED. This was the only route in this module without a dependency,
     and it discloses the host ADB path, the connection mode, emulator serials,
     the exact Frida version, hook/event/evidence counts and per-hook error
-    strings — host layout and analysis state, to anyone who could reach the
+    strings - host layout and analysis state, to anyone who could reach the
     gateway. The equivalent leak on /sandbox/status was closed previously; this
     endpoint reintroduced a subset of it.
     """
@@ -186,7 +186,7 @@ async def runtime_health(current_user: dict = Depends(get_current_user)):
     # Behaviour categories observed, NOT a score.
     #
     # This used to sum weights (35/25/20/10/5/5) over evidence categories and
-    # report the total as "Risk Score" — a FOURTH scoring formula, matching
+    # report the total as "Risk Score" - a FOURTH scoring formula, matching
     # neither the FRS in risk_engine nor the BFCI in bfci_scorer, under a name
     # an analyst reads as the verdict. Two different numbers called the same
     # thing in one product is worse than one imperfect number.
@@ -226,7 +226,7 @@ async def runtime_health(current_user: dict = Depends(get_current_user)):
         "Hooks Installed": total_installed,
         "Events Received": total_events,
         "Evidence Count": len(evidence_records),
-        # Deliberately NOT a score — see above. Risk is owned by risk_engine and
+        # Deliberately NOT a score - see above. Risk is owned by risk_engine and
         # is served by /api/v1/cases/{sha256}.
         "Observed Categories": observed_categories,
         "Subscribers": len(active_trackers) + 1,

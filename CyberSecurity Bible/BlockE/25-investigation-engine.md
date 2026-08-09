@@ -1,4 +1,4 @@
-# 25 — Investigation Engine
+# 25 - Investigation Engine
 
 > **Chapter ID:** `CH25` · **Block:** E · **Status:** Stable
 > **Tags:** `#investigation` `#artifact-graph` `#recursion` `#evidence-ledger` `#case-management` `#sweep`
@@ -30,7 +30,7 @@
 ## 1. What the engine is for
 
 The detection pipeline ([Ch 23](23-detection-pipeline.md)) analyses *artifacts*. The investigation
-engine assembles those analyses into **an investigation** — a connected, evidenced, reproducible
+engine assembles those analyses into **an investigation** - a connected, evidenced, reproducible
 account of what happened and who it affects.
 
 ```
@@ -46,10 +46,10 @@ Four responsibilities:
 
 | # | Responsibility | Principle |
 |---|---|---|
-| 1 | **Artifact graph** — nodes and relationships | P5 identity |
-| 2 | **Recursion** — child artifacts re-enter the pipeline | **P6** |
-| 3 | **Evidence ledger** — every claim → an artifact pointer | **P3** |
-| 4 | **Cases and sweep** — from one sample to estate-wide impact | P8 |
+| 1 | **Artifact graph** - nodes and relationships | P5 identity |
+| 2 | **Recursion** - child artifacts re-enter the pipeline | **P6** |
+| 3 | **Evidence ledger** - every claim → an artifact pointer | **P3** |
+| 4 | **Cases and sweep** - from one sample to estate-wide impact | P8 |
 
 ---
 
@@ -109,7 +109,7 @@ A single question demonstrates it:
                           ★ THREE client banks are targeted, not one
 ```
 
-That traversal — not the individual verdict — is the product.
+That traversal - not the individual verdict - is the product.
 → [Ch 15 §11](../malware/15-malware-infrastructure.md#11-pivoting-infrastructure-as-an-investigative-graph)
 
 ---
@@ -153,7 +153,7 @@ the pipeline.
     reason: "installed a malicious payload (child artifact <sha256>)"
 ```
 
-> **⚙️ Engineering Note — without propagation, recursion is pointless.** A system that analyses
+> **⚙️ Engineering Note - without propagation, recursion is pointless.** A system that analyses
 > the payload but leaves the dropper scored "clean" has produced a correct analysis and a wrong
 > answer, because the dropper is what the bank's customers actually installed and what the store
 > is distributing. **The parent must inherit a verdict from its children**, with the child cited
@@ -266,7 +266,7 @@ propagation:
     - propagate across mere similarity without review
 ```
 
-> **⚙️ Engineering Note — do not propagate downward.** A malicious APK may bundle a perfectly
+> **⚙️ Engineering Note - do not propagate downward.** A malicious APK may bundle a perfectly
 > ordinary open-source library. Marking that library malicious because of its container is how a
 > platform ends up flagging OkHttp. Upward propagation reflects *delivery responsibility*;
 > downward propagation reflects nothing.
@@ -282,7 +282,7 @@ A **case** is the unit the humans work in, and it must be shared across the orga
 case:
   id: "CASE-2026-0805-014"          # ★ shared with SOC and fraud ops
   tenant_id: "..."
-  opened_utc: "..."                  # ★ immutable — CERT-In clock (Ch 20 §11)
+  opened_utc: "..."                  # ★ immutable - CERT-In clock (Ch 20 §11)
   opened_by: automated | analyst | soc_api
   state: open | contained | investigating | closed
   severity / confidence: ...
@@ -299,7 +299,7 @@ case:
   timeline: [...]                     # from Ch 17 §6 where device forensics exist
   regulatory:
     detected_at_utc: "..."           # ★ immutable
-    potentially_reportable: true     # ★ flag only — never assert (Ch 20 §11)
+    potentially_reportable: true     # ★ flag only - never assert (Ch 20 §11)
 ```
 
 ### Case creation triggers
@@ -311,7 +311,7 @@ case:
 | Dropper chain + accessibility on a customer device | Critical |
 | Known-malicious signer with customers affected | High |
 | Novel family candidate | High (analyst) |
-| Analyst manual creation | — |
+| Analyst manual creation | - |
 
 ---
 
@@ -412,7 +412,7 @@ verdict:
 
 > **⚙️ Engineering Note:** Keep automated and adjudicated verdicts as **separate layers**. If an
 > analyst overwrites the automated verdict in place, you lose the ability to measure the platform's
-> accuracy — and analyst adjudications are the highest-quality labels you have for tuning
+> accuracy - and analyst adjudications are the highest-quality labels you have for tuning
 > ([Ch 21 §3](../ai-malware-analysis/21-ai-assisted-malware-analysis.md#3-datasets-and-their-limitations)).
 > Preserve both, always.
 
@@ -430,7 +430,7 @@ verdict:
 | Legitimate app scored malicious | Adjudication + rule tuning + regression test added |
 | Sample deleted (retention) | Graph node and findings persist; bytes removed |
 
-> **🚨 Misconception:** "The verdict is the output." The **case** is the output — verdict plus
+> **🚨 Misconception:** "The verdict is the output." The **case** is the output - verdict plus
 > evidence plus affected cohort plus recommended actions plus a reproducible record. A verdict
 > alone doesn't tell a bank whose sessions to hold or what to tell a regulator.
 
@@ -456,14 +456,13 @@ verdict:
 **What judges ask:** *"You analysed a dropper and it looked clean. Doesn't that mean you missed
 it?"*
 
-**Perfect answer:** It would, if the analysis stopped there. The dropper is genuinely clean —
-Anatsa's Play droppers were working utilities with no malicious code, which is exactly why store
+**Perfect answer:** It would, if the analysis stopped there. The dropper is genuinely clean - Anatsa's Play droppers were working utilities with no malicious code, which is exactly why store
 review passed them. So during detonation we diff the installed-package list before and after, and
 when a new package appears we treat it as a **new artifact with a `derived_from` edge**, re-run
 the entire pipeline on it, and then **propagate the child's verdict back up to the parent**. The
 dropper's final score is critical, with the reason recorded as "delivered malicious child
 artifact," and the child cited as the evidence. Without that upward propagation you'd have a
-correct analysis and a wrong answer — because the dropper is what customers actually installed and
+correct analysis and a wrong answer - because the dropper is what customers actually installed and
 what the store is still distributing.
 
 **Common mistakes:**
@@ -477,7 +476,7 @@ what the store is still distributing.
   it's unusual enough to be interesting.
 - *"How do you go from one sample to protecting the whole customer base?"* → The sweep. We pivot on
   signer certificate first because it's the most durable identity, then hardcoded keys, then
-  DEX-level code similarity, then shared C2. And we match pivot precision to action cost — a signer
+  DEX-level code similarity, then shared C2. And we match pivot precision to action cost - a signer
   match justifies an automated session hold; a similarity match justifies review, not a
   customer-visible action.
 - *"Can an analyst override you?"* → Yes, with a required reason, recorded as a separate
@@ -505,8 +504,8 @@ pipeline, and its verdict propagates **upward** to the parent with the reason re
 child cap, and hash-based cycle detection prevent runaway recursion.
 
 **Q: "How do you make a verdict auditable?"**
-An immutable, append-only evidence ledger where every finding cites a pointer — file and line, log
-offset, or network flow — plus recorded rule, tool, model, and device-environment versions so the
+An immutable, append-only evidence ledger where every finding cites a pointer - file and line, log
+offset, or network flow - plus recorded rule, tool, model, and device-environment versions so the
 analysis is reproducible.
 
 **Q: "Should a malicious app make its bundled libraries malicious?"**
@@ -514,8 +513,7 @@ No. Propagate upward only. Downward propagation flags every open-source dependen
 precision.
 
 **Q: "How do you handle analyst disagreement?"**
-A separate adjudication layer with a required reason. Never overwrite the automated verdict —
-you'd lose accuracy measurement and your best labels.
+A separate adjudication layer with a required reason. Never overwrite the automated verdict - you'd lose accuracy measurement and your best labels.
 
 **Beginner mistakes:**
 - Not propagating child verdicts.
@@ -538,12 +536,12 @@ you'd lose accuracy measurement and your best labels.
 
 ## 15. References
 
-1. Caltagirone, Pendergast, Betz — *The Diamond Model of Intrusion Analysis* (2013).
-2. OASIS — STIX 2.1 relationship model. https://oasis-open.github.io/cti-documentation/
-3. NIST SP 800-86 — forensic integration with incident response.
-4. Zscaler ThreatLabz — *Anatsa's Latest Updates* (August 2025) — direct payload installation.
-5. ThreatFabric — Anatsa Play dropper campaign (July 2025).
-6. TLSH — similarity hashing. https://github.com/trendmicro/tlsh
+1. Caltagirone, Pendergast, Betz - *The Diamond Model of Intrusion Analysis* (2013).
+2. OASIS - STIX 2.1 relationship model. https://oasis-open.github.io/cti-documentation/
+3. NIST SP 800-86 - forensic integration with incident response.
+4. Zscaler ThreatLabz - *Anatsa's Latest Updates* (August 2025) - direct payload installation.
+5. ThreatFabric - Anatsa Play dropper campaign (July 2025).
+6. TLSH - similarity hashing. https://github.com/trendmicro/tlsh
 
 ---
 

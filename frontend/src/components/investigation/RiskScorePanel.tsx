@@ -17,7 +17,7 @@ function scoreDrivers(data: FraudCardData): string[] {
   const drivers: string[] = [];
   if (data.has_accessibility_abuse) drivers.push('Accessibility abuse observed');
   if (data.has_system_alert_window) drivers.push('Overlay / system alert window capability');
-  if (data.has_sms_read_write) drivers.push('SMS read/write — OTP interception risk');
+  if (data.has_sms_read_write) drivers.push('SMS read/write - OTP interception risk');
   if (data.targets_indian_banks) drivers.push('Banking application targeting');
   if (data.family_classification !== 'Unknown') drivers.push(`Malware family: ${data.family_classification}`);
   const frs = data.frs_breakdown;
@@ -42,7 +42,7 @@ export default function RiskScorePanel({ data }: { data: FraudCardData }) {
             <h2 className="text-sm font-semibold text-slate-900">Fraud Risk Score</h2>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            <HelpTerm term="Risk Score">Weighted score</HelpTerm> from verified evidence — not a malware verdict alone.
+            <HelpTerm term="Risk Score">Weighted score</HelpTerm> from verified evidence - not a malware verdict alone.
           </p>
         </div>
         <span

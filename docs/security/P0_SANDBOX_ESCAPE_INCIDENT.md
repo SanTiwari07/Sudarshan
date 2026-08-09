@@ -1,4 +1,4 @@
-# P0 — Sandbox Escape Incident Report
+# P0 - Sandbox Escape Incident Report
 
 **Date:** 2026-08-06  
 **Classification:** Production blocking  
@@ -24,7 +24,7 @@ Downstream BFCI, threat correlation, and risk scores from affected sessions must
 | Docker “sandbox” | Malware in container | Malware **never executes** in analysis-engine; only tools run there | Name collision: “sandbox” = Android VM, not Docker |
 | Gateway fallback | Engine-only dynamic | Backend could run **full Frida** without seccomp/CPU limits | `_run_analysis_pipeline` local path when engine HTTP failed |
 
-**Primary root cause:** **Control-plane misrouting** — analysis containers were encouraged to use the Docker host as the ADB transport (`host.docker.internal`), merging the compromised guest’s reachability with **every device and port the host ADB server proxies**, instead of a **dedicated Genymotion endpoint** on a private NIC.
+**Primary root cause:** **Control-plane misrouting** - analysis containers were encouraged to use the Docker host as the ADB transport (`host.docker.internal`), merging the compromised guest’s reachability with **every device and port the host ADB server proxies**, instead of a **dedicated Genymotion endpoint** on a private NIC.
 
 **Contributing causes:**
 
@@ -129,7 +129,7 @@ flowchart TB
 ## 10. Configuration changes
 
 ```env
-# Required for Genymotion — VM IP from `adb devices`, NOT host.docker.internal
+# Required for Genymotion - VM IP from `adb devices`, NOT host.docker.internal
 ADB_HOST=192.168.56.101
 SANDBOX_PROVIDER=genymotion
 DEVICE_SERIAL=192.168.56.101:5555
@@ -177,7 +177,7 @@ docker compose -f docker-compose.yml -f docker-compose.hardened.yml up -d --buil
 
 - Start agent with **`-l 127.0.0.1:PORT`** (implemented).  
 - Access only via **`adb forward tcp:PORT tcp:PORT`** from analysis-engine.  
-- Rename binary (`SUDARSHAN_FRIDA_BIN`) — obscurity only; network bind is the real control.  
+- Rename binary (`SUDARSHAN_FRIDA_BIN`) - obscurity only; network bind is the real control.  
 - Rotate / redeploy server binary after each session.
 
 ---
@@ -245,7 +245,7 @@ After host networking is locked down, re-run representative families (TeaBot, Jo
 1. Start Genymotion on `192.168.56.101` with a rooted image.  
 2. Set `ADB_HOST=host.docker.internal` and `SANDBOX_CONTAINMENT_STRICT=false`.  
 3. Install a LAN-scanning sample; observe probes to `192.168.56.1`, Docker bridge, and host-published ports.  
-4. Enable strict mode + VM IP + `FRIDA_LISTEN_HOST=127.0.0.1`; repeat — Frida port not visible on guest LAN; ADB connect to host alias blocked at policy layer.
+4. Enable strict mode + VM IP + `FRIDA_LISTEN_HOST=127.0.0.1`; repeat - Frida port not visible on guest LAN; ADB connect to host alias blocked at policy layer.
 
 ---
 

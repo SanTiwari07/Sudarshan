@@ -4,7 +4,7 @@ Regression tests for the Frida attach failure.
 Symptom: every dynamic run returned INSTRUMENTATION_FAILED with
     "Frida attach failed. Ensure frida-server is running on emulator."
 Cause: frida-server WAS running. SELinux is Enforcing by default on Android
-15+, which denies the ptrace that Frida injection needs — even for uid 0 — so
+15+, which denies the ptrace that Frida injection needs - even for uid 0 - so
 `device.attach(pid)` raised PermissionDeniedError on a process that was
 demonstrably running. The error message blamed the wrong component and cost
 real debugging time.

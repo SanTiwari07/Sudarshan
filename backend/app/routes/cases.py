@@ -1,13 +1,13 @@
-# backend/app/routes/cases.py — expanded CaseDetail + evidence endpoint
+# backend/app/routes/cases.py - expanded CaseDetail + evidence endpoint
 """
 Sudarshan Cases API
 =====================
 Provides persistent case history retrieved from SQLite.
 
 Endpoints:
-  GET /api/v1/cases            — paginated list (JWT required, analyst+)
-  GET /api/v1/cases/{sha256}   — single case by hash (JWT required, analyst+)
-  GET /api/v1/cases/{sha256}/evidence — Frida evidence.json for case
+  GET /api/v1/cases - paginated list (JWT required, analyst+)
+  GET /api/v1/cases/{sha256} - single case by hash (JWT required, analyst+)
+  GET /api/v1/cases/{sha256}/evidence - Frida evidence.json for case
 """
 
 import logging

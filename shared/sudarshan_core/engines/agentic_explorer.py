@@ -1,13 +1,13 @@
 """
-SUDARSHAN — Agentic Dynamic Analysis Explorer
+SUDARSHAN - Agentic Dynamic Analysis Explorer
 ==============================================
 Orchestrates the full Observe → Think → Act → Execute agent loop for
 dynamic analysis of Android applications.
 
 Drop-in replacement for UIExplorer with the same public interface:
-    start(duration_seconds: int)   — async, runs the agent loop
-    stop()                         — signals graceful termination
-    get_reports() → Dict           — returns all artifacts
+    start(duration_seconds: int) - async, runs the agent loop
+    stop() - signals graceful termination
+    get_reports() → Dict - returns all artifacts
 
 Architecture principle:
     AI controls navigation. Deterministic engines control verdict.
@@ -308,8 +308,7 @@ class AgenticExplorer:
                     # Count EVERY event against its OWN hook. This previously
                     # iterated the set of categories, so a category was counted
                     # once per cycle regardless of how many events arrived, and
-                    # the first event's hook was attributed to every category —
-                    # corrupting both the per-category counts and
+                    # the first event's hook was attributed to every category - # corrupting both the per-category counts and
                     # frida_unique_hook_types.
                     for event in frida_events_this_cycle:
                         self.benchmark.record_frida_event(
@@ -336,7 +335,7 @@ class AgenticExplorer:
 
                 # SC5: Crash detection & auto-recovery
                 if self._is_crash_screen(obs.activity):
-                    logger.warning(f"[AgenticExplorer] SC5: App crash/ANR screen detected ({obs.activity}) — attempting relaunch and recovery")
+                    logger.warning(f"[AgenticExplorer] SC5: App crash/ANR screen detected ({obs.activity}) - attempting relaunch and recovery")
                     self.audit_log.record_system_event("crash_detected_relaunching", obs.activity)
                     try:
                         if self.main_activity:
@@ -364,7 +363,7 @@ class AgenticExplorer:
 
                     if consecutive_crashes >= MAX_CONSECUTIVE_CRASHES:
                         logger.error(
-                            "[AgenticExplorer] App crashed %d times in a row — "
+                            "[AgenticExplorer] App crashed %d times in a row - "
                             "stopping exploration. Evidence collected so far is "
                             "retained; the run is NOT reported as clean.",
                             consecutive_crashes,
@@ -376,7 +375,7 @@ class AgenticExplorer:
                         break
                     continue
 
-                # Reached a normal screen — the app recovered, so the crash
+                # Reached a normal screen - the app recovered, so the crash
                 # streak must not carry over and trip MAX_CONSECUTIVE_CRASHES
                 # later in the run.
                 consecutive_crashes = 0
@@ -393,7 +392,7 @@ class AgenticExplorer:
                     if next_goal.attempts >= MAX_ATTEMPTS_PER_GOAL:
                         logger.warning(
                             f"[AgenticExplorer] Goal '{next_goal.name}' exhausted "
-                            f"{next_goal.attempts} attempts — marking FAILED"
+                            f"{next_goal.attempts} attempts - marking FAILED"
                         )
                         self.goals.mark_failed(next_goal.name)
                         self.audit_log.record_system_event(
@@ -407,7 +406,7 @@ class AgenticExplorer:
 
                 # SC6: Planner signals stop (FallbackPlanner exhausted)
                 if action is None:
-                    logger.info("[AgenticExplorer] SC6: Planner returned None — no progress possible")
+                    logger.info("[AgenticExplorer] SC6: Planner returned None - no progress possible")
                     self.audit_log.record_system_event(
                         "stop_planner_exhausted",
                         "FallbackPlanner consecutive failure limit reached"
@@ -420,7 +419,7 @@ class AgenticExplorer:
                     self.benchmark.record_fallback_activation()
 
                 # NOTE: LLM calls are counted inside AgentPlanner, at the actual
-                # request site — a schema retry issues a second API call that is
+                # request site - a schema retry issues a second API call that is
                 # invisible from here.
 
 
@@ -435,7 +434,7 @@ class AgenticExplorer:
                 # next screen was the tool's own fixed sleep. With the
                 # deterministic FallbackPlanner there is no LLM round trip to
                 # absorb the difference either, so input was dispatched into
-                # activity transitions — tapping views mid-teardown and running
+                # activity transitions - tapping views mid-teardown and running
                 # `uiautomator dump` against a window that was still animating.
                 # On a slower emulator that crashed the app under analysis, and
                 # a harness-induced crash is indistinguishable in the report
@@ -448,12 +447,12 @@ class AgenticExplorer:
                     settled = await self.executor.wait_for_idle()
                     if not settled:
                         logger.debug(
-                            "[AgenticExplorer] UI did not settle after '%s' — "
+                            "[AgenticExplorer] UI did not settle after '%s' - "
                             "observing anyway", action.get("tool", "")
                         )
 
                 # A cached choice that failed must not be replayed on this
-                # screen — drop it so the next visit re-plans from scratch.
+                # screen - drop it so the next visit re-plans from scratch.
                 if last_action_failed:
                     self.planner.invalidate_cache_for_screen(obs.screen_hash)
 
@@ -609,10 +608,10 @@ class AgenticExplorer:
         Return all artifacts in the same structure as UIExplorer.get_reports().
 
         Adds:
-            "audit_log"      — full Explainable Exploration Log
-            "benchmark"      — per-run benchmark metrics
-            "goal_summary"   — final status of all 15 fraud goals
-            "agent_memory"   — memory summary (no credential values)
+            "audit_log" - full Explainable Exploration Log
+            "benchmark" - per-run benchmark metrics
+            "goal_summary" - final status of all 15 fraud goals
+            "agent_memory" - memory summary (no credential values)
         """
         mem_summary = self.memory.get_summary()
         audit_entries = self.audit_log.get_entries()

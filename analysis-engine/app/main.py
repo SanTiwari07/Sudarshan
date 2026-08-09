@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Standalone Analysis Engine Microservice
+SUDARSHAN - Standalone Analysis Engine Microservice
 ===================================================
 FastAPI REST microservice responsible for executing all static & dynamic
 APK analysis operations inside the containerized environment.
@@ -147,8 +147,7 @@ _apktool = ApktoolEngine()
 _jadx = JadxEngine()
 
 # Bound how many analyses run at once. Each one occupies a worker thread and
-# spawns APKTool/JADX subprocesses, and the container is capped at cpus: 2.0 —
-# without this, concurrent uploads oversubscribe the CPU and every analysis gets
+# spawns APKTool/JADX subprocesses, and the container is capped at cpus: 2.0 - # without this, concurrent uploads oversubscribe the CPU and every analysis gets
 # slower until they all breach the timeout together.
 MAX_CONCURRENT_ANALYSES = int(os.getenv("MAX_CONCURRENT_ANALYSES", "2"))
 _analysis_slots = asyncio.Semaphore(MAX_CONCURRENT_ANALYSES)
@@ -172,7 +171,7 @@ DEFAULT_CONFIDENCE = 70.0
 # In-process, so it does NOT survive a restart and is not shared across workers.
 # entrypoint.sh therefore pins --workers 1; with 2 workers a job created in one
 # process 404s from the other. Externalising this (SQLite/Redis) is the real fix
-# and is still open — see audit/03_Backend_Audit.md §3.
+# and is still open - see audit/03_Backend_Audit.md §3.
 #
 # It also used to grow without bound, holding every completed job's full report
 # for the process lifetime. Finished jobs now expire.
@@ -223,7 +222,7 @@ def health():
 
 
 def _adb_connected() -> bool:
-    """Blocking ADB probe — always call via a worker thread."""
+    """Blocking ADB probe - always call via a worker thread."""
     try:
         from sudarshan_core.sandbox import get_sandbox_provider
 
@@ -279,7 +278,7 @@ async def _execute_analysis_pipeline(
     logger.info(f"[Engine] Executing analysis pipeline for SHA-256: {sha256_hash} (Timeout: {timeout_seconds}s)")
 
     async def _run():
-        # 1. Primary Static Analysis — Androguard, MobSF, APKTool, JADX in parallel where safe
+        # 1. Primary Static Analysis - Androguard, MobSF, APKTool, JADX in parallel where safe
         async def _run_androguard():
             timer.stage_started("NATIVE_ANALYSIS")
             out = await asyncio.to_thread(analyze_apk, apk_path)
@@ -290,7 +289,7 @@ async def _execute_analysis_pipeline(
 
         # MobSF is OPTIONAL enrichment. Unguarded, an unreachable MOBSF_HOST
         # raised MobSFAnalysisError straight out of the pipeline and the whole
-        # request 500'd — so the gateway silently fell back to its own
+        # request 500'd - so the gateway silently fell back to its own
         # (toolchain-less) local run. The backend has always guarded this
         # (routes/upload.py); the engine did not.
         mobsf_budget = int(os.getenv("MOBSF_MAX_SECONDS", "0") or "0")
@@ -415,7 +414,7 @@ async def _execute_analysis_pipeline(
         if har_path and await asyncio.to_thread(os.path.exists, har_path):
             try:
                 nc = NetworkCapture()
-                # Parses a HAR file off disk — size is attacker-influenced.
+                # Parses a HAR file off disk - size is attacker-influenced.
                 added = await asyncio.to_thread(nc.ingest_mitmproxy_har, har_path)
                 if dynamic_result and isinstance(dynamic_result, dict):
                     dynamic_result["mitmproxy_flows_added"] = added
@@ -469,7 +468,7 @@ async def _execute_analysis_pipeline(
         timer.stage_completed("RISK")
 
         # MobSF is the only source for component inventory, certificate and
-        # AppSec score. When it is not configured these stay empty/None — they
+        # AppSec score. When it is not configured these stay empty/None - they
         # are NOT invented. Previously this block hardcoded eight fields,
         # including a fabricated "appsec_score": 50.0 that an analyst could not
         # distinguish from a computed score.
@@ -506,7 +505,7 @@ async def _execute_analysis_pipeline(
             # Androguard genuinely produces this; the engine used to drop it.
             "suspicious_strings": getattr(androguard_output, "suspicious_strings", []),
 
-            # MobSF-derived. Empty/None when MobSF is not configured — never faked.
+            # MobSF-derived. Empty/None when MobSF is not configured - never faked.
             "manifest_findings": mobsf.get("manifest_analysis", []),
             "code_findings": mobsf.get("code_analysis", {}).get("findings", []),
             "activities": mobsf.get("activities", [])[:20],
@@ -518,8 +517,7 @@ async def _execute_analysis_pipeline(
             "appsec_score": mobsf.get("appsec_score"),
             "mobsf_scan_hash": mobsf.get("scan_hash") or mobsf.get("hash"),
 
-            # Lets a caller distinguish "nothing found" from "never computed" —
-            # an evidentiary distinction a forensic report has to make.
+            # Lets a caller distinguish "nothing found" from "never computed" - # an evidentiary distinction a forensic report has to make.
             "analysis_completeness": {
                 "static_androguard": True,
                 "static_apktool": apktool_res is not None,
@@ -540,7 +538,7 @@ async def _execute_analysis_pipeline(
     # Caveat, stated honestly: cancelling an asyncio.to_thread call does NOT kill
     # the thread. On timeout the caller gets a 408 immediately and the loop is
     # freed, but any in-flight step runs to completion in the background. That is
-    # bounded in practice — APKTool and JADX enforce their own 120s/180s
+    # bounded in practice - APKTool and JADX enforce their own 120s/180s
     # subprocess timeouts, and the semaphore slot is not released until the step
     # returns, so a stuck analysis consumes a slot rather than the whole service.
     # Truly pre-emptive cancellation needs a process pool; see 03_Backend_Audit.
@@ -567,7 +565,7 @@ def _resolve_upload_path(raw: str) -> Path:
 
     The previous check was `Path(raw).exists()` and nothing else, so any readable
     path in the container could be fed to Androguard/APKTool/JADX and the 404
-    body echoed the input back — a filesystem oracle. resolve() collapses
+    body echoed the input back - a filesystem oracle. resolve() collapses
     '..' and symlinks before the containment test, so neither can escape.
 
     Errors are deliberately generic and never echo `raw`.
@@ -605,7 +603,7 @@ def _reject_non_apk(head: bytes, filename: Optional[str]) -> None:
 @app.post("/api/v1/analyze")
 async def analyze_path(req: AnalyzePathRequest):
     """
-    Synchronous analysis endpoint — accepts a shared-volume file path.
+    Synchronous analysis endpoint - accepts a shared-volume file path.
     The path must resolve inside UPLOADS_DIR; see _resolve_upload_path.
     """
     file_path = _resolve_upload_path(req.file_path)
@@ -677,11 +675,11 @@ async def analyze_async(
     background_tasks: BackgroundTasks,
 ):
     """
-    Asynchronous job submission endpoint — returns job_id for polling.
+    Asynchronous job submission endpoint - returns job_id for polling.
     """
     # Validate the path up front so a bad request fails fast with 400 rather
     # than becoming a job that reports FAILED later. Same containment rule as
-    # the synchronous endpoint — this path used req.file_path unchecked.
+    # the synchronous endpoint - this path used req.file_path unchecked.
     apk_path = _resolve_upload_path(req.file_path)
 
     _evict_finished_jobs()

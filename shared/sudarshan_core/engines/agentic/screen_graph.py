@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Screen Graph Builder
+SUDARSHAN - Screen Graph Builder
 =================================
 Maintains spatial graph memory of UI screens (nodes) and navigational actions (edges).
 Calculates screen identity hashes based on activity name and normalized element topology.

@@ -143,7 +143,7 @@ function CaptureProgress({ captured, expected }: { captured: number; expected: n
         Capturing runtime screenshots…
       </div>
       <p className="text-xs text-blue-800">
-        {captured}/{expected || '—'} screenshots collected
+        {captured}/{expected || '-'} screenshots collected
       </p>
       <div className="h-1.5 bg-blue-100 rounded-full overflow-hidden">
         <div className="h-full bg-blue-600 transition-all duration-500" style={{ width: `${pct}%` }} />
@@ -251,7 +251,7 @@ export default function ScreenshotGallery({
       <SectionHeader
         icon={<Camera className="h-4 w-4" />}
         title="Screenshot appendix"
-        subtitle="Artifact browser — filter by quality, correlation, and claim type"
+        subtitle="Artifact browser - filter by quality, correlation, and claim type"
       />
       <div className="p-4 sm:p-5 space-y-4">
         {entries.some((e) => visualFromEntry(e)) && (

@@ -1,11 +1,11 @@
 /**
- * SUDARSHAN — Banking Trojan Frida Instrumentation Script v4 (Frida 17 Compatible)
+ * SUDARSHAN - Banking Trojan Frida Instrumentation Script v4 (Frida 17 Compatible)
  * ==================================================================================
  * Production-grade runtime API hook suite for detecting Android banking malware.
  *
  * ROOT CAUSE FIX (v3 → v4):
  *   v3 used CommonJS require for frida-java-bridge which FAILS in Frida 17+.
- *   In Frida 17, Java is a built-in global — no require needed or supported.
+ *   In Frida 17, Java is a built-in global - no require needed or supported.
  *   This v4 script removes the require call entirely and uses the built-in Java global.
  *
  * Target Categories & Scored Components:
@@ -38,8 +38,8 @@
 // external `frida-java-bridge` module. The previous header here asserted the
 // opposite ("Java is injected by Frida 17+ automatically") and initHooks was
 // guarded by `if (typeof Java === 'undefined') return`, so on Frida 17 EVERY
-// Java hook — accessibility, SMS, overlay, banking, persistence, dangerous
-// APIs, anti-analysis, ~40 in total — silently failed to install. The canary is
+// Java hook - accessibility, SMS, overlay, banking, persistence, dangerous
+// APIs, anti-analysis, ~40 in total - silently failed to install. The canary is
 // emitted before initHooks, so the session still reported "loaded" and the run
 // came back NO_BEHAVIOR_OBSERVED with BFCI 0.0. That is the real reason every
 // BFCI component reads 0.0 on every sample.
@@ -48,7 +48,7 @@
 // "must be bundled with frida-java-bridge via frida-compile". Bundling is now
 // wired up (see frida_hooks/package.json and build_bundle in frida_sandbox.py);
 // this resolves the bridge whichever way the script is loaded.
-// STATIC import, deliberately — not a dynamic require().
+// STATIC import, deliberately - not a dynamic require().
 //
 // This file is compiled with frida-compile, which bundles as ESM and
 // tree-shakes. A dynamic bridge require buried inside a try/catch is
@@ -59,13 +59,13 @@
 // the bundler is guaranteed to keep.
 //
 // Consequence: THIS FILE IS ESM AND MUST BE COMPILED. It is no longer valid as
-// a classic script, which is correct — an unbundled script has no Java bridge
+// a classic script, which is correct - an unbundled script has no Java bridge
 // on Frida 17 and could never have installed a Java hook anyway. See
 // _select_hooks_script() in frida_sandbox.py, which refuses to load raw source.
 import JavaBridgeModule from 'frida-java-bridge';
 
 // The package is published as an ES module, so the real API can sit on
-// `.default` through interop — measured on device:
+// `.default` through interop - measured on device:
 //   Object.keys(mod)      -> ["default"]
 //   typeof mod.available  -> "undefined"
 //   mod.default.available -> true
@@ -101,7 +101,7 @@ var Java = (function resolveJavaBridge() {
 //     typeof Process.findModuleByName       ->  "function"
 //
 // Every native hook called the removed static form and failed with
-// "not a function" — SSL_write, SSL_read, connect, execve, ptrace, open,
+// "not a function" - SSL_write, SSL_read, connect, execve, ptrace, open,
 // RegisterNatives, and the dlopen watchers. This resolves a symbol across both
 // API generations, preferring a module-scoped lookup and falling back to the
 // global export table.
@@ -178,7 +178,7 @@ var runtimeContext = {
 // events that are evidence of the behaviour the category names. The caps in
 // bfci_scorer are 2-3 events with logarithmic scaling, so a SINGLE mis-filed
 // event scores 50-63/100 for that component. A category that also catches
-// ordinary application behaviour is not a weak signal — it is a constant.
+// ordinary application behaviour is not a weak signal - it is a constant.
 //
 // UNSCORED categories are collected as evidence and reported, but contribute
 // nothing to BFCI. calculate_bfci_v2 iterates `for cat in BFCI_WEIGHTS`, so a
@@ -279,7 +279,7 @@ function emit(category, data) {
   //
   // This used to be description.substring(0, 50). For network hooks the
   // description begins with a ~30-character fixed prefix ("Network connection
-  // opened to: "), leaving under 20 characters of URL to discriminate — so two
+  // opened to: "), leaving under 20 characters of URL to discriminate - so two
   // DISTINCT C2 endpoints sharing a domain prefix collapsed to one key and the
   // second was silently dropped. Losing a C2 indicator to a display-string
   // truncation is not acceptable for IOC collection.
@@ -335,8 +335,8 @@ function emit(category, data) {
   runtimeContext.last_event_id = eventId;
 
   // Count only. The full event objects used to be accumulated in `events[...]`
-  // and NEVER read or cleared by anything — Python maintains its own
-  // collected_events from the message channel — so this was a pure memory leak
+  // and NEVER read or cleared by anything - Python maintains its own
+  // collected_events from the message channel - so this was a pure memory leak
   // growing inside the malware's own process for the whole session.
   if (typeof eventCounts[category] === 'number') {
     eventCounts[category]++;
@@ -378,7 +378,7 @@ setInterval(function () {
   });
 }, 3000);
 
-// Call synchronously — do NOT use setImmediate() here.
+// Call synchronously - do NOT use setImmediate() here.
 //
 // setImmediate() defers Java.perform() to the next GumJS event-loop tick,
 // which executes on a Frida fiber that needs a fresh JNI thread attachment.
@@ -390,14 +390,14 @@ setInterval(function () {
 //
 // Calling initHooks() directly here runs Java.perform() on the same thread
 // that is already executing the script load, which already has a valid JNI
-// env. This is identical to how the working minimal probe loads — no deferred
+// env. This is identical to how the working minimal probe loads - no deferred
 // path, no fresh thread attachment, no getArtClassSpec() crash.
 initHooks();
 
 
 // ─── Main Hook Initialization ─────────────────────────────────────────────────
 function initHooks() {
-  // Java is a Frida 17 built-in global — no require() needed
+  // Java is a Frida 17 built-in global - no require() needed
   if (!Java || !Java.available) {
     // Loud and specific. This used to say "Is this an Android app?", which sent
     // every reader chasing the wrong problem: the app was fine, the BRIDGE was
@@ -444,7 +444,7 @@ function initHooks() {
         send({ type: 'diag', msg: 'deoptimizeEverything_failed', error: e.message });
       }
 
-      // deoptimizeBootImage: new in Frida 16.2 — deoptimizes AOT-compiled boot image
+      // deoptimizeBootImage: new in Frida 16.2 - deoptimizes AOT-compiled boot image
       // Fixes hooks on system classes that are inlined into the boot image (API 29+).
       try {
         Java.deoptimizeBootImage();
@@ -469,7 +469,7 @@ function initHooks() {
       } catch (e) { /* non-fatal */ }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// [A] ACCESSIBILITY SERVICE HOOKS (weight 0.35 — heaviest BFCI component)
+// [A] ACCESSIBILITY SERVICE HOOKS (weight 0.35 - heaviest BFCI component)
 // ═══════════════════════════════════════════════════════════════════════════════
 
       try {
@@ -489,7 +489,7 @@ function initHooks() {
           });
           // Accessibility events carry the package of the app being observed.
           // This is the working replacement for getRunningTasks(), which is
-          // restricted on API 22+ — and it is exactly how an ATS trojan knows a
+          // restricted on API 22+ - and it is exactly how an ATS trojan knows a
           // banking app came to the foreground.
           _noteForegroundPackage(pkgName, 'AccessibilityService.onAccessibilityEvent');
           return this.onAccessibilityEvent(event);
@@ -565,7 +565,7 @@ function initHooks() {
         };
         registerHook('AccessibilityNodeInfo.performAction');
 
-        // findAccessibilityNodeInfosByText — ATS credential field location
+        // findAccessibilityNodeInfosByText - ATS credential field location
         AccessibilityNodeInfo.findAccessibilityNodeInfosByText.implementation = function (text) {
           var result = this.findAccessibilityNodeInfosByText(text);
           var textStr = text ? text.toString() : '';
@@ -726,7 +726,7 @@ function initHooks() {
 
       // NOTE ON CATEGORY: these four hooks read device/subscriber IDENTITY. None
       // of them reads, intercepts, sends or deletes an SMS. They previously
-      // emitted to 'sms' — weight 0.25, cap 2 — so any app calling getDeviceId()
+      // emitted to 'sms' - weight 0.25, cap 2 - so any app calling getDeviceId()
       // and getSubscriberId() scored sms=100 and contributed 25 points of BFCI
       // with no SMS involvement at all. That is thousands of ordinary analytics
       // SDKs. They now emit to the unscored 'device_fingerprint' category:
@@ -739,7 +739,7 @@ function initHooks() {
             hook: 'TelephonyManager.getLine1Number',
             class_name: 'android.telephony.TelephonyManager',
             severity: 'MED',
-            description: 'App queried device phone number (MSISDN — device identity)',
+            description: 'App queried device phone number (MSISDN - device identity)',
           });
           return num;
         };
@@ -751,7 +751,7 @@ function initHooks() {
             hook: 'TelephonyManager.getSimSerialNumber',
             class_name: 'android.telephony.TelephonyManager',
             severity: 'MED',
-            description: 'App queried SIM Serial Number (ICCID — device fingerprinting)',
+            description: 'App queried SIM Serial Number (ICCID - device fingerprinting)',
           });
           return serial;
         };
@@ -818,8 +818,8 @@ function initHooks() {
 
         // CATEGORY NOTE: updateViewLayout and removeView are on the path of every
         // AlertDialog, Toast, PopupWindow, spinner dropdown and soft-keyboard
-        // resize. They previously emitted to 'overlay' unconditionally — weight
-        // 0.20, cap 2 — so ANY app that showed and dismissed a dialog scored
+        // resize. They previously emitted to 'overlay' unconditionally - weight
+        // 0.20, cap 2 - so ANY app that showed and dismissed a dialog scored
         // overlay=100 and contributed 20 points of BFCI. Only operations on a
         // view we ourselves saw added AS an overlay are overlay evidence; the
         // rest is ordinary UI and goes to the unscored 'app_telemetry'.
@@ -877,8 +877,8 @@ function initHooks() {
       //
       // CATEGORY NOTE: this is notification interception, not an overlay, and it
       // was saturating the overlay component. It is a genuinely strong OTP-theft
-      // signal — binding a NotificationListenerService requires an explicit user
-      // grant of Notification Access, which few benign apps hold — so it is a
+      // signal - binding a NotificationListenerService requires an explicit user
+      // grant of Notification Access, which few benign apps hold - so it is a
       // CANDIDATE for its own BFCI weight. It is deliberately left UNSCORED here
       // rather than moved into 'sms', because adding weight is a model change and
       // this fix must not raise any existing verdict. See audit/12 §11.
@@ -915,7 +915,7 @@ function initHooks() {
       //
       // CATEGORY NOTE: this fires on EVERY screen transition, including those
       // driven by our own agentic explorer. It was emitting to 'banking'
-      // (weight 0.10, cap 3) — the previous comment here read "FIX: emit to
+      // (weight 0.10, cap 3) - the previous comment here read "FIX: emit to
       // 'banking', not 'activity' (which doesn't exist)", i.e. it was filed
       // there because no suitable category existed, not because an activity
       // resume is banking evidence. Three screen transitions saturated the
@@ -972,7 +972,7 @@ function initHooks() {
             hook: 'ActivityManager.getRunningTasks',
             class_name: 'android.app.ActivityManager',
             severity: 'MED',
-            description: 'App called getRunningTasks() (restricted since API 22 — '
+            description: 'App called getRunningTasks() (restricted since API 22 - '
                          + 'returns only the caller\'s own tasks)',
           });
           if (tasks && tasks.size() > 0) {
@@ -991,7 +991,7 @@ function initHooks() {
         registerHook('ActivityManager.getRunningTasks');
       } catch (e) { reportHookError('ActivityManager.getRunningTasks', e.message); }
 
-      // UsageStatsManager.queryEvents — the modern way to learn what is in the
+      // UsageStatsManager.queryEvents - the modern way to learn what is in the
       // foreground, and what malware actually uses now that getRunningTasks is
       // restricted. Requires PACKAGE_USAGE_STATS, so a call is itself notable.
       try {
@@ -1048,7 +1048,7 @@ function initHooks() {
         registerHook('SharedPreferences.getString');
       } catch (e) { reportHookError('SharedPreferences.getString', e.message); }
 
-      // CATEGORY NOTE: Cipher.doFinal fires on ANY encryption — every HTTPS-
+      // CATEGORY NOTE: Cipher.doFinal fires on ANY encryption - every HTTPS-
       // adjacent operation, every EncryptedSharedPreferences read. It is not
       // evidence of banking-credential theft on its own and was saturating the
       // banking component. Retained as unscored context; the WHAT is carried by
@@ -1091,7 +1091,7 @@ function initHooks() {
       // KeyStore.
       //
       // CATEGORY NOTE: getInstance() fires for any app using the Android
-      // Keystore — including every app that pins a certificate or uses
+      // Keystore - including every app that pins a certificate or uses
       // EncryptedSharedPreferences. Obtaining a KeyStore handle is not credential
       // theft. Unscored context.
       try {
@@ -1110,7 +1110,7 @@ function initHooks() {
         registerHook('KeyStore.getInstance');
       } catch (e) { reportHookError('KeyStore.getInstance', e.message); }
 
-      // AccountManager — device account enumeration.
+      // AccountManager - device account enumeration.
       // CATEGORY NOTE: reconnaissance, not banking targeting. Every
       // Google-account-aware app does this. Moved to device_fingerprint.
       try {
@@ -1130,10 +1130,9 @@ function initHooks() {
         registerHook('AccountManager.getAccountsByType');
       } catch (e) { reportHookError('AccountManager.getAccountsByType', e.message); }
 
-      // PackageManager — installed apps enumeration.
+      // PackageManager - installed apps enumeration.
       //
-      // CATEGORY NOTE: this IS ATS target reconnaissance when malware does it —
-      // but launchers, app stores, antivirus and many analytics SDKs do it too,
+      // CATEGORY NOTE: this IS ATS target reconnaissance when malware does it - // but launchers, app stores, antivirus and many analytics SDKs do it too,
       // and it was scoring 'banking' on its own. Enumeration alone does not
       // establish banking targeting; the ActivityManager hook below does, by
       // matching an actual banking package. Moved to device_fingerprint.
@@ -1217,8 +1216,8 @@ function initHooks() {
             severity: 'MED',
             endpoint: epStr,
             // `url` is the key frida_sandbox reads to build network_logs.
-            // Without it, raw-socket C2 — one of the two paths malware uses
-            // specifically to avoid Java HTTP hooks — produced no IOC at all.
+            // Without it, raw-socket C2 - one of the two paths malware uses
+            // specifically to avoid Java HTTP hooks - produced no IOC at all.
             url: epStr,
             ioc: epStr,
             description: 'Direct socket connection to: ' + epStr,
@@ -1228,7 +1227,7 @@ function initHooks() {
         registerHook('Socket.connect');
       } catch (e) { reportHookError('Socket.connect', e.message); }
 
-      // HttpsURLConnection — SSL certificate pinning bypass detection
+      // HttpsURLConnection - SSL certificate pinning bypass detection
       try {
         var HttpsURLConnection = Java.use('javax.net.ssl.HttpsURLConnection');
         HttpsURLConnection.connect.implementation = function () {
@@ -1265,7 +1264,7 @@ function initHooks() {
         registerHook('HttpURLConnection.getInputStream');
       } catch (e) { reportHookError('HttpURLConnection.getInputStream', e.message); }
 
-      // OkHttp3 — most banking malware uses OkHttp for C2
+      // OkHttp3 - most banking malware uses OkHttp for C2
       try {
         var RealCall = Java.use('okhttp3.internal.connection.RealCall');
         RealCall.execute.implementation = function () {
@@ -1305,7 +1304,7 @@ function initHooks() {
         registerHook('OkHttp.RealCall.enqueue');
       } catch (e) { reportHookError('OkHttp', e.message); }
 
-      // Retrofit — common C2 client wrapper
+      // Retrofit - common C2 client wrapper
       try {
         var OkHttpCall = Java.use('retrofit2.OkHttpCall');
         OkHttpCall.execute.implementation = function () {
@@ -1320,7 +1319,7 @@ function initHooks() {
         registerHook('Retrofit.OkHttpCall.execute');
       } catch (e) { reportHookError('Retrofit.OkHttpCall.execute', e.message); }
 
-      // WebView — loading C2 URLs, evaluating injected JS
+      // WebView - loading C2 URLs, evaluating injected JS
       try {
         var WebView = Java.use('android.webkit.WebView');
         WebView.loadUrl.overload('java.lang.String').implementation = function (url) {
@@ -1408,7 +1407,7 @@ function initHooks() {
             hook: 'DevicePolicyManager.lockNow',
             class_name: 'android.app.admin.DevicePolicyManager',
             severity: 'CRITICAL',
-            description: 'App invoked lockNow() — RANSOMWARE/EXTORTION BEHAVIOR CONFIRMED',
+            description: 'App invoked lockNow() - RANSOMWARE/EXTORTION BEHAVIOR CONFIRMED',
           });
           return this.lockNow();
         };
@@ -1515,7 +1514,7 @@ function initHooks() {
         Runtime.exec.overload('[Ljava.lang.String;').implementation = function (cmds) {
           // `cmds` is ALREADY a Java array here. The previous code called
           // Java.array('java.lang.String', cmds), which CONSTRUCTS an array
-          // from a JS array — passing a Java array to it throws, and a throw
+          // from a JS array - passing a Java array to it throws, and a throw
           // inside a hook implementation propagates into the target method, so
           // a sample using the (very common) array form of exec() had the call
           // fail. Frida marshals a String[] to a JS array already; join it.
@@ -1537,7 +1536,7 @@ function initHooks() {
         registerHook('Runtime.exec[]');
       } catch (e) { reportHookError('Runtime.exec', e.message); }
 
-      // ProcessBuilder — shell command execution alternative
+      // ProcessBuilder - shell command execution alternative
       try {
         var ProcessBuilder = Java.use('java.lang.ProcessBuilder');
         ProcessBuilder.start.implementation = function () {
@@ -1585,7 +1584,7 @@ function initHooks() {
       //
       // The previous filter tested whether the KEY contained 'qemu' /
       // 'goldfish' / 'genymotion'. The checks that actually matter read keys
-      // whose names contain none of those — it is the VALUE that gives the
+      // whose names contain none of those - it is the VALUE that gives the
       // emulator away:
       //
       //   ro.hardware          -> goldfish / ranchu
@@ -1596,7 +1595,7 @@ function initHooks() {
       // So the spoofing defeated essentially no real check. Both the key set
       // and the value set are now matched, plausible values are substituted
       // rather than a blanket '0' (returning '0' for ro.hardware is itself
-      // anomalous), and the two-argument overload — the more common form — is
+      // anomalous), and the two-argument overload - the more common form - is
       // hooked as well.
       var EMULATOR_VALUE_MARKERS = /(goldfish|ranchu|qemu|genymotion|vbox|sdk_gphone|generic|emu64|android_x86)/i;
       var SPOOFED_PROPERTIES = {
@@ -1645,7 +1644,7 @@ function initHooks() {
         };
         registerHook('SystemProperties.get');
 
-        // The (key, default) overload — more common than the single-arg form
+        // The (key, default) overload - more common than the single-arg form
         // and previously not hooked at all.
         SystemProperties.get.overload('java.lang.String', 'java.lang.String')
           .implementation = function (key, def) {
@@ -1656,7 +1655,7 @@ function initHooks() {
         registerHook('SystemProperties.get(default)');
       } catch (e) { reportHookError('SystemProperties.get', e.message); }
 
-      // android.os.Build static fields — the single most common emulator check,
+      // android.os.Build static fields - the single most common emulator check,
       // and previously not touched at all. These are static String fields, so
       // they are patched once rather than hooked per call.
       try {
@@ -1712,7 +1711,7 @@ function initHooks() {
       // Some samples scan /proc/self/maps for frida-agent or check port 27042.
       // Anti-Frida line suppression.
       //
-      // Returning null here USED to mean "skip this line" — but null from
+      // Returning null here USED to mean "skip this line" - but null from
       // readLine() is end-of-stream. A sample looping
       // `while ((line = br.readLine()) != null)` over /proc/self/maps therefore
       // stopped reading at the first frida line instead of skipping it, leaving
@@ -1739,7 +1738,7 @@ function initHooks() {
               class_name: 'java.io.BufferedReader',
               severity: 'HIGH',
               suppressed_lines: suppressed,
-              description: 'App scanned a stream for Frida artifacts (anti-Frida detection attempt) — '
+              description: 'App scanned a stream for Frida artifacts (anti-Frida detection attempt) - '
                            + suppressed + ' matching line(s) skipped, stream kept open',
             });
           }
@@ -1756,7 +1755,7 @@ function initHooks() {
             class_name: 'java.lang.System',
             severity: 'CRITICAL',
             exit_code: code,
-            description: 'App attempted to self-terminate via System.exit(' + code + ') — blocked to preserve dynamic analysis',
+            description: 'App attempted to self-terminate via System.exit(' + code + ') - blocked to preserve dynamic analysis',
           });
         };
         registerHook('System.exit');
@@ -1770,7 +1769,7 @@ function initHooks() {
             class_name: 'android.os.Process',
             severity: 'CRITICAL',
             target_pid: pid,
-            description: 'App attempted to self-terminate via Process.killProcess(' + pid + ') — blocked to preserve dynamic analysis',
+            description: 'App attempted to self-terminate via Process.killProcess(' + pid + ') - blocked to preserve dynamic analysis',
           });
         };
         registerHook('Process.killProcess');
@@ -1784,7 +1783,7 @@ function initHooks() {
             class_name: 'java.lang.Runtime',
             severity: 'CRITICAL',
             exit_code: code,
-            description: 'App attempted to self-terminate via Runtime.exit(' + code + ') — blocked to preserve dynamic analysis',
+            description: 'App attempted to self-terminate via Runtime.exit(' + code + ') - blocked to preserve dynamic analysis',
           });
         };
         registerHook('Runtime.exit');
@@ -1832,9 +1831,9 @@ function initHooks() {
 } // end initHooks
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// NATIVE INSTRUMENTATION — Phase 4: libc.so hooks
+// NATIVE INSTRUMENTATION - Phase 4: libc.so hooks
 // Intercepts SSL/TLS, socket ops, process execution at native layer.
-// Runs OUTSIDE Java.perform — purely native Frida Interceptor.
+// Runs OUTSIDE Java.perform - purely native Frida Interceptor.
 // ═══════════════════════════════════════════════════════════════════════════════
 // Guard so re-invocation after a late dlopen cannot double-attach a hook.
 var _nativeHooksInstalled = { libssl: false, libc: false, libart: false };
@@ -1844,7 +1843,7 @@ function installNativeHooks() {
     var libssl = Process.findModuleByName('libssl.so');
     if (libssl && !_nativeHooksInstalled.libssl) {
       _nativeHooksInstalled.libssl = true;
-      // SSL_write — capture plaintext before encryption
+      // SSL_write - capture plaintext before encryption
       try {
         var SSL_write = resolveExport('libssl.so', 'SSL_write');
         if (SSL_write) {
@@ -1881,14 +1880,14 @@ function installNativeHooks() {
         }
       } catch (e) { reportHookError('native:SSL_write', e.message); }
 
-      // SSL_read — capture incoming TLS data.
+      // SSL_read - capture incoming TLS data.
       //
       // The buffer pointer MUST be captured in onEnter. This previously read
       // `this.context.x1` in onLeave, but x1 is a caller-saved argument
       // register on ARM64: by the time SSL_read returns it has almost certainly
       // been clobbered by the function body. Every `preview` was therefore
       // garbage, and readUtf8String() on an arbitrary pointer can fault the
-      // target process — a native segfault that the surrounding try/catch
+      // target process - a native segfault that the surrounding try/catch
       // cannot catch, killing the analysis outright.
       try {
         var SSL_read = resolveExport('libssl.so', 'SSL_read');
@@ -1931,11 +1930,11 @@ function installNativeHooks() {
       } catch (e) { reportHookError('native:SSL_read', e.message); }
     }
 
-    // libc.so — connect(), send(), recv(), execve()
+    // libc.so - connect(), send(), recv(), execve()
     var libc = Process.findModuleByName('libc.so');
     if (libc && !_nativeHooksInstalled.libc) {
       _nativeHooksInstalled.libc = true;
-      // connect() — socket connections
+      // connect() - socket connections
       try {
         var connect = resolveExport('libc.so', 'connect');
         if (connect) {
@@ -1974,7 +1973,7 @@ function installNativeHooks() {
         }
       } catch (e) { reportHookError('native:connect', e.message); }
 
-      // execve() — process execution
+      // execve() - process execution
       try {
         var execve = resolveExport('libc.so', 'execve');
         if (execve) {
@@ -2003,14 +2002,14 @@ function installNativeHooks() {
         }
       } catch (e) { reportHookError('native:execve', e.message); }
 
-      // ptrace() — anti-debug self-check detection
+      // ptrace() - anti-debug self-check detection
       try {
         var ptrace = resolveExport('libc.so', 'ptrace');
         if (ptrace) {
           Interceptor.attach(ptrace, {
             onEnter: function (args) {
               var request = args[0].toInt32();
-              if (request === 0) { // PTRACE_TRACEME — self-ptrace anti-debug
+              if (request === 0) { // PTRACE_TRACEME - self-ptrace anti-debug
                 send({
                   type: 'event',
                   payload: {
@@ -2021,7 +2020,7 @@ function installNativeHooks() {
                     hook: 'libc.ptrace',
                     severity: 'HIGH',
                     request: request,
-                    description: 'App called ptrace(PTRACE_TRACEME) — self-anti-debug protection',
+                    description: 'App called ptrace(PTRACE_TRACEME) - self-anti-debug protection',
                     data: { hook: 'libc.ptrace', request: request },
                   }
                 });
@@ -2032,7 +2031,7 @@ function installNativeHooks() {
         }
       } catch (e) { reportHookError('native:ptrace', e.message); }
 
-      // open() — sensitive file access at native level
+      // open() - sensitive file access at native level
       try {
         var open = resolveExport('libc.so', 'open');
         if (open) {
@@ -2069,7 +2068,7 @@ function installNativeHooks() {
       } catch (e) { reportHookError('native:open', e.message); }
     }
 
-    // libart.so — RegisterNatives monitoring (JNI hooking detection)
+    // libart.so - RegisterNatives monitoring (JNI hooking detection)
     try {
       var libart = Process.findModuleByName('libart.so');
       if (libart && !_nativeHooksInstalled.libart) {
@@ -2093,7 +2092,7 @@ function installNativeHooks() {
                     hook: 'libart.RegisterNatives',
                     severity: 'HIGH',
                     method_count: num_methods,
-                    description: 'JNI RegisterNatives() called (' + num_methods + ' methods) — native bridge established',
+                    description: 'JNI RegisterNatives() called (' + num_methods + ' methods) - native bridge established',
                     data: { hook: 'libart.RegisterNatives', method_count: num_methods },
                   }
                 });
@@ -2116,7 +2115,7 @@ installNativeHooks();
 // ─── Late-load coverage ───────────────────────────────────────────────────────
 //
 // installNativeHooks() used to run ONCE, as an IIFE at script load. For a packed
-// dropper — the primary target — the payload's native libraries are loaded
+// dropper - the primary target - the payload's native libraries are loaded
 // AFTER attach, so findModuleByName() returned null, the entire native block was
 // skipped, and nothing was instrumented at the native layer for exactly the
 // samples that matter most.

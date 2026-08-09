@@ -12,7 +12,7 @@ import {
 import { AlertTriangle, Eye, Fingerprint, ShieldAlert } from 'lucide-react';
 
 function pct(value: number | undefined): string {
-  if (value == null || Number.isNaN(value)) return '—';
+  if (value == null || Number.isNaN(value)) return '-';
   return `${Math.round(value * 100)}%`;
 }
 
@@ -102,7 +102,7 @@ function AnalyzedBody({ vide, data }: { vide: VideResult; data: FraudCardData })
 
       {vide.critical_visual_cluster && (
         <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-900">
-          Critical visual cluster flag is set without VIDE-F001 detection — review correlated capabilities.
+          Critical visual cluster flag is set without VIDE-F001 detection - review correlated capabilities.
         </div>
       )}
 

@@ -1,5 +1,5 @@
 """
-SUDARSHAN — World Model (Persistent Exploration Memory)
+SUDARSHAN - World Model (Persistent Exploration Memory)
 ========================================================
 Maintains structured memory of explored application states, visited screens,
 permission prompts, login forms, banking triggers, and failed actions.

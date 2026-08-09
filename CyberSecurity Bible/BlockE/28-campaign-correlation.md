@@ -1,4 +1,4 @@
-# 28 — Campaign Correlation
+# 28 - Campaign Correlation
 
 > **Chapter ID:** `CH28` · **Block:** E · **Status:** Stable
 > **Tags:** `#correlation` `#campaign` `#clustering` `#tlsh` `#pivoting` `#attribution` `#multi-tenant`
@@ -87,7 +87,7 @@ formalised with the operational consequence attached.
 
 Economics, not cryptography. The adversary **needs their signing key** to push updates to their
 own installed base ([Ch 06 §4](../security/06-certificates.md#4-trust-on-first-use--androids-actual-model)).
-Rotating it means abandoning those victims — or carrying a **v3 proof-of-rotation lineage** that
+Rotating it means abandoning those victims - or carrying a **v3 proof-of-rotation lineage** that
 cryptographically links old key to new, which hands you the correlation for free
 ([Ch 07 §6](../security/07-apk-signing.md#6-v3-and-v31--key-rotation)).
 
@@ -112,7 +112,7 @@ cryptographically links old key to new, which hands you the correlation for free
 |---|---|
 | 0 | Identical DEX |
 | 1–30 | Same build lineage, minor changes |
-| **31–50** | **Same family** — the working threshold |
+| **31–50** | **Same family** - the working threshold |
 | 51–100 | Possibly related; review |
 | > 150 | Unrelated |
 
@@ -165,7 +165,7 @@ cryptographically links old key to new, which hands you the correlation for free
 | **DGA from the same generator** | **Very high** | Algorithmic identity |
 
 > **⚙️ Engineering Note:** DGA-derived correlation is the strongest infrastructure pivot available
-> and it is *predictive* — reverse the generator once (a T5 human task,
+> and it is *predictive* - reverse the generator once (a T5 human task,
 > [Ch 10](../reverse-engineering/10-reverse-engineering.md)) and you can enumerate the campaign's
 > future domains, pre-block them, and recognise any sample using the same generator. Octo2
 > introduced a DGA in September 2024 specifically to raise blocking cost (ThreatFabric); reversing
@@ -177,33 +177,33 @@ cryptographically links old key to new, which hands you the correlation for free
 
 ```
   ┌──────────────────────────────────────────────────────────────┐
-  │ PHASE 1 — DETERMINISTIC (high precision, auto-merge)          │
+  │ PHASE 1 - DETERMINISTIC (high precision, auto-merge)          │
   │   union-find over:                                            │
   │     • identical signer_cert_sha256                            │
   │     • v3 rotation lineage membership                          │
   │     • identical hardcoded key                                 │
   │   → hard clusters                                             │
   ├──────────────────────────────────────────────────────────────┤
-  │ PHASE 2 — SIMILARITY (medium precision, propose)              │
+  │ PHASE 2 - SIMILARITY (medium precision, propose)              │
   │   for each pair of hard clusters:                             │
   │     score = w1·tlsh_proximity + w2·api_overlap                │
   │           + w3·manifest_similarity + w4·resource_overlap       │
   │   merge if score > MERGE_THRESHOLD                            │
   │   flag for review if BETWEEN review and merge thresholds      │
   ├──────────────────────────────────────────────────────────────┤
-  │ PHASE 3 — INFRASTRUCTURE (link, don't merge)                  │
+  │ PHASE 3 - INFRASTRUCTURE (link, don't merge)                  │
   │   add campaign-level edges for shared C2, TLS, DGA, protocol  │
-  │   ★ links do NOT merge clusters — different actors share       │
+  │   ★ links do NOT merge clusters - different actors share       │
   │     delivery services (Zombinder)                             │
   ├──────────────────────────────────────────────────────────────┤
-  │ PHASE 4 — HUMAN ADJUDICATION                                  │
+  │ PHASE 4 - HUMAN ADJUDICATION                                  │
   │   analyst confirms / splits / merges; recorded as adjudication │
   └──────────────────────────────────────────────────────────────┘
 ```
 
 ### Why phase 3 links rather than merges
 
-**Zombinder** delivered **Octo2**, **Chameleon**, and **Hook** — three different payload families
+**Zombinder** delivered **Octo2**, **Chameleon**, and **Hook** - three different payload families
 through one delivery service (ThreatFabric). Merging on shared delivery infrastructure would fuse
 three unrelated actors into one phantom campaign.
 
@@ -237,7 +237,7 @@ campaign:
     campaign: medium
     actor: low                             # ★ be honest
   basis: [signer_match, tlsh_cluster, c2_overlap]
-  caveats: ["MaaS — affiliates use distinct signers"]
+  caveats: ["MaaS - affiliates use distinct signers"]
 ```
 
 ### The MaaS vs private-operation signature
@@ -246,13 +246,13 @@ campaign:
 |---|---|
 | Many signers + high code similarity + divergent C2 | **MaaS with multiple affiliates** |
 | Few signers + coherent infrastructure | **Private operation** |
-| One signer per sample, code-similar | **Sophisticated MaaS** — per-build key generation |
+| One signer per sample, code-similar | **Sophisticated MaaS** - per-build key generation |
 
 Cleafy assessed **Klopatra** as a private botnet partly on this shape (August 2025); ERMAC's
 ~$5,000/month rental model (ESET, May 2022) is the MaaS archetype.
 
 > **⚙️ Engineering Note:** Report this shape explicitly. It tells the bank whether they face **one
-> adversary or a marketplace** — which changes the expected trajectory. A private operation may be
+> adversary or a marketplace** - which changes the expected trajectory. A private operation may be
 > disrupted by a single takedown; a MaaS ecosystem will produce a new affiliate next week.
 
 ---
@@ -284,7 +284,7 @@ family:
 
 > **⚙️ Engineering Note:** Make `source_leaked` a first-class field that **automatically
 > downgrades** actor-attribution confidence for anything in that lineage. It is a two-line schema
-> decision that prevents an entire class of confidently wrong reports — and post-leak windows are
+> decision that prevents an entire class of confidently wrong reports - and post-leak windows are
 > exactly when variant volume spikes and analysts are busiest.
 > → [Ch 30](../threat-intelligence/30-threat-intelligence-database.md)
 
@@ -297,7 +297,7 @@ family:
 | **Operator/group** | ⚠ Rarely | Sustained tracking; usually vendor-sourced |
 | **Nation-state** | ❌ No | Out of scope ([Ch 16 §10](../threat-intelligence/16-threat-intelligence.md#10-attribution-and-its-limits)) |
 
-**Never attribute from** language artifacts, build timezones, or CIS geofencing — spoofable and a
+**Never attribute from** language artifacts, build timezones, or CIS geofencing - spoofable and a
 documented false-flag technique.
 
 ---
@@ -349,7 +349,7 @@ correlation_result:
 ```
 
 > **🏛️ Enterprise Insight:** *"Four institutions are affected"* is shareable and genuinely useful
-> — it tells each bank the campaign is sectoral rather than personal. *"Bank B is affected"* is
+> - it tells each bank the campaign is sectoral rather than personal. *"Bank B is affected"* is
 > **Bank B's information about being attacked**, and disclosing it without consent is a
 > confidentiality breach and a commercial betrayal. Aggregate counts, never identities. This
 > boundary must be in the contract and enforced in the query layer, not left to convention.
@@ -416,7 +416,7 @@ correlation_result:
 
 > **🚨 Misconception:** "Same C2 means same actor." Shared hosting, bulletproof providers with many
 > customers, and delivery services (Zombinder) all put unrelated actors on shared infrastructure.
-> Infrastructure overlap is a **link**, and links are hypotheses — merging on them is how you
+> Infrastructure overlap is a **link**, and links are hypotheses - merging on them is how you
 > invent a campaign that doesn't exist.
 
 ---
@@ -429,9 +429,9 @@ correlation_result:
 4. **Link on infrastructure; merge only on identity-grade pivots.**
 5. **Model dropper and payload as separate actors** with a delivery relationship.
 6. **Flag leaked-source families** and auto-downgrade actor confidence.
-7. **Index hardcoded keys** — they catch affiliates whose signers differ.
+7. **Index hardcoded keys** - they catch affiliates whose signers differ.
 8. **Parse and expand v3 rotation lineage** into one actor node.
-9. **Report the operation shape** (MaaS vs private) — it changes expectations.
+9. **Report the operation shape** (MaaS vs private) - it changes expectations.
 10. **Share counts, never institution identities**, across tenants.
 11. **Record "unique signer per sample"** as a sophistication indicator, not a failure.
 12. **Keep human adjudication in the loop** and store it separately.
@@ -449,13 +449,12 @@ The signer links to sibling samples; a shared AES key links to samples with *dif
 which tells us we're looking at MaaS affiliates rather than one operator; the C2 resolves to a host
 with sibling domains that appear in other tenants' submissions. Then we union the target lists
 across the cluster. So each bank sees "this campaign spans 47 samples and four institutions, and
-these are *your* packages targeted and *your* customers affected" — the count is shared, the
+these are *your* packages targeted and *your* customers affected" - the count is shared, the
 identities are not. "Bank B is targeted" is Bank B's information about being attacked, not ours to
 distribute, and that boundary is enforced in the query layer, not by convention.
 
 **Common mistakes:**
-- Merging clusters on shared infrastructure. Zombinder delivered Octo2, Chameleon, and Hook —
-  three different actors through one service.
+- Merging clusters on shared infrastructure. Zombinder delivered Octo2, Chameleon, and Hook - three different actors through one service.
 - Attributing to an operator from code similarity after a source leak.
 - Applying one confidence threshold across all pivot types.
 
@@ -468,13 +467,13 @@ distribute, and that boundary is enforced in the query layer, not by convention.
   Nation-state, no. And after the Cerberus, Octo, SpyNote, and ERMAC 3.0 leaks, code similarity
   indicates lineage rather than actor, so we carry a `source_leaked` flag that automatically
   downgrades actor confidence for those families.
-- *"Could you accidentally cluster two unrelated apps?"* → Yes, if you use TLSH alone — a shared
+- *"Could you accidentally cluster two unrelated apps?"* → Yes, if you use TLSH alone - a shared
   Flutter or React Native runtime can dominate a DEX. We require agreement across TLSH, API-set
   overlap, and manifest or resource similarity before auto-merging.
 
 **Fact that impresses:** Hardcoded encryption keys are a better correlation pivot than C2 domains,
 and almost nobody indexes them. Adversaries rotate domains weekly and rebuild binaries daily, but
-rotating a key means rebuilding the panel and re-flashing the installed base — so keys persist for
+rotating a key means rebuilding the panel and re-flashing the installed base - so keys persist for
 months. More usefully, a shared key across samples with *different signing certificates* is a
 direct fingerprint of a MaaS operation with multiple affiliates.
 
@@ -483,7 +482,7 @@ direct fingerprint of a MaaS operation with multiple affiliates.
 ## 13. Interview Insights
 
 **Q: "How do you group malware samples into families?"**
-Deterministic pivots first — signer certificate, v3 rotation lineage, hardcoded keys — union-find
+Deterministic pivots first - signer certificate, v3 rotation lineage, hardcoded keys - union-find
 into hard clusters. Then similarity with multi-measure agreement (DEX TLSH plus API-set plus
 manifest/resource). Then infrastructure as *links*, not merges. Then human adjudication.
 
@@ -493,7 +492,7 @@ is identical. DEX-level tracks code lineage, which is what family clustering nee
 
 **Q: "Two samples share a C2. Same actor?"**
 Not necessarily. Shared hosting, bulletproof providers with many customers, and delivery services
-like Zombinder — which distributed Octo2, Chameleon, and Hook — all place unrelated actors on
+like Zombinder - which distributed Octo2, Chameleon, and Hook - all place unrelated actors on
 common infrastructure. Link, don't merge.
 
 **Q: "Malware source code leaked. What does that do to your attribution?"**
@@ -527,16 +526,16 @@ the contract.
 
 ## 15. References
 
-1. Caltagirone, Pendergast, Betz — *The Diamond Model of Intrusion Analysis* (2013).
-2. TLSH — Trend Micro Locality Sensitive Hash. https://github.com/trendmicro/tlsh
-3. ThreatFabric — *Octo2* (September 2024) — DGA; Zombinder as first stage.
-4. ThreatFabric — Zombinder distributing Chameleon alongside Hook.
-5. Hunt.io — ERMAC 3.0 source leak (published August 2025).
-6. ESET — ERMAC v2 MaaS pricing (~$5,000/month, May 2022).
-7. Cleafy Labs — *Klopatra* (August 2025) — private-botnet assessment.
-8. Cleafy Labs — *Copybara* — "JOKER RAT" panel naming.
-9. AOSP — APK Signature Scheme v3 proof-of-rotation. https://source.android.com/docs/security/features/apksigning/v3
-10. OASIS — STIX 2.1 campaign, intrusion-set, and relationship objects.
+1. Caltagirone, Pendergast, Betz - *The Diamond Model of Intrusion Analysis* (2013).
+2. TLSH - Trend Micro Locality Sensitive Hash. https://github.com/trendmicro/tlsh
+3. ThreatFabric - *Octo2* (September 2024) - DGA; Zombinder as first stage.
+4. ThreatFabric - Zombinder distributing Chameleon alongside Hook.
+5. Hunt.io - ERMAC 3.0 source leak (published August 2025).
+6. ESET - ERMAC v2 MaaS pricing (~$5,000/month, May 2022).
+7. Cleafy Labs - *Klopatra* (August 2025) - private-botnet assessment.
+8. Cleafy Labs - *Copybara* - "JOKER RAT" panel naming.
+9. AOSP - APK Signature Scheme v3 proof-of-rotation. https://source.android.com/docs/security/features/apksigning/v3
+10. OASIS - STIX 2.1 campaign, intrusion-set, and relationship objects.
 
 ---
 

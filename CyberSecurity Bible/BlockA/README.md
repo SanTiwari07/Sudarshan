@@ -1,6 +1,6 @@
 # SUDARSHAN Engineering Knowledge Base
 
-Internal engineering documentation for **SUDARSHAN** — an AI-powered enterprise Android
+Internal engineering documentation for **SUDARSHAN** - an AI-powered enterprise Android
 malware investigation platform built for banks.
 
 **→ Start at [index.md](index.md)**
@@ -14,7 +14,7 @@ reverse engineering, static and dynamic analysis, Android banking malware, threa
 intelligence, digital forensics, SOC operations, incident response, AI-assisted analysis,
 and the design of the SUDARSHAN platform itself.
 
-It is written to be used for years as onboarding documentation and a daily reference — not
+It is written to be used for years as onboarding documentation and a daily reference - not
 read once. Every concept answers **WHAT / WHY / HOW / WHEN / WHERE / LIMITATIONS**, follows
 complete lifecycles rather than isolated definitions, and ends with *Judge Insights* and
 *Interview Insights*.
@@ -31,12 +31,12 @@ and chain of custody.
 
 | Block | Chapters | Status |
 |---|---|---|
-| **A — Foundations** | 00–09 | ✅ **Complete** |
-| **B — Analysis Craft** | 10–12 | ✅ **Complete** |
-| **C — The Adversary** | 13–16 | ✅ **Complete** |
-| **D — Operations** | 17–21 | ✅ **Complete** |
-| **E — Building SUDARSHAN** | 22–30 | ✅ **Complete** |
-| **F — Reference** | 31–37 | ✅ **Complete** |
+| **A - Foundations** | 00–09 | ✅ **Complete** |
+| **B - Analysis Craft** | 10–12 | ✅ **Complete** |
+| **C - The Adversary** | 13–16 | ✅ **Complete** |
+| **D - Operations** | 17–21 | ✅ **Complete** |
+| **E - Building SUDARSHAN** | 22–30 | ✅ **Complete** |
+| **F - Reference** | 31–37 | ✅ **Complete** |
 
 **All 38 chapters (00–37) written.** ~163,000 words.
 
@@ -44,11 +44,11 @@ and chain of custody.
 
 These files are plain CommonMark with relative links and work without modification in:
 
-- **GitHub Wiki** — push the `docs/` contents to the wiki repo
-- **Docusaurus** — point `docs.path` at `docs/`; `index.md` is the landing page
-- **MkDocs** — set `docs_dir: docs`; the chapter tables in `index.md` mirror the nav
-- **Obsidian** — open `docs/` as a vault; relative links and tags resolve natively
-- **Notion** — import the folder; the heading hierarchy maps to Notion blocks
+- **GitHub Wiki** - push the `docs/` contents to the wiki repo
+- **Docusaurus** - point `docs.path` at `docs/`; `index.md` is the landing page
+- **MkDocs** - set `docs_dir: docs`; the chapter tables in `index.md` mirror the nav
+- **Obsidian** - open `docs/` as a vault; relative links and tags resolve natively
+- **Notion** - import the folder; the heading hierarchy maps to Notion blocks
 
 ### Suggested MkDocs nav stub
 
@@ -108,7 +108,7 @@ nav:
 2. **Version-gate every platform claim** (`Android 14 (API 34)+`, never "modern Android").
 3. **Attribute every threat-intel claim** to a named vendor with a publication date.
 4. Bump `Version` and `Last Updated` in the file header.
-5. Update cross-references in both directions — upstream and downstream.
+5. Update cross-references in both directions - upstream and downstream.
 6. Prefer primary sources: `developer.android.com`, `source.android.com`, OWASP, MITRE, NIST,
    and named vendor threat research.
 

@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Untrusted Content Sanitizer
+SUDARSHAN - Untrusted Content Sanitizer
 =========================================
 THE single choke point for every string that originates from the analysed
 application before it may appear in an LLM prompt.
@@ -24,12 +24,12 @@ module removes that possibility by neutralising the delimiters themselves.
 
 Design rules
 ------------
-- ONE sanitizer. No ad hoc escaping at call sites — a surface that forgets to
+- ONE sanitizer. No ad hoc escaping at call sites - a surface that forgets to
   escape is a hole, and per-site escaping guarantees one will be forgotten.
 - Defang, never drop. Analysts must still see roughly what the app displayed,
   so text is neutralised rather than removed.
 - Bounded output. A hostile app can emit megabytes; every string is truncated.
-- Total function. Never raises, whatever bytes arrive — a sanitizer that throws
+- Total function. Never raises, whatever bytes arrive - a sanitizer that throws
   is a denial-of-service vector.
 
 This module performs NO risk scoring and is never consulted by the Risk Engine.
@@ -63,7 +63,7 @@ _ANGLE_CLOSE_REPLACEMENT: str = "›"   # › single right angle quote
 # used to smuggle structure past naive filters.
 _CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
-# Unicode direction overrides — used to visually reorder text so a reviewer sees
+# Unicode direction overrides - used to visually reorder text so a reviewer sees
 # something different from what the model receives ("Trojan Source").
 _BIDI_OVERRIDES = re.compile(r"[‪-‮⁦-⁩]")
 
@@ -168,7 +168,7 @@ def contains_injection_attempt(value: Any) -> bool:
     """
     Report whether raw input looked like a prompt-injection attempt.
 
-    Detection only — never a gate. Sanitization is unconditional; this exists so
+    Detection only - never a gate. Sanitization is unconditional; this exists so
     an attempt can be surfaced to the analyst as a finding rather than silently
     defanged.
     """

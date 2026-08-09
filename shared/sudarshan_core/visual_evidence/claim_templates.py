@@ -1,4 +1,4 @@
-"""Deterministic investigative claim templates — no LLM."""
+"""Deterministic investigative claim templates - no LLM."""
 
 from __future__ import annotations
 

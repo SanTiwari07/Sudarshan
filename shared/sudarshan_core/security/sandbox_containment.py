@@ -4,9 +4,9 @@ Sandbox containment policy for dynamic analysis.
 Malware executes on the Android guest (Genymotion / AVD), not inside the
 analysis-engine container. Containment therefore has two layers:
 
-  1. Guest posture — root + permissive SELinux are required for Frida; the guest
+  1. Guest posture - root + permissive SELinux are required for Frida; the guest
      must be treated as fully compromised after every session.
-  2. Control-plane posture — how the engine reaches the guest (ADB target, Frida
+  2. Control-plane posture - how the engine reaches the guest (ADB target, Frida
      listen address, gateway fallbacks) must not bridge the guest onto the host
      LAN, the Docker host ADB multiplexer, or an unhardened backend container.
 
@@ -34,7 +34,7 @@ _HOST_DOCKER_INTERNAL_ALIASES = frozenset(
     {"host.docker.internal", "host.containers.internal", "gateway.docker.internal"}
 )
 
-# RFC1918 + link-local + CGNAT — acceptable Genymotion host-only targets.
+# RFC1918 + link-local + CGNAT - acceptable Genymotion host-only targets.
 _PRIVATE_NETWORKS = (
     ipaddress.ip_network("10.0.0.0/8"),
     ipaddress.ip_network("172.16.0.0/12"),
@@ -90,7 +90,7 @@ def gateway_dynamic_allowed() -> bool:
     """
     Whether the API gateway may run Frida/ADB locally when the engine is down.
 
-    Must remain false in production — the backend image has no cgroup/seccomp
+    Must remain false in production - the backend image has no cgroup/seccomp
     profile and bind-mounts the host repository read-write.
     """
     return os.getenv("SUDARSHAN_ALLOW_GATEWAY_DYNAMIC", "").strip().lower() in (
@@ -178,7 +178,7 @@ def audit_sandbox_connectivity(config: SandboxConfig) -> List[ContainmentFinding
                     message=(
                         f"ADB_HOST={adb_host!r} routes container ADB through the "
                         "Docker host. A rooted guest can reach every device and "
-                        "service the host ADB server exposes — not a single "
+                        "service the host ADB server exposes - not a single "
                         "disposable Genymotion VM."
                     ),
                 )
@@ -226,7 +226,7 @@ def audit_sandbox_connectivity(config: SandboxConfig) -> List[ContainmentFinding
                 severity="warning",
                 code="GATEWAY_DYNAMIC_DISABLED",
                 message=(
-                    "SUDARSHAN_ALLOW_GATEWAY_DYNAMIC is not set — the backend "
+                    "SUDARSHAN_ALLOW_GATEWAY_DYNAMIC is not set - the backend "
                     "will not run Frida when the analysis-engine is unavailable "
                     "(intended for production)."
                 ),
@@ -316,7 +316,7 @@ def validate_adb_invocation(args: Sequence[str]) -> None:
     if not args:
         return
 
-    # Global listen flag — exposes host ADB to the LAN.
+    # Global listen flag - exposes host ADB to the LAN.
     if "-a" in args:
         raise ContainmentViolation(
             "adb -a (listen on all interfaces) is forbidden in analysis containers.",
@@ -358,7 +358,7 @@ def _adb_connect_target(args: Sequence[str]) -> Optional[str]:
 def build_frida_start_command(remote_binary: str, port: str, config: Optional[SandboxConfig] = None) -> str:
     """Shell command to start frida-server on the guest (loopback bind only)."""
     listen = frida_listen_host(config)
-    # nohup + background — same pattern as before, but not LAN-visible.
+    # nohup + background - same pattern as before, but not LAN-visible.
     return f"nohup {remote_binary} -l {listen}:{port} > /dev/null 2>&1 &"
 
 

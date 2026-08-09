@@ -1,4 +1,4 @@
-# 11 — Evaluation Strategy & Testing Framework
+# 11 - Evaluation Strategy & Testing Framework
 
 ## Purpose
 

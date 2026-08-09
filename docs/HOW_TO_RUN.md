@@ -139,7 +139,7 @@ Requires `SUDARSHAN_ENV=production`, `ANALYSIS_ENGINE_INTERNAL_TOKEN`, correct G
 
 ## 6. Setting Up Genymotion Desktop & Frida
 
-### 6.1 Genymotion (default — `SANDBOX_PROVIDER=genymotion`)
+### 6.1 Genymotion (default - `SANDBOX_PROVIDER=genymotion`)
 
 1. **Install Genymotion Desktop** and create a rooted virtual device (Android 10/11, x86_64 recommended).
 2. **Start the device** from the Genymotion UI and confirm ADB can see it:
@@ -162,7 +162,7 @@ Requires `SUDARSHAN_ENV=production`, `ANALYSIS_ENGINE_INTERNAL_TOKEN`, correct G
    ```
 5. Point Genymotion HTTP proxy at `127.0.0.1:8080` if using mitmproxy network capture.
 
-### 6.2 Android Studio AVD (optional — `SANDBOX_PROVIDER=android_studio`)
+### 6.2 Android Studio AVD (optional - `SANDBOX_PROVIDER=android_studio`)
 
 1. Set `SANDBOX_PROVIDER=android_studio` in `.env`.
 2. Launch an AVD (Android 10/11+, x86_64).

@@ -1,5 +1,5 @@
 """
-Sudarshan — Dynamic Analysis Engine (DAE) explicit pipeline state machine.
+Sudarshan - Dynamic Analysis Engine (DAE) explicit pipeline state machine.
 
 Every transition is logged and exposed for runtime telemetry. Failures must
 carry a reason; states are never skipped silently.

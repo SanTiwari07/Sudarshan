@@ -97,7 +97,7 @@ export default function ThreatIntelligenceDetail({
                 )}
               </>
             ) : (
-              <p>Unavailable — this provider did not contribute to the score.</p>
+              <p>Unavailable - this provider did not contribute to the score.</p>
             )}
           </ProviderCard>
 
@@ -113,7 +113,7 @@ export default function ThreatIntelligenceDetail({
                 )}
               </>
             ) : (
-              <p>Unavailable — this provider did not contribute to the score.</p>
+              <p>Unavailable - this provider did not contribute to the score.</p>
             )}
           </ProviderCard>
 
@@ -127,7 +127,7 @@ export default function ThreatIntelligenceDetail({
                 <p>Reports considered: {merged.abuseipdb.reports}</p>
               </>
             ) : (
-              <p>Unavailable — this provider did not contribute to the score.</p>
+              <p>Unavailable - this provider did not contribute to the score.</p>
             )}
           </ProviderCard>
         </div>
@@ -155,7 +155,7 @@ export default function ThreatIntelligenceDetail({
                   {ioc.type}: <span className="font-mono font-normal">{ioc.indicator}</span>
                 </div>
                 <p className="text-slate-600 mt-1">
-                  {ioc.reputation} — {ioc.source}
+                  {ioc.reputation} - {ioc.source}
                   {ioc.vt_malicious != null && ioc.vt_total != null && (
                     <span className="font-mono"> (VT {ioc.vt_malicious}/{ioc.vt_total})</span>
                   )}
@@ -179,7 +179,7 @@ export default function ThreatIntelligenceDetail({
       </DetailSection>
 
       <DetailSection title="Malware family classification">
-        <p className="text-xs text-slate-500 mb-2">Rule-based / deterministic — not an LLM verdict.</p>
+        <p className="text-xs text-slate-500 mb-2">Rule-based / deterministic - not an LLM verdict.</p>
         <div className="rounded-lg border border-slate-200 p-3 text-sm space-y-2">
           <div>
             <span className="text-slate-500 text-xs">Family</span>
@@ -208,9 +208,9 @@ export default function ThreatIntelligenceDetail({
             `Threat intelligence / correlation score: ${view.score.toFixed(1)} / 100`,
             'Correlation axis',
             axisExcluded
-              ? 'Excluded from FRS — unavailable or not used'
+              ? 'Excluded from FRS - unavailable or not used'
               : view.merged.correlationScore != null
-                ? `Included — contributes to weighted FRS`
+                ? `Included - contributes to weighted FRS`
                 : 'Included in FRS weighting',
           ]}
         />

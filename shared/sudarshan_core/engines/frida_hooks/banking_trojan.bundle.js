@@ -14465,8 +14465,8 @@ function initHooks() {
             severity: "MED",
             endpoint: epStr,
             // `url` is the key frida_sandbox reads to build network_logs.
-            // Without it, raw-socket C2 — one of the two paths malware uses
-            // specifically to avoid Java HTTP hooks — produced no IOC at all.
+            // Without it, raw-socket C2 - one of the two paths malware uses
+            // specifically to avoid Java HTTP hooks - produced no IOC at all.
             url: epStr,
             ioc: epStr,
             description: "Direct socket connection to: " + epStr

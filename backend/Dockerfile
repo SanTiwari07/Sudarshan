@@ -26,7 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Shared analysis layer — one source of truth for both services.
+# Shared analysis layer - one source of truth for both services.
 COPY shared/ /opt/sudarshan-core/
 # Editable so the ./shared bind mount in docker-compose.yml gives the same
 # live-reload behaviour the service code already had.

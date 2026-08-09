@@ -1,4 +1,4 @@
-# 18 — Mobile Threat Hunting
+# 18 - Mobile Threat Hunting
 
 > **Chapter ID:** `CH18` · **Block:** D (Operations) · **Status:** Stable
 > **Tags:** `#threat-hunting` `#peak` `#tahiti` `#hypothesis-driven` `#telemetry` `#hunt-playbooks`
@@ -52,7 +52,7 @@
         └────────────────────────────────────────────────┘
 ```
 
-> **⚙️ Engineering Note — the defining property of a mature hunt programme:** **every hunt ends
+> **⚙️ Engineering Note - the defining property of a mature hunt programme:** **every hunt ends
 > with an artifact.** Either a new detection rule, a tuning change, a telemetry gap logged, or a
 > documented negative result. A hunt that ends with "we looked, seemed fine" and produces nothing
 > is unrepeatable and unmeasurable. This is the same compounding principle as
@@ -81,7 +81,7 @@
 
 ### PEAK
 
-Splunk's **PEAK** framework — *Prepare, Execute, Act with Knowledge* — with three hunt types:
+Splunk's **PEAK** framework - *Prepare, Execute, Act with Knowledge* - with three hunt types:
 
 | Hunt type | Driven by | Example |
 |---|---|---|
@@ -100,7 +100,7 @@ Splunk's **PEAK** framework — *Prepare, Execute, Act with Knowledge* — with 
 
 ### TaHiTI
 
-**Targeted Hunting integrating Threat Intelligence** — a three-phase model emphasising that
+**Targeted Hunting integrating Threat Intelligence** - a three-phase model emphasising that
 hunts should be **intel-driven**, with a documented hypothesis backlog:
 
 ```
@@ -111,7 +111,7 @@ hunts should be **intel-driven**, with a documented hypothesis backlog:
    crown jewel)
 ```
 
-TaHiTI's most useful contribution is the **hypothesis backlog** — a ranked, persistent queue of
+TaHiTI's most useful contribution is the **hypothesis backlog** - a ranked, persistent queue of
 hunt ideas, so hunting is a managed programme rather than whatever the analyst thought of on
 Tuesday.
 
@@ -137,7 +137,7 @@ Be realistic about sources before designing hunts against data you don't have.
 | **App store monitoring** | Public | ★★ impersonation, fake listings |
 | **Customer-reported devices** | Case-by-case | ★ deep but low volume ([Ch 17](../digital-forensics/17-digital-forensics.md)) |
 
-### The bank-app SDK — the highest-leverage investment
+### The bank-app SDK - the highest-leverage investment
 
 If a bank instruments its own app with a lightweight security SDK, these signals become
 huntable across the entire customer base:
@@ -160,7 +160,7 @@ device_signals:
 
 > **🏛️ Enterprise Insight:** Note what's absent. Collecting the **full installed-app list** from
 > every customer device would be enormously useful for hunting and is a **privacy and DPDP
-> problem** — it reveals health apps, dating apps, religious and political affiliations. The
+> problem** - it reveals health apps, dating apps, religious and political affiliations. The
 > defensible design collects *the accessibility and notification-listener package names* (a small,
 > directly security-relevant set) rather than the whole inventory. That constraint is a
 > feature: it forces precision and it is the position you want to defend to a regulator.
@@ -195,12 +195,12 @@ hunt:
   success_criteria: >
     Either a statistically meaningful association (→ build a detection),
     or a documented negative with the confidence interval stated.
-  privacy_review: "completed — a11y package names only, no full inventory"
+  privacy_review: "completed - a11y package names only, no full inventory"
 ```
 
 > **⚙️ Engineering Note:** The `privacy_review` field is not bureaucratic decoration. In a bank
 > under DPDP, a hunt that requires data you are not permitted to collect is a hunt that cannot
-> run — and discovering that *after* three days of work is wasted effort. Make it part of the
+> run - and discovering that *after* three days of work is wasted effort. Make it part of the
 > template so it's answered in Prepare, not Execute.
 
 ---
@@ -210,7 +210,7 @@ hunt:
 Five concrete, runnable hunts. Each maps to techniques from
 [Ch 13](../malware/13-android-malware.md).
 
-### HUNT-1 — Unauthorised accessibility services (★ highest value)
+### HUNT-1 - Unauthorised accessibility services (★ highest value)
 
 **Hypothesis:** Devices with a non-allowlisted accessibility service are at elevated ODF risk.
 
@@ -236,13 +236,13 @@ ORDER BY fraud_rate DESC;
 ```
 
 **Expected noise:** password managers, TalkBack alternatives, automation tools, remote support.
-**Build the allowlist first** — otherwise the hunt returns the legitimate population and buries
+**Build the allowlist first** - otherwise the hunt returns the legitimate population and buries
 the signal.
 
 **Outcome:** any package with a materially elevated fraud rate → pull a sample, analyse
 ([Ch 11](../static-analysis/11-static-analysis.md)), and if malicious, build a detection.
 
-### HUNT-2 — Clone / repackaged bank app
+### HUNT-2 - Clone / repackaged bank app
 
 **Hypothesis:** Apps claiming our package name with a signer outside our canonical registry are
 impersonation attempts.
@@ -257,11 +257,11 @@ WHERE s.signer_sha256 NOT IN (
 ORDER BY s.first_seen DESC;
 ```
 
-**Precision: essentially 100%** when the registry is correct — this is the deterministic rule
+**Precision: essentially 100%** when the registry is correct - this is the deterministic rule
 from [Ch 06 §11](../security/06-certificates.md#11-detection-logic-for-sudarshan). Run it
 continuously, not as a hunt, once validated.
 
-### HUNT-3 — Dropper chains in the corpus
+### HUNT-3 - Dropper chains in the corpus
 
 **Hypothesis:** Apps that install other apps, where the installer's stated purpose is unrelated,
 are droppers.
@@ -281,7 +281,7 @@ ORDER BY n_installed DESC;
 **Rationale:** a PDF reader or QR scanner has no legitimate reason to install applications
 ([Ch 09 §7](../apk/09-package-manager.md#7-droppers-the-technique-in-full)).
 
-### HUNT-4 — Our package name in someone's target list
+### HUNT-4 - Our package name in someone's target list
 
 **Hypothesis:** Samples in the corpus reference our client banks' package names in resources.
 
@@ -298,7 +298,7 @@ ORDER BY s.first_seen DESC;
 **This is the hunt that produces the escalation email.** It converts corpus data into
 *"campaign X is targeting you."* → [Ch 11 §5](../static-analysis/11-static-analysis.md#5-tier-2--resource-and-asset-mining)
 
-### HUNT-5 — Rare-signer capability clusters
+### HUNT-5 - Rare-signer capability clusters
 
 **Hypothesis:** Apps with the ODF capability cluster whose signer appears rarely are
 disproportionately malicious (established publishers sign many apps; throwaway keys sign few).
@@ -345,7 +345,7 @@ backwards**.
   ★ Re-score, and notify the banks that submitted them
 ```
 
-> **⚙️ Engineering Note — retro-hunting is a product requirement, not a nice-to-have.** A sample
+> **⚙️ Engineering Note - retro-hunting is a product requirement, not a nice-to-have.** A sample
 > scored *inconclusive* in March because its C2 was offline
 > ([Ch 12 §9](../dynamic-analysis/12-dynamic-analysis.md#9-sandbox-evasion)) should be
 > automatically re-evaluated when new intel lands. Build (1) full-corpus rule replay, (2)
@@ -387,7 +387,7 @@ The mandatory final step.
   Write the rule (Sigma / YARA / SQL / platform rule)
        │
        ▼
-  Backtest against historical data — measure the FP rate
+  Backtest against historical data - measure the FP rate
        │
        ▼
   FP rate acceptable?  ──no──► tune, add cluster conditions, or shelve
@@ -441,7 +441,7 @@ fields:
   - accessibility_services_enabled
 ```
 
-> **⚙️ Engineering Note:** `level: medium`, not `high` — and the `falsepositives` block is
+> **⚙️ Engineering Note:** `level: medium`, not `high` - and the `falsepositives` block is
 > populated honestly. A rule that fires on every password-manager user and is labelled `high`
 > will be muted by the SOC within a week, and then it protects nobody. **Calibrated severity is
 > what keeps a rule alive.** → [Ch 19](../soc/19-enterprise-soc-operations.md)
@@ -458,11 +458,11 @@ fields:
 | Time-to-hypothesis-resolution | Efficiency | |
 | Findings escalated to IR | Direct impact | Low counts are normal and fine |
 | Corpus retro-hunt verdict changes | Value of new intel | ★ Underrated |
-| **"Threats found"** | — | ⚠️ **Bad primary metric** — incentivises finding things |
+| **"Threats found"** | - | ⚠️ **Bad primary metric** - incentivises finding things |
 
 > **⚙️ Engineering Note:** Measuring a hunt team on "threats found" creates pressure to
 > manufacture findings and to avoid hunting where nothing is likely. Measure on **detections
-> created, telemetry gaps closed, and hypotheses resolved** — a well-documented negative result
+> created, telemetry gaps closed, and hypotheses resolved** - a well-documented negative result
 > that proves a technique isn't present in your environment is a genuine success and should be
 > recorded as one.
 
@@ -514,8 +514,7 @@ hypothesis_backlog:
 ```
 
 > **🏛️ Enterprise Insight:** Expose the backlog to the client bank's security team. Hunting is
-> one of the few security activities where a client can meaningfully contribute hypotheses —
-> they know their own fraud patterns, their customer demographics, and which of their flows are
+> one of the few security activities where a client can meaningfully contribute hypotheses - > they know their own fraud patterns, their customer demographics, and which of their flows are
 > unusual. A shared backlog turns SUDARSHAN from a tool into a joint programme, and it surfaces
 > hypotheses a vendor would never think of.
 
@@ -543,7 +542,7 @@ Every hunt in §5 has a substantial legitimate population:
 | HUNT-4 target lists | Aggregators, comparison apps, payment SDKs, MDM catalogues |
 | HUNT-5 rare signers | Small indie developers; new legitimate publishers |
 
-**HUNT-2 (clone detection) is the exception** — near-zero false positives, because it's a
+**HUNT-2 (clone detection) is the exception** - near-zero false positives, because it's a
 cryptographic identity check rather than a behavioural heuristic.
 
 > **🚨 Misconception:** "A hunt that returns lots of results found lots of threats." Usually it
@@ -555,9 +554,9 @@ cryptographic identity check rather than a behavioural heuristic.
 
 | Case | Handling |
 |---|---|
-| Enterprise-managed devices | MDM legitimately installs apps and holds device admin — separate population |
-| Shared/family devices | One device, multiple customers — attribution is ambiguous |
-| Regional norms | Third-party stores and sideloading are mainstream in some markets — calibrate per geography |
+| Enterprise-managed devices | MDM legitimately installs apps and holds device admin - separate population |
+| Shared/family devices | One device, multiple customers - attribution is ambiguous |
+| Regional norms | Third-party stores and sideloading are mainstream in some markets - calibrate per geography |
 | Accessibility users | **Never treat as suspicious by default.** Genuine assistive-technology users exist and deserve service. |
 
 > **🏛️ Enterprise Insight:** That last row deserves emphasis. Some customers use accessibility
@@ -570,8 +569,8 @@ cryptographic identity check rather than a behavioural heuristic.
 ## 11. Engineering tips
 
 1. **Build baselines before hunting.** Otherwise you rediscover normal.
-2. **Build the accessibility allowlist first** — it's the precondition for HUNT-1.
-3. **Every hunt ends with an artifact** — rule, tuning change, or documented gap.
+2. **Build the accessibility allowlist first** - it's the precondition for HUNT-1.
+3. **Every hunt ends with an artifact** - rule, tuning change, or documented gap.
 4. **Run privacy review in Prepare**, not after three days of work.
 5. **Retro-hunt on every new intel drop**, and notify submitters when verdicts change.
 6. **Backtest before deploying**; measure the FP rate honestly.
@@ -588,10 +587,10 @@ cryptographic identity check rather than a behavioural heuristic.
 **What judges ask:** *"You can't put an agent on customers' phones. So what is there to hunt in?"*
 
 **Perfect answer:** Three places, and none of them is endpoint telemetry. First, the sample
-corpus — every APK ever submitted, which we retro-hunt whenever new intelligence lands, so a
+corpus - every APK ever submitted, which we retro-hunt whenever new intelligence lands, so a
 sample scored inconclusive in March because its C2 was offline gets automatically re-scored in
 August and the submitting bank gets notified that the verdict changed. Second, telemetry the
-bank's own app collects from consented devices — deliberately minimal: which accessibility
+bank's own app collects from consented devices - deliberately minimal: which accessibility
 services and notification listeners are enabled, whether an overlay was present during a
 session, whether our own app's signer matches what we published. Not the full app inventory,
 because that reveals health, dating, and religious apps and fails DPDP data minimisation. Third,
@@ -614,13 +613,13 @@ devices also appear in our corpus with an ODF capability cluster.
 - *"How do you avoid flagging disabled customers?"* → Build the accessibility allowlist properly
   and never auto-restrict on accessibility alone. A bank that flags assistive-technology users as
   fraud risks has created a discrimination problem, not a detection.
-- *"What if a hunt finds nothing?"* → That's a legitimate outcome and we record it as one — a
+- *"What if a hunt finds nothing?"* → That's a legitimate outcome and we record it as one - a
   documented negative that a technique isn't present in this environment has real value.
   Measuring hunters on "threats found" just incentivises manufacturing findings.
 
 **Fact that impresses:** Retro-hunting changes the meaning of a verdict. Because a sample can be
 inconclusive purely because its C2 was down at detonation time, "clean" in our platform is
-provisional — we replay every new rule across the entire historical corpus and notify the
+provisional - we replay every new rule across the entire historical corpus and notify the
 original submitter when a verdict flips. Most scanners treat a verdict as final; treating it as
 revisable is what makes the answer trustworthy.
 
@@ -636,7 +635,7 @@ individual findings.
 **Q: "Walk me through a hunt."**
 Use the template: trigger (intel report), a specific falsifiable hypothesis, mapped ATT&CK
 techniques, data sources, scope and timebox, success criteria including what a negative result
-looks like. Then execute, then — crucially — convert the finding into a rule, backtest it, and
+looks like. Then execute, then - crucially - convert the finding into a rule, backtest it, and
 update the backlog.
 
 **Q: "What frameworks do you know?"**
@@ -670,15 +669,15 @@ where nothing is likely.
 ## 14. Cross-references
 
 **Upstream:**
-- [← Ch 16 Threat Intelligence](../threat-intelligence/16-threat-intelligence.md) — intel as hunt trigger; ATT&CK mapping
-- [← Ch 17 Digital Forensics](../digital-forensics/17-digital-forensics.md) — device artifacts as telemetry
+- [← Ch 16 Threat Intelligence](../threat-intelligence/16-threat-intelligence.md) - intel as hunt trigger; ATT&CK mapping
+- [← Ch 17 Digital Forensics](../digital-forensics/17-digital-forensics.md) - device artifacts as telemetry
 
 **Downstream:**
-- [→ Ch 19 Enterprise SOC](19-enterprise-soc-operations.md) — where hunt-derived rules live
-- [→ Ch 20 Incident Response](../incident-response/20-incident-response.md) — escalation path
-- [→ Ch 21 AI-assisted Analysis](../ai-malware-analysis/21-ai-assisted-malware-analysis.md) — model-assisted hunting
-- [→ Ch 28 Campaign Correlation](../sudarshan/28-campaign-correlation.md) — corpus pivoting
-- [→ Ch 30 TI Database](../threat-intelligence/30-threat-intelligence-database.md) — retro-hunt infrastructure
+- [→ Ch 19 Enterprise SOC](19-enterprise-soc-operations.md) - where hunt-derived rules live
+- [→ Ch 20 Incident Response](../incident-response/20-incident-response.md) - escalation path
+- [→ Ch 21 AI-assisted Analysis](../ai-malware-analysis/21-ai-assisted-malware-analysis.md) - model-assisted hunting
+- [→ Ch 28 Campaign Correlation](../sudarshan/28-campaign-correlation.md) - corpus pivoting
+- [→ Ch 30 TI Database](../threat-intelligence/30-threat-intelligence-database.md) - retro-hunt infrastructure
 
 **Related chain:** Intel trigger → hypothesis → corpus/telemetry hunt → finding → detection rule
 → SOC → IR.
@@ -687,21 +686,21 @@ where nothing is likely.
 
 ## 15. References
 
-1. Splunk — **PEAK** Threat Hunting Framework. https://www.splunk.com/en_us/blog/security/peak-threat-hunting-framework.html
-2. Betaalvereniging Nederland / DCC-NL — **TaHiTI**: Targeted Hunting integrating Threat Intelligence.
-3. Sqrrl / David Bianco — *A Framework for Cyber Threat Hunting*; the Hunting Maturity Model.
-4. MITRE ATT&CK for Mobile — technique mapping for hunt hypotheses. https://attack.mitre.org/matrices/mobile/
-5. SigmaHQ — Sigma generic detection rule format. https://github.com/SigmaHQ/sigma
-6. VirusTotal — Retrohunt and LiveHunt documentation. https://docs.virustotal.com/
-7. Digital Personal Data Protection Act, 2023 (India) — purpose limitation, data minimisation.
-8. Zscaler ThreatLabz — *Anatsa's Latest Updates* (August 2025) — example hunt trigger.
-9. Hunt.io — ERMAC 3.0 source leak (August 2025) — example retro-hunt trigger.
-10. NIST SP 800-137 — *Information Security Continuous Monitoring*.
+1. Splunk - **PEAK** Threat Hunting Framework. https://www.splunk.com/en_us/blog/security/peak-threat-hunting-framework.html
+2. Betaalvereniging Nederland / DCC-NL - **TaHiTI**: Targeted Hunting integrating Threat Intelligence.
+3. Sqrrl / David Bianco - *A Framework for Cyber Threat Hunting*; the Hunting Maturity Model.
+4. MITRE ATT&CK for Mobile - technique mapping for hunt hypotheses. https://attack.mitre.org/matrices/mobile/
+5. SigmaHQ - Sigma generic detection rule format. https://github.com/SigmaHQ/sigma
+6. VirusTotal - Retrohunt and LiveHunt documentation. https://docs.virustotal.com/
+7. Digital Personal Data Protection Act, 2023 (India) - purpose limitation, data minimisation.
+8. Zscaler ThreatLabz - *Anatsa's Latest Updates* (August 2025) - example hunt trigger.
+9. Hunt.io - ERMAC 3.0 source leak (August 2025) - example retro-hunt trigger.
+10. NIST SP 800-137 - *Information Security Continuous Monitoring*.
 
 ### Further reading
-- ThreatHunting Project — open hunt procedure library
-- Splunk Security Research — hunt content examples
-- OWASP MASVS — MASVS-PRIVACY controls relevant to telemetry design
+- ThreatHunting Project - open hunt procedure library
+- Splunk Security Research - hunt content examples
+- OWASP MASVS - MASVS-PRIVACY controls relevant to telemetry design
 
 ---
 

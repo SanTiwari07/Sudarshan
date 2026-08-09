@@ -1,4 +1,4 @@
-# 03 — Static Threat Intelligence Engine Specification
+# 03 - Static Threat Intelligence Engine Specification
 
 ```yaml
 Module Title:        Static Threat Intelligence & Decompilation Engine

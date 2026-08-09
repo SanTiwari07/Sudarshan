@@ -17,7 +17,7 @@ export default function GroundedNarrativeCard({ data }: { data: FraudCardData })
       <SectionHeader
         icon={<MessageSquare className="h-4 w-4" />}
         title="Why we believe this"
-        subtitle="Evidence-grounded synthesis — always verify against the score ledger."
+        subtitle="Evidence-grounded synthesis - always verify against the score ledger."
       />
       <div className="px-4 py-2 bg-slate-100 border-b border-slate-200 text-[10px] flex items-center justify-between">
         <span className="text-slate-600">

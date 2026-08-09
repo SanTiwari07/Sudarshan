@@ -1,6 +1,6 @@
 # SUDARSHAN Engineering Knowledge Base
 
-> **The definitive internal engineering documentation for SUDARSHAN — an AI-powered
+> **The definitive internal engineering documentation for SUDARSHAN - an AI-powered
 > enterprise Android malware investigation platform for banks.**
 
 > **Version:** 1.5.0 · **Last Updated:** 2026-08-05 · **Status:** ✅ **ALL 38 CHAPTERS COMPLETE** (00–37)
@@ -36,7 +36,7 @@ for the full version.
 
 ## Chapter index
 
-### Block A — Foundations ✅ **Complete**
+### Block A - Foundations ✅ **Complete**
 
 | # | Chapter | Purpose | Tags |
 |---|---|---|---|
@@ -51,7 +51,7 @@ for the full version.
 | 08 | [APK File Format](apk/08-apk-file-format.md) | ZIP, AXML, `resources.arsc`, DEX at byte level | `#file-format` `#dex` |
 | 09 | [Package Manager](apk/09-package-manager.md) | Install pipeline, sessions, droppers | `#package-manager` `#droppers` |
 
-### Block B — Analysis Craft ✅ **Complete**
+### Block B - Analysis Craft ✅ **Complete**
 
 | # | Chapter | Purpose | Tags |
 |---|---|---|---|
@@ -59,7 +59,7 @@ for the full version.
 | 11 | [Static Analysis](static-analysis/11-static-analysis.md) | Tiered pipeline, MobSF, YARA, capability extraction | `#mobsf` `#yara` `#pipeline` |
 | 12 | [Dynamic Analysis](dynamic-analysis/12-dynamic-analysis.md) | Frida, detonation, evasion, network + memory | `#frida` `#detonation` `#evasion` |
 
-### Block C — The Adversary ✅ **Complete**
+### Block C - The Adversary ✅ **Complete**
 
 | # | Chapter | Purpose | Tags |
 |---|---|---|---|
@@ -68,7 +68,7 @@ for the full version.
 | 15 | [Malware Infrastructure](malware/15-malware-infrastructure.md) | C2, MaaS, Zombinder, pivoting, mule chains | `#c2` `#maas` `#pivoting` |
 | 16 | [Threat Intelligence](threat-intelligence/16-threat-intelligence.md) | ATT&CK Mobile, Pyramid of Pain, STIX, attribution | `#mitre` `#stix` `#attribution` |
 
-### Block D — Operations ✅ **Complete**
+### Block D - Operations ✅ **Complete**
 
 | # | Chapter | Purpose | Tags |
 |---|---|---|---|
@@ -78,7 +78,7 @@ for the full version.
 | 20 | [Incident Response](incident-response/20-incident-response.md) | Two-track IR, remediation runbook, CERT-In | `#incident-response` `#picerl` |
 | 21 | [AI-assisted Analysis](ai-malware-analysis/21-ai-assisted-malware-analysis.md) | ML, drift, LLM triage, explainability | `#ml` `#llm` `#explainability` |
 
-### Block E — Building SUDARSHAN ✅ **Complete**
+### Block E - Building SUDARSHAN ✅ **Complete**
 
 | # | Chapter | Purpose | Tags |
 |---|---|---|---|
@@ -92,7 +92,7 @@ for the full version.
 | 29 | [Investigation Reports](sudarshan/29-investigation-reports.md) | Five audiences, evidence linking, regulatory pack | `#reporting` `#regulatory` |
 | 30 | [Threat Intelligence Database](threat-intelligence/30-threat-intelligence-database.md) | Schema, aliases, provenance, retro-hunt | `#ti-database` `#retro-hunt` |
 
-### Block F — Reference ✅ **Complete**
+### Block F - Reference ✅ **Complete**
 
 | # | Chapter | Purpose | Tags |
 |---|---|---|---|
@@ -135,7 +135,7 @@ for the full version.
 
 ---
 
-## Concept map — Block A
+## Concept map - Block A
 
 ```
                       ┌─────────────────┐
@@ -173,7 +173,7 @@ for the full version.
 
 ---
 
-## Concept map — Block B
+## Concept map - Block B
 
 ```
         ┌──────────────────────────────────────────────┐
@@ -199,12 +199,12 @@ for the full version.
 ```
 
 **The Block B thesis:** static is blind to what wasn't shipped; dynamic is blind to what didn't
-run. Their blind spots are complementary, so fusion is mandatory — see
+run. Their blind spots are complementary, so fusion is mandatory - see
 [Ch 12 §1](dynamic-analysis/12-dynamic-analysis.md#1-why-dynamic-analysis-exists).
 
 ---
 
-## Concept map — Block C
+## Concept map - Block C
 
 ```
    DELIVERY ──► DROPPER ──► ★ ACCESSIBILITY ──► self-escalation
@@ -237,12 +237,12 @@ run. Their blind spots are complementary, so fusion is mandatory — see
 ```
 
 **The Block C thesis:** accessibility abuse is the hinge of the entire playbook, and detection
-should target the **top of the Pyramid of Pain** — behaviour and capability clusters — because
+should target the **top of the Pyramid of Pain** - behaviour and capability clusters - because
 hashes and IPs cost the adversary nothing to change.
 
 ---
 
-## Concept map — Block D
+## Concept map - Block D
 
 ```
    VICTIM DEVICE                          SAMPLE CORPUS + TELEMETRY
@@ -278,13 +278,13 @@ hashes and IPs cost the adversary nothing to change.
 ```
 
 **The Block D thesis:** containment runs on a *minutes* clock while investigation runs on an
-*hours* clock, so they must be **two parallel tracks with different confidence bars** — and the
+*hours* clock, so they must be **two parallel tracks with different confidence bars** - and the
 verdict must stay deterministic and evidence-linked, because a bank has to defend it to a
 regulator.
 
 ---
 
-## Concept map — Block E
+## Concept map - Block E
 
 ```
    SOURCES ──► ① INTAKE (Ch 24) ──► ② PIPELINE (Ch 23) ──► ③ ENGINE (Ch 25)
@@ -324,7 +324,7 @@ Defined fully in [Ch 00 §6](00-introduction.md#6-conventions-used-everywhere).
 | 🏛️ **Enterprise Insight** | Why a bank, regulator, or SOC lead cares |
 | ⚖️ **Judge Tip** | What impresses in demo Q&A |
 | 🚨 **Misconception** | A widely believed wrong thing |
-| 🔬 **Research Gap** | Genuinely unsolved — don't claim we solved it |
+| 🔬 **Research Gap** | Genuinely unsolved - don't claim we solved it |
 
 **Version-gated claims** are always written as *"Android 14 (API 34)+"*, never "modern
 Android." **Malware family names** carry the naming vendor on first use per chapter, because
@@ -336,7 +336,7 @@ vendor naming diverges.
 
 Each file carries `Version: MAJOR.MINOR.PATCH` and `Last Updated`. Bump MINOR when adding a
 section, PATCH for corrections, MAJOR on structural change. **Threat-intel content ages
-fastest** — anything in Blocks C and D older than 12 months should be re-verified before use.
+fastest** - anything in Blocks C and D older than 12 months should be re-verified before use.
 
 ---
 

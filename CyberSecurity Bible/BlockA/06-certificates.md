@@ -1,4 +1,4 @@
-# 06 — Certificates
+# 06 - Certificates
 
 > **Chapter ID:** `CH06` · **Block:** A (Foundations) · **Status:** Stable
 > **Tags:** `#certificates` `#x509` `#identity` `#fingerprint` `#trust-on-first-use` `#play-app-signing` `#correlation`
@@ -12,7 +12,7 @@
 1. [The one idea that matters](#1-the-one-idea-that-matters)
 2. [X.509 in ninety seconds](#2-x509-in-ninety-seconds)
 3. [Why Android certificates are self-signed](#3-why-android-certificates-are-self-signed)
-4. [Trust On First Use — Android's actual model](#4-trust-on-first-use--androids-actual-model)
+4. [Trust On First Use - Android's actual model](#4-trust-on-first-use--androids-actual-model)
 5. [Fingerprints: the thing you actually use](#5-fingerprints-the-thing-you-actually-use)
 6. [Where the certificate is enforced](#6-where-the-certificate-is-enforced)
 7. [Key rotation and lineage](#7-key-rotation-and-lineage)
@@ -35,7 +35,7 @@
 > The file hash is not. The developer name inside the certificate is not.**
 
 Everything else in this chapter is elaboration. If you take one thing from Block A into
-your daily work, take this — it prevents more analytical errors than any other single fact
+your daily work, take this - it prevents more analytical errors than any other single fact
 in Android security.
 
 Why it's true, in one line: **the package name is a string anyone can type; the certificate
@@ -88,7 +88,7 @@ That certificate will claim to be Google. Android will accept it. It will instal
 
 A CA model would mean:
 - Every Android developer paying a CA, creating a barrier for hobbyists and open source.
-- Google (or CAs) becoming a gatekeeper for whether an app can *exist* — politically and
+- Google (or CAs) becoming a gatekeeper for whether an app can *exist* - politically and
   practically undesirable for an open platform.
 - CA compromise becoming an ecosystem-wide app-signing compromise.
 
@@ -98,8 +98,7 @@ world*; it asserts *that this app is from the same source as the last version of
 > **🚨 Misconception:** "The certificate tells you who developed the app." It tells you
 > **what the signer typed into the `-dname` field.** The Subject fields (CN, O, OU, L, ST, C)
 > are **completely self-asserted and unverified**. Malware routinely puts plausible-looking
-> organisation names in there. Never report a certificate Subject as an attribution claim —
-> report it as an *artifact*, useful for clustering, worthless as proof.
+> organisation names in there. Never report a certificate Subject as an attribution claim - > report it as an *artifact*, useful for clustering, worthless as proof.
 
 ### What the Subject IS good for
 
@@ -109,14 +108,14 @@ Despite being unverified, Subject strings are useful:
   `O=` value recurring across samples clusters a campaign.
 - **Default detection.** `CN=Android Debug, O=Android, C=US` is the **Android debug
   certificate**. An app in the wild signed with the debug key was built by someone who ran a
-  debug build — sloppy, and a genuine signal.
+  debug build - sloppy, and a genuine signal.
 - **Anomaly detection.** A certificate claiming a well-known bank's `O=` value whose
   fingerprint doesn't match that bank's known signer is, by definition, an impersonation
   attempt.
 
 ---
 
-## 4. Trust On First Use — Android's actual model
+## 4. Trust On First Use - Android's actual model
 
 ### HOW it works
 
@@ -141,7 +140,7 @@ Despite being unverified, Subject strings are useful:
    │         │
    ▼         ▼
  Update   INSTALL_FAILED_UPDATE_INCOMPATIBLE
- allowed  (must uninstall first — losing all data)
+ allowed  (must uninstall first - losing all data)
 ```
 
 This is **Trust On First Use (TOFU)**. Android never asks "is this signer trustworthy?" It
@@ -176,7 +175,7 @@ the real app, so there's no prior signer to conflict with.
 ## 5. Fingerprints: the thing you actually use
 
 A **fingerprint** is a hash of the DER-encoded certificate. It's how you refer to a signer
-in practice — compact, comparable, and greppable.
+in practice - compact, comparable, and greppable.
 
 ```bash
 # The canonical command. Learn it.
@@ -201,7 +200,7 @@ Alternatives:
 ```bash
 # keytool on the extracted cert
 $ unzip -p app.apk META-INF/CERT.RSA | keytool -printcert
-# Androguard (scriptable — what SUDARSHAN should use)
+# Androguard (scriptable - what SUDARSHAN should use)
 $ python3 -c "
 from androguard.core.bytecodes.apk import APK
 a = APK('app.apk')
@@ -259,8 +258,8 @@ Concrete places where Android makes a decision based on the signer, not the pack
 
 A repackaged clone with the same `package_name` but a different signer **cannot** claim the
 bank's HTTPS links. The package name alone is insufficient; the fingerprint is what makes it
-verifiable. This is the cleanest available proof that Android treats the certificate — not
-the package name — as identity.
+verifiable. This is the cleanest available proof that Android treats the certificate - not
+the package name - as identity.
 
 ---
 
@@ -294,7 +293,7 @@ Each lineage node also carries flags describing what the old certificate is stil
 for (e.g. still valid for `signature` permissions and `sharedUserId`, or not).
 
 From **Android 13 (API 33)**, `PackageManager.checkSignatures()` recognises proof-of-rotation
-and returns the **newest** signing certificate — so same-signer checks keep working across a
+and returns the **newest** signing certificate - so same-signer checks keep working across a
 rotation.
 
 **v3.1** (Android 13 era) refines this: it lets a developer target rotation at newer SDK
@@ -306,7 +305,7 @@ awkward compatibility cases v3 alone couldn't express.
 > **⚖️ Judge Tip:** Key rotation is usually discussed as a developer feature. The
 > counter-intuitive security point worth making: **proof-of-rotation lineage is an
 > attribution windfall.** If an adversary rotates keys, the lineage cryptographically links
-> the old identity to the new one — the adversary hands you the correlation you would
+> the old identity to the new one - the adversary hands you the correlation you would
 > otherwise have to infer. Any campaign-correlation engine should parse v3 lineage and treat
 > every key in the chain as the *same actor*.
 
@@ -336,7 +335,7 @@ Since new apps must publish as App Bundles ([Ch 02 §7](../apk/02-apk-architectu
 
 1. **The certificate on a Play-downloaded APK is the app signing key held by Google**, not
    the developer's upload key. Both are real; they're different keys with different roles.
-2. **It is still a valid, stable identity** for that app on Play — TOFU works, App Links
+2. **It is still a valid, stable identity** for that app on Play - TOFU works, App Links
    work, attestation works.
 3. **You must not describe it as "the developer's key"** in a report. Say "the app signing
    certificate (Play App Signing)".
@@ -348,7 +347,7 @@ Since new apps must publish as App Bundles ([Ch 02 §7](../apk/02-apk-architectu
 > **🏛️ Enterprise Insight:** For a bank's own apps, maintain a **canonical signer registry**:
 > package name → expected app signing certificate SHA-256 (plus any lineage predecessors).
 > Then any sample claiming your package with a different fingerprint is an impersonation
-> candidate, full stop — no ML required, no false positives from obfuscation or permissions.
+> candidate, full stop - no ML required, no false positives from obfuscation or permissions.
 > This is the cheapest high-precision detection a bank can deploy, and SUDARSHAN should
 > ship it as a first-class feature. → [Ch 28](../sudarshan/28-campaign-correlation.md)
 
@@ -365,7 +364,7 @@ interviews constantly and it is the seed of several entries in
 | **What it is** | Public key + self-asserted identity claim | Cryptographic proof produced with the private key over the APK's contents | Digest of exact file bytes |
 | **Answers** | *Who signed this?* | *Was this modified since signing?* | *Is this the exact same file?* |
 | **Stable across rebuilds?** | ✅ Yes (same key) | ❌ New signature each build | ❌ Changes on any byte change |
-| **Forgeable without the key?** | You can make a *lookalike* cert, but not the same fingerprint | ❌ No | ✅ Trivially — that's the point |
+| **Forgeable without the key?** | You can make a *lookalike* cert, but not the same fingerprint | ❌ No | ✅ Trivially - that's the point |
 | **Use for** | **Identity, attribution, correlation** | **Integrity verification** | **IOC, blocklist, dedup** |
 | **Lifetime as an indicator** | Months to years | Per-build | Hours to days |
 
@@ -379,7 +378,7 @@ An analogy that survives scrutiny:
 
 > **🚨 Misconception:** "Same hash = same app; different hash = different app." Both halves
 > are wrong in practice. Same hash does mean same file (useful!). But **different hash
-> absolutely does not mean different app** — Play generates per-device split APKs, so the
+> absolutely does not mean different app** - Play generates per-device split APKs, so the
 > same app version legitimately has many hashes. And adversaries change a byte to defeat
 > hash blocklists as routine hygiene; Zscaler ThreatLabz documented Anatsa rotating package
 > names and install hashes between campaigns.
@@ -424,17 +423,17 @@ carrying a v3 lineage that links old to new. Either way you win.
 ```
 
 Supporting pivots when the signer differs (each covered later):
-- **Code similarity** — TLSH/SSDEEP fuzzy hashes, call-graph comparison → [Ch 28](../sudarshan/28-campaign-correlation.md)
-- **Packer fingerprint** — Virbox / Jiagu / Bangcle native library names → [Ch 10](../reverse-engineering/10-reverse-engineering.md)
-- **Infrastructure overlap** — shared IPs/domains, e.g. ERMAC's `141.164.62[.]236` (Hunt.io, Aug 2025)
+- **Code similarity** - TLSH/SSDEEP fuzzy hashes, call-graph comparison → [Ch 28](../sudarshan/28-campaign-correlation.md)
+- **Packer fingerprint** - Virbox / Jiagu / Bangcle native library names → [Ch 10](../reverse-engineering/10-reverse-engineering.md)
+- **Infrastructure overlap** - shared IPs/domains, e.g. ERMAC's `141.164.62[.]236` (Hunt.io, Aug 2025)
 - **Hardcoded key reuse** → [Ch 05 §10](05-android-cryptography.md#10-detection-logic-for-sudarshan)
-- **Resource artifacts** — overlay HTML, target package lists, locale sets
+- **Resource artifacts** - overlay HTML, target package lists, locale sets
 
 ### Real-world caveat
 
 Sophisticated MaaS operations generate a **fresh key per build** precisely to break this
 pivot. When that happens, signer correlation yields clusters of one and you must fall back
-to code and infrastructure similarity. **Record that fact** — "unique signer per sample" is
+to code and infrastructure similarity. **Record that fact** - "unique signer per sample" is
 itself an operational-sophistication indicator worth reporting.
 
 ---
@@ -446,7 +445,7 @@ itself an operational-sophistication indicator worth reporting.
 ```yaml
 on_sample_intake:
   extract:
-    - signer_cert_sha256          # PRIMARY IDENTITY KEY — indexed, required
+    - signer_cert_sha256          # PRIMARY IDENTITY KEY - indexed, required
     - signer_spki_sha256          # survives re-encoding
     - signer_subject_dn           # artifact only, never attribution
     - signer_issuer_dn
@@ -464,14 +463,14 @@ on_sample_intake:
 
 | Rule | Logic | Severity | Confidence |
 |---|---|---|---|
-| **Impersonation of a protected package** | `package ∈ bank_registry AND signer_sha256 ∉ registry[package].allowed` | **Critical** | **High** — deterministic, no ML |
+| **Impersonation of a protected package** | `package ∈ bank_registry AND signer_sha256 ∉ registry[package].allowed` | **Critical** | **High** - deterministic, no ML |
 | **Android debug certificate** | Subject == `CN=Android Debug, O=Android, C=US` | Medium | High |
 | **Known-malicious signer** | signer ∈ TI database malicious signers | High | High |
 | **Signer seen only on flagged samples** | cluster purity == 100% malicious, n ≥ 3 | Medium-High | Medium |
-| **Absurd validity** | `notAfter - notBefore > 100 years` or `notBefore` in the future | Low | Medium — common in malware, also in careless legit builds |
+| **Absurd validity** | `notAfter - notBefore > 100 years` or `notBefore` in the future | Low | Medium - common in malware, also in careless legit builds |
 | **Weak key** | RSA < 2048 bits | Low | High (as a hygiene finding) |
-| **Multiple signers** | `number_of_signers > 1` | Low | Informational — legitimate but unusual |
-| **Fresh signer per sample across a family** | code-similar samples, all distinct signers | Informational | — flag as *operational sophistication* |
+| **Multiple signers** | `number_of_signers > 1` | Low | Informational - legitimate but unusual |
+| **Fresh signer per sample across a family** | code-similar samples, all distinct signers | Informational | - flag as *operational sophistication* |
 
 > **⚙️ Engineering Note:** The impersonation rule is the highest-precision detection in the
 > entire SUDARSHAN design. It has essentially **zero false positives** when the registry is
@@ -522,7 +521,7 @@ certificate should be a **first-class node**, not an attribute of the sample:
 | **v3 lineage present** | Map *every* key in the lineage to the same actor node |
 | **v1-only APK** | Different verification semantics and Janus exposure → [Ch 07](07-apk-signing.md) |
 | **Split APKs** | All splits share the signer; verify each anyway |
-| **Expired certificate** | Android does **not** check expiry at install for app signing certs — an expired cert still installs. Surprises people. |
+| **Expired certificate** | Android does **not** check expiry at install for app signing certs - an expired cert still installs. Surprises people. |
 | **Same cert, different package names** | Common and legitimate (one developer, many apps). Also a malware-family fingerprint. Cluster, don't accuse. |
 | **Debug certificate** | Suspicious in the wild, but also seen in genuine sideloaded internal/test builds |
 
@@ -544,7 +543,7 @@ certificate should be a **first-class node**, not an attribute of the sample:
 ## 13. Engineering tips
 
 1. **Index `signer_cert_sha256` as your primary identity key.** Not the file hash.
-2. **Parse and expand v3 lineage** — collapse all lineage keys into one actor node.
+2. **Parse and expand v3 lineage** - collapse all lineage keys into one actor node.
 3. **Build the bank's canonical signer registry on day one.** Cheapest high-precision win.
 4. **Report Subject DN as an artifact, never as attribution.** Write the caveat into the
    report template so analysts can't forget.
@@ -560,13 +559,13 @@ certificate should be a **first-class node**, not an attribute of the sample:
 **What judges ask:** *"How do you know this fake banking app isn't the real one?"*
 
 **Perfect answer:** The package name matches, but the signing certificate doesn't. Android
-identity is the signer, not the package name — a package name is a string anyone can type,
+identity is the signer, not the package name - a package name is a string anyone can type,
 whereas the certificate requires a private key the bank has never released. We maintain a
 registry of each client bank's app signing certificate SHA-256 fingerprints, so this check
 is deterministic and cryptographic: the clone claims `com.bank.example` but its fingerprint
 isn't in the registry, which means it cannot have been built by the bank. It also can't
-update over the genuine app — Android would reject it with
-`INSTALL_FAILED_UPDATE_INCOMPATIBLE` — and it can't claim the bank's verified App Links,
+update over the genuine app - Android would reject it with
+`INSTALL_FAILED_UPDATE_INCOMPATIBLE` - and it can't claim the bank's verified App Links,
 because `assetlinks.json` pins the fingerprint.
 
 **Common mistakes:**
@@ -583,7 +582,7 @@ because `assetlinks.json` pins the fingerprint.
 - *"What if the attacker uses a different package name?"* → Then it's not impersonating our
   registry entry, and we fall back to capability clustering and code/infrastructure
   similarity. Different detection, and we're explicit about which one fired.
-- *"Can two apps share a certificate legitimately?"* → Yes — one developer's portfolio, and
+- *"Can two apps share a certificate legitimately?"* → Yes - one developer's portfolio, and
   it's required for `signature` permissions and (deprecated) `sharedUserId`.
 
 **Fact that impresses:** APK Signature Scheme **v3 carries a proof-of-rotation lineage**, so
@@ -602,7 +601,7 @@ Then the punchline: **identity is the certificate; the hash is only an IOC.**
 
 **Q: "Why are Android signing certificates self-signed?"**
 No CA gatekeeping, no cost barrier, no ecosystem-wide CA-compromise risk. The model is Trust
-On First Use — Android verifies *sameness across updates*, not real-world identity.
+On First Use - Android verifies *sameness across updates*, not real-world identity.
 
 **Q: "What happens if I try to update an app with a different signing key?"**
 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`. The user must uninstall first, losing app data. Unless
@@ -610,8 +609,8 @@ v3 proof-of-rotation lineage links the keys.
 
 **Q: "How does an app prove its identity to a server?"**
 Not by package name (spoofable) and not by a client-side self-check (patchable). Use **key
-attestation** — the attestation record includes the calling app's signing certificate digest
-and is verified server-side against Google's PKI — optionally alongside Play Integrity's
+attestation** - the attestation record includes the calling app's signing certificate digest
+and is verified server-side against Google's PKI - optionally alongside Play Integrity's
 `appIntegrity` verdict. → [Ch 05 §5](05-android-cryptography.md#5-key-attestation)
 
 **Q: "You have two APKs with different hashes. Same app?"**
@@ -630,16 +629,16 @@ Bundle.
 ## 16. Cross-references
 
 **Upstream:**
-- [← Ch 02 APK Architecture](../apk/02-apk-architecture.md) — package name vs application ID
-- [← Ch 05 Android Cryptography](05-android-cryptography.md) — key attestation, Keystore
+- [← Ch 02 APK Architecture](../apk/02-apk-architecture.md) - package name vs application ID
+- [← Ch 05 Android Cryptography](05-android-cryptography.md) - key attestation, Keystore
 
 **Downstream:**
-- [→ Ch 07 APK Signing](07-apk-signing.md) — how the cert is bound to the APK; v1–v4; Janus
-- [→ Ch 09 Package Manager](../apk/09-package-manager.md) — where TOFU is enforced
-- [→ Ch 17 Digital Forensics](../digital-forensics/17-digital-forensics.md) — `packages.xml` cert artifacts
-- [→ Ch 26 IOC Extraction](../sudarshan/26-ioc-extraction.md) — signer as an indicator
-- [→ Ch 28 Campaign Correlation](../sudarshan/28-campaign-correlation.md) — the pivot in §10
-- [→ Ch 32 Common Misconceptions](../appendix/32-common-misconceptions.md) — §9 in full
+- [→ Ch 07 APK Signing](07-apk-signing.md) - how the cert is bound to the APK; v1–v4; Janus
+- [→ Ch 09 Package Manager](../apk/09-package-manager.md) - where TOFU is enforced
+- [→ Ch 17 Digital Forensics](../digital-forensics/17-digital-forensics.md) - `packages.xml` cert artifacts
+- [→ Ch 26 IOC Extraction](../sudarshan/26-ioc-extraction.md) - signer as an indicator
+- [→ Ch 28 Campaign Correlation](../sudarshan/28-campaign-correlation.md) - the pivot in §10
+- [→ Ch 32 Common Misconceptions](../appendix/32-common-misconceptions.md) - §9 in full
 
 **Related chain:** Certificate → signature → APK signing → TOFU → update integrity →
 campaign correlation.
@@ -648,23 +647,23 @@ campaign correlation.
 
 ## 17. References
 
-1. AOSP — *Application Signing*. https://source.android.com/docs/security/features/apksigning
-2. Android Developers — *Sign your app*. https://developer.android.com/studio/publish/app-signing
-3. Android Developers — *APK signature scheme v3 / key rotation*. https://source.android.com/docs/security/features/apksigning/v3
-4. Android Developers — *Verify Android App Links* (`assetlinks.json`). https://developer.android.com/training/app-links/verify-android-applinks
-5. Android Developers — `PackageManager.checkSignatures()` / `SigningInfo` reference.
-6. Google Play Console Help — *Play App Signing*. https://support.google.com/googleplay/android-developer/answer/9842756
-7. RFC 5280 — *Internet X.509 Public Key Infrastructure Certificate and CRL Profile*.
-8. Android Developers — `apksigner` documentation. https://developer.android.com/tools/apksigner
-9. Androguard documentation — certificate extraction API. https://androguard.readthedocs.io/
-10. Zscaler ThreatLabz — *Anatsa's Latest Updates* (August 2025) — package name and hash rotation.
-11. Hunt.io — *ERMAC 3.0 source code leak* (August 2025) — shared infrastructure pivots.
-12. OWASP MASTG — code signing and integrity test cases. https://mas.owasp.org/MASTG/
+1. AOSP - *Application Signing*. https://source.android.com/docs/security/features/apksigning
+2. Android Developers - *Sign your app*. https://developer.android.com/studio/publish/app-signing
+3. Android Developers - *APK signature scheme v3 / key rotation*. https://source.android.com/docs/security/features/apksigning/v3
+4. Android Developers - *Verify Android App Links* (`assetlinks.json`). https://developer.android.com/training/app-links/verify-android-applinks
+5. Android Developers - `PackageManager.checkSignatures()` / `SigningInfo` reference.
+6. Google Play Console Help - *Play App Signing*. https://support.google.com/googleplay/android-developer/answer/9842756
+7. RFC 5280 - *Internet X.509 Public Key Infrastructure Certificate and CRL Profile*.
+8. Android Developers - `apksigner` documentation. https://developer.android.com/tools/apksigner
+9. Androguard documentation - certificate extraction API. https://androguard.readthedocs.io/
+10. Zscaler ThreatLabz - *Anatsa's Latest Updates* (August 2025) - package name and hash rotation.
+11. Hunt.io - *ERMAC 3.0 source code leak* (August 2025) - shared infrastructure pivots.
+12. OWASP MASTG - code signing and integrity test cases. https://mas.owasp.org/MASTG/
 
 ### Further reading
-- AOSP `tools/apksig/` — the reference signing/verification implementation
-- Android Developers — *Use Play App Signing* migration guidance
-- MITRE ATT&CK for Mobile — T1408 (Artifact/asset analysis context)
+- AOSP `tools/apksig/` - the reference signing/verification implementation
+- Android Developers - *Use Play App Signing* migration guidance
+- MITRE ATT&CK for Mobile - T1408 (Artifact/asset analysis context)
 
 ---
 

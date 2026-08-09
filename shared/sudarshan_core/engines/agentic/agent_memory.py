@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Agentic Memory
+SUDARSHAN - Agentic Memory
 ===========================
 Maintains persistent, cross-iteration exploration state for the agent loop.
 
@@ -12,13 +12,13 @@ What is remembered:
   - Failed actions with reasons (planner avoids repeating failures).
   - Previous LLM reasoning (last N iterations for context efficiency).
   - Current working activity name.
-  - Safe test credentials used (key names only — values NEVER stored).
+  - Safe test credentials used (key names only - values NEVER stored).
 
 Security / compliance rules:
-  - Credential VALUES are NEVER stored — only the dictionary key name is stored.
+  - Credential VALUES are NEVER stored - only the dictionary key name is stored.
     e.g. memory stores "password_key_used: password" not "Password@123".
   - All memory data is treated as analysis metadata, not PII.
-  - Memory is ephemeral — it lives only for the duration of one analysis session.
+  - Memory is ephemeral - it lives only for the duration of one analysis session.
 
 Usage::
 
@@ -96,7 +96,7 @@ class ActionRecord:
     success:         bool
     error:           Optional[str]
     timestamp:       str
-    credential_key:  Optional[str] = None   # key name only — never the actual value
+    credential_key:  Optional[str] = None   # key name only - never the actual value
 
 
 @dataclass
@@ -265,7 +265,7 @@ class AgentMemory:
                 "target": target,
                 "error": error,
             })
-            logger.debug(f"[Memory] Failed action recorded: {tool}({target}) — {error}")
+            logger.debug(f"[Memory] Failed action recorded: {tool}({target}) - {error}")
 
     def is_action_loop(self, tool: str, target: str) -> bool:
         """
@@ -325,10 +325,10 @@ class AgentMemory:
         Build a compact, token-efficient context block for the agent prompt.
 
         This is injected as the MEMORY section of the planner prompt.
-        Credential values are NEVER included — only key names.
+        Credential values are NEVER included - only key names.
 
         NOTE: This entire block will be enclosed in <UNTRUSTED_MEMORY> tags
-        by the planner — it is treated as data context, not instructions.
+        by the planner - it is treated as data context, not instructions.
         """
         lines = [
             "=== AGENT MEMORY ===",
@@ -360,7 +360,7 @@ class AgentMemory:
             # Both re-enter the next prompt, so both are sanitized.
             lines.append(
                 f"  [{status}] {sanitize(r.tool, max_length=32)}"
-                f"({sanitize(r.target, max_length=80)}){cred_note} — "
+                f"({sanitize(r.target, max_length=80)}){cred_note} - "
                 f"{sanitize(r.reasoning, max_length=60)}"
             )
         if not recent:

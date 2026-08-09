@@ -1,4 +1,4 @@
-"""MobSF client helpers — report readiness and timeout policy."""
+"""MobSF client helpers - report readiness and timeout policy."""
 
 from sudarshan_core.services.mobsf_client import MobSFClient
 

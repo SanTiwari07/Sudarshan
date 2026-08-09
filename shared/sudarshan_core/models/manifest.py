@@ -1,5 +1,5 @@
 """
-SUDARSHAN — Investigation Manifest Model
+SUDARSHAN - Investigation Manifest Model
 ==========================================
 Formal data contract representing the output of Static Intelligence that drives
 the Dynamic Analysis Engine configuration.
@@ -58,7 +58,7 @@ class StaticCapabilityFlags(BaseModel):
     indian_bank_packages: List[str] = Field(default_factory=list)
     obfuscation_score: float = 0.0
 
-    # Recommended hook profiles derived from flags — used by the sandbox
+    # Recommended hook profiles derived from flags - used by the sandbox
     # to activate only relevant Frida hook bundles.
     recommended_hook_profiles: List[str] = Field(default_factory=list)
 
@@ -81,7 +81,7 @@ class StaticCapabilityFlags(BaseModel):
             profiles.append("dynamic_code")
         if self.has_device_admin:
             profiles.append("persistence")
-        # Network hooks are always included — C2 detection is baseline
+        # Network hooks are always included - C2 detection is baseline
         profiles.append("network")
         return list(dict.fromkeys(profiles))  # Deduplicate, preserving order
 
@@ -206,7 +206,7 @@ def build_manifest(
     Build an InvestigationManifest from the flags_dict produced by static
     analysis normalization.
 
-    This is the sole entry point for creating manifests — all field derivation
+    This is the sole entry point for creating manifests - all field derivation
     is centralized here to keep upload.py clean.
     """
     # ── Capability flags ──────────────────────────────────────────────────────

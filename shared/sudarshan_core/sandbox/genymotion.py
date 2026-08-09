@@ -52,7 +52,7 @@ class GenymotionProvider(SandboxProvider):
         )
         return [c for c in candidates if c]
 
-    # ── State profiles (shell / dumpsys — no `adb emu`) ───────────────────────
+    # ── State profiles (shell / dumpsys - no `adb emu`) ───────────────────────
 
     def apply_state_profile(self, serial: str, profile: str) -> bool:
         logger.info("[genymotion] Applying profile %s on %s", profile, serial)
@@ -66,7 +66,7 @@ class GenymotionProvider(SandboxProvider):
         if profile == "mobile_data_on":
             return shell("svc", "data", "enable")
         if profile == "gps_active":
-            # New Delhi — Genymotion accepts mock location via settings + am
+            # New Delhi - Genymotion accepts mock location via settings + am
             ok1 = shell("settings", "put", "secure", "mock_location", "1")
             ok2 = shell(
                 "am",

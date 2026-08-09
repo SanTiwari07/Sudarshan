@@ -167,7 +167,7 @@ def test_grant_accessibility_uses_real_class():
 def test_grant_accessibility_skips_when_no_class():
     """
     grant_accessibility(service_class=None) must not write anything to settings.
-    Writing a non-existent component name silently fails on Android — skipping
+    Writing a non-existent component name silently fails on Android - skipping
     is the correct, honest behaviour.
     """
     calls: List[List[str]] = []

@@ -1,19 +1,19 @@
 # backend/app/ai/gemini_rag.py
 """
-Sudarshan Investigation Assistant — Gemini RAG Engine
+Sudarshan Investigation Assistant - Gemini RAG Engine
 ======================================================
 Implements the Evidence-Aware Investigation Assistant for Sudarshan.
 
 Architecture:
-  1. Investigation Graph Builder   — indexes all evidence sections per SHA256
-  2. Intent Detector               — classifies the question type
-  3. Hybrid Retriever              — keyword + section-aware + intent retrieval
-  4. Context Builder               — compresses evidence into a focused prompt
-  5. Gemini Streamer                — streams structured 7-section response
+  1. Investigation Graph Builder - indexes all evidence sections per SHA256
+  2. Intent Detector - classifies the question type
+  3. Hybrid Retriever - keyword + section-aware + intent retrieval
+  4. Context Builder - compresses evidence into a focused prompt
+  5. Gemini Streamer - streams structured 7-section response
 
 Design Rules:
   - Gemini NEVER receives raw APK data or full reports
-  - Gemini NEVER decides risk — it only explains deterministic engine output
+  - Gemini NEVER decides risk - it only explains deterministic engine output
   - Every statement in the response traces back to indexed evidence
   - If evidence is absent, the assistant says so explicitly
 """
@@ -53,8 +53,8 @@ MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 # ─── Investigation Graph (in-memory per SHA256) ───────────────────────────────
 # Structure: { sha256: { section_name: [chunk_str, ...] } }
 #
-# BOUNDED (LRU). This grew for the process lifetime — one entry per analysed
-# sample, each holding ~20 sections of formatted evidence chunks — with nothing
+# BOUNDED (LRU). This grew for the process lifetime - one entry per analysed
+# sample, each holding ~20 sections of formatted evidence chunks - with nothing
 # ever evicting. An index that falls out is rebuilt on demand from the database
 # by the /chat endpoint, so eviction costs a rebuild, not the conversation.
 _INDEX_MAX_ENTRIES = int(os.getenv("SUDARSHAN_RAG_INDEX_MAX", "128"))
@@ -161,7 +161,7 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
     stei_axes = frs.get("stei_axes", {})
     if stei_axes:
         idx["risk_engine"].append(
-            f"STEI Axes — CT (Credential Theft): {stei_axes.get('ct', 0):.1f}, "
+            f"STEI Axes - CT (Credential Theft): {stei_axes.get('ct', 0):.1f}, "
             f"BT (Banking Targeting): {stei_axes.get('bt', 0):.1f}, "
             f"PR (Permission Risk): {stei_axes.get('pr', 0):.1f}, "
             f"OB (Obfuscation): {stei_axes.get('ob', 0):.1f}, "
@@ -181,7 +181,7 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
     for perm in dangerous_perms:
         if isinstance(perm, dict):
             idx["permissions"].append(
-                f"DANGEROUS: {perm.get('permission', '')} — {perm.get('info', '')} — {perm.get('description', '')}"
+                f"DANGEROUS: {perm.get('permission', '')} - {perm.get('info', '')} - {perm.get('description', '')}"
             )
         elif isinstance(perm, str):
             idx["permissions"].append(f"DANGEROUS: {perm}")
@@ -206,7 +206,7 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
         if isinstance(finding, dict):
             idx["manifest"].append(
                 f"[{finding.get('severity', 'INFO')}] {finding.get('title', '')}: "
-                f"{finding.get('description', '')} — Component: {finding.get('component', '')}"
+                f"{finding.get('description', '')} - Component: {finding.get('component', '')}"
             )
 
     # ── Activities / Services / Receivers ─────────────────────────────────────
@@ -223,7 +223,7 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
     idx["receivers"].append(f"Total Receivers: {len(receivers)}")
 
     idx["components"] = [
-        f"Exported Components — check manifest section for exported=true details",
+        f"Exported Components - check manifest section for exported=true details",
         f"Activities: {len(activities)}, Services: {len(services)}, Receivers: {len(receivers)}",
     ]
 
@@ -326,7 +326,7 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
                 conf = stg.get('confidence', 0.0)
                 idx["fraud_workflow"].append(
                     f"  Stage {i}: {stg.get('label', '')} [{stg.get('technique_id', '')}] "
-                    f"— {stg.get('description', '')} (confidence={conf:.0%})"
+                    f" - {stg.get('description', '')} (confidence={conf:.0%})"
                 )
     else:
         idx["fraud_workflow"] = ["No fraud workflow was reconstructed from dynamic evidence."]
@@ -403,7 +403,7 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
         for ioc in ioc_reps[:8]:
             if isinstance(ioc, dict):
                 idx["threat_intelligence"].append(
-                    f"IOC [{ioc.get('type', '')}] {ioc.get('indicator', '')} — "
+                    f"IOC [{ioc.get('type', '')}] {ioc.get('indicator', '')} - "
                     f"Reputation: {ioc.get('reputation', '')} (Source: {ioc.get('source', '')})"
                 )
     else:
@@ -468,14 +468,14 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
             if so.get("rpath") not in (None, "False", ""):
                 flags.append(f"RPATH={so['rpath']} (dangerous)")
             idx["binary_analysis"].append(
-                f"Native Library: {name} — {', '.join(flags) if flags else 'no security flags'}"
+                f"Native Library: {name} - {', '.join(flags) if flags else 'no security flags'}"
             )
     if not idx["binary_analysis"]:
         idx["binary_analysis"] = ["No native binary analysis data available (MobSF mode required)."]
 
-    # ── Code Findings — categorized by topic ──────────────────────────────────
+    # ── Code Findings - categorized by topic ──────────────────────────────────
     all_code_findings = report.get("code_findings", [])
-    # We need the raw dicts for categorization — handle both ManifestFinding objs and dicts
+    # We need the raw dicts for categorization - handle both ManifestFinding objs and dicts
     code_finding_dicts = []
     for f_ in all_code_findings:
         if isinstance(f_, dict):
@@ -542,7 +542,7 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
     for t in trackers[:20]:
         if isinstance(t, dict):
             cats = ", ".join(t.get("categories", [])) if t.get("categories") else "Unknown category"
-            idx["trackers"].append(f"Third-party SDK/Tracker: {t.get('name', 'Unknown')} — {cats}")
+            idx["trackers"].append(f"Third-party SDK/Tracker: {t.get('name', 'Unknown')} - {cats}")
     if not idx["trackers"]:
         idx["trackers"] = ["No third-party tracker fingerprints detected (requires MobSF analysis mode)."]
     idx["trackers"].append(f"Total SDKs/trackers detected: {len(trackers)}")
@@ -572,7 +572,7 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
         evicted, _ = _investigation_index.popitem(last=False)
         logger.debug(f"[RAG] Evicted investigation index for {evicted[:12]}…")
     logger.info(
-        f"[RAG] Investigation index built for {sha256} — "
+        f"[RAG] Investigation index built for {sha256} - "
         f"{sum(len(v) for v in idx.values())} evidence chunks across {len(idx)} sections"
     )
 
@@ -731,7 +731,7 @@ def build_investigation_context(
 ) -> str:
     """
     Build a structured investigation context string for the Gemini prompt.
-    Never sends entire reports — only retrieved chunks.
+    Never sends entire reports - only retrieved chunks.
     """
     idx = _investigation_index.get(sha256, {})
 
@@ -767,7 +767,7 @@ def build_investigation_context(
 
 # ─── 5. Prompt Builder ────────────────────────────────────────────────────────
 
-SYSTEM_INSTRUCTION = """You are SUDARSHAN — the Sudarshan Banking Threat Intelligence Assistant.
+SYSTEM_INSTRUCTION = """You are SUDARSHAN - the Sudarshan Banking Threat Intelligence Assistant.
 
 YOUR ROLE:
 • Explain mobile malware and fraud investigation evidence collected by the Sudarshan platform
@@ -806,7 +806,7 @@ REQUIRED RESPONSE FORMAT:
 * **Threat Intelligence**: VirusTotal / OTX / AbuseIPDB correlation
 
 ### Confidence Score
-**Confidence**: 95% — High confidence based on verified static & dynamic findings.
+**Confidence**: 95% - High confidence based on verified static & dynamic findings.
 
 ### Recommended Action
 **Action**: [Allow / Monitor / Manual Review / Block APK / Escalate to SOC / Escalate to CERT-In]

@@ -88,7 +88,7 @@ class MobSFAnalysisError(Exception):
     """Raised when MobSF analysis fails."""
     pass
 
-# ─── MobSF Parsed Models (plain dicts — not Pydantic to avoid coupling) ──────
+# ─── MobSF Parsed Models (plain dicts - not Pydantic to avoid coupling) ──────
 
 def _empty_report() -> Dict[str, Any]:
     return {
@@ -155,14 +155,14 @@ class MobSFClient:
         Is MobSF reachable right now? Single probe, result cached.
 
         This used to make FIVE attempts with a 5 s timeout and `sleep(3)`
-        between them — up to 37 s added to EVERY analysis whenever MobSF was
+        between them - up to 37 s added to EVERY analysis whenever MobSF was
         unreachable, just to re-confirm an answer that had not changed. Measured
         against an unresolvable host it cost ~28 s per analysis.
 
         Retrying a health check defeats its purpose. The question is "is it up
         now?", and "no" is a perfectly good answer: the pipeline falls back to
         Androguard, which is the designed behaviour. So: one attempt, short
-        timeout, and the verdict is cached — briefly when up (it may go down),
+        timeout, and the verdict is cached - briefly when up (it may go down),
         for longer when down (a circuit breaker, so a dead MobSF is not
         re-probed on every single upload).
 
@@ -175,7 +175,7 @@ class MobSFClient:
         # on every analysis. The engine already guards on MOBSF_HOST; the
         # gateway did not.
         if not (os.getenv("MOBSF_HOST") or self._host_explicit):
-            logger.debug("[MobSF] MOBSF_HOST not configured — skipping probe.")
+            logger.debug("[MobSF] MOBSF_HOST not configured - skipping probe.")
             return False
 
         now = time.monotonic()
@@ -190,14 +190,14 @@ class MobSFClient:
         try:
             async with httpx.AsyncClient(timeout=HEALTH_TIMEOUT_SECONDS) as client:
                 r = await client.get(f"{self.host}/api_docs", headers=self.headers)
-                # 302/401/403 all mean "MobSF is up and answering" — /api_docs
+                # 302/401/403 all mean "MobSF is up and answering" - /api_docs
                 # requires auth and may redirect.
                 available = r.status_code in (200, 302, 401, 403)
                 if not available:
                     logger.warning(f"[MobSF] Health check unexpected status: {r.status_code}")
         except Exception as e:
             logger.info(
-                f"[MobSF] Not reachable at {self.host} ({type(e).__name__}: {e}) — "
+                f"[MobSF] Not reachable at {self.host} ({type(e).__name__}: {e}) - "
                 f"falling back to Androguard. Re-probing in {HEALTH_CACHE_TTL_DOWN:.0f}s."
             )
 
@@ -229,7 +229,7 @@ class MobSFClient:
         scan_hash = data.get("hash")
         if not scan_hash:
             raise MobSFAnalysisError(f"MobSF upload returned no hash: {data}")
-        logger.info(f"MobSF upload complete — scan_hash={scan_hash}")
+        logger.info(f"MobSF upload complete - scan_hash={scan_hash}")
         return scan_hash
 
     async def scan(self, scan_hash: str, rescan: bool = False) -> None:
@@ -246,7 +246,7 @@ class MobSFClient:
         except httpx.TimeoutException:
             logger.warning(
                 "MobSF scan HTTP timed out after %.0fs for hash=%s; "
-                "scan may still be running — polling report",
+                "scan may still be running - polling report",
                 MOBSF_SCAN_TIMEOUT_SECONDS,
                 scan_hash,
             )
@@ -349,7 +349,7 @@ class MobSFClient:
                 # Do not re-upload while a server-side scan may still be running.
                 if scan_hash:
                     logger.warning(
-                        "MobSF client timeout on attempt %s (hash=%s): %s — polling",
+                        "MobSF client timeout on attempt %s (hash=%s): %s - polling",
                         attempt + 1,
                         scan_hash,
                         e,
@@ -441,7 +441,7 @@ class MobSFClient:
     ) -> Dict[str, Any]:
         """
         Normalize MobSF JSON report into Sudarshan's internal format.
-        Only reads fields — never writes to MobSF.
+        Only reads fields - never writes to MobSF.
         """
         report = _empty_report()
         report["available"] = True
@@ -486,7 +486,7 @@ class MobSFClient:
         report["receivers"] = raw.get("receivers", [])
         report["providers"] = raw.get("providers", [])
 
-        # Exported components — full attack surface extraction
+        # Exported components - full attack surface extraction
         # MobSF stores exported=true in browsable_activities and in component dicts
         exported_acts: List[str] = []
         browsable = raw.get("browsable_activities", {})
@@ -537,7 +537,7 @@ class MobSFClient:
                 secrets.append(item)
             elif isinstance(item, dict):
                 secrets.append(item.get("secret", str(item)))
-        report["hardcoded_secrets"] = secrets[:100]  # raised from 20 — full exposure list
+        report["hardcoded_secrets"] = secrets[:100]  # raised from 20 - full exposure list
 
         # ── Certificate ─────────────────────────────────────────────────────────
         report["certificate"] = raw.get("certificate_analysis", {})
@@ -577,7 +577,7 @@ class MobSFClient:
             report["manifest_analysis"] = manifest_analysis
 
         # ── Binary Analysis ─────────────────────────────────────────────────
-        # Normalize MobSF binary_analysis list — each item is a native SO file record
+        # Normalize MobSF binary_analysis list - each item is a native SO file record
         binary_raw = raw.get("binary_analysis", [])
         binary_normalized: list = []
         if isinstance(binary_raw, list):

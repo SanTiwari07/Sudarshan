@@ -32,7 +32,7 @@ Verification   (TP/TN Audits) (519 Tests Total)
 ```
 
 1. **Determinism Verification**: Replays pinned baseline feature vectors against [`risk_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/risk_engine.py) to assert that zero score drift occurs across codebase updates.
-2. **Ground-Truth Matrix**: Labelled trojan fixtures in `test_detection_regressions.py` and determinism baselines must remain stable; **risk bands** are `Safe` / `Suspicious` / `High Risk` / `Critical` per [`risk_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/risk_engine.py) (see [`architecture/08_DETERMINISTIC_RISK_ENGINE.md`](architecture/08_DETERMINISTIC_RISK_ENGINE.md)). Numeric score ranges in the table below are **historical targets** — re-measure after FRS renormalization changes.
+2. **Ground-Truth Matrix**: Labelled trojan fixtures in `test_detection_regressions.py` and determinism baselines must remain stable; **risk bands** are `Safe` / `Suspicious` / `High Risk` / `Critical` per [`risk_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/risk_engine.py) (see [`architecture/08_DETERMINISTIC_RISK_ENGINE.md`](architecture/08_DETERMINISTIC_RISK_ENGINE.md)). Numeric score ranges in the table below are **historical targets** - re-measure after FRS renormalization changes.
 3. **Prompt Injection Resilience**: Asserts that malicious prompt injection payloads embedded in APK metadata fail to alter LLM behavior or override risk scoring ([`test_prompt_injection.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_prompt_injection.py)).
 
 ---

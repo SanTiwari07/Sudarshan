@@ -1,5 +1,5 @@
 """
-Container boot-time ADB warm-up — all invocations go through adb_gateway.run_adb.
+Container boot-time ADB warm-up - all invocations go through adb_gateway.run_adb.
 
 Shell entrypoint must not call the adb binary directly; policy validation lives
 in sudarshan_core.security.sandbox_containment.validate_adb_invocation.
@@ -24,7 +24,7 @@ def bootstrap_adb_connect(max_attempts: int = 10, retry_sleep_seconds: float = 3
     run_adb(adb_bin, ["devices"], timeout=15)
 
     if not host:
-        print("[adb_bootstrap] ADB_HOST unset — skipping connect.")
+        print("[adb_bootstrap] ADB_HOST unset - skipping connect.")
         return 0
 
     target = f"{host}:{port}"
@@ -40,7 +40,7 @@ def bootstrap_adb_connect(max_attempts: int = 10, retry_sleep_seconds: float = 3
         if attempt < max_attempts:
             time.sleep(retry_sleep_seconds)
 
-    print(f"[adb_bootstrap] No emulator at {target} — static analysis only.")
+    print(f"[adb_bootstrap] No emulator at {target} - static analysis only.")
     return 0
 
 

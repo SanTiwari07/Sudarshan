@@ -1,5 +1,5 @@
 """
-SUDARSHAN — JADX Static Analysis Engine
+SUDARSHAN - JADX Static Analysis Engine
 =========================================
 Wraps the JADX CLI to decompile DEX bytecode to Java source code, enabling
 deeper static code analysis beyond what Androguard's bytecode scanning provides.
@@ -21,9 +21,9 @@ Usage::
 
     engine = JadxEngine()
     result = engine.analyze(apk_path)
-    # result.fraud_class_hits    — list of decompiled class names matching fraud patterns
-    # result.suspicious_strings  — string literals from decompiled source
-    # result.dynamic_load_hits   — class / method names indicating dynamic loading
+    # result.fraud_class_hits - list of decompiled class names matching fraud patterns
+    # result.suspicious_strings - string literals from decompiled source
+    # result.dynamic_load_hits - class / method names indicating dynamic loading
 """
 
 from __future__ import annotations
@@ -139,7 +139,7 @@ class JadxEngine:
                 timeout=180,
             )
 
-            # JADX can exit non-zero even with partial success — check output dir
+            # JADX can exit non-zero even with partial success - check output dir
             if not out_dir.exists() or not any(out_dir.rglob("*.java")):
                 error_snippet = proc.stderr[:500] if proc.stderr else "no output produced"
                 return JadxResult(available=False, error=f"JADX produced no output: {error_snippet}")

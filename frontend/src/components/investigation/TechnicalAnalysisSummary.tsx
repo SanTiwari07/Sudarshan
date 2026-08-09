@@ -4,27 +4,21 @@ import {
   isCriticalSeverity,
   overallAnalysisConfidence,
 } from '../../lib/findingAnalystView';
-import { AlertTriangle, FileSearch, Layers, ShieldCheck } from 'lucide-react';
 
-function MetricCell({
-  icon,
+function Metric({
   label,
   value,
   sub,
 }: {
-  icon: React.ReactNode;
   label: string;
   value: string;
-  sub?: string;
+  sub: string;
 }) {
   return (
-    <div className="px-4 py-4 border-b sm:border-b-0 sm:border-r border-slate-100 last:border-0 min-w-0">
-      <div className="flex items-center gap-2 text-slate-500 mb-1.5">
-        {icon}
-        <span className="text-xs font-medium">{label}</span>
-      </div>
-      <div className="text-2xl font-semibold text-slate-900 tabular-nums leading-none">{value}</div>
-      {sub && <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">{sub}</p>}
+    <div className="min-w-0 px-4 py-3 first:pl-0">
+      <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">{label}</p>
+      <p className="text-2xl font-semibold text-slate-900 tabular-nums leading-tight mt-1">{value}</p>
+      <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">{sub}</p>
     </div>
   );
 }
@@ -48,33 +42,26 @@ export default function TechnicalAnalysisSummary({
   ).length;
   const confidence = overallAnalysisConfidence(records, data);
 
-  const grid = (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
-      <MetricCell icon={<FileSearch className="h-4 w-4" />} label="Total findings" value={String(total)} />
-      <MetricCell
-        icon={<AlertTriangle className="h-4 w-4" />}
+  const strip = (
+    <div className="flex flex-col sm:flex-row sm:items-stretch divide-y sm:divide-y-0 sm:divide-x divide-slate-200">
+      <Metric label="Total findings" value={String(total)} sub="Verified evidence records" />
+      <Metric
         label="Critical"
         value={String(critical)}
-        sub={critical > 0 ? 'Review in registry below' : 'None flagged critical'}
+        sub={critical > 0 ? 'Requires review' : 'None flagged critical'}
       />
-      <MetricCell
-        icon={<Layers className="h-4 w-4" />}
+      <Metric
         label="By source"
         value={`${staticCount} · ${runtimeCount} · ${threatCount}`}
-        sub="Static · runtime · threat"
+        sub="Static · Runtime · Threat"
       />
-      <MetricCell
-        icon={<ShieldCheck className="h-4 w-4" />}
-        label="Confidence"
-        value={`${confidence}%`}
-        sub="From verified evidence"
-      />
+      <Metric label="Confidence" value={`${confidence}%`} sub="Verified evidence" />
     </div>
   );
 
   if (embedded) {
-    return <div className="border-b border-slate-100">{grid}</div>;
+    return <div className="py-3 border-b border-slate-200">{strip}</div>;
   }
 
-  return <div className="space-y-4">{grid}</div>;
+  return <div className="space-y-4">{strip}</div>;
 }

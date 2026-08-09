@@ -21,8 +21,16 @@ from typing import Any, Dict, List, Optional, Tuple
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
+from app.artifact_resolve import resolve_artifact_dir
 from app.auth.auth import require_analyst
-from app.routes.report import load_report
+from app.case_access import get_authorized_case
+
+from sudarshan_core.visual_evidence.api_merge import (
+    build_visual_evidence_index,
+    index_visual_evidence_by_scr,
+    load_visual_evidence_records,
+    merge_entry_with_visual_evidence,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,45 +45,8 @@ def _dynamic_block(report: Dict[str, Any]) -> Dict[str, Any]:
     return dyn if isinstance(dyn, dict) else {}
 
 
-def _artifact_dir_from_report(report: Dict[str, Any]) -> Optional[Path]:
-    dyn = _dynamic_block(report)
-    raw_dir = dyn.get("artifact_dir") or report.get("artifact_dir") or report.get("_artifact_dir")
-    if not raw_dir:
-        return None
-
-    raw_str = str(raw_dir).replace("\\", "/")
-    candidates: list[Path] = []
-
-    try:
-        candidates.append(Path(raw_dir).resolve())
-    except (OSError, RuntimeError):
-        pass
-
-    # Docker volume path when API runs with a host-mounted UPLOADS_DIR
-    if raw_str.startswith("/app/uploads/"):
-        suffix = raw_str[len("/app/uploads/") :]
-        candidates.append((_UPLOADS_DIR / suffix).resolve())
-    elif raw_str.startswith("/app/uploads"):
-        candidates.append(_UPLOADS_DIR.resolve())
-
-    folder_name = Path(raw_str).name
-    if folder_name:
-        candidates.append((_UPLOADS_DIR / "sudarshan_artifacts" / folder_name).resolve())
-        candidates.append((_UPLOADS_DIR / folder_name).resolve())
-
-    seen: set[str] = set()
-    for candidate in candidates:
-        key = str(candidate)
-        if key in seen:
-            continue
-        seen.add(key)
-        try:
-            if candidate.is_dir():
-                return candidate
-        except (OSError, RuntimeError):
-            continue
-
-    return None
+def _artifact_dir_from_report(report: Dict[str, Any], sha256: Optional[str] = None) -> Optional[Path]:
+    return resolve_artifact_dir(report, sha256=sha256 or str(report.get("sha256") or "") or None)
 
 
 def _resolve_image_path(artifact_dir: Path, filename: str) -> Path:
@@ -354,7 +325,6 @@ def _build_runtime_meta(
         "failureReason": failure,
         "analysisRunning": False,
         "warnings": warnings,
-        "artifactDirResolved": str(artifact_dir) if artifact_dir else None,
     }
 
 
@@ -367,23 +337,26 @@ async def get_screenshot_manifest(
     if not _SHA256_RE.match(sha256):
         raise HTTPException(status_code=400, detail="Invalid SHA256.")
 
-    report = await load_report(sha256)
-    if not report:
-        raise HTTPException(
-            status_code=404,
-            detail="Case not found. Analyze the APK first.",
-        )
-    report_dict = report if isinstance(report, dict) else {}
+    report_dict = await get_authorized_case(sha256, user)
 
-    artifact_dir = _artifact_dir_from_report(report_dict)
+    artifact_dir = _artifact_dir_from_report(report_dict, sha256=sha256)
     raw_entries = _load_screenshot_manifest_entries(artifact_dir, report_dict)
     verified, warnings = _merge_verified_entries(artifact_dir, raw_entries)
+    ver_records = load_visual_evidence_records(artifact_dir)
+    ver_by_scr = index_visual_evidence_by_scr(ver_records)
 
     verified.sort(key=lambda e: int(e.get("timestamp_ms") or 0))
     if order == "newest":
         verified = list(reversed(verified))
 
-    normalized = [_normalize_screenshot_entry(e) for e in verified]
+    normalized = [
+        merge_entry_with_visual_evidence(
+            _normalize_screenshot_entry(e),
+            ver_by_scr.get(str(e.get("screenshot_id") or "")),
+            sha256=sha256,
+        )
+        for e in verified
+    ]
     runtime = _build_runtime_meta(report_dict, artifact_dir, verified, warnings)
 
     return {
@@ -392,6 +365,8 @@ async def get_screenshot_manifest(
         "entries": normalized,
         "screenshots": normalized,
         "runtime": runtime,
+        "visual_evidence_index": build_visual_evidence_index(ver_records),
+        "has_visual_evidence": bool(ver_records),
     }
 
 
@@ -408,20 +383,15 @@ async def get_screenshot(
     if not safe_name or safe_name != filename.replace("\\", "/").split("/")[-1]:
         raise HTTPException(status_code=400, detail="Invalid filename.")
 
-    report = await load_report(sha256)
-    if not report:
-        raise HTTPException(
-            status_code=404,
-            detail="Case not found. Analyze the APK first.",
-        )
+    report_dict = await get_authorized_case(sha256, user)
 
-    artifact_dir = _artifact_dir_from_report(report if isinstance(report, dict) else {})
+    artifact_dir = _artifact_dir_from_report(report_dict, sha256=sha256)
     if artifact_dir is None:
         raise HTTPException(status_code=404, detail="No artifact directory for this case.")
 
     # Manifest entries may be full relative paths (screenshots/foo.png) or basenames.
     rel_for_lookup = filename
-    dyn = _dynamic_block(report if isinstance(report, dict) else {})
+    dyn = _dynamic_block(report_dict)
     for entry in dyn.get("screenshots") or []:
         if not entry:
             continue

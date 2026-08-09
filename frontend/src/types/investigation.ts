@@ -32,6 +32,8 @@ export type InvestigationEvidence = {
   artifactRefs?: string[];
   contributionLabel?: string;
   linkedLedgerLineIds?: string[];
+  /** Frida evidence.json category when category is runtime */
+  runtimeSubcategory?: string;
 };
 
 export type LedgerLine = {
@@ -54,6 +56,9 @@ export type TimelineEvent = {
   evidenceIds: string[];
   contributionLabel?: string;
   kind: 'forensic' | 'score' | 'workflow';
+  screenshotId?: string;
+  visualClaim?: string;
+  correlationStatus?: string;
 };
 
 export type InvestigationCounts = {

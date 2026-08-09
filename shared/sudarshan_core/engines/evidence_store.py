@@ -345,6 +345,11 @@ class EvidenceStore:
             with self._lock:
                 self._records.append(record)
 
+            # Same-bus subscribers (e.g. ScreenshotManager) can read causal targets.
+            if etype not in ("SCREENSHOT_CAPTURED", "EVIDENCE_CREATED"):
+                event["evidence_record_id"] = record.id
+                event["evidence_finding_id"] = record.finding_id
+
             if self.event_bus:
                 from sudarshan_core.engines.event_bus import EventType, RuntimeEvent
                 self.event_bus.publish(RuntimeEvent(

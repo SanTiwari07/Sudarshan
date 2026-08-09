@@ -11,6 +11,7 @@ import {
 import type { FraudCardData } from '../../App';
 import type { RuntimeScreenshotMeta } from '../../lib/screenshotManifest';
 import { formatScreenshotTime, inferFailureReasonFromCase } from '../../lib/screenshotManifest';
+import type { ScreenshotUxState } from '../../lib/investigationRuntime';
 
 const POSSIBLE_CAUSES = [
   'App crashed during launch',
@@ -24,9 +25,17 @@ type Props = {
   data: FraudCardData;
   runtime: RuntimeScreenshotMeta | null;
   captured: number;
+  uxState?: ScreenshotUxState;
+  compact?: boolean;
 };
 
-export default function ScreenshotDiagnosticsCard({ data, runtime, captured }: Props) {
+export default function ScreenshotDiagnosticsCard({
+  data,
+  runtime,
+  captured,
+  uxState,
+  compact = false,
+}: Props) {
   const reason =
     runtime?.failureReason || inferFailureReasonFromCase(data, captured) || 'Screenshots unavailable';
 
@@ -47,7 +56,11 @@ export default function ScreenshotDiagnosticsCard({ data, runtime, captured }: P
       : '—';
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 max-h-[220px] overflow-y-auto shadow-sm">
+    <div
+      className={`rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm ${
+        compact ? 'max-h-none' : 'max-h-[280px] overflow-y-auto'
+      }`}
+    >
       <div className="flex gap-3">
         <div className="p-2 rounded-lg bg-amber-50 text-amber-700 border border-amber-100 shrink-0 h-fit">
           <Camera className="h-4 w-4" />
@@ -56,15 +69,19 @@ export default function ScreenshotDiagnosticsCard({ data, runtime, captured }: P
           <div>
             <p className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
               <AlertCircle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
-              {reason}
+              {uxState === 'CAPTURE_FAILED' ? 'View runtime diagnostics' : reason}
             </p>
-            <p className="text-[11px] text-slate-500 mt-1 leading-snug">
-              Visual sandbox captures were not available for this run. Metadata below reflects the dynamic analysis
-              session.
-            </p>
+            {!compact && (
+              <p className="text-[11px] text-slate-500 mt-1 leading-snug">
+                Visual sandbox captures were not available for this run. Metadata below reflects the dynamic analysis
+                session.
+              </p>
+            )}
           </div>
 
-          <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-1 text-[10px]">
+          {!compact && (
+            <>
+              <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-1 text-[10px]">
             <div>
               <dt className="text-slate-400 uppercase tracking-wide">Expected</dt>
               <dd className="font-mono font-semibold text-slate-800">{expected}</dd>
@@ -100,6 +117,8 @@ export default function ScreenshotDiagnosticsCard({ data, runtime, captured }: P
               ))}
             </ul>
           </div>
+            </>
+          )}
 
           <div className="flex flex-wrap gap-2 pt-1">
             <Link

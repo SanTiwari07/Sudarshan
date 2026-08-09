@@ -24,22 +24,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cases", tags=["Case History"])
 
 
-def _list_scope_analyst_id(user: dict) -> Optional[int]:
-    """Analysts see only their cases; soc_lead and admin see all."""
-    if user.get("role") == "analyst":
-        return int(user["id"])
-    return None
-
-
-def _assert_case_visible(user: dict, case_row: dict) -> None:
-    scope = _list_scope_analyst_id(user)
-    if scope is None:
-        return
-    owner = case_row.get("analyst_id")
-    if owner is not None and int(owner) != scope:
-        raise HTTPException(status_code=404, detail="Case not found.")
-
-
+from app.case_access import assert_case_visible, list_scope_analyst_id
 class NoteCreateRequest(BaseModel):
     text: str
     author: Optional[str] = "SOC Analyst"
@@ -71,7 +56,7 @@ async def get_case_evidence(
     row = await get_case(sha256)
     if not row:
         raise HTTPException(status_code=404, detail=f"Case not found for SHA256 {sha256}.")
-    _assert_case_visible(user, row)
+    assert_case_visible(user, row)
 
     dyn = row.get("dynamic_result") or {}
     artifact_dir = dyn.get("artifact_dir")
@@ -238,7 +223,7 @@ async def list_all_cases(
     user: dict = Depends(require_analyst),
 ):
     """Return paginated case history (scoped to analyst_id for role=analyst)."""
-    scope_id = _list_scope_analyst_id(user)
+    scope_id = list_scope_analyst_id(user)
     total = await count_cases(analyst_id=scope_id)
     rows = await list_cases(limit=limit, offset=offset, analyst_id=scope_id)
 
@@ -275,7 +260,7 @@ async def get_case_detail(
             status_code=404,
             detail=f"Case not found for SHA256 {sha256}. Analyze the APK first.",
         )
-    _assert_case_visible(user, row)
+    assert_case_visible(user, row)
 
     # Return the merged persistence record (raw_result + summary columns) so
     # fields like `vide` and dynamic artifacts are not dropped by response_model.

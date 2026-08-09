@@ -1,30 +1,19 @@
 import type { FraudCardData } from '../../App';
 import type { InvestigationBundle } from '../../types/investigation';
+import { useAnalysis } from '../../context/AnalysisContext';
 import { useInvestigationUI } from '../../context/InvestigationUIContext';
-import HelpTerm from './HelpTerm';
-import { countFindingEvidence } from '../../lib/analystCopy';
+import { mapFindingEvidence } from '../../lib/findingEvidenceMapper';
+import {
+  isFindingDetected,
+  SEVERITY_DISPLAY,
+  visibleFindingDefinitions,
+  type TechnicalFindingId,
+} from '../../lib/technicalFindings';
+import ExplainFindingButton from './ExplainFindingButton';
 import SocCard from '../ui/Card';
 import SectionHeader from '../ui/SectionHeader';
 import { AlertTriangle } from 'lucide-react';
 import { COLORS } from '../../theme/colors';
-
-type FindingRow = {
-  title: string;
-  helpTerm: string;
-  explanation: string;
-  severity: keyof typeof COLORS.severity;
-  detected: boolean;
-  evidenceId: string;
-  ledgerScope: 'stei' | 'dynamic';
-  evidenceKeywords: string[];
-};
-
-const SEVERITY_LABEL: Record<string, string> = {
-  critical: 'Critical Risk',
-  high: 'High Risk',
-  medium: 'Moderate Risk',
-  low: 'Lower Risk',
-};
 
 export default function CoreFindingsList({
   data,
@@ -33,64 +22,15 @@ export default function CoreFindingsList({
   data: FraudCardData;
   bundle?: InvestigationBundle | null;
 }) {
-  const { openEvidence, openLedger } = useInvestigationUI();
+  const { openFindingEvidence, openFindingExplanation } = useInvestigationUI();
+  const { runtimeEvidenceRaw } = useAnalysis();
 
-  const rows: FindingRow[] = [
-    {
-      title: 'Accessibility Service Abuse',
-      helpTerm: 'Accessibility Abuse',
-      explanation:
-        'Allows malware to control the phone without the user\'s knowledge — including reading banking screens and automating taps.',
-      severity: 'critical',
-      detected: data.has_accessibility_abuse,
-      evidenceId: 'STAT-A11Y',
-      ledgerScope: 'stei',
-      evidenceKeywords: ['a11y', 'accessibility', 'STAT-A11Y'],
-    },
-    {
-      title: 'SMS & OTP Interception',
-      helpTerm: 'SMS Interception',
-      explanation: 'SMS read permissions may allow theft of one-time passwords sent by banks.',
-      severity: 'critical',
-      detected: data.has_sms_read_write,
-      evidenceId: 'STAT-SMS',
-      ledgerScope: 'stei',
-      evidenceKeywords: ['sms', 'STAT-SMS'],
-    },
-    {
-      title: 'Overlay Window Capability',
-      helpTerm: 'Overlay Attack',
-      explanation: 'Can display fake banking login screens over legitimate apps.',
-      severity: 'high',
-      detected: data.has_system_alert_window,
-      evidenceId: 'STAT-OVERLAY',
-      ledgerScope: 'stei',
-      evidenceKeywords: ['overlay', 'STAT-OVERLAY', 'alert'],
-    },
-    {
-      title: 'Runtime Code Loading',
-      helpTerm: 'Runtime Code Loading',
-      explanation: 'Downloads or loads hidden code after installation, evading static inspection.',
-      severity: 'medium',
-      detected: Boolean(data.obfuscation_score && data.obfuscation_score > 0),
-      evidenceId: 'STAT-CODE-0',
-      ledgerScope: 'stei',
-      evidenceKeywords: ['code', 'load', 'dex', 'STAT-CODE'],
-    },
-    {
-      title: 'Obfuscation',
-      helpTerm: 'Obfuscation',
-      explanation: 'Makes the application\'s code difficult to inspect and reverse-engineer.',
-      severity: 'medium',
-      detected: Boolean(data.obfuscation_score && data.obfuscation_score > 0.25),
-      evidenceId: 'STAT-CODE-0',
-      ledgerScope: 'stei',
-      evidenceKeywords: ['obfus', 'STAT-CODE'],
-    },
-  ];
+  const definitions = visibleFindingDefinitions(data);
+  const detected = definitions.filter((d) => isFindingDetected(d.id, data));
+  const clear = definitions.filter((d) => !isFindingDetected(d.id, data));
 
-  const detected = rows.filter((r) => r.detected);
-  const clear = rows.filter((r) => !r.detected);
+  const evidenceCount = (id: TechnicalFindingId) =>
+    mapFindingEvidence(id, data, bundle ?? null, runtimeEvidenceRaw).length;
 
   return (
     <SocCard>
@@ -107,28 +47,44 @@ export default function CoreFindingsList({
           </div>
         )}
         {detected.map((row) => {
-          const count = Math.max(1, countFindingEvidence(bundle, row.evidenceKeywords));
+          const count = evidenceCount(row.id);
           const sevClass = COLORS.severity[row.severity] || COLORS.severity.info;
           return (
-            <button
-              key={row.title}
-              type="button"
-              onClick={() => openEvidence(row.evidenceId)}
+            <div
+              key={row.id}
               className="w-full text-left rounded-xl border border-slate-200 p-4 hover:border-blue-300 hover:bg-blue-50/30 transition-colors"
             >
-              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                <h3 className="text-sm font-bold text-slate-900">
-                  <HelpTerm term={row.helpTerm}>{row.title}</HelpTerm>
-                </h3>
-                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${sevClass}`}>
-                  {SEVERITY_LABEL[row.severity] || 'Risk'}
-                </span>
+              <div
+                className="cursor-pointer"
+                role="button"
+                tabIndex={0}
+                onClick={() => openFindingExplanation(row.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    openFindingExplanation(row.id);
+                  }
+                }}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                  <h3 className="text-sm font-bold text-slate-900 inline-flex items-center gap-1">
+                    {row.title}
+                    <ExplainFindingButton findingId={row.id} />
+                  </h3>
+                  <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${sevClass}`}>
+                    {SEVERITY_DISPLAY[row.severity] || 'Risk'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">{row.summary}</p>
               </div>
-              <p className="text-xs text-slate-600 leading-relaxed">{row.explanation}</p>
-              <p className="text-[11px] text-blue-700 font-semibold mt-3">
+              <button
+                type="button"
+                onClick={() => openFindingEvidence(row.id)}
+                className="text-[11px] text-blue-700 font-semibold mt-3 hover:underline"
+              >
                 Verified evidence · {count} observation{count === 1 ? '' : 's'}
-              </p>
-            </button>
+              </button>
+            </div>
           );
         })}
         {clear.length > 0 && detected.length > 0 && (
@@ -137,9 +93,9 @@ export default function CoreFindingsList({
             <div className="flex flex-wrap gap-2">
               {clear.map((row) => (
                 <button
-                  key={row.title}
+                  key={row.id}
                   type="button"
-                  onClick={() => openLedger(row.ledgerScope)}
+                  onClick={() => openFindingExplanation(row.id)}
                   className="text-[11px] px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100"
                 >
                   {row.title}

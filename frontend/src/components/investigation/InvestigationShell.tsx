@@ -1,16 +1,24 @@
 import { useEffect } from 'react';
-import { Navigate, useParams } from 'react-router-dom';
+import { Navigate, useLocation, useParams } from 'react-router-dom';
 import { LoadingSpinner } from '../ui/Skeleton';
 import { useAnalysis } from '../../context/AnalysisContext';
 import { InvestigationUIProvider } from '../../context/InvestigationUIContext';
 import CaseHeader from './CaseHeader';
 import ScoreLedgerSlideOver from './ScoreLedgerSlideOver';
 import EvidenceDrawer from './EvidenceDrawer';
+import FindingExplanationDrawer from './FindingExplanationDrawer';
+import FindingEvidenceDrawer from './FindingEvidenceDrawer';
+import ScoreInfluenceDetailDrawer from './ScoreInfluenceDetailDrawer';
 import AnalystNotesPanel from './AnalystNotesPanel';
 
 function InvestigationChrome({ children }: { children: React.ReactNode }) {
+  const { pathname } = useLocation();
   const { sha256: routeSha } = useParams<{ sha256?: string }>();
-  const { analysisResult, investigationBundle, loading, activeSha256, loadCaseByHash } = useAnalysis();
+  const { analysisResult, investigationBundle, loading, activeSha256, loadCaseByHash, runtimeEvidenceRaw } =
+    useAnalysis();
+
+  const showCaseHeader =
+    !pathname.startsWith('/technical') && !pathname.startsWith('/threat-intel');
 
   const pendingHash = routeSha || activeSha256;
 
@@ -31,12 +39,19 @@ function InvestigationChrome({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <CaseHeader data={analysisResult} />
+      {showCaseHeader && <CaseHeader data={analysisResult} />}
       {children}
       {bundle && (
         <>
           <ScoreLedgerSlideOver data={analysisResult} bundle={bundle} />
           <EvidenceDrawer data={analysisResult} bundle={bundle} />
+          <FindingExplanationDrawer
+            data={analysisResult}
+            bundle={bundle}
+            rawRuntime={runtimeEvidenceRaw}
+          />
+          <FindingEvidenceDrawer data={analysisResult} bundle={bundle} rawRuntime={runtimeEvidenceRaw} />
+          <ScoreInfluenceDetailDrawer data={analysisResult} bundle={bundle} />
         </>
       )}
       <AnalystNotesPanel sha256={analysisResult.sha256} />

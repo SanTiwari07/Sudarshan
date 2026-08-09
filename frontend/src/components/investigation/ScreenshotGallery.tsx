@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { FraudCardData } from '../../App';
 import type { InvestigationBundle } from '../../types/investigation';
 import { useAnalysis } from '../../context/AnalysisContext';
@@ -15,11 +15,18 @@ import {
   type ScreenshotManifestEntry,
 } from '../../lib/screenshotManifest';
 import { useRuntimeScreenshots } from '../../hooks/useRuntimeScreenshots';
+import { visualFromEntry } from '../../lib/visualEvidence';
+import {
+  classifyScreenshotUxState,
+  SCREENSHOT_STATE_COPY,
+  type ScreenshotUxState,
+} from '../../lib/investigationRuntime';
 import { Camera, Loader2 } from 'lucide-react';
 
 function ScreenshotTile({
   sha256,
   entry,
+  index,
   title,
   mitre,
   evidenceId,
@@ -27,6 +34,7 @@ function ScreenshotTile({
 }: {
   sha256: string;
   entry: ScreenshotManifestEntry;
+  index: number;
   title: string;
   mitre?: string;
   evidenceId?: string;
@@ -70,21 +78,30 @@ function ScreenshotTile({
     };
   }, [sha256, entry]);
 
-  if (failed) return null;
-
   const time = formatScreenshotTime(entry.timestamp_ms);
   const stage = screenshotStageLabel(entry);
   const description = screenshotDescription(entry);
+
+  if (failed) {
+    return (
+      <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50/50 p-3 text-center text-[11px] text-amber-900">
+        Could not load {screenshotDescription(entry)}
+      </div>
+    );
+  }
 
   return (
     <button
       type="button"
       onClick={onZoom}
-      className="group text-left rounded-xl border border-slate-200/80 overflow-hidden bg-white hover:border-blue-300 hover:shadow-md transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+      disabled={!src && loading}
+      className="group text-left rounded-xl border border-slate-200/80 overflow-hidden bg-white hover:border-blue-300 hover:shadow-md transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-70"
     >
       <div className="aspect-[9/16] w-full max-h-[280px] bg-slate-100 relative overflow-hidden">
         {loading && (
-          <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-slate-100 to-slate-200" aria-hidden />
+          <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center text-[10px] text-slate-500">
+            Loading…
+          </div>
         )}
         {src && (
           <img
@@ -95,6 +112,9 @@ function ScreenshotTile({
           />
         )}
         <div className="absolute top-2 left-2 flex flex-wrap gap-1">
+          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-900/75 text-white">
+            {String(index + 1).padStart(2, '0')}
+          </span>
           {evidenceId && (
             <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-blue-700 text-white">{evidenceId}</span>
           )}
@@ -103,24 +123,18 @@ function ScreenshotTile({
           )}
         </div>
       </div>
-      <div className="p-2.5 border-t border-slate-100 dark:border-slate-800 space-y-0.5">
+      <div className="p-2.5 border-t border-slate-100 space-y-0.5">
         <div className="flex items-center justify-between gap-2 text-[10px] text-slate-500">
           <span className="font-mono">{time}</span>
           <span className="font-semibold text-blue-700 truncate">{stage}</span>
         </div>
-        <div className="text-xs font-semibold text-slate-800 dark:text-slate-100 line-clamp-2">{description}</div>
+        <div className="text-xs font-semibold text-slate-800 line-clamp-2">{description}</div>
       </div>
     </button>
   );
 }
 
-function CaptureProgress({
-  captured,
-  expected,
-}: {
-  captured: number;
-  expected: number;
-}) {
+function CaptureProgress({ captured, expected }: { captured: number; expected: number }) {
   const pct = expected > 0 ? Math.min(100, (captured / expected) * 100) : 0;
   return (
     <div className="rounded-lg border border-blue-100 bg-blue-50/60 px-4 py-3 space-y-2">
@@ -151,6 +165,37 @@ function SkeletonRow({ count = 4 }: { count?: number }) {
   );
 }
 
+function EmptyScreenshotState({
+  state,
+  data,
+  runtime,
+  captured,
+}: {
+  state: ScreenshotUxState;
+  data: FraudCardData;
+  runtime: import('../../lib/screenshotManifest').RuntimeScreenshotMeta | null;
+  captured: number;
+}) {
+  if (state === 'LOADING' || state === 'AVAILABLE') return null;
+  const copy = SCREENSHOT_STATE_COPY[state];
+  const showDiagnostics = state === 'CAPTURE_FAILED' || state === 'ARTIFACT_MISSING';
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-4">
+        <p className="text-sm font-semibold text-slate-900">{copy.title}</p>
+        <p className="text-sm text-slate-600 mt-2 leading-relaxed">{copy.body}</p>
+      </div>
+      {showDiagnostics && (
+        <ScreenshotDiagnosticsCard data={data} runtime={runtime} captured={captured} uxState={state} />
+      )}
+      {state === 'RUNTIME_INCONCLUSIVE' || state === 'NO_UI_REACHED' ? (
+        <ScreenshotDiagnosticsCard data={data} runtime={runtime} captured={captured} uxState={state} compact />
+      ) : null}
+    </div>
+  );
+}
+
 export default function ScreenshotGallery({
   data,
   bundle,
@@ -159,11 +204,33 @@ export default function ScreenshotGallery({
   bundle: InvestigationBundle | null;
 }) {
   const { loading: caseLoading } = useAnalysis();
-  const { entries, runtime, loading, capturing, expected, capturedCount } = useRuntimeScreenshots(data.sha256, {
-    poll: caseLoading,
-    sortOrder: 'newest',
-  });
+  const { entries, runtime, loading, error, capturing, expected, capturedCount } = useRuntimeScreenshots(
+    data.sha256,
+    {
+      poll: caseLoading,
+      sortOrder: 'newest',
+    },
+  );
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [qualityFilter, setQualityFilter] = useState<string>('all');
+  const [correlationFilter, setCorrelationFilter] = useState<string>('all');
+
+  const visibleEntries = useMemo(() => {
+    return entries.filter((e) => {
+      const ve = visualFromEntry(e);
+      if (qualityFilter !== 'all' && ve?.quality !== qualityFilter) return false;
+      if (correlationFilter !== 'all' && ve?.correlation_status !== correlationFilter) return false;
+      return true;
+    });
+  }, [entries, qualityFilter, correlationFilter]);
+
+  const uxState = classifyScreenshotUxState({
+    loading,
+    apiError: error,
+    entryCount: entries.length,
+    runtime,
+    data,
+  });
 
   const evidenceByShot = new Map<string, { id: string; mitre?: string; title?: string }>();
   bundle?.evidenceRecords.forEach((e) => {
@@ -175,51 +242,80 @@ export default function ScreenshotGallery({
     });
   });
 
-  const visibleEntries = entries;
   const activeEntry = lightboxIndex != null ? visibleEntries[lightboxIndex] : null;
   const showCaptureProgress =
     capturing && visibleEntries.length === 0 && (expected > 0 || caseLoading);
-  const showDiagnostics = !loading && visibleEntries.length === 0 && !showCaptureProgress;
 
   return (
     <SocCard id="runtime-screenshots" className="overflow-hidden">
       <SectionHeader
         icon={<Camera className="h-4 w-4" />}
-        title="Runtime Screenshots"
-        subtitle={
-          visibleEntries.length > 0
-            ? `${visibleEntries.length} verified capture${visibleEntries.length === 1 ? '' : 's'} · newest first`
-            : 'Sandbox visual evidence · validated against artifacts'
-        }
+        title="Screenshot appendix"
+        subtitle="Artifact browser — filter by quality, correlation, and claim type"
       />
       <div className="p-4 sm:p-5 space-y-4">
-        {loading && visibleEntries.length === 0 && <SkeletonRow />}
+        {entries.some((e) => visualFromEntry(e)) && (
+          <div className="flex flex-wrap gap-2 text-[11px]">
+            <select
+              className="border border-slate-200 rounded px-2 py-1 bg-white"
+              value={qualityFilter}
+              onChange={(e) => setQualityFilter(e.target.value)}
+              aria-label="Filter by quality"
+            >
+              <option value="all">All quality</option>
+              <option value="A">A</option>
+              <option value="B">B</option>
+              <option value="C">C</option>
+              <option value="D">D</option>
+            </select>
+            <select
+              className="border border-slate-200 rounded px-2 py-1 bg-white"
+              value={correlationFilter}
+              onChange={(e) => setCorrelationFilter(e.target.value)}
+              aria-label="Filter by correlation"
+            >
+              <option value="all">All correlation</option>
+              <option value="causal">causal</option>
+              <option value="linked">linked</option>
+              <option value="temporal">temporal</option>
+              <option value="unresolved">unresolved</option>
+            </select>
+          </div>
+        )}
+        {uxState === 'LOADING' && visibleEntries.length === 0 && <SkeletonRow />}
 
         {showCaptureProgress && <CaptureProgress captured={capturedCount} expected={expected} />}
 
-        {showDiagnostics && (
-          <ScreenshotDiagnosticsCard data={data} runtime={runtime} captured={capturedCount} />
+        {uxState !== 'AVAILABLE' && uxState !== 'LOADING' && !showCaptureProgress && (
+          <EmptyScreenshotState state={uxState} data={data} runtime={runtime} captured={capturedCount} />
         )}
 
         {visibleEntries.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-            {visibleEntries.map((entry, index) => {
-              const file = entryFilename(entry);
-              const meta = evidenceByShot.get(file) || evidenceByShot.get(entry.screenshot_id || '');
-              const title = meta?.title || screenshotDescription(entry);
-              return (
-                <ScreenshotTile
-                  key={entry.id || entry.screenshot_id || file || index}
-                  sha256={data.sha256}
-                  entry={entry}
-                  title={title}
-                  mitre={meta?.mitre}
-                  evidenceId={meta?.id}
-                  onZoom={() => setLightboxIndex(index)}
-                />
-              );
-            })}
-          </div>
+          <>
+            <p className="text-xs text-slate-600">Tap a screenshot to inspect the captured application state.</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+              {visibleEntries.map((entry, index) => {
+                const file = entryFilename(entry);
+                const meta = evidenceByShot.get(file) || evidenceByShot.get(entry.screenshot_id || '');
+                const title = meta?.title || screenshotDescription(entry);
+                return (
+                  <ScreenshotTile
+                    key={entry.id || entry.screenshot_id || file || index}
+                    sha256={data.sha256}
+                    entry={entry}
+                    index={index}
+                    title={title}
+                    mitre={meta?.mitre}
+                    evidenceId={meta?.id}
+                    onZoom={() => setLightboxIndex(index)}
+                  />
+                );
+              })}
+            </div>
+            {visibleEntries.length > 0 && (
+              <p className="text-[11px] text-slate-500">Captured during sandbox execution.</p>
+            )}
+          </>
         )}
 
         {visibleEntries.length > 0 && capturing && (

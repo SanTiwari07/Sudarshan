@@ -810,6 +810,25 @@ async def _run_analysis_pipeline(
     )
     timer.stage_completed("VIDE_DYNAMIC")
 
+    if dynamic_result and dynamic_result.get("artifact_dir"):
+        try:
+            from sudarshan_core.visual_evidence.enrich import enrich_visual_evidence_artifact
+
+            enrich_visual_evidence_artifact(
+                Path(dynamic_result["artifact_dir"]),
+                analysis_id=sha256_hash,
+                package_name=package_name or "",
+                vide_result=vide_result if isinstance(vide_result, dict) else {},
+                static_flags={
+                    "has_accessibility_abuse": flags_dict.get("has_accessibility_abuse", False),
+                    "has_system_alert_window": flags_dict.get("has_system_alert_window", False),
+                    "has_sms_read_write": flags_dict.get("has_sms_read_write", False),
+                    "targets_indian_banks": flags_dict.get("targets_indian_banks", False),
+                },
+            )
+        except Exception as exc:
+            logger.warning("[Upload] Visual evidence enrichment failed (non-critical): %s", exc)
+
     # ── STEP 4: Risk Scoring (5-axis STEI) ───────────────────────────────────
     timer.set_orchestrator_stage(OrchestratorStage.RISK_ASSESSMENT)
     timer.stage_started("RISK", "deterministic FRS")

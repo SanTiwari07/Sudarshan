@@ -68,7 +68,7 @@ SECTION_NAMES = [
     "receivers", "components", "static_findings", "dynamic_findings",
     "runtime_events", "timeline", "network", "files", "apis",
     "mitre", "malware_family", "threat_intelligence", "risk_engine",
-    "recommendations", "verdict", "fraud_workflow",
+    "recommendations", "verdict", "fraud_workflow", "visual_evidence",
     # MobSF enrichment sections
     "binary_analysis", "crypto_findings", "webview_findings",
     "ssl_findings", "anti_analysis", "secrets", "trackers",
@@ -82,7 +82,7 @@ INTENT_SECTION_MAP: Dict[str, List[str]] = {
     "otp":               ["dynamic_findings", "runtime_events", "permissions", "static_findings", "threat_intelligence"],
     "sms":               ["dynamic_findings", "runtime_events", "permissions", "static_findings"],
     "accessibility":     ["dynamic_findings", "runtime_events", "static_findings", "permissions"],
-    "overlay":           ["dynamic_findings", "runtime_events", "permissions", "static_findings"],
+    "overlay":           ["visual_evidence", "dynamic_findings", "runtime_events", "permissions", "static_findings"],
     "permissions":       ["permissions", "static_findings", "manifest"],
     "network":           ["network", "threat_intelligence", "dynamic_findings", "static_findings", "network_security"],
     "mitre":             ["mitre", "static_findings", "dynamic_findings"],
@@ -90,13 +90,13 @@ INTENT_SECTION_MAP: Dict[str, List[str]] = {
     "manifest":          ["manifest", "components", "activities", "services", "receivers", "exported_components"],
     "certificate":       ["metadata", "static_findings"],
     "virustotal":        ["threat_intelligence"],
-    "dynamic":           ["dynamic_findings", "runtime_events", "timeline", "network", "files"],
-    "timeline":          ["timeline", "dynamic_findings", "runtime_events"],
+    "dynamic":           ["visual_evidence", "dynamic_findings", "runtime_events", "timeline", "network", "files"],
+    "timeline":          ["visual_evidence", "timeline", "dynamic_findings", "runtime_events"],
     "recommend":         ["recommendations", "verdict", "risk_engine"],
-    "report":            ["verdict", "risk_engine", "static_findings", "dynamic_findings", "threat_intelligence", "mitre", "recommendations"],
+    "report":            ["visual_evidence", "verdict", "risk_engine", "static_findings", "dynamic_findings", "threat_intelligence", "mitre", "recommendations"],
     "compare":           ["malware_family", "threat_intelligence", "mitre", "static_findings"],
-    "executive":         ["verdict", "risk_engine", "recommendations", "threat_intelligence"],
-    "workflow":          ["fraud_workflow", "dynamic_findings", "runtime_events", "timeline"],
+    "executive":         ["visual_evidence", "verdict", "risk_engine", "recommendations", "threat_intelligence"],
+    "workflow":          ["visual_evidence", "fraud_workflow", "dynamic_findings", "runtime_events", "timeline"],
     "chain":             ["fraud_workflow", "dynamic_findings", "runtime_events"],
     "sequence":          ["fraud_workflow", "dynamic_findings", "runtime_events"],
     # New intents for enriched MobSF data
@@ -108,7 +108,8 @@ INTENT_SECTION_MAP: Dict[str, List[str]] = {
     "native":            ["binary_analysis", "static_findings"],
     "sdk":               ["trackers", "static_findings"],
     "exported":          ["exported_components", "manifest", "components"],
-    "anti":              ["anti_analysis", "static_findings", "dynamic_findings"],
+    "anti":              ["visual_evidence", "anti_analysis", "static_findings", "dynamic_findings"],
+    "visual":            ["visual_evidence", "dynamic_findings", "runtime_events", "fraud_workflow"],
     "default":           ["verdict", "risk_engine", "fraud_workflow", "static_findings", "dynamic_findings", "threat_intelligence"],
 }
 
@@ -329,6 +330,31 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
                 )
     else:
         idx["fraud_workflow"] = ["No fraud workflow was reconstructed from dynamic evidence."]
+
+    # ── Visual investigation evidence (deterministic VER artifact) ─────────────
+    idx["visual_evidence"] = []
+    try:
+        from app.artifact_resolve import resolve_artifact_dir
+        from sudarshan_core.visual_evidence.api_merge import load_visual_evidence_records
+
+        art_dir = resolve_artifact_dir(report, sha256=sha256)
+        for ver in load_visual_evidence_records(art_dir):
+            sid = ver.get("screenshot_id", "")
+            claim = ver.get("investigative_claim", "")
+            idx["visual_evidence"].append(
+                f"{sid}\n"
+                f"Claim: {claim}\n"
+                f"Quality: {ver.get('quality', '')}\n"
+                f"Correlation: {ver.get('correlation_status', '')}\n"
+                f"Evidence: {', '.join(ver.get('linked_evidence_ids') or [])}\n"
+                f"Finding: {', '.join(ver.get('linked_finding_keys') or [])}\n"
+                f"Workflow: {ver.get('workflow_stage_label', '')}\n"
+                f"Timestamp_ms: {ver.get('timestamp_ms', '')}"
+            )
+    except Exception as exc:
+        logger.debug("[RAG] visual_evidence index skip: %s", exc)
+    if not idx["visual_evidence"]:
+        idx["visual_evidence"] = ["No visual_evidence.json artifact indexed for this case."]
 
     # ── Network ───────────────────────────────────────────────────────────────
     idx["network"] = []
@@ -561,6 +587,8 @@ def detect_intent(question: str) -> str:
     """Classify question intent to select relevant evidence sections."""
     q = question.lower()
 
+    if any(w in q for w in ["screenshot", "scr-", "visual evidence", "what was visible", "what did the screen"]):
+        return "visual"
     if any(w in q for w in ["otp", "sms", "message", "intercept", "read_sms"]):
         return "otp"
     if any(w in q for w in ["accessibility", "a11y", "screen control", "tap inject"]):

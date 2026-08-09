@@ -26,6 +26,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from sudarshan_core.visual_evidence.report_sections import (
+    build_appendix_visual_html,
+    build_executive_visual_html,
+    build_technical_visual_html,
+)
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -1224,6 +1230,9 @@ class ReportGenerator:
         ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         idx = _FindingIndex()
         evidence_json = self._load_artifact("evidence.json")
+        visual_exec = build_executive_visual_html(self.apk_dir)
+        visual_tech = build_technical_visual_html(self.apk_dir)
+        visual_appendix = build_appendix_visual_html(self.apk_dir)
 
         body = (
             _build_header(self.r, ts)
@@ -1232,9 +1241,12 @@ class ReportGenerator:
             + _build_static(self.r, idx)
             + _build_threat_intel(self.r, idx)
             + _build_dynamic(self.r, evidence_json, idx)
+            + visual_exec
             + _build_visual_gallery(self.apk_dir, idx, self.r)
+            + visual_tech
             + _build_exploration_coverage(self.r, self.apk_dir, idx)
             + _build_recommendations(self.r)
+            + visual_appendix
             + _build_ledger(idx)
             + _build_footer(self.r)
         )

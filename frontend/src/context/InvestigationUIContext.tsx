@@ -1,6 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { LedgerScope } from '../types/investigation';
+import type { TechnicalFindingId } from '../lib/technicalFindings';
+import type { ScoreInfluenceAxis } from '../lib/scoreInfluenceModel';
 
 type InvestigationUIContextValue = {
   ledgerOpen: boolean;
@@ -10,8 +12,18 @@ type InvestigationUIContextValue = {
   drawerEvidenceId: string | null;
   openEvidence: (id: string) => void;
   closeEvidence: () => void;
+  explanationFindingId: TechnicalFindingId | null;
+  findingEvidenceId: TechnicalFindingId | null;
+  openFindingExplanation: (id: TechnicalFindingId) => void;
+  openFindingEvidence: (id: TechnicalFindingId) => void;
+  closeFindingExplanation: () => void;
+  closeFindingEvidence: () => void;
   timelineFocusMs: number | null;
   setTimelineFocus: (ms: number | null) => void;
+  influenceDetailOpen: boolean;
+  influenceAxis: ScoreInfluenceAxis | null;
+  openInfluenceDetail: (axis: ScoreInfluenceAxis) => void;
+  closeInfluenceDetail: () => void;
 };
 
 const InvestigationUIContext = createContext<InvestigationUIContextValue | null>(null);
@@ -21,7 +33,11 @@ export function InvestigationUIProvider({ children }: { children: React.ReactNod
   const [ledgerOpen, setLedgerOpen] = useState(false);
   const [ledgerScope, setLedgerScope] = useState<LedgerScope>('full');
   const [drawerEvidenceId, setDrawerEvidenceId] = useState<string | null>(null);
+  const [explanationFindingId, setExplanationFindingId] = useState<TechnicalFindingId | null>(null);
+  const [findingEvidenceId, setFindingEvidenceId] = useState<TechnicalFindingId | null>(null);
   const [timelineFocusMs, setTimelineFocusMs] = useState<number | null>(null);
+  const [influenceDetailOpen, setInfluenceDetailOpen] = useState(false);
+  const [influenceAxis, setInfluenceAxis] = useState<ScoreInfluenceAxis | null>(null);
 
   useEffect(() => {
     const ev = searchParams.get('evidence');
@@ -35,6 +51,9 @@ export function InvestigationUIProvider({ children }: { children: React.ReactNod
     }
   }, [searchParams]);
 
+  const closeFindingExplanation = useCallback(() => setExplanationFindingId(null), []);
+  const closeFindingEvidence = useCallback(() => setFindingEvidenceId(null), []);
+
   const openLedger = useCallback((scope: LedgerScope = 'full') => {
     setLedgerScope(scope);
     setLedgerOpen(true);
@@ -44,6 +63,8 @@ export function InvestigationUIProvider({ children }: { children: React.ReactNod
 
   const openEvidence = useCallback(
     (id: string) => {
+      setExplanationFindingId(null);
+      setFindingEvidenceId(null);
       setDrawerEvidenceId(id);
       setSearchParams((prev) => {
         const next = new URLSearchParams(prev);
@@ -63,6 +84,44 @@ export function InvestigationUIProvider({ children }: { children: React.ReactNod
     });
   }, [setSearchParams]);
 
+  const openFindingExplanation = useCallback(
+    (id: TechnicalFindingId) => {
+      setFindingEvidenceId(null);
+      setDrawerEvidenceId(null);
+      setExplanationFindingId(id);
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('evidence');
+        return next;
+      });
+    },
+    [setSearchParams],
+  );
+
+  const openFindingEvidence = useCallback(
+    (id: TechnicalFindingId) => {
+      setExplanationFindingId(null);
+      setDrawerEvidenceId(null);
+      setFindingEvidenceId(id);
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('evidence');
+        return next;
+      });
+    },
+    [setSearchParams],
+  );
+
+  const openInfluenceDetail = useCallback((axis: ScoreInfluenceAxis) => {
+    setInfluenceAxis(axis);
+    setInfluenceDetailOpen(true);
+  }, []);
+
+  const closeInfluenceDetail = useCallback(() => {
+    setInfluenceDetailOpen(false);
+    setInfluenceAxis(null);
+  }, []);
+
   const value = useMemo(
     () => ({
       ledgerOpen,
@@ -72,8 +131,18 @@ export function InvestigationUIProvider({ children }: { children: React.ReactNod
       drawerEvidenceId,
       openEvidence,
       closeEvidence,
+      explanationFindingId,
+      findingEvidenceId,
+      openFindingExplanation,
+      openFindingEvidence,
+      closeFindingExplanation,
+      closeFindingEvidence,
       timelineFocusMs,
       setTimelineFocus: setTimelineFocusMs,
+      influenceDetailOpen,
+      influenceAxis,
+      openInfluenceDetail,
+      closeInfluenceDetail,
     }),
     [
       ledgerOpen,
@@ -83,7 +152,17 @@ export function InvestigationUIProvider({ children }: { children: React.ReactNod
       drawerEvidenceId,
       openEvidence,
       closeEvidence,
+      explanationFindingId,
+      findingEvidenceId,
+      openFindingExplanation,
+      openFindingEvidence,
+      closeFindingExplanation,
+      closeFindingEvidence,
       timelineFocusMs,
+      influenceDetailOpen,
+      influenceAxis,
+      openInfluenceDetail,
+      closeInfluenceDetail,
     ],
   );
 

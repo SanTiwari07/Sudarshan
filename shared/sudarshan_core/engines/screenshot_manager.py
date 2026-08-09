@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 from sudarshan_core.sandbox import get_sandbox_provider
 import threading
 import time
@@ -196,8 +197,12 @@ class ScreenshotManager:
     ) -> Optional[str]:
         """
         Take a screenshot on the device, pull it locally, and record it in
-        the manifest. Returns the relative path or None on failure.
+        the manifest.         Returns the relative path or None on failure.
         """
+        if os.getenv("SUDARSHAN_DISABLE_SCREENSHOTS", "").lower() in ("1", "true", "yes"):
+            logger.debug("[ScreenshotManager] Capture disabled via SUDARSHAN_DISABLE_SCREENSHOTS")
+            return None
+
         with self._lock:
             scr_id = self._next_scr_id()
             idx_str = f"{self._counter:03d}"
@@ -372,20 +377,17 @@ class ScreenshotManager:
             )
             return
 
+        trigger_uuid = str(event.get("evidence_record_id") or "")
+
         def _bg_capture():
-            ref = self.capture(
+            self.capture(
                 label=label,
                 category=category,
                 source="auto",
                 gated=True,
                 reason=reason.value,
+                trigger_evid=trigger_uuid,
             )
-            if ref and self.evidence_store:
-                updated_id = self.evidence_store.attach_screenshot_to_latest(ref)
-                if updated_id and self._manifest:
-                    scr_id = self._manifest[-1].screenshot_id
-                    self.evidence_store.set_screenshot_id(updated_id, scr_id)
-                    self._manifest[-1].trigger_event = updated_id
 
         t = threading.Thread(target=_bg_capture, daemon=True)
         with self._lock:

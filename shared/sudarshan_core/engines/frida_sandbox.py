@@ -736,6 +736,43 @@ def _format_activity_component(package_name: str, activity: str) -> str:
     return f"{package_name}/{act}"
 
 
+def _read_dumpsys_activities(device: str) -> str:
+    ok, out = _adb("-s", device, "shell", "dumpsys", "activity", "activities", timeout=20)
+    return out or ""
+
+
+def _get_foreground_component(device: str) -> str:
+    """Return '<package>/<activity>' for the resumed window, or 'unknown'."""
+    try:
+        from sudarshan_core.engines.agentic.perception import parse_foreground_activity
+
+        comp = parse_foreground_activity(_read_dumpsys_activities(device))
+        if comp != "unknown":
+            return comp
+    except Exception as exc:
+        logger.debug("[Frida] parse_foreground_activity failed: %s", exc)
+
+    ok, out = _adb(
+        "-s",
+        device,
+        "shell",
+        "dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'",
+        timeout=15,
+    )
+    if ok and out:
+        match = re.search(r"([\w.]+/[\w.$]+)", out)
+        if match:
+            return match.group(1)
+    return "unknown"
+
+
+def _foreground_package(device: str) -> str:
+    comp = _get_foreground_component(device)
+    if "/" in comp:
+        return comp.split("/", 1)[0]
+    return ""
+
+
 def _launch_failure_is_process_crash(reason: str) -> bool:
     """True only when a PID existed and died — not when launch intent never started."""
     r = (reason or "").lower()
@@ -1617,6 +1654,9 @@ class FridaSession:
         # of the session — a persistence signal (watchdog service, restart
         # receiver), surfaced in the result rather than swallowed.
         self.survived_force_stop: bool = False
+        # True when lifecycle screenshots were taken while another package owned
+        # the foreground (typically the launcher home screen).
+        self.foreground_mismatch: bool = False
         # Set by stop() to cut an in-flight analysis short instead of sleeping
         # out the full window.
         self._stop_event = threading.Event()
@@ -1828,11 +1868,51 @@ class FridaSession:
 
     # ── Session lifecycle helpers ─────────────────────────────────────────────
 
+    def _bring_target_to_foreground(self) -> bool:
+        """Issue am start for the target package and return whether adb succeeded."""
+        import shlex as _shlex
+
+        launched = False
+        if self.main_activity:
+            component = _format_activity_component(self.package_name, self.main_activity)
+            if component:
+                ok, _ = _adb(
+                    "-s",
+                    self.device_serial,
+                    "shell",
+                    f"am start -W -n {_shlex.quote(component)}",
+                    timeout=20,
+                )
+                launched = ok
+        if not launched:
+            launched = _launch_app(self.device_serial, self.package_name)
+        if not launched:
+            launched = _launch_main_launcher_intent(self.device_serial, self.package_name)
+        time.sleep(1.0)
+        return launched
+
+    def _ensure_target_foreground(self, attempts: int = 4) -> bool:
+        for attempt in range(attempts):
+            pkg = _foreground_package(self.device_serial)
+            if pkg == self.package_name:
+                return True
+            logger.warning(
+                "[Frida] Foreground is %r (want %s) — bringing target forward "
+                "(attempt %d/%d)",
+                pkg or "unknown",
+                self.package_name,
+                attempt + 1,
+                attempts,
+            )
+            self._bring_target_to_foreground()
+        return _foreground_package(self.device_serial) == self.package_name
+
     def _wait_for_app_settled(self, timeout: float) -> bool:
         """
         Block until the target app's window stops changing, or `timeout`.
 
-        Polls mCurrentFocus and requires two consecutive identical samples.
+        Polls mCurrentFocus and requires two consecutive identical samples
+        while the target package owns the foreground window.
         Returns True if the UI was seen to settle. Never raises — a settling
         wait that can fail the run would be worse than the crash it prevents.
         """
@@ -1841,6 +1921,13 @@ class FridaSession:
         stable = 0
 
         while time.monotonic() < deadline:
+            if _foreground_package(self.device_serial) != self.package_name:
+                self._bring_target_to_foreground()
+                stable = 0
+                last_sig = None
+                time.sleep(APP_SETTLE_POLL_SECONDS)
+                continue
+
             ok, out = _adb(
                 "-s", self.device_serial, "shell",
                 "dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'",
@@ -1880,9 +1967,20 @@ class FridaSession:
         if self.screenshot_manager is None:
             return
         try:
+            self._ensure_target_foreground(3)
+            activity = _get_foreground_component(self.device_serial)
+            fg_pkg = _foreground_package(self.device_serial)
+            if fg_pkg and fg_pkg != self.package_name:
+                self.foreground_mismatch = True
+                logger.warning(
+                    "[Frida] Screenshot '%s' taken while foreground is %s, not %s",
+                    label,
+                    fg_pkg,
+                    self.package_name,
+                )
             ref = self.screenshot_manager.capture(
                 label=label, category=category, source="lifecycle",
-                reason="LIFECYCLE", force=True,
+                reason="LIFECYCLE", force=True, activity=activity,
             )
             if ref:
                 logger.info(f"[Frida] Screenshot captured: {label}")
@@ -3311,6 +3409,7 @@ async def _run_device_session(
         # Presence of non-standard launch method is itself a weak signal of
         # anti-analysis hardening. NOT consumed by risk_engine.
         "launch_method_used":  session.launch_method_used,
+        "foreground_mismatch": session.foreground_mismatch,
 
         # Launch diagnostics (Requirement 6) — timestamps for all 10 milestones.
         # Offsets are seconds since apk_install (None = milestone not reached).
@@ -3505,6 +3604,29 @@ async def _run_device_session(
             logger.info(f"[Frida] Screenshot manifest flushed: {n} image(s)")
         except Exception as e:
             logger.error(f"[Frida] Failed to write screenshot manifest: {e}")
+
+    try:
+        from sudarshan_core.visual_evidence.linker import write_visual_evidence_artifact
+
+        static_flags = merge_static_flags(
+            apk_dir,
+            {
+                "has_accessibility_abuse": bool(result.get("has_accessibility_abuse")),
+                "has_system_alert_window": bool(result.get("has_system_alert_window")),
+                "has_sms_read_write": bool(result.get("has_sms_read_write")),
+                "targets_indian_banks": bool(result.get("targets_indian_banks")),
+            },
+        )
+        write_visual_evidence_artifact(
+            apk_dir,
+            analysis_id=str(result.get("sha256") or package_name or ""),
+            package_name=str(package_name or ""),
+            static_flags=static_flags,
+            vide_result=result.get("vide") if isinstance(result.get("vide"), dict) else {},
+            session_metadata={"explorer_used": result.get("explorer_used")},
+        )
+    except Exception as e:
+        logger.error(f"[Frida] Failed to write visual_evidence.json: {e}")
 
     session.dae.transition(DAEStage.GENERATE_REPORT, "artifact flush complete")
 

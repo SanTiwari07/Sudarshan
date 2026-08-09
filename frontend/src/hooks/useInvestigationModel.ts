@@ -6,7 +6,8 @@ import type {
   InvestigationEvidence,
 } from '../types/investigation';
 import { buildLedgerLines } from '../lib/scoreLedger';
-import { buildForensicTimeline } from '../lib/timelineMerge';
+import { buildForensicTimeline, appendVisualTimelineEvents } from '../lib/timelineMerge';
+import type { ScreenshotManifestEntry } from '../lib/screenshotManifest';
 
 type RawEvidenceRecord = Record<string, unknown>;
 
@@ -25,6 +26,7 @@ function normalizeRuntimeRecord(raw: RawEvidenceRecord, index: number): Investig
     mitreName: raw.mitre_technique_name ? String(raw.mitre_technique_name) : undefined,
     screenshotRef: raw.screenshot_ref ? String(raw.screenshot_ref) : undefined,
     hookNames: raw.api ? [String(raw.api)] : undefined,
+    runtimeSubcategory: raw.category ? String(raw.category) : undefined,
   };
 }
 
@@ -132,6 +134,7 @@ function computeCounts(
 export function buildInvestigationBundle(
   data: FraudCardData | null,
   rawRuntimeEvidence: RawEvidenceRecord[] = [],
+  screenshotEntries: ScreenshotManifestEntry[] = [],
 ): InvestigationBundle | null {
   if (!data) return null;
 
@@ -140,7 +143,10 @@ export function buildInvestigationBundle(
   const evidenceRecords = [...staticEv, ...runtime];
 
   const ledgerLines = buildLedgerLines(data);
-  const timelineEvents = buildForensicTimeline(data);
+  const timelineEvents = appendVisualTimelineEvents(
+    buildForensicTimeline(data),
+    screenshotEntries,
+  );
   const counts = computeCounts(data, evidenceRecords);
 
   return {
@@ -154,10 +160,11 @@ export function buildInvestigationBundle(
 export function useInvestigationModel(
   data: FraudCardData | null,
   rawRuntimeEvidence: RawEvidenceRecord[] = [],
+  screenshotEntries: ScreenshotManifestEntry[] = [],
 ) {
   return useMemo(
-    () => buildInvestigationBundle(data, rawRuntimeEvidence),
-    [data, rawRuntimeEvidence],
+    () => buildInvestigationBundle(data, rawRuntimeEvidence, screenshotEntries),
+    [data, rawRuntimeEvidence, screenshotEntries],
   );
 }
 

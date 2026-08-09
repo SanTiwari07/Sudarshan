@@ -507,8 +507,13 @@ def _dynamic_run_was_conclusive(dynamic: Optional[Dict]) -> bool:
     # evasion, the safer this engine rated it, which is precisely the regression
     # the surrounding comment says was fixed.
     observed = 0
-    for field in ("api_calls", "network_logs", "activities_triggered",
-                  "files_accessed"):
+    for field in (
+        "api_calls",
+        "network_logs",
+        "activities_triggered",
+        "files_accessed",
+        "anti_analysis_events",
+    ):
         value = dynamic.get(field)
         try:
             observed += len(value or [])

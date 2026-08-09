@@ -1,58 +1,81 @@
-import { Target } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import type { FraudCardData } from '../App';
 import { useAnalysis } from '../context/AnalysisContext';
+import { dynamicRuntimeLabel } from '../lib/analystCopy';
 import SocCard from '../components/ui/Card';
-import SectionHeader from '../components/ui/SectionHeader';
 import HelpTerm from '../components/investigation/HelpTerm';
 import CoreFindingsList from '../components/investigation/CoreFindingsList';
-import InvestigationTimeline from '../components/investigation/InvestigationTimeline';
-import ThreatScenarioTable from '../components/investigation/ThreatScenarioTable';
 import FraudRiskHero from '../components/investigation/FraudRiskHero';
 import VisualImpersonationExecutiveCard from '../components/investigation/VisualImpersonationExecutiveCard';
-import ExecutiveIntelligenceOverview from '../components/investigation/ExecutiveIntelligenceOverview';
-import EvidencePipelineTimeline from '../components/investigation/EvidencePipelineTimeline';
+import InvestigationConclusionCard from '../components/investigation/InvestigationConclusionCard';
 import StructuredCaseSummary from '../components/investigation/StructuredCaseSummary';
 import CaseSummaryStrip from '../components/investigation/CaseSummaryStrip';
-import IntelligencePhaseCards from '../components/investigation/IntelligencePhaseCards';
-import ScreenshotGallery from '../components/investigation/ScreenshotGallery';
 import ApplicationInfoCard from '../components/investigation/ApplicationInfoCard';
-import ScoreEntryCard from '../components/investigation/ScoreEntryCard';
 import { useRuntimeScreenshots } from '../hooks/useRuntimeScreenshots';
+import { Activity, Shield } from 'lucide-react';
 
-function MitrePanel({ data }: { data: FraudCardData }) {
-  const techniques = data.intelligence_report?.mitre_techniques_used || [];
+function RuntimeLimitationBanner({ data }: { data: FraudCardData }) {
+  const frs = data.frs_breakdown;
+  if (!frs?.dynamic_ran) return null;
+  if (frs.dynamic_conclusive) {
+    return (
+      <SocCard className="border-emerald-100 bg-emerald-50/40">
+        <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-emerald-900">
+            <HelpTerm term="Runtime Behaviour Confirmed">Runtime behaviour confirmed</HelpTerm> in the sandbox.
+          </p>
+          <Link to="/technical" className="text-xs font-semibold text-emerald-800 hover:underline">
+            Inspect live analysis →
+          </Link>
+        </div>
+      </SocCard>
+    );
+  }
+
+  return (
+    <SocCard className="border-amber-200/80 bg-amber-50/50">
+      <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-amber-950">Runtime limitation</p>
+          <p className="text-xs text-amber-900/90 mt-1">
+            {dynamicRuntimeLabel(data)}. No runtime evidence was used to increase the final score.
+          </p>
+        </div>
+        <Link
+          to="/technical"
+          className="inline-flex items-center gap-1 text-xs font-semibold text-blue-800 hover:underline"
+        >
+          <Activity className="h-3.5 w-3.5" />
+          Inspect live analysis →
+        </Link>
+      </div>
+    </SocCard>
+  );
+}
+
+function ThreatIntelTeaser({ data }: { data: FraudCardData }) {
+  const corr = data.frs_breakdown?.correlation ?? 0;
+  const family = data.family_classification;
+  if (corr < 20 && (!family || family === 'Unknown')) return null;
 
   return (
     <SocCard>
-      <SectionHeader
-        icon={<Target className="h-4 w-4" />}
-        title="Attack Techniques (MITRE)"
-        subtitle={
-          <>
-            <HelpTerm term="MITRE">Industry attack technique mapping</HelpTerm> — {techniques.length} linked to this
-            case.
-          </>
-        }
-      />
-      <div className="p-5">
-        {techniques.length === 0 ? (
-          <div className="text-center py-8 px-4 rounded-xl border border-dashed border-slate-200 bg-slate-50">
-            <p className="text-sm text-slate-700">No attack techniques were mapped for this application.</p>
-            <p className="text-xs text-slate-500 mt-2">Techniques appear when behaviour matches MITRE ATT&CK Mobile.</p>
+      <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-start gap-2">
+          <Shield className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-slate-900">Threat intelligence</p>
+            <p className="text-xs text-slate-600 mt-0.5">
+              {family && family !== 'Unknown'
+                ? `Campaign correlation: ${family}.`
+                : 'External threat correlation contributed to this case.'}
+              {corr >= 20 ? ` Correlation axis score ${corr.toFixed(0)}/100.` : ''}
+            </p>
           </div>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {techniques.map((tech, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
-              >
-                <Target className="h-4 w-4 text-blue-600 flex-shrink-0" />
-                <span className="font-mono font-bold text-slate-800">{tech}</span>
-              </div>
-            ))}
-          </div>
-        )}
+        </div>
+        <Link to="/threat-intel" className="text-xs font-semibold text-blue-700 hover:underline">
+          View threat intelligence →
+        </Link>
       </div>
     </SocCard>
   );
@@ -72,27 +95,18 @@ export default function FraudCard({ data }: { data: FraudCardData | null }) {
   return (
     <div className="space-y-6 sm:space-y-8">
       <FraudRiskHero data={data} />
+      <InvestigationConclusionCard data={data} bundle={investigationBundle} />
+      <RuntimeLimitationBanner data={data} />
       <VisualImpersonationExecutiveCard data={data} />
-      <ExecutiveIntelligenceOverview data={data} bundle={investigationBundle} />
-      <EvidencePipelineTimeline data={data} />
+      <ThreatIntelTeaser data={data} />
       <StructuredCaseSummary data={data} />
       {investigationBundle && stripCounts && (
         <CaseSummaryStrip riskScore={data.final_risk_score} counts={stripCounts} />
       )}
-      <ScreenshotGallery data={data} bundle={investigationBundle} />
-      {investigationBundle && <IntelligencePhaseCards data={data} bundle={investigationBundle} />}
       <CoreFindingsList data={data} bundle={investigationBundle} />
       <div className="analyst-split-main">
-        <div className="analyst-split-primary">
-          <MitrePanel data={data} />
-          {data.threat_scenario_table && data.threat_scenario_table.length > 0 && (
-            <ThreatScenarioTable rows={data.threat_scenario_table} />
-          )}
-          {investigationBundle && <InvestigationTimeline bundle={investigationBundle} />}
-        </div>
-        <div className="analyst-split-side">
+        <div className="analyst-split-side ml-auto max-w-md w-full">
           <ApplicationInfoCard data={data} />
-          <ScoreEntryCard data={data} />
         </div>
       </div>
     </div>

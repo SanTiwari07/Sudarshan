@@ -3,6 +3,7 @@ import type { FraudCardData } from '../App';
 import { API_BASE, authHeaders } from '../config';
 import { useInvestigationModel } from '../hooks/useInvestigationModel';
 import type { InvestigationBundle } from '../types/investigation';
+import { fetchScreenshotManifest, type ScreenshotManifestEntry } from '../lib/screenshotManifest';
 
 interface AnalysisContextType {
   analysisResult: FraudCardData | null;
@@ -10,6 +11,7 @@ interface AnalysisContextType {
   loading: boolean;
   error: string | null;
   runtimeEvidenceRaw: Record<string, unknown>[];
+  screenshotManifestEntries: ScreenshotManifestEntry[];
   investigationBundle: InvestigationBundle | null;
   setAnalysisResult: (data: FraudCardData | null) => void;
   loadCaseByHash: (sha256: string) => Promise<FraudCardData | null>;
@@ -108,13 +110,24 @@ async function fetchRuntimeEvidence(sha256: string): Promise<Record<string, unkn
 export function AnalysisProvider({ children }: { children: React.ReactNode }) {
   const [analysisResult, setAnalysisState] = useState<FraudCardData | null>(null);
   const [runtimeEvidenceRaw, setRuntimeEvidenceRaw] = useState<Record<string, unknown>[]>([]);
+  const [screenshotManifestEntries, setScreenshotManifestEntries] = useState<ScreenshotManifestEntry[]>([]);
   const [activeSha256, setActiveSha256] = useState<string | null>(() => {
     return sessionStorage.getItem('sudarshan_active_sha256');
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const investigationBundle = useInvestigationModel(analysisResult, runtimeEvidenceRaw);
+  const investigationBundle = useInvestigationModel(
+    analysisResult,
+    runtimeEvidenceRaw,
+    screenshotManifestEntries,
+  );
+
+  const refreshScreenshotManifest = useCallback(async (sha256: string) => {
+    const manifest = await fetchScreenshotManifest(sha256, 'timeline');
+    const list = manifest?.entries?.length ? manifest.entries : manifest?.screenshots || [];
+    setScreenshotManifestEntries(list);
+  }, []);
 
   const setAnalysisResult = useCallback((data: FraudCardData | null) => {
     setAnalysisState(data);
@@ -122,24 +135,28 @@ export function AnalysisProvider({ children }: { children: React.ReactNode }) {
       setActiveSha256(data.sha256);
       sessionStorage.setItem('sudarshan_active_sha256', data.sha256);
       fetchRuntimeEvidence(data.sha256).then(setRuntimeEvidenceRaw);
+      void refreshScreenshotManifest(data.sha256);
     } else {
       setActiveSha256(null);
       setRuntimeEvidenceRaw([]);
+      setScreenshotManifestEntries([]);
       sessionStorage.removeItem('sudarshan_active_sha256');
     }
-  }, []);
+  }, [refreshScreenshotManifest]);
 
   const clearAnalysis = useCallback(() => {
     setAnalysisState(null);
     setActiveSha256(null);
     setRuntimeEvidenceRaw([]);
+    setScreenshotManifestEntries([]);
     sessionStorage.removeItem('sudarshan_active_sha256');
   }, []);
 
   const loadInvestigationBundle = useCallback(async (sha256: string) => {
     const ev = await fetchRuntimeEvidence(sha256);
     setRuntimeEvidenceRaw(ev);
-  }, []);
+    await refreshScreenshotManifest(sha256);
+  }, [refreshScreenshotManifest]);
 
   const loadCaseByHash = useCallback(async (sha256: string): Promise<FraudCardData | null> => {
     if (analysisResult?.sha256 === sha256 && runtimeEvidenceRaw.length > 0) {
@@ -161,6 +178,7 @@ export function AnalysisProvider({ children }: { children: React.ReactNode }) {
       const fullData = mapCaseDetailToFraudCard(caseDetail);
       const ev = await fetchRuntimeEvidence(sha256);
       setRuntimeEvidenceRaw(ev);
+      await refreshScreenshotManifest(sha256);
       setAnalysisResult(fullData);
       return fullData;
     } catch (err: unknown) {
@@ -170,7 +188,7 @@ export function AnalysisProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [analysisResult, runtimeEvidenceRaw.length, setAnalysisResult]);
+  }, [refreshScreenshotManifest, setAnalysisResult]);
 
   useEffect(() => {
     if (activeSha256 && !analysisResult) {
@@ -185,6 +203,7 @@ export function AnalysisProvider({ children }: { children: React.ReactNode }) {
       loading,
       error,
       runtimeEvidenceRaw,
+      screenshotManifestEntries,
       investigationBundle,
       setAnalysisResult,
       loadCaseByHash,
@@ -197,6 +216,7 @@ export function AnalysisProvider({ children }: { children: React.ReactNode }) {
       loading,
       error,
       runtimeEvidenceRaw,
+      screenshotManifestEntries,
       investigationBundle,
       setAnalysisResult,
       loadCaseByHash,

@@ -63,7 +63,11 @@
   }
 
   .technical-view {
-    @apply w-full min-w-0 space-y-6;
+    @apply w-full min-w-0 max-w-[1340px] mx-auto space-y-6;
+  }
+
+  .investigation-evidence-workspace {
+    @apply w-full px-0 sm:px-1;
   }
 
   .evidence-section {

@@ -1,150 +1,213 @@
-import type { InvestigationBundle } from '../../types/investigation';
+import { useMemo, type ReactNode } from 'react';
+import type { FraudCardData } from '../../App';
+import type { InvestigationBundle, TimelineEvent } from '../../types/investigation';
 import { formatTimelineOffset } from '../../lib/timelineMerge';
 import { humanizeTimelineLabel, timelineTone } from '../../lib/analystCopy';
 import { useInvestigationUI } from '../../context/InvestigationUIContext';
+import { useAnalysis } from '../../context/AnalysisContext';
 import SocCard from '../ui/Card';
 import SectionHeader from '../ui/SectionHeader';
 import HelpTerm from './HelpTerm';
-import { CheckCircle2, AlertTriangle, CircleDot, Clock } from 'lucide-react';
+import TimelineScreenshotThumb from './TimelineScreenshotThumb';
+import { Clock } from 'lucide-react';
 
-const TONE_STYLES = {
-  completed: {
-    border: 'border-emerald-400',
-    bg: 'bg-emerald-50',
-    icon: <CheckCircle2 className="h-5 w-5 text-emerald-600" />,
-    text: 'text-slate-800',
-    chip: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-  },
-  active: {
-    border: 'border-blue-500',
-    bg: 'bg-blue-50',
-    icon: <CircleDot className="h-5 w-5 text-blue-600" />,
-    text: 'text-slate-900',
-    chip: 'bg-blue-50 text-blue-800 border-blue-200',
-  },
-  warning: {
-    border: 'border-amber-400',
-    bg: 'bg-amber-50',
-    icon: <AlertTriangle className="h-5 w-5 text-amber-600" />,
-    text: 'text-amber-950',
-    chip: 'bg-amber-50 text-amber-900 border-amber-200',
-  },
-};
+type TimelineStatus = 'COMPLETE' | 'INCONCLUSIVE' | 'FAILED' | 'PENDING' | 'ACTIVE';
 
-const STORY_OPENING: { label: string; tone: 'completed' | 'active' | 'warning' }[] = [
-  { label: 'APK received for fraud investigation', tone: 'completed' },
-  { label: 'Code inspection started (static analysis)', tone: 'completed' },
-  { label: 'Permissions and manifest extracted', tone: 'completed' },
+const STORY_OPENING: { label: string; support?: string; offsetSec: number }[] = [
+  { label: 'APK received', support: 'Fraud investigation initialized', offsetSec: 0 },
+  { label: 'Code inspection started', support: 'Static analysis pipeline engaged', offsetSec: 2 },
+  { label: 'Permissions and manifest extracted', offsetSec: 5 },
 ];
 
+function timelineGroupLabel(ev: TimelineEvent): string {
+  if (ev.kind === 'score' || ev.category === 'score') return 'RISK ASSESSMENT';
+  if (ev.category === 'runtime' || ev.source === 'FRIDA') return 'DYNAMIC ANALYSIS';
+  if (ev.category === 'scenario' || ev.category === 'intel') return 'THREAT INTELLIGENCE';
+  if (ev.kind === 'workflow') return 'REPORTING';
+  return 'STATIC ANALYSIS';
+}
+
+function eventStatus(tone: 'completed' | 'active' | 'warning'): TimelineStatus {
+  if (tone === 'warning') return 'INCONCLUSIVE';
+  if (tone === 'active') return 'ACTIVE';
+  return 'COMPLETE';
+}
+
+function statusClass(status: TimelineStatus): string {
+  if (status === 'COMPLETE') return 'text-emerald-700';
+  if (status === 'INCONCLUSIVE') return 'text-amber-700';
+  if (status === 'FAILED') return 'text-red-700';
+  if (status === 'ACTIVE') return 'text-slate-700';
+  return 'text-slate-400';
+}
+
+function TimelineRow({
+  timeLabel,
+  title,
+  support,
+  status,
+  onClick,
+  isLast,
+  visualExtra,
+}: {
+  timeLabel: string;
+  title: string;
+  support?: string;
+  status: TimelineStatus;
+  onClick?: () => void;
+  isLast?: boolean;
+  visualExtra?: ReactNode;
+}) {
+  const content = (
+    <div className="grid grid-cols-[5.25rem_1fr] gap-x-4 gap-y-0.5 py-3 min-h-[4rem]">
+      <div className="relative flex items-start gap-2">
+        <div className="flex flex-col items-center shrink-0 w-3">
+          <span className="mt-1.5 h-2 w-2 rounded-full bg-slate-400 shrink-0" aria-hidden />
+          {!isLast && <div className="w-px flex-1 min-h-[2rem] bg-slate-200 mt-1" aria-hidden />}
+        </div>
+        <span className="font-mono text-[11px] text-slate-500 tabular-nums pt-0.5">{timeLabel}</span>
+      </div>
+      <div className="min-w-0 pb-1">
+        <p className="text-[13px] font-semibold text-slate-900 leading-snug">{title}</p>
+        {support && <p className="text-[12px] text-slate-500 mt-0.5 leading-relaxed">{support}</p>}
+        {visualExtra}
+        <p className={`mt-1 text-[10px] font-bold uppercase tracking-wide ${statusClass(status)}`}>
+          {status}
+        </p>
+      </div>
+    </div>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="w-full text-left rounded-md hover:bg-slate-50/80 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return <div>{content}</div>;
+}
+
+function GroupBlock({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="mb-4 last:mb-0">
+      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400 mb-1 pl-[5.25rem]">
+        {label}
+      </p>
+      {children}
+    </div>
+  );
+}
+
 export default function InvestigationTimeline({
+  data,
   bundle,
   embedded = false,
 }: {
+  data: FraudCardData;
   bundle: InvestigationBundle;
   embedded?: boolean;
 }) {
   const { openEvidence, setTimelineFocus } = useInvestigationUI();
+  const { screenshotManifestEntries } = useAnalysis();
   const events = bundle.timelineEvents;
   const base = events[0]?.timestampMs ?? 0;
-  const closingLabel =
-    events.length > 0 && events[events.length - 1].category === 'score'
-      ? 'Fraud intelligence report produced'
-      : null;
+
+  const groupedEvents = useMemo(() => {
+    const map = new Map<string, TimelineEvent[]>();
+    events.forEach((ev) => {
+      const g = timelineGroupLabel(ev);
+      const list = map.get(g) || [];
+      list.push(ev);
+      map.set(g, list);
+    });
+    return map;
+  }, [events]);
 
   const timelineBody = (
-    <div className="px-4 sm:px-5 py-4 max-h-[28rem] overflow-y-auto scrollbar-hidden">
-        <div className="relative">
-          {STORY_OPENING.map((step, i) => {
-            const style = TONE_STYLES[step.tone];
-            const isLastStory = i === STORY_OPENING.length - 1 && events.length === 0;
-            return (
-              <div key={step.label} className="flex gap-4">
-                <div className="flex flex-col items-center w-10 shrink-0">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-full border-2 ${style.border} ${style.bg}`}>
-                    {style.icon}
-                  </div>
-                  {!isLastStory && <div className="w-px flex-1 min-h-[1.5rem] bg-slate-200 my-1" />}
-                </div>
-                <div className="flex-1 text-left pb-6 min-w-0">
-                  <div className="text-sm font-semibold text-slate-800 leading-snug">{step.label}</div>
-                  <span className={`inline-flex mt-1 text-[10px] font-medium px-2 py-0.5 rounded-full border ${style.chip}`}>
-                    Complete
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-          {events.map((ev, i) => {
-            const tone = timelineTone(ev, i, events.length);
-            const style = TONE_STYLES[tone];
-            const label = humanizeTimelineLabel(ev.label);
-            const isLast = i === events.length - 1 && !closingLabel;
+    <div className="max-w-[1050px] py-4">
+      <GroupBlock label="INGESTION">
+        {STORY_OPENING.map((step, i) => (
+          <TimelineRow
+            key={step.label}
+            timeLabel={formatTimelineOffset(step.offsetSec * 1000, 0)}
+            title={step.label}
+            support={step.support}
+            status="COMPLETE"
+            isLast={i === STORY_OPENING.length - 1 && events.length === 0}
+          />
+        ))}
+      </GroupBlock>
 
-            return (
-              <div key={ev.id} className="flex gap-4">
-                <div className="flex flex-col items-center w-10 shrink-0">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-full border-2 ${style.border} ${style.bg}`}>
-                    {style.icon}
-                  </div>
-                  {!isLast && <div className="w-px flex-1 min-h-[1.5rem] bg-slate-200 my-1" />}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTimelineFocus(ev.timestampMs);
-                    if (ev.evidenceIds[0]) openEvidence(ev.evidenceIds[0]);
-                  }}
-                  className={`flex-1 text-left pb-6 min-w-0 rounded-lg -ml-1 pl-1 pr-2 transition-colors duration-200 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isLast ? 'pb-0' : ''}`}
-                >
-                  <div className="font-mono text-[11px] text-slate-500 mb-1 tabular-nums">
-                    {formatTimelineOffset(ev.timestampMs, base)}
-                  </div>
-                  <div className={`text-sm font-semibold leading-snug ${style.text}`}>{label}</div>
-                  {ev.contributionLabel && (
-                    <span className="text-[11px] font-mono text-amber-700 mt-0.5 block">{ev.contributionLabel}</span>
-                  )}
-                  {ev.evidenceIds.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {ev.evidenceIds.slice(0, 3).map((id) => (
-                        <span key={id} className="font-mono text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded-md border border-blue-100">
-                          {id}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </button>
-              </div>
-            );
-          })}
-          {closingLabel && (
-            <div className="flex gap-4">
-              <div className="flex flex-col items-center w-10 shrink-0">
-                <div className={`flex h-10 w-10 items-center justify-center rounded-full border-2 ${TONE_STYLES.active.border} ${TONE_STYLES.active.bg}`}>
-                  {TONE_STYLES.active.icon}
-                </div>
-              </div>
-              <div className="flex-1 text-left min-w-0">
-                <div className="text-sm font-semibold text-slate-900 leading-snug">{closingLabel}</div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      {['STATIC ANALYSIS', 'DYNAMIC ANALYSIS', 'THREAT INTELLIGENCE', 'RISK ASSESSMENT', 'REPORTING'].map(
+        (groupName) => {
+          const groupEvents = groupedEvents.get(groupName);
+          if (!groupEvents?.length) return null;
+          return (
+            <GroupBlock key={groupName} label={groupName}>
+              {groupEvents.map((ev, i) => {
+                const tone = timelineTone(ev, i, groupEvents.length);
+                const status = eventStatus(tone);
+                const label = humanizeTimelineLabel(ev.label);
+                const support = ev.contributionLabel || undefined;
+                const isLast = i === groupEvents.length - 1;
+                const shotEntry = ev.screenshotId
+                  ? screenshotManifestEntries.find((e) => e.screenshot_id === ev.screenshotId)
+                  : undefined;
+                const visualExtra =
+                  shotEntry && data.sha256 ? (
+                    <TimelineScreenshotThumb sha256={data.sha256} entry={shotEntry} />
+                  ) : undefined;
+                return (
+                  <TimelineRow
+                    key={ev.id}
+                    timeLabel={formatTimelineOffset(ev.timestampMs, base)}
+                    title={label}
+                    support={support}
+                    status={status}
+                    isLast={isLast}
+                    visualExtra={visualExtra}
+                    onClick={
+                      ev.evidenceIds[0]
+                        ? () => {
+                            setTimelineFocus(ev.timestampMs);
+                            openEvidence(ev.evidenceIds[0]);
+                          }
+                        : undefined
+                    }
+                  />
+                );
+              })}
+            </GroupBlock>
+          );
+        },
+      )}
+    </div>
   );
 
   if (embedded) {
     return (
-      <div className="relative static">
-        <div className="px-4 sm:px-5 py-3 border-t border-slate-100">
-          <h3 className="text-sm font-semibold text-slate-900">Investigation timeline</h3>
-          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-            Chronological sequence —{' '}
-            <HelpTerm term="Verified Evidence">verified evidence only</HelpTerm>.
-          </p>
-        </div>
+      <section className="pt-4 border-t border-slate-200" aria-labelledby="investigation-timeline-title">
+        <h3 id="investigation-timeline-title" className="text-[15px] font-semibold text-slate-900">
+          Investigation timeline
+        </h3>
+        <p className="text-[12px] text-slate-500 mt-0.5">
+          Chronological sequence ·{' '}
+          <HelpTerm term="Verified Evidence">verified evidence only</HelpTerm>
+        </p>
         {timelineBody}
-      </div>
+      </section>
     );
   }
 
@@ -160,7 +223,7 @@ export default function InvestigationTimeline({
           </>
         }
       />
-      {timelineBody}
+      <div className="px-4 sm:px-5">{timelineBody}</div>
     </SocCard>
   );
 }

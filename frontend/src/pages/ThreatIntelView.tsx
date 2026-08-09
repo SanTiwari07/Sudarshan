@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { AlertTriangle, RefreshCw, FileText } from 'lucide-react';
 import type { FraudCardData } from '../App';
-import { API_BASE, authHeaders } from '../config';
 import { useAnalysis } from '../context/AnalysisContext';
+import { useIntelPayload } from '../hooks/useIntelPayload';
 import SocCard from '../components/ui/Card';
 import IntelPipelineTimeline from '../components/investigation/IntelPipelineTimeline';
 import AIIntelligenceOverview from '../components/threatIntel/AIIntelligenceOverview';
@@ -14,9 +14,9 @@ import ThreatEvidenceExplorer from '../components/threatIntel/ThreatEvidenceExpl
 import ThreatIocRegistry from '../components/threatIntel/ThreatIocRegistry';
 import ThreatIntelExportSuite from '../components/threatIntel/ThreatIntelExportSuite';
 import ThreatIntelPageShell from '../components/threatIntel/ThreatIntelPageShell';
+import CompactCaseContext from '../components/investigation/CompactCaseContext';
 import { INTEL } from '../components/threatIntel/intelTokens';
 import {
-  type IntelApiPayload,
   buildThreatDna,
   buildAttackChain,
   buildConfidenceSources,
@@ -37,35 +37,16 @@ function ThreatIntelSkeleton() {
 
 export default function ThreatIntelView({ data }: { data: FraudCardData | null }) {
   const { investigationBundle } = useAnalysis();
-  const [intel, setIntel] = useState<IntelApiPayload | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchIntelligence = async () => {
-    if (!data) return;
-    try {
-      setLoading(true);
-      setError(null);
-      const res = await fetch(`${API_BASE}/intelligence/${data.sha256}`, {
-        headers: authHeaders(),
-      });
-      if (!res.ok) {
-        throw new Error(
-          res.status === 404 ? 'No intelligence analysis found for this hash.' : `Fetch failed (${res.status})`,
-        );
-      }
-      const json: IntelApiPayload = await res.json();
-      setIntel(json);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch threat intelligence');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchIntelligence();
-  }, [data?.sha256]);
+  const {
+    api: intel,
+    loading,
+    error,
+    reload: fetchIntelligence,
+  } = useIntelPayload({
+    enabled: Boolean(data),
+    data,
+    fetchPolicy: 'always',
+  });
 
   const derived = useMemo(() => {
     if (!data || !intel) return null;
@@ -85,7 +66,8 @@ export default function ThreatIntelView({ data }: { data: FraudCardData | null }
 
   return (
     <ThreatIntelPageShell>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 pb-4">
+      {data && <CompactCaseContext data={data} page="threat" />}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 pb-4 mt-4">
         <div>
           <h2 className="text-lg font-semibold text-slate-800">Threat intelligence</h2>
           <p className={INTEL.subtitle}>Banking threat comparison for the active case</p>

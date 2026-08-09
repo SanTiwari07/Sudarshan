@@ -64,9 +64,12 @@ export default function VisualImpersonationExecutiveCard({ data }: { data: Fraud
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Visual impersonation</p>
-            <p className="text-sm font-semibold text-slate-800 mt-0.5">No impersonation detected</p>
+            <p className="text-sm font-semibold text-slate-800 mt-0.5">No banking-app impersonation detected</p>
             <p className="text-xs text-slate-600 mt-1">
-              VIDE analyzed · {VIDE_BASELINE_SHORT_NAMES.length} baselines checked
+              VIDE compared the application interface against available laboratory banking UI baselines.
+            </p>
+            <p className="text-xs text-slate-600 mt-1">
+              {VIDE_BASELINE_SHORT_NAMES.length} baselines checked
               {confidence != null ? (
                 <>
                   {' '}
@@ -74,6 +77,7 @@ export default function VisualImpersonationExecutiveCard({ data }: { data: Fraud
                 </>
               ) : null}
             </p>
+            <p className="text-xs text-slate-500 mt-1">No sufficiently similar interface was identified.</p>
             {evidence.length > 0 && (
               <p className="text-[11px] text-slate-500 mt-1">Evidence: {evidence.join(' · ')}</p>
             )}
@@ -81,7 +85,7 @@ export default function VisualImpersonationExecutiveCard({ data }: { data: Fraud
               to="/technical"
               className="inline-flex items-center gap-1 text-xs text-blue-700 font-semibold hover:underline mt-2"
             >
-              View details
+              View visual evidence
               <span aria-hidden>→</span>
             </Link>
           </div>
@@ -91,7 +95,7 @@ export default function VisualImpersonationExecutiveCard({ data }: { data: Fraud
   }
 
   const institution =
-    compare?.institution_display || vide!.visual_impersonation_institution || 'Unknown institution';
+    compare?.institution_display || vide!.visual_impersonation_institution || 'Laboratory banking-style baseline';
   const ruleId = compare?.rule_id || 'VIDE-F001';
 
   const caps: string[] = [];
@@ -121,7 +125,7 @@ export default function VisualImpersonationExecutiveCard({ data }: { data: Fraud
           <span className="font-mono font-bold text-red-700 bg-red-50 border border-red-200 px-2 py-1 rounded">
             {ruleId}
           </span>
-          <span className="text-slate-700 font-medium">Banking UI impersonation detected</span>
+          <span className="text-slate-700 font-medium">Matched laboratory baseline</span>
         </div>
 
         {vide!.critical_visual_cluster && (

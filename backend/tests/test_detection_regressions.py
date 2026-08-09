@@ -211,6 +211,20 @@ def test_conclusive_dynamic_run_is_included():
     assert "dynamic" not in b["axes_excluded"]
 
 
+def test_anti_analysis_events_make_run_conclusive():
+    """Sandbox evasion hooks are observable sample behaviour, not harness noise."""
+    evasive = dict(_EMPTY_RUN)
+    evasive.update(
+        anti_analysis_events=[
+            {"data": {"hook": "frida_detected"}},
+            {"data": {"hook": "root_check"}},
+            {"data": {"hook": "debugger_check"}},
+        ],
+    )
+    res = calculate_risk_score(flags=StaticAnalysisFlags(**_TROJAN), dynamic_result=evasive)
+    assert res["frs_breakdown"]["dynamic_conclusive"] is True
+
+
 def test_conclusive_benign_dynamic_run_may_lower_the_score():
     """
     This is NOT 'dynamic can only ever raise the score'. A well-covered run that

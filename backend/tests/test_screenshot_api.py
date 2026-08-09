@@ -70,10 +70,12 @@ async def test_screenshot_endpoint_serves_file(tmp_path, monkeypatch):
         },
     }
 
-    async def _load(_sha):
-        return fake_report if _sha == sha else None
+    async def _auth_case(_sha, _user):
+        if _sha != sha:
+            raise HTTPException(status_code=404, detail="Case not found.")
+        return fake_report
 
-    monkeypatch.setattr("app.routes.screenshots.load_report", _load)
+    monkeypatch.setattr("app.routes.screenshots.get_authorized_case", _auth_case)
 
     await db.init_db()
     if not await db.username_exists("shot_tester"):

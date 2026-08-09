@@ -1,9 +1,12 @@
 import type { FraudCardData } from '../../App';
 import { getRiskStyle } from '../../theme/colors';
 import { riskBandPlainEnglish } from '../../lib/analystCopy';
-import { computeWeightedContribution, getAxesUsed } from '../../lib/scoreLedger';
 import HelpTerm from './HelpTerm';
 import { useInvestigationUI } from '../../context/InvestigationUIContext';
+import RiskInfluenceCard from './RiskInfluenceCard';
+import { useAnalysis } from '../../context/AnalysisContext';
+import { executiveVisualEntries } from '../../lib/visualEvidence';
+import VisualEvidenceCard from './VisualEvidenceCard';
 
 function ScoreRing({ score, pct, strokeClass }: { score: number; pct: number; strokeClass: string }) {
   const r = 54;
@@ -35,44 +38,13 @@ function ScoreRing({ score, pct, strokeClass }: { score: number; pct: number; st
   );
 }
 
-function ContributionBar({ label, value, weighted }: { label: string; value: number; weighted: number }) {
-  const pct = Math.min(100, Math.max(0, value));
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between gap-2 text-xs">
-        <span className="font-medium text-slate-700">{label}</span>
-        <span className="font-mono text-slate-500 tabular-nums">
-          {value.toFixed(0)}
-          {weighted > 0 ? (
-            <span className="text-slate-400 ml-1">(+{weighted.toFixed(1)} weighted)</span>
-          ) : null}
-        </span>
-      </div>
-      <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-        <div
-          className="h-full rounded-full bg-blue-600/80 transition-all duration-700 ease-out"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
 export default function FraudRiskHero({ data }: { data: FraudCardData }) {
   const riskStyle = getRiskStyle(data.risk_band);
   const { openLedger } = useInvestigationUI();
+  const { screenshotManifestEntries } = useAnalysis();
+  const execShots = executiveVisualEntries(screenshotManifestEntries);
   const score = data.final_risk_score;
   const pct = Math.min(100, Math.max(0, score));
-  const frs = data.frs_breakdown;
-  const axesUsed = getAxesUsed(data);
-
-  const staticScore = frs?.stei ?? 0;
-  const runtimeScore = frs?.dynamic ?? 0;
-  const threatScore = frs?.correlation ?? 0;
-
-  const staticWeighted = computeWeightedContribution('stei', staticScore, axesUsed);
-  const runtimeWeighted = computeWeightedContribution('dynamic', runtimeScore, axesUsed);
-  const threatWeighted = computeWeightedContribution('correlation', threatScore, axesUsed);
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden upload-fade-in">
@@ -95,21 +67,19 @@ export default function FraudRiskHero({ data }: { data: FraudCardData }) {
             >
               View score breakdown
             </button>
+            {execShots.length > 0 && (
+              <div className="mt-5 space-y-2 max-w-md">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Visual evidence</p>
+                {execShots.map((entry) => (
+                  <VisualEvidenceCard key={entry.screenshot_id} sha256={data.sha256} entry={entry} />
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="w-full lg:max-w-md space-y-3 border-t lg:border-t-0 lg:border-l border-slate-100 pt-5 lg:pt-0 lg:pl-8">
-          <ContributionBar
-            label="Static Evidence Contribution"
-            value={staticScore}
-            weighted={staticWeighted}
-          />
-          <ContributionBar
-            label="Runtime Evidence Contribution"
-            value={frs?.dynamic_ran && !frs.dynamic_conclusive ? Math.min(runtimeScore, 40) : runtimeScore}
-            weighted={frs?.dynamic_ran && frs.dynamic_conclusive ? runtimeWeighted : 0}
-          />
-          <ContributionBar label="Threat Intelligence Contribution" value={threatScore} weighted={threatWeighted} />
+        <div className="w-full lg:max-w-md border-t lg:border-t-0 lg:border-l border-slate-100 pt-5 lg:pt-0 lg:pl-8">
+          <RiskInfluenceCard data={data} embedded />
         </div>
       </div>
     </div>

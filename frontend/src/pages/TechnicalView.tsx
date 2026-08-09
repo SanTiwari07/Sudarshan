@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   Terminal, Cpu, Search, Lock, Code, Package,
   ChevronDown, ChevronUp, Shield, Globe, AlertTriangle, Database, Tag, Key
@@ -6,14 +6,18 @@ import {
 import type { FraudCardData } from '../App';
 import VisualImpersonationPanel from '../components/investigation/VisualImpersonationPanel';
 import { exportJSON, exportCSV } from '../utils/derive';
-import { API_BASE, authHeaders } from '../config';
 import SocCard from '../components/ui/Card';
 import SectionHeader from '../components/ui/SectionHeader';
 import CopyButton from '../components/ui/CopyButton';
 import WorkflowDiagram from '../components/WorkflowDiagram';
 import EvidenceRegistrySection from '../components/investigation/EvidenceRegistrySection';
 import ScreenshotGallery from '../components/investigation/ScreenshotGallery';
-import IntelligentOverview from '../components/investigation/IntelligentOverview';
+import DynamicAnalysisSummary from '../components/investigation/DynamicAnalysisSummary';
+import HelpTerm from '../components/investigation/HelpTerm';
+import {
+  resolveRuntimeDynamicStatus,
+  runtimeStatusHeadline,
+} from '../lib/investigationRuntime';
 import { useAnalysis } from '../context/AnalysisContext';
 
 function EvidenceSection({
@@ -325,191 +329,76 @@ function LogcatInspectorPanel({ logcat }: { logcat?: string }) {
 
 // ─── Dynamic Sandbox Panel ────────────────────────────────────────────────────────
 
-function AuthedScreenshot({
-  sha256,
-  relPath,
-  onEnlarge,
-}: {
-  sha256: string;
-  relPath: string;
-  onEnlarge?: (src: string) => void;
-}) {
-  const filename = relPath.split('/').pop() || relPath;
-  const [src, setSrc] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    let objectUrl: string | null = null;
-    const url = `${API_BASE}/screenshots/${sha256}/${encodeURIComponent(filename)}`;
-
-    setLoading(true);
-    fetch(url, { headers: authHeaders() })
-      .then((res) => {
-        if (!res.ok) throw new Error(String(res.status));
-        return res.blob();
-      })
-      .then((blob) => {
-        if (cancelled) return;
-        objectUrl = URL.createObjectURL(blob);
-        setSrc(objectUrl);
-      })
-      .catch(() => {
-        if (!cancelled) setSrc(null);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [sha256, filename]);
-
-  if (loading) {
-    return (
-      <div className="aspect-[9/16] w-full bg-slate-100 animate-pulse flex items-center justify-center text-[10px] text-slate-400">
-        Loading…
-      </div>
-    );
-  }
-
-  if (!src) {
-    return (
-      <div className="aspect-[9/16] w-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-400">
-        Unavailable
-      </div>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={() => onEnlarge?.(src)}
-      className="block w-full aspect-[9/16] overflow-hidden bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-    >
-      <img
-        src={src}
-        alt={filename}
-        loading="lazy"
-        className="h-full w-full object-cover object-top transition-transform duration-200 hover:scale-[1.02]"
-      />
-    </button>
-  );
-}
-
 function DynamicAnalysisPanel({ data }: { data: FraudCardData }) {
   const dyn =
     data.dynamic_result && typeof data.dynamic_result === 'object' && !Array.isArray(data.dynamic_result)
       ? data.dynamic_result
       : {};
-  const statusRaw =
-    dyn.dynamic_status || (data.frs_breakdown?.dynamic_available ? 'EVENTS_CAPTURED' : 'NOT_RUN');
-  const status = String(statusRaw || 'NOT_RUN').toUpperCase();
-  const isOk = status === 'EVENTS_CAPTURED' || status === 'NO_RUNTIME_ACTIVITY';
-  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const runtimeStatus = resolveRuntimeDynamicStatus(data);
+  const headline = runtimeStatusHeadline(runtimeStatus);
+  const isOk = runtimeStatus === 'COMPLETED';
 
   return (
     <SocCard>
       <SectionHeader
         icon={<Terminal className="h-4 w-4" />}
         title="Dynamic Sandbox Execution"
-        subtitle="Frida Runtime Instrumentation & Telemetry"
+        subtitle="Frida runtime instrumentation and telemetry"
       />
-      
-      {/* Pipeline Diagnostic Header */}
+
       <div className="p-4 border-b border-slate-100 bg-slate-50/50">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-slate-500">Pipeline Status:</span>
-            <span className={`px-2 py-0.5 text-xs font-bold rounded-md font-mono ${
-              isOk ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300'
-            }`}>
-              {status}
+            <span className="text-xs font-medium text-slate-500">Runtime status:</span>
+            <span
+              className={`px-2 py-0.5 text-xs font-bold rounded-md font-mono ${
+                isOk
+                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                  : 'bg-amber-100 text-amber-800 border border-amber-300'
+              }`}
+            >
+              {headline.toUpperCase()}
             </span>
           </div>
           <div className="flex items-center gap-2 text-xs font-mono text-slate-600">
-            <span>Engine: <strong>{dyn.engine || 'frida'}</strong></span>
+            <span>
+              Engine: <strong>{dyn.engine || 'frida'}</strong>
+            </span>
             <span>•</span>
-            <span>Canary: <strong>{dyn.canary_received ? '✓ LOADED' : '✗ UNRECEIVED'}</strong></span>
+            <span>
+              Canary: <strong>{dyn.canary_received ? '✓ LOADED' : '✗ UNRECEIVED'}</strong>
+            </span>
           </div>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+          {data.frs_breakdown?.dynamic_ran && (
+            <div className="p-2 bg-white rounded border border-slate-200">
+              <span className="text-slate-400 block text-[10px] uppercase font-semibold">
+                <HelpTerm term="BFCI">Observed BFCI</HelpTerm>
+              </span>
+              <span className="font-mono font-bold text-slate-800 text-sm">
+                {(dyn.bfci ?? data.frs_breakdown?.dynamic ?? 0).toFixed(1)} / 100
+              </span>
+            </div>
+          )}
           <div className="p-2 bg-white rounded border border-slate-200">
-            <span className="text-slate-400 block text-[10px] uppercase font-semibold">BFCI Score</span>
-            <span className="font-mono font-bold text-slate-800 text-sm">{(dyn.bfci || data.frs_breakdown?.dynamic || 0).toFixed(1)} / 100</span>
+            <span className="text-slate-400 block text-[10px] uppercase font-semibold">Raw events</span>
+            <span className="font-mono font-bold text-slate-800 text-sm">
+              {dyn.evidence_record_count || (dyn.api_calls || []).length}
+            </span>
           </div>
           <div className="p-2 bg-white rounded border border-slate-200">
-            <span className="text-slate-400 block text-[10px] uppercase font-semibold">Hook Coverage</span>
-            <span className="font-mono font-bold text-emerald-600 text-sm">100% (11 Cats)</span>
-          </div>
-          <div className="p-2 bg-white rounded border border-slate-200">
-            <span className="text-slate-400 block text-[10px] uppercase font-semibold">Raw Events</span>
-            <span className="font-mono font-bold text-slate-800 text-sm">{dyn.evidence_record_count || (dyn.api_calls || []).length}</span>
-          </div>
-          <div className="p-2 bg-white rounded border border-slate-200">
-            <span className="text-slate-400 block text-[10px] uppercase font-semibold">Hook Errors</span>
+            <span className="text-slate-400 block text-[10px] uppercase font-semibold">Hook errors</span>
             <span className="font-mono font-bold text-slate-800 text-sm">{(dyn.hook_errors || []).length}</span>
           </div>
         </div>
       </div>
 
-      {/* Real Screenshots Gallery */}
-      <div className="p-4 border-b border-slate-100">
-        <h3 className="text-xs font-semibold text-slate-600 mb-3">Runtime screen captures</h3>
-        {(dyn.screenshots || []).length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-            {dyn.screenshots.map((s: string, i: number) => {
-              const filename = s.split('/').pop() || s;
-              return (
-                <div
-                  key={i}
-                  className="min-w-0 rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm"
-                >
-                  <AuthedScreenshot sha256={data.sha256} relPath={s} onEnlarge={setLightboxSrc} />
-                  <div className="p-2 text-[10px] font-mono text-slate-600 truncate border-t border-slate-100" title={filename}>
-                    {filename}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="text-xs text-slate-400 p-4 border border-dashed border-slate-200 rounded-lg text-center">
-            No runtime screenshots captured during execution.
-          </div>
-        )}
-      </div>
-
-      {/* Fraud Workflow Reconstruction */}
       <div className="p-4">
         <h3 className="text-xs font-semibold text-slate-600 mb-3">Reconstructed behavioral chain</h3>
         <WorkflowDiagram workflow={data.fraud_workflow} />
       </div>
-      {lightboxSrc && (
-        <div
-          className="fixed inset-0 z-[60] bg-slate-900/90 flex items-center justify-center p-4"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setLightboxSrc(null)}
-        >
-          <button
-            type="button"
-            className="absolute top-4 right-4 text-white/90 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
-            onClick={() => setLightboxSrc(null)}
-          >
-            Close
-          </button>
-          <img
-            src={lightboxSrc}
-            alt="Runtime capture enlarged"
-            className="max-h-[90vh] max-w-full rounded-lg shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          />
-        </div>
-      )}
     </SocCard>
   );
 }
@@ -988,8 +877,6 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
         </div>
       </header>
 
-      <IntelligentOverview data={data} bundle={investigationBundle} />
-
       <EvidenceRegistrySection data={data} bundle={investigationBundle} loading={loading} />
 
       <EvidenceSection title="Overview" description="Classification summary and APK identifiers.">
@@ -1025,6 +912,7 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
       </EvidenceSection>
 
       <EvidenceSection title="Runtime analysis" description="Network capture, sandbox telemetry, and visual evidence.">
+        <DynamicAnalysisSummary data={data} />
         <ScreenshotGallery data={data} bundle={investigationBundle} />
         <div className="analyst-grid-2">
           <NetworkCapturePanel networkLogs={data.dynamic_analysis?.network_logs} />

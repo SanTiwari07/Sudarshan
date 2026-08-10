@@ -12,7 +12,7 @@ export default function RuntimeBehaviourDetail({
   bundle: InvestigationBundle;
 }) {
   const view = buildRuntimeInfluenceView(data, bundle);
-  const frsRows = buildFrsAxisTransparency(data);
+  const frsRows = buildFrsAxisTransparency('dynamic', data);
   const { openEvidence } = useInvestigationUI();
 
   return (
@@ -47,7 +47,7 @@ export default function RuntimeBehaviourDetail({
       {view.telemetry.length > 0 && (
         <DetailSection title="What happened during runtime">
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-            {view.telemetry.map((t) => (
+            {(view.telemetry as any[]).map((t: any) => (
               <div key={t.label} className="rounded-lg border border-slate-200 bg-slate-50/80 p-2.5">
                 <dt className="text-[10px] font-bold uppercase text-slate-500">{t.label}</dt>
                 <dd className="font-mono font-semibold text-slate-900 mt-0.5">{t.value}</dd>
@@ -60,21 +60,21 @@ export default function RuntimeBehaviourDetail({
       {view.eventGroups.length > 0 && (
         <DetailSection title="Runtime evidence">
           <div className="space-y-3">
-            {view.eventGroups.map((g) => (
+            {(view.eventGroups as any[]).map((g: any) => (
               <div key={g.label} className="rounded-lg border border-slate-200 p-3">
                 <div className="flex justify-between text-sm font-semibold text-slate-900">
                   <span>{g.label}</span>
                   <span className="font-mono text-slate-600">{g.count}</span>
                 </div>
                 <ul className="mt-2 space-y-1">
-                  {g.events.slice(0, 5).map((ev) => (
-                    <li key={ev.id}>
+                  {(g.events || []).slice(0, 5).map((ev: any, idx: number) => (
+                    <li key={ev.id || idx}>
                       <button
                         type="button"
-                        onClick={() => openEvidence(ev.id)}
+                        onClick={() => ev.id && openEvidence(ev.id)}
                         className="text-left text-xs text-blue-800 hover:underline w-full"
                       >
-                        <span className="font-semibold">{ev.title}</span>
+                        <span className="font-semibold">{ev.title || ev.label}</span>
                         {ev.severity && <span className="text-slate-500"> - {ev.severity}</span>}
                       </button>
                     </li>
@@ -104,7 +104,7 @@ export default function RuntimeBehaviourDetail({
 
       <DetailSection title="What would make runtime conclusive?">
         <ul className="text-xs text-slate-600 space-y-1 list-disc pl-4">
-          {view.conclusiveHints.map((h) => (
+          {(view.conclusiveHints as any[]).map((h: any) => (
             <li key={h}>{h}</li>
           ))}
         </ul>

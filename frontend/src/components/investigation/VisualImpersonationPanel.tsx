@@ -73,7 +73,7 @@ function AnalyzedBody({ vide, data }: { vide: VideResult; data: FraudCardData })
 
       <div>
         <div className="text-[10px] uppercase tracking-wide text-slate-500 mb-1">Baselines analyzed</div>
-        <p className="text-slate-800 font-medium">{VIDE_BASELINE_SHORT_NAMES.join(' · ')}</p>
+        <p className="text-slate-800 font-medium">{Object.values(VIDE_BASELINE_SHORT_NAMES).join(' · ')}</p>
       </div>
 
       {evidence.length > 0 && (

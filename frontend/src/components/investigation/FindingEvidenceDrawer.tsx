@@ -34,35 +34,35 @@ export default function FindingEvidenceDrawer({
       open
       onClose={closeFindingEvidence}
       title={vm.title}
-      subtitle={`${vm.sections.evidenceCount} observation${vm.sections.evidenceCount === 1 ? '' : 's'}`}
+      subtitle={`${vm.sections?.evidenceCount ?? 0} observation${(vm.sections?.evidenceCount ?? 0) === 1 ? '' : 's'}`}
       headerExtra={
-        vm.sections.evidenceBasis !== 'none' ? (
+        vm.sections?.evidenceBasis && vm.sections.evidenceBasis !== 'none' ? (
           <span className="inline-block mt-2 text-[10px] font-bold uppercase px-2 py-0.5 rounded border border-slate-300 bg-slate-50 text-slate-700">
-            {evidenceBasisBadge(vm.sections.evidenceBasis)}
+            {evidenceBasisBadge(vm.sections.evidenceBasis || '')}
           </span>
         ) : null
       }
     >
-      <FindingSection label="Summary">{summarizeEvidenceForDrawer(vm.evidence)}</FindingSection>
+      <FindingSection label="Summary">{summarizeEvidenceForDrawer(vm.evidence || [])}</FindingSection>
 
-      {illustrated.length > 0 && (
+      {Array.isArray(illustrated) && illustrated.length > 0 && (
         <FindingSection label="Visual evidence">
           <div className="space-y-2">
-            {illustrated.map((entry) => (
-              <VisualEvidenceCard key={entry.screenshot_id} sha256={data.sha256} entry={entry} />
+            {(illustrated as any[]).map((entry: any) => (
+              <VisualEvidenceCard key={entry.screenshot_id || entry.id} sha256={data.sha256} entry={entry} />
             ))}
           </div>
           <p className="text-[11px] text-slate-500 mt-2">
-            Illustrated by: {illustrated.map((e) => e.screenshot_id).join(', ')}
+            Illustrated by: {(illustrated as any[]).map((e: any) => e.screenshot_id || e.id).join(', ')}
           </p>
         </FindingSection>
       )}
 
-      {vm.evidence.length === 0 ? (
+      {(!vm.evidence || vm.evidence.length === 0) ? (
         <p className="text-sm text-slate-500 py-4">No supporting evidence records are currently available.</p>
       ) : (
         <div className="space-y-3">
-          {vm.evidence.map((item, index) => (
+          {vm.evidence.map((item: any, index: number) => (
             <div
               key={`${item.id}-${index}`}
               className="rounded-xl border border-slate-200 p-4 bg-slate-50/50 space-y-2"

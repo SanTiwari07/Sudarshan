@@ -10,7 +10,7 @@ import { DetailSection, FlowSteps, FrsAxisTransparencyTable, MonoBlock } from '.
 
 export default function StaticEvidenceDetail({ data }: { data: FraudCardData }) {
   const view = buildStaticInfluenceView(data);
-  const frsRows = buildFrsAxisTransparency(data);
+  const frsRows = buildFrsAxisTransparency('static', data);
   const [openId, setOpenId] = useState<string | null>(null);
 
   if (view.unavailable) {

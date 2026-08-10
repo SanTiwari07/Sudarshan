@@ -28,11 +28,11 @@ export default function CampaignAttributionPanel({
     },
     {
       label: 'Distribution Method',
-      value: intel.alienvault.pulse_count > 0 ? `OTX pulse correlation (${intel.alienvault.pulse_count} pulses)` : 'Unknown',
+      value: (intel?.alienvault?.pulse_count ?? 0) > 0 ? `OTX pulse correlation (${intel?.alienvault?.pulse_count} pulses)` : 'Unknown',
     },
     {
       label: 'Known Variants',
-      value: tc?.known_family || intel.virus_total.suggested_label || 'Unknown',
+      value: tc?.known_family || intel?.virus_total?.suggested_label || 'Unknown',
     },
     { label: 'First Seen', value: 'Unknown' },
     { label: 'Last Seen', value: 'Unknown' },

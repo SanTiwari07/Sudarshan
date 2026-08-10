@@ -35,7 +35,7 @@ export default function MitreAttackCards({ cards }: { cards: MitreCard[] }) {
             <p className="mt-2 text-[10px] text-slate-600 leading-snug opacity-80 group-hover:opacity-100">
               {c.evidence}
             </p>
-            {c.evidenceIds.map((id) => (
+            {c.evidenceIds?.map((id) => (
               <button
                 key={id}
                 type="button"

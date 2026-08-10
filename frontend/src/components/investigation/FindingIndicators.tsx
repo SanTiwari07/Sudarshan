@@ -27,7 +27,7 @@ function severityVisual(severity?: string): SeverityVisual {
   if (raw.includes('low')) {
     return { label: 'LOW', dot: 'bg-sky-500', text: 'text-sky-700' };
   }
-  const formatted = formatSeverityLabel(severity).toUpperCase();
+  const formatted = formatSeverityLabel(severity || '').toUpperCase();
   return { label: formatted, dot: 'bg-slate-400', text: 'text-slate-600' };
 }
 

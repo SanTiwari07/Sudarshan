@@ -39,13 +39,16 @@ services:
       - MOBSF_HOST=http://mobsf:8000
       - MOBSF_API_KEY=${MOBSF_API_KEY:-sudarshan_mobsf_api_key_2026}
       - ANALYSIS_ENGINE_INTERNAL_TOKEN=${ANALYSIS_ENGINE_INTERNAL_TOKEN:-}
-      - SANDBOX_PROVIDER=${SANDBOX_PROVIDER:-genymotion}
+      - SANDBOX_PROVIDER=${SANDBOX_PROVIDER:-auto}
       # Genymotion exposes each VM at its own TCP endpoint on the host-only
       # network; it is not the Docker host's port 5555.
       - ADB_HOST=${ADB_HOST:-}
       - ADB_PORT=${ADB_PORT:-5555}
-      - DEVICE_SERIAL=${DEVICE_SERIAL:-}
+      - DEVICE_SERIAL=${DEVICE_SERIAL:-${ANDROID_DEVICE_SERIAL:-}}
+      - ANDROID_DEVICE_SERIAL=${ANDROID_DEVICE_SERIAL:-${DEVICE_SERIAL:-}}
+      - ANDROID_SANDBOX_PROVIDER=${ANDROID_SANDBOX_PROVIDER:-${SANDBOX_PROVIDER:-auto}}
       - FRIDA_PORT=${FRIDA_PORT:-27055}
+      - FRIDA_VERSION=${FRIDA_VERSION:-17.16.4}
       - AUTO_CONNECT=${AUTO_CONNECT:-true}
       - ROOT_REQUIRED=${ROOT_REQUIRED:-true}
       - UPLOADS_DIR=/app/uploads
@@ -86,12 +89,15 @@ services:
       - "8001"
     environment:
       - PYTHONPATH=/app:/opt/sudarshan-core
-      - SANDBOX_PROVIDER=${SANDBOX_PROVIDER:-genymotion}
+      - SANDBOX_PROVIDER=${SANDBOX_PROVIDER:-auto}
       # Preserve the configurable Genymotion endpoint from .env.
       - ADB_HOST=${ADB_HOST:-}
       - ADB_PORT=${ADB_PORT:-5555}
-      - DEVICE_SERIAL=${DEVICE_SERIAL:-}
+      - DEVICE_SERIAL=${DEVICE_SERIAL:-${ANDROID_DEVICE_SERIAL:-}}
+      - ANDROID_DEVICE_SERIAL=${ANDROID_DEVICE_SERIAL:-${DEVICE_SERIAL:-}}
+      - ANDROID_SANDBOX_PROVIDER=${ANDROID_SANDBOX_PROVIDER:-${SANDBOX_PROVIDER:-auto}}
       - FRIDA_PORT=${FRIDA_PORT:-27055}
+      - FRIDA_VERSION=${FRIDA_VERSION:-17.16.4}
       - AUTO_CONNECT=${AUTO_CONNECT:-true}
       - ROOT_REQUIRED=${ROOT_REQUIRED:-true}
       - MOBSF_HOST=http://mobsf:8000

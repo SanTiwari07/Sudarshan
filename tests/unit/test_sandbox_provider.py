@@ -32,7 +32,15 @@ from sudarshan_core.sandbox.types import ConnectionResult, DeviceInfo
 
 
 @pytest.fixture(autouse=True)
-def _clear_provider_cache():
+def _clear_provider_cache(monkeypatch):
+    # Isolate from host shell leftovers (e.g. ANDROID_SANDBOX_PROVIDER=auto)
+    for key in (
+        "ANDROID_SANDBOX_PROVIDER",
+        "ANDROID_DEVICE_SERIAL",
+        "FRIDA_SERVER_DIR",
+        "FRIDA_VERSION",
+    ):
+        monkeypatch.delenv(key, raising=False)
     clear_sandbox_provider_cache()
     yield
     clear_sandbox_provider_cache()
@@ -69,12 +77,13 @@ def _adb_sequence(responses: List[Tuple[bool, str]]):
 
 def test_load_sandbox_config_defaults(monkeypatch):
     for key in (
-        "SANDBOX_PROVIDER", "ADB_HOST", "ADB_PORT", "DEVICE_SERIAL",
-        "FRIDA_PORT", "AUTO_CONNECT", "ROOT_REQUIRED",
+        "SANDBOX_PROVIDER", "ANDROID_SANDBOX_PROVIDER", "ADB_HOST", "ADB_PORT",
+        "DEVICE_SERIAL", "ANDROID_DEVICE_SERIAL", "FRIDA_PORT", "AUTO_CONNECT",
+        "ROOT_REQUIRED",
     ):
         monkeypatch.delenv(key, raising=False)
     cfg = load_sandbox_config()
-    assert cfg.provider == "genymotion"
+    assert cfg.provider == "auto"
     assert cfg.adb_port == "5555"
     assert cfg.auto_connect is True
     assert cfg.root_required is True
@@ -91,14 +100,15 @@ def test_factory_android_studio(monkeypatch):
     clear_sandbox_provider_cache()
     p = get_sandbox_provider(force_new=True)
     assert isinstance(p, AndroidStudioProvider)
+    assert p.name == "android_avd"
 
 
 def test_factory_aliases(monkeypatch):
-    for alias in ("avd", "emulator", "androidstudio"):
+    for alias in ("avd", "emulator", "androidstudio", "android_avd"):
         monkeypatch.setenv("SANDBOX_PROVIDER", alias)
         clear_sandbox_provider_cache()
         p = get_sandbox_provider(force_new=True)
-        assert p.name == "android_studio"
+        assert p.name == "android_avd"
 
 
 # ── Device detection ──────────────────────────────────────────────────────────
@@ -164,7 +174,7 @@ def test_select_device_none_online(geny_cfg):
 
 def test_auto_connect_calls_adb_connect(monkeypatch):
     monkeypatch.setenv("SANDBOX_PROVIDER", "genymotion")
-    monkeypatch.setenv("ADB_HOST", "host.docker.internal")
+    monkeypatch.setenv("ADB_HOST", "192.168.56.102")
     monkeypatch.setenv("ADB_PORT", "5555")
     monkeypatch.setenv("AUTO_CONNECT", "true")
     cfg = load_sandbox_config()
@@ -174,15 +184,37 @@ def test_auto_connect_calls_adb_connect(monkeypatch):
     def fake_adb(*args, **kwargs):
         calls.append(args)
         if args and args[0] == "connect":
-            return True, "connected to host.docker.internal:5555"
+            return True, "connected to 192.168.56.102:5555"
         if args and args[0] == "devices":
-            return True, "List of devices attached\nhost.docker.internal:5555\tdevice\n"
+            # First probe in _maybe_tcp_connect sees nothing; after connect, device appears.
+            if not any(c and c[0] == "connect" for c in calls[:-1]):
+                return True, "List of devices attached\n"
+            return True, "List of devices attached\n192.168.56.102:5555\tdevice\n"
         return True, ""
 
     with patch.object(p, "adb", side_effect=fake_adb):
         devices = p.list_devices()
     assert any(c[0] == "connect" for c in calls)
-    assert devices[0].serial == "host.docker.internal:5555"
+    assert devices[0].serial == "192.168.56.102:5555"
+
+
+def test_auto_connect_skips_docker_host_alias(monkeypatch):
+    monkeypatch.setenv("SANDBOX_PROVIDER", "auto")
+    monkeypatch.setenv("ADB_HOST", "host.docker.internal")
+    monkeypatch.setenv("AUTO_CONNECT", "true")
+    cfg = load_sandbox_config()
+    p = GenymotionProvider(cfg)
+    calls = []
+
+    def fake_adb(*args, **kwargs):
+        calls.append(args)
+        if args and args[0] == "devices":
+            return True, "List of devices attached\nemulator-5554\tdevice\n"
+        return True, ""
+
+    with patch.object(p, "adb", side_effect=fake_adb):
+        p.list_devices()
+    assert not any(c and c[0] == "connect" for c in calls)
 
 
 def test_adb_unavailable_on_connect(geny_cfg):
@@ -209,7 +241,7 @@ def test_ensure_root_success(geny_cfg):
 
     with patch.object(p, "adb", side_effect=fake_adb):
         with patch.object(p, "adb_shell", side_effect=lambda s, c, timeout=30: (True, "root")):
-            p.ensure_root("192.168.56.101:5555")  # should not raise
+            assert p.ensure_root("192.168.56.101:5555") is True
 
 
 def test_ensure_root_failure_raises_sandbox_not_rooted(geny_cfg):
@@ -232,7 +264,13 @@ def test_ensure_frida_already_running(geny_cfg):
         "adb_shell",
         return_value=(True, "root  123  1  ... sudarshan_agent_srv"),
     ):
-        status = p.ensure_frida("serial")
+        with patch.object(p, "adb", return_value=(True, "")):
+            with patch.object(
+                p,
+                "get_device_info",
+                return_value=DeviceInfo(serial="serial", abi="x86_64"),
+            ):
+                status = p.ensure_frida("serial")
     assert status.available is True
     assert status.running is True
     assert status.restarted is False
@@ -244,17 +282,22 @@ def test_ensure_frida_restarts(geny_cfg):
 
     def fake_shell(serial, command, timeout=30):
         calls["n"] += 1
-        if "ps -A" in command and calls["n"] == 1:
-            return True, ""  # not running
+        if ("pgrep" in command or "ps -A" in command) and calls["n"] <= 2:
+            return True, ""  # not running initially
         if command.startswith("ls "):
             return True, "/data/local/tmp/sudarshan_agent_srv"
-        if "ps -A" in command:
+        if "pgrep" in command or "ps -A" in command:
             return True, "sudarshan_agent_srv"
         return True, ""
 
     with patch.object(p, "adb_shell", side_effect=fake_shell):
         with patch.object(p, "adb", return_value=(True, "")):
-            status = p.ensure_frida("serial", restart_if_needed=True)
+            with patch.object(
+                p,
+                "get_device_info",
+                return_value=DeviceInfo(serial="serial", abi="x86_64"),
+            ):
+                status = p.ensure_frida("serial", restart_if_needed=True, push_if_missing=False)
     assert status.available is True
     assert status.restarted is True
 
@@ -262,7 +305,12 @@ def test_ensure_frida_restarts(geny_cfg):
 def test_verify_frida_unavailable(geny_cfg):
     p = GenymotionProvider(geny_cfg)
     with patch.object(p, "adb_shell", return_value=(True, "")):
-        status = p.verify_frida("serial")
+        with patch.object(
+            p,
+            "get_device_info",
+            return_value=DeviceInfo(serial="serial", abi="x86_64"),
+        ):
+            status = p.verify_frida("serial")
     assert status.available is False
 
 

@@ -54,8 +54,29 @@ CFG = load_sandbox_config()
 ANDROID_SDK = CFG.android_sdk_root or os.path.expandvars(r"%LOCALAPPDATA%\Android\Sdk")
 EMULATOR_BIN = shutil.which("emulator") or os.path.join(ANDROID_SDK, "emulator", "emulator.exe")
 
-FRIDA_SERVER_DIR = Path(__file__).parent.parent / "frida-server-17.16.4-android-x86_64"
-FRIDA_SERVER_BIN = FRIDA_SERVER_DIR / "frida-server-17.16.4-android-x86_64"
+FRIDA_SERVER_DIR = Path(
+    os.getenv("FRIDA_SERVER_DIR")
+    or str(Path(__file__).parent.parent / f"frida-server-{CFG.frida_version}-android-x86_64")
+)
+
+
+def _resolve_frida_bin_for_device(serial: str):
+    """Locate ABI-matched frida-server; never silently use the wrong arch."""
+    from sudarshan_core.sandbox.frida_assets import locate_frida_server, missing_binary_message
+
+    provider = get_sandbox_provider()
+    info = provider.get_device_info(serial)
+    spec = locate_frida_server(
+        info.abi,
+        abilist=info.abilist,
+        version=CFG.frida_version,
+        repo_root=_ROOT,
+    )
+    return info, spec, missing_binary_message
+
+
+# legacy path kept for check_tools messaging
+FRIDA_SERVER_BIN = FRIDA_SERVER_DIR / f"frida-server-{CFG.frida_version}-android-x86_64"
 
 ADB_TCP_PORT = int(CFG.adb_port or "5555")
 PREFERRED_AVD = CFG.preferred_avd
@@ -117,11 +138,11 @@ def check_tools() -> bool:
         info("Genymotion Desktop: start your VM from the Genymotion UI before continuing.")
 
     if FRIDA_SERVER_BIN.exists():
-        ok(f"frida-server: {FRIDA_SERVER_BIN} ({FRIDA_SERVER_BIN.stat().st_size // 1024 // 1024} MB)")
+        ok(f"frida-server (x86_64 asset): {FRIDA_SERVER_BIN} ({FRIDA_SERVER_BIN.stat().st_size // 1024 // 1024} MB)")
     else:
-        err(f"frida-server binary not found: {FRIDA_SERVER_BIN}")
-        err("Download frida-server-17.16.4-android-x86_64 from github.com/frida/frida/releases")
-        all_ok = False
+        warn(f"Default x86_64 frida-server not at {FRIDA_SERVER_BIN}")
+        warn("Bootstrap will resolve the ABI-matched binary from FRIDA_SERVER_DIR / repo root.")
+        info("Download matching arch from https://github.com/frida/frida/releases")
 
     try:
         import frida
@@ -199,25 +220,26 @@ def setup_device(serial: str, push_server: bool = True) -> bool:
 
     if push_server:
         step(5, f"Push Frida agent server ({frida_bin_name}) to device")
-        ok_f, out = provider.adb("-s", serial, "shell", f"ls -la {remote_path} 2>/dev/null")
-        if ok_f and frida_bin_name in out:
-            info(f"Agent server already on device: {out}")
+        info_d, spec, missing_msg = _resolve_frida_bin_for_device(serial)
+        ok(f"Device ABI: {info_d.abi or '?'} (provider={info_d.provider})")
+        if not spec.found or spec.path is None:
+            err(missing_msg(spec))
+            return False
+        ok(f"Host Frida binary: {spec.path.name}")
+        info(f"Pushing {spec.path} → {remote_path}")
+        ok_f, out = provider.adb(
+            "-s", serial, "push", str(spec.path), remote_path, timeout=120
+        )
+        if ok_f or "pushed" in (out or "").lower():
+            ok(f"Pushed: {out}")
         else:
-            info(f"Pushing {FRIDA_SERVER_BIN} → {remote_path}")
-            ok_f, out = provider.adb(
-                "-s", serial, "push", str(FRIDA_SERVER_BIN), remote_path, timeout=120
-            )
-            if ok_f:
-                ok(f"Pushed: {out}")
-            else:
-                err(f"Push failed: {out}")
-                return False
-            provider.adb("-s", serial, "shell", f"chmod 755 {remote_path}")
-            # Also keep legacy path for older auto-start logic
-            provider.adb(
-                "-s", serial, "shell",
-                f"cp {remote_path} /data/local/tmp/frida-server && chmod 755 /data/local/tmp/frida-server",
-            )
+            err(f"Push failed: {out}")
+            return False
+        provider.adb("-s", serial, "shell", f"chmod 755 {remote_path}")
+        provider.adb(
+            "-s", serial, "shell",
+            f"cp {remote_path} /data/local/tmp/frida-server && chmod 755 /data/local/tmp/frida-server",
+        )
 
     step(6, f"Start / verify Frida agent ({frida_bin_name}) on port {frida_port}")
     try:
@@ -227,10 +249,18 @@ def setup_device(serial: str, push_server: bool = True) -> bool:
         err(f"Frida verification failed: {e}")
         return False
 
-    step(7, "Enable ADB over TCP")
-    ok_f, out = provider.adb("-s", serial, "tcpip", str(ADB_TCP_PORT))
-    ok(f"ADB TCP on port {ADB_TCP_PORT}: {out}")
-    time.sleep(1)
+    step(7, "ADB transport note")
+    from sudarshan_core.sandbox.device import transport_for_serial
+
+    transport = transport_for_serial(serial)
+    if transport == "tcp":
+        info(f"Device already on TCP transport ({serial}) - skipping adb tcpip")
+    elif transport == "emulator":
+        info(f"Android emulator transport ({serial}) - ADB TCP mode not required")
+    else:
+        ok_f, out = provider.adb("-s", serial, "tcpip", str(ADB_TCP_PORT))
+        ok(f"ADB TCP on port {ADB_TCP_PORT}: {out}")
+        time.sleep(1)
     return True
 
 
@@ -322,10 +352,17 @@ def main():
         warn(str(e))
 
     if not serial:
-        if CFG.provider not in ("android_studio", "androidstudio", "avd", "emulator"):
+        if CFG.provider not in (
+            "android_studio",
+            "androidstudio",
+            "android_avd",
+            "avd",
+            "emulator",
+            "auto",
+        ):
             err(
-                "No Genymotion device found. Start a virtual device in Genymotion Desktop, "
-                "then re-run this script (or set DEVICE_SERIAL)."
+                "No sandbox device found. Start Genymotion or an Android Studio AVD, "
+                "then re-run this script (or set ANDROID_DEVICE_SERIAL)."
             )
             sys.exit(1)
         if args.skip_start:

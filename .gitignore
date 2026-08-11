@@ -84,6 +84,7 @@ venv.bak/
 .env
 .env.*
 !.env.example
+.sudarshan_sandbox.env
 
 # PyTest
 .pytest_cache/

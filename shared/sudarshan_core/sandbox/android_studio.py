@@ -1,9 +1,8 @@
 """
-Android Studio AVD sandbox provider (optional / legacy).
+Android Studio AVD sandbox provider.
 
-Preserves the previous Android Studio Emulator + `adb emu` console
-behaviour so operators can set SANDBOX_PROVIDER=android_studio without
-losing multi-stage GPS/battery/SMS simulation.
+Uses the Android Emulator `adb emu` console for GPS/battery/SMS simulation.
+Canonical provider id is `android_avd` (aliases: android_studio, avd, emulator).
 """
 
 from __future__ import annotations
@@ -20,7 +19,7 @@ logger = logging.getLogger(__name__)
 class AndroidStudioProvider(SandboxProvider):
     """Sandbox backend for Android Studio AVDs."""
 
-    name = "android_studio"
+    name = "android_avd"
 
     def _adb_candidates(self) -> List[str]:
         user = os.environ.get("USERNAME") or os.environ.get("USER") or "user"
@@ -41,11 +40,11 @@ class AndroidStudioProvider(SandboxProvider):
         """Send an Android Emulator console command via `adb emu`."""
         ok, out = self.adb("-s", serial, "emu", *args, timeout=5)
         if not ok:
-            logger.error("[android_studio] emu command failed: %s", out)
+            logger.error("[android_avd] emu command failed: %s", out)
         return ok
 
     def apply_state_profile(self, serial: str, profile: str) -> bool:
-        logger.info("[android_studio] Applying profile %s on %s", profile, serial)
+        logger.info("[android_avd] Applying profile %s on %s", profile, serial)
 
         def shell(*parts: str) -> bool:
             ok, _ = self.adb("-s", serial, "shell", *parts)
@@ -77,7 +76,7 @@ class AndroidStudioProvider(SandboxProvider):
         if profile == "reboot":
             return shell("am", "broadcast", "-a", "android.intent.action.BOOT_COMPLETED")
 
-        logger.warning("[android_studio] Unknown profile: %s", profile)
+        logger.warning("[android_avd] Unknown profile: %s", profile)
         return False
 
     def reset_state(self, serial: str) -> bool:

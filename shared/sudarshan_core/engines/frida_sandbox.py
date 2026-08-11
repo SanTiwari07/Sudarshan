@@ -245,10 +245,14 @@ def _sandbox_env():
 
 # Module-level mirrors kept for backwards-compatible imports / status APIs.
 # Re-read on each call site that needs freshness via _sandbox_env().
-ADB_HOST = os.getenv("ADB_HOST", "")   # e.g. host.docker.internal
+ADB_HOST = os.getenv("ADB_HOST", "")   # e.g. Genymotion VM IP or host.docker.internal for AVD
 ADB_PORT = os.getenv("ADB_PORT", "5555")
-DEVICE_SERIAL = os.getenv("DEVICE_SERIAL", "")
-SANDBOX_PROVIDER_NAME = os.getenv("SANDBOX_PROVIDER", "genymotion")
+DEVICE_SERIAL = os.getenv("ANDROID_DEVICE_SERIAL") or os.getenv("DEVICE_SERIAL", "")
+SANDBOX_PROVIDER_NAME = (
+    os.getenv("ANDROID_SANDBOX_PROVIDER")
+    or os.getenv("SANDBOX_PROVIDER")
+    or "auto"
+)
 
 # BFCI_WEIGHTS is now imported from bfci_scorer - kept as a re-export for
 # callers that import it directly from this module (backwards compatibility).

@@ -1,8 +1,7 @@
 """
-Stub providers for future sandbox backends.
+Stub providers for future sandbox backends (Corellium / Waydroid).
 
-These exist so SANDBOX_PROVIDER can be extended (Corellium, Waydroid,
-physical rooted devices) without changing the Dynamic Analysis Engine.
+Physical devices use PhysicalDeviceProvider in auto.py (real ADB implementation).
 """
 
 from __future__ import annotations
@@ -18,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 class FutureProvider(SandboxProvider):
     """
-    Placeholder for Corellium / Waydroid / physical-device backends.
+    Placeholder for Corellium / Waydroid backends.
 
     Instantiation is allowed so factory registration stays uniform;
     connect() always returns a structured failure until implemented.
@@ -47,7 +46,8 @@ class FutureProvider(SandboxProvider):
             error_code="SANDBOX_ERROR",
             error_message=(
                 f"Sandbox provider {self.name!r} is registered but not yet "
-                "implemented. Use SANDBOX_PROVIDER=genymotion or android_studio."
+                "implemented. Use SANDBOX_PROVIDER=auto (or genymotion / "
+                "android_avd / physical)."
             ),
             stages=[{"stage": "provider", "ok": False, "detail": self.name}],
         )
@@ -65,17 +65,3 @@ class WaydroidProvider(FutureProvider):
 
     def __init__(self, config):
         super().__init__(config, backend_name="waydroid")
-
-
-class PhysicalDeviceProvider(FutureProvider):
-    """
-    Physical rooted device stub.
-
-    When implemented, this can reuse most of SandboxProvider's ADB/root/Frida
-    logic - only device discovery and state simulation differ.
-    """
-
-    name = "physical"
-
-    def __init__(self, config):
-        super().__init__(config, backend_name="physical")

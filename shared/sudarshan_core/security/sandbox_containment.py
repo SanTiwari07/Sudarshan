@@ -152,9 +152,12 @@ def _is_private_or_loopback_host(host: str) -> bool:
 def audit_sandbox_connectivity(config: SandboxConfig) -> List[ContainmentFinding]:
     """Return containment findings for the current sandbox configuration."""
     findings: List[ContainmentFinding] = []
-    provider = (config.provider or "genymotion").strip().lower()
+    provider = (config.provider or "auto").strip().lower()
     adb_host = (config.adb_host or "").strip()
 
+    # Genymotion-specific ADB_HOST rules only apply when the operator explicitly
+    # selected Genymotion (or auto has already set ADB_HOST to a VM IP).
+    # Auto mode without ADB_HOST is valid - the device may be an AVD serial.
     if provider == "genymotion":
         if not adb_host:
             findings.append(
@@ -163,8 +166,8 @@ def audit_sandbox_connectivity(config: SandboxConfig) -> List[ContainmentFinding
                     code="GENYMOTION_ADB_HOST_UNSET",
                     message=(
                         "Genymotion requires ADB_HOST to be the VM IP from "
-                        "`adb devices` (e.g. 192.168.56.101). An empty ADB_HOST "
-                        "causes the engine entrypoint to default to "
+                        "`adb devices` (discovered automatically by bootstrap). "
+                        "An empty ADB_HOST causes the engine entrypoint to default to "
                         "host.docker.internal, which attaches to the host ADB "
                         "multiplexer instead of an isolated VM."
                     ),
@@ -202,12 +205,29 @@ def audit_sandbox_connectivity(config: SandboxConfig) -> List[ContainmentFinding
                     message=(
                         f"ADB_HOST={adb_host!r} resolves to loopback inside the "
                         "analysis container, not the Genymotion VM. Use the VM's "
-                        "host-only IP (e.g. 192.168.56.101)."
+                        "host-only IP from `adb devices`."
                     ),
                 )
             )
+    elif provider == "auto" and adb_host and _normalize_host(adb_host) in _HOST_DOCKER_INTERNAL_ALIASES:
+        findings.append(
+            ContainmentFinding(
+                severity="warning",
+                code="AUTO_ADB_HOST_DOCKER_BRIDGE",
+                message=(
+                    f"ADB_HOST={adb_host!r} bridges through the Docker host. "
+                    "For Genymotion, prefer the VM private IP discovered by bootstrap."
+                ),
+            )
+        )
 
-    if config.root_required and provider in ("genymotion", "android_studio"):
+    if config.root_required and provider in (
+        "genymotion",
+        "android_studio",
+        "android_avd",
+        "auto",
+        "physical",
+    ):
         findings.append(
             ContainmentFinding(
                 severity="warning",
@@ -294,7 +314,7 @@ def _validate_adb_server_flag(flag: str, value: str) -> None:
         return
     host = value.split(":")[0] if flag == "-H" else value
     if flag == "-H":
-        provider = os.getenv("SANDBOX_PROVIDER", "genymotion").strip().lower()
+        provider = os.getenv("SANDBOX_PROVIDER", "auto").strip().lower()
         if provider == "genymotion" and _normalize_host(host) in _HOST_DOCKER_INTERNAL_ALIASES:
             raise ContainmentViolation(
                 "adb -H host.docker.internal is forbidden for Genymotion.",
@@ -336,7 +356,7 @@ def validate_adb_invocation(args: Sequence[str]) -> None:
         target = _adb_connect_target(args)
         if target:
             host = target.split(":")[0]
-            provider = os.getenv("SANDBOX_PROVIDER", "genymotion").strip().lower()
+            provider = os.getenv("SANDBOX_PROVIDER", "auto").strip().lower()
             if provider == "genymotion" and _normalize_host(host) in _HOST_DOCKER_INTERNAL_ALIASES:
                 raise ContainmentViolation(
                     "adb connect to host.docker.internal is forbidden for Genymotion; "

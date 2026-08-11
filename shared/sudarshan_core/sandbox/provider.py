@@ -18,12 +18,28 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
 
 from sudarshan_core.sandbox.config import SandboxConfig
+from sudarshan_core.sandbox.device import (
+    enrich_device_info,
+    fetch_device_props,
+    format_device_line,
+    ip_from_serial,
+    parse_adb_devices_l,
+    provider_display_name,
+    select_sandbox_device,
+    transport_for_serial,
+)
 from sudarshan_core.sandbox.exceptions import (
     ADBUnavailable,
     DeviceNotFound,
     FridaUnavailable,
     RootUnavailable,
     SandboxOffline,
+)
+from sudarshan_core.sandbox.frida_assets import (
+    FridaBinarySpec,
+    locate_frida_server,
+    missing_binary_message,
+    supported_host_abis,
 )
 from sudarshan_core.sandbox.types import ConnectionResult, DeviceInfo, FridaStatus
 from sudarshan_core.security.sandbox_containment import (
@@ -86,112 +102,151 @@ class SandboxProvider(ABC):
 
     # ── Device detection ──────────────────────────────────────────────────────
 
-    def list_devices(self) -> List[DeviceInfo]:
+    def _maybe_tcp_connect(self) -> None:
         """
-        Parse `adb devices` and return online devices.
+        Optionally `adb connect` when AUTO_CONNECT + ADB_HOST are set.
 
-        If AUTO_CONNECT and ADB_HOST are set, attempt TCP connect first.
+        Never blindly connect to a hardcoded Genymotion IP. Emulator transports
+        (emulator-5554) are already visible via the local ADB server.
+
+        If any device is already online, skip connect - avoids long timeouts on
+        stale ADB_HOST values left in `.env` after a VM IP change.
         """
-        if self.config.auto_connect and self.config.adb_host:
-            target = self.config.tcp_target
-            ok, out = self.adb("connect", target or "", timeout=10)
-            if ok:
-                logger.info("[%s] ADB TCP connected: %s", self.name, target)
-            else:
-                logger.warning("[%s] ADB TCP connect failed (%s): %s", self.name, target, out)
+        if not self.config.auto_connect:
+            return
+        host = (self.config.adb_host or "").strip()
+        if not host:
+            return
+        if host.lower() in (
+            "host.docker.internal",
+            "host.containers.internal",
+            "gateway.docker.internal",
+        ):
+            return
 
-        ok, output = self.adb("devices")
+        # Fast path: already have online devices
+        ok_dev, output = self.adb("devices", "-l", timeout=8)
+        if ok_dev and parse_adb_devices_l(output or ""):
+            return
+
+        target = self.config.tcp_target
+        if not target:
+            return
+        ok, out = self.adb("connect", target, timeout=5)
+        if ok:
+            logger.info("[%s] ADB TCP connected: %s", self.name, target)
+        else:
+            logger.warning("[%s] ADB TCP connect failed (%s): %s", self.name, target, out)
+
+    def list_devices(self, *, enrich: bool = False) -> List[DeviceInfo]:
+        """
+        Parse `adb devices -l` and return online devices.
+
+        When enrich=True, query Android properties and fingerprint the provider
+        (Genymotion / android_avd / physical) for each device.
+        """
+        self._maybe_tcp_connect()
+
+        ok, output = self.adb("devices", "-l")
         if not ok:
+            # Fallback without -l for older adb
+            ok, output = self.adb("devices")
+            if not ok:
+                return []
+
+        raw = parse_adb_devices_l(output)
+        if not raw:
+            # parse_adb_devices_l handles both -l and plain formats
             return []
 
         devices: List[DeviceInfo] = []
-        for line in output.splitlines()[1:]:
-            line = line.strip()
-            if not line or "\t" not in line:
-                # Some adb builds use spaces
-                parts = line.split()
-                if len(parts) < 2:
-                    continue
-                serial, state = parts[0], parts[1]
-            else:
-                serial, state = line.split("\t", 1)
-                state = state.strip()
-            if state != "device":
-                continue
-            devices.append(
-                DeviceInfo(
-                    serial=serial.strip(),
-                    state=state,
-                    provider=self.name,
-                    ip=serial.split(":")[0] if ":" in serial else "",
-                )
+        for meta in raw:
+            serial = meta["serial"]
+            info = DeviceInfo(
+                serial=serial,
+                state=meta.get("state", "device"),
+                provider=self.name if self.name != "auto" else "",
+                ip=ip_from_serial(serial),
+                transport=transport_for_serial(serial),
+                model=meta.get("model", ""),
             )
+            if enrich:
+                info = self._enrich_device(info, adb_meta=meta)
+            else:
+                # Lightweight fingerprint from adb -l product/model alone
+                info = enrich_device_info(info, adb_meta=meta)
+            devices.append(info)
+        return devices
+
+    def _enrich_device(
+        self,
+        info: DeviceInfo,
+        *,
+        adb_meta: Optional[Dict[str, str]] = None,
+    ) -> DeviceInfo:
+        def _getprop(serial: str, prop: str) -> str:
+            ok, out = self.adb_shell(serial, f"getprop {prop}", timeout=10)
+            return out.strip() if ok else ""
+
+        props = fetch_device_props(info.serial, _getprop)
+        return enrich_device_info(info, props=props, adb_meta=adb_meta or {})
+
+    def discover_devices(self) -> List[DeviceInfo]:
+        """Fully enriched device list for startup logs / selection."""
+        devices = self.list_devices(enrich=True)
+        if devices:
+            logger.info("[%s] Detected Android devices:", self.name)
+            for i, d in enumerate(devices, 1):
+                logger.info("  %s", format_device_line(i, d))
         return devices
 
     def select_device(self, preferred_serial: Optional[str] = None) -> DeviceInfo:
         """
-        Choose a device from `adb devices`.
+        Choose a sandbox device.
 
         Priority:
-          1. preferred_serial argument
-          2. DEVICE_SERIAL env
-          3. single online device
-          4. first online device (logged)
+          1. preferred_serial argument / ANDROID_DEVICE_SERIAL / DEVICE_SERIAL
+          2. Emulator over physical
+          3. Rooted when known
+          4. Frida ABI supported on host
+          5. Deterministic serial tie-break
         """
         preferred = (preferred_serial or self.config.device_serial or "").strip()
-        devices = self.list_devices()
-        if not devices:
+        devices = self.discover_devices()
+        try:
+            chosen = select_sandbox_device(
+                devices,
+                preferred_serial=preferred,
+                preferred_provider=self.config.provider if self.name != "auto" else "",
+                supported_abis=supported_host_abis(),
+            )
+        except ValueError as exc:
             raise DeviceNotFound(
-                "No online devices found via `adb devices`. "
-                f"Start a {self.name} sandbox and ensure ADB can see it.",
+                str(exc),
                 details={"provider": self.name, "adb_host": self.config.adb_host},
-            )
+            ) from exc
 
-        if preferred:
-            for d in devices:
-                if d.serial == preferred:
-                    return d
-            raise DeviceNotFound(
-                f"Configured DEVICE_SERIAL={preferred!r} not found. "
-                f"Online: {[d.serial for d in devices]}",
-                details={
-                    "preferred": preferred,
-                    "online": [d.serial for d in devices],
-                },
-            )
-
-        if len(devices) > 1:
-            logger.warning(
-                "[%s] Multiple devices online %s - selecting first. "
-                "Set DEVICE_SERIAL to pin one.",
-                self.name,
-                [d.serial for d in devices],
-            )
-        return devices[0]
+        logger.info(
+            "[%s] Selected sandbox: %s (%s)",
+            self.name,
+            provider_display_name(chosen.provider or self.name),
+            chosen.serial,
+        )
+        return chosen
 
     # ── Device introspection ──────────────────────────────────────────────────
 
     def get_device_info(self, serial: str) -> DeviceInfo:
         """Query Android properties and return a populated DeviceInfo."""
-        props = {
-            "android_version": "ro.build.version.release",
-            "api_level": "ro.build.version.sdk",
-            "abi": "ro.product.cpu.abi",
-            "model": "ro.product.model",
-            "manufacturer": "ro.product.manufacturer",
-        }
-        values: Dict[str, str] = {}
-        for key, prop in props.items():
-            ok, out = self.adb_shell(serial, f"getprop {prop}", timeout=10)
-            values[key] = out.strip() if ok else ""
-
-        return DeviceInfo(
+        info = DeviceInfo(
             serial=serial,
             state="device",
-            provider=self.name,
-            ip=serial.split(":")[0] if ":" in serial else self.config.adb_host,
-            **values,
+            provider=self.name if self.name != "auto" else "",
+            ip=ip_from_serial(serial) or self.config.adb_host,
+            transport=transport_for_serial(serial),
+            frida_port=self.config.frida_port,
         )
+        return self._enrich_device(info)
 
     def verify_online(self, serial: str) -> bool:
         """Return True if serial appears as state=device."""
@@ -202,48 +257,90 @@ class SandboxProvider(ABC):
 
     # ── Root ──────────────────────────────────────────────────────────────────
 
-    def ensure_root(self, serial: str) -> None:
-        """
-        Run `adb root`, then verify `whoami` == root.
-
-        Raises RootUnavailable / SandboxNotRooted when ROOT_REQUIRED and
-        the device is not rooted.
-        """
-        ok, out = self.adb("-s", serial, "root", timeout=30)
-        if not ok and "already running as root" not in (out or "").lower():
-            logger.warning("[%s] adb root returned: %s", self.name, out)
-        time.sleep(1.5)
-
-        # After adb root, TCP devices may need reconnect
-        if self.config.auto_connect and self.config.adb_host:
-            self.adb("connect", self.config.tcp_target or "", timeout=10)
-            time.sleep(0.5)
-
+    def _whoami(self, serial: str) -> str:
         ok, who = self.adb_shell(serial, "whoami", timeout=10)
-        who = (who or "").strip().splitlines()[-1].strip() if who else ""
-        if who == "root":
-            logger.info("[%s] Root verified on %s (whoami=root)", self.name, serial)
-            return
+        if ok and who:
+            return who.strip().splitlines()[-1].strip()
+        return ""
 
-        # Fallback: su -c whoami (some Genymotion images)
+    def check_root(self, serial: str) -> bool:
+        """Return True if the shell is already root (no adb root attempt)."""
+        if self._whoami(serial) == "root":
+            return True
         ok2, who2 = self.adb_shell(serial, "su -c whoami", timeout=10)
         who2 = (who2 or "").strip().splitlines()[-1].strip() if who2 else ""
-        if who2 == "root":
-            logger.info("[%s] Root verified on %s via su (whoami=root)", self.name, serial)
-            return
+        return who2 == "root"
+
+    def _wait_for_device(self, serial: str, timeout_s: float = 30.0) -> bool:
+        """Poll until serial is online again (adb root restarts adbd)."""
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            ok, out = self.adb("devices", "-l", timeout=8)
+            if ok:
+                for meta in parse_adb_devices_l(out or ""):
+                    if meta.get("serial") == serial:
+                        return True
+            # Emulator transport sometimes needs a short settle after adbd restart
+            time.sleep(1.0)
+        return False
+
+    def ensure_root(self, serial: str) -> bool:
+        """
+        Ensure a root shell when possible.
+
+        Returns True if root is available. When ROOT_REQUIRED=false, returns
+        False instead of raising. Never treats `adb root` failure as fatal
+        unless root is required by the selected analysis mode.
+        """
+        if self.check_root(serial):
+            logger.info("[%s] Root already available on %s", self.name, serial)
+            return True
+
+        ok, out = self.adb("-s", serial, "root", timeout=45)
+        out_l = (out or "").lower()
+        if not ok and "already running as root" not in out_l:
+            logger.warning("[%s] adb root returned: %s", self.name, out)
+
+        # adb root restarts adbd - emulators often drop offline briefly.
+        transport = transport_for_serial(serial)
+        time.sleep(2.0 if transport == "emulator" else 1.5)
+
+        if transport == "tcp" or (self.config.auto_connect and self.config.adb_host):
+            target = serial if transport == "tcp" else (self.config.tcp_target or "")
+            if target and ":" in target:
+                self.adb("connect", target, timeout=10)
+
+        if not self._wait_for_device(serial, timeout_s=45.0 if transport == "emulator" else 20.0):
+            logger.warning(
+                "[%s] Device %s did not return online quickly after adb root",
+                self.name,
+                serial,
+            )
+
+        if self.check_root(serial):
+            logger.info("[%s] Root verified on %s (whoami=root)", self.name, serial)
+            return True
+
+        # One more settle+retry - AVDs occasionally need it
+        time.sleep(2.0)
+        self._wait_for_device(serial, timeout_s=15.0)
+        if self.check_root(serial):
+            logger.info("[%s] Root verified on %s after retry", self.name, serial)
+            return True
 
         msg = (
-            f"Sandbox not rooted on {serial}: whoami={who!r}, su={who2!r}. "
-            f"adb root output: {out!r}"
+            f"Root unavailable on {serial}. "
+            f"adb root output: {(out or '').strip()!r}. "
+            "Use a rooted/userdebug image, or set ROOT_REQUIRED=false."
         )
         if self.config.root_required:
-            raise RootUnavailable(msg, details={"serial": serial, "whoami": who})
+            raise RootUnavailable(msg, details={"serial": serial, "root_available": False})
         logger.warning("[%s] %s (ROOT_REQUIRED=false - continuing)", self.name, msg)
+        return False
 
     def verify_root(self, serial: str) -> bool:
         try:
-            self.ensure_root(serial)
-            return True
+            return bool(self.ensure_root(serial))
         except RootUnavailable:
             return False
 
@@ -266,7 +363,6 @@ class SandboxProvider(ABC):
 
     def _frida_process_names(self) -> List[str]:
         names = [self.config.frida_bin, "frida-server"]
-        # Deduplicate while preserving order
         seen = set()
         out = []
         for n in names:
@@ -292,7 +388,6 @@ class SandboxProvider(ABC):
                 patterns.append(n[:15])
         if not patterns:
             patterns = ["frida-server"]
-        # Unique, order preserved
         seen = set()
         uniq = []
         for p in patterns:
@@ -312,19 +407,190 @@ class SandboxProvider(ABC):
             running = True
         return running, text
 
-    def ensure_frida(self, serial: str, restart_if_needed: bool = True) -> FridaStatus:
-        """
-        Verify frida-server is running; restart if necessary.
+    def resolve_frida_binary(self, serial: str, abi: str = "", abilist: str = "") -> FridaBinarySpec:
+        """Locate the host Frida server matching the device ABI."""
+        if not abi:
+            info = self.get_device_info(serial)
+            abi = info.abi
+            abilist = info.abilist
+        search_dirs = None
+        if self.config.frida_server_dir:
+            from pathlib import Path
 
-        Also checks host frida package version when available.
+            search_dirs = [Path(self.config.frida_server_dir)]
+        return locate_frida_server(
+            abi,
+            abilist=abilist,
+            version=self.config.frida_version,
+            search_dirs=search_dirs,
+        )
+
+    def push_frida_server(self, serial: str, abi: str = "", abilist: str = "") -> str:
+        """
+        Push the ABI-matched Frida server to the device.
+
+        Returns the remote path of the primary agent binary.
+        Raises FridaUnavailable with an actionable message if the host binary
+        is missing - never silently pushes the wrong architecture.
+        """
+        spec = self.resolve_frida_binary(serial, abi=abi, abilist=abilist)
+        if not spec.found or spec.path is None:
+            raise FridaUnavailable(
+                missing_binary_message(spec),
+                details={
+                    "serial": serial,
+                    "abi": spec.abi,
+                    "expected": spec.expected_name,
+                    "found": False,
+                },
+            )
+
+        remote = f"/data/local/tmp/{self.config.frida_bin}"
+        legacy = "/data/local/tmp/frida-server"
+        logger.info(
+            "[%s] Pushing Frida %s (%s) → %s on %s",
+            self.name,
+            spec.path.name,
+            spec.abi,
+            remote,
+            serial,
+        )
+        ok, out = self.adb(
+            "-s", serial, "push", str(spec.path), remote, timeout=120
+        )
+        if not ok and "pushed" not in (out or "").lower():
+            raise FridaUnavailable(
+                f"Failed to push Frida binary to {serial}: {out}",
+                details={"serial": serial, "host_binary": str(spec.path)},
+            )
+        self.adb_shell(serial, f"chmod 755 {remote}", timeout=10)
+        self.adb_shell(
+            serial,
+            f"cp {remote} {legacy} && chmod 755 {legacy}",
+            timeout=15,
+        )
+        return remote
+
+    def ensure_frida_forward(self, serial: str, port: Optional[str] = None) -> bool:
+        """Configure ADB port forwarding for the Frida listen port.
+
+        Host TCP ports bind to one device. When a Genymotion TCP device and an
+        Android emulator are both online, ``adb -s emulator-* forward`` fails
+        with a misleading \"more than one device\" error - work around by
+        temporarily disconnecting other TCP devices, then reconnecting them.
+        """
+        port = port or self.config.frida_port
+        transport = transport_for_serial(serial)
+
+        def _try_forward() -> Tuple[bool, str, str]:
+            ok1, out1 = self.adb(
+                "-s", serial, "forward", f"tcp:{port}", f"tcp:{port}", timeout=10
+            )
+            ok2, out2 = self.adb(
+                "-s", serial, "forward", "tcp:27042", f"tcp:{port}", timeout=10
+            )
+            return bool(ok1 or ok2), out1 or "", out2 or ""
+
+        ok, out1, out2 = _try_forward()
+        if ok:
+            logger.info(
+                "[%s] Frida forwarded tcp:%s -> %s:%s", self.name, port, serial, port
+            )
+            return True
+
+        combined = f"{out1} {out2}".lower()
+        needs_workaround = (
+            "more than one device" in combined
+            or "cannot bind" in combined
+            or "address already in use" in combined
+        )
+        if not needs_workaround:
+            logger.warning(
+                "[%s] Frida forward failed on %s: %s | %s",
+                self.name,
+                serial,
+                out1,
+                out2,
+            )
+            return False
+
+        # Disconnect other TCP sandboxes so the emulator (or selected TCP
+        # device) can own the host Frida ports.
+        online = self.list_devices(enrich=False)
+        disconnected: List[str] = []
+        for d in online:
+            if d.serial == serial:
+                continue
+            if transport_for_serial(d.serial) == "tcp":
+                logger.info(
+                    "[%s] Temporarily disconnecting %s so Frida forward can bind on %s",
+                    self.name,
+                    d.serial,
+                    serial,
+                )
+                self.adb("disconnect", d.serial, timeout=5)
+                disconnected.append(d.serial)
+
+        # Also clear host ports owned by the selected TCP device if rebinding
+        if transport == "tcp":
+            self.adb("-s", serial, "forward", "--remove", f"tcp:{port}", timeout=5)
+            self.adb("-s", serial, "forward", "--remove", "tcp:27042", timeout=5)
+
+        ok, out1, out2 = _try_forward()
+
+        for other in disconnected:
+            self.adb("connect", other, timeout=5)
+
+        if ok:
+            logger.info(
+                "[%s] Frida forwarded tcp:%s -> %s:%s (after multi-device workaround)",
+                self.name,
+                port,
+                serial,
+                port,
+            )
+            return True
+
+        logger.warning(
+            "[%s] Frida forward failed on %s after workaround: %s | %s. "
+            "Disconnect other ADB devices and retry.",
+            self.name,
+            serial,
+            out1,
+            out2,
+        )
+        return False
+
+    def ensure_frida(
+        self,
+        serial: str,
+        restart_if_needed: bool = True,
+        *,
+        push_if_missing: bool = True,
+        abi: str = "",
+        abilist: str = "",
+    ) -> FridaStatus:
+        """
+        Verify frida-server is running; push/start if necessary.
+
+        ABI is detected from the device when not provided. The wrong-arch
+        binary is never used as a silent fallback.
         """
         host_version = ""
         try:
-            import frida as _frida  # local import - optional at import time
+            import frida as _frida
 
             host_version = getattr(_frida, "__version__", "") or ""
         except ImportError:
             host_version = ""
+
+        if not abi:
+            try:
+                info = self.get_device_info(serial)
+                abi = info.abi
+                abilist = abilist or info.abilist
+            except Exception:  # noqa: BLE001
+                abi = abi or ""
 
         names = self._frida_process_names()
         running, out = self._frida_process_running(serial, names)
@@ -335,29 +601,61 @@ class SandboxProvider(ABC):
             binary_name=self.config.frida_bin,
             port=self.config.frida_port,
             host_version=host_version,
+            abi=abi,
             message="",
         )
 
         if running:
             status.available = True
-            status.compatible = True  # best-effort; deep probe is optional
+            status.compatible = True
             status.message = f"frida agent running ({out.strip()[:120]})"
+            status.forwarded = self.ensure_frida_forward(serial)
             return status
 
         if not restart_if_needed:
             status.message = "frida-server not running"
             raise FridaUnavailable(status.message, details=status.to_dict())
 
-        # Attempt restart from known paths
         logger.info("[%s] frida-server not running on %s - attempting start", self.name, serial)
+
+        # Ensure a binary exists on device; push ABI-matched host binary if needed
+        remote_paths = self._frida_remote_paths()
+        have_remote = False
+        for remote in remote_paths:
+            ok_ls, ls_out = self.adb_shell(serial, f"ls {remote}", timeout=10)
+            if ok_ls and "No such file" not in (ls_out or ""):
+                have_remote = True
+                status.binary_path = remote
+                break
+
+        if not have_remote and push_if_missing:
+            try:
+                status.binary_path = self.push_frida_server(
+                    serial, abi=abi, abilist=abilist
+                )
+                have_remote = True
+                spec = self.resolve_frida_binary(serial, abi=abi, abilist=abilist)
+                status.host_binary = str(spec.path) if spec.path else ""
+            except FridaUnavailable:
+                raise
+
+        if not have_remote:
+            spec = self.resolve_frida_binary(serial, abi=abi, abilist=abilist)
+            raise FridaUnavailable(
+                missing_binary_message(spec),
+                details={
+                    "serial": serial,
+                    "abi": spec.abi,
+                    "expected": spec.expected_name,
+                },
+            )
+
         started = False
-        for remote in self._frida_remote_paths():
-            # Check existence
+        for remote in remote_paths:
             ok_ls, ls_out = self.adb_shell(serial, f"ls {remote}", timeout=10)
             if not ok_ls or "No such file" in (ls_out or ""):
                 continue
             status.binary_path = remote
-            # Kill stale then start
             for n in names:
                 self.adb_shell(serial, f"pkill -f {n} 2>/dev/null", timeout=5)
             port = self.config.frida_port
@@ -372,13 +670,10 @@ class SandboxProvider(ABC):
                 status.available = True
                 status.compatible = True
                 status.message = f"Started {remote} on port {port}"
-                # Forward ports for Docker / host Frida clients
-                self.adb("-s", serial, "forward", f"tcp:{port}", f"tcp:{port}", timeout=10)
-                self.adb("-s", serial, "forward", "tcp:27042", f"tcp:{port}", timeout=10)
+                status.forwarded = self.ensure_frida_forward(serial, port)
                 break
 
         if not started:
-            # Last-ditch: try configured binary name with configured port or default frida-server
             bin_name = self.config.frida_bin or "frida-server"
             port = self.config.frida_port or "27055"
             legacy_cmd = build_frida_start_command(
@@ -394,12 +689,17 @@ class SandboxProvider(ABC):
                 status.compatible = True
                 status.binary_path = f"/data/local/tmp/{bin_name}"
                 status.message = f"Started /data/local/tmp/{bin_name} on port {port}"
-                self.adb("-s", serial, "forward", f"tcp:{port}", f"tcp:{port}", timeout=10)
+                status.forwarded = self.ensure_frida_forward(serial, port)
                 return status
 
+            spec = self.resolve_frida_binary(serial, abi=abi, abilist=abilist)
             status.message = (
-                f"frida agent ({bin_name}) not running and could not be started. "
-                "Push a matching ABI binary to /data/local/tmp/."
+                f"Frida startup failed\n"
+                f"Device: {serial}\n"
+                f"ABI: {abi or spec.abi or '(unknown)'}\n"
+                f"Expected binary: {spec.expected_name}\n"
+                f"Binary found: {'yes - ' + str(spec.path) if spec.found else 'no'}\n"
+                f"Agent still not running after push/start."
             )
             raise FridaUnavailable(status.message, details=status.to_dict())
 
@@ -407,7 +707,7 @@ class SandboxProvider(ABC):
 
     def verify_frida(self, serial: str) -> FridaStatus:
         try:
-            return self.ensure_frida(serial, restart_if_needed=False)
+            return self.ensure_frida(serial, restart_if_needed=False, push_if_missing=False)
         except FridaUnavailable as exc:
             return FridaStatus(
                 available=False,
@@ -472,35 +772,49 @@ class SandboxProvider(ABC):
             )
 
             try:
-                self.ensure_root(device.serial)
-                info.rooted = True
-                _stage("root", True, "whoami=root")
+                rooted = self.ensure_root(device.serial)
+                info.rooted = rooted
+                info.root_available = rooted
+                _stage("root", True if rooted else False, "available" if rooted else "unavailable")
             except RootUnavailable as exc:
                 info.rooted = False
-                _stage("root", False, exc.message)
+                info.root_available = False
+                _stage("root", False, f"unavailable - {exc.message}")
                 if self.config.root_required:
                     raise
 
             selinux = self.ensure_selinux_permissive(device.serial)
             _stage("selinux", "Permissive" in selinux or "Disabled" in selinux, selinux)
 
-            frida_status = self.ensure_frida(device.serial, restart_if_needed=True)
+            frida_status = self.ensure_frida(
+                device.serial,
+                restart_if_needed=True,
+                push_if_missing=True,
+                abi=info.abi,
+                abilist=info.abilist,
+            )
             info.frida_running = frida_status.running
-            info.frida_version = frida_status.host_version
+            info.frida_available = frida_status.available
+            info.frida_version = frida_status.host_version or frida_status.version
+            info.frida_port = frida_status.port
+            info.adb_forwarding = frida_status.forwarded
             _stage("frida", frida_status.available, frida_status.message)
 
             elapsed = (time.monotonic() - t0) * 1000
             info.connection_time_ms = elapsed
             logger.info(
-                "[%s] Connected serial=%s ip=%s android=%s abi=%s root=%s frida=%s "
-                "connect_ms=%.1f",
+                "[%s] Connected serial=%s provider=%s transport=%s ip=%s "
+                "android=%s abi=%s root=%s frida=%s forward=%s connect_ms=%.1f",
                 self.name,
                 info.serial,
+                info.provider,
+                info.transport,
                 info.ip,
                 info.android_version,
                 info.abi,
-                info.rooted,
+                info.root_available,
                 info.frida_running,
+                info.adb_forwarding,
                 elapsed,
             )
             return ConnectionResult(

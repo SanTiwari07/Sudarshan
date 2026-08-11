@@ -17,8 +17,7 @@ function InvestigationChrome({ children }: { children: React.ReactNode }) {
   const { analysisResult, investigationBundle, loading, activeSha256, loadCaseByHash, runtimeEvidenceRaw } =
     useAnalysis();
 
-  const showCaseHeader =
-    !pathname.startsWith('/technical') && !pathname.startsWith('/threat-intel');
+  const showCaseHeader = pathname === '/fraud-card' || pathname.startsWith('/fraud-card/');
 
   const pendingHash = routeSha || activeSha256;
 

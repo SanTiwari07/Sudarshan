@@ -14,7 +14,6 @@ import ThreatEvidenceExplorer from '../components/threatIntel/ThreatEvidenceExpl
 import ThreatIocRegistry from '../components/threatIntel/ThreatIocRegistry';
 import ThreatIntelExportSuite from '../components/threatIntel/ThreatIntelExportSuite';
 import ThreatIntelPageShell from '../components/threatIntel/ThreatIntelPageShell';
-import CompactCaseContext from '../components/investigation/CompactCaseContext';
 import { INTEL } from '../components/threatIntel/intelTokens';
 import {
   buildThreatDna,
@@ -66,8 +65,7 @@ export default function ThreatIntelView({ data }: { data: FraudCardData | null }
 
   return (
     <ThreatIntelPageShell>
-      {data && <CompactCaseContext data={data} page="threat" />}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 pb-4 mt-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 pb-4">
         <div>
           <h2 className="text-lg font-semibold text-slate-800">Threat intelligence</h2>
           <p className={INTEL.subtitle}>Banking threat comparison for the active case</p>

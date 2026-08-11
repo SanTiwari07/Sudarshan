@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cases", tags=["Case History"])
 
 
-from app.case_access import assert_case_visible, list_scope_analyst_id
+from sudarshan_core.engines.risk_engine import reconcile_frs_breakdown
 class NoteCreateRequest(BaseModel):
     text: str
     author: Optional[str] = "SOC Analyst"
@@ -153,6 +153,7 @@ def _dynamic_analysis_from_row(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
 def _case_detail_from_row(row: Dict[str, Any]) -> CaseDetail:
     dyn = _dynamic_analysis_from_row(row)
+    frs_breakdown = reconcile_frs_breakdown(row.get("frs_breakdown"), dyn)
     services = row.get("services_list") or row.get("services") or []
     return CaseDetail(
         sha256=row["sha256"],
@@ -170,7 +171,7 @@ def _case_detail_from_row(row: Dict[str, Any]) -> CaseDetail:
         base_score=row.get("base_score"),
         ai_confidence_multiplier=row.get("ai_confidence_multiplier"),
         recommended_action=row.get("recommended_action"),
-        frs_breakdown=row.get("frs_breakdown"),
+        frs_breakdown=frs_breakdown,
         risk_explanation=row.get("risk_explanation"),
         threat_scenario_table=row.get("threat_scenario_table"),
         intelligence_report=row.get("intelligence_report"),
@@ -268,6 +269,9 @@ async def get_case_detail(
     if dyn is not None:
         row.setdefault("dynamic_analysis", dyn)
         row.setdefault("dynamic_result", dyn)
+    reconciled_frs = reconcile_frs_breakdown(row.get("frs_breakdown"), dyn)
+    if reconciled_frs is not None:
+        row["frs_breakdown"] = reconciled_frs
     row.setdefault(
         "technical_view",
         {

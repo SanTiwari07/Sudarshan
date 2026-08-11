@@ -252,3 +252,41 @@ def test_instrumentation_failure_is_not_evidence_of_safety():
     res = calculate_risk_score(flags=StaticAnalysisFlags(**_TROJAN), dynamic_result=failed)
     assert res["frs_breakdown"]["dynamic_conclusive"] is False
     assert "dynamic" in res["frs_breakdown"]["axes_excluded"]
+
+
+def test_instrumentation_failed_with_sample_behavior_is_conclusive():
+    """Native anti-analysis hooks can fire when the Java bridge fails."""
+    evasive = {
+        "available": True,
+        "engine": "frida",
+        "dynamic_status": "INSTRUMENTATION_FAILED",
+        "bfci": 0.0,
+        "api_calls": [],
+        "network_logs": [],
+        "activities_triggered": [],
+        "files_accessed": [],
+        "anti_analysis_events": [
+            {"data": {"hook": "frida_detected"}},
+            {"data": {"hook": "root_check"}},
+            {"data": {"hook": "debugger_check"}},
+        ],
+    }
+    res = calculate_risk_score(flags=StaticAnalysisFlags(**_TROJAN), dynamic_result=evasive)
+    assert res["frs_breakdown"]["dynamic_conclusive"] is True
+    assert "dynamic" not in res["frs_breakdown"]["axes_excluded"]
+
+
+def test_evidence_record_count_makes_run_conclusive():
+    sparse = {
+        "available": True,
+        "engine": "frida",
+        "dynamic_status": "EVENTS_CAPTURED",
+        "bfci": 12.0,
+        "api_calls": ["Activity.onCreate"],
+        "network_logs": [],
+        "activities_triggered": [],
+        "files_accessed": [],
+        "evidence_record_count": 8,
+    }
+    res = calculate_risk_score(flags=StaticAnalysisFlags(**_TROJAN), dynamic_result=sparse)
+    assert res["frs_breakdown"]["dynamic_conclusive"] is True

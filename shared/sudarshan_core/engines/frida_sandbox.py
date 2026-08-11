@@ -382,6 +382,7 @@ _CERT_FAIL_MARKERS = (
     "INSTALL_PARSE_FAILED_NO_CERTIFICATES",
     "NO_CERTIFICATES",
     "Failed collecting certificates",
+    "APK content size did not verify",
 )
 
 _MANIFEST_REPAIR_MARKERS = (
@@ -2653,7 +2654,7 @@ class FridaSession:
                 spawn_errors: List[str] = []
                 for attempt in range(3):
                     try:
-                        pid = device.spawn([self.package_name])
+                        pid = device.spawn(self.package_name)
                         break
                     except Exception as e:
                         spawn_errors.append(f"{type(e).__name__}: {e}")
@@ -3629,6 +3630,7 @@ async def _run_device_session(
 
     try:
         from sudarshan_core.visual_evidence.linker import write_visual_evidence_artifact
+        from sudarshan_core.visual_evidence.static_sources import merge_static_flags
 
         static_flags = merge_static_flags(
             apk_dir,

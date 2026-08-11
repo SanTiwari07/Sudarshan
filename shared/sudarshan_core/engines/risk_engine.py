@@ -470,62 +470,127 @@ def _calculate_bfci_from_frida(dynamic: Dict) -> Tuple[float, List[str]]:
 # sample rather than evidence about the sandbox.
 _MIN_DYNAMIC_EVENTS = 3
 
+_OBSERVED_BEHAVIOR_FIELDS = (
+    "api_calls",
+    "network_logs",
+    "activities_triggered",
+    "files_accessed",
+    "anti_analysis_events",
+)
+
+
+def _count_observed_sample_behavior(dynamic: Dict) -> int:
+    """Count hook-derived sample behaviour items (not harness commentary)."""
+    observed = 0
+    for field in _OBSERVED_BEHAVIOR_FIELDS:
+        value = dynamic.get(field)
+        try:
+            observed += len(value or [])
+        except TypeError:
+            continue
+    return observed
+
+
+def _dynamic_behavior_is_conclusive(dynamic: Dict) -> bool:
+    """Whether observable sample behaviour exceeds the conclusive threshold."""
+    observed = _count_observed_sample_behavior(dynamic)
+    try:
+        evidence_records = int(dynamic.get("evidence_record_count") or 0)
+    except (TypeError, ValueError):
+        evidence_records = 0
+    try:
+        bfci_val = float(dynamic.get("bfci") or 0.0)
+    except (TypeError, ValueError):
+        bfci_val = 0.0
+    return (
+        observed >= _MIN_DYNAMIC_EVENTS
+        or evidence_records >= _MIN_DYNAMIC_EVENTS
+        or bfci_val >= 20.0
+    )
+
+
+def reconcile_frs_breakdown(
+    frs_breakdown: Optional[Dict],
+    dynamic_result: Optional[Dict],
+) -> Optional[Dict]:
+    """
+    Refresh dynamic-axis provenance when serving a stored case.
+
+    Older payloads may omit `dynamic_conclusive` or mark the axis excluded even
+    when `dynamic_result` contains conclusive behavioural evidence.
+    """
+    if not frs_breakdown or not isinstance(frs_breakdown, dict):
+        return frs_breakdown
+    if not dynamic_result or not isinstance(dynamic_result, dict):
+        return frs_breakdown
+
+    dynamic_available = bool(dynamic_result.get("available", False))
+    dynamic_conclusive = dynamic_available and _dynamic_run_was_conclusive(dynamic_result)
+    correlation_available = "correlation" not in (frs_breakdown.get("axes_excluded") or [])
+
+    axes = [
+        ("stei", 0.25, True),
+        ("dynamic", 0.35, dynamic_conclusive),
+        ("correlation", 0.20, correlation_available),
+        ("banking_impact", 0.20, True),
+    ]
+    live = [(name, weight) for name, weight, ok in axes if ok]
+    total_weight = sum(weight for _, weight in live)
+    axes_used = (
+        {name: round(weight / total_weight, 3) for name, weight in live}
+        if total_weight
+        else {}
+    )
+    axes_excluded = [name for name, _, ok in axes if not ok]
+
+    reconciled = dict(frs_breakdown)
+    reconciled.update(
+        {
+            "dynamic_ran": dynamic_available,
+            "dynamic_available": dynamic_available,
+            "dynamic_conclusive": dynamic_conclusive,
+            "axes_used": axes_used,
+            "axes_excluded": axes_excluded,
+        }
+    )
+    return reconciled
+
 
 def _dynamic_run_was_conclusive(dynamic: Optional[Dict]) -> bool:
     """
     Did the sandbox actually observe enough to reason about?
-    
-    A run is conclusive if Frida attached cleanly, hooks loaded, and actual
-    behavior was observed (events captured or BFCI >= 20.0). Runs where no
-    behavior was observed, or where instrumentation failed, are inconclusive.
+
+    A run is conclusive when the sample exhibited enough observable behaviour
+    (hook events, flushed evidence records, or BFCI >= 20). Harness faults
+    (INSTRUMENTATION_FAILED) do not override real sample behaviour - native
+    anti-analysis hooks can still fire when the Java bridge fails.
     """
     if not dynamic or not dynamic.get("available", False):
         return False
 
     status = str(dynamic.get("dynamic_status") or "").upper()
     outcome = str(dynamic.get("outcome") or "").upper()
+    observed = _count_observed_sample_behavior(dynamic)
+    try:
+        evidence_records = int(dynamic.get("evidence_record_count") or 0)
+    except (TypeError, ValueError):
+        evidence_records = 0
+    try:
+        bfci_val = float(dynamic.get("bfci") or 0.0)
+    except (TypeError, ValueError):
+        bfci_val = 0.0
+    behavior_conclusive = _dynamic_behavior_is_conclusive(dynamic)
+
+    if behavior_conclusive:
+        # Explicit dormancy: hooks ran but the sample produced zero events.
+        if status == "NO_BEHAVIOR_OBSERVED":
+            return False
+        return True
 
     if status in {"NO_BEHAVIOR_OBSERVED", "INSTRUMENTATION_FAILED", "TIMEOUT", "FAILED"} or outcome == "FAILED":
         return False
 
-    # Count only fields that record what the SAMPLE did.
-    #
-    # Two defects lived here, and together they made evasion pay:
-    #
-    #   1. `evidence` was counted. That field carries harness commentary
-    #      ("process started"), not sample behaviour - so a trojan that
-    #      detected Frida and deliberately did nothing still produced one
-    #      "observed" item and was rated CONCLUSIVE.
-    #   2. The threshold was `>= 1`, while _MIN_DYNAMIC_EVENTS (=3) sat
-    #      directly above this function, unused. The declared policy and the
-    #      implemented policy disagreed.
-    #
-    # Consequence: a dormant sample took the dynamic axis - the LARGEST weight
-    # at 0.35 - at a near-zero value, diluting strong static evidence. Measured
-    # on the regression fixture, a trojan scoring 42.22 static-only dropped to
-    # 23.75 after a sandbox run that observed nothing. The better a sample's
-    # evasion, the safer this engine rated it, which is precisely the regression
-    # the surrounding comment says was fixed.
-    observed = 0
-    for field in (
-        "api_calls",
-        "network_logs",
-        "activities_triggered",
-        "files_accessed",
-        "anti_analysis_events",
-    ):
-        value = dynamic.get(field)
-        try:
-            observed += len(value or [])
-        except TypeError:
-            continue
-    if observed >= _MIN_DYNAMIC_EVENTS:
-        return True
-
-    try:
-        return float(dynamic.get("bfci") or 0.0) >= 20.0
-    except (TypeError, ValueError):
-        return False
+    return False
 
 
 

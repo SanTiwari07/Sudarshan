@@ -44,10 +44,29 @@ RUN curl -L "https://github.com/skylot/jadx/releases/download/v1.5.1/jadx-1.5.1.
 
 WORKDIR /app
 
+# Pip defaults for slow or flaky networks (common during Docker Desktop builds).
+ENV PIP_DEFAULT_TIMEOUT=300 \
+    PIP_RETRIES=15 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
 # 4. Install Python dependencies
 # Build context is the REPO ROOT (see docker-compose.yml).
+#
+# Install the large Frida wheels in their own layer first so a later transient
+# PyPI/DNS failure does not force re-downloading ~33 MB on every retry.
+RUN pip install --no-cache-dir --break-system-packages \
+    frida==17.16.4 \
+    frida-tools==14.10.4
+
 COPY analysis-engine/requirements.txt .
-RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
+RUN set -e; \
+    for attempt in 1 2 3 4 5; do \
+        pip install --no-cache-dir --break-system-packages -r requirements.txt && exit 0; \
+        echo "pip install attempt ${attempt} failed; retrying in $((attempt * 15))s..."; \
+        sleep $((attempt * 15)); \
+    done; \
+    echo "pip install failed after 5 attempts"; \
+    exit 1
 
 # 4b. Shared analysis layer - the same package the backend installs, so the two
 #     services can no longer drift.

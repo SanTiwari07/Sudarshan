@@ -1,5 +1,5 @@
 📦
-513316 /banking_trojan.js
+513262 /banking_trojan.js
 ✄
 var __defProp = Object.defineProperty;
 var __export = (target, all) => {
@@ -14060,7 +14060,7 @@ function initHooks() {
             hook: "TelephonyManager.getLine1Number",
             class_name: "android.telephony.TelephonyManager",
             severity: "MED",
-            description: "App queried device phone number (MSISDN \u2014 device identity)"
+            description: "App queried device phone number (MSISDN - device identity)"
           });
           return num;
         };
@@ -14071,7 +14071,7 @@ function initHooks() {
             hook: "TelephonyManager.getSimSerialNumber",
             class_name: "android.telephony.TelephonyManager",
             severity: "MED",
-            description: "App queried SIM Serial Number (ICCID \u2014 device fingerprinting)"
+            description: "App queried SIM Serial Number (ICCID - device fingerprinting)"
           });
           return serial;
         };
@@ -14251,7 +14251,7 @@ function initHooks() {
             hook: "ActivityManager.getRunningTasks",
             class_name: "android.app.ActivityManager",
             severity: "MED",
-            description: "App called getRunningTasks() (restricted since API 22 \u2014 returns only the caller's own tasks)"
+            description: "App called getRunningTasks() (restricted since API 22 - returns only the caller's own tasks)"
           });
           if (tasks && tasks.size() > 0) {
             try {
@@ -14667,7 +14667,7 @@ function initHooks() {
             hook: "DevicePolicyManager.lockNow",
             class_name: "android.app.admin.DevicePolicyManager",
             severity: "CRITICAL",
-            description: "App invoked lockNow() \u2014 RANSOMWARE/EXTORTION BEHAVIOR CONFIRMED"
+            description: "App invoked lockNow() - RANSOMWARE/EXTORTION BEHAVIOR CONFIRMED"
           });
           return this.lockNow();
         };
@@ -14953,7 +14953,7 @@ function initHooks() {
               class_name: "java.io.BufferedReader",
               severity: "HIGH",
               suppressed_lines: suppressed,
-              description: "App scanned a stream for Frida artifacts (anti-Frida detection attempt) \u2014 " + suppressed + " matching line(s) skipped, stream kept open"
+              description: "App scanned a stream for Frida artifacts (anti-Frida detection attempt) - " + suppressed + " matching line(s) skipped, stream kept open"
             });
           }
           return line;
@@ -14970,7 +14970,7 @@ function initHooks() {
             class_name: "java.lang.System",
             severity: "CRITICAL",
             exit_code: code3,
-            description: "App attempted to self-terminate via System.exit(" + code3 + ") \u2014 blocked to preserve dynamic analysis"
+            description: "App attempted to self-terminate via System.exit(" + code3 + ") - blocked to preserve dynamic analysis"
           });
         };
         registerHook("System.exit");
@@ -14985,7 +14985,7 @@ function initHooks() {
             class_name: "android.os.Process",
             severity: "CRITICAL",
             target_pid: pid,
-            description: "App attempted to self-terminate via Process.killProcess(" + pid + ") \u2014 blocked to preserve dynamic analysis"
+            description: "App attempted to self-terminate via Process.killProcess(" + pid + ") - blocked to preserve dynamic analysis"
           });
         };
         registerHook("Process.killProcess");
@@ -15000,7 +15000,7 @@ function initHooks() {
             class_name: "java.lang.Runtime",
             severity: "CRITICAL",
             exit_code: code3,
-            description: "App attempted to self-terminate via Runtime.exit(" + code3 + ") \u2014 blocked to preserve dynamic analysis"
+            description: "App attempted to self-terminate via Runtime.exit(" + code3 + ") - blocked to preserve dynamic analysis"
           });
         };
         registerHook("Runtime.exit");
@@ -15226,7 +15226,7 @@ function installNativeHooks() {
                     hook: "libc.ptrace",
                     severity: "HIGH",
                     request,
-                    description: "App called ptrace(PTRACE_TRACEME) \u2014 self-anti-debug protection",
+                    description: "App called ptrace(PTRACE_TRACEME) - self-anti-debug protection",
                     data: { hook: "libc.ptrace", request }
                   }
                 });
@@ -15294,7 +15294,7 @@ function installNativeHooks() {
                     hook: "libart.RegisterNatives",
                     severity: "HIGH",
                     method_count: num_methods,
-                    description: "JNI RegisterNatives() called (" + num_methods + " methods) \u2014 native bridge established",
+                    description: "JNI RegisterNatives() called (" + num_methods + " methods) - native bridge established",
                     data: { hook: "libart.RegisterNatives", method_count: num_methods }
                   }
                 });

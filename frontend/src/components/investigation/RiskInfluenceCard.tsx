@@ -31,6 +31,26 @@ function buildRows(data: FraudCardData): InfluenceRow[] {
 
   const dynamicIncluded = frs.dynamic_conclusive && !frs.axes_excluded?.includes('dynamic');
   const dynamicScore = frs.dynamic ?? 0;
+  const dynResult = (
+    data.dynamic_result && typeof data.dynamic_result === 'object' && !Array.isArray(data.dynamic_result)
+      ? data.dynamic_result
+      : data.dynamic_analysis && typeof data.dynamic_analysis === 'object' && !Array.isArray(data.dynamic_analysis)
+        ? data.dynamic_analysis
+        : undefined
+  ) as { dynamic_status?: string; error?: string } | undefined;
+  const dynamicStatus = dynResult?.dynamic_status?.toUpperCase();
+  const instrumentationFailed =
+    Boolean(frs.dynamic_ran) &&
+    !dynamicIncluded &&
+    (dynamicStatus === 'INSTRUMENTATION_FAILED' || Boolean(dynResult?.error));
+  const runtimeNotRun = !frs.dynamic_ran && !data.dynamic_available;
+  const dynamicSummary = dynamicIncluded
+    ? 'Observed sandbox behaviour contributed to the fraud risk score.'
+    : runtimeNotRun
+      ? 'Runtime analysis did not run for this case, so this axis was excluded from the final score.'
+      : instrumentationFailed
+        ? 'Runtime instrumentation failed, so sandbox evidence was excluded from the final score.'
+        : 'Runtime execution was inconclusive, so this axis was excluded from the final score.';
   const dynamicContribution = dynamicIncluded
     ? computeWeightedContribution('dynamic', dynamicScore, axesUsed)
     : 0;
@@ -54,9 +74,7 @@ function buildRows(data: FraudCardData): InfluenceRow[] {
       term: 'BFCI',
       score: dynamicScore,
       influence: dynamicIncluded ? influenceLabel(dynamicScore) : 'Not included',
-      summary: dynamicIncluded
-        ? 'Observed sandbox behaviour contributed to the fraud risk score.'
-        : 'Runtime execution was inconclusive, so this axis was excluded from the final score.',
+      summary: dynamicSummary,
       included: Boolean(dynamicIncluded),
       contributionLabel: dynamicIncluded
         ? `${dynamicContribution.toFixed(1)} pts to FRS`

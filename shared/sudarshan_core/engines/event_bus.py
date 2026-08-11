@@ -212,6 +212,7 @@ class RuntimeEventBus:
         deadline = time.time() + max(0.1, timeout_seconds)
         while time.time() < deadline:
             if self._queue.unfinished_tasks == 0 and self._queue.empty():
+                time.sleep(0.15)  # Allow subscriber callbacks and background handlers to settle
                 return True
             time.sleep(0.05)
         logger.warning(

@@ -490,7 +490,7 @@ class EvidenceStore:
 
         try:
             with open(output_path, "w", encoding="utf-8") as f:
-                json.dump(payload, f, indent=2, ensure_ascii=False)
+                json.dump(payload, f, indent=2, ensure_ascii=False, default=str)
             logger.info(
                 f"[EvidenceStore] Flushed {len(records_snapshot)} records → {output_path}"
             )

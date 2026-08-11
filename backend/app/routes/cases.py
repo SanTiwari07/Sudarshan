@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.auth.auth import require_analyst
+from app.case_access import assert_case_visible, list_scope_analyst_id
 from app.db.database import get_case, list_cases, count_cases, add_case_note, get_case_notes, save_case
 from app.evidence_loader import load_evidence_records
 from app.services.case_intel_enrichment import enrich_case_threat_intel

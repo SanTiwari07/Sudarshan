@@ -292,9 +292,10 @@ def select_sandbox_device(
             if d.serial == preferred_serial:
                 return d
         online = [d.serial for d in devices]
-        raise ValueError(
-            f"Configured device serial {preferred_serial!r} not found. "
-            f"Online: {online}. Set ANDROID_DEVICE_SERIAL / DEVICE_SERIAL to override."
+        logger.warning(
+            "Configured device serial %r not found online (online: %s). Falling back to automatic selection.",
+            preferred_serial,
+            online,
         )
 
     ranked = rank_devices(

@@ -3107,7 +3107,12 @@ async def _run_device_session(
     # This is an analysis sandbox: the AVD is disposable and exists to be
     # instrumented. It is never applied to anything but the attached emulator.
     await loop.run_in_executor(None, _adb, "-s", device_serial, "root")
-    await asyncio.sleep(1)
+    # Wait for ADB daemon to reconnect if adbd restarted
+    for _ in range(10):
+        await asyncio.sleep(0.5)
+        ok_who, who = await loop.run_in_executor(None, _adb, "-s", device_serial, "shell", "whoami")
+        if ok_who and ("root" in (who or "") or "shell" in (who or "")):
+            break
 
     ok, enforce = await loop.run_in_executor(
         None, _adb, "-s", device_serial, "shell", "getenforce"

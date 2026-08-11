@@ -194,6 +194,16 @@ class ToolExecutor:
         Returns ToolResult - never raises.
         """
         tool_name = action.get("tool", "")
+        # Alias resolution for fallback / LLM variations
+        if tool_name == "click":
+            tool_name = "click_text" if action.get("text") else "tap"
+            action["tool"] = tool_name
+        elif tool_name == "input_text":
+            tool_name = "type_text"
+            action["tool"] = tool_name
+            if "field_hint" not in action:
+                action["field_hint"] = action.get("text") or "text"
+
         tool_def  = get_tool(tool_name)
 
         if not tool_def:

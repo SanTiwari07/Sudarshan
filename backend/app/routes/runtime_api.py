@@ -90,6 +90,8 @@ _ARTIFACT_ROOTS = (
     Path("/app/uploads"),
     Path("sudarshan_artifacts"),
     Path("backend/sudarshan_artifacts"),
+    Path(__file__).resolve().parents[2] / "sudarshan_artifacts",
+    Path.cwd() / "sudarshan_artifacts",
 )
 
 # Cache the rglob result briefly. This walks the ENTIRE artifact tree and stats

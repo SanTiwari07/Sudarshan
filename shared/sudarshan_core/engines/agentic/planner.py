@@ -761,15 +761,18 @@ class FallbackPlanner:
             x = getattr(matching_node, "center_x", 540) if matching_node else 540
             y = getattr(matching_node, "center_y", 960) if matching_node else 960
 
-            tool_name = "click"
+            tool_name = "click_text" if highest_candidate.target_label else "tap"
+            field_hint = "text"
             if highest_candidate.action_type == "input":
-                tool_name = "input_text"
+                tool_name = "type_text"
+                field_hint = highest_candidate.input_text or highest_candidate.target_label or "text"
 
             logger.info(f"[FallbackPlanner] Goal-driven action: {highest_candidate.reason} (priority={highest_candidate.priority})")
             
             action_dict = {
                 "tool":       tool_name,
                 "text":       highest_candidate.input_text or highest_candidate.target_label,
+                "field_hint": field_hint,
                 "x":          x,
                 "y":          y,
                 "goal":       goal_name,

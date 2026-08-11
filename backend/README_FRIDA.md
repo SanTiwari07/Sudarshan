@@ -121,7 +121,7 @@ BFCI = (wa × A) + (ws × S) + (wo × O) + (wb × B) + (wn × N) + (wp × P)
 FRS = 0.25×STEI + 0.35×BFCI + 0.20×Correlation + 0.20×BankingImpact
      │
      ▼
-Fraud Intelligence Report (via Gemini 2.5 Flash / Ollama)
+Fraud Intelligence Report (via Gemini 2.5 Flash)
 ```
 
 ---

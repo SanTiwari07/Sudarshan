@@ -139,7 +139,7 @@ $$STEI = 0.60 \times CT + 0.20 \times BT + 0.10 \times PR + 0.05 \times OB + 0.0
 | Axis | Weight | Indicators Evaluated |
 | :--- | :--- | :--- |
 | **Credential Theft ($CT$)** | 60% | Accessibility abuse, SMS read/write, System Alert Window overlay abuse. |
-| **Banking Targeting ($BT$)** | 20% | Package matching against 47 Indian banking application signatures. |
+| **Banking Targeting ($BT$)** | 20% | Package matching against 21 Indian banking app package prefixes (`INDIAN_BANK_PACKAGES` in `apk_analyzer.py`). |
 | **Permission Risk ($PR$)** | 10% | Count of dangerous Android permissions requested vs expected baseline. |
 | **Obfuscation ($OB$)** | 5% | Shannon entropy ratio of DEX bytecode and class/method reflection calls. |
 | **Infrastructure Risk ($IR$)** | 5% | Hardcoded malicious IPs, C2 domains, and suspicious string literals. |

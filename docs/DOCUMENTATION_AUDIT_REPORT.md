@@ -69,7 +69,7 @@ A full documentation audit was conducted against the live codebase. Key findings
 |---|---|---|---|
 | Version declared as `v2.5.0-STABLE` — actual is `2.1.0` | Most docs | MEDIUM | **Fixed** — corrected throughout |
 | Test count stated as 519 — actual is 583 | `README.md`, `VALIDATION.md`, `11_EVALUATION.md`, `DAE_CURRENT_STATE.md` | MEDIUM | **Fixed** |
-| "47 Indian banking apps" — `apk_analyzer.py` has 21 | `08_DETERMINISTIC_RISK_ENGINE.md` | LOW | **Fixed** |
+| "47 Indian banking apps" — `apk_analyzer.py` has 21 | `08_DETERMINISTIC_RISK_ENGINE.md`, `05_AI_INVESTIGATION_ENGINE.md`, `03_STATIC_THREAT_INTELLIGENCE.md` | LOW | **Fixed** (all three instances — 05 and 03 were missed in initial pass, corrected 2026-08-11) |
 | Plaintext demo passwords in documentation | `BOI_DEMO_CREDENTIALS.md` | HIGH | **Fixed** — placeholders only |
 | CASE_STUDIES.md conflates STEI and FRS in summary table | `CASE_STUDIES.md` | MEDIUM | **Annotated** |
 | BENCHMARKS.md metrics not empirically re-verified | `BENCHMARKS.md` | MEDIUM | **Annotated** |
@@ -92,6 +92,7 @@ A full documentation audit was conducted against the live codebase. Key findings
 - Per-session ephemeral artifact roots — partial mitigation only; see `security/P0_RED_TEAM_PENETRATION_REPORT.md`.
 - VIDE live WebView device path — run `scripts/verify_vide_webview_device.md` when frida-server is active.
 - Add `docs/security/` overview document indexing the two P0 reports.
+- **[CONFIRMED OPEN — G2d]** `sanitizer.py` is NOT imported by `gemini_client.py` or `gemini_rag.py`. The production LLM narrative paths (`analyze_with_llm`, RAG chat) receive APK-controlled strings (activity names, MobSF text) with no sanitization fence. `05_AI_INVESTIGATION_ENGINE.md` §4 implies it is wired — it is not. This is not a documentation fix; it requires a code change.
 
 ---
 

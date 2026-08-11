@@ -42,7 +42,7 @@ What it does **not** contain, and which the brief asked for:
 | Network capture | mitmproxy sidecar → HAR → ingest | unchanged | 🟢 |
 | Scoring | 5-axis STEI + BFCI + FRS, with axis exclusion, renormalisation, visibility floor | unchanged | 🟢 |
 | Threat intel | VirusTotal, OTX, AbuseIPDB | **the 24 h SQLite cache is never called** | 🟢 |
-| AI layer | RAG-grounded **Gemini only**; agentic planner / perception / tool-executor loop | Ollama removed | 🟢 |
+| AI layer | RAG-grounded **Gemini only**; agentic planner / perception / tool-executor loop | Pure Gemini pipeline | 🟢 |
 | Prompt-injection defence | Single-choke-point sanitizer, 20 adversarial tests | **not wired to either production LLM path** | 🟢 |
 | Output | STIX 2.1, IOC CSV, MITRE mapping, fraud-workflow reconstruction | STIX IDs are malformed | 🟢 |
 | Domain specialisation | Indian banking - `targets_indian_banks`, CERT-In in the RAG corpus | bank matching is naked substring | 🟢 |

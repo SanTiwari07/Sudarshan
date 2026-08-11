@@ -74,7 +74,10 @@ Implemented in [`gemini_rag.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app
 
 ## 4. Prompt Injection Sanitization Guard (`sanitizer.py`)
 
-All strings extracted from untrusted APK binaries (class names, method strings, layout text, UI labels) are sanitized prior to prompt assembly in [`sanitizer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/agentic/sanitizer.py):
+> [!WARNING]
+> **G2d — CONFIRMED OPEN (verified 2026-08-11):** `sanitizer.py` is imported by the agentic explorer modules only. It is **not** imported by `gemini_client.py` or `gemini_rag.py`. APK-controlled strings (activity class names, MobSF finding text, hardcoded string literals) enter both production LLM prompt paths without sanitization fencing. This is a code gap, not a documentation gap.
+
+[`sanitizer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/agentic/sanitizer.py) implements the guard:
 
 ```python
 def sanitize_input(text: str) -> str:
@@ -84,7 +87,7 @@ def sanitize_input(text: str) -> str:
     return text[:2000]
 ```
 
-Tested against 64 adversarial injection payloads ([`test_prompt_injection.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_prompt_injection.py)).
+Tested against 64 adversarial injection payloads ([`test_prompt_injection.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_prompt_injection.py)). The test suite confirms the sanitizer function works. The function is not yet called on the paths that need it.
 
 ---
 
@@ -102,4 +105,4 @@ To guarantee zero hallucinated verdicts:
 The engine maps observed evidence against known threat actors and banking malware families (*Drinik*, *Xenomorph*, *Anatsa*, *Cerberus*):
 
 - **MITRE ATT&CK for Mobile**: Maps findings to technique IDs (`T1628` Accessibility Abuse, `T1637` App Overlay, `T1643` SMS Theft).
-- **Banking Application Graph**: Cross-references package names against 47 Indian financial applications (SBI, HDFC, ICICI, Axis, PhonePe, Paytm, BHIM, Google Pay).
+- **Banking Application Graph**: Cross-references package names against **21** Indian banking app package prefixes (`INDIAN_BANK_PACKAGES` in `apk_analyzer.py` — SBI, HDFC, ICICI, Axis, PhonePe, Paytm, BHIM, Google Pay family).

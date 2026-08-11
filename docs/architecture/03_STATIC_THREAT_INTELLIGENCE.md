@@ -2,7 +2,7 @@
 
 ```yaml
 Module Title:        Static Threat Intelligence & Decompilation Engine
-Version:             2.5.0-STABLE
+Version:             2.1.0
 Primary Files:       analysis-engine/app/main.py
                      shared/sudarshan_core/models/manifest.py
                      shared/sudarshan_core/engines/apk_repair.py

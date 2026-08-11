@@ -2,7 +2,7 @@
 
 ```yaml
 Module Title:        Dynamic Analysis Engine (DAE) & Agentic Explorer
-Version:             2.5.0-STABLE
+Version:             2.1.0
 Primary Files:       analysis-engine/app/main.py
                      backend/app/routes/runtime_api.py
                      shared/sudarshan_core/engines/frida_sandbox.py

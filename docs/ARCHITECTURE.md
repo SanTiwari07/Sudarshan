@@ -2,11 +2,11 @@
 
 ```yaml
 Document Title:      Sudarshan Platform Architectural Specification
-Version:             2.5.0-STABLE
+Version:             2.1.0
 Last Revision:       2026-08-08
 Repository Scope:    SanTiwari07/Sudarshan (d:/Projects/Sudarshan BOI)
 Target Audience:     Enterprise Security Engineers, SOC Analysts, System Architects
-Verification Status: 519 / 519 Unit & Integration Tests Collected & Verified (100%)
+Verification Status: 583 / 583 Unit & Integration Tests Collected & Verified (100%)
 ```
 
 ---
@@ -139,7 +139,7 @@ d:\Projects\Sudarshan BOI\
 │   │   ├── routes/                  # Gateway API routers (upload.py, report.py, cases.py, runtime_api.py)
 │   │   └── workers/                 # Async worker pool (analysis_queue.py)
 │   └── tests/                       # Automated unit & regression tests
-├── tests/                           # 519 automated unit & integration tests
+├── tests/                           # 583 automated unit & integration tests
 ├── docker-compose.hardened.yml      # Production overlay (read-only rootfs, seccomp, containment)
 ├── deploy/security/                 # seccomp profiles for hardened analysis-engine
 ├── analysis-engine/                 # Containerized Analysis Microservice (Port 8001)

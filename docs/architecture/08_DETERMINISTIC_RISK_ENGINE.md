@@ -2,7 +2,7 @@
 
 ```yaml
 Module Title:        Deterministic Risk Engine & Mathematical Models
-Version:             2.5.0-STABLE
+Version:             2.1.0
 Primary Files:       shared/sudarshan_core/engines/risk_engine.py
                      shared/sudarshan_core/engines/bfci_scorer.py
 Test Suite:          backend/tests/test_risk_engine.py, backend/tests/test_bfci_scorer.py
@@ -52,7 +52,7 @@ graph TD
 $$STEI = 0.60 \times CT + 0.20 \times BT + 0.10 \times PR + 0.05 \times OB + 0.05 \times IR$$
 
 - **Credential Theft ($CT$)**: Accessibility, SMS, and Overlay abuse ($0.0 - 1.0$).
-- **Banking Targeting ($BT$)**: Matches against 47 Indian banking apps ($0.0 - 1.0$).
+- **Banking Targeting ($BT$)**: Matches against 21 Indian banking app package prefixes (`apk_analyzer.py`, `INDIAN_BANK_PACKAGES`) ($0.0 - 1.0$).
 - **Permission Risk ($PR$)**: Ratio of requested dangerous permissions ($0.0 - 1.0$).
 - **Obfuscation ($OB$)**: Shannon entropy ratio of classes.dex & reflection usage ($0.0 - 1.0$).
 - **Infrastructure Risk ($IR$)**: Malicious C2 domains and hardcoded IP addresses ($0.0 - 1.0$).

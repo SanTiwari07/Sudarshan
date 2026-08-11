@@ -8,7 +8,7 @@
   </p>
   
   <p>
-    <b>526</b> Automated Unit & Integration Tests &nbsp;&nbsp;|&nbsp;&nbsp;
+    <b>583</b> Automated Unit &amp; Integration Tests &nbsp;&nbsp;|&nbsp;&nbsp;
     <b>VIDE Visual Impersonation Detection</b> &nbsp;&nbsp;|&nbsp;&nbsp;
     <b>Deterministic Fraud Scoring</b> &nbsp;&nbsp;|&nbsp;&nbsp;
     <b>Containerized Microservices</b>
@@ -341,7 +341,7 @@ Nominal weights $0.25 \times STEI + 0.35 \times Dynamic + 0.20 \times ThreatCorr
 ### 2. Static Threat and Environmental Index ($STEI$)
 $$STEI = 0.60 \times CT + 0.20 \times BT + 0.10 \times PR + 0.05 \times OB + 0.05 \times IR$$
 - **Credential Theft ($CT$)**: Accessibility, SMS read/write, overlay window abuse.
-- **Banking Targeting ($BT$)**: Matches against 47 Indian banking package signatures (SBI, HDFC, ICICI, etc.).
+- **Banking Targeting ($BT$)**: Matches against 21 Indian banking app package prefixes (`INDIAN_BANK_PACKAGES` in `apk_analyzer.py`).
 - **Permission Risk ($PR$)**: Ratio of dangerous Android permissions.
 - **Obfuscation ($OB$)**: Shannon entropy ratio of classes.dex & reflection usage.
 - **Infrastructure Risk ($IR$)**: Malicious C2 domains/IPs extracted from bytecode.
@@ -395,7 +395,7 @@ Run the automated bootstrapper script from PowerShell:
 ```
 
 ### Automated Test Suite Execution
-Run the full automated test suite (**526 tests collected**):
+Run the full automated test suite (**583 tests collected**, verified 2026-08-11):
 ```powershell
 $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests
 ```
@@ -432,7 +432,7 @@ The detailed documentation portal is available under [`docs/`](docs/README.md):
 | [**08 - Deterministic Risk Engine**](docs/architecture/08_DETERMINISTIC_RISK_ENGINE.md) | Math formulas for 5-axis STEI, BFCI v2, FRS, Threat Scenario Matrix. |
 | [**09 - AI Report Generation**](docs/architecture/09_AI_REPORT_GENERATION.md) | HTML security reports, PDF report exporter, JSON report feed. |
 | [**10 - Analyst Dashboard**](docs/dashboard/10_DASHBOARD.md) | React 18 SPA, `InvestigationShell`, Executive Fraud Card, Technical View, VIDE panels, Workflow UI. |
-| [**11 - Evaluation Strategy**](docs/evaluation/11_EVALUATION.md) | Automated testing suite (**526** tests in `pytest tests/ backend/tests`), benchmarks, determinism baselines. |
+| [**11 - Evaluation Strategy**](docs/evaluation/11_EVALUATION.md) | Automated testing suite (**583** tests in `pytest tests/ backend/tests`, verified 2026-08-11), benchmarks, determinism baselines. |
 | [**How to Run Guide**](docs/HOW_TO_RUN.md) | Comprehensive installation, configuration, and execution guide. |
 | [**DAE Current State**](docs/DAE_CURRENT_STATE.md) | Complete resolution audit and technical current state document. |
 | [**Documentation Audit Report**](docs/DOCUMENTATION_AUDIT_REPORT.md) | Formal documentation audit, file mapping, and verification report. |

@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## 2026-08-11
+
+### Documentation
+- **Full Documentation Audit**: Complete codebase-verified documentation pass across all files in `docs/` and root `README.md`. Codebase treated as sole source of truth.
+- **Version corrected**: All docs and `README.md` now state `v2.1.0` (from `backend/app/main.py`); prior docs incorrectly stated `v2.5.0-STABLE`.
+- **Test count corrected**: Verified **583 tests collected** (2026-08-11 live run, 42.63s) via `pytest tests/ backend/tests --collect-only`. Prior `README.md` stated 526; prior `docs/` stated 519.
+- **Indian bank package count corrected**: `08_DETERMINISTIC_RISK_ENGINE.md` and `README.md` updated to state 21 package prefixes (from 47/various); verified against `apk_analyzer.py::INDIAN_BANK_PACKAGES`.
+- **Demo credentials sanitized**: `docs/BOI_DEMO_CREDENTIALS.md` no longer contains plaintext passwords; replaced with `.env` placeholder guidance.
+- **CASE_STUDIES.md annotated**: Summary table notes FRS/STEI distinction; Drinik/Xenomorph FRS scores marked "Not re-verified".
+- **BENCHMARKS.md annotated**: Warning added — metrics not re-measured in this audit pass.
+
 ## [2.5.0-STABLE] - 2026-08-05
 
 ### Documentation

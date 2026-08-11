@@ -23,12 +23,12 @@ All documentation herein is strictly derived from and cross-verified against the
 | [**08 - Deterministic Risk Engine**](architecture/08_DETERMINISTIC_RISK_ENGINE.md) | Risk Scoring & Math Formulas | 5-axis STEI, logarithmic volume-aware BFCI v2, 4-axis FRS formula, static fallback. |
 | [**09 - AI Report Generation**](architecture/09_AI_REPORT_GENERATION.md) | Security Reporting & Export | Executive Fraud Cards, HTML security reports, PDF report exporter, STIX 2.1 exporter, CSV IOC feed. |
 | [**10 - Analyst Dashboard**](dashboard/10_DASHBOARD.md) | Analyst UI & Visual Workflows | React 18 SPA, `InvestigationShell`, Executive View (`FraudCard.tsx`), Technical SOC View, VIDE panels, `WorkflowDiagram.tsx` timeline. |
-| [**11 - Evaluation Strategy**](evaluation/11_EVALUATION.md) | Verification & Testing | Automated test suite in `tests/` & `backend/tests/` (**519 collected & verified tests**), benchmarks, determinism baselines. |
+| [**11 - Evaluation Strategy**](evaluation/11_EVALUATION.md) | Verification & Testing | Automated test suite in `tests/` & `backend/tests/` (**583 collected & verified tests** as of 2026-08-11), benchmarks, determinism baselines. |
 | [**HOW_TO_RUN.md**](HOW_TO_RUN.md) | Installation & Operations | Prerequisites, Docker Compose setup, single-command `start.ps1`, Vite polling mode, environment variables. |
-| [**VALIDATION.md**](VALIDATION.md) | Validation Protocols | Determinism replay, ground-truth matrix, pytest suite (**519**), dynamic APK corpus (`validate_dynamic_pipeline.py`). |
+| [**VALIDATION.md**](VALIDATION.md) | Validation Protocols | Determinism replay, ground-truth matrix, pytest suite (**583**), dynamic APK corpus (`validate_dynamic_pipeline.py`). |
 | [**DAE_CURRENT_STATE.md**](DAE_CURRENT_STATE.md) | Technical Resolution Audit | Resolution state of containerization, Frida 17 Java bridge, ART JIT deopt, PID attach, BFCI v2, manifest, and HAR merger. |
 | [**CONTRIBUTING.md**](CONTRIBUTING.md) | Developer Guidelines | Code standards, PEP-8/ESLint style, pytest testing workflows, pull request process. |
-| [**CHANGELOG.md**](CHANGELOG.md) | Release Notes & Version History | Version history (`v2.5.0-STABLE`), release highlights, and commit traceability. |
+| [**CHANGELOG.md**](CHANGELOG.md) | Release Notes & Version History | Version history (`v2.1.0`), release highlights, and commit traceability. |
 | [**DOCUMENTATION_AUDIT_REPORT.md**](DOCUMENTATION_AUDIT_REPORT.md) | Master Audit Report | Summary of audit changes, updated files, new files, and link verification results. |
 | [**security/P0_SANDBOX_ESCAPE_INCIDENT.md**](security/P0_SANDBOX_ESCAPE_INCIDENT.md) | Sandbox Escape Incident | P0 containment remediation, hardened compose, env checklist. |
 | [**security/P0_RED_TEAM_PENETRATION_REPORT.md**](security/P0_RED_TEAM_PENETRATION_REPORT.md) | Red Team Findings | ADB bypass fixes, residual risks, regression test commands. |
@@ -112,7 +112,7 @@ graph TD
 The Sudarshan platform codebase is backed by an automated regression and determinism verification test suite:
 
 - **Test Suite Command**: `$env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests`
-- **Verification Metric**: **519 / 519 tests collected & verified**.
+- **Verification Metric**: **583 / 583 tests collected** (verified 2026-08-11).
 - **Key Test Modules (in [`tests/`](file:///d:/Projects/Sudarshan%20BOI/tests/) and [`backend/tests/`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/))**:
   - `test_remaining_features.py`: Tests `InvestigationManifest`, `ApktoolEngine`, `JadxEngine`, and `NetworkCapture` mitmproxy HAR parsing.
   - `test_bfci_scorer.py`: Tests logarithmic volume scoring and sequence bonuses.

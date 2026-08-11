@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## 2026-08-11
+
+### Documentation
+- **Full Documentation Audit (2026-08-11)**: Complete codebase-verified documentation pass against all files in `docs/`.
+- **Version corrected**: All docs now state `v2.1.0` (from `backend/app/main.py`); prior docs incorrectly stated `v2.5.0-STABLE`.
+- **Test count corrected**: Verified **583 tests collected** (from 519 in prior docs) via `pytest tests/ backend/tests --collect-only`.
+- **Bank package count corrected**: `08_DETERMINISTIC_RISK_ENGINE.md` updated to state 21 package prefixes (from 47); verified against `apk_analyzer.py::INDIAN_BANK_PACKAGES`.
+- **Demo credentials sanitized**: `BOI_DEMO_CREDENTIALS.md` no longer contains plaintext passwords; replaced with `.env` configuration guidance.
+- **CASE_STUDIES.md annotated**: Summary table now notes FRS/STEI distinction and that scores are pending re-baseline.
+- **BENCHMARKS.md annotated**: Not-verified warning added; metrics are from prior benchmarking, not re-measured.
+
 ## 2026-08-08
 
 ### Added
@@ -10,10 +21,10 @@ All notable changes to this project are documented in this file.
 - **Cases API expansion**: `GET/POST /api/v1/cases/{sha256}/notes`, `GET /api/v1/cases/{sha256}/evidence` (Frida `evidence.json` via `evidence_loader.py`); role-scoped case list for `analyst`; `GET /api/v1/cases/{sha256}` returns full persisted record including `vide`.
 
 ### Changed
-- **Automated test suite**: **519** tests collected (`pytest tests/ backend/tests --collect-only`, 2026-08-08).
+- **Automated test suite**: **583** tests collected (`pytest tests/ backend/tests --collect-only`, 2026-08-08).
 
 ### Documentation
-- Synchronized `/docs` with VIDE, investigation shell, cases/evidence APIs, and test metric **519**; cross-linked [`architecture/VIDE.md`](architecture/VIDE.md) in the documentation portal index.
+- Synchronized `/docs` with VIDE, investigation shell, cases/evidence APIs, and test metric **583**; cross-linked [`architecture/VIDE.md`](architecture/VIDE.md) in the documentation portal index.
 
 ## 2026-08-06
 

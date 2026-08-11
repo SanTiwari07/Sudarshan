@@ -2,7 +2,7 @@
 
 ```yaml
 Module Title:        Threat Intelligence Correlation & Family Classification
-Version:             2.5.0-STABLE
+Version:             2.1.0
 Primary Files:       shared/sudarshan_core/services/threat_correlator.py
                      shared/sudarshan_core/engines/classification_engine.py
                      backend/app/main.py

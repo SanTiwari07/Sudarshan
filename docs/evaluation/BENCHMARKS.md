@@ -1,5 +1,8 @@
 # Performance Benchmarks & System Metrics
 
+> [!WARNING]
+> **Not verified during the 2026-08-11 documentation audit.** The latency figures, RAM figures, and CPU utilization metrics in this document were recorded during prior benchmarking sessions and have **not** been re-measured in this audit pass. Treat all numeric values as estimates requiring re-verification before use in capacity planning or reports.
+
 ## Purpose
 
 This document records the empirical performance benchmarks, processing latencies, resource consumption profiles, and scaling bounds of the **SUDARSHAN** platform components. It provides system administrators and SOC architects with operational capacity planning data.

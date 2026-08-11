@@ -138,10 +138,11 @@ graph TD
 
 ---
 
-## Summary of Case Study Results
+> [!NOTE]
+> **Score accuracy caveat**: The STEI and FRS scores in this summary table are `[STATIC-VERIFIED]` estimates derived from static pipeline runs. They may differ from current `risk_engine.py` output if the FRS formula or axis weights have been updated since initial measurement. FRS (Fraud Risk Score) and STEI (Static Threat Exposure Index) are distinct quantities computed differently; the summary table above conflates them for brevity. Always re-run the pipeline for authoritative scores.
 
-| Sample Name | Target Profile | STEI Score | FRS Score | Severity Band | Recommended Action |
+| Sample Name | Target Profile | STEI Score | FRS Score (static-only) | Severity Band | Recommended Action |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **InsecureBankv2** | Training App | $20.00$ | $38.50$ | **MEDIUM** | Step-Up Authentication Alert |
-| **Drinik Trojan** | Indian Banking | $92.50$ | $92.50$ | **CRITICAL** | Immediate Account Quarantine |
-| **Xenomorph Trojan** | ATS Automation | $88.00$ | $88.00$ | **CRITICAL** | Immediate Account Quarantine |
+| **Drinik Trojan** | Indian Banking | $92.50$ | Not re-verified | **CRITICAL** | Immediate Account Quarantine |
+| **Xenomorph Trojan** | ATS Automation | $88.00$ | Not re-verified | **CRITICAL** | Immediate Account Quarantine |

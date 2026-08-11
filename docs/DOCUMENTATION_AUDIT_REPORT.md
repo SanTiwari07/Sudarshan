@@ -1,131 +1,103 @@
-# Sudarshan Platform Master Documentation Audit Report
+# Sudarshan Platform — Master Documentation Audit Report
 
 ```yaml
-Audit Date:          2026-08-08
-Platform Version:    v2.5.0-STABLE (VIDE, Investigation Shell, Cases evidence API)
+Audit Date:          2026-08-11
+Auditor:             Documentation Engineer (automated codebase audit)
+Platform Version:    v2.1.0 (backend/app/main.py — source of truth)
 Target Repository:   SanTiwari07/Sudarshan (d:/Projects/Sudarshan BOI)
-Test Suite Command:  $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests
-Audit Scope:         VIDE engine, dashboard investigation shell, cases/evidence APIs, test metric refresh
+Audit Method:        Full codebase inspection — source files are the source of truth
+Test Suite Metric:   583 tests collected in 42.63s (verified: 2026-08-11)
+                     Command: $env:PYTHONPATH="backend;shared";
+                              $env:JWT_SECRET_KEY="test_secret_key_for_pytest";
+                              backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests --collect-only -q
 ```
 
 ---
 
-## Executive Summary (2026-08-08)
+## Executive Summary (2026-08-11)
 
-Documentation was re-synchronized with the codebase after **VIDE** (`shared/sudarshan_core/engines/vide/`), **InvestigationShell** / investigation UX, and expanded **Cases API** (`/evidence`, `/notes`). **Empirical verification:** `pytest tests/ backend/tests --collect-only` reports **519 tests collected** (2026-08-08).
+A full documentation audit was conducted against the live codebase. Key findings:
 
-### Files updated (2026-08-08 pass)
-
-- [`docs/CHANGELOG.md`](CHANGELOG.md), [`docs/README.md`](README.md), [`docs/DAE_CURRENT_STATE.md`](DAE_CURRENT_STATE.md), [`docs/ARCHITECTURE.md`](ARCHITECTURE.md), [`docs/02_SYSTEM_OVERVIEW.md`](02_SYSTEM_OVERVIEW.md), [`docs/PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md)
-- [`docs/dashboard/10_DASHBOARD.md`](dashboard/10_DASHBOARD.md), [`docs/architecture/03_STATIC_THREAT_INTELLIGENCE.md`](architecture/03_STATIC_THREAT_INTELLIGENCE.md), [`docs/architecture/04_DYNAMIC_ANALYSIS_ENGINE.md`](architecture/04_DYNAMIC_ANALYSIS_ENGINE.md), [`docs/architecture/05_AI_INVESTIGATION_ENGINE.md`](architecture/05_AI_INVESTIGATION_ENGINE.md), [`docs/architecture/07_FRAUD_INTELLIGENCE_ENGINE.md`](architecture/07_FRAUD_INTELLIGENCE_ENGINE.md), [`docs/architecture/08_DETERMINISTIC_RISK_ENGINE.md`](architecture/08_DETERMINISTIC_RISK_ENGINE.md), [`docs/architecture/VIDE.md`](architecture/VIDE.md)
-- [`docs/CONTRIBUTING.md`](CONTRIBUTING.md), [`docs/VALIDATION.md`](VALIDATION.md), [`docs/evaluation/11_EVALUATION.md`](evaluation/11_EVALUATION.md), [`docs/future/12_FUTURE_WORK.md`](future/12_FUTURE_WORK.md), [`README.md`](../README.md)
-
-### Drift fixed
-
-| Issue | Resolution |
-| :--- | :--- |
-| Test count **486** | Updated to **519** collected tests |
-| Missing VIDE in portal index | Added `architecture/VIDE.md` row; cross-links in DAE, static/dynamic/risk docs |
-| Dashboard missing InvestigationShell | Documented shared chrome, evidence drawer, notes API |
-| Cases API incomplete in README | Documented `/evidence` and `/notes` routes |
-| VIDE RAG claim | Clarified: VIDE lines flow via `report.evidence` / `risk_engine` RAG chunks only |
-
-### Remaining TODOs
-
-- **VIDE live WebView on device**: Run `scripts/verify_vide_webview_device.md` when frida-server is up; do not mark device path as production-verified until that checklist passes.
-- **Dedicated `vide` RAG section**: Not implemented in `gemini_rag.py` today - optional future enhancement.
+1. **Version mismatch corrected**: Multiple docs referenced `v2.5.0-STABLE` but `backend/app/main.py` declares `version="2.1.0"`. All documents have been updated to state `2.1.0`.
+2. **Test count corrected**: Prior docs stated 583 tests. Verified count is **583** (2026-08-11 run — 64 additional tests discovered).
+3. **BT axis bank count**: `08_DETERMINISTIC_RISK_ENGINE.md` cited "47 Indian banking apps" — `apk_analyzer.py` declares exactly **21 package prefixes** in `INDIAN_BANK_PACKAGES`. Corrected.
+4. **Demo credentials exposure**: `BOI_DEMO_CREDENTIALS.md` published plaintext passwords in a documentation file. Replaced with placeholder references and guidance to configure via `.env`.
+5. **CASE_STUDIES.md FRS/STEI conflation**: The summary table listed the same score for both STEI and FRS without noting they are different quantities. Annotated.
+6. **BENCHMARKS.md**: Metrics were not empirically re-verified during this audit pass. Annotated "Not verified during this audit."
+7. **`docs/security/`**: Two P0 reports exist; no general security overview document in this directory.
 
 ---
 
-## Prior audit (2026-08-06)
+## Document Status Matrix
 
-```yaml
-Audit Date:          2026-08-06
-Platform Version:    v2.5.0-STABLE (CONTAINERIZED MICROSERVICES, SANDBOX CONTAINMENT P0)
-Target Repository:   SanTiwari07/Sudarshan (d:/Projects/Sudarshan BOI)
-Test Suite Command:  $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests
-Audit Scope:         Full Repository, Security Containment, Engines, Microservices, REST APIs, Docker Compose, Documentation Portal
-```
+| File | Status | Accuracy | Issues Found | Action Taken |
+|---|---|---|---|---|
+| `docs/README.md` | CURRENT | HIGH | v2.5.0 ref; test count was 519 | Updated — 2.1.0; 583 tests |
+| `docs/01_INTRODUCTION.md` | PARTIALLY CURRENT | MEDIUM | v2.5.0 references | Updated |
+| `docs/02_SYSTEM_OVERVIEW.md` | PARTIALLY CURRENT | MEDIUM | v2.5.0 references; test count | Updated |
+| `docs/ARCHITECTURE.md` | PARTIALLY CURRENT | MEDIUM | v2.5.0 references; test count | Updated |
+| `docs/BOI_DEMO_CREDENTIALS.md` | NEEDS UPDATE | LOW | Plaintext passwords in documentation | Updated — passwords replaced with placeholders |
+| `docs/CHANGELOG.md` | PARTIALLY CURRENT | MEDIUM | References v2.5.0 as latest | Updated header |
+| `docs/CONTRIBUTING.md` | CURRENT | HIGH | Accurate | Version note added |
+| `docs/DAE_CURRENT_STATE.md` | PARTIALLY CURRENT | MEDIUM | v2.5.0; test count 519 | Updated — 2.1.0; 583 |
+| `docs/DOCUMENTATION_AUDIT_REPORT.md` | CURRENT | HIGH | This document | This file |
+| `docs/HOW_TO_RUN.md` | CURRENT | HIGH | Commands verified against source | Version note added |
+| `docs/MIGRATION.md` | CURRENT | HIGH | Still describes active architecture | Marked active; version corrected |
+| `docs/PROJECT_CONTEXT.md` | PARTIALLY CURRENT | MEDIUM | v2.5.0; test count | Updated |
+| `docs/VALIDATION.md` | PARTIALLY CURRENT | MEDIUM | Test count was 519; actual 583 | Updated |
+| `docs/architecture/03_STATIC_THREAT_INTELLIGENCE.md` | PARTIALLY CURRENT | MEDIUM | v2.5.0; bank count "47" | Updated |
+| `docs/architecture/04_DYNAMIC_ANALYSIS_ENGINE.md` | CURRENT | HIGH | Accurate to codebase | Version corrected |
+| `docs/architecture/05_AI_INVESTIGATION_ENGINE.md` | CURRENT | HIGH | Accurate | Version corrected |
+| `docs/architecture/06_EVIDENCE_PROCESSING.md` | CURRENT | HIGH | Accurate | Version corrected |
+| `docs/architecture/07_FRAUD_INTELLIGENCE_ENGINE.md` | CURRENT | HIGH | Accurate | Version corrected |
+| `docs/architecture/08_DETERMINISTIC_RISK_ENGINE.md` | PARTIALLY CURRENT | MEDIUM | "47 Indian banking apps" — source has 21 | Updated |
+| `docs/architecture/09_AI_REPORT_GENERATION.md` | CURRENT | HIGH | Accurate | Version corrected |
+| `docs/architecture/VIDE.md` | CURRENT | HIGH | Verification status well-documented | No change needed |
+| `docs/dashboard/10_DASHBOARD.md` | CURRENT | HIGH | Accurate to frontend source | Version corrected |
+| `docs/evaluation/11_EVALUATION.md` | PARTIALLY CURRENT | MEDIUM | Test count was 519; actual 583 | Updated |
+| `docs/evaluation/BENCHMARKS.md` | PARTIALLY CURRENT | LOW | Metrics not re-verified this pass | Annotated "Not verified" |
+| `docs/evaluation/CASE_STUDIES.md` | PARTIALLY CURRENT | MEDIUM | FRS/STEI conflation in summary table | Annotated |
+| `docs/future/12_FUTURE_WORK.md` | CURRENT | HIGH | Accurate | Version corrected |
+| `docs/security/P0_RED_TEAM_PENETRATION_REPORT.md` | CURRENT | HIGH | P0 remediation record | No change needed |
+| `docs/security/P0_SANDBOX_ESCAPE_INCIDENT.md` | CURRENT | HIGH | P0 incident record | No change needed |
 
 ---
 
-## Executive Summary
+## Cross-Document Consistency Issues
 
-A full zero-drift documentation pass was executed on **2026-08-06** against the active codebase. Portal documents in `/docs` were compared to implementation files, with emphasis on the P0 sandbox containment work (`shared/sudarshan_core/security/`, `docker-compose.hardened.yml`, gateway dynamic-analysis gate in `upload.py`).
-
-**Empirical verification:** `pytest tests/ backend/tests --collect-only` reports **486 tests collected** (`.pytest_cache/v/cache/nodeids`, 2026-08-06).
+| Issue | Affected Files | Severity | Status |
+|---|---|---|---|
+| Version declared as `v2.5.0-STABLE` — actual is `2.1.0` | Most docs | MEDIUM | **Fixed** — corrected throughout |
+| Test count stated as 519 — actual is 583 | `README.md`, `VALIDATION.md`, `11_EVALUATION.md`, `DAE_CURRENT_STATE.md` | MEDIUM | **Fixed** |
+| "47 Indian banking apps" — `apk_analyzer.py` has 21 | `08_DETERMINISTIC_RISK_ENGINE.md` | LOW | **Fixed** |
+| Plaintext demo passwords in documentation | `BOI_DEMO_CREDENTIALS.md` | HIGH | **Fixed** — placeholders only |
+| CASE_STUDIES.md conflates STEI and FRS in summary table | `CASE_STUDIES.md` | MEDIUM | **Annotated** |
+| BENCHMARKS.md metrics not empirically re-verified | `BENCHMARKS.md` | MEDIUM | **Annotated** |
 
 ---
 
-# Documentation Update Report
+## What Could Not Be Verified in This Audit Pass
 
-## Files Updated
+- **BENCHMARKS.md latency figures** — Not measured; figures retained from prior benchmarking.
+- **VIDE live device WebView path** — Requires connected device; documented as needing `scripts/verify_vide_webview_device.md`.
+- **VirusTotal/OTX/AbuseIPDB results** — Require live API keys not present during audit.
+- **MobSF scan results** — Require running MobSF container; not tested during this audit.
+- **CASE_STUDIES.md numeric scores** — Not re-run against current `risk_engine.py`; annotated as pending re-baseline.
 
-- [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) - §12 security/containment; FRS weights; repo tree (`security/`, hardened compose); test metric **486**; Genymotion ADB wording.
-- [`docs/02_SYSTEM_OVERVIEW.md`](02_SYSTEM_OVERVIEW.md) - FRS renormalization; containment subsystem row; test metric **486**.
-- [`docs/01_INTRODUCTION.md`](01_INTRODUCTION.md) - FRS formulation and risk bands aligned to `risk_engine.py`.
-- [`docs/PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md) - FRS §4.3–4.4; test metric **486**.
-- [`docs/architecture/08_DETERMINISTIC_RISK_ENGINE.md`](architecture/08_DETERMINISTIC_RISK_ENGINE.md) - Full FRS section rewrite (axis exclusion, bands, visibility floor).
-- [`docs/architecture/04_DYNAMIC_ANALYSIS_ENGINE.md`](architecture/04_DYNAMIC_ANALYSIS_ENGINE.md) - §2c sandbox containment and ADB policy.
-- [`docs/DAE_CURRENT_STATE.md`](DAE_CURRENT_STATE.md) - Containment capabilities, remediation rows, limitations; test metric **486**.
-- [`docs/HOW_TO_RUN.md`](HOW_TO_RUN.md) - `.env.example`-aligned security vars; §5.1 hardened compose; admin password behavior.
-- [`docs/MIGRATION.md`](MIGRATION.md) - Internal token and gateway dynamic-analysis policy.
-- [`docs/README.md`](README.md) - Index entries for security runbooks; test metric **486**; containment test modules.
-- [`docs/CONTRIBUTING.md`](CONTRIBUTING.md), [`docs/VALIDATION.md`](VALIDATION.md), [`docs/evaluation/11_EVALUATION.md`](evaluation/11_EVALUATION.md) - Test metric **486**; containment test modules in 11.
-- [`docs/dashboard/10_DASHBOARD.md`](dashboard/10_DASHBOARD.md) - Risk band labels from API.
-- [`docs/CHANGELOG.md`](CHANGELOG.md) - **2026-08-06** release notes.
-- [`README.md`](../README.md) - FRS summary and test metric **486** (root entry point).
+---
 
-## Files Created
+## Remaining TODOs (Carry-Forward)
 
-- None.
+- Re-baseline `CASE_STUDIES.md` numeric scores against current `risk_engine.py` when corpus APKs are re-analyzed.
+- Per-session ephemeral artifact roots — partial mitigation only; see `security/P0_RED_TEAM_PENETRATION_REPORT.md`.
+- VIDE live WebView device path — run `scripts/verify_vide_webview_device.md` when frida-server is active.
+- Add `docs/security/` overview document indexing the two P0 reports.
 
-## Files Deleted
-
-- None.
-
-## Sections Rewritten
-
-- **FRS / risk bands** across `01_INTRODUCTION`, `02_SYSTEM_OVERVIEW`, `08_DETERMINISTIC_RISK_ENGINE`, `PROJECT_CONTEXT`, `ARCHITECTURE`, root `README.md` (removed obsolete 0.40/0.30 fixed-weight and legacy five-band table).
-- **Security & isolation** - `ARCHITECTURE.md` §12, `04_DYNAMIC_ANALYSIS_ENGINE.md` §2c, `HOW_TO_RUN.md` §5.1.
-- **DAE operational state** - containment remediation scorecard and known artifact-root limitation.
-
-## Architecture Changes
-
-- Documented **two-layer containment** (guest compromise assumption + control-plane ADB/Frida policy).
-- Documented **analysis-engine internal auth** and **production fail-closed** behavior.
-- Documented **gateway dynamic analysis disabled by default** (`SUDARSHAN_ALLOW_GATEWAY_DYNAMIC`).
-- Documented **hardened compose overlay** and loopback-only MobSF/mitmproxy in base compose.
-
-## New Features Documented
-
-- `adb_gateway.run_adb` centralized choke point.
-- `validate_backend_production_config()` on gateway startup.
-- Analysis-engine `_InternalServiceAuthMiddleware`.
-- Security regression tests under `tests/unit/` and `backend/tests/test_gateway_dynamic_blocker.py`.
-
-## Documentation Drift Fixed
-
-| Drift | Resolution |
-| :--- | :--- |
-| FRS fixed 0.40/0.30/0.15/0.15 weights | Replaced with nominal 0.25/0.35/0.20/0.20 + renormalization per `risk_engine.py` |
-| Legacy CRITICAL at ≥80 / five-band LOW–CRITICAL table | Replaced with Safe / Suspicious / High Risk / Critical thresholds from code |
-| Test count **457** | Updated to **486** collected tests |
-| Genymotion ADB always `host.docker.internal` | Clarified VM IP / `ADB_HOST` vs AVD exception |
-| `ADMIN_PASSWORD=sudarshan_admin_2024` in HOW_TO_RUN | Removed; documented random bootstrap password |
-| DAE “screenshot gallery gap” | Removed; UI uses JWT blob fetch (already in `10_DASHBOARD.md`) |
-
-## Remaining TODOs
-
-- [`docs/evaluation/CASE_STUDIES.md`](evaluation/CASE_STUDIES.md) and [`docs/VALIDATION.md`](VALIDATION.md) ground-truth tables still reference legacy `CRITICAL` score ranges (≥85 / ≥80); re-baseline against current `risk_engine.py` bands when corpus scores are re-measured.
-- Per-session ephemeral artifact roots - partial mitigation only; see [`security/P0_RED_TEAM_PENETRATION_REPORT.md`](security/P0_RED_TEAM_PENETRATION_REPORT.md).
+---
 
 ## Warnings
 
-- Default **dev** `docker-compose.yml` bind-mounts source trees; not equivalent to hardened production posture.
-- Enabling `SUDARSHAN_ALLOW_GATEWAY_DYNAMIC=true` runs dynamic analysis in the gateway container and is unsafe for production.
-
-## Suggestions
-
-- Run `pytest tests/ backend/tests` on CI after each release and pin the collected count in `DOCUMENTATION_AUDIT_REPORT.md`.
-- Add a short cross-link from [`08_DETERMINISTIC_RISK_ENGINE.md`](architecture/08_DETERMINISTIC_RISK_ENGINE.md) to `backend/tests/test_risk_engine.py` for band threshold regression tests.
+- `BOI_DEMO_CREDENTIALS.md` previously contained plaintext hackathon demo passwords. Best practice is to document that users configure passwords via `.env`, not to publish them in tracked markdown.
+- Dynamic analysis requires an external rooted Android sandbox. The system does NOT perform dynamic analysis inside Docker containers — the sandbox must run on the host.
+- Default `docker-compose.yml` bind-mounts source trees; not equivalent to hardened production posture.
+- `SUDARSHAN_ALLOW_GATEWAY_DYNAMIC=true` runs dynamic analysis in the gateway container and is unsafe for production.

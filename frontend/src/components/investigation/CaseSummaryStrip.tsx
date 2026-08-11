@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import type { InvestigationCounts } from '../../types/investigation';
 import { useInvestigationUI } from '../../context/InvestigationUIContext';
 import { securityFindingsTotal } from '../../lib/analystCopy';
@@ -28,7 +29,7 @@ function MetricCard({
       type={onClick ? 'button' : undefined}
       onClick={onClick}
       className={`text-left p-3.5 rounded-md border border-slate-200 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.01)] h-full flex flex-col gap-2 ${
-        onClick ? 'hover:border-blue-400 hover:bg-slate-50 transition-colors' : ''
+        onClick ? 'hover:border-blue-400 hover:bg-slate-50 cursor-pointer transition-colors' : ''
       }`}
     >
       <div className="flex items-center justify-between gap-2">
@@ -49,6 +50,7 @@ export default function CaseSummaryStrip({
   riskScore?: number;
   counts: InvestigationCounts;
 }) {
+  const navigate = useNavigate();
   const { openLedger } = useInvestigationUI();
   const findings = securityFindingsTotal(counts);
 
@@ -73,6 +75,7 @@ export default function CaseSummaryStrip({
         value={counts.mitreTechniques}
         title="Attack Techniques"
         blurb="Mapped directly to MITRE ATT&CK Mobile."
+        onClick={() => openLedger('stei')}
       />
       <MetricCard
         icon={<FileSearch className="h-4 w-4" />}
@@ -86,6 +89,7 @@ export default function CaseSummaryStrip({
         value={counts.screenshots}
         title="Runtime Screenshots"
         blurb="Frames captured during emulator sandbox run."
+        onClick={() => navigate('/technical')}
       />
     </div>
   );

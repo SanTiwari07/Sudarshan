@@ -97,14 +97,14 @@ export default function FraudCard({ data }: { data: FraudCardData | null }) {
       {/* 1. Risk */}
       <FraudRiskHero data={data} />
 
-      {/* 2. Key Findings */}
-      <CoreFindingsList data={data} bundle={investigationBundle} />
-
-      {/* 3. Evidence */}
+      {/* 2. Evidence Summary Strip */}
       {investigationBundle && stripCounts && (
         <CaseSummaryStrip riskScore={data.final_risk_score} counts={stripCounts} />
       )}
       <RuntimeLimitationBanner data={data} />
+
+      {/* 3. Technical Findings */}
+      <CoreFindingsList data={data} bundle={investigationBundle} />
 
       {/* 4. Intelligence */}
       <InvestigationConclusionCard data={data} bundle={investigationBundle} />

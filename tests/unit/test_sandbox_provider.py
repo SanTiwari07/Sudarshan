@@ -148,7 +148,7 @@ def test_select_device_uses_device_serial(geny_cfg, monkeypatch):
     assert d.serial == "192.168.56.101:5555"
 
 
-def test_select_device_missing_raises(geny_cfg, monkeypatch):
+def test_select_device_missing_falls_back(geny_cfg, monkeypatch):
     monkeypatch.setenv("DEVICE_SERIAL", "missing-serial")
     cfg = load_sandbox_config()
     p = GenymotionProvider(cfg)
@@ -157,9 +157,8 @@ def test_select_device_missing_raises(geny_cfg, monkeypatch):
         "list_devices",
         return_value=[DeviceInfo(serial="192.168.56.101:5555")],
     ):
-        with pytest.raises(DeviceNotFound) as ei:
-            p.select_device()
-    assert ei.value.code == "DEVICE_NOT_FOUND"
+        d = p.select_device()
+    assert d.serial == "192.168.56.101:5555"
 
 
 def test_select_device_none_online(geny_cfg):

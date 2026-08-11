@@ -397,14 +397,17 @@ class SandboxProvider(ABC):
         grep_pat = "|".join(uniq)
         ok, out = self.adb_shell(
             serial,
-            f"pgrep -f '{uniq[0]}' 2>/dev/null || pgrep -f frida-server 2>/dev/null "
-            f"|| ps -A 2>/dev/null | grep -E '{grep_pat}' || true",
+            f"su 0 pgrep -f '{uniq[0]}' 2>/dev/null || su 0 pgrep -f frida-server 2>/dev/null || "
+            f"su 0 ps -A 2>/dev/null | grep -E '{grep_pat}' || "
+            f"pgrep -f '{uniq[0]}' 2>/dev/null || ps -A 2>/dev/null | grep -E '{grep_pat}' || true",
             timeout=20,
         )
         text = out or ""
-        running = bool(text.strip()) and any(p in text for p in uniq)
-        if not running and text.strip().isdigit():
-            running = True
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        running = bool(lines) and (
+            any(p in text for p in uniq)
+            or any(line.isdigit() for line in lines)
+        )
         return running, text
 
     def resolve_frida_binary(self, serial: str, abi: str = "", abilist: str = "") -> FridaBinarySpec:

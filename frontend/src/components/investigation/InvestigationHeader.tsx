@@ -47,37 +47,59 @@ export default function InvestigationHeader({
   const pipe = pipelineStates(data, bundle);
 
   return (
-    <header className="py-4 border-b border-slate-200">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 space-y-1">
-          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
-            Fraud investigation
-          </p>
-          <h1 className="text-xl sm:text-[22px] font-semibold text-slate-900 tracking-tight leading-snug truncate">
+    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs mb-2">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        {/* Left column */}
+        <div className="min-w-0 space-y-1.5">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+            FRAUD INVESTIGATION
+          </div>
+          <h1 className="text-xl sm:text-2xl font-bold font-mono text-slate-900 tracking-tight leading-tight truncate">
             {packageTitle}
           </h1>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
-            <span className="font-medium uppercase tracking-wide text-slate-400">SHA256</span>
-            <span className="font-mono text-slate-600 truncate max-w-[min(100%,20rem)]" title={data.sha256}>
-              {data.sha256.slice(0, 18)}…
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 font-mono">
+            <span className="text-slate-400 font-semibold">SHA256</span>
+            <span className="text-slate-700 truncate max-w-[min(100%,22rem)]" title={data.sha256}>
+              {data.sha256.slice(0, 24)}…
             </span>
             <CopyButton value={data.sha256} />
+            {data.analysis_mode && (
+              <span className="px-2 py-0.5 text-[10px] font-sans font-semibold bg-blue-50 text-blue-700 border border-blue-200 rounded-md">
+                {data.analysis_mode}
+              </span>
+            )}
+            {data.family_classification && data.family_classification !== 'Unknown' && (
+              <span className="px-2 py-0.5 text-[10px] font-sans font-semibold bg-red-50 text-red-700 border border-red-200 rounded-md">
+                Family: {data.family_classification}
+              </span>
+            )}
           </div>
         </div>
 
-        <div className="flex flex-col items-start lg:items-end gap-2 shrink-0">
-          <div className="flex items-baseline gap-2">
-            <span className={`text-3xl font-semibold tabular-nums leading-none ${riskText}`}>{score}</span>
-            <span className="text-sm text-slate-400 font-medium">/ 100</span>
+        {/* Right column */}
+        <div className="flex flex-col items-start sm:items-end gap-1.5 shrink-0 sm:border-l sm:border-slate-100 sm:pl-6">
+          <div className="flex items-baseline gap-1.5">
+            <span className={`font-mono text-3xl sm:text-4xl font-black tabular-nums leading-none ${riskText}`}>
+              {score}
+            </span>
+            <span className="text-xs font-medium text-slate-400">/ 100</span>
           </div>
-          <p className={`text-xs font-bold uppercase tracking-wide ${riskText}`}>{bandLabel}</p>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1">
+          <span className={`text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${
+            data.final_risk_score > 60
+              ? 'bg-red-50 text-red-700 border border-red-200'
+              : data.final_risk_score > 30
+                ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+          }`}>
+            {bandLabel}
+          </span>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 border-t border-slate-100 mt-1 w-full justify-start sm:justify-end">
             <PipelineStatusChip label="Static" state={pipe.static} />
             <PipelineStatusChip label="Dynamic" state={pipe.dynamic} />
             <PipelineStatusChip label="Threat Intel" state={pipe.threat} />
           </div>
         </div>
       </div>
-    </header>
+    </div>
   );
 }

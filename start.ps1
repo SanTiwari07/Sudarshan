@@ -61,10 +61,55 @@ function Import-EnvFile {
 }
 
 function Find-Python {
-    foreach ($c in @("python", "py")) {
-        $cmd = Get-Command $c -ErrorAction SilentlyContinue
-        if ($cmd) { return $cmd.Source }
+    $storeStub = [System.IO.Path]::Combine(
+        $env:LOCALAPPDATA, "Microsoft", "WindowsApps")
+
+    # 1. Project .venv (highest priority -- already has all deps installed)
+    $venvPy = Join-Path $Root ".venv\Scripts\python.exe"
+    if (Test-Path $venvPy) {
+        # Resolve the real interpreter the venv points to
+        $realPy = & $venvPy -c "import sys; print(sys.executable)" 2>$null
+        if ($LASTEXITCODE -eq 0 -and $realPy -and (Test-Path $realPy.Trim())) {
+            return $venvPy   # Use venv wrapper so installed packages are visible
+        }
     }
+
+    # 2. Real Python installs under %LOCALAPPDATA%\Programs\Python  (bypasses Store stub)
+    $localPyRoot = Join-Path $env:LOCALAPPDATA "Programs\Python"
+    if (Test-Path $localPyRoot) {
+        $candidates = Get-ChildItem "$localPyRoot\Python3*\python.exe" -ErrorAction SilentlyContinue |
+            Sort-Object FullName -Descending   # prefer newer version
+        foreach ($c in $candidates) {
+            $ver = & $c.FullName --version 2>$null
+            if ($LASTEXITCODE -eq 0) { return $c.FullName }
+        }
+    }
+
+    # 3. py.exe launcher (Windows Python Launcher) -- try explicit versions
+    $pyLauncher = "C:\Windows\py.exe"
+    if (-not (Test-Path $pyLauncher)) {
+        $pyCmdObj = Get-Command py -ErrorAction SilentlyContinue
+        if ($pyCmdObj) { $pyLauncher = $pyCmdObj.Source }
+    }
+    if ($pyLauncher -and (Test-Path $pyLauncher)) {
+        foreach ($ver in @("-3.11", "-3.12", "-3.13", "-3.10", "-3")) {
+            $realPy = & $pyLauncher $ver -c "import sys; print(sys.executable)" 2>$null
+            if ($LASTEXITCODE -eq 0 -and $realPy -and
+                (Test-Path $realPy.Trim()) -and
+                ($realPy.Trim() -notlike "*WindowsApps*")) {
+                return $realPy.Trim()
+            }
+        }
+    }
+
+    # 4. PATH-based fallback -- skip the Microsoft Store stub
+    foreach ($name in @("python3", "python")) {
+        $cmd = Get-Command $name -ErrorAction SilentlyContinue
+        if ($cmd -and $cmd.Source -notlike "*WindowsApps*") {
+            return $cmd.Source
+        }
+    }
+
     return $null
 }
 

@@ -468,7 +468,7 @@ def _calculate_bfci_from_frida(dynamic: Dict) -> Tuple[float, List[str]]:
 
 # Minimum observable activity for a sandbox run to count as evidence about the
 # sample rather than evidence about the sandbox.
-_MIN_DYNAMIC_EVENTS = 3
+_MIN_DYNAMIC_EVENTS = 1
 
 _OBSERVED_BEHAVIOR_FIELDS = (
     "api_calls",

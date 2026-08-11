@@ -36,7 +36,7 @@ class SandboxConfig:
     adb_host: str = ""
     adb_port: str = "5555"
     device_serial: str = ""
-    frida_port: str = "27055"
+    frida_port: str = "27042"
     frida_bin: str = "sudarshan_agent_srv"
     frida_version: str = "17.16.4"
     frida_server_dir: str = ""
@@ -75,7 +75,7 @@ def load_sandbox_config() -> SandboxConfig:
             os.getenv("FRIDA_PORT")
             or os.getenv("SUDARSHAN_FRIDA_PORT")
             or os.getenv("FRIDA_SERVER_PORT")
-            or "27055"
+            or "27042"
         ).strip(),
         frida_bin=os.getenv("SUDARSHAN_FRIDA_BIN", "sudarshan_agent_srv").strip()
         or "sudarshan_agent_srv",

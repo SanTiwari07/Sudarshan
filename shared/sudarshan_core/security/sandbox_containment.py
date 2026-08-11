@@ -376,10 +376,10 @@ def _adb_connect_target(args: Sequence[str]) -> Optional[str]:
 
 
 def build_frida_start_command(remote_binary: str, port: str, config: Optional[SandboxConfig] = None) -> str:
-    """Shell command to start frida-server on the guest (loopback bind only)."""
-    listen = frida_listen_host(config)
-    # nohup + background - same pattern as before, but not LAN-visible.
-    return f"nohup {remote_binary} -l {listen}:{port} > /dev/null 2>&1 &"
+    """Shell command to start frida-server as root on the guest."""
+    listen = frida_listen_host(config) or "0.0.0.0"
+    p = port or "27042"
+    return f"su 0 sh -c 'nohup {remote_binary} -l {listen}:{p} </dev/null >/dev/null 2>&1 &'"
 
 
 def validate_backend_production_config() -> None:

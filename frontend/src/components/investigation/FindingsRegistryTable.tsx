@@ -9,7 +9,6 @@ import {
 import { ChevronRight } from 'lucide-react';
 import EvidenceToolbar, { type EvidenceFilter } from './EvidenceToolbar';
 import {
-  ConfidenceIndicator,
   SeverityIndicator,
   SourceIndicator,
 } from './FindingIndicators';
@@ -36,7 +35,7 @@ function WhyMattersCell({ evidence }: { evidence: InvestigationEvidence }) {
   const generic = text === GENERIC_SUMMARY;
   return (
     <p
-      className={`text-[12px] leading-relaxed break-words ${
+      className={`text-[12px] leading-relaxed break-words break-all ${
         generic ? 'text-slate-400' : 'text-slate-600'
       }`}
     >
@@ -47,12 +46,9 @@ function WhyMattersCell({ evidence }: { evidence: InvestigationEvidence }) {
 
 function FindingCell({ row }: { row: InvestigationEvidence }) {
   return (
-    <div className="min-w-0 space-y-1">
+    <div className="min-w-0 space-y-0.5">
       <p className="font-mono text-[11px] text-slate-400 leading-none">{row.id}</p>
-      <p className="text-[13px] font-medium text-slate-900 leading-snug">{row.title}</p>
-      {row.description?.trim() && (
-        <p className="text-[12px] text-slate-500 leading-relaxed line-clamp-2">{row.description.trim()}</p>
-      )}
+      <p className="text-[13px] font-semibold text-slate-900 leading-snug break-words break-all">{row.title}</p>
     </div>
   );
 }
@@ -68,17 +64,19 @@ function FindingRowMobile({
     <button
       type="button"
       onClick={onOpen}
-      className="w-full text-left px-4 py-3 border-b border-slate-100 hover:bg-slate-50/80 transition-colors group"
+      className="w-full text-left px-4 py-2.5 border-b border-slate-100 hover:bg-slate-50/80 transition-colors group"
     >
       <FindingCell row={row} />
-      <div className="mt-2 flex flex-wrap items-center gap-3">
+      <div className="mt-1.5 flex flex-wrap items-center gap-3">
         <SeverityIndicator severity={row.severity} />
         <SourceIndicator evidence={row} />
         <span className="text-[12px] font-semibold text-slate-700 tabular-nums">{row.confidence}%</span>
       </div>
-      <WhyMattersCell evidence={row} />
+      <div className="mt-1">
+        <WhyMattersCell evidence={row} />
+      </div>
       <ChevronRight
-        className="h-4 w-4 text-slate-300 group-hover:text-slate-500 mt-2"
+        className="h-4 w-4 text-slate-300 group-hover:text-slate-500 mt-1"
         aria-hidden
       />
     </button>
@@ -116,37 +114,30 @@ export default function FindingsRegistryTable({
         />
       )}
       {!embedded && (
-        <div className="px-4 py-3 border-b border-slate-100 text-xs text-slate-600">
+        <div className="px-4 py-2.5 border-b border-slate-100 text-xs text-slate-600">
           {bundle.evidenceRecords.length} verified records - evidence-backed findings only.
         </div>
       )}
 
-      <div className="hidden md:block">
-        <table className="w-full text-left border-collapse">
+      <div className="hidden md:block w-full overflow-hidden">
+        <table className="w-full table-fixed text-left border-collapse">
           <thead>
-            <tr className="border-b border-slate-200">
-              <th className="py-2.5 pl-0 pr-4 text-[11px] font-bold uppercase tracking-wide text-slate-400 w-[38%]">
-                Finding
+            <tr className="bg-slate-50/80 border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              <th className="py-2.5 px-4 w-[38%]">
+                FINDING
               </th>
-              <th className="py-2.5 px-4 text-[11px] font-bold uppercase tracking-wide text-slate-400 w-[24%]">
-                Why it matters
+              <th className="py-2.5 px-4 w-[48%]">
+                WHY IT MATTERS
               </th>
-              <th className="py-2.5 px-3 text-[11px] font-bold uppercase tracking-wide text-slate-400">
-                Severity
+              <th className="py-2.5 px-4 w-[14%] text-right pr-6 whitespace-nowrap">
+                SEVERITY
               </th>
-              <th className="py-2.5 px-3 text-[11px] font-bold uppercase tracking-wide text-slate-400">
-                Source
-              </th>
-              <th className="py-2.5 px-3 text-[11px] font-bold uppercase tracking-wide text-slate-400 text-right">
-                Confidence
-              </th>
-              <th className="py-2.5 w-8" aria-hidden />
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-slate-100">
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-8 text-center text-sm text-slate-500">
+                <td colSpan={3} className="py-8 text-center text-sm text-slate-500">
                   No findings match your search or filters.
                 </td>
               </tr>
@@ -162,28 +153,16 @@ export default function FindingsRegistryTable({
                     }
                   }}
                   tabIndex={0}
-                  className="group cursor-pointer border-b border-slate-100 hover:bg-slate-50/90 transition-colors"
+                  className="group cursor-pointer hover:bg-slate-50/90 transition-colors"
                 >
-                  <td className="py-3 pr-4 align-top">
+                  <td className="py-2.5 px-4 align-middle">
                     <FindingCell row={row} />
                   </td>
-                  <td className="py-3 px-4 align-top">
+                  <td className="py-2.5 px-4 align-middle">
                     <WhyMattersCell evidence={row} />
                   </td>
-                  <td className="py-3 px-3 align-top">
+                  <td className="py-2.5 px-4 align-middle text-right pr-6 whitespace-nowrap">
                     <SeverityIndicator severity={row.severity} />
-                  </td>
-                  <td className="py-3 px-3 align-top">
-                    <SourceIndicator evidence={row} />
-                  </td>
-                  <td className="py-3 px-3 align-top">
-                    <ConfidenceIndicator confidence={row.confidence} />
-                  </td>
-                  <td className="py-3 align-top">
-                    <ChevronRight
-                      className="h-4 w-4 text-slate-200 group-hover:text-slate-500 transition-colors"
-                      aria-hidden
-                    />
                   </td>
                 </tr>
               ))
@@ -192,9 +171,9 @@ export default function FindingsRegistryTable({
         </table>
       </div>
 
-      <div className="md:hidden border-t border-slate-100">
+      <div className="md:hidden border-t border-slate-100 divide-y divide-slate-100">
         {rows.length === 0 ? (
-          <p className="py-8 text-center text-sm text-slate-500">No findings match your search or filters.</p>
+          <p className="py-6 text-center text-sm text-slate-500">No findings match your search or filters.</p>
         ) : (
           rows.map((row) => (
             <FindingRowMobile key={row.id} row={row} onOpen={() => openRow(row.id)} />
@@ -205,8 +184,8 @@ export default function FindingsRegistryTable({
   );
 
   if (embedded) {
-    return <div className="pb-2">{tableBlock}</div>;
+    return <SocCard className="overflow-hidden">{tableBlock}</SocCard>;
   }
 
-  return <SocCard>{tableBlock}</SocCard>;
+  return <SocCard className="overflow-hidden">{tableBlock}</SocCard>;
 }

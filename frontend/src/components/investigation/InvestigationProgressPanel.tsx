@@ -34,48 +34,62 @@ function stepStatusLabel(state: StepState, stepId: string): string {
 }
 
 function StepNode({ step, showConnector }: { step: Step; showConnector: boolean }) {
-  const emphasize = step.emphasize || step.state === 'inconclusive';
+  const isComplete = step.state === 'complete';
+  const isInconclusive = step.state === 'inconclusive';
+  const isFailed = step.state === 'failed';
+
   return (
-    <li className="flex min-w-0 flex-1 items-start">
-      <div className="flex flex-col items-center shrink-0 w-[4.75rem] sm:w-[5.25rem]">
-        <span className="text-[10px] font-mono text-slate-400 tabular-nums">{step.num}</span>
-        <div className="flex items-center w-full mt-1">
-          <span
-            className={`flex h-8 w-8 items-center justify-center rounded-lg border shrink-0 ${
-              emphasize
-                ? 'border-amber-300 bg-amber-50/80 text-amber-800'
-                : step.state === 'complete'
-                  ? 'border-slate-200 bg-white text-slate-600'
+    <li className="relative flex-1 flex flex-col min-w-0">
+      <div className="flex items-center w-full">
+        {/* Node Icon Circle */}
+        <div
+          className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-lg border shrink-0 font-semibold transition-colors ${
+            isComplete
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+              : isInconclusive
+                ? 'border-amber-300 bg-amber-50 text-amber-800'
+                : isFailed
+                  ? 'border-red-200 bg-red-50 text-red-700'
                   : 'border-slate-200 bg-slate-50 text-slate-400'
-            }`}
-          >
-            {step.icon}
-          </span>
-          {showConnector && (
-            <div className="hidden lg:block h-px flex-1 bg-slate-200 ml-2 min-w-[0.5rem]" aria-hidden />
-          )}
-        </div>
-      </div>
-      <div className={`min-w-0 flex-1 pb-3 pr-2 ${emphasize ? 'text-amber-950' : ''}`}>
-        <p className="text-[12px] font-semibold text-slate-900 leading-tight">{step.label}</p>
-        <p className="text-[12px] text-slate-600 mt-0.5 leading-snug">{step.value}</p>
-        {step.support && (
-          <p className="text-[11px] text-amber-800/90 mt-1 leading-snug max-w-[15rem]">{step.support}</p>
-        )}
-        <p
-          className={`mt-1.5 inline-flex items-center gap-0.5 text-[10px] font-bold uppercase tracking-wide ${
-            step.state === 'complete'
-              ? 'text-emerald-700'
-              : step.state === 'inconclusive'
-                ? 'text-amber-700'
-                : step.state === 'failed'
-                  ? 'text-red-700'
-                  : 'text-slate-400'
           }`}
         >
-          {step.state === 'complete' && <Check className="h-3 w-3" aria-hidden />}
-          {stepStatusLabel(step.state, step.id)}
-        </p>
+          {step.icon}
+        </div>
+
+        {/* Connector Line */}
+        {showConnector && (
+          <div className="hidden lg:block flex-1 h-0.5 bg-slate-200 mx-2" aria-hidden />
+        )}
+      </div>
+
+      {/* Node Content */}
+      <div className="mt-2 min-w-0 pr-2">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] font-mono font-bold text-slate-400">{step.num}</span>
+          <span className="text-xs font-semibold text-slate-900 truncate">{step.label}</span>
+        </div>
+        <p className="text-xs font-mono text-slate-700 font-medium truncate mt-0.5">{step.value}</p>
+        {step.support && (
+          <p className="text-[11px] text-amber-800/90 leading-tight mt-1 truncate" title={step.support}>
+            {step.support}
+          </p>
+        )}
+        <div className="mt-1.5 flex items-center gap-1">
+          <span
+            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+              isComplete
+                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                : isInconclusive
+                  ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                  : isFailed
+                    ? 'bg-red-50 text-red-800 border border-red-200'
+                    : 'bg-slate-100 text-slate-500 border border-slate-200'
+            }`}
+          >
+            {isComplete && <Check className="h-3 w-3" aria-hidden />}
+            {stepStatusLabel(step.state, step.id)}
+          </span>
+        </div>
       </div>
     </li>
   );
@@ -106,12 +120,12 @@ export default function InvestigationProgressPanel({
     } else {
       dynamicState = 'inconclusive';
       dynamicValue = 'Inconclusive';
-      dynamicSupport = 'Runtime behavior could not be conclusively observed.';
+      dynamicSupport = 'Runtime behavior not observed';
     }
   } else if (data.dynamic_available || data.dynamic_analysis) {
     dynamicState = 'inconclusive';
     dynamicValue = 'Limited data';
-    dynamicSupport = 'Runtime behavior could not be conclusively observed.';
+    dynamicSupport = 'Runtime behavior not observed';
   }
 
   const threatDone =
@@ -178,11 +192,14 @@ export default function InvestigationProgressPanel({
   ];
 
   const inner = (
-    <div className="py-3">
-      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400 mb-2">
-        Investigation pipeline
-      </p>
-      <ol className="flex flex-col lg:flex-row lg:items-start gap-4 lg:gap-0 border-t border-slate-100 lg:border-0 pt-3">
+    <div className="p-4 sm:p-5">
+      <div className="flex items-center justify-between gap-2 mb-4">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+          INVESTIGATION PIPELINE
+        </span>
+        <span className="text-xs text-slate-400 font-mono">5 STAGES</span>
+      </div>
+      <ol className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 lg:gap-0">
         {steps.map((step, i) => (
           <StepNode key={step.id} step={step} showConnector={i < steps.length - 1} />
         ))}
@@ -191,11 +208,11 @@ export default function InvestigationProgressPanel({
   );
 
   if (embedded) {
-    return <div className="border-b border-slate-200">{inner}</div>;
+    return <SocCard className="overflow-hidden">{inner}</SocCard>;
   }
 
   return (
-    <SocCard className="shadow-none relative static">
+    <SocCard className="overflow-hidden">
       {inner}
     </SocCard>
   );

@@ -44,6 +44,7 @@ services:
       # network; it is not the Docker host's port 5555.
       - ADB_HOST=${ADB_HOST:-}
       - ADB_PORT=${ADB_PORT:-5555}
+      - ADB_SERVER_SOCKET=${ADB_SERVER_SOCKET:-tcp:host.docker.internal:5037}
       - DEVICE_SERIAL=${DEVICE_SERIAL:-${ANDROID_DEVICE_SERIAL:-}}
       - ANDROID_DEVICE_SERIAL=${ANDROID_DEVICE_SERIAL:-${DEVICE_SERIAL:-}}
       - ANDROID_SANDBOX_PROVIDER=${ANDROID_SANDBOX_PROVIDER:-${SANDBOX_PROVIDER:-auto}}
@@ -93,6 +94,7 @@ services:
       # Preserve the configurable Genymotion endpoint from .env.
       - ADB_HOST=${ADB_HOST:-}
       - ADB_PORT=${ADB_PORT:-5555}
+      - ADB_SERVER_SOCKET=${ADB_SERVER_SOCKET:-tcp:host.docker.internal:5037}
       - DEVICE_SERIAL=${DEVICE_SERIAL:-${ANDROID_DEVICE_SERIAL:-}}
       - ANDROID_DEVICE_SERIAL=${ANDROID_DEVICE_SERIAL:-${DEVICE_SERIAL:-}}
       - ANDROID_SANDBOX_PROVIDER=${ANDROID_SANDBOX_PROVIDER:-${SANDBOX_PROVIDER:-auto}}
@@ -125,6 +127,8 @@ services:
       - MITMPROXY_HAR_PATH=/mitmproxy_har/dump.har
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./analysis-engine:/app
       - ./shared:/opt/sudarshan-core
@@ -132,8 +136,6 @@ services:
       - uploads:/app/uploads
       - ~/.android:/root/.android:ro
       - mitmproxy_har:/mitmproxy_har:ro
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     mem_limit: 4g
     cpus: 2.0
     security_opt:

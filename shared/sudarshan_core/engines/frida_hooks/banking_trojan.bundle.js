@@ -1,5 +1,5 @@
 📦
-513262 /banking_trojan.js
+519483 /banking_trojan.js
 ✄
 var __defProp = Object.defineProperty;
 var __export = (target, all) => {
@@ -13587,6 +13587,8 @@ var eventCounts = {
   dangerous_apis: 0,
   files_accessed: 0,
   anti_analysis: 0,
+  smoke: 0,
+  // baseline runtime smoke-test events (app start, activity, class, file, pref, url)
   device_fingerprint: 0,
   // IMEI / IMSI / ICCID / MSISDN, app + account enumeration
   app_telemetry: 0,
@@ -13754,8 +13756,14 @@ function initHooks() {
       }
       send({ type: "diag", msg: "java_gate_passed", ts: Date.now() });
       try {
-        Java.deoptimizeEverything();
-        send({ type: "diag", msg: "deoptimizeEverything_success", ts: Date.now() });
+        var BuildVersion = Java.use("android.os.Build$VERSION");
+        var sdkLevel = BuildVersion.SDK_INT ? BuildVersion.SDK_INT.value : 0;
+        if (sdkLevel > 0 && sdkLevel < 34) {
+          Java.deoptimizeEverything();
+          send({ type: "diag", msg: "deoptimizeEverything_success", ts: Date.now() });
+        } else {
+          send({ type: "diag", msg: "deoptimizeEverything_skipped_api34_plus", sdk_int: sdkLevel, ts: Date.now() });
+        }
       } catch (e) {
         send({ type: "diag", msg: "deoptimizeEverything_failed", error: e.message });
       }
@@ -14903,7 +14911,12 @@ function initHooks() {
           try {
             var current = Build[field].value;
             if (current && EMULATOR_VALUE_MARKERS.test(String(current))) {
-              Build[field].value = BUILD_SPOOF[field];
+              try {
+                var jField = Build.class.getDeclaredField(field);
+                jField.setAccessible(true);
+                jField.set(null, BUILD_SPOOF[field]);
+              } catch (reflectErr) {
+              }
               spoofedFields.push(field + '="' + current + '"');
             }
           } catch (fieldErr) {
@@ -15025,6 +15038,149 @@ function initHooks() {
         registerHook("InMemoryDexClassLoader.<init>");
       } catch (e) {
         reportHookError("InMemoryDexClassLoader", e.message);
+      }
+      try {
+        var Application = Java.use("android.app.Application");
+        Application.onCreate.implementation = function() {
+          emit("smoke", {
+            hook: "Application.onCreate",
+            class_name: "android.app.Application",
+            severity: "INFO",
+            package: runtimeContext.package_name,
+            description: "Target Application process initialized: " + runtimeContext.package_name
+          });
+          return this.onCreate();
+        };
+        registerHook("Application.onCreate");
+      } catch (e) {
+        reportHookError("Application.onCreate", e.message);
+      }
+      try {
+        var ActivityClass = Java.use("android.app.Activity");
+        ActivityClass.onCreate.overload("android.os.Bundle").implementation = function(savedInstanceState) {
+          var actName = this.getClass().getName();
+          runtimeContext.current_activity = actName;
+          emit("smoke", {
+            hook: "Activity.onCreate",
+            class_name: actName,
+            severity: "INFO",
+            activity: actName,
+            package: runtimeContext.package_name,
+            description: "Activity created: " + actName
+          });
+          return this.onCreate(savedInstanceState);
+        };
+        registerHook("Activity.onCreate");
+      } catch (e) {
+        reportHookError("Activity.onCreate", e.message);
+      }
+      try {
+        var ClassLoaderClass = Java.use("java.lang.ClassLoader");
+        ClassLoaderClass.loadClass.overload("java.lang.String").implementation = function(className) {
+          var res = this.loadClass(className);
+          if (className && !isDuplicate("loadClass_" + className)) {
+            if (className.indexOf("android.") !== 0 && className.indexOf("java.") !== 0 && className.indexOf("javax.") !== 0) {
+              emit("smoke", {
+                hook: "ClassLoader.loadClass",
+                class_name: className,
+                severity: "INFO",
+                package: runtimeContext.package_name,
+                description: "Application class loaded: " + className
+              });
+            }
+          }
+          return res;
+        };
+        registerHook("ClassLoader.loadClass");
+      } catch (e) {
+        reportHookError("ClassLoader.loadClass", e.message);
+      }
+      try {
+        var ContextWrapper = Java.use("android.content.ContextWrapper");
+        ContextWrapper.getSharedPreferences.overload("java.lang.String", "int").implementation = function(name, mode) {
+          if (name && !isDuplicate("pref_" + name)) {
+            emit("smoke", {
+              hook: "ContextWrapper.getSharedPreferences",
+              class_name: "android.content.ContextWrapper",
+              severity: "INFO",
+              preference_name: name,
+              description: "SharedPreferences accessed: " + name
+            });
+          }
+          return this.getSharedPreferences(name, mode);
+        };
+        registerHook("ContextWrapper.getSharedPreferences");
+      } catch (e) {
+        reportHookError("ContextWrapper.getSharedPreferences", e.message);
+      }
+      try {
+        var FileClass = Java.use("java.io.File");
+        FileClass.$init.overload("java.lang.String").implementation = function(path) {
+          if (path && (path.indexOf("/data/") === 0 || path.indexOf("/sdcard/") === 0) && !isDuplicate("file_" + path)) {
+            emit("smoke", {
+              hook: "File.<init>",
+              class_name: "java.io.File",
+              severity: "INFO",
+              file_path: path,
+              description: "Application accessed file path: " + path
+            });
+          }
+          return this.$init(path);
+        };
+        registerHook("File.<init>");
+      } catch (e) {
+        reportHookError("File.<init>", e.message);
+      }
+      try {
+        var URLClass = Java.use("java.net.URL");
+        URLClass.openConnection.overload().implementation = function() {
+          var urlStr = this.toString();
+          if (urlStr && !isDuplicate("url_" + urlStr)) {
+            emit("smoke", {
+              hook: "URL.openConnection",
+              class_name: "java.net.URL",
+              severity: "INFO",
+              url: urlStr,
+              description: "Application opened network URL connection: " + urlStr
+            });
+          }
+          return this.openConnection();
+        };
+        registerHook("URL.openConnection");
+      } catch (e) {
+        reportHookError("URL.openConnection", e.message);
+      }
+      try {
+        var WebView = Java.use("android.webkit.WebView");
+        WebView.loadUrl.overload("java.lang.String").implementation = function(url) {
+          emit("smoke", {
+            hook: "WebView.loadUrl",
+            class_name: "android.webkit.WebView",
+            severity: "INFO",
+            url,
+            description: "WebView loaded URL: " + url
+          });
+          return this.loadUrl(url);
+        };
+        registerHook("WebView.loadUrl");
+      } catch (e) {
+        reportHookError("WebView.loadUrl", e.message);
+      }
+      try {
+        var SystemClass = Java.use("java.lang.System");
+        SystemClass.loadLibrary.implementation = function(libname) {
+          emit("smoke", {
+            hook: "System.loadLibrary",
+            class_name: "java.lang.System",
+            severity: "INFO",
+            library: libname,
+            description: "Native library loaded: " + libname
+          });
+          return this.loadLibrary(libname);
+        };
+        registerHook("System.loadLibrary");
+      } catch (e) {
+        reportHookError("System.loadLibrary", e.message);
       }
       send({
         type: "ready",

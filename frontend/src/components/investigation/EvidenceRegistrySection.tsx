@@ -1,11 +1,9 @@
 import type { FraudCardData } from '../../App';
 import type { InvestigationBundle } from '../../types/investigation';
 import { LoadingSpinner } from '../ui/Skeleton';
-import InvestigationHeader from './InvestigationHeader';
 import InvestigationProgressPanel from './InvestigationProgressPanel';
-import TechnicalAnalysisSummary from './TechnicalAnalysisSummary';
+import TechnicalOverviewMetrics from './TechnicalOverviewMetrics';
 import FindingsRegistryTable from './FindingsRegistryTable';
-import InvestigationTimeline from './InvestigationTimeline';
 
 export default function EvidenceRegistrySection({
   data,
@@ -25,17 +23,10 @@ export default function EvidenceRegistrySection({
   }
 
   return (
-    <section
-      className="investigation-evidence-workspace w-full max-w-[1340px] mx-auto"
-      aria-label="Investigation evidence workspace"
-    >
-      <InvestigationHeader data={data} bundle={bundle} />
+    <div className="w-full space-y-6">
       <InvestigationProgressPanel data={data} bundle={bundle} embedded />
-      <TechnicalAnalysisSummary data={data} bundle={bundle} embedded />
-      <div className="pt-2">
-        <FindingsRegistryTable bundle={bundle} embedded />
-      </div>
-      <InvestigationTimeline data={data} bundle={bundle} embedded />
-    </section>
+      <TechnicalOverviewMetrics data={data} bundle={bundle} />
+      <FindingsRegistryTable bundle={bundle} embedded />
+    </div>
   );
 }

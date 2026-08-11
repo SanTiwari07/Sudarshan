@@ -9,7 +9,10 @@ def test_should_recorrelate_when_unavailable_and_never_queried():
     assert should_recorrelate_threat_intel({"available": False, "sources_queried": []}) is True
 
 
-def test_should_not_recorrelate_when_available():
+def test_should_not_recorrelate_when_available(monkeypatch):
+    monkeypatch.setattr("app.services.case_intel_enrichment._get_vt_key", lambda: "vt")
+    monkeypatch.setattr("app.services.case_intel_enrichment._get_otx_key", lambda: "otx")
+    monkeypatch.setattr("app.services.case_intel_enrichment._get_abuseipdb_key", lambda: None)
     assert (
         should_recorrelate_threat_intel(
             {"available": True, "sources_queried": ["VirusTotal", "AlienVault OTX"]}

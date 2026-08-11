@@ -1631,6 +1631,7 @@ class FridaSession:
             # ── Unscored: evidence only ───────────────────────────────────────
             "dangerous_apis": [], "files_accessed": [],
             "anti_analysis": [],        # sandbox evasion / anti-instrumentation
+            "smoke": [],                # baseline runtime smoke-test events
             "device_fingerprint": [],   # IMEI/IMSI/ICCID/MSISDN, app + account enumeration
             "app_telemetry": [],        # activity lifecycle, keyboard, generic crypto/prefs
             "notification": [],         # notification interception
@@ -2098,88 +2099,55 @@ class FridaSession:
 
         try:
             logger.info(f"[Frida] Connecting to device {self.device_serial}")
+            try:
+                from sudarshan_core.sandbox import get_sandbox_provider
+                provider = get_sandbox_provider()
+                provider.ensure_frida(self.device_serial, restart_if_needed=True)
+                time.sleep(1.0)
+            except Exception as st_err:
+                logger.warning(f"[Frida] Sandbox provider ensure_frida check: {st_err}")
+
             device = None
             for attempt in range(3):
                 try:
-                    # FIX Bug #7: Docker TCP mode requires using frida's remote device API.
-                    # When ADB_HOST is set, the device serial is an IP:port string
-                    # (e.g. 'host.docker.internal:5555'). frida.enumerate_devices() only
-                    # lists USB/local devices; it will never find a TCP-connected emulator
-                    # unless we explicitly add it as a remote device using the Frida
-                    # server port (27042 by default) on the host running the emulator.
-                    #
-                    # Strategy:
-                    #   1. If ADB_HOST is set, add remote device via frida device manager.
-                    #   2. Otherwise, enumerate devices normally.
-                    device_ip = self.device_serial.split(":")[0] if ":" in self.device_serial or "." in self.device_serial else ""
-                    if ADB_HOST or device_ip:
+                    # 1. Standard USB / ADB device transport (uses port 27042 forward)
+                    try:
+                        all_devices = frida.enumerate_devices()
+                        logger.info(f"[Frida] Available devices: {[d.id for d in all_devices]}")
+                        for d in all_devices:
+                            if d.id == self.device_serial:
+                                device = d
+                                break
+                    except Exception as enum_err:
+                        logger.debug(f"[Frida] enumerate_devices failed: {enum_err}")
+
+                    # 2. Remote TCP fallback (for Docker / remote hosts)
+                    if not device:
                         candidate_ports = []
-                        for p_env in [os.getenv("SUDARSHAN_FRIDA_PORT"), os.getenv("FRIDA_SERVER_PORT"), "27055", "27042"]:
+                        for p_env in [os.getenv("SUDARSHAN_FRIDA_PORT"), os.getenv("FRIDA_SERVER_PORT"), "27042", "27055"]:
                             if p_env and p_env.isdigit():
                                 p_int = int(p_env)
                                 if p_int not in candidate_ports:
                                     candidate_ports.append(p_int)
 
-                        #
-                        # frida-server also binds device-local loopback
-                        # (127.0.0.1:27042), so it is ONLY reachable through a
-                        # forward. Try the container's own forwarded port first, and
-                        # keep ADB_HOST as a fallback for setups where the operator
-                        # forwarded on the host instead.
                         for f_port in candidate_ports:
-                            fwd_ok, fwd_out = _adb(
-                                "-s", self.device_serial, "forward",
-                                f"tcp:{f_port}", f"tcp:{f_port}", timeout=10,
-                            )
-                            if not fwd_ok:
-                                logger.debug(
-                                    f"[Frida] adb forward tcp:{f_port} failed: {fwd_out}"
-                                )
-
-                            for frida_host in ("127.0.0.1", ADB_HOST):
+                            _adb("-s", self.device_serial, "forward", f"tcp:{f_port}", f"tcp:{f_port}", timeout=10)
+                            hosts_to_try = ("127.0.0.1",) if not ADB_HOST else ("127.0.0.1", ADB_HOST)
+                            for frida_host in hosts_to_try:
                                 try:
-                                    device = frida.get_device_manager().add_remote_device(
-                                        f"{frida_host}:{f_port}"
-                                    )
-                                    # add_remote_device is lazy - it can return a
-                                    # device object that fails on first real use.
-                                    # Force a round trip so a dead endpoint is
-                                    # rejected here rather than at attach time.
-                                    device.enumerate_processes()
-                                    logger.info(
-                                        f"[Frida] TCP remote device connected: "
-                                        f"{frida_host}:{f_port}"
-                                    )
+                                    dev_remote = frida.get_device_manager().add_remote_device(f"{frida_host}:{f_port}")
+                                    dev_remote.enumerate_processes()
+                                    device = dev_remote
+                                    logger.info(f"[Frida] TCP remote device connected: {frida_host}:{f_port}")
                                     break
-                                except Exception as tcp_err:
-                                    device = None
-                                    logger.debug(
-                                        f"[Frida] remote device {frida_host}:{f_port} "
-                                        f"unusable: {type(tcp_err).__name__}: {tcp_err}"
-                                    )
+                                except Exception:
+                                    pass
                             if device:
                                 break
 
-                        if not device:
-                            logger.warning(
-                                "[Frida] No reachable frida-server on %s via ports %s. "
-                                "Check that frida-server is running on the device and "
-                                "that its port matches SUDARSHAN_FRIDA_PORT.",
-                                self.device_serial, candidate_ports,
-                            )
-                        if device:
-                            break
-
-                    # Local/USB mode (or TCP fallback): enumerate all devices
-                    all_devices = frida.enumerate_devices()
-                    logger.info(f"[Frida] Available devices: {[d.id for d in all_devices]}")
-                    for d in all_devices:
-                        if d.id == self.device_serial:
-                            device = d
-                            break
                     if device:
                         break
-                    raise Exception(f"Device '{self.device_serial}' not in enumerate_devices list")
+                    raise Exception(f"Device '{self.device_serial}' not found")
                 except Exception as e:
                     logger.warning(f"[Frida] Device connect attempt {attempt+1} failed: {e}")
                     time.sleep(2)
@@ -3401,9 +3369,9 @@ async def _run_device_session(
     # that is excluded from BFCI (a device-identity read, say) is still real
     # observed behaviour and must not vanish from the analyst's view.
     api_calls = [
-        e.get("data", {}).get("hook", "")
+        e.get("data", {}).get("hook", "") or e.get("hook", "")
         for category in ["accessibility", "sms", "overlay", "banking",
-                         "persistence", "dangerous_apis",
+                         "persistence", "dangerous_apis", "smoke",
                          "device_fingerprint", "app_telemetry", "notification"]
         for e in session.collected_events.get(category, [])
     ]

@@ -94,20 +94,27 @@ export default function FraudCard({ data }: { data: FraudCardData | null }) {
 
   return (
     <div className="space-y-6 sm:space-y-8">
+      {/* 1. Risk */}
       <FraudRiskHero data={data} />
-      <InvestigationConclusionCard data={data} bundle={investigationBundle} />
-      <RuntimeLimitationBanner data={data} />
-      <VisualImpersonationExecutiveCard data={data} />
-      <ThreatIntelTeaser data={data} />
-      <StructuredCaseSummary data={data} />
+
+      {/* 2. Key Findings */}
+      <CoreFindingsList data={data} bundle={investigationBundle} />
+
+      {/* 3. Evidence */}
       {investigationBundle && stripCounts && (
         <CaseSummaryStrip riskScore={data.final_risk_score} counts={stripCounts} />
       )}
-      <CoreFindingsList data={data} bundle={investigationBundle} />
-      <div className="analyst-split-main">
-        <div className="analyst-split-side ml-auto max-w-md w-full">
-          <ApplicationInfoCard data={data} />
-        </div>
+      <RuntimeLimitationBanner data={data} />
+
+      {/* 4. Intelligence */}
+      <InvestigationConclusionCard data={data} bundle={investigationBundle} />
+      <VisualImpersonationExecutiveCard data={data} />
+      <ThreatIntelTeaser data={data} />
+
+      {/* 5. Detailed Investigation & Application Identity */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <StructuredCaseSummary data={data} />
+        <ApplicationInfoCard data={data} />
       </div>
     </div>
   );

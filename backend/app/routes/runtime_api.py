@@ -460,3 +460,64 @@ async def runtime_evidence(
         "returned": len(records),
         "evidence": records,
     }
+
+
+@router.get("/runtime/diagnostics")
+async def runtime_diagnostics(
+    current_user: dict = Depends(get_current_user),
+    case_id: Optional[str] = Query(None, description="Scope diagnostics to case ID / package"),
+):
+    """
+    Comprehensive Runtime Analysis Diagnostics Mode.
+    Answers all 15 operational pipeline health questions end-to-end.
+    """
+    from sudarshan_core.engines.frida_sandbox import get_sandbox_status, _find_adb, get_connected_emulators
+
+    sandbox_status = get_sandbox_status()
+    adb_path = _find_adb()
+    emulators = get_connected_emulators() if adb_path else []
+
+    evidence_records = _load_evidence_from_artifacts(case_id) if case_id else _load_evidence_from_artifacts()
+
+    trackers = list(_ACTIVE_TRACKERS.values())
+    active_tracker = None
+    if case_id:
+        for t in trackers:
+            if case_id.lower() in t.package_name.lower():
+                active_tracker = t
+                break
+    if not active_tracker and trackers:
+        active_tracker = trackers[-1]
+
+    registered_hooks_count = len(_hook_registry)
+    triggered_hooks_count = sum(1 for h in _hook_registry.values() if h.get("fired", 0) > 0)
+
+    raw_events_received = _pipeline_metrics.get("events_total", 0)
+    evidence_stored_count = len(evidence_records)
+
+    return {
+        "timestamp": time.time(),
+        "case_id_scoped": case_id,
+        "diagnostics": {
+            "emulator_connected": len(emulators) > 0,
+            "connected_emulators": emulators,
+            "adb_available": adb_path is not None,
+            "adb_path": adb_path,
+            "frida_available": sandbox_status.get("frida_available", False),
+            "frida_version": sandbox_status.get("frida_version"),
+            "frida_sandbox_ready": sandbox_status.get("ready", False),
+            "hooks_bundle_present": sandbox_status.get("hooks_script_present", False),
+            "hooks_registered_total": registered_hooks_count,
+            "hooks_triggered_total": triggered_hooks_count,
+            "raw_events_received": raw_events_received,
+            "events_per_sec": _pipeline_metrics.get("events_per_sec", 0.0),
+            "evidence_records_stored": evidence_stored_count,
+            "active_sessions_count": len(trackers),
+            "active_session_detail": active_tracker.to_dict() if active_tracker else None,
+        },
+        "pipeline_health_summary": {
+            "status": "HEALTHY" if sandbox_status.get("ready") and raw_events_received > 0 else "READY_IDLE" if sandbox_status.get("ready") else "UNAVAILABLE",
+            "message": "Full dynamic pipeline operational and ready to process APKs." if sandbox_status.get("ready") else sandbox_status.get("message", "Sandbox not ready"),
+        }
+    }
+

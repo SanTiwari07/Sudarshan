@@ -1,13 +1,11 @@
 import type { FraudCardData } from '../../App';
 import type { InvestigationBundle } from '../../types/investigation';
-import { useAnalysis } from '../../context/AnalysisContext';
 import { useInvestigationUI } from '../../context/InvestigationUIContext';
 import { mapFindingEvidence } from '../../lib/findingEvidenceMapper';
 import {
   isFindingDetected,
   SEVERITY_DISPLAY,
   visibleFindingDefinitions,
-  type TechnicalFindingId,
 } from '../../lib/technicalFindings';
 import ExplainFindingButton from './ExplainFindingButton';
 import SocCard from '../ui/Card';
@@ -23,14 +21,16 @@ export default function CoreFindingsList({
   bundle?: InvestigationBundle | null;
 }) {
   const { openFindingEvidence, openFindingExplanation } = useInvestigationUI();
-  const { runtimeEvidenceRaw } = useAnalysis();
+  void bundle;
 
   const definitions = visibleFindingDefinitions(data);
-  const detected = definitions.filter((d) => isFindingDetected(d.id, data));
-  const clear = definitions.filter((d) => !isFindingDetected(d.id, data));
+  const detected = definitions.filter((d: any) => isFindingDetected(d.id, data));
+  const clear = definitions.filter((d: any) => !isFindingDetected(d.id, data));
 
-  const evidenceCount = (id: TechnicalFindingId) =>
-    mapFindingEvidence(id, data, bundle ?? null, runtimeEvidenceRaw).length;
+  const evidenceCount = (id: any) => {
+    const ev = mapFindingEvidence(id, data);
+    return Array.isArray(ev.records) ? ev.records.length : 1;
+  };
 
   return (
     <SocCard>
@@ -46,9 +46,9 @@ export default function CoreFindingsList({
             <p className="text-xs text-slate-500 mt-2">Review verified evidence and threat indicators before clearing.</p>
           </div>
         )}
-        {detected.map((row) => {
+        {detected.map((row: any) => {
           const count = evidenceCount(row.id);
-          const sevClass = COLORS.severity[row.severity] || COLORS.severity.info;
+          const sevClass = (COLORS.severity as Record<string, string>)[row.severity] || COLORS.severity.info;
           return (
             <div
               key={row.id}
@@ -72,7 +72,7 @@ export default function CoreFindingsList({
                     <ExplainFindingButton findingId={row.id} />
                   </h3>
                   <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${sevClass}`}>
-                    {SEVERITY_DISPLAY[row.severity] || 'Risk'}
+                    {SEVERITY_DISPLAY[row.severity]?.label || 'Risk'}
                   </span>
                 </div>
                 <p className="text-xs text-slate-600 leading-relaxed">{row.summary}</p>
@@ -91,7 +91,7 @@ export default function CoreFindingsList({
           <div className="pt-2 border-t border-slate-100">
             <div className="text-[10px] font-bold uppercase text-slate-400 mb-2">Not detected</div>
             <div className="flex flex-wrap gap-2">
-              {clear.map((row) => (
+              {clear.map((row: any) => (
                 <button
                   key={row.id}
                   type="button"

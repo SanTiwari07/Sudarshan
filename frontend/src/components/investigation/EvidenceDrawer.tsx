@@ -99,10 +99,11 @@ export default function EvidenceDrawer({
   const explanation = evidence ? buildFindingExplanation(evidence, data) : null;
   const headline = evidence ? findingHeadline(evidence) : null;
   const artifacts = evidence?.artifactRefs ?? [];
-  const visualEntries = drawerEvidenceId
+  const visualSingle = drawerEvidenceId
     ? illustratedByEvidenceId(drawerEvidenceId, screenshotManifestEntries)
-    : [];
-  const sourceLabel = evidence ? sourceDisplayLabel(evidence) : '';
+    : null;
+  const visualEntries = visualSingle ? [visualSingle] : [];
+  const sourceLabel = evidence ? sourceDisplayLabel(evidence.sourceEngine || evidence.category) : '';
 
   return (
     <>
@@ -142,10 +143,7 @@ export default function EvidenceDrawer({
                   </span>
                 </div>
                 <div>
-                  <p className="text-[15px] font-semibold text-slate-900 leading-snug">{headline.title}</p>
-                  {headline.subtitle && (
-                    <p className="text-[13px] text-slate-600 mt-1 leading-relaxed">{headline.subtitle}</p>
-                  )}
+                  <p className="text-[15px] font-semibold text-slate-900 leading-snug">{headline}</p>
                 </div>
               </div>
             )}

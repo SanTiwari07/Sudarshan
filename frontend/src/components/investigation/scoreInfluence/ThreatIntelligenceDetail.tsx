@@ -9,20 +9,16 @@ import {
   providerUiStatus,
   type MergedThreatIntel,
 } from '../../../lib/intelPayloadMerge';
-import { DetailSection, FlowSteps, FrsAxisTransparencyTable, MonoBlock } from './InfluenceDetailShell';
+import { DetailSection, FlowSteps, FrsAxisTransparencyTable } from './InfluenceDetailShell';
 
 function ProviderStatusBadge({ status }: { status: ReturnType<typeof providerUiStatus> }) {
-  const label = PROVIDER_STATUS_LABEL[status];
+  const label = PROVIDER_STATUS_LABEL[status?.label] || status?.label || 'STANDBY';
   const cls =
-    status === 'available'
-      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-      : status === 'no_result'
-        ? 'bg-slate-50 text-slate-700 border-slate-200'
-        : status === 'loading'
-          ? 'bg-blue-50 text-blue-800 border-blue-200'
-          : status === 'error'
-            ? 'bg-red-50 text-red-800 border-red-200'
-            : 'bg-slate-50 text-slate-500 border-slate-200';
+    status?.tone === 'critical'
+      ? 'bg-red-50 text-red-800 border-red-200'
+      : status?.tone === 'info'
+        ? 'bg-blue-50 text-blue-800 border-blue-200'
+        : 'bg-slate-50 text-slate-700 border-slate-200';
   return (
     <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${cls}`}>{label}</span>
   );
@@ -51,7 +47,6 @@ function ProviderCard({
 export default function ThreatIntelligenceDetail({
   data,
   merged,
-  fetchState,
   fetchError,
 }: {
   data: FraudCardData;
@@ -60,15 +55,14 @@ export default function ThreatIntelligenceDetail({
   fetchError: string | null;
 }) {
   const view = buildThreatInfluenceView(data, merged);
-  const frsRows = buildFrsAxisTransparency(data);
+  const frsRows = buildFrsAxisTransparency('threat_intel', data);
   const corr = data.threat_correlation;
   const iocs = corr?.ioc_reputation ?? [];
 
-  const vtStatus = providerUiStatus('virustotal', merged, fetchState);
-  const otxStatus = providerUiStatus('otx', merged, fetchState);
-  const abuseStatus = providerUiStatus('abuseipdb', merged, fetchState);
-
+  const vtStatus = providerUiStatus(merged?.status);
   const axisExcluded = !view.axisIncluded;
+  const matchedRule = data.technical_view?.matched_rule || 'Rule engine match';
+  const familySignals = data.family_classification && data.family_classification !== 'Unknown' ? [data.family_classification] : [];
 
   return (
     <div className="space-y-6">
@@ -80,55 +74,13 @@ export default function ThreatIntelligenceDetail({
 
       <DetailSection title="Reputation summary">
         <div className="space-y-3">
-          <ProviderCard title="VirusTotal" status={vtStatus}>
-            {merged.virusTotal.available ? (
-              <>
-                <p>
-                  Detections:{' '}
-                  <span className="font-mono font-semibold text-slate-900">
-                    {merged.virusTotal.malicious}/{merged.virusTotal.total}
-                  </span>
-                  {merged.virusTotal.ratio > 0 && (
-                    <span className="text-slate-500"> ({(merged.virusTotal.ratio * 100).toFixed(1)}%)</span>
-                  )}
-                </p>
-                {merged.virusTotal.vendors?.length > 0 && (
-                  <p className="text-slate-500">Malicious vendors: {merged.virusTotal.vendors.slice(0, 5).join(', ')}</p>
-                )}
-              </>
-            ) : (
-              <p>Unavailable - this provider did not contribute to the score.</p>
-            )}
-          </ProviderCard>
-
-          <ProviderCard title="AlienVault OTX" status={otxStatus}>
-            {merged.alienvault.available ? (
-              <>
-                <p>
-                  Pulse count:{' '}
-                  <span className="font-mono font-semibold">{merged.alienvault.pulse_count}</span>
-                </p>
-                {merged.alienvault.campaign && merged.alienvault.campaign !== 'None' && (
-                  <p>Campaign: {merged.alienvault.campaign}</p>
-                )}
-              </>
-            ) : (
-              <p>Unavailable - this provider did not contribute to the score.</p>
-            )}
-          </ProviderCard>
-
-          <ProviderCard title="AbuseIPDB" status={abuseStatus}>
-            {merged.abuseipdb.available ? (
-              <>
-                <p>
-                  Abuse confidence:{' '}
-                  <span className="font-mono font-semibold">{merged.abuseipdb.confidence}%</span>
-                </p>
-                <p>Reports considered: {merged.abuseipdb.reports}</p>
-              </>
-            ) : (
-              <p>Unavailable - this provider did not contribute to the score.</p>
-            )}
+          <ProviderCard title="Threat Intelligence Summary" status={vtStatus}>
+            <p>
+              Threat Score:{' '}
+              <span className="font-mono font-semibold text-slate-900">
+                {view.threatScore}
+              </span>
+            </p>
           </ProviderCard>
         </div>
       </DetailSection>
@@ -138,40 +90,9 @@ export default function ThreatIntelligenceDetail({
           <p className="text-sm text-slate-600">No IOCs recorded on this case.</p>
         ) : (
           <ul className="space-y-2">
-            {data.sha256 && (
-              <li className="rounded-lg border border-slate-200 p-2.5 text-xs">
-                <div className="font-semibold text-slate-800">SHA-256</div>
-                <MonoBlock>{data.sha256}</MonoBlock>
-                {corr && corr.sha256_total > 0 && (
-                  <p className="mt-1 text-slate-600">
-                    VT: {corr.sha256_detections}/{corr.sha256_total}
-                  </p>
-                )}
-              </li>
-            )}
-            {iocs.map((ioc) => (
-              <li key={`${ioc.type}-${ioc.indicator}`} className="rounded-lg border border-slate-200 p-2.5 text-xs">
-                <div className="font-semibold text-slate-800">
-                  {ioc.type}: <span className="font-mono font-normal">{ioc.indicator}</span>
-                </div>
-                <p className="text-slate-600 mt-1">
-                  {ioc.reputation} - {ioc.source}
-                  {ioc.vt_malicious != null && ioc.vt_total != null && (
-                    <span className="font-mono"> (VT {ioc.vt_malicious}/{ioc.vt_total})</span>
-                  )}
-                  {ioc.otx_pulses != null && <span> · OTX pulses {ioc.otx_pulses}</span>}
-                  {ioc.abuse_score != null && <span> · Abuse {ioc.abuse_score}%</span>}
-                </p>
-              </li>
-            ))}
-            {(corr?.suspicious_domains ?? []).map((d) => (
-              <li key={`dom-${d}`} className="text-xs font-mono text-slate-700">
-                Domain: {d}
-              </li>
-            ))}
-            {(corr?.malicious_ips ?? []).map((ip) => (
-              <li key={`ip-${ip}`} className="text-xs font-mono text-slate-700">
-                IP: {ip}
+            {iocs.map((ioc: any, idx: number) => (
+              <li key={idx} className="text-xs font-mono bg-slate-50 p-2 rounded border border-slate-200">
+                {ioc.value || ioc.indicator || String(ioc)} ({ioc.type || 'IOC'}) - {ioc.reputation || 'Recorded'}
               </li>
             ))}
           </ul>
@@ -183,17 +104,17 @@ export default function ThreatIntelligenceDetail({
         <div className="rounded-lg border border-slate-200 p-3 text-sm space-y-2">
           <div>
             <span className="text-slate-500 text-xs">Family</span>
-            <div className="font-bold text-slate-900">{view.family}</div>
+            <div className="font-bold text-slate-900">{data.family_classification || 'Not Classified'}</div>
           </div>
           <div>
             <span className="text-slate-500 text-xs">Matched rule</span>
-            <div className="font-mono text-slate-800">{view.matchedRule}</div>
+            <div className="font-mono text-slate-800">{matchedRule}</div>
           </div>
-          {view.familySignals.length > 0 && (
+          {familySignals.length > 0 && (
             <div>
               <span className="text-slate-500 text-xs">Evidence flags</span>
               <ul className="text-xs text-slate-700 list-disc pl-4 mt-1">
-                {view.familySignals.map((s) => (
+                {familySignals.map((s: string) => (
                   <li key={s}>{s}</li>
                 ))}
               </ul>
@@ -205,16 +126,14 @@ export default function ThreatIntelligenceDetail({
       <DetailSection title="How it influenced FRS">
         <FlowSteps
           steps={[
-            `Threat intelligence / correlation score: ${view.score.toFixed(1)} / 100`,
+            `Threat intelligence / correlation score: ${view.threatScore.toFixed(1)} / 100`,
             'Correlation axis',
             axisExcluded
               ? 'Excluded from FRS - unavailable or not used'
-              : view.merged.correlationScore != null
-                ? `Included - contributes to weighted FRS`
-                : 'Included in FRS weighting',
+              : 'Included in FRS weighting',
           ]}
         />
-        {corr?.threat_score_sources?.map((line) => (
+        {corr?.threat_score_sources?.map((line: string) => (
           <p key={line} className="text-xs text-slate-600 mt-2 font-mono">
             {line}
           </p>

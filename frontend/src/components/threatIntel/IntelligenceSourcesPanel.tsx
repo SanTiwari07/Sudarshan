@@ -41,7 +41,7 @@ function buildSources(
     vtStatus = vt.malicious > 0 ? 'matched' : 'available';
   }
 
-  const iocStatus: SourceStatus = iocCount > 0 ? 'matched' : intel.sources_status.length ? 'available' : 'unavailable';
+  const iocStatus: SourceStatus = iocCount > 0 ? 'matched' : (intel?.sources_status?.length ?? 0) > 0 ? 'available' : 'unavailable';
 
   const rulesStatus: SourceStatus =
     family && family !== 'Unknown'
@@ -83,8 +83,8 @@ function buildSources(
       detail:
         vtStatus === 'unavailable'
           ? 'VirusTotal lookup not available'
-          : vt.malicious > 0
-            ? `${vt.malicious} vendors flagged this hash`
+          : (vt?.malicious ?? 0) > 0
+            ? `${vt?.malicious} vendors flagged this hash`
             : 'Hash seen; no malicious consensus',
     },
     {

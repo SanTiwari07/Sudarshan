@@ -86,7 +86,7 @@ export default function DynamicAnalysisSummary({ data }: { data: FraudCardData }
           </a>
           <button
             type="button"
-            onClick={() => openInfluenceDetail('runtime')}
+            onClick={() => openInfluenceDetail('dynamic')}
             className="inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:border-blue-300"
           >
             View scoring details

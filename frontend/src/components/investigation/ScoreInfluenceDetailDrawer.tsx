@@ -19,8 +19,9 @@ const AXIS_META: Record<
   { title: string; icon: typeof Code; ledgerScope: 'stei' | 'dynamic' | 'correlation' }
 > = {
   static: { title: 'Static evidence', icon: Code, ledgerScope: 'stei' },
-  runtime: { title: 'Runtime behaviour', icon: Activity, ledgerScope: 'dynamic' },
-  threat: { title: 'Threat intelligence', icon: Globe, ledgerScope: 'correlation' },
+  dynamic: { title: 'Runtime behaviour', icon: Activity, ledgerScope: 'dynamic' },
+  threat_intel: { title: 'Threat intelligence', icon: Globe, ledgerScope: 'correlation' },
+  vide: { title: 'Visual evidence', icon: Globe, ledgerScope: 'dynamic' },
 };
 
 export default function ScoreInfluenceDetailDrawer({
@@ -35,7 +36,7 @@ export default function ScoreInfluenceDetailDrawer({
   const meta = AXIS_META[axis];
   const Icon = meta.icon;
 
-  const intelEnabled = influenceDetailOpen && axis === 'threat';
+  const intelEnabled = influenceDetailOpen && axis === 'threat_intel';
   const { merged, loading, error } = useIntelPayload({ enabled: intelEnabled, data });
 
   const threatMerged = merged ?? mergeIntelWithCase(data, null);
@@ -51,7 +52,7 @@ export default function ScoreInfluenceDetailDrawer({
     headerScore = `${v.score.toFixed(0)} / 100`;
     headerInfluence = v.influence;
     tagline = v.tagline;
-  } else if (axis === 'runtime') {
+  } else if (axis === 'dynamic') {
     const v = buildRuntimeInfluenceView(data, bundle);
     headerScore = v.includedInFrs && v.observedScore != null ? `${v.observedScore.toFixed(1)} / 100` : 'Not included';
     headerInfluence = v.influence;
@@ -101,8 +102,8 @@ export default function ScoreInfluenceDetailDrawer({
 
         <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-6">
           {axis === 'static' && <StaticEvidenceDetail data={data} />}
-          {axis === 'runtime' && <RuntimeBehaviourDetail data={data} bundle={bundle} />}
-          {axis === 'threat' && (
+          {axis === 'dynamic' && <RuntimeBehaviourDetail data={data} bundle={bundle} />}
+          {axis === 'threat_intel' && (
             <ThreatIntelligenceDetail
               data={data}
               merged={threatMerged}

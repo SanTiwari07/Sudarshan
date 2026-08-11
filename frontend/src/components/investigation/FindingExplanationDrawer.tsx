@@ -21,12 +21,14 @@ export default function FindingExplanationDrawer({
   const vm = buildTechnicalFindingViewModel(explanationFindingId, data, bundle, rawRuntime);
   const sevClass = COLORS.severity[vm.severity] || COLORS.severity.info;
 
+  const sec = vm.sections || {};
+
   return (
     <FindingDrawerShell
       open
       onClose={closeFindingExplanation}
       title={vm.title}
-      subtitle={vm.subtitle}
+      subtitle={vm.summary}
       headerExtra={
         <div className="flex flex-wrap items-center gap-2 mt-2">
           <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${sevClass}`}>
@@ -40,51 +42,51 @@ export default function FindingExplanationDrawer({
         </div>
       }
     >
-      <FindingSection label="What it is">{vm.sections.whatItIs}</FindingSection>
-      <FindingSection label="Why it matters">{vm.sections.whyItMatters}</FindingSection>
+      <FindingSection label="What it is">{sec.whatItIs}</FindingSection>
+      <FindingSection label="Why it matters">{sec.whyItMatters}</FindingSection>
 
       <FindingSection label="What Sudarshan detected">
-        {vm.sections.whatDetected.length > 0 ? (
+        {(sec.whatDetected?.length ?? 0) > 0 ? (
           <ul className="list-disc pl-4 space-y-1">
-            {vm.sections.whatDetected.map((line) => (
+            {(sec.whatDetected ?? []).map((line: string) => (
               <li key={line}>{line}</li>
             ))}
           </ul>
         ) : (
           <p className="text-slate-500 italic">No mapped observations for this sample.</p>
         )}
-        {vm.sections.evidenceCount > 0 && (
-          <p className="text-slate-600 mt-2 tabular-nums">{vm.sections.evidenceCount} supporting observations</p>
+        {(sec.evidenceCount ?? 0) > 0 && (
+          <p className="text-slate-600 mt-2 tabular-nums">{sec.evidenceCount} supporting observations</p>
         )}
       </FindingSection>
 
       <FindingSection label="Evidence basis">
         <div className="flex flex-wrap items-center gap-2 mb-2">
           <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded border border-slate-300 bg-slate-50 text-slate-700">
-            {vm.sections.evidenceBasisBadge}
+            {sec.evidenceBasisBadge}
           </span>
-          <span className="text-slate-600">{vm.sections.evidenceBasisLabel}</span>
+          <span className="text-slate-600">{sec.evidenceBasisLabel}</span>
         </div>
-        {vm.sections.runtimeNote && (
-          <p className="text-slate-500 italic mt-1">{vm.sections.runtimeNote}</p>
+        {sec.runtimeNote && (
+          <p className="text-slate-500 italic mt-1">{sec.runtimeNote}</p>
         )}
       </FindingSection>
 
-      <FindingSection label="What this proves">{vm.sections.whatItProves}</FindingSection>
-      <FindingSection label="What this does not prove">{vm.sections.whatItDoesNotProve}</FindingSection>
+      <FindingSection label="What this proves">{sec.whatItProves}</FindingSection>
+      <FindingSection label="What this does not prove">{sec.whatItDoesNotProve}</FindingSection>
 
       <FindingSection label="Risk impact">
         <p className="font-semibold text-slate-900 mb-1">{vm.severityLabel}</p>
-        <p>{vm.sections.riskImpact}</p>
+        <p>{sec.riskImpact}</p>
       </FindingSection>
 
-      {vm.sections.mitre && (
+      {sec.mitre && (
         <FindingSection label="MITRE ATT&CK">
-          <span className="font-mono text-blue-800">{vm.sections.mitre}</span>
+          <span className="font-mono text-blue-800">{sec.mitre}</span>
         </FindingSection>
       )}
 
-      <FindingSection label="Analyst takeaway">{vm.sections.analystTakeaway}</FindingSection>
+      <FindingSection label="Analyst takeaway">{sec.analystTakeaway}</FindingSection>
     </FindingDrawerShell>
   );
 }

@@ -27,6 +27,7 @@ from sudarshan_core.models.schemas import StaticAnalysisFlags
 from sudarshan_core.services.threat_correlator import (
     correlate, _get_vt_key, _get_otx_key, _get_abuseipdb_key, extract_dynamic_urls,
 )
+from app.services.case_intel_enrichment import should_recorrelate_threat_intel
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/intelligence", tags=["Threat Intelligence"])
@@ -229,15 +230,8 @@ async def get_threat_intelligence(
     otx_key = _get_otx_key()
     abuse_key = _get_abuseipdb_key()
 
-    queried_sources = set(tc.get("sources_queried") or [])
-
     # Re-run correlation if new API keys are configured that were not queried yet
-    should_recorrelate = (
-        (vt_key and "VirusTotal" not in queried_sources) or
-        (otx_key and "AlienVault OTX" not in queried_sources) or
-        (abuse_key and "AbuseIPDB" not in queried_sources) or
-        (not tc.get("available") and not queried_sources)
-    )
+    should_recorrelate = should_recorrelate_threat_intel(tc)
 
     if should_recorrelate:
         try:

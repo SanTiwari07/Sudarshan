@@ -8,17 +8,20 @@ import {
   PROVIDER_STATUS_LABEL,
   providerUiStatus,
   type MergedThreatIntel,
+  type ProviderUiStatus,
 } from '../../../lib/intelPayloadMerge';
 import { DetailSection, FlowSteps, FrsAxisTransparencyTable } from './InfluenceDetailShell';
 
-function ProviderStatusBadge({ status }: { status: ReturnType<typeof providerUiStatus> }) {
-  const label = PROVIDER_STATUS_LABEL[status?.label] || status?.label || 'STANDBY';
+function ProviderStatusBadge({ status }: { status: ProviderUiStatus }) {
+  const label = PROVIDER_STATUS_LABEL[status] || status;
   const cls =
-    status?.tone === 'critical'
-      ? 'bg-red-50 text-red-800 border-red-200'
-      : status?.tone === 'info'
-        ? 'bg-blue-50 text-blue-800 border-blue-200'
-        : 'bg-slate-50 text-slate-700 border-slate-200';
+    status === 'available'
+      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+      : status === 'error'
+        ? 'bg-red-50 text-red-800 border-red-200'
+        : status === 'loading'
+          ? 'bg-blue-50 text-blue-800 border-blue-200'
+          : 'bg-slate-50 text-slate-700 border-slate-200';
   return (
     <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${cls}`}>{label}</span>
   );
@@ -30,7 +33,7 @@ function ProviderCard({
   children,
 }: {
   title: string;
-  status: ReturnType<typeof providerUiStatus>;
+  status: ProviderUiStatus;
   children: ReactNode;
 }) {
   return (
@@ -47,6 +50,7 @@ function ProviderCard({
 export default function ThreatIntelligenceDetail({
   data,
   merged,
+  fetchState,
   fetchError,
 }: {
   data: FraudCardData;
@@ -59,7 +63,7 @@ export default function ThreatIntelligenceDetail({
   const corr = data.threat_correlation;
   const iocs = corr?.ioc_reputation ?? [];
 
-  const vtStatus = providerUiStatus(merged?.status);
+  const vtStatus = providerUiStatus('virustotal', merged, fetchState);
   const axisExcluded = !view.axisIncluded;
   const matchedRule = data.technical_view?.matched_rule || 'Rule engine match';
   const familySignals = data.family_classification && data.family_classification !== 'Unknown' ? [data.family_classification] : [];

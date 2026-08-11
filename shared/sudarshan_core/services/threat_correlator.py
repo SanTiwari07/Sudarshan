@@ -466,8 +466,9 @@ async def correlate(
         sources_queried.append("VirusTotal")
 
     # ── Process OTX hash ──────────────────────────────────────────────────────
-    if otx_hash.get("found") and otx_hash.get("pulse_count", 0) > 0:
+    if _get_otx_key() and otx_hash.get("found") is not None:
         sources_queried.append("AlienVault OTX")
+    if otx_hash.get("found") and otx_hash.get("pulse_count", 0) > 0:
         result["available"] = True
         result["otx_pulses"] = otx_hash.get("pulses", [])
         # Extract family from pulses
@@ -527,6 +528,11 @@ async def correlate(
     if ioc_rep:
         result["available"] = True
 
+    # Any successfully queried TI source means correlation ran — even a clean
+    # VT/OTX result (0 detections) must not be treated as "unavailable".
+    if sources_queried:
+        result["available"] = True
+
     # ── Threat Score Calculation ───────────────────────────────────────────────
     score_components: List[str] = []
     threat_score = 0.0
@@ -548,6 +554,15 @@ async def correlate(
         score_components.append(f"Malicious URLs: {malicious_urls} (+{url_contribution:.1f})")
 
     result["threat_score"] = min(threat_score, 100.0)
+    if result["available"] and not score_components:
+        if result.get("vt_hash_in_database") is False:
+            score_components.append("VT: SHA-256 not present in VirusTotal database")
+        elif result.get("sha256_total", 0) > 0 and result.get("sha256_detections", 0) == 0:
+            score_components.append(
+                f"VT: 0/{int(result['sha256_total'])} detections (clean reputation)"
+            )
+        elif sources_queried:
+            score_components.append("Threat intelligence queried — no malicious indicators matched")
     result["threat_score_sources"] = score_components
     result["correlation_confidence"] = min(len(sources_queried) / 3, 1.0)
     result["sources_queried"] = list(set(sources_queried))

@@ -17,8 +17,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.auth.auth import require_analyst
-from app.db.database import get_case, list_cases, count_cases, add_case_note, get_case_notes
+from app.db.database import get_case, list_cases, count_cases, add_case_note, get_case_notes, save_case
 from app.evidence_loader import load_evidence_records
+from app.services.case_intel_enrichment import enrich_case_threat_intel
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cases", tags=["Case History"])
@@ -262,6 +263,12 @@ async def get_case_detail(
             detail=f"Case not found for SHA256 {sha256}. Analyze the APK first.",
         )
     assert_case_visible(user, row)
+
+    prior_tc = row.get("threat_correlation") or {}
+    prior_frs = row.get("frs_breakdown")
+    row = await enrich_case_threat_intel(row)
+    if (row.get("threat_correlation") or {}) != prior_tc or row.get("frs_breakdown") != prior_frs:
+        await save_case(sha256, row, analyst_id=row.get("analyst_id"))
 
     # Return the merged persistence record (raw_result + summary columns) so
     # fields like `vide` and dynamic artifacts are not dropped by response_model.

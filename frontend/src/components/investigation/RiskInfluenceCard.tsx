@@ -55,6 +55,10 @@ function buildRows(data: FraudCardData): InfluenceRow[] {
     ? computeWeightedContribution('dynamic', dynamicScore, axesUsed)
     : 0;
 
+  const staticIncluded = !frs.axes_excluded?.includes('stei');
+  const correlationIncluded = !frs.axes_excluded?.includes('correlation');
+  const correlationScore = frs.correlation ?? data.threat_correlation?.threat_score ?? 0;
+
   return [
     {
       key: 'stei',
@@ -62,9 +66,9 @@ function buildRows(data: FraudCardData): InfluenceRow[] {
       label: 'Static evidence',
       term: 'STEI',
       score: frs.stei ?? 0,
-      influence: influenceLabel(frs.stei ?? 0),
+      influence: influenceLabel(frs.stei ?? 0, staticIncluded),
       summary: buildStaticCardSummary(data),
-      included: !frs.axes_excluded?.includes('stei'),
+      included: staticIncluded,
       contributionLabel: `${(frs.stei ?? 0).toFixed(0)} / 100`,
     },
     {
@@ -73,7 +77,7 @@ function buildRows(data: FraudCardData): InfluenceRow[] {
       label: 'Runtime behaviour',
       term: 'BFCI',
       score: dynamicScore,
-      influence: dynamicIncluded ? influenceLabel(dynamicScore) : 'Not included',
+      influence: dynamicIncluded ? influenceLabel(dynamicScore, true) : 'Not included',
       summary: dynamicSummary,
       included: Boolean(dynamicIncluded),
       contributionLabel: dynamicIncluded
@@ -85,11 +89,13 @@ function buildRows(data: FraudCardData): InfluenceRow[] {
       axis: 'threat_intel',
       label: 'Threat intelligence',
       term: 'Threat Intelligence',
-      score: frs.correlation ?? 0,
-      influence: influenceLabel(frs.correlation ?? 0),
+      score: correlationScore,
+      influence: correlationIncluded ? influenceLabel(correlationScore, true) : 'Not included',
       summary: buildThreatCardSummary(data),
-      included: !frs.axes_excluded?.includes('correlation'),
-      contributionLabel: `${(frs.correlation ?? 0).toFixed(0)} / 100`,
+      included: correlationIncluded,
+      contributionLabel: correlationIncluded
+        ? `${correlationScore.toFixed(0)} / 100`
+        : 'Not included',
     },
   ];
 }

@@ -10,7 +10,7 @@ export function SocCard({ children, className = '', id }: SocCardProps) {
   return (
     <div
       id={id}
-      className={`bg-white border border-slate-200/80 rounded-xl shadow-sm overflow-hidden transition-shadow duration-200 hover:shadow-md ${className}`}
+      className={`bg-white border border-slate-200/80 rounded-md shadow-[0_1px_2px_rgba(0,0,0,0.02)] overflow-hidden ${className}`}
     >
       {children}
     </div>

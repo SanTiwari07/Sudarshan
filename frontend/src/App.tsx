@@ -7,13 +7,35 @@ import InvestigationShell from './components/investigation/InvestigationShell';
 import { AnalysisProvider, useAnalysis } from './context/AnalysisContext';
 import { LoadingSpinner, ErrorState } from './components/ui/Skeleton';
 
+function lazyWithRetry<T extends React.ComponentType<any>>(
+  componentImport: () => Promise<{ default: T }>
+) {
+  return lazy(async () => {
+    const pageHasBeenRefreshed = JSON.parse(
+      window.sessionStorage.getItem('page_has_been_refreshed') || 'false'
+    );
+    try {
+      const component = await componentImport();
+      window.sessionStorage.setItem('page_has_been_refreshed', 'false');
+      return component;
+    } catch (error) {
+      if (!pageHasBeenRefreshed) {
+        window.sessionStorage.setItem('page_has_been_refreshed', 'true');
+        window.location.reload();
+        return new Promise(() => {});
+      }
+      throw error;
+    }
+  });
+}
+
 // Lazy views
-const Upload = lazy(() => import('./pages/Upload'));
-const FraudCard = lazy(() => import('./pages/FraudCard'));
-const TechnicalView = lazy(() => import('./pages/TechnicalView'));
-const ThreatIntelView = lazy(() => import('./pages/ThreatIntelView'));
-const History = lazy(() => import('./pages/History'));
-const InvestigationChat = lazy(() => import('./pages/InvestigationChat'));
+const Upload = lazyWithRetry(() => import('./pages/Upload'));
+const FraudCard = lazyWithRetry(() => import('./pages/FraudCard'));
+const TechnicalView = lazyWithRetry(() => import('./pages/TechnicalView'));
+const ThreatIntelView = lazyWithRetry(() => import('./pages/ThreatIntelView'));
+const History = lazyWithRetry(() => import('./pages/History'));
+const InvestigationChat = lazyWithRetry(() => import('./pages/InvestigationChat'));
 
 // ─── Type Definitions ─────────────────────────────────────────────────────────
 

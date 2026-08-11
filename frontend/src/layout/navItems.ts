@@ -6,7 +6,6 @@ import {
   Globe,
   Database,
   UploadCloud,
-  Activity,
 } from 'lucide-react';
 
 export type NavItem = {
@@ -31,9 +30,10 @@ export const NAV_ITEMS: NavItem[] = [
 ];
 
 export const ENTERPRISE_NAV_MAIN: NavItem[] = [
-  { to: '/fraud-card', label: 'Dashboard', shortLabel: 'Dashboard', icon: LayoutDashboard },
-  { to: '/technical', label: 'Live Analysis', shortLabel: 'Live', icon: Activity },
+  { to: '/fraud-card', label: 'Executive Fraud Card', shortLabel: 'Executive', icon: LayoutDashboard },
+  { to: '/technical', label: 'Technical SOC View', shortLabel: 'Technical', icon: Terminal },
   { to: '/threat-intel', label: 'Threat Intelligence', shortLabel: 'Intel', icon: Globe },
+  { to: '/chat', label: 'AI Copilot', shortLabel: 'AI Copilot', icon: MessageSquare },
 ];
 
 /** Right cluster: Cases, then Upload APK (adjacent to notifications). */

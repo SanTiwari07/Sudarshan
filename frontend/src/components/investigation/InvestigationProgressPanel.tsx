@@ -43,14 +43,14 @@ function StepNode({ step, showConnector }: { step: Step; showConnector: boolean 
       <div className="flex items-center w-full">
         {/* Node Icon Circle */}
         <div
-          className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-lg border shrink-0 font-semibold transition-colors ${
+          className={`relative z-10 flex h-7 w-7 items-center justify-center rounded-md border shrink-0 font-semibold transition-colors shadow-xs ${
             isComplete
-              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
               : isInconclusive
                 ? 'border-amber-300 bg-amber-50 text-amber-800'
                 : isFailed
-                  ? 'border-red-200 bg-red-50 text-red-700'
-                  : 'border-slate-200 bg-slate-50 text-slate-400'
+                  ? 'border-red-200 bg-red-50 text-red-800'
+                  : 'border-slate-200 bg-white text-slate-400'
           }`}
         >
           {step.icon}
@@ -58,35 +58,35 @@ function StepNode({ step, showConnector }: { step: Step; showConnector: boolean 
 
         {/* Connector Line */}
         {showConnector && (
-          <div className="hidden lg:block flex-1 h-0.5 bg-slate-200 mx-2" aria-hidden />
+          <div className="hidden lg:block flex-1 h-0.5 bg-slate-200 mx-3" aria-hidden />
         )}
       </div>
 
       {/* Node Content */}
-      <div className="mt-2 min-w-0 pr-2">
+      <div className="mt-2 min-w-0 pr-3">
         <div className="flex items-center gap-1.5">
-          <span className="text-[10px] font-mono font-bold text-slate-400">{step.num}</span>
-          <span className="text-xs font-semibold text-slate-900 truncate">{step.label}</span>
+          <span className="text-[9px] font-mono font-bold text-slate-400">{step.num}</span>
+          <span className="text-xs font-bold text-slate-900 uppercase tracking-wider truncate">{step.label}</span>
         </div>
-        <p className="text-xs font-mono text-slate-700 font-medium truncate mt-0.5">{step.value}</p>
+        <p className="text-[11px] font-mono text-slate-700 mt-0.5 truncate">{step.value}</p>
         {step.support && (
-          <p className="text-[11px] text-amber-800/90 leading-tight mt-1 truncate" title={step.support}>
+          <p className="text-[10px] text-amber-800 leading-tight mt-1 truncate" title={step.support}>
             {step.support}
           </p>
         )}
-        <div className="mt-1.5 flex items-center gap-1">
+        <div className="mt-1 flex items-center gap-1">
           <span
-            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${
               isComplete
-                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-200/50'
                 : isInconclusive
-                  ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                  ? 'bg-amber-50 text-amber-800 border-amber-200/50'
                   : isFailed
-                    ? 'bg-red-50 text-red-800 border border-red-200'
-                    : 'bg-slate-100 text-slate-500 border border-slate-200'
+                    ? 'bg-red-50 text-red-850 border-red-200/50'
+                    : 'bg-slate-50 text-slate-500 border-slate-200/50'
             }`}
           >
-            {isComplete && <Check className="h-3 w-3" aria-hidden />}
+            {isComplete && <Check className="h-2.5 w-2.5" aria-hidden />}
             {stepStatusLabel(step.state, step.id)}
           </span>
         </div>
@@ -148,7 +148,7 @@ export default function InvestigationProgressPanel({
       label: 'Static',
       state: staticDone ? 'complete' : 'pending',
       value: staticDone ? `${bundle.counts.staticFindings} signals` : 'Pending',
-      icon: <FileCode className="h-4 w-4" aria-hidden />,
+      icon: <FileCode className="h-3.5 w-3.5" aria-hidden />,
     },
     {
       num: '02',
@@ -157,7 +157,7 @@ export default function InvestigationProgressPanel({
       state: dynamicState,
       value: dynamicValue,
       support: dynamicSupport,
-      icon: <Activity className="h-4 w-4" aria-hidden />,
+      icon: <Activity className="h-3.5 w-3.5" aria-hidden />,
       emphasize: dynamicState === 'inconclusive',
     },
     {
@@ -171,7 +171,7 @@ export default function InvestigationProgressPanel({
           : threatDone
             ? 'Correlated'
             : 'Pending',
-      icon: <Globe className="h-4 w-4" aria-hidden />,
+      icon: <Globe className="h-3.5 w-3.5" aria-hidden />,
     },
     {
       num: '04',
@@ -179,7 +179,7 @@ export default function InvestigationProgressPanel({
       label: 'Risk',
       state: riskDone ? 'complete' : 'pending',
       value: riskDone ? `${data.final_risk_score.toFixed(0)} / 100` : '-',
-      icon: <Shield className="h-4 w-4" aria-hidden />,
+      icon: <Shield className="h-3.5 w-3.5" aria-hidden />,
     },
     {
       num: '05',
@@ -187,13 +187,13 @@ export default function InvestigationProgressPanel({
       label: 'Report',
       state: reportDone ? 'complete' : 'pending',
       value: reportDone ? 'Ready' : 'Partial',
-      icon: <FileText className="h-4 w-4" aria-hidden />,
+      icon: <FileText className="h-3.5 w-3.5" aria-hidden />,
     },
   ];
 
   const inner = (
-    <div className="p-4 sm:p-5">
-      <div className="flex items-center justify-between gap-2 mb-4">
+    <div className="p-3.5">
+      <div className="flex items-center justify-between gap-2 mb-3.5 pb-2 border-b border-slate-100">
         <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
           INVESTIGATION PIPELINE
         </span>

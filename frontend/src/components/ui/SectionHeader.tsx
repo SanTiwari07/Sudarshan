@@ -12,20 +12,20 @@ interface SectionHeaderProps {
 export default function SectionHeader({ icon, title, subtitle, badge, action, className = '' }: SectionHeaderProps) {
   return (
     <div
-      className={`flex items-start justify-between gap-3 px-4 py-3 border-b border-slate-100 bg-white ${className}`}
+      className={`flex items-start justify-between gap-3 px-3 py-2.5 border-b border-slate-200/60 bg-slate-50/50 ${className}`}
     >
-      <div className="flex items-start gap-3 min-w-0">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-50 text-blue-700 border border-slate-100">
+      <div className="flex items-start gap-2.5 min-w-0">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white text-slate-700 border border-slate-200 shadow-xs">
           {icon}
         </span>
         <div className="min-w-0 pt-0.5">
-          <h2 className="text-sm font-semibold text-slate-900 tracking-tight leading-snug">{title}</h2>
+          <h2 className="text-xs font-bold text-slate-900 tracking-wider uppercase">{title}</h2>
           {subtitle && (
-            <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{subtitle}</p>
+            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">{subtitle}</p>
           )}
         </div>
       </div>
-      {(badge ?? action) && <div className="shrink-0 pt-1">{badge ?? action}</div>}
+      {(badge ?? action) && <div className="shrink-0 pt-0.5">{badge ?? action}</div>}
     </div>
   );
 }

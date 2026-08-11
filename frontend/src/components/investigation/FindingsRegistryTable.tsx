@@ -114,66 +114,68 @@ export default function FindingsRegistryTable({
         />
       )}
       {!embedded && (
-        <div className="px-4 py-2.5 border-b border-slate-100 text-xs text-slate-600">
-          {bundle.evidenceRecords.length} verified records - evidence-backed findings only.
+        <div className="px-3 py-2 border-b border-slate-200 text-[11px] text-slate-500 bg-slate-50/50 font-mono">
+          {bundle.evidenceRecords.length} VERIFIED RECORDS · EVIDENCE-BACKED FINDINGS ONLY
         </div>
       )}
 
       <div className="hidden md:block w-full overflow-hidden">
-        <table className="w-full table-fixed text-left border-collapse">
-          <thead>
-            <tr className="bg-slate-50/80 border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-              <th className="py-2.5 px-4 w-[38%]">
-                FINDING
-              </th>
-              <th className="py-2.5 px-4 w-[48%]">
-                WHY IT MATTERS
-              </th>
-              <th className="py-2.5 px-4 w-[14%] text-right pr-6 whitespace-nowrap">
-                SEVERITY
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {rows.length === 0 ? (
+        <div className="soc-table-wrap !border-0 rounded-none">
+          <table className="soc-table">
+            <thead>
               <tr>
-                <td colSpan={3} className="py-8 text-center text-sm text-slate-500">
-                  No findings match your search or filters.
-                </td>
+                <th className="py-2 px-3 w-[38%] !bg-slate-50/80">
+                  Finding
+                </th>
+                <th className="py-2 px-3 w-[48%] !bg-slate-50/80">
+                  Why It Matters
+                </th>
+                <th className="py-2 px-3 w-[14%] text-right pr-4 whitespace-nowrap !bg-slate-50/80">
+                  Severity
+                </th>
               </tr>
-            ) : (
-              rows.map((row) => (
-                <tr
-                  key={row.id}
-                  onClick={() => openRow(row.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      openRow(row.id);
-                    }
-                  }}
-                  tabIndex={0}
-                  className="group cursor-pointer hover:bg-slate-50/90 transition-colors"
-                >
-                  <td className="py-2.5 px-4 align-middle">
-                    <FindingCell row={row} />
-                  </td>
-                  <td className="py-2.5 px-4 align-middle">
-                    <WhyMattersCell evidence={row} />
-                  </td>
-                  <td className="py-2.5 px-4 align-middle text-right pr-6 whitespace-nowrap">
-                    <SeverityIndicator severity={row.severity} />
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={3} className="py-8 text-center text-xs text-slate-500 font-mono">
+                    No findings match your search or filters.
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                rows.map((row) => (
+                  <tr
+                    key={row.id}
+                    onClick={() => openRow(row.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openRow(row.id);
+                      }
+                    }}
+                    tabIndex={0}
+                    className="group cursor-pointer hover:bg-slate-50/90 transition-colors"
+                  >
+                    <td className="py-1.5 px-3 align-middle border-r border-slate-100/50">
+                      <FindingCell row={row} />
+                    </td>
+                    <td className="py-1.5 px-3 align-middle border-r border-slate-100/50">
+                      <WhyMattersCell evidence={row} />
+                    </td>
+                    <td className="py-1.5 px-3 align-middle text-right pr-4 whitespace-nowrap">
+                      <SeverityIndicator severity={row.severity} />
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      <div className="md:hidden border-t border-slate-100 divide-y divide-slate-100">
+      <div className="md:hidden border-t border-slate-200 divide-y divide-slate-150">
         {rows.length === 0 ? (
-          <p className="py-6 text-center text-sm text-slate-500">No findings match your search or filters.</p>
+          <p className="py-6 text-center text-xs text-slate-500 font-mono">No findings match your search or filters.</p>
         ) : (
           rows.map((row) => (
             <FindingRowMobile key={row.id} row={row} onOpen={() => openRow(row.id)} />
@@ -182,10 +184,6 @@ export default function FindingsRegistryTable({
       </div>
     </>
   );
-
-  if (embedded) {
-    return <SocCard className="overflow-hidden">{tableBlock}</SocCard>;
-  }
 
   return <SocCard className="overflow-hidden">{tableBlock}</SocCard>;
 }

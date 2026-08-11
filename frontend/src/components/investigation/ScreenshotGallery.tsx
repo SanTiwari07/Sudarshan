@@ -95,12 +95,12 @@ function ScreenshotTile({
       type="button"
       onClick={onZoom}
       disabled={!src && loading}
-      className="group text-left rounded-xl border border-slate-200/80 overflow-hidden bg-white hover:border-blue-300 hover:shadow-md transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-70"
+      className="group text-left rounded-md border border-slate-200 overflow-hidden bg-white hover:border-slate-350 hover:shadow-xs transition-all duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-500 disabled:opacity-70"
     >
-      <div className="aspect-[9/16] w-full max-h-[280px] bg-slate-100 relative overflow-hidden">
+      <div className="aspect-[9/16] w-full max-h-[240px] bg-slate-50 relative overflow-hidden">
         {loading && (
-          <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center text-[10px] text-slate-500">
-            Loading…
+          <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center text-[10px] text-slate-450 font-mono">
+            LOADING…
           </div>
         )}
         {src && (
@@ -108,27 +108,27 @@ function ScreenshotTile({
             src={src}
             alt={title}
             loading="lazy"
-            className="w-full h-full object-cover object-top group-hover:scale-[1.02] transition-transform duration-200"
+            className="w-full h-full object-cover object-top group-hover:scale-[1.01] transition-transform duration-200"
           />
         )}
-        <div className="absolute top-2 left-2 flex flex-wrap gap-1">
-          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-900/75 text-white">
+        <div className="absolute top-1.5 left-1.5 flex flex-wrap gap-1">
+          <span className="text-[9px] font-mono font-bold px-1 py-0.2 rounded bg-slate-900/80 text-white">
             {String(index + 1).padStart(2, '0')}
           </span>
           {evidenceId && (
-            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-blue-700 text-white">{evidenceId}</span>
+            <span className="text-[9px] font-mono font-bold px-1 py-0.2 rounded bg-blue-700 text-white">{evidenceId}</span>
           )}
           {mitre && (
-            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-900/80 text-white">{mitre}</span>
+            <span className="text-[9px] font-mono font-bold px-1 py-0.2 rounded bg-slate-900/90 text-white">{mitre}</span>
           )}
         </div>
       </div>
-      <div className="p-2.5 border-t border-slate-100 space-y-0.5">
-        <div className="flex items-center justify-between gap-2 text-[10px] text-slate-500">
-          <span className="font-mono">{time}</span>
-          <span className="font-semibold text-blue-700 truncate">{stage}</span>
+      <div className="p-2 border-t border-slate-150 space-y-0.5 bg-slate-50/20">
+        <div className="flex items-center justify-between gap-2 text-[9px] text-slate-500 font-mono">
+          <span>{time}</span>
+          <span className="font-bold text-blue-800 uppercase tracking-wider truncate">{stage}</span>
         </div>
-        <div className="text-xs font-semibold text-slate-800 line-clamp-2">{description}</div>
+        <div className="text-[11px] font-bold text-slate-800 line-clamp-1 leading-tight">{description}</div>
       </div>
     </button>
   );
@@ -182,9 +182,9 @@ function EmptyScreenshotState({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-4">
-        <p className="text-sm font-semibold text-slate-900">{copy.title}</p>
-        <p className="text-sm text-slate-600 mt-2 leading-relaxed">{copy.body}</p>
+      <div className="rounded-md border border-slate-200 bg-slate-50/40 p-3.5">
+        <p className="text-xs font-bold uppercase tracking-wider text-slate-900">{copy.title}</p>
+        <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">{copy.body}</p>
       </div>
       {showDiagnostics && (
         <ScreenshotDiagnosticsCard data={data} runtime={runtime} captured={captured} uxState={state} />

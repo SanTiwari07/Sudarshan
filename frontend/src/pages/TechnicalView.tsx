@@ -43,23 +43,27 @@ function EvidenceSection({
 // ─── Explainability Engine ────────────────────────────────────────────────────────
 
 function ExplainabilityEngine({ data }: { data: FraudCardData }) {
+  const isMalicious = data.family_classification !== 'Unknown';
   return (
-    <SocCard className="h-full">
+    <SocCard className="h-full flex flex-col">
       <SectionHeader
         icon={<Cpu className="h-4 w-4" />}
         title="Explainability Engine"
         subtitle="Classification output from the rules engine"
       />
-      <div className="p-4 space-y-3">
-        <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-3">
-          <p className="text-xs font-medium text-slate-500 mb-1">Classification result</p>
-          <p className={`text-lg font-semibold leading-snug ${data.family_classification !== 'Unknown' ? 'text-red-600' : 'text-slate-900'}`}>
-            {data.family_classification}
-          </p>
+      <div className="p-3 space-y-3 flex-1 flex flex-col justify-between">
+        <div className="border border-slate-200 bg-slate-50/50 p-2.5 rounded-md">
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Classification result</p>
+          <div className="flex items-center gap-2">
+            <span className={`inline-block h-2 w-2 rounded-full ${isMalicious ? 'bg-red-500 animate-pulse' : 'bg-slate-400'}`} />
+            <p className={`text-base font-bold tracking-tight ${isMalicious ? 'text-red-700' : 'text-slate-800'}`}>
+              {data.family_classification}
+            </p>
+          </div>
         </div>
-        <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-3 min-w-0">
-          <p className="text-xs font-medium text-slate-500 mb-2">Matched rule</p>
-          <p className="font-mono text-xs text-slate-800 bg-white border border-slate-100 p-3 rounded-lg leading-relaxed break-words">
+        <div className="border border-slate-200 bg-slate-50/50 p-2.5 rounded-md min-w-0 flex-1 flex flex-col justify-between">
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Matched rule</p>
+          <p className="font-mono text-xs text-slate-800 bg-white border border-slate-200 p-2.5 rounded-md leading-normal break-all overflow-y-auto max-h-32 scrollbar-hidden">
             {data.technical_view.matched_rule}
           </p>
         </div>
@@ -89,16 +93,16 @@ function APKMetadata({ data }: { data: FraudCardData }) {
         title="APK Technical Identifiers"
         subtitle="Package identity, hash, and scoring inputs"
       />
-      <div className="px-4 py-2">
+      <div className="px-3 py-1 bg-white">
         {rows.map(r => (
           <div
             key={r.label}
-            className="grid grid-cols-1 sm:grid-cols-[minmax(9rem,32%)_1fr] gap-x-4 gap-y-1 py-3 border-b border-slate-100 last:border-0 hover:bg-slate-50/80 rounded-lg px-2 -mx-2 transition-colors duration-150"
+            className="grid grid-cols-1 sm:grid-cols-[minmax(9rem,28%)_1fr] gap-x-4 gap-y-0.5 py-1.5 border-b border-slate-150 last:border-0 hover:bg-slate-50/50 rounded px-1.5 -mx-1.5 transition-colors duration-100 items-center"
           >
-            <span className="text-xs font-medium text-slate-500">{r.label}</span>
-            <div className="flex items-center gap-2 min-w-0">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{r.label}</span>
+            <div className="flex items-center gap-1.5 min-w-0">
               <span
-                className={`text-xs sm:text-sm min-w-0 ${r.mono ? 'font-mono' : ''} ${r.highlight ? 'text-red-600 font-semibold' : 'text-slate-800'} ${r.truncate ? 'truncate' : 'break-words'}`}
+                className={`text-xs min-w-0 ${r.mono ? 'font-mono' : ''} ${r.highlight ? 'text-red-700 font-semibold' : 'text-slate-800'} ${r.truncate ? 'truncate' : 'break-all'}`}
                 title={r.truncate ? String(r.value) : undefined}
               >
                 {r.value}
@@ -124,36 +128,36 @@ function PermissionTable({ data }: { data: FraudCardData }) {
   return (
     <SocCard>
       <SectionHeader icon={<Lock className="h-4 w-4" />} title="Permission Analysis" subtitle={`${data.all_permissions.length} total permissions extracted`} />
-      <div className="p-3 border-b border-slate-100">
+      <div className="p-2 border-b border-slate-200 bg-slate-50/30">
         <div className="relative">
-          <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
           <input
             type="text"
             value={filter}
             onChange={e => setFilter(e.target.value)}
             placeholder="Filter permissions..."
-            className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full pl-7 pr-3 py-1 text-xs bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
       </div>
-      <div className="soc-table-wrap max-h-72">
+      <div className="soc-table-wrap !border-0 rounded-none max-h-72">
         <table className="soc-table text-xs">
           <thead>
             <tr>
-              <th>Permission</th>
-              <th className="text-right">Status</th>
+              <th className="!bg-slate-50/80">Permission</th>
+              <th className="text-right !bg-slate-50/80">Status</th>
             </tr>
           </thead>
           <tbody className="font-mono">
             {perms.map(p => {
               const isFired = fired.has(p);
               return (
-                <tr key={p} className={isFired ? '!bg-red-50/60' : ''}>
+                <tr key={p} className={isFired ? '!bg-red-50/40' : ''}>
                   <td className="break-all">{p}</td>
                   <td className="text-right">
                     {isFired ? (
-                      <span className="inline-flex px-2 py-0.5 text-[10px] font-semibold bg-red-100 text-red-700 rounded-md whitespace-nowrap">
-                        Critical
+                      <span className="inline-flex px-1.5 py-0.5 text-[9px] font-bold bg-red-100 text-red-800 rounded border border-red-200/50 whitespace-nowrap">
+                        CRITICAL
                       </span>
                     ) : (
                       <span className="text-slate-400">Normal</span>
@@ -178,19 +182,31 @@ function DangerousAPITable({ data }: { data: FraudCardData }) {
     <SocCard>
       <SectionHeader icon={<Code className="h-4 w-4" />} title="Dangerous API Detection" subtitle={`${apis.length} dangerous API(s) detected`} />
       {apis.length === 0 ? (
-        <div className="p-6 text-center text-xs text-slate-400">
+        <div className="p-6 text-center text-xs text-slate-400 font-mono">
           No dangerous Java/Android API invocations detected in DEX bytecode.
         </div>
       ) : (
-        <div className="divide-y divide-slate-100 font-mono text-xs max-h-72 overflow-y-auto scrollbar-hidden">
-          {apis.map((api, i) => (
-            <div key={i} className="px-4 py-3 flex flex-wrap items-center justify-between gap-2 hover:bg-slate-50/80 transition-colors duration-150">
-              <span className="text-red-700 font-semibold break-all min-w-0">{api}</span>
-              <span className="px-2 py-0.5 text-[10px] font-semibold bg-red-50 text-red-600 border border-red-100 rounded-md shrink-0">
-                Dangerous hook
-              </span>
-            </div>
-          ))}
+        <div className="soc-table-wrap !border-0 rounded-none max-h-72">
+          <table className="soc-table text-xs">
+            <thead>
+              <tr>
+                <th className="!bg-slate-50/80">API Signature</th>
+                <th className="text-right !bg-slate-50/80">Category</th>
+              </tr>
+            </thead>
+            <tbody className="font-mono">
+              {apis.map((api, i) => (
+                <tr key={i} className="!bg-red-50/20">
+                  <td className="break-all text-red-700 font-semibold">{api}</td>
+                  <td className="text-right">
+                    <span className="inline-flex px-1.5 py-0.5 text-[9px] font-bold bg-red-100 text-red-800 rounded border border-red-200/50 whitespace-nowrap">
+                      DANGEROUS HOOK
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </SocCard>
@@ -204,7 +220,7 @@ function CertificatePanel({ certificate }: { certificate?: Record<string, any> }
     return (
       <SocCard>
         <SectionHeader icon={<Lock className="h-4 w-4" />} title="Digital Certificate & Signature" subtitle="X.509 Cryptographic Identity" />
-        <div className="p-4 text-center text-xs text-slate-400">No certificate metadata available</div>
+        <div className="p-6 text-center text-xs text-slate-400 font-mono">No certificate metadata available</div>
       </SocCard>
     );
   }
@@ -214,13 +230,23 @@ function CertificatePanel({ certificate }: { certificate?: Record<string, any> }
   return (
     <SocCard>
       <SectionHeader icon={<Lock className="h-4 w-4" />} title="Digital Certificate & Signature" subtitle="X.509 Cryptographic Identity & Attribution" />
-      <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto scrollbar-hidden text-xs">
-        {entries.map(([k, v]) => (
-          <div key={k} className="flex justify-between p-2.5 hover:bg-slate-50">
-            <span className="text-slate-500 font-mono capitalize">{k.replace(/_/g, ' ')}</span>
-            <span className="font-mono text-slate-800 break-all text-right max-w-md">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
-          </div>
-        ))}
+      <div className="soc-table-wrap !border-0 rounded-none max-h-72">
+        <table className="soc-table text-xs">
+          <thead>
+            <tr>
+              <th className="!bg-slate-50/80 w-1/3">Property</th>
+              <th className="!bg-slate-50/80 w-2/3">Value</th>
+            </tr>
+          </thead>
+          <tbody className="font-mono">
+            {entries.map(([k, v]) => (
+              <tr key={k}>
+                <td className="text-slate-500 capitalize">{k.replace(/_/g, ' ')}</td>
+                <td className="break-all text-slate-800">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </SocCard>
   );
@@ -236,7 +262,7 @@ function DecompilationPanel({ data }: { data: FraudCardData }) {
     return (
       <SocCard>
         <SectionHeader icon={<Code className="h-4 w-4" />} title="Static Decompilation Intelligence" subtitle="APKTool Resources & JADX Source Pattern Scanner" />
-        <div className="p-4 text-center text-xs text-slate-400">Decompilation enrichment data unavailable for this scan</div>
+        <div className="p-4 text-center text-xs text-slate-400 font-mono">Decompilation enrichment data unavailable for this scan</div>
       </SocCard>
     );
   }
@@ -244,17 +270,17 @@ function DecompilationPanel({ data }: { data: FraudCardData }) {
   return (
     <SocCard>
       <SectionHeader icon={<Code className="h-4 w-4" />} title="Static Decompilation Intelligence" subtitle="APKTool Resources & JADX Java Source Hits" />
-      <div className="p-4 space-y-3 font-mono text-xs">
+      <div className="p-3 space-y-2.5 font-mono text-xs">
         {jadx?.fraud_class_hits?.length > 0 && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-            <span className="font-bold text-red-700 uppercase">JADX Fraud Classes Found:</span>
-            <div className="mt-1 text-red-800 text-[11px]">{jadx.fraud_class_hits.join(', ')}</div>
+          <div className="p-2.5 bg-red-50/50 border border-red-200 rounded-md">
+            <span className="font-bold text-red-800 uppercase tracking-wider text-[10px]">JADX Fraud Classes Found:</span>
+            <div className="mt-1 text-red-900 text-xs break-all leading-relaxed">{jadx.fraud_class_hits.join(', ')}</div>
           </div>
         )}
         {apktool?.decoded_manifest_xml && (
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-700">
-            <span className="font-bold text-slate-800 uppercase">Decoded Manifest Excerpt:</span>
-            <pre className="mt-1 text-[11px] text-slate-600 overflow-x-auto whitespace-pre-wrap">
+          <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-md text-slate-700">
+            <span className="font-bold text-slate-800 uppercase tracking-wider text-[10px]">Decoded Manifest Excerpt:</span>
+            <pre className="mt-1 text-[11px] text-slate-600 overflow-x-auto whitespace-pre-wrap font-mono leading-normal bg-white p-2 border border-slate-150 rounded">
               {apktool.decoded_manifest_xml.slice(0, 300)}...
             </pre>
           </div>
@@ -271,7 +297,7 @@ function NetworkCapturePanel({ networkLogs }: { networkLogs?: any[] }) {
     return (
       <SocCard>
         <SectionHeader icon={<Terminal className="h-4 w-4" />} title="Network Capture & C2 Telemetry" subtitle="Runtime mitmproxy & PCAP logs" />
-        <div className="p-4 text-center text-xs text-slate-400">No dynamic network traffic captured</div>
+        <div className="p-6 text-center text-xs text-slate-400 font-mono">No dynamic network traffic captured</div>
       </SocCard>
     );
   }
@@ -279,23 +305,23 @@ function NetworkCapturePanel({ networkLogs }: { networkLogs?: any[] }) {
   return (
     <SocCard>
       <SectionHeader icon={<Terminal className="h-4 w-4" />} title="Network Capture & C2 Telemetry" subtitle={`${networkLogs.length} network request(s) captured`} />
-      <div className="soc-table-wrap max-h-72">
+      <div className="soc-table-wrap !border-0 rounded-none max-h-72">
         <table className="soc-table text-xs">
           <thead>
             <tr>
-              <th>Method</th>
-              <th>Host / IP</th>
-              <th>URL / Endpoint</th>
-              <th>Status</th>
+              <th className="!bg-slate-50/80">Method</th>
+              <th className="!bg-slate-50/80">Host / IP</th>
+              <th className="!bg-slate-50/80">URL / Endpoint</th>
+              <th className="text-right !bg-slate-50/80">Status</th>
             </tr>
           </thead>
           <tbody className="font-mono">
             {networkLogs.map((req, i) => (
-              <tr key={i} className={req.is_suspicious ? '!bg-red-50/50' : ''}>
-                <td className="font-semibold">{req.method || 'GET'}</td>
-                <td className="break-all">{req.domain || req.ip || '-'}</td>
-                <td className="max-w-[14rem] truncate" title={req.url || undefined}>{req.url || '-'}</td>
-                <td className="font-semibold tabular-nums">{req.response_status || 200}</td>
+              <tr key={i} className={req.is_suspicious ? '!bg-red-50/40' : ''}>
+                <td className="font-bold text-slate-900">{req.method || 'GET'}</td>
+                <td className="break-all text-slate-700">{req.domain || req.ip || '-'}</td>
+                <td className="max-w-[14rem] truncate text-slate-600" title={req.url || undefined}>{req.url || '-'}</td>
+                <td className="text-right font-semibold tabular-nums text-slate-900">{req.response_status || 200}</td>
               </tr>
             ))}
           </tbody>
@@ -312,7 +338,7 @@ function LogcatInspectorPanel({ logcat }: { logcat?: string }) {
     return (
       <SocCard>
         <SectionHeader icon={<Terminal className="h-4 w-4" />} title="Logcat System Diagnostics" subtitle="Android OS Event Stream" />
-        <div className="p-4 text-center text-xs text-slate-400">No logcat telemetry collected</div>
+        <div className="p-6 text-center text-xs text-slate-400 font-mono">No logcat telemetry collected</div>
       </SocCard>
     );
   }
@@ -320,7 +346,7 @@ function LogcatInspectorPanel({ logcat }: { logcat?: string }) {
   return (
     <SocCard>
       <SectionHeader icon={<Terminal className="h-4 w-4" />} title="Logcat System Diagnostics" subtitle="Monospace Android System Log Inspector" />
-      <div className="p-4 bg-slate-900 font-mono text-[11px] text-emerald-400 max-h-60 overflow-y-auto scrollbar-hidden rounded-b-xl whitespace-pre-wrap leading-relaxed border-t border-slate-800">
+      <div className="p-3 bg-slate-950 font-mono text-[11px] text-emerald-400 max-h-60 overflow-y-auto scrollbar-hidden rounded-b-md whitespace-pre-wrap leading-normal border-t border-slate-800">
         {logcat}
       </div>
     </SocCard>
@@ -346,35 +372,35 @@ function DynamicAnalysisPanel({ data }: { data: FraudCardData }) {
         subtitle="Frida runtime instrumentation and telemetry"
       />
 
-      <div className="p-4 border-b border-slate-100 bg-slate-50/50">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+      <div className="p-3 border-b border-slate-200 bg-slate-50/40">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-2.5">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-slate-500">Runtime status:</span>
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Runtime status:</span>
             <span
-              className={`px-2 py-0.5 text-xs font-bold rounded-md font-mono ${
+              className={`px-1.5 py-0.5 text-[10px] font-bold rounded border font-mono uppercase ${
                 isOk
-                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                  : 'bg-amber-100 text-amber-800 border border-amber-300'
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200/50'
+                  : 'bg-amber-50 text-amber-800 border-amber-200/50'
               }`}
             >
-              {headline.toUpperCase()}
+              {headline}
             </span>
           </div>
-          <div className="flex items-center gap-2 text-xs font-mono text-slate-600">
+          <div className="flex items-center gap-2 text-[11px] font-mono text-slate-600">
             <span>
-              Engine: <strong>{dyn.engine || 'frida'}</strong>
+              Engine: <strong className="text-slate-800">{dyn.engine || 'frida'}</strong>
             </span>
             <span>•</span>
             <span>
-              Canary: <strong>{dyn.canary_received ? '✓ LOADED' : '✗ UNRECEIVED'}</strong>
+              Canary: <strong className="text-slate-800">{dyn.canary_received ? '✓ LOADED' : '✗ UNRECEIVED'}</strong>
             </span>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
           {data.frs_breakdown?.dynamic_ran && (
             <div className="p-2 bg-white rounded border border-slate-200">
-              <span className="text-slate-400 block text-[10px] uppercase font-semibold">
+              <span className="text-slate-400 block text-[9px] uppercase font-bold tracking-wider">
                 <HelpTerm term="BFCI">Observed BFCI</HelpTerm>
               </span>
               <span className="font-mono font-bold text-slate-800 text-sm">
@@ -383,20 +409,20 @@ function DynamicAnalysisPanel({ data }: { data: FraudCardData }) {
             </div>
           )}
           <div className="p-2 bg-white rounded border border-slate-200">
-            <span className="text-slate-400 block text-[10px] uppercase font-semibold">Raw events</span>
+            <span className="text-slate-400 block text-[9px] uppercase font-bold tracking-wider">Raw events</span>
             <span className="font-mono font-bold text-slate-800 text-sm">
               {dyn.evidence_record_count || (dyn.api_calls || []).length}
             </span>
           </div>
           <div className="p-2 bg-white rounded border border-slate-200">
-            <span className="text-slate-400 block text-[10px] uppercase font-semibold">Hook errors</span>
+            <span className="text-slate-400 block text-[9px] uppercase font-bold tracking-wider">Hook errors</span>
             <span className="font-mono font-bold text-slate-800 text-sm">{(dyn.hook_errors || []).length}</span>
           </div>
         </div>
       </div>
 
-      <div className="p-4">
-        <h3 className="text-xs font-semibold text-slate-600 mb-3">Reconstructed behavioral chain</h3>
+      <div className="p-3 bg-white">
+        <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2.5">Reconstructed behavioral chain</h3>
         <WorkflowDiagram workflow={data.fraud_workflow} />
       </div>
     </SocCard>
@@ -432,14 +458,14 @@ function ManifestFindingsPanel({ data }: { data: FraudCardData }) {
   });
 
   const sevColor = (s?: string) => ({
-    high: 'bg-red-100 text-red-700',
-    warning: 'bg-orange-100 text-orange-700',
-    info: 'bg-blue-100 text-blue-700',
-  }[(s || 'info').toLowerCase()] || 'bg-slate-100 text-slate-600');
+    high: 'bg-red-50 text-red-800 border-red-200/50',
+    warning: 'bg-orange-50 text-orange-800 border-orange-200/50',
+    info: 'bg-blue-50 text-blue-800 border-blue-200/50',
+  }[(s || 'info').toLowerCase()] || 'bg-slate-50 text-slate-600 border-slate-200/50');
 
   return (
     <SocCard>
-      <button onClick={() => setOpen(o => !o)} className="w-full">
+      <button onClick={() => setOpen(o => !o)} className="w-full text-left">
         <SectionHeader
           icon={<AlertTriangle className="h-4 w-4" />}
           title="Manifest Security Findings"
@@ -449,33 +475,35 @@ function ManifestFindingsPanel({ data }: { data: FraudCardData }) {
       </button>
       {open && (
         <>
-          <div className="flex items-center gap-2 px-3 pb-3 border-b border-slate-100">
-            <div className="relative flex-1">
-              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+          <div className="flex flex-wrap items-center justify-between gap-2 p-2 border-b border-slate-200 bg-slate-50/40">
+            <div className="relative flex-1 min-w-[140px]">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
               <input type="text" value={filter} onChange={e => setFilter(e.target.value)}
-                placeholder="Filter findings..." className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                placeholder="Filter findings..." className="w-full pl-7 pr-3 py-1 text-xs bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500" />
             </div>
-            {['all', 'high', 'warning', 'info'].map(s => (
-              <button key={s} onClick={() => setSev(s)}
-                className={`px-2.5 py-1 text-[10px] font-bold uppercase rounded-full transition-colors ${sev === s ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
-                {s}{s !== 'all' && sevCounts[s] ? ` (${sevCounts[s]})` : ''}
-              </button>
-            ))}
+            <div className="flex items-center gap-1">
+              {['all', 'high', 'warning', 'info'].map(s => (
+                <button key={s} onClick={() => setSev(s)}
+                  className={`px-2 py-0.5 text-[9px] font-bold uppercase rounded border transition-all ${sev === s ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>
+                  {s}{s !== 'all' && sevCounts[s] ? ` (${sevCounts[s]})` : ''}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto scrollbar-hidden">
+          <div className="divide-y divide-slate-150 max-h-72 overflow-y-auto scrollbar-hidden">
             {visible.map((f, i) => (
-              <div key={i} className="px-4 py-2.5 hover:bg-slate-50">
-                <div className="flex items-start gap-2">
-                  <span className={`mt-0.5 px-1.5 py-0.5 text-[10px] font-bold rounded flex-shrink-0 ${sevColor(f.severity)}`}>{f.severity?.toUpperCase()}</span>
+              <div key={i} className="p-3 hover:bg-slate-50/50 transition-colors">
+                <div className="flex items-start gap-2.5">
+                  <span className={`mt-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded border flex-shrink-0 ${sevColor(f.severity)}`}>{f.severity?.toUpperCase()}</span>
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold text-slate-800">{f.title}</p>
-                    {f.component && <p className="text-[10px] font-mono text-slate-500 truncate">{f.component}</p>}
-                    {f.description && <p className="text-[10px] text-slate-500 mt-0.5">{f.description}</p>}
+                    <p className="text-xs font-bold text-slate-800 leading-tight">{f.title}</p>
+                    {f.component && <p className="text-[10px] font-mono text-slate-500 truncate mt-0.5">{f.component}</p>}
+                    {f.description && <p className="text-[10px] text-slate-500 mt-1 leading-normal">{f.description}</p>}
                   </div>
                 </div>
               </div>
             ))}
-            {visible.length === 0 && <div className="p-6 text-center text-xs text-slate-400">No findings match the current filter.</div>}
+            {visible.length === 0 && <div className="p-6 text-center text-xs text-slate-400 font-mono">No findings match the current filter.</div>}
           </div>
         </>
       )}
@@ -514,14 +542,14 @@ function CodeFindingsPanel({ data }: { data: FraudCardData }) {
   });
 
   const sevColor = (s?: string) => ({
-    high: 'text-red-700 bg-red-50 border-red-200',
-    warning: 'text-orange-700 bg-orange-50 border-orange-200',
-    info: 'text-blue-700 bg-blue-50 border-blue-200',
-  }[(s || 'info').toLowerCase()] || 'text-slate-600 bg-slate-50 border-slate-200');
+    high: 'text-red-800 bg-red-50 border-red-200/50',
+    warning: 'text-orange-800 bg-orange-50 border-orange-200/50',
+    info: 'text-blue-800 bg-blue-50 border-blue-200/50',
+  }[(s || 'info').toLowerCase()] || 'text-slate-600 bg-slate-50 border-slate-200/50');
 
   return (
     <SocCard>
-      <button onClick={() => setOpen(o => !o)} className="w-full">
+      <button onClick={() => setOpen(o => !o)} className="w-full text-left">
         <SectionHeader
           icon={<Code className="h-4 w-4" />}
           title="Static Code Security Findings"
@@ -531,16 +559,16 @@ function CodeFindingsPanel({ data }: { data: FraudCardData }) {
       </button>
       {open && (
         <>
-          <div className="flex flex-wrap items-center gap-2 px-3 pb-3 border-b border-slate-100">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+          <div className="flex flex-wrap items-center gap-2 p-2.5 border-b border-slate-200 bg-slate-50/40">
+            <div className="relative min-w-[130px]">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
               <input type="text" value={filter} onChange={e => setFilter(e.target.value)}
-                placeholder="Search findings..." className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg w-44 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                placeholder="Search..." className="pl-7 pr-3 py-1 text-xs bg-white border border-slate-200 rounded-md w-36 focus:outline-none focus:ring-1 focus:ring-blue-500" />
             </div>
             <div className="flex gap-1">
               {CODE_CATEGORIES.map(c => (
                 <button key={c.id} onClick={() => setCat(c.id)}
-                  className={`px-2.5 py-1 text-[10px] font-bold rounded-full transition-colors ${cat === c.id ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                  className={`px-2 py-0.5 text-[9px] font-bold rounded border transition-all ${cat === c.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>
                   {c.label}
                 </button>
               ))}
@@ -548,28 +576,28 @@ function CodeFindingsPanel({ data }: { data: FraudCardData }) {
             <div className="flex gap-1 ml-auto">
               {['all', 'high', 'warning', 'info'].map(s => (
                 <button key={s} onClick={() => setSev(s)}
-                  className={`px-2 py-0.5 text-[10px] font-bold rounded transition-colors ${sev === s ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                  className={`px-1.5 py-0.5 text-[9px] font-bold rounded border transition-all ${sev === s ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50'}`}>
                   {s}
                 </button>
               ))}
             </div>
           </div>
-          <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto scrollbar-hidden">
+          <div className="divide-y divide-slate-150 max-h-96 overflow-y-auto scrollbar-hidden">
             {visible.map((f, i) => (
-              <div key={i} className="px-4 py-3 hover:bg-slate-50">
-                <div className="flex items-start justify-between gap-2 mb-1">
-                  <p className="text-xs font-semibold text-slate-800 leading-snug">{f.title}</p>
-                  <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded border flex-shrink-0 ${sevColor(f.severity)}`}>{f.severity?.toUpperCase()}</span>
+              <div key={i} className="p-3 hover:bg-slate-50/50 transition-colors">
+                <div className="flex items-start justify-between gap-2.5 mb-1.5">
+                  <p className="text-xs font-bold text-slate-800 leading-tight">{f.title}</p>
+                  <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded border flex-shrink-0 ${sevColor(f.severity)}`}>{f.severity?.toUpperCase()}</span>
                 </div>
-                {f.description && <p className="text-[10px] text-slate-500 mb-1.5">{f.description}</p>}
+                {f.description && <p className="text-[10px] text-slate-500 mb-2 leading-relaxed">{f.description}</p>}
                 <div className="flex flex-wrap gap-1.5">
-                  {(f as any).rule_id && <code className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">{(f as any).rule_id}</code>}
-                  {(f as any).masvs && <span className="text-[9px] bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.5 rounded font-mono">MASVS: {(f as any).masvs}</span>}
-                  {(f as any).cwe && <span className="text-[9px] bg-orange-50 text-orange-700 border border-orange-200 px-1.5 py-0.5 rounded font-mono">{(f as any).cwe}</span>}
-                  {(f as any).owasp && <span className="text-[9px] bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded font-mono">{(f as any).owasp}</span>}
+                  {(f as any).rule_id && <code className="text-[9px] bg-slate-100 text-slate-600 border border-slate-200 px-1.5 py-0.5 rounded font-mono">{(f as any).rule_id}</code>}
+                  {(f as any).masvs && <span className="text-[9px] bg-purple-50 text-purple-700 border border-purple-200/50 px-1.5 py-0.5 rounded font-mono">MASVS: {(f as any).masvs}</span>}
+                  {(f as any).cwe && <span className="text-[9px] bg-orange-50 text-orange-700 border border-orange-200/50 px-1.5 py-0.5 rounded font-mono">{(f as any).cwe}</span>}
+                  {(f as any).owasp && <span className="text-[9px] bg-green-50 text-green-700 border border-green-200/50 px-1.5 py-0.5 rounded font-mono">{(f as any).owasp}</span>}
                 </div>
                 {f.files?.length > 0 && (
-                  <div className="mt-1.5">
+                  <div className="mt-2 space-y-0.5 border-t border-slate-100 pt-1.5">
                     {f.files.slice(0, 3).map((file, fi) => (
                       <p key={fi} className="text-[9px] font-mono text-slate-400 truncate">{file}</p>
                     ))}
@@ -577,7 +605,7 @@ function CodeFindingsPanel({ data }: { data: FraudCardData }) {
                 )}
               </div>
             ))}
-            {visible.length === 0 && <div className="p-6 text-center text-xs text-slate-400">No findings match the current filter.</div>}
+            {visible.length === 0 && <div className="p-6 text-center text-xs text-slate-400 font-mono">No findings match the current filter.</div>}
           </div>
         </>
       )}
@@ -600,17 +628,17 @@ function ExportedComponentsPanel({ data }: { data: FraudCardData }) {
 
   type ComponentRow = { name: string; type: string; color: string };
   const rows: ComponentRow[] = [
-    ...acts.map(n => ({ name: n, type: 'Activity', color: 'bg-red-50 text-red-700 border-red-200' })),
-    ...svcs.map(n => ({ name: n, type: 'Service', color: 'bg-orange-50 text-orange-700 border-orange-200' })),
-    ...rcvs.map(n => ({ name: n, type: 'Receiver', color: 'bg-yellow-50 text-yellow-700 border-yellow-200' })),
-    ...prvs.map(n => ({ name: n, type: 'Provider', color: 'bg-purple-50 text-purple-700 border-purple-200' })),
+    ...acts.map(n => ({ name: n, type: 'Activity', color: 'bg-red-50 text-red-700 border-red-200/50' })),
+    ...svcs.map(n => ({ name: n, type: 'Service', color: 'bg-orange-50 text-orange-700 border-orange-200/50' })),
+    ...rcvs.map(n => ({ name: n, type: 'Receiver', color: 'bg-yellow-50 text-yellow-700 border-yellow-200/50' })),
+    ...prvs.map(n => ({ name: n, type: 'Provider', color: 'bg-purple-50 text-purple-700 border-purple-200/50' })),
   ];
 
   const visible = filter ? rows.filter(r => r.name.toLowerCase().includes(filter.toLowerCase())) : rows;
 
   return (
     <SocCard>
-      <button onClick={() => setOpen(o => !o)} className="w-full">
+      <button onClick={() => setOpen(o => !o)} className="w-full text-left">
         <SectionHeader
           icon={<Shield className="h-4 w-4" />}
           title="Exported Components - Attack Surface"
@@ -620,22 +648,37 @@ function ExportedComponentsPanel({ data }: { data: FraudCardData }) {
       </button>
       {open && (
         <>
-          <div className="px-3 pb-3 border-b border-slate-100">
+          <div className="p-2 border-b border-slate-200 bg-slate-50/40">
             <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
               <input type="text" value={filter} onChange={e => setFilter(e.target.value)}
-                placeholder="Filter by component name..." className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                placeholder="Filter by component name..." className="w-full pl-7 pr-3 py-1 text-xs bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500" />
             </div>
           </div>
-          <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto scrollbar-hidden">
-            {visible.map((row, i) => (
-              <div key={i} className="px-4 py-2.5 flex items-center gap-3 hover:bg-slate-50">
-                <span className={`px-2 py-0.5 text-[10px] font-bold rounded border flex-shrink-0 ${row.color}`}>{row.type}</span>
-                <span className="font-mono text-xs text-slate-800 break-all">{row.name}</span>
-                <CopyButton value={row.name} />
-              </div>
-            ))}
-            {visible.length === 0 && <div className="p-6 text-center text-xs text-slate-400">No components match filter.</div>}
+          <div className="soc-table-wrap !border-0 rounded-none max-h-72">
+            <table className="soc-table text-xs">
+              <thead>
+                <tr>
+                  <th className="!bg-slate-50/80 w-24">Type</th>
+                  <th className="!bg-slate-50/80">Component Name</th>
+                  <th className="text-right !bg-slate-50/80 w-16">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="font-mono">
+                {visible.map((row, i) => (
+                  <tr key={i}>
+                    <td>
+                      <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded border ${row.color}`}>{row.type}</span>
+                    </td>
+                    <td className="break-all text-slate-800 text-xs">{row.name}</td>
+                    <td className="text-right">
+                      <CopyButton value={row.name} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {visible.length === 0 && <div className="p-6 text-center text-xs text-slate-400 font-mono">No components match filter.</div>}
           </div>
         </>
       )}
@@ -654,15 +697,15 @@ function BinaryAnalysisPanel({ data }: { data: FraudCardData }) {
   const flagStyle = (val?: string | null) => {
     if (!val) return 'text-slate-400';
     const v = String(val).toLowerCase();
-    if (v === 'true' || v === 'full' || v === 'enabled') return 'text-emerald-600 font-bold';
-    if (v === 'false' || v === 'none' || v === 'disabled') return 'text-red-600 font-bold';
-    if (v === 'partial') return 'text-orange-600 font-bold';
+    if (v === 'true' || v === 'full' || v === 'enabled') return 'text-emerald-700 font-bold';
+    if (v === 'false' || v === 'none' || v === 'disabled') return 'text-red-700 font-bold';
+    if (v === 'partial') return 'text-orange-700 font-bold';
     return 'text-slate-600';
   };
 
   return (
     <SocCard>
-      <button onClick={() => setOpen(o => !o)} className="w-full">
+      <button onClick={() => setOpen(o => !o)} className="w-full text-left">
         <SectionHeader
           icon={<Database className="h-4 w-4" />}
           title="Native Binary Analysis"
@@ -671,26 +714,26 @@ function BinaryAnalysisPanel({ data }: { data: FraudCardData }) {
         />
       </button>
       {open && (
-        <div className="soc-table-wrap">
+        <div className="soc-table-wrap !border-0 rounded-none max-h-72">
           <table className="soc-table text-xs">
             <thead>
               <tr>
-                <th>Library</th>
-                <th className="text-center">NX</th>
-                <th className="text-center">Stack Canary</th>
-                <th className="text-center">RELRO</th>
-                <th className="text-center">RPATH</th>
-                <th className="text-center">Fortify</th>
+                <th className="!bg-slate-50/80">Library</th>
+                <th className="text-center !bg-slate-50/80 w-16">NX</th>
+                <th className="text-center !bg-slate-50/80 w-24">Stack Canary</th>
+                <th className="text-center !bg-slate-50/80 w-20">RELRO</th>
+                <th className="text-center !bg-slate-50/80 w-16">RPATH</th>
+                <th className="text-center !bg-slate-50/80 w-16">Fortify</th>
               </tr>
             </thead>
             <tbody>
               {bins.map((b, i) => (
                 <tr key={i}>
-                  <td className="font-mono break-all">{b.name || '-'}</td>
+                  <td className="font-mono break-all text-slate-800">{b.name || '-'}</td>
                   <td className={`text-center font-mono ${flagStyle(b.nx)}`}>{String(b.nx ?? '-')}</td>
                   <td className={`text-center font-mono ${flagStyle(b.stack_canary)}`}>{String(b.stack_canary ?? '-')}</td>
                   <td className={`text-center font-mono ${flagStyle(b.relro)}`}>{String(b.relro ?? '-')}</td>
-                  <td className={`text-center font-mono ${b.rpath && String(b.rpath) !== 'False' ? 'text-red-600 font-bold' : 'text-emerald-600'}`}>{String(b.rpath ?? '-')}</td>
+                  <td className={`text-center font-mono ${b.rpath && String(b.rpath) !== 'False' ? 'text-red-700 font-bold' : 'text-emerald-700'}`}>{String(b.rpath ?? '-')}</td>
                   <td className={`text-center font-mono ${flagStyle(b.fortify)}`}>{String(b.fortify ?? '-')}</td>
                 </tr>
               ))}
@@ -714,7 +757,7 @@ function NetworkSecurityPanel({ data }: { data: FraudCardData }) {
 
   return (
     <SocCard>
-      <button onClick={() => setOpen(o => !o)} className="w-full">
+      <button onClick={() => setOpen(o => !o)} className="w-full text-left">
         <SectionHeader
           icon={<Globe className="h-4 w-4" />}
           title="Network Security Config"
@@ -723,15 +766,25 @@ function NetworkSecurityPanel({ data }: { data: FraudCardData }) {
         />
       </button>
       {open && (
-        <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto scrollbar-hidden text-xs">
-          {entries.map(([k, v]) => (
-            <div key={k} className="flex justify-between p-3 hover:bg-slate-50 gap-4">
-              <span className="text-slate-500 font-mono flex-shrink-0 capitalize">{k.replace(/_/g, ' ')}</span>
-              <span className={`font-mono text-right break-all ${String(v) === 'true' ? 'text-red-600 font-bold' : String(v) === 'false' ? 'text-emerald-600' : 'text-slate-700'}`}>
-                {typeof v === 'object' ? JSON.stringify(v) : String(v)}
-              </span>
-            </div>
-          ))}
+        <div className="soc-table-wrap !border-0 rounded-none max-h-60">
+          <table className="soc-table text-xs">
+            <thead>
+              <tr>
+                <th className="!bg-slate-50/80 w-1/2">Property</th>
+                <th className="!bg-slate-50/80 w-1/2 text-right">Setting</th>
+              </tr>
+            </thead>
+            <tbody className="font-mono">
+              {entries.map(([k, v]) => (
+                <tr key={k}>
+                  <td className="text-slate-500 capitalize">{k.replace(/_/g, ' ')}</td>
+                  <td className={`text-right break-all ${String(v) === 'true' ? 'text-red-700 font-bold' : String(v) === 'false' ? 'text-emerald-700' : 'text-slate-800'}`}>
+                    {typeof v === 'object' ? JSON.stringify(v) : String(v)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </SocCard>
@@ -748,15 +801,15 @@ function TrackersPanel({ data }: { data: FraudCardData }) {
 
   const catColor = (cats: string[]) => {
     const s = cats.join(' ').toLowerCase();
-    if (s.includes('analytics') || s.includes('tracker')) return 'bg-orange-50 text-orange-700 border-orange-200';
-    if (s.includes('crash') || s.includes('error')) return 'bg-red-50 text-red-700 border-red-200';
-    if (s.includes('ads') || s.includes('advertis')) return 'bg-yellow-50 text-yellow-700 border-yellow-200';
-    return 'bg-slate-100 text-slate-600 border-slate-200';
+    if (s.includes('analytics') || s.includes('tracker')) return 'bg-orange-50 text-orange-800 border-orange-200/50';
+    if (s.includes('crash') || s.includes('error')) return 'bg-red-50 text-red-800 border-red-200/50';
+    if (s.includes('ads') || s.includes('advertis')) return 'bg-yellow-50 text-yellow-800 border-yellow-200/50';
+    return 'bg-slate-50 text-slate-600 border-slate-200/50';
   };
 
   return (
     <SocCard>
-      <button onClick={() => setOpen(o => !o)} className="w-full">
+      <button onClick={() => setOpen(o => !o)} className="w-full text-left">
         <SectionHeader
           icon={<Tag className="h-4 w-4" />}
           title="Third-Party SDKs & Trackers"
@@ -765,14 +818,14 @@ function TrackersPanel({ data }: { data: FraudCardData }) {
         />
       </button>
       {open && (
-        <div className="p-4 flex flex-wrap gap-2">
+        <div className="p-3 flex flex-wrap gap-2 bg-white">
           {trackers.map((t, i) => (
-            <div key={i} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg shadow-xs text-xs">
-              <span className="font-semibold text-slate-800">{t.name}</span>
+            <div key={i} className="flex items-center gap-2 px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-md text-xs">
+              <span className="font-bold text-slate-800">{t.name}</span>
               {t.categories.length > 0 && (
                 <div className="flex gap-1">
                   {t.categories.slice(0, 2).map((c, ci) => (
-                    <span key={ci} className={`px-1.5 py-0.5 text-[9px] font-bold rounded border ${catColor([c])}`}>{c}</span>
+                    <span key={ci} className={`px-1.5 py-0.2 text-[9px] font-bold rounded border uppercase ${catColor([c])}`}>{c}</span>
                   ))}
                 </div>
               )}
@@ -799,7 +852,7 @@ function SecretsPanel({ data }: { data: FraudCardData }) {
 
   return (
     <SocCard>
-      <button onClick={() => setOpen(o => !o)} className="w-full">
+      <button onClick={() => setOpen(o => !o)} className="w-full text-left">
         <SectionHeader
           icon={<Key className="h-4 w-4" />}
           title="Hardcoded Secrets & Credentials"
@@ -809,25 +862,40 @@ function SecretsPanel({ data }: { data: FraudCardData }) {
       </button>
       {open && (
         <>
-          <div className="px-3 pb-3 border-b border-slate-100">
+          <div className="p-2 border-b border-slate-200 bg-slate-50/40">
             <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
               <input type="text" value={filter} onChange={e => setFilter(e.target.value)}
-                placeholder="Filter secrets..." className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                placeholder="Filter secrets..." className="w-full pl-7 pr-3 py-1 text-xs bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500" />
             </div>
           </div>
-          <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto scrollbar-hidden">
-            {display.map((s, i) => (
-              <div key={i} className="px-4 py-2.5 flex items-center gap-2 hover:bg-slate-50">
-                <span className="px-1.5 py-0.5 text-[9px] font-bold bg-red-50 text-red-600 border border-red-200 rounded flex-shrink-0">SECRET</span>
-                <span className="font-mono text-xs text-slate-700 break-all">{s}</span>
-                <CopyButton value={s} />
-              </div>
-            ))}
+          <div className="soc-table-wrap !border-0 rounded-none max-h-72">
+            <table className="soc-table text-xs">
+              <thead>
+                <tr>
+                  <th className="!bg-slate-50/80 w-20">Type</th>
+                  <th className="!bg-slate-50/80">Value</th>
+                  <th className="text-right !bg-slate-50/80 w-16">Copy</th>
+                </tr>
+              </thead>
+              <tbody className="font-mono">
+                {display.map((s, i) => (
+                  <tr key={i}>
+                    <td>
+                      <span className="px-1 py-0.5 text-[9px] font-bold bg-red-100 text-red-800 border border-red-200/50 rounded uppercase whitespace-nowrap">SECRET</span>
+                    </td>
+                    <td className="break-all text-xs text-slate-700">{s}</td>
+                    <td className="text-right">
+                      <CopyButton value={s} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
           {visible.length > 15 && (
-            <div className="p-3 border-t border-slate-100 text-center">
-              <button onClick={() => setShowAll(a => !a)} className="text-xs text-blue-600 font-semibold hover:text-blue-800">
+            <div className="p-2.5 border-t border-slate-200 text-center bg-slate-50/50">
+              <button onClick={() => setShowAll(a => !a)} className="text-xs text-blue-700 font-bold hover:text-blue-800 transition-colors">
                 {showAll ? 'Show fewer' : `Show all ${visible.length} secrets`}
               </button>
             </div>

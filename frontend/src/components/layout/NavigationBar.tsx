@@ -17,16 +17,16 @@ function NavLinks({ items }: { items: NavItem[] }) {
         const active = isNavActive(pathname, item);
         const Icon = item.icon;
         const base =
-          'flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-md text-[11px] sm:text-xs font-medium whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/80 shrink-0';
+          'flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[11px] font-mono tracking-wider uppercase font-semibold whitespace-nowrap transition-all focus:outline-none shrink-0 border';
 
         if (item.disabled) {
           return (
             <span
               key={item.label}
-              className={`${base} text-blue-500/70 cursor-not-allowed`}
+              className={`${base} text-slate-600 border-transparent cursor-not-allowed`}
               aria-disabled="true"
             >
-              <Icon className="h-3.5 w-3.5 opacity-60" aria-hidden />
+              <Icon className="h-3.5 w-3.5 opacity-40" aria-hidden />
               <span className="hidden md:inline">{item.label}</span>
               <span className="md:hidden">{item.shortLabel}</span>
             </span>
@@ -40,11 +40,11 @@ function NavLinks({ items }: { items: NavItem[] }) {
             aria-current={active ? 'page' : undefined}
             className={
               active
-                ? `${base} bg-blue-800 text-white shadow-sm ring-1 ring-blue-600/50`
-                : `${base} text-blue-100 hover:bg-blue-800/80 hover:text-white`
+                ? `${base} bg-slate-900 border-slate-800 text-white shadow-[0_1px_2px_rgba(0,0,0,0.2)]`
+                : `${base} text-slate-400 border-transparent hover:text-slate-100 hover:bg-slate-900/50`
             }
           >
-            <Icon className={`h-3.5 w-3.5 ${active ? 'text-cyan-300' : 'text-blue-300'}`} aria-hidden />
+            <Icon className={`h-3.5 w-3.5 ${active ? 'text-blue-400' : 'text-slate-500'}`} aria-hidden />
             <span className="hidden lg:inline">{item.label}</span>
             <span className="lg:hidden">{item.shortLabel}</span>
           </Link>
@@ -72,7 +72,7 @@ export default function NavigationBar({ items, variant = 'all', className = '' }
       aria-label={variant === 'end' ? 'Quick actions' : 'Primary'}
     >
       <div
-        className={`flex items-center gap-0.5 sm:gap-1 overflow-x-auto max-w-full px-1 py-0.5 scrollbar-thin scrollbar-thumb-blue-700/50 ${justify}`}
+        className={`flex items-center gap-1 overflow-x-auto max-w-full px-1 py-0.5 scrollbar-hidden ${justify}`}
       >
         <NavLinks items={resolved} />
       </div>

@@ -42,35 +42,35 @@ export default function DynamicAnalysisSummary({ data }: { data: FraudCardData }
         title="Dynamic analysis"
         subtitle="Runtime behaviour observed in the isolated Android sandbox"
       />
-      <div className="p-4 sm:p-5 space-y-4">
+      <div className="p-3.5 space-y-3.5">
         <div>
-          <p className="text-sm text-slate-700 leading-relaxed">
+          <p className="text-xs text-slate-750 leading-relaxed font-medium">
             {status === 'INCONCLUSIVE'
               ? 'Runtime behaviour could not be confirmed.'
               : runtimeStatusExplanation(status)}
           </p>
         </div>
 
-        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-          <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3">
-            <dt className="text-[10px] font-bold uppercase text-slate-500">Status</dt>
-            <dd className="font-mono font-bold text-slate-900 mt-1">{runtimeStatusHeadline(status)}</dd>
+        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <div className="rounded-md border border-slate-200 bg-slate-50/40 p-2.5">
+            <dt className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Status</dt>
+            <dd className="font-mono font-bold text-slate-900 mt-1 uppercase tracking-wider text-xs">{runtimeStatusHeadline(status)}</dd>
           </div>
           {bfci != null && frs?.dynamic_ran && (
-            <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3">
-              <dt className="text-[10px] font-bold uppercase text-slate-500">
+            <div className="rounded-md border border-slate-200 bg-slate-50/40 p-2.5">
+              <dt className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
                 <HelpTerm term="BFCI">Observed runtime score</HelpTerm>
               </dt>
               <dd className="font-mono font-bold text-slate-900 mt-1">{bfci.toFixed(1)} / 100</dd>
             </div>
           )}
-          <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 sm:col-span-2">
-            <dt className="text-[10px] font-bold uppercase text-slate-500">Contribution to final FRS</dt>
-            <dd className="font-semibold text-slate-900 mt-1">
+          <div className="rounded-md border border-slate-200 bg-slate-50/40 p-2.5 sm:col-span-2">
+            <dt className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Contribution to final FRS</dt>
+            <dd className="font-semibold text-slate-900 mt-1 text-xs">
               {included && contribution != null ? `${contribution.toFixed(2)} points` : 'Not included'}
             </dd>
             {exclusionReason && (
-              <p className="text-xs text-amber-800 mt-2 leading-relaxed">
+              <p className="text-[11px] text-amber-850 mt-1.5 leading-normal">
                 <HelpTerm term="Axis Excluded">Why excluded?</HelpTerm> {exclusionReason}
               </p>
             )}
@@ -80,28 +80,28 @@ export default function DynamicAnalysisSummary({ data }: { data: FraudCardData }
         <div className="flex flex-wrap gap-2">
           <a
             href="#runtime-screenshots"
-            className="inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold text-blue-800 bg-blue-50 border border-blue-100 rounded-lg hover:bg-blue-100"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-blue-800 bg-blue-50 border border-blue-200/50 rounded hover:bg-blue-100/50 transition-all"
           >
             View runtime evidence
           </a>
           <button
             type="button"
             onClick={() => openInfluenceDetail('dynamic')}
-            className="inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:border-blue-300"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-slate-700 bg-white border border-slate-250 rounded hover:border-slate-350 hover:bg-slate-50 transition-all"
           >
             View scoring details
           </button>
           <Link
             to="/threat-intel"
-            className="inline-flex items-center gap-1 px-3 py-2 text-xs font-semibold text-slate-600 hover:text-blue-700"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-blue-700 transition-colors"
           >
             Threat intelligence →
           </Link>
         </div>
 
         {status === 'RUNNING' && (
-          <p className="text-xs text-slate-500 flex items-center gap-1">
-            <Terminal className="h-3.5 w-3.5" />
+          <p className="text-[11px] text-slate-500 flex items-center gap-1.5 font-mono">
+            <Terminal className="h-3.5 w-3.5 text-blue-600 animate-pulse" />
             Sandbox still running - refresh to update runtime evidence.
           </p>
         )}

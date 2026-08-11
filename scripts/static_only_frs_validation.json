@@ -1,0 +1,134 @@
+{
+  "step0_correlation_sentinel_check": "None and {'available': False} produce identical axis exclusion",
+  "correlation_sentinel_used": {
+    "available": false
+  },
+  "scenarios": [
+    {
+      "id": "drinik",
+      "label": "Drinik Banking Trojan",
+      "classifier_family": "Drinik",
+      "classifier_rule": "Banking Target + Dynamic Code Loading = Drinik-pattern",
+      "case_study_claimed_frs": 79.51,
+      "case_study_claimed_band": "HIGH RISK",
+      "stei": 79.12,
+      "stei_axes": {
+        "ct": 100.0,
+        "bt": 40.0,
+        "pr": 71.0,
+        "ob": 70.4,
+        "ir": 10.0
+      },
+      "banking_impact": 80.0,
+      "correlation": 0.0,
+      "dynamic": 0.0,
+      "axes_used": {
+        "stei": 0.556,
+        "banking_impact": 0.444
+      },
+      "axes_excluded": [
+        "dynamic",
+        "correlation"
+      ],
+      "formula_used": "static_only_frs",
+      "dynamic_available": false,
+      "base_score": 79.51,
+      "final_risk_score": 79.51,
+      "risk_band": "High Risk",
+      "case_study_band_equiv": "HIGH",
+      "recomputed_base_score": 79.51,
+      "weight_sum": 1.0,
+      "invariants": {
+        "axes_excluded_static_only": true,
+        "two_axis_weights": true,
+        "weights_sum_to_one": true,
+        "base_score_matches_components": true
+      },
+      "band_matches_case_study": true
+    },
+    {
+      "id": "xenomorph",
+      "label": "Xenomorph Banking Trojan",
+      "classifier_family": "Hydra",
+      "classifier_rule": "Accessibility + System Alert Window = Hydra-pattern",
+      "case_study_claimed_frs": 50.82,
+      "case_study_claimed_band": "SUSPICIOUS",
+      "stei": 52.27,
+      "stei_axes": {
+        "ct": 65.0,
+        "bt": 30.0,
+        "pr": 55.0,
+        "ob": 35.5,
+        "ir": 0.0
+      },
+      "banking_impact": 49.0,
+      "correlation": 0.0,
+      "dynamic": 0.0,
+      "axes_used": {
+        "stei": 0.556,
+        "banking_impact": 0.444
+      },
+      "axes_excluded": [
+        "dynamic",
+        "correlation"
+      ],
+      "formula_used": "static_only_frs",
+      "dynamic_available": false,
+      "base_score": 50.82,
+      "final_risk_score": 50.82,
+      "risk_band": "Suspicious",
+      "case_study_band_equiv": "MEDIUM",
+      "recomputed_base_score": 50.82,
+      "weight_sum": 1.0,
+      "invariants": {
+        "axes_excluded_static_only": true,
+        "two_axis_weights": true,
+        "weights_sum_to_one": true,
+        "base_score_matches_components": true
+      },
+      "band_matches_case_study": true
+    },
+    {
+      "id": "insecurebankv2",
+      "label": "InsecureBankv2 Training App",
+      "classifier_family": "Unknown",
+      "classifier_rule": "No specific family signature matched.",
+      "case_study_claimed_frs": 9.17,
+      "case_study_claimed_band": "SAFE",
+      "stei": 0.5,
+      "stei_axes": {
+        "ct": 0.0,
+        "bt": 0.0,
+        "pr": 0.0,
+        "ob": 0.0,
+        "ir": 10.0
+      },
+      "banking_impact": 20.0,
+      "correlation": 0.0,
+      "dynamic": 0.0,
+      "axes_used": {
+        "stei": 0.556,
+        "banking_impact": 0.444
+      },
+      "axes_excluded": [
+        "dynamic",
+        "correlation"
+      ],
+      "formula_used": "static_only_frs",
+      "dynamic_available": false,
+      "base_score": 9.17,
+      "final_risk_score": 9.17,
+      "risk_band": "Safe",
+      "case_study_band_equiv": "LOW",
+      "recomputed_base_score": 9.16,
+      "weight_sum": 1.0,
+      "invariants": {
+        "axes_excluded_static_only": true,
+        "two_axis_weights": true,
+        "weights_sum_to_one": true,
+        "base_score_matches_components": true
+      },
+      "band_matches_case_study": true
+    }
+  ]
+}

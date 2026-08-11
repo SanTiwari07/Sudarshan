@@ -15,8 +15,20 @@ import os
 from typing import Any, Dict, List, Optional
 
 from app.rag.knowledge_base import build_rag_context, get_cert_in_recommendations
+from sudarshan_core.engines.agentic.sanitizer import sanitize
 
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_evidence_value(val: Any) -> Any:
+    """Recursively sanitize APK-derived strings inside evidence dicts/lists."""
+    if isinstance(val, str):
+        return sanitize(val)
+    if isinstance(val, dict):
+        return {k: _sanitize_evidence_value(v) for k, v in val.items()}
+    if isinstance(val, list):
+        return [_sanitize_evidence_value(v) for v in val]
+    return val
 
 
 # Substrings that mark a failure as transient. Anything else - a bad key, a
@@ -95,7 +107,7 @@ def _build_vide_evidence_block(vide_result: Optional[Dict[str, Any]]) -> Dict[st
         return {"Available": False}
     vc = vide_result.get("vide_compare") or {}
     si = vide_result.get("signer_impersonation") or {}
-    return {
+    block = {
         "Available": bool(vide_result.get("available")),
         "Status": vide_result.get("status", "UNKNOWN"),
         "RuleId": vc.get("rule_id"),
@@ -108,6 +120,7 @@ def _build_vide_evidence_block(vide_result: Optional[Dict[str, Any]]) -> Dict[st
         "SignerImpersonation": si.get("detected"),
         "CriticalVisualCluster": vide_result.get("critical_visual_cluster"),
     }
+    return _sanitize_evidence_value(block)
 
 
 def _build_evidence_dict(
@@ -159,7 +172,7 @@ def _build_evidence_dict(
             "FilesAccessed": dynamic.get("files_accessed", [])[:5],
         }
 
-    return evidence
+    return _sanitize_evidence_value(evidence)
 
 
 def _to_str_list(val: Any) -> List[str]:

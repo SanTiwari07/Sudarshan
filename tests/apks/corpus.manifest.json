@@ -110,6 +110,15 @@
       "label": "APK with no runtime permissions",
       "relative_path": "categories/no_runtime_permissions.apk",
       "optional": true
+    },
+    {
+      "id": "drinik",
+      "category": "banking_malware",
+      "label": "Drinik Banking Trojan (manual placement only)",
+      "relative_path": "categories/drinik.apk",
+      "optional": true,
+      "package_hint": "com.sbi.lotusintouch.refund",
+      "notes": "Researcher-controlled sample only. Never committed. Set DRINIK_APK_PATH or copy to this path. Validate with scripts/validate_real_drinik_e2e.py"
     }
   ]
 }

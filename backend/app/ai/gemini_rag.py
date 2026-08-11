@@ -28,7 +28,19 @@ import asyncio
 from collections import OrderedDict
 from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 
+from sudarshan_core.engines.agentic.sanitizer import sanitize, sanitize_block
+
 logger = logging.getLogger(__name__)
+
+
+def _apk_str(value: Any) -> str:
+    """Sanitize one APK-derived field before it is concatenated into chunk text."""
+    return sanitize(value)
+
+
+def _sanitize_chunk_text(text: str) -> str:
+    """Sanitize a completed evidence chunk (multi-line safe)."""
+    return sanitize_block(text)
 
 def _get_gemini_api_key() -> str:
     key = os.getenv("GEMINI_API_KEY", "")
@@ -128,9 +140,9 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
     # ── Metadata ──────────────────────────────────────────────────────────────
     idx["metadata"] = [
         f"SHA256: {sha256}",
-        f"Package: {report.get('package_name', 'Unknown')}",
-        f"App Name: {report.get('app_name', 'Unknown')}",
-        f"Analysis Mode: {report.get('analysis_mode', 'Unknown')}",
+        f"Package: {_apk_str(report.get('package_name', 'Unknown'))}",
+        f"App Name: {_apk_str(report.get('app_name', 'Unknown'))}",
+        f"Analysis Mode: {_apk_str(report.get('analysis_mode', 'Unknown'))}",
         f"Certificate: {json.dumps(report.get('certificate', {}))[:300]}",
     ]
 
@@ -146,7 +158,7 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
         f"Risk Band: {band}",
         f"Confidence: {confidence:.0f}%",
         f"Recommended Action: {action}",
-        f"Family Classification: {report.get('family_classification', 'Unknown')}",
+        f"Family Classification: {_apk_str(report.get('family_classification', 'Unknown'))}",
     ]
 
     idx["risk_engine"] = [
@@ -171,7 +183,7 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
     # Include evidence chain from risk engine
     evidence_chain = report.get("evidence", [])
     for ev in evidence_chain[:10]:
-        idx["risk_engine"].append(f"Risk Evidence: {ev}")
+        idx["risk_engine"].append(f"Risk Evidence: {_apk_str(ev)}")
 
     # ── Permissions ───────────────────────────────────────────────────────────
     all_perms = report.get("all_permissions", [])
@@ -181,10 +193,11 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
     for perm in dangerous_perms:
         if isinstance(perm, dict):
             idx["permissions"].append(
-                f"DANGEROUS: {perm.get('permission', '')} - {perm.get('info', '')} - {perm.get('description', '')}"
+                f"DANGEROUS: {_apk_str(perm.get('permission', ''))} - "
+                f"{_apk_str(perm.get('info', ''))} - {_apk_str(perm.get('description', ''))}"
             )
         elif isinstance(perm, str):
-            idx["permissions"].append(f"DANGEROUS: {perm}")
+            idx["permissions"].append(f"DANGEROUS: {_apk_str(perm)}")
 
     # Key behavioral flags
     idx["permissions"].append(
@@ -205,21 +218,21 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
     for finding in report.get("manifest_findings", [])[:15]:
         if isinstance(finding, dict):
             idx["manifest"].append(
-                f"[{finding.get('severity', 'INFO')}] {finding.get('title', '')}: "
-                f"{finding.get('description', '')} - Component: {finding.get('component', '')}"
+                f"[{_apk_str(finding.get('severity', 'INFO'))}] {_apk_str(finding.get('title', ''))}: "
+                f"{_apk_str(finding.get('description', ''))} - Component: {_apk_str(finding.get('component', ''))}"
             )
 
     # ── Activities / Services / Receivers ─────────────────────────────────────
     activities = report.get("activities", [])
-    idx["activities"] = [f"Activity: {a}" for a in activities[:20]]
+    idx["activities"] = [f"Activity: {_apk_str(a)}" for a in activities[:20]]
     idx["activities"].append(f"Total Activities: {len(activities)}")
 
     services = report.get("services_list", [])
-    idx["services"] = [f"Service: {s}" for s in services[:20]]
+    idx["services"] = [f"Service: {_apk_str(s)}" for s in services[:20]]
     idx["services"].append(f"Total Services: {len(services)}")
 
     receivers = report.get("receivers", [])
-    idx["receivers"] = [f"Receiver: {r}" for r in receivers[:20]]
+    idx["receivers"] = [f"Receiver: {_apk_str(r)}" for r in receivers[:20]]
     idx["receivers"].append(f"Total Receivers: {len(receivers)}")
 
     idx["components"] = [
@@ -233,17 +246,21 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
     for finding in report.get("code_findings", [])[:15]:
         if isinstance(finding, dict):
             idx["static_findings"].append(
-                f"[{finding.get('severity', 'INFO')}] {finding.get('title', '')}: "
-                f"{finding.get('description', '')}"
+                f"[{_apk_str(finding.get('severity', 'INFO'))}] {_apk_str(finding.get('title', ''))}: "
+                f"{_apk_str(finding.get('description', ''))}"
             )
 
     urls = report.get("hardcoded_urls_ips", [])
     if urls:
-        idx["static_findings"].append(f"Hardcoded URLs/IPs ({len(urls)}): {', '.join(urls[:10])}")
+        idx["static_findings"].append(
+            f"Hardcoded URLs/IPs ({len(urls)}): {', '.join(_apk_str(u) for u in urls[:10])}"
+        )
 
     secrets = report.get("hardcoded_secrets", [])
     if secrets:
-        idx["static_findings"].append(f"Hardcoded Secrets ({len(secrets)}): {', '.join(secrets[:5])}")
+        idx["static_findings"].append(
+            f"Hardcoded Secrets ({len(secrets)}): {', '.join(_apk_str(s) for s in secrets[:5])}"
+        )
 
     obf_score = report.get("obfuscation_score", 0)
     idx["static_findings"].append(f"Obfuscation Score: {obf_score:.1f}")
@@ -253,7 +270,7 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
 
     # ── APIs ──────────────────────────────────────────────────────────────────
     dangerous_apis = report.get("dangerous_apis_found_raw", [])
-    idx["apis"] = [f"Dangerous API: {api}" for api in dangerous_apis[:20]]
+    idx["apis"] = [f"Dangerous API: {_apk_str(api)}" for api in dangerous_apis[:20]]
     idx["apis"].append(f"Total Dangerous APIs: {len(dangerous_apis)}")
 
     # ── Dynamic Findings ──────────────────────────────────────────────────────
@@ -264,16 +281,16 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
 
     if dyn_available:
         api_calls = dyn.get("api_calls", [])
-        idx["dynamic_findings"].extend([f"Runtime API Call: {c}" for c in api_calls[:15]])
+        idx["dynamic_findings"].extend([f"Runtime API Call: {_apk_str(c)}" for c in api_calls[:15]])
         idx["dynamic_findings"].append(f"Total Runtime API Calls: {len(api_calls)}")
 
         network_logs = dyn.get("network_logs", [])
         idx["dynamic_findings"].append(f"Network Connections Observed: {len(network_logs)}")
         for net in network_logs[:10]:
-            idx["dynamic_findings"].append(f"Network: {net}")
+            idx["dynamic_findings"].append(f"Network: {_apk_str(net)}")
 
         files = dyn.get("files_accessed", [])
-        idx["dynamic_findings"].extend([f"File Accessed: {f}" for f in files[:10]])
+        idx["dynamic_findings"].extend([f"File Accessed: {_apk_str(f)}" for f in files[:10]])
 
         # YARA matches
         yara = dyn.get("yara_matches", [])
@@ -325,8 +342,8 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
             if isinstance(stg, dict):
                 conf = stg.get('confidence', 0.0)
                 idx["fraud_workflow"].append(
-                    f"  Stage {i}: {stg.get('label', '')} [{stg.get('technique_id', '')}] "
-                    f" - {stg.get('description', '')} (confidence={conf:.0%})"
+                    f"  Stage {i}: {_apk_str(stg.get('label', ''))} [{_apk_str(stg.get('technique_id', ''))}] "
+                    f" - {_apk_str(stg.get('description', ''))} (confidence={conf:.0%})"
                 )
     else:
         idx["fraud_workflow"] = ["No fraud workflow was reconstructed from dynamic evidence."]
@@ -342,13 +359,13 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
             sid = ver.get("screenshot_id", "")
             claim = ver.get("investigative_claim", "")
             idx["visual_evidence"].append(
-                f"{sid}\n"
-                f"Claim: {claim}\n"
-                f"Quality: {ver.get('quality', '')}\n"
-                f"Correlation: {ver.get('correlation_status', '')}\n"
-                f"Evidence: {', '.join(ver.get('linked_evidence_ids') or [])}\n"
-                f"Finding: {', '.join(ver.get('linked_finding_keys') or [])}\n"
-                f"Workflow: {ver.get('workflow_stage_label', '')}\n"
+                f"{_apk_str(sid)}\n"
+                f"Claim: {_apk_str(claim)}\n"
+                f"Quality: {_apk_str(ver.get('quality', ''))}\n"
+                f"Correlation: {_apk_str(ver.get('correlation_status', ''))}\n"
+                f"Evidence: {', '.join(_apk_str(x) for x in (ver.get('linked_evidence_ids') or []))}\n"
+                f"Finding: {', '.join(_apk_str(x) for x in (ver.get('linked_finding_keys') or []))}\n"
+                f"Workflow: {_apk_str(ver.get('workflow_stage_label', ''))}\n"
                 f"Timestamp_ms: {ver.get('timestamp_ms', '')}"
             )
     except Exception as exc:
@@ -359,14 +376,14 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
     # ── Network ───────────────────────────────────────────────────────────────
     idx["network"] = []
     if urls:
-        idx["network"].extend([f"Hardcoded URL/IP: {u}" for u in urls[:15]])
+        idx["network"].extend([f"Hardcoded URL/IP: {_apk_str(u)}" for u in urls[:15]])
     corr = report.get("threat_correlation", {}) or {}
     suspicious_domains = corr.get("suspicious_domains", [])
     malicious_ips = corr.get("malicious_ips", [])
     if suspicious_domains:
-        idx["network"].extend([f"Suspicious Domain (VT): {d}" for d in suspicious_domains[:10]])
+        idx["network"].extend([f"Suspicious Domain (VT): {_apk_str(d)}" for d in suspicious_domains[:10]])
     if malicious_ips:
-        idx["network"].extend([f"Malicious IP (VT): {ip}" for ip in malicious_ips[:10]])
+        idx["network"].extend([f"Malicious IP (VT): {_apk_str(ip)}" for ip in malicious_ips[:10]])
     if not idx["network"]:
         idx["network"] = ["No suspicious network indicators found."]
 
@@ -385,16 +402,16 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
         vendors = corr.get("vt_malicious_vendors", [])
         if vendors:
             idx["threat_intelligence"].append(
-                f"Flagged by: {', '.join(vendors[:5])}"
+                f"Flagged by: {', '.join(_apk_str(v) for v in vendors[:5])}"
             )
 
         known_family = corr.get("known_family")
         if known_family:
-            idx["threat_intelligence"].append(f"Known Malware Family (VT): {known_family}")
+            idx["threat_intelligence"].append(f"Known Malware Family (VT): {_apk_str(known_family)}")
 
         campaign = corr.get("campaign")
         if campaign:
-            idx["threat_intelligence"].append(f"Campaign Attribution: {campaign}")
+            idx["threat_intelligence"].append(f"Campaign Attribution: {_apk_str(campaign)}")
 
         threat_score = corr.get("threat_score", 0)
         idx["threat_intelligence"].append(f"Threat Intelligence Score: {threat_score:.1f}/100")
@@ -403,8 +420,8 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
         for ioc in ioc_reps[:8]:
             if isinstance(ioc, dict):
                 idx["threat_intelligence"].append(
-                    f"IOC [{ioc.get('type', '')}] {ioc.get('indicator', '')} - "
-                    f"Reputation: {ioc.get('reputation', '')} (Source: {ioc.get('source', '')})"
+                    f"IOC [{_apk_str(ioc.get('type', ''))}] {_apk_str(ioc.get('indicator', ''))} - "
+                    f"Reputation: {_apk_str(ioc.get('reputation', ''))} (Source: {_apk_str(ioc.get('source', ''))})"
                 )
     else:
         idx["threat_intelligence"].append(
@@ -414,11 +431,11 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
     # ── Malware Family ────────────────────────────────────────────────────────
     family = report.get("family_classification", "Unknown")
     idx["malware_family"] = [
-        f"Classified Family: {family}",
-        f"Matched Rule: {report.get('matched_rule', 'No rule matched')}",
+        f"Classified Family: {_apk_str(family)}",
+        f"Matched Rule: {_apk_str(report.get('matched_rule', 'No rule matched'))}",
     ]
     if corr.get("known_family"):
-        idx["malware_family"].append(f"VirusTotal Family: {corr.get('known_family')}")
+        idx["malware_family"].append(f"VirusTotal Family: {_apk_str(corr.get('known_family'))}")
     if family == "Unknown":
         idx["malware_family"].append(
             "No known malware family was matched. The APK does not match any known banking trojan signature."
@@ -427,15 +444,15 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
     # ── MITRE Mapping ─────────────────────────────────────────────────────────
     intel = report.get("intelligence_report", {}) or {}
     mitre_techs = intel.get("mitre_techniques_used", [])
-    idx["mitre"] = [f"MITRE Technique: {t}" for t in mitre_techs[:15]]
+    idx["mitre"] = [f"MITRE Technique: {_apk_str(t)}" for t in mitre_techs[:15]]
     if not mitre_techs:
         idx["mitre"] = ["No MITRE ATT&CK for Mobile techniques were mapped for this APK."]
 
     # ── Recommendations ───────────────────────────────────────────────────────
     recs = intel.get("recommended_actions", [])
     cert_recs = intel.get("cert_in_recommendations", [])
-    idx["recommendations"] = [f"Action: {r}" for r in recs[:8]]
-    idx["recommendations"].extend([f"CERT-In: {r}" for r in cert_recs[:5]])
+    idx["recommendations"] = [f"Action: {_apk_str(r)}" for r in recs[:8]]
+    idx["recommendations"].extend([f"CERT-In: {_apk_str(r)}" for r in cert_recs[:5]])
     if action:
         idx["recommendations"].append(f"Deterministic Recommendation: {action}")
 
@@ -445,11 +462,11 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
     exported_rcvs = report.get("exported_receivers", [])
     idx["exported_components"] = []
     for a in exported_acts[:20]:
-        idx["exported_components"].append(f"Exported Activity: {a}")
+        idx["exported_components"].append(f"Exported Activity: {_apk_str(a)}")
     for s in exported_svcs[:10]:
-        idx["exported_components"].append(f"Exported Service: {s}")
+        idx["exported_components"].append(f"Exported Service: {_apk_str(s)}")
     for r_ in exported_rcvs[:10]:
-        idx["exported_components"].append(f"Exported Receiver: {r_}")
+        idx["exported_components"].append(f"Exported Receiver: {_apk_str(r_)}")
     if not idx["exported_components"]:
         idx["exported_components"] = ["No exported components detected in this APK."]
 
@@ -468,7 +485,7 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
             if so.get("rpath") not in (None, "False", ""):
                 flags.append(f"RPATH={so['rpath']} (dangerous)")
             idx["binary_analysis"].append(
-                f"Native Library: {name} - {', '.join(flags) if flags else 'no security flags'}"
+                f"Native Library: {_apk_str(name)} - {', '.join(flags) if flags else 'no security flags'}"
             )
     if not idx["binary_analysis"]:
         idx["binary_analysis"] = ["No native binary analysis data available (MobSF mode required)."]
@@ -507,10 +524,10 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
         masvs = f_.get("masvs", "")
         cwe = f_.get("cwe", "")
         owasp = f_.get("owasp", "")
-        line = (f"[{sev.upper()}] {f_.get('title', 'Unknown finding')}"
-                f"{' (MASVS: ' + masvs + ')' if masvs else ''}"
-                f"{' (CWE: ' + cwe + ')' if cwe else ''}"
-                f"{' (OWASP: ' + owasp + ')' if owasp else ''}")
+        line = (f"[{sev.upper()}] {_apk_str(f_.get('title', 'Unknown finding'))}"
+                f"{' (MASVS: ' + _apk_str(masvs) + ')' if masvs else ''}"
+                f"{' (CWE: ' + _apk_str(cwe) + ')' if cwe else ''}"
+                f"{' (OWASP: ' + _apk_str(owasp) + ')' if owasp else ''}")
         if any(k in combined for k in _CRYPTO_KEYWORDS):
             idx["crypto_findings"].append(f"Crypto: {line}")
         if any(k in combined for k in _WEBVIEW_KEYWORDS):
@@ -531,7 +548,7 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
 
     # ── Secrets ───────────────────────────────────────────────────────────────
     secrets_list = report.get("hardcoded_secrets", [])
-    idx["secrets"] = [f"Hardcoded Secret: {s[:120]}" for s in secrets_list[:30]]
+    idx["secrets"] = [f"Hardcoded Secret: {_apk_str(s)[:120]}" for s in secrets_list[:30]]
     if not idx["secrets"]:
         idx["secrets"] = ["No hardcoded secrets were detected."]
     idx["secrets"].append(f"Total hardcoded secrets found: {len(secrets_list)}")
@@ -542,7 +559,9 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
     for t in trackers[:20]:
         if isinstance(t, dict):
             cats = ", ".join(t.get("categories", [])) if t.get("categories") else "Unknown category"
-            idx["trackers"].append(f"Third-party SDK/Tracker: {t.get('name', 'Unknown')} - {cats}")
+            idx["trackers"].append(
+                f"Third-party SDK/Tracker: {_apk_str(t.get('name', 'Unknown'))} - {cats}"
+            )
     if not idx["trackers"]:
         idx["trackers"] = ["No third-party tracker fingerprints detected (requires MobSF analysis mode)."]
     idx["trackers"].append(f"Total SDKs/trackers detected: {len(trackers)}")
@@ -561,6 +580,9 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
                 idx["network_security"].append(f"NSC {key}: {json.dumps(val)[:200]}")
     if not idx["network_security"]:
         idx["network_security"] = ["Network Security Config data not available for this APK."]
+
+    for section_name, chunks in idx.items():
+        idx[section_name] = [_sanitize_chunk_text(c) for c in chunks]
 
 
 
@@ -737,7 +759,7 @@ def build_investigation_context(
 
     # Build context sections
     lines = ["=== INVESTIGATION CONTEXT ==="]
-    lines.append(f"Question: {question}")
+    lines.append(f"Question: {sanitize(question)}")
     lines.append(f"Sections Retrieved: {', '.join(sections_used)}")
     lines.append("")
 
@@ -823,10 +845,11 @@ def build_gemini_prompt(
     question: str,
     context: str,
 ) -> str:
+    safe_question = sanitize(question)
     return f"""{context}
 
 === ANALYST QUESTION ===
-{question}
+{safe_question}
 
 Answer following the exact 7-section format specified in your instructions.
 Base your answer ONLY on the evidence provided in the INVESTIGATION CONTEXT above.

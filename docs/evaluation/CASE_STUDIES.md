@@ -52,7 +52,7 @@ graph TD
     A[InsecureBankv2 APK] --> B[Static Analysis]
     B --> C[Extracted Intent Filters & Hardcoded Credentials]
     C --> D[5-Axis STEI Calculator]
-    D --> E[FRS Score: 38.5 - MEDIUM]
+    D --> E[FRS Score: 9.17 - SAFE]
     E --> F[Threat Table: Insecure Storage & Cleartext HTTP]
 ```
 
@@ -62,13 +62,14 @@ graph TD
    - Hardcoded developer secrets and S3 bucket credentials in `CryptoClass.java`.
    - Cleartext HTTP traffic (`http://10.0.2.2:8888`) allowed in manifest.
    - Exported content provider `TrackUserContentProvider` accessible to all apps.
-3. **Calculated Risk Score**:
+3. **Calculated Risk Score** `[STATIC-VERIFIED]` *(static-only, `scripts/validate_static_only_frs.py`)*:
    - **Credential Theft ($CT$)**: $0.0$ (No Accessibility, No SMS interception).
-   - **Banking Targeting ($BT$)**: $20.0$ (Contains generic banking keywords).
-   - **Permission Risk ($PR$)**: $25.0$ (Standard storage permissions).
-   - **Obfuscation ($OB$)**: $0.0$ (Unencrypted Smali, zero entropy).
-   - **Infrastructure Risk ($IR$)**: $20.0$ (Hardcoded local IP).
-   - **Final FRS Score**: **$38.50$** $\rightarrow$ **MEDIUM RISK BAND**.
+   - **Banking Targeting ($BT$)**: $0.0$ (No Indian bank package matches).
+   - **Permission Risk ($PR$)**: $0.0$ (Benign permission set in fixture).
+   - **Obfuscation ($OB$)**: $0.0$ (Low entropy).
+   - **Infrastructure Risk ($IR$)**: $10.0$ (Hardcoded local IP).
+   - **STEI**: $0.50$ · **Banking Impact**: $20.00$ (Unknown family baseline).
+   - **Final FRS Score**: **$9.17$** $\rightarrow$ **SAFE** band (engine label; case-study equivalent: LOW).
 
 ---
 
@@ -86,7 +87,7 @@ graph TD
     A[Drinik Trojan APK] --> B[Static Analysis Pipeline]
     B --> C[Accessibility Abuse + SMS OTP Read + SBI Overlay]
     C --> D[5-Axis STEI Calculator]
-    D --> E[FRS Score: 92.50 - CRITICAL]
+    D --> E[FRS Score: 79.51 - HIGH RISK]
     E --> F[Threat Table: Active Credential Theft & Overlay]
 ```
 
@@ -99,13 +100,16 @@ graph TD
    - Matched Indian bank packages: `com.sbi.lotusintouch`, `com.icicibank.mobilebanking`.
    - Hardcoded C2 path: `http://194.163.142.89/drinik/gate.php`.
    - High string entropy ($H = 0.68$) indicating encrypted C2 payloads.
-3. **Calculated Risk Score**:
+3. **Calculated Risk Score** `[STATIC-VERIFIED]` *(static-only, correlation unavailable, `scripts/validate_static_only_frs.py`)*:
    - **Credential Theft ($CT$)**: $100.0$ (Accessibility $+40$, SMS $+35$, Overlay $+25$).
-   - **Banking Targeting ($BT$)**: $80.0$ (Multiple Indian bank target matches).
-   - **Permission Risk ($PR$)**: $80.0$ (Critical dangerous permissions).
-   - **Obfuscation ($OB$)**: $55.0$ (High entropy + Reflection).
-   - **Infrastructure Risk ($IR$)**: $60.0$ (Known malicious C2 IP).
-   - **Final FRS Score**: **$92.50$** $\rightarrow$ **CRITICAL RISK BAND**.
+   - **Banking Targeting ($BT$)**: $40.0$ (Two Indian bank package matches).
+   - **Permission Risk ($PR$)**: $71.0$ (Critical dangerous permissions).
+   - **Obfuscation ($OB$)**: $70.4$ (High entropy + Reflection + DexClassLoader).
+   - **Infrastructure Risk ($IR$)**: $10.0$ (Hardcoded C2 URL; single IOC).
+   - **STEI**: $79.12$ · **Banking Impact**: $80.00$ (Drinik family weight 1.0 + RBI MDS-2021 OTP risk).
+   - **Renormalized weights**: STEI $0.556$ + Banking Impact $0.444$ (dynamic and correlation axes excluded).
+   - **Family classification**: **Drinik** (Banking Target + DexClassLoader; checked before broader Xenomorph rule).
+   - **Final FRS Score**: **$79.51$** $\rightarrow$ **HIGH RISK** band — immediate escalation warranted.
 
 ---
 
@@ -123,7 +127,7 @@ graph TD
     A[Xenomorph Trojan APK] --> B[Static Analysis Engine]
     B --> C[ATS Automation Indicators + Telegram C2 Strings]
     C --> D[5-Axis STEI Calculator]
-    D --> E[FRS Score: 88.00 - CRITICAL]
+    D --> E[FRS Score: 50.82 - SUSPICIOUS]
     E --> F[Threat Table: Automated Transfer System ATS]
 ```
 
@@ -133,16 +137,19 @@ graph TD
    - Obfuscated DEX class names consistent with ATS automation framework.
    - Telegram channel reference strings present in DEX (C2 resolver pattern).
    - `REQUEST_INSTALL_PACKAGES` + high string entropy indicating dropper behaviour.
-3. **Calculated Risk Score**:
-   - **Final FRS Score**: **$88.00$** $\rightarrow$ **CRITICAL RISK BAND**.
+3. **Calculated Risk Score** `[STATIC-VERIFIED]` *(static-only fixture; no SMS in profile to disambiguate from Drinik — classifies as Hydra on accessibility + overlay)*:
+   - **Credential Theft ($CT$)**: $65.0$ · **Banking Targeting ($BT$)**: $30.0$ · **Permission Risk ($PR$)**: $55.0$
+   - **Obfuscation ($OB$)**: $35.5$ · **Infrastructure Risk ($IR$)**: $0.0$
+   - **STEI**: $52.27$ · **Banking Impact**: $49.00$ (Hydra family weight 0.85)
+   - **Final FRS Score**: **$50.82$** $\rightarrow$ **SUSPICIOUS** band (engine label; case-study equivalent: MEDIUM).
 
 ---
 
 > [!NOTE]
-> **Score accuracy caveat**: The STEI and FRS scores in this summary table are `[STATIC-VERIFIED]` estimates derived from static pipeline runs. They may differ from current `risk_engine.py` output if the FRS formula or axis weights have been updated since initial measurement. FRS (Fraud Risk Score) and STEI (Static Threat Exposure Index) are distinct quantities computed differently; the summary table above conflates them for brevity. Always re-run the pipeline for authoritative scores.
+> **Score accuracy**: FRS values below are `[STATIC-VERIFIED]` against `risk_engine.py` via `scripts/validate_static_only_frs.py` (static-only path: dynamic and correlation axes excluded; STEI and banking impact renormalized to weights $0.556$ / $0.444$). STEI and FRS are distinct quantities. Re-run the script for authoritative scores after any engine change.
 
 | Sample Name | Target Profile | STEI Score | FRS Score (static-only) | Severity Band | Recommended Action |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **InsecureBankv2** | Training App | $20.00$ | $38.50$ | **MEDIUM** | Step-Up Authentication Alert |
-| **Drinik Trojan** | Indian Banking | $92.50$ | Not re-verified | **CRITICAL** | Immediate Account Quarantine |
-| **Xenomorph Trojan** | ATS Automation | $88.00$ | Not re-verified | **CRITICAL** | Immediate Account Quarantine |
+| **InsecureBankv2** | Training App | $0.50$ | $9.17$ | **SAFE** | Monitor / training baseline |
+| **Drinik Trojan** | Indian Banking | $79.12$ | $79.51$ | **HIGH RISK** | Immediate escalation warranted |
+| **Xenomorph Trojan** | ATS Automation | $52.27$ | $50.82$ | **SUSPICIOUS** | Step-up authentication / deeper review |

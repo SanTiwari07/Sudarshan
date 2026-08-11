@@ -229,12 +229,15 @@ class EvidenceStore:
         event_bus: Optional[RuntimeEventBus] = None,
         package_name: str = "",
         analysis_stage: str = "single",
+        case_id: str = "",
     ):
         self._records: List[EvidenceRecord] = []
         self._lock    = threading.Lock()
         self._evid_counter = 0          # drives EVID-NNN sequence
         self._runtime_context = {
             "package_name":   package_name,
+            "case_id":        case_id,
+            "sha256":         case_id,
             "analysis_stage": analysis_stage,
             "pid":            0,   # updated externally if needed
         }

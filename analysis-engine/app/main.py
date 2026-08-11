@@ -36,6 +36,7 @@ from sudarshan_core.engines.jadx_engine import JadxEngine
 from sudarshan_core.engines.frida_sandbox import run_frida_analysis
 from sudarshan_core.engines.network_capture import NetworkCapture
 from sudarshan_core.engines.risk_engine import calculate_risk_score as compute_fraud_risk_score
+from sudarshan_core.engines.classification_engine import classify_family
 from sudarshan_core.engines.vide import run_vide_analysis
 from sudarshan_core.engines.vide.pipeline import safe_run_vide_analysis
 from sudarshan_core.engines.vide.ui_profile import UIProfile
@@ -454,14 +455,13 @@ async def _execute_analysis_pipeline(
         timer.stage_completed("VIDE_DYNAMIC")
 
         timer.stage_started("RISK")
+        family_name, matched_rule = classify_family(flags)
         risk_output = await asyncio.to_thread(
             compute_fraud_risk_score,
             flags=flags,
             dynamic_result=dynamic_result,
             correlation_result=threat_corr,
-            # Without this the Permission Risk axis (10% of STEI) scored 0 for
-            # every sample, because _axis_pr falls back to an empty list. The
-            # backend already passed it (routes/upload.py); the engine did not.
+            family=family_name,
             all_permissions=permissions,
             vide_result=vide_result,
         )
@@ -480,7 +480,8 @@ async def _execute_analysis_pipeline(
             "package_name": package_name,
             "app_name": getattr(androguard_output, "app_name", package_name),
             "analysis_mode": analysis_mode,
-            "family_classification": risk_output.get("family_classification", "Unknown"),
+            "family_classification": family_name,
+            "matched_rule": matched_rule,
             "base_score": risk_output["base_score"],
             "ai_confidence_multiplier": risk_output["ai_confidence_multiplier"],
             "final_risk_score": risk_output["final_risk_score"],

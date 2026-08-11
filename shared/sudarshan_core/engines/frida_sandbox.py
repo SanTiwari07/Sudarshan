@@ -48,8 +48,15 @@ from typing import Any, Dict, List, Optional, Tuple
 from sudarshan_core.engines.event_bus import EventType, RuntimeEvent, RuntimeEventBus
 from sudarshan_core.engines.bfci_scorer import calculate_bfci_v2, BFCI_WEIGHTS
 from sudarshan_core.engines.dae_pipeline import DAEPipelineTracker, DAEStage
+from sudarshan_core.engines.apk_repair import compute_sha256
 
 logger = logging.getLogger(__name__)
+
+
+def log_pipeline_lifecycle(stage: int, label: str, detail: str = "") -> None:
+    """Observable lifecycle marker for dynamic pipeline debugging (stages 1–12)."""
+    suffix = f" — {detail}" if detail else ""
+    logger.info("[Pipeline %02d] %s%s", stage, label, suffix)
 
 try:
     from sudarshan_core.engines.evidence_store import EvidenceStore
@@ -1593,6 +1600,7 @@ class FridaSession:
         package_name: str,
         main_activity: Optional[str] = None,
         artifact_dir: Optional[Path] = None,
+        case_id: str = "",
     ):
         self.device_serial = device_serial
         self.package_name = package_name
@@ -1686,6 +1694,7 @@ class FridaSession:
                 event_bus=self.event_bus,
                 package_name=package_name,
                 analysis_stage="single",
+                case_id=case_id,
             )
         else:
             self.evidence_store = None
@@ -1767,6 +1776,11 @@ class FridaSession:
                 bus_event["event_type"] = EventType.FRIDA_EVENT
                 bus_event["type"] = EventType.FRIDA_EVENT
                 self.event_bus.publish(bus_event)
+                log_pipeline_lifecycle(
+                    10,
+                    "RuntimeEvent emitted",
+                    f"category={category} hook={hook_name}",
+                )
 
                 if category == "network":
                     net_data = event.get("data") or {}
@@ -2911,6 +2925,7 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
         "available": False,
         "engine": "frida",
         "dynamic_status": "INSTRUMENTATION_FAILED",
+        "sha256": compute_sha256(apk_path) if os.path.isfile(apk_path) else "",
         "bfci": 0.0,
         "bfci_components": {},
         "bfci_weights": BFCI_WEIGHTS,
@@ -2955,6 +2970,7 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
                 "(or set SANDBOX_PROVIDER=android_studio and start an AVD)."
             )
         )
+        log_pipeline_lifecycle(1, "emulator ready", f"FAIL {err_code}")
         logger.warning("[Frida] %s: %s", err_code, err_msg)
         base_result["error"] = err_msg
         base_result["error_code"] = err_code
@@ -2975,6 +2991,8 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
     )
     base_result["sandbox_connection"] = connection.to_dict()
     base_result["sandbox_provider"] = provider.name
+    log_pipeline_lifecycle(1, "emulator ready", f"serial={device_serial}")
+    log_pipeline_lifecycle(4, "Frida device connected", provider.name)
 
     # ── Serialise access to the device ────────────────────────────────────────
     # There is exactly ONE emulator and it was taken with no lock, while the
@@ -3138,13 +3156,18 @@ async def _run_device_session(
     apk_dir = artifact_dir_for(apk_path)
     logger.info(f"[Frida] Artifacts for this sample: {apk_dir}")
 
+    content_sha256 = base_result.get("sha256") or compute_sha256(apk_path)
+    base_result["sha256"] = content_sha256
+
     session = FridaSession(
         device_serial, package_name,
         main_activity=main_activity,
         artifact_dir=apk_dir,
+        case_id=content_sha256,
     )
 
     # ── Step 3: Install APK ────────────────────────────────────────────────────
+    log_pipeline_lifecycle(2, "APK installed", "starting adb install")
     _install_start = time.monotonic()
     session.dae.transition(DAEStage.INSTALLING, "adb install")
     ok, output, provenance = await loop.run_in_executor(None, _adb_install_apk, apk_path, device_serial)
@@ -3155,6 +3178,7 @@ async def _run_device_session(
         base_result["error"] = f"APK install failed: {output}"
         base_result["dae_pipeline"] = session.dae.to_dict()
         return base_result
+    log_pipeline_lifecycle(2, "APK installed", package_name)
     session.dae.transition(DAEStage.VERIFY_INSTALL, "pm path verification")
     if not await loop.run_in_executor(
         None, _verify_package_installed, device_serial, package_name

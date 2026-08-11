@@ -24,6 +24,23 @@ Copy APKs into `tests/apks/categories/` using filenames from the manifest, for e
 
 Entries marked `"optional": true` are skipped when missing. Required entries must exist before declaring production stability.
 
+### Drinik (banking malware — manual only)
+
+Malware samples are **never fetched automatically**. For the Drinik E2E milestone:
+
+1. Obtain a researcher-controlled Drinik APK in an isolated lab.
+2. Place at `tests/apks/categories/drinik.apk` **or** set `DRINIK_APK_PATH`.
+3. Ingest and validate:
+
+```powershell
+$env:PYTHONPATH = "backend;shared"
+backend\.venv\Scripts\python.exe scripts\apk_ingest.py --drinik
+backend\.venv\Scripts\python.exe scripts\validate_real_drinik_e2e.py
+backend\.venv\Scripts\python.exe scripts\validate_real_drinik_e2e.py --dynamic  # requires ADB+emulator
+```
+
+Fixtures in `backend/tests/case_study_fixtures.py` are for static regression only — not proof of live dynamic analysis.
+
 ## Run validation
 
 ```powershell

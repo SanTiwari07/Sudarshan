@@ -105,7 +105,7 @@ export default function VisualImpersonationExecutiveCard({ data }: { data: Fraud
 
   return (
     <SocCard className="border-red-200/60">
-      <div className="px-4 sm:px-5 py-4 border-b border-slate-200/80 bg-gradient-to-r from-red-50/80 via-white to-slate-50">
+      <div className="px-4 sm:px-5 py-4 border-b border-slate-200/80 bg-gradient-to-r from-red-50/80 via-white to-white">
         <div className="flex items-start gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-100 text-red-700 border border-red-200/80">
             <Eye className="h-4 w-4" />

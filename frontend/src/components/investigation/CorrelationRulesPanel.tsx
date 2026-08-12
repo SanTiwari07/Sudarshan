@@ -19,11 +19,11 @@ export default function CorrelationRulesPanel({ data }: { data: FraudCardData })
       <SectionHeader icon={<Globe className="h-4 w-4" />} title="Correlation rules" subtitle="External + FRS alignment" />
       <div className="p-4 space-y-3 text-xs">
         <div className="grid grid-cols-2 gap-3">
-          <div className="p-2 bg-slate-50 rounded border">
+          <div className="p-2 bg-white rounded border">
             <div className="text-slate-500">FRS correlation</div>
             <div className="font-mono font-bold">{frs?.correlation?.toFixed(1) ?? '-'}</div>
           </div>
-          <div className="p-2 bg-slate-50 rounded border">
+          <div className="p-2 bg-white rounded border">
             <div className="text-slate-500">Intel threat_score</div>
             <div className="font-mono font-bold">{corr?.threat_score?.toFixed(1) ?? '-'}</div>
           </div>

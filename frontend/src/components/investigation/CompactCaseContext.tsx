@@ -18,7 +18,7 @@ export default function CompactCaseContext({
   const band = riskBandPlainEnglish(data.risk_band);
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-xs">
       <div className="min-w-0">
         <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Active case</p>
         <p className="text-sm font-semibold text-slate-900 truncate">{data.package_name || data.sha256.slice(0, 16)}</p>

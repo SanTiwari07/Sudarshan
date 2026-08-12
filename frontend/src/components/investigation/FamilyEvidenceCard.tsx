@@ -22,7 +22,7 @@ export default function FamilyEvidenceCard({ data }: { data: FraudCardData }) {
           <span className="text-slate-500">Family</span>
           <div className="text-lg font-bold text-red-700">{data.family_classification}</div>
         </div>
-        <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+        <div className="p-3 bg-white border border-slate-200 rounded-lg">
           <div className="text-[10px] uppercase text-slate-500">Matched rule</div>
           <div className="mt-1 text-slate-800">{rule}</div>
         </div>

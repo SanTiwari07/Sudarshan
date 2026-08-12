@@ -65,7 +65,7 @@ export default function FindingEvidenceDrawer({
           {vm.evidence.map((item: any, index: number) => (
             <div
               key={`${item.id}-${index}`}
-              className="rounded-xl border border-slate-200 p-4 bg-slate-50/50 space-y-2"
+              className="rounded-xl border border-slate-200 p-4 bg-white space-y-2"
             >
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <p className="text-sm font-semibold text-slate-900">{item.title}</p>

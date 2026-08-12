@@ -21,7 +21,7 @@ export default function InvestigationConclusionCard({
 
   return (
     <SocCard className="upload-fade-in overflow-hidden border border-slate-200 rounded-md">
-      <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center gap-2.5">
+      <div className="px-4 py-3 border-b border-slate-200 bg-white flex items-center gap-2.5">
         <span className="p-1.5 rounded bg-blue-100 text-blue-700 border border-blue-200/80 shrink-0">
           <Brain className="h-4 w-4" />
         </span>
@@ -74,7 +74,7 @@ export default function InvestigationConclusionCard({
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <section className="rounded border border-slate-200 bg-slate-50 p-3.5">
+          <section className="rounded border border-slate-200 bg-white p-3.5">
             <h3 className="text-xs font-bold text-slate-900 flex items-center gap-1.5 font-mono uppercase tracking-wider">
               <Shield className="h-3.5 w-3.5 text-blue-700" />
               Confidence
@@ -98,7 +98,7 @@ export default function InvestigationConclusionCard({
           )}
         </div>
 
-        <section className="bg-slate-50 border border-slate-100 rounded p-3.5">
+        <section className="bg-white border border-slate-200 rounded p-3.5">
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 font-mono mb-1">Recommended Response Strategy</h3>
           <p className="text-xs text-slate-700 leading-relaxed">{model.recommendedAction}</p>
         </section>

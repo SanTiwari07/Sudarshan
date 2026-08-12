@@ -10,6 +10,7 @@ import { useInvestigationUI } from '../../context/InvestigationUIContext';
 import SocCard from '../ui/Card';
 import SectionHeader from '../ui/SectionHeader';
 import HelpTerm from './HelpTerm';
+import DownloadReportButton from './DownloadReportButton';
 import { BarChart2, ChevronRight } from 'lucide-react';
 
 type InfluenceRow = {
@@ -21,6 +22,8 @@ type InfluenceRow = {
   influence: string;
   summary: string;
   included: boolean;
+  value: string;
+  unit: string;
   contributionLabel: string;
 };
 
@@ -69,7 +72,9 @@ function buildRows(data: FraudCardData): InfluenceRow[] {
       influence: influenceLabel(frs.stei ?? 0, staticIncluded),
       summary: buildStaticCardSummary(data),
       included: staticIncluded,
-      contributionLabel: `${(frs.stei ?? 0).toFixed(0)} / 100`,
+      value: staticIncluded ? (frs.stei ?? 0).toFixed(0) : 'Not included',
+      unit: staticIncluded ? '/ 100' : '',
+      contributionLabel: staticIncluded ? `${(frs.stei ?? 0).toFixed(0)} / 100` : 'Not included',
     },
     {
       key: 'dynamic',
@@ -80,6 +85,8 @@ function buildRows(data: FraudCardData): InfluenceRow[] {
       influence: dynamicIncluded ? influenceLabel(dynamicScore, true) : 'Not included',
       summary: dynamicSummary,
       included: Boolean(dynamicIncluded),
+      value: dynamicIncluded ? dynamicContribution.toFixed(1) : 'Not included',
+      unit: dynamicIncluded ? 'pts to FRS' : '',
       contributionLabel: dynamicIncluded
         ? `${dynamicContribution.toFixed(1)} pts to FRS`
         : 'Not included',
@@ -93,6 +100,8 @@ function buildRows(data: FraudCardData): InfluenceRow[] {
       influence: correlationIncluded ? influenceLabel(correlationScore, true) : 'Not included',
       summary: buildThreatCardSummary(data),
       included: correlationIncluded,
+      value: correlationIncluded ? correlationScore.toFixed(0) : 'Not included',
+      unit: correlationIncluded ? '/ 100' : '',
       contributionLabel: correlationIncluded
         ? `${correlationScore.toFixed(0)} / 100`
         : 'Not included',
@@ -106,32 +115,60 @@ export default function RiskInfluenceCard({ data, embedded = false }: { data: Fr
   if (rows.length === 0) return null;
 
   const body = (
-    <div className={embedded ? 'space-y-4' : 'p-4 space-y-4'}>
+    <div className={embedded ? 'flex-1 flex flex-col justify-between gap-3.5 sm:gap-4' : 'p-4 space-y-4'}>
       {rows.map((row) => (
         <button
           key={row.key}
           type="button"
           onClick={() => openInfluenceDetail(row.axis)}
           aria-label={`View ${row.label.toLowerCase()} details`}
-          className="w-full text-left rounded-lg border border-slate-100 p-3 cursor-pointer hover:border-blue-200 hover:bg-slate-50/80 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+          className={`w-full text-left rounded-lg border border-slate-200 cursor-pointer bg-white hover:border-blue-300 hover:bg-blue-50/40 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 shadow-xs ${
+            embedded ? 'flex-1 flex flex-col justify-between p-4 sm:p-4.5' : 'p-3.5 sm:p-4'
+          }`}
         >
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <span className="text-sm font-semibold text-slate-900">
-              <HelpTerm term={row.term}>{row.label}</HelpTerm>
-            </span>
-            <span className="text-xs font-semibold text-blue-800">{row.influence}</span>
+          <div>
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <span className="text-sm sm:text-base font-extrabold text-slate-900">
+                <HelpTerm term={row.term}>{row.label}</HelpTerm>
+              </span>
+              <span className="text-xs font-black text-blue-800 uppercase tracking-wider">{row.influence}</span>
+            </div>
+            <div className="mt-2 mb-2.5 flex items-baseline gap-1.5 font-mono">
+              {row.included ? (
+                <>
+                  <span className="text-2xl sm:text-3xl font-black text-blue-700 leading-none tracking-tight">
+                    {row.value}
+                  </span>
+                  {row.unit && (
+                    <span className="leading-none">
+                      {row.unit.startsWith('/') ? (
+                        <span className="inline-flex items-baseline gap-1">
+                          <span className="text-xs font-semibold text-slate-400">/</span>
+                          <span className="text-sm sm:text-base font-bold text-slate-700">{row.unit.replace('/', '').trim()}</span>
+                        </span>
+                      ) : (
+                        <span className="text-xs sm:text-sm font-semibold text-slate-500 select-none">{row.unit}</span>
+                      )}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span className="text-xs sm:text-sm font-semibold text-slate-400">
+                  {row.value}
+                </span>
+              )}
+            </div>
+            <p className="text-xs sm:text-[13px] text-slate-600 leading-relaxed">{row.summary}</p>
+            {row.key === 'dynamic' && !row.included && row.score > 0 && (
+              <p className="text-xs font-medium text-amber-800 mt-2">
+                Observed runtime score {row.score.toFixed(1)} / 100 - excluded from final FRS because evidence was
+                inconclusive.
+              </p>
+            )}
           </div>
-          <p className="text-xs font-mono text-slate-600 mt-1">{row.contributionLabel}</p>
-          <p className="text-xs text-slate-600 mt-2 leading-relaxed">{row.summary}</p>
-          {row.key === 'dynamic' && !row.included && row.score > 0 && (
-            <p className="text-[10px] text-amber-800 mt-2">
-              Observed runtime score {row.score.toFixed(1)} / 100 - excluded from final FRS because evidence was
-              inconclusive.
-            </p>
-          )}
-          <div className="flex items-center justify-end gap-1 mt-2 text-[10px] font-semibold text-blue-700">
+          <div className="flex items-center justify-end gap-1 mt-3 text-xs sm:text-sm font-bold text-blue-700">
             View details
-            <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+            <ChevronRight className="h-4 w-4" aria-hidden />
           </div>
         </button>
       ))}
@@ -139,7 +176,7 @@ export default function RiskInfluenceCard({ data, embedded = false }: { data: Fr
         <button
           type="button"
           onClick={() => openLedger('full')}
-          className="w-full text-center text-xs font-semibold text-blue-700 py-2 rounded-lg border border-blue-100 hover:bg-blue-50"
+          className="w-full text-center text-xs sm:text-sm font-bold text-blue-700 py-2.5 rounded-lg border border-blue-200 hover:bg-blue-50 transition-colors"
         >
           View score breakdown
         </button>
@@ -149,8 +186,10 @@ export default function RiskInfluenceCard({ data, embedded = false }: { data: Fr
 
   if (embedded) {
     return (
-      <div>
-        <p className="text-xs font-bold text-slate-800 mb-3">What influenced the score?</p>
+      <div className="h-full flex flex-col justify-between">
+        <div className="mb-3 sm:mb-4">
+          <p className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight">What influenced the score?</p>
+        </div>
         {body}
       </div>
     );
@@ -158,11 +197,14 @@ export default function RiskInfluenceCard({ data, embedded = false }: { data: Fr
 
   return (
     <SocCard>
-      <SectionHeader
-        icon={<BarChart2 className="h-4 w-4" />}
-        title="What influenced the score?"
-        subtitle="Analyst view - open the score ledger for raw weights and contributions."
-      />
+      <div className="p-4 pb-0 flex items-center justify-between gap-3">
+        <SectionHeader
+          icon={<BarChart2 className="h-4 w-4" />}
+          title="What influenced the score?"
+          subtitle="Analyst view - open the score ledger for raw weights and contributions."
+        />
+        <DownloadReportButton sha256={data.sha256} />
+      </div>
       {body}
     </SocCard>
   );

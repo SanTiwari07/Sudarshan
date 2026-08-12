@@ -81,7 +81,7 @@
   }
 
   .soc-card-header {
-    @apply px-3 py-2.5 border-b border-slate-200/80 flex items-center justify-between bg-slate-50/50;
+    @apply px-3 py-2.5 border-b border-slate-200/80 flex items-center justify-between bg-white;
   }
 
   .soc-card-title {
@@ -141,16 +141,13 @@
   /* Scrollbar Controls */
   .scrollbar-hidden {
     -ms-overflow-style: none;
-    scrollbar-width: thin;
+    scrollbar-width: none;
   }
 
   .scrollbar-hidden::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
-  }
-
-  .scrollbar-hidden::-webkit-scrollbar-thumb {
-    @apply bg-slate-300 rounded-full;
+    display: none;
+    width: 0px;
+    height: 0px;
   }
 
   /* Animation Utilities */

@@ -25,7 +25,7 @@ export default function ExecutiveBriefing({ data }: { data: FraudCardData }) {
       </SocCard>
 
       <SocCard className="h-full">
-        <div className="px-5 py-4 border-b border-slate-200 bg-slate-50">
+        <div className="px-5 py-4 border-b border-slate-200 bg-white">
           <div className="flex items-center gap-2">
             <Lightbulb className="h-4 w-4 text-amber-600" />
             <h2 className="text-base font-bold text-slate-900 tracking-tight">What this means</h2>

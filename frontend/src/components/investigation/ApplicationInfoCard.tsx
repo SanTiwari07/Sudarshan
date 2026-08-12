@@ -43,11 +43,11 @@ export default function ApplicationInfoCard({ data }: { data: FraudCardData }) {
 
   return (
     <SocCard className="border border-slate-200 rounded-md">
-      <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center gap-2">
+      <div className="px-4 py-3 border-b border-slate-200 bg-white flex items-center gap-2">
         <Package className="h-4 w-4 text-slate-500" />
         <h2 className="text-xs font-bold uppercase tracking-wider text-slate-800 font-mono">Application Information</h2>
       </div>
-      <div className="px-4 py-2.5 bg-slate-50/40 border-b border-slate-100">
+      <div className="px-4 py-2.5 bg-white border-b border-slate-100">
         <div className="text-xs font-bold text-slate-900 truncate font-mono">{displayName}</div>
       </div>
       <div className="px-4 py-2 divide-y divide-slate-100">

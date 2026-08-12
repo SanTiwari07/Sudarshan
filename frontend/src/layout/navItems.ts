@@ -33,7 +33,7 @@ export const ENTERPRISE_NAV_MAIN: NavItem[] = [
   { to: '/fraud-card', label: 'Executive Fraud Card', shortLabel: 'Executive', icon: LayoutDashboard },
   { to: '/technical', label: 'Technical SOC View', shortLabel: 'Technical', icon: Terminal },
   { to: '/threat-intel', label: 'Threat Intelligence', shortLabel: 'Intel', icon: Globe },
-  { to: '/chat', label: 'AI Copilot', shortLabel: 'AI Copilot', icon: MessageSquare },
+  { to: '/chat', label: 'AI Assistant', shortLabel: 'AI Assistant', icon: MessageSquare },
 ];
 
 /** Right cluster: Cases, then Upload APK (adjacent to notifications). */

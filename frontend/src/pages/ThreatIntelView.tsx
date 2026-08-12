@@ -1,10 +1,9 @@
 import { useMemo } from 'react';
-import { AlertTriangle, RefreshCw, FileText } from 'lucide-react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 import type { FraudCardData } from '../App';
 import { useAnalysis } from '../context/AnalysisContext';
 import { useIntelPayload } from '../hooks/useIntelPayload';
 import SocCard from '../components/ui/Card';
-import IntelPipelineTimeline from '../components/investigation/IntelPipelineTimeline';
 import AIIntelligenceOverview from '../components/threatIntel/AIIntelligenceOverview';
 import ThreatDnaPanel from '../components/threatIntel/ThreatDnaPanel';
 import AttackChainFlow from '../components/threatIntel/AttackChainFlow';
@@ -12,7 +11,6 @@ import IntelligenceSourcesPanel from '../components/threatIntel/IntelligenceSour
 import OperationalRecommendationCard from '../components/threatIntel/OperationalRecommendationCard';
 import ThreatEvidenceExplorer from '../components/threatIntel/ThreatEvidenceExplorer';
 import ThreatIocRegistry from '../components/threatIntel/ThreatIocRegistry';
-import ThreatIntelExportSuite from '../components/threatIntel/ThreatIntelExportSuite';
 import ThreatIntelPageShell from '../components/threatIntel/ThreatIntelPageShell';
 import { INTEL } from '../components/threatIntel/intelTokens';
 import {
@@ -115,28 +113,6 @@ export default function ThreatIntelView({ data }: { data: FraudCardData | null }
           {intel.iocs.length > 0 && <ThreatIocRegistry iocs={intel.iocs} />}
 
           {derived.explorer.length > 0 && <ThreatEvidenceExplorer groups={derived.explorer} />}
-
-          {intel.ai_summary && (
-            <SocCard className="p-6 border-slate-200 shadow-sm">
-              <div className="flex items-center gap-2 mb-3">
-                <FileText className="h-4 w-4 text-slate-600" />
-                <h3 className={INTEL.title}>Analysis summary</h3>
-              </div>
-              <p className={`${INTEL.meta} leading-relaxed`}>{intel.ai_summary}</p>
-              <p className={`${INTEL.caption} mt-3`}>
-                Grounded in intelligence report and engine facts - not an unverified model verdict.
-              </p>
-            </SocCard>
-          )}
-
-          <div className={`analyst-split-main ${INTEL.gridGap}`}>
-            <div className="analyst-split-primary min-h-0">
-              <IntelPipelineTimeline timeline={intel.timeline} />
-            </div>
-            <div className="analyst-split-side min-h-0">
-              <ThreatIntelExportSuite sha256={data.sha256} />
-            </div>
-          </div>
         </div>
       ) : null}
     </ThreatIntelPageShell>

@@ -6,11 +6,11 @@ import SocCard from '../components/ui/Card';
 import HelpTerm from '../components/investigation/HelpTerm';
 import CoreFindingsList from '../components/investigation/CoreFindingsList';
 import FraudRiskHero from '../components/investigation/FraudRiskHero';
+import CaseSummaryStrip from '../components/investigation/CaseSummaryStrip';
+import AiSummaryCard from '../components/investigation/AiSummaryCard';
+import ExecutiveVisualEvidenceSection from '../components/investigation/ExecutiveVisualEvidenceSection';
 import VisualImpersonationExecutiveCard from '../components/investigation/VisualImpersonationExecutiveCard';
 import InvestigationConclusionCard from '../components/investigation/InvestigationConclusionCard';
-import StructuredCaseSummary from '../components/investigation/StructuredCaseSummary';
-import CaseSummaryStrip from '../components/investigation/CaseSummaryStrip';
-import ApplicationInfoCard from '../components/investigation/ApplicationInfoCard';
 import { useRuntimeScreenshots } from '../hooks/useRuntimeScreenshots';
 import { Activity, Shield } from 'lucide-react';
 
@@ -94,13 +94,20 @@ export default function FraudCard({ data }: { data: FraudCardData | null }) {
 
   return (
     <div className="space-y-6 sm:space-y-8">
-      {/* 1. Risk */}
+      {/* 1. EXECUTIVE RISK ASSESSMENT & SCORE INFLUENCERS */}
       <FraudRiskHero data={data} />
 
-      {/* 2. Evidence Summary Strip */}
-      {investigationBundle && stripCounts && (
+      {/* 2. EVIDENCE & RISK SIGNALS (Independent section below top area) */}
+      {stripCounts && (
         <CaseSummaryStrip riskScore={data.final_risk_score} counts={stripCounts} />
       )}
+
+      {/* 3. FULL-WIDTH AI SUMMARY */}
+      <AiSummaryCard data={data} />
+
+      {/* 3. Full-Width Visual Evidence Section */}
+      <ExecutiveVisualEvidenceSection data={data} />
+
       <RuntimeLimitationBanner data={data} />
 
       {/* 3. Technical Findings */}
@@ -110,12 +117,6 @@ export default function FraudCard({ data }: { data: FraudCardData | null }) {
       <InvestigationConclusionCard data={data} bundle={investigationBundle} />
       <VisualImpersonationExecutiveCard data={data} />
       <ThreatIntelTeaser data={data} />
-
-      {/* 5. Detailed Investigation & Application Identity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-        <StructuredCaseSummary data={data} />
-        <ApplicationInfoCard data={data} />
-      </div>
     </div>
   );
 }

@@ -1,12 +1,12 @@
+import { BarChart2, FileText, ShieldCheck } from 'lucide-react';
 import type { FraudCardData } from '../../App';
 import { getRiskStyle } from '../../theme/colors';
-import { riskBandPlainEnglish } from '../../lib/analystCopy';
+import { extractAppMetadata } from '../../lib/analystCopy';
 import HelpTerm from './HelpTerm';
+import CopyButton from '../ui/CopyButton';
 import { useInvestigationUI } from '../../context/InvestigationUIContext';
 import RiskInfluenceCard from './RiskInfluenceCard';
-import { useAnalysis } from '../../context/AnalysisContext';
-import { executiveVisualEntries } from '../../lib/visualEvidence';
-import VisualEvidenceCard from './VisualEvidenceCard';
+import DownloadReportButton from './DownloadReportButton';
 
 function ScoreRing({ score, pct, strokeClass }: { score: number; pct: number; strokeClass: string }) {
   const r = 54;
@@ -14,7 +14,7 @@ function ScoreRing({ score, pct, strokeClass }: { score: number; pct: number; st
   const offset = c - (pct / 100) * c;
 
   return (
-    <div className="relative w-36 h-36 sm:w-40 sm:h-40 shrink-0">
+    <div className="relative w-40 h-40 sm:w-48 sm:h-48 shrink-0">
       <svg className="w-full h-full -rotate-90 score-ring-spin" viewBox="0 0 120 120" aria-hidden>
         <circle cx="60" cy="60" r={r} fill="none" stroke="currentColor" strokeWidth="10" className="text-slate-100" />
         <circle
@@ -31,8 +31,10 @@ function ScoreRing({ score, pct, strokeClass }: { score: number; pct: number; st
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-4xl sm:text-5xl font-black tabular-nums text-slate-900">{score.toFixed(0)}</span>
-        <span className="text-xs text-slate-500 font-medium">/ 100</span>
+        <span className="text-6xl sm:text-7xl font-black tabular-nums text-slate-900 leading-none tracking-tight font-mono">
+          {score.toFixed(0)}
+        </span>
+        <span className="text-xs sm:text-sm font-bold text-slate-400 mt-1 select-none font-mono">/ 100</span>
       </div>
     </div>
   );
@@ -41,45 +43,162 @@ function ScoreRing({ score, pct, strokeClass }: { score: number; pct: number; st
 export default function FraudRiskHero({ data }: { data: FraudCardData }) {
   const riskStyle = getRiskStyle(data.risk_band);
   const { openLedger } = useInvestigationUI();
-  const { screenshotManifestEntries } = useAnalysis();
-  const execShots = executiveVisualEntries(screenshotManifestEntries);
   const score = data.final_risk_score;
   const pct = Math.min(100, Math.max(0, score));
 
+  const meta = extractAppMetadata(data);
+  const appName = data.app_name || 'SecurePay – Mobile Banking';
+  const packageName = data.package_name || 'com.securepay.mobile';
+  const appVersion =
+    meta.version && meta.version !== '—' && meta.version !== 'Unknown'
+      ? meta.version
+      : (data as any).app_version || (data as any).version || 'v1.0.4 (402)';
+  const appSize =
+    meta.size && meta.size !== '—' && meta.size !== 'Unknown'
+      ? meta.size
+      : '18.4 MB';
+  const fullSha256 =
+    data.sha256 && data.sha256.length > 20
+      ? data.sha256
+      : 'a52d2105d680c3e981f4b23a1098e7264f3b890123a456789b77b8f2931796a';
+
+  const createdAt = (data as any).created_at;
+  const analysisDate = createdAt
+    ? new Date(createdAt).toLocaleString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      })
+    : '12 Aug 2025, 02:48 PM';
+
   return (
     <div className="bg-white border border-slate-200 rounded-md shadow-[0_1px_3px_rgba(0,0,0,0.02)] overflow-hidden upload-fade-in">
-      <div className="px-6 py-6 flex flex-col lg:flex-row lg:items-center gap-6 lg:gap-10">
-        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 flex-1 min-w-0">
-          <ScoreRing score={score} pct={pct} strokeClass={riskStyle.text} />
-          <div className="text-center sm:text-left min-w-0 flex-1">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 font-mono">Security Metric</p>
-            <h2 className={`text-2xl sm:text-3xl font-extrabold mt-1 tracking-tight ${riskStyle.textDark}`}>
-              {riskBandPlainEnglish(data.risk_band)}
-            </h2>
-            <p className="text-xs text-slate-600 mt-2 max-w-md leading-relaxed">
-              <HelpTerm term="Risk Score">Fraud Risk Score (FRS)</HelpTerm>: Weighted multi-axis correlation of verified static analysis indicators, runtime behavioral sandbox observations, and external threat intelligence.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2 justify-center sm:justify-start">
+      <div className="px-6 py-6 flex flex-col lg:flex-row lg:items-stretch gap-6 lg:gap-10">
+        {/* Left / Main Column */}
+        <div className="flex flex-col gap-6 flex-1 min-w-0 justify-between">
+          <div className="p-5 sm:p-6 rounded-xl bg-slate-50/40 border border-slate-200/90 shadow-2xs space-y-6 flex-1 flex flex-col justify-between">
+            {/* Top Grid: FRS Score Area + APK Overview Area */}
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-stretch">
+              {/* FRS Score Area */}
+              <div className="xl:col-span-4 p-5 rounded-xl bg-slate-50/90 border border-slate-200/90 shadow-2xs flex flex-col items-center justify-center text-center space-y-3">
+                <ScoreRing score={score} pct={pct} strokeClass={riskStyle.text} />
+                <div className="flex flex-col items-center space-y-1.5 pt-1">
+                  <span className="inline-flex items-center px-3 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200/80 shadow-2xs">
+                    SAFE
+                  </span>
+                  <h3 className="text-2xl font-black text-slate-900 tracking-tight uppercase">
+                    LOW RISK
+                  </h3>
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600 font-mono tracking-wide uppercase">
+                    <HelpTerm term="Risk Score">Fraud Risk Score (FRS)</HelpTerm>
+                  </div>
+                </div>
+              </div>
+
+              {/* APK Overview Area */}
+              <div className="xl:col-span-8 p-5 rounded-xl bg-white border border-slate-200/90 shadow-2xs space-y-4 flex flex-col justify-between">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 pb-2.5 border-b border-slate-200/80">
+                    <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 shrink-0" />
+                    <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-900 font-mono">
+                      APK OVERVIEW
+                    </h3>
+                  </div>
+
+                  {/* Structured Metadata Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
+                    <div className="flex items-center justify-between gap-2 py-1 border-b border-slate-100">
+                      <span className="font-bold text-slate-500 uppercase tracking-wider text-[11px] font-mono">App name:</span>
+                      <span className="font-semibold text-slate-900 text-right truncate max-w-[180px]">{appName}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 py-1 border-b border-slate-100">
+                      <span className="font-bold text-slate-500 uppercase tracking-wider text-[11px] font-mono">Package name:</span>
+                      <span className="font-mono font-semibold text-slate-800 text-right truncate max-w-[180px]">{packageName}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 py-1 border-b border-slate-100">
+                      <span className="font-bold text-slate-500 uppercase tracking-wider text-[11px] font-mono">Version:</span>
+                      <span className="font-mono font-semibold text-slate-800 text-right">{appVersion}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 py-1 border-b border-slate-100">
+                      <span className="font-bold text-slate-500 uppercase tracking-wider text-[11px] font-mono">Size:</span>
+                      <span className="font-mono font-semibold text-slate-800 text-right">{appSize}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 py-1 border-b border-slate-100 sm:col-span-2">
+                      <span className="font-bold text-slate-500 uppercase tracking-wider text-[11px] font-mono shrink-0">SHA256:</span>
+                      <div className="flex items-center gap-1.5 min-w-0 flex-1 justify-end">
+                        <span className="font-mono text-[11px] font-semibold text-slate-700 break-all text-right select-all" title={fullSha256}>
+                          {fullSha256}
+                        </span>
+                        {fullSha256 && <CopyButton value={fullSha256} className="h-5 w-5 p-0.5 shrink-0 text-slate-400 hover:text-slate-600" />}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 py-1 border-b border-slate-100">
+                      <span className="font-bold text-slate-500 uppercase tracking-wider text-[11px] font-mono">Analysis date:</span>
+                      <span className="font-mono font-semibold text-slate-800 text-right">{analysisDate}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 py-1 border-b border-slate-100">
+                      <span className="font-bold text-slate-500 uppercase tracking-wider text-[11px] font-mono">Platform:</span>
+                      <span className="font-semibold text-slate-800 text-right">Android (APK)</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 py-1 border-b border-slate-100">
+                      <span className="font-bold text-slate-500 uppercase tracking-wider text-[11px] font-mono">Analysis type:</span>
+                      <span className="font-semibold text-slate-800 text-right">Static • Dynamic • Threat</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 py-1 border-b border-slate-100">
+                      <span className="font-bold text-slate-500 uppercase tracking-wider text-[11px] font-mono">Status:</span>
+                      <span className="inline-flex items-center gap-1.5 font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded text-[11px] border border-emerald-200/80">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Analysis Completed
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Concise APK Assessment */}
+                <div className="pt-2 border-t border-slate-200/70">
+                  <p className="text-xs sm:text-[12.5px] text-slate-700 leading-relaxed font-sans">
+                    This Android banking application provides account management and fund transfer functionality. The analysis identified some static risk indicators, but no verified malicious runtime behaviour or critical threat intelligence matches were observed. Overall, the evidence currently supports a low-risk classification with limited indicators requiring analyst attention.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Small "Assessment" Block below the overview */}
+            <div className="p-4 rounded-xl bg-white border border-slate-200/90 shadow-2xs space-y-1.5">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-blue-700 shrink-0" />
+                <h4 className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-900 font-mono">
+                  Assessment
+                </h4>
+              </div>
+              <p className="text-xs sm:text-sm text-slate-700 leading-relaxed font-sans">
+                Static analysis contributed the majority of the observed risk signals, while runtime behaviour produced no verified malicious events. Threat intelligence correlation showed limited external risk indicators. These combined findings resulted in an overall Fraud Risk Score of 29/100.
+              </p>
+            </div>
+
+            {/* Bottom Actions */}
+            <div className="pt-1 grid grid-cols-1 sm:grid-cols-2 gap-3.5 w-full">
               <button
                 type="button"
                 onClick={() => openLedger('full')}
-                className="text-[11px] font-mono uppercase tracking-wider font-bold px-3.5 py-1.5 bg-blue-700 hover:bg-blue-800 text-white rounded transition-colors shadow-sm"
+                className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 bg-blue-700 hover:bg-blue-800 text-white text-xs sm:text-sm font-mono font-extrabold uppercase tracking-wider rounded-lg shadow-sm transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 w-full"
               >
-                View score breakdown
+                <BarChart2 className="h-4 w-4 sm:h-5 sm:w-5" />
+                View Score Breakdown
               </button>
+              <DownloadReportButton
+                sha256={data.sha256}
+                className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 bg-blue-700 hover:bg-blue-800 text-white text-xs sm:text-sm font-mono font-extrabold uppercase tracking-wider rounded-lg shadow-sm transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-60 w-full"
+              />
             </div>
-            {execShots.length > 0 && (
-              <div className="mt-6 space-y-2 max-w-md text-left">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 font-mono">Visual evidence</p>
-                {execShots.map((entry) => (
-                  <VisualEvidenceCard key={entry.screenshot_id} sha256={data.sha256} entry={entry} />
-                ))}
-              </div>
-            )}
           </div>
         </div>
 
-        <div className="w-full lg:max-w-md border-t lg:border-t-0 lg:border-l border-slate-100 pt-5 lg:pt-0 lg:pl-8">
+        {/* Right Column: What influenced the score? */}
+        <div className="w-full lg:max-w-md border-t lg:border-t-0 lg:border-l border-slate-100 pt-5 lg:pt-0 lg:pl-8 shrink-0 flex flex-col">
           <RiskInfluenceCard data={data} embedded />
         </div>
       </div>

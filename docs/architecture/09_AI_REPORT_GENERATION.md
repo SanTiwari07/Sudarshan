@@ -30,7 +30,7 @@ Case reports are queried and served via [`report.py`](file:///d:/Projects/Sudars
 
 - `GET /api/v1/report/pdf/{sha256}`: Exports full PDF report. Requires Bearer auth.
 - `GET /api/v1/report/json/{sha256}`: Exports complete JSON analysis payload. Requires Bearer auth.
-- `POST /api/v1/report/chat`: Interacts with RAG-grounded AI copilot for case inquiry.
+- `POST /api/v1/report/chat`: Interacts with RAG-grounded AI assistant for case inquiry.
 
 ---
 

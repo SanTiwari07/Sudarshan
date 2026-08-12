@@ -12,7 +12,7 @@ import { Brain, MessageSquare, Shield, Sparkles } from 'lucide-react';
 
 function ConfidenceBar({ label, percent, detail }: { label: string; percent: number; detail: string }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2.5">
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
       <div className="flex items-center justify-between gap-2 mb-1.5">
         <span className="text-xs font-semibold text-slate-800">{label}</span>
         <span className="text-xs font-mono font-bold text-blue-700">{percent}%</span>
@@ -51,7 +51,7 @@ export default function ExecutiveIntelligenceOverview({
 
   return (
     <SocCard className="upload-fade-in overflow-hidden">
-      <div className="px-5 sm:px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-blue-50 via-white to-slate-50">
+      <div className="px-5 sm:px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-blue-50 via-white to-white">
         <div className="flex items-center gap-3">
           <span className="p-2 rounded-xl bg-blue-100 text-blue-700 border border-blue-200 shrink-0">
             <Brain className="h-5 w-5" />
@@ -90,7 +90,7 @@ export default function ExecutiveIntelligenceOverview({
           ))}
         </section>
 
-        <section className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/50 p-4 sm:p-5">
+        <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 sm:p-5 shadow-2xs">
           <h3 className="text-sm font-bold text-slate-900">Why this matters</h3>
           {why.map((para, i) => (
             <p key={i} className="text-sm text-slate-700 leading-relaxed">

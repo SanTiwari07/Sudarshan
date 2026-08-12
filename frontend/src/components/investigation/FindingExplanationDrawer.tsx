@@ -62,7 +62,7 @@ export default function FindingExplanationDrawer({
 
       <FindingSection label="Evidence basis">
         <div className="flex flex-wrap items-center gap-2 mb-2">
-          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded border border-slate-300 bg-slate-50 text-slate-700">
+          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded border border-slate-300 bg-white text-slate-700">
             {sec.evidenceBasisBadge}
           </span>
           <span className="text-slate-600">{sec.evidenceBasisLabel}</span>

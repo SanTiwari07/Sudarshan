@@ -54,7 +54,7 @@ export default function IntelligentOverview({
     >
       <div className="px-4 sm:px-5 py-4 border-b border-slate-100">
         <div className="flex items-start gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-50 text-blue-700 border border-slate-100">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-blue-700 border border-slate-200">
             <Sparkles className="h-4 w-4" aria-hidden />
           </span>
           <div>

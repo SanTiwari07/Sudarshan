@@ -19,7 +19,7 @@ export default function GroundedNarrativeCard({ data }: { data: FraudCardData })
         title="Why we believe this"
         subtitle="Evidence-grounded synthesis - always verify against the score ledger."
       />
-      <div className="px-4 py-2 bg-slate-100 border-b border-slate-200 text-[10px] flex items-center justify-between">
+      <div className="px-4 py-2 bg-white border-b border-slate-200 text-[10px] flex items-center justify-between">
         <span className="text-slate-600">
           AI-assisted explanation layered on <HelpTerm term="Verified Evidence">verified evidence</HelpTerm>
         </span>
@@ -68,7 +68,7 @@ export default function GroundedNarrativeCard({ data }: { data: FraudCardData })
         {tab === 2 && (
           <div className="space-y-2">
             {(intel?.recommended_actions || data.executive_view.recommended_actions).map((act, i) => (
-              <div key={i} className="flex gap-2 p-3 bg-slate-50 rounded-lg border text-sm">
+              <div key={i} className="flex gap-2 p-3 bg-white rounded-lg border border-slate-200 text-sm">
                 <span className="w-5 h-5 rounded-full bg-blue-700 text-white text-xs flex items-center justify-center font-bold shrink-0">
                   {i + 1}
                 </span>

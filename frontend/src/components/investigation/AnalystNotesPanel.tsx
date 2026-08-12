@@ -81,7 +81,7 @@ export default function AnalystNotesPanel({ sha256 }: { sha256: string }) {
                 Save note
               </button>
               {savedNotes.map((n) => (
-                <div key={n.id} className="p-3 bg-slate-50 border rounded text-xs">
+                <div key={n.id} className="p-3 bg-white border border-slate-200 rounded text-xs">
                   <div className="text-slate-500">{n.author} · {n.created_at}</div>
                   <div className="mt-1 text-slate-800">{n.text}</div>
                 </div>

@@ -59,13 +59,13 @@ function AnalyzedBody({ vide, data }: { vide: VideResult; data: FraudCardData })
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="p-2.5 rounded-md border border-slate-200 bg-slate-50/40">
+        <div className="p-2.5 rounded-md border border-slate-200 bg-white">
           <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500">VIDE confidence</div>
           <div className="text-base font-bold text-slate-900 tabular-nums mt-0.5">
             {formatVideConfidence(confidence)}
           </div>
         </div>
-        <div className="p-2.5 rounded-md border border-slate-200 bg-slate-50/40">
+        <div className="p-2.5 rounded-md border border-slate-200 bg-white">
           <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Status</div>
           <div className="text-xs font-bold text-slate-800 mt-1">{vide.status || 'OK'}</div>
         </div>

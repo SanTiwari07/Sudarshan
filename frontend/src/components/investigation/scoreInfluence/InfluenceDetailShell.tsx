@@ -30,7 +30,7 @@ export function FrsAxisTransparencyTable({
   return (
     <div className="rounded-lg border border-slate-200 overflow-hidden text-xs">
       <table className="w-full">
-        <thead className="bg-slate-50 text-slate-500">
+        <thead className="bg-white text-slate-500 border-b border-slate-200">
           <tr>
             <th className="text-left px-3 py-2 font-semibold">FRS axis</th>
             <th className="text-left px-3 py-2 font-semibold">Status</th>
@@ -63,7 +63,7 @@ export function FrsAxisTransparencyTable({
 
 export function MonoBlock({ children }: { children: string }) {
   return (
-    <code className="block text-[11px] font-mono bg-slate-50 border border-slate-200 rounded px-2 py-1.5 break-all text-slate-800">
+    <code className="block text-[11px] font-mono bg-white border border-slate-200 rounded px-2 py-1.5 break-all text-slate-800">
       {children}
     </code>
   );

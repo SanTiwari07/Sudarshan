@@ -24,7 +24,7 @@ export default function EvidenceToolbar({
   onFilterChange: (v: EvidenceFilter) => void;
 }) {
   return (
-    <div className="p-3 border-b border-slate-200 bg-slate-50/50">
+    <div className="p-3 border-b border-slate-200 bg-white">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
         <div>
           <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Evidence Registry</h2>

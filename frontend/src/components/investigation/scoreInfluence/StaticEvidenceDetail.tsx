@@ -33,7 +33,7 @@ export default function StaticEvidenceDetail({ data }: { data: FraudCardData }) 
                   <button
                     type="button"
                     onClick={() => setOpenId(open ? null : f.id)}
-                    className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-slate-50"
+                    className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-blue-50/40"
                   >
                     <span className="text-sm font-semibold text-slate-900">{f.title}</span>
                     <ChevronDown className={`h-4 w-4 text-slate-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -71,7 +71,7 @@ export default function StaticEvidenceDetail({ data }: { data: FraudCardData }) 
                   className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${
                     eng.status === 'available'
                       ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                      : 'bg-slate-50 text-slate-500 border-slate-200'
+                      : 'bg-white text-slate-500 border-slate-200'
                   }`}
                 >
                   {eng.status === 'available' ? 'Available' : 'Not available'}

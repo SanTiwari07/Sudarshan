@@ -128,7 +128,7 @@ function MathematicalAccordion({
   const baseEst = estimateBaseFrs(data);
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50/80 overflow-hidden">
+    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -163,7 +163,7 @@ function MathematicalAccordion({
           </div>
           <div className="max-h-64 overflow-y-auto space-y-2">
             {lines.map((line) => (
-              <div key={line.id} className="border border-slate-200 rounded-lg p-2.5 text-[11px] bg-slate-50">
+              <div key={line.id} className="border border-slate-200 rounded-lg p-2.5 text-[11px] bg-white">
                 <div className="font-semibold text-slate-800">{line.label}</div>
                 <div className="text-slate-600 mt-0.5 font-mono leading-relaxed">{line.detail}</div>
                 {line.contributionLabel && (
@@ -245,7 +245,7 @@ export default function ScoreLedgerSlideOver({
               <Info className="h-4 w-4 text-blue-600" />
               Why this APK is Suspicious
             </h3>
-            <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 sm:p-5 space-y-3 shadow-sm">
+            <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5 space-y-3 shadow-sm">
               {suspicious.map((para, i) => (
                 <p key={i} className="text-sm text-slate-700 leading-relaxed">
                   {para}

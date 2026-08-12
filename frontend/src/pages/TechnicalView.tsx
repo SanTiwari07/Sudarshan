@@ -5,7 +5,6 @@ import {
 } from 'lucide-react';
 import type { FraudCardData } from '../App';
 import VisualImpersonationPanel from '../components/investigation/VisualImpersonationPanel';
-import { exportJSON, exportCSV } from '../utils/derive';
 import SocCard from '../components/ui/Card';
 import SectionHeader from '../components/ui/SectionHeader';
 import CopyButton from '../components/ui/CopyButton';
@@ -915,36 +914,6 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
 
   return (
     <div className="technical-view">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pb-4 border-b border-slate-200/80">
-        <div className="flex items-start gap-3 min-w-0">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700 border border-slate-200/80">
-            <Terminal className="h-5 w-5" />
-          </span>
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold text-slate-900 tracking-tight">Live Analysis</h1>
-            <p className="text-sm text-slate-500 mt-1 leading-relaxed truncate sm:whitespace-normal">
-              Verified evidence and inspection detail - {data.package_name || `${data.sha256.slice(0, 16)}…`}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => exportJSON(data)}
-            className="px-3 py-2 text-xs font-semibold bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-          >
-            Export JSON
-          </button>
-          <button
-            type="button"
-            onClick={() => exportCSV(data)}
-            className="px-3 py-2 text-xs font-semibold bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-          >
-            Export CSV
-          </button>
-        </div>
-      </header>
-
       <EvidenceRegistrySection data={data} bundle={investigationBundle} loading={loading} />
 
       <EvidenceSection title="Overview" description="Classification summary and APK identifiers.">

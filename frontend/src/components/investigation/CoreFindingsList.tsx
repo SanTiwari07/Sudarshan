@@ -41,7 +41,7 @@ export default function CoreFindingsList({
       />
       <div className="p-5 sm:p-6 space-y-3">
         {detected.length === 0 && (
-          <div className="text-center py-8 px-4 rounded-xl border border-dashed border-slate-200 bg-slate-50">
+          <div className="text-center py-8 px-4 rounded-xl border border-dashed border-slate-200 bg-white">
             <p className="text-sm text-slate-700">No high-priority fraud patterns were flagged on this case.</p>
             <p className="text-xs text-slate-500 mt-2">Review verified evidence and threat indicators before clearing.</p>
           </div>

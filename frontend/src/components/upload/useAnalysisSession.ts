@@ -191,6 +191,39 @@ export function useAnalysisSession(onComplete: (data: FraudCardData) => void) {
     }
   }, [file, isBusy, pollJob, navigate, onComplete, applyBackendPipeline]);
 
+  const startAnalysisFromJob = useCallback(async (jobId: string, filename: string) => {
+    if (isBusy) return;
+
+    setError(null);
+    setPhase('analyzing');
+    targetProgressRef.current = 5;
+    setSmoothProgress(5);
+    setPipelineUi(
+      resolvePipelineUi({
+        pipeline_stage: 'QUEUED',
+        pipeline_message: 'Job queued - waiting for worker…',
+        progress_pct: 5,
+      }),
+    );
+    // Create a mock file object just for the UI name display
+    setFile(new File([], filename));
+
+    const token = getToken();
+
+    try {
+      const analysisResult = await pollJob(jobId, token);
+      targetProgressRef.current = 100;
+      setSmoothProgress(100);
+      setPipelineUi(resolvePipelineUi({ pipeline_stage: 'COMPLETED', progress_pct: 100 }));
+      setResult(analysisResult);
+      onComplete(analysisResult);
+      setPhase('complete');
+    } catch (err: unknown) {
+      setPhase('error');
+      setError(err instanceof Error ? err.message : 'Analysis pipeline failed.');
+    }
+  }, [isBusy, pollJob, onComplete]);
+
   return {
     phase,
     file,
@@ -201,6 +234,7 @@ export function useAnalysisSession(onComplete: (data: FraudCardData) => void) {
     pipelineUi,
     isBusy,
     startAnalysis,
+    startAnalysisFromJob,
     reset,
   };
 }

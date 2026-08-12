@@ -122,6 +122,40 @@ CREATE TABLE IF NOT EXISTS analysis_jobs (
 );
 """
 
+_CREATE_DISCOVERY_SESSIONS = """
+CREATE TABLE IF NOT EXISTS discovery_sessions (
+    id            TEXT PRIMARY KEY,
+    target_url    TEXT NOT NULL,
+    domain        TEXT NOT NULL,
+    status        TEXT NOT NULL,
+    pages_scanned INTEGER DEFAULT 0,
+    error         TEXT,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL,
+    progress_logs TEXT  -- JSON list
+);
+"""
+
+_CREATE_DISCOVERY_CANDIDATES = """
+CREATE TABLE IF NOT EXISTS discovery_candidates (
+    id                TEXT PRIMARY KEY,
+    session_id        TEXT NOT NULL,
+    source_url        TEXT NOT NULL,
+    discovery_url     TEXT NOT NULL,
+    filename          TEXT,
+    source_type       TEXT NOT NULL,
+    package_id        TEXT,
+    download_status   TEXT NOT NULL,
+    validation_status TEXT,
+    sha256            TEXT,
+    size              INTEGER,
+    storage_path      TEXT,
+    error             TEXT,
+    created_at        TEXT NOT NULL,
+    FOREIGN KEY (session_id) REFERENCES discovery_sessions(id)
+);
+"""
+
 
 @asynccontextmanager
 async def _connect() -> AsyncIterator[aiosqlite.Connection]:
@@ -174,6 +208,8 @@ async def init_db() -> None:
         await db.execute(_CREATE_IOC_CACHE)
         await db.execute(_CREATE_NOTES)
         await db.execute(_CREATE_ANALYSIS_JOBS)
+        await db.execute(_CREATE_DISCOVERY_SESSIONS)
+        await db.execute(_CREATE_DISCOVERY_CANDIDATES)
         for stmt in _CREATE_INDEXES:
             await db.execute(stmt)
         await _apply_migrations(db)
@@ -487,15 +523,59 @@ async def load_analysis_job(job_id: str) -> Optional[Dict[str, Any]]:
             result = json.loads(data["result_json"])
         except json.JSONDecodeError:
             logger.warning("[DB] analysis_jobs.result_json corrupt for %s", job_id[:8])
-    return {
-        "job_id": data["job_id"],
-        "status": data["status"],
-        "sha256": data.get("sha256"),
-        "analyst_id": data.get("analyst_id"),
-        "queued_at": data.get("queued_at"),
-        "started_at": data.get("started_at"),
-        "completed_at": data.get("completed_at"),
-        "result": result,
-        "error": data.get("error"),
-    }
+# ─── Discovery State ────────────────────────────────────────────────────────
+
+async def save_discovery_session(session: Dict[str, Any]) -> None:
+    async with _connect() as db:
+        await db.execute(
+            """
+            INSERT OR REPLACE INTO discovery_sessions
+            (id, target_url, domain, status, pages_scanned, error, created_at, updated_at, progress_logs)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                session["id"], session["target_url"], session["domain"], session["status"],
+                session.get("pages_scanned", 0), session.get("error"),
+                session.get("created_at"), session.get("updated_at"),
+                json.dumps(session.get("progress_logs", []))
+            )
+        )
+        await db.commit()
+
+async def get_discovery_session(session_id: str) -> Optional[Dict[str, Any]]:
+    async with _connect() as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM discovery_sessions WHERE id = ?", (session_id,)) as cur:
+            row = await cur.fetchone()
+    if not row:
+        return None
+    d = dict(row)
+    d["progress_logs"] = json.loads(d.get("progress_logs") or "[]")
+    return d
+
+async def save_discovery_candidate(candidate: Dict[str, Any]) -> None:
+    async with _connect() as db:
+        await db.execute(
+            """
+            INSERT OR REPLACE INTO discovery_candidates
+            (id, session_id, source_url, discovery_url, filename, source_type, package_id, 
+             download_status, validation_status, sha256, size, storage_path, error, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                candidate["id"], candidate["session_id"], candidate["source_url"],
+                candidate["discovery_url"], candidate.get("filename"), candidate["source_type"],
+                candidate.get("package_id"), candidate["download_status"], candidate.get("validation_status"),
+                candidate.get("sha256"), candidate.get("size"), candidate.get("storage_path"),
+                candidate.get("error"), candidate.get("created_at")
+            )
+        )
+        await db.commit()
+
+async def get_discovery_candidates(session_id: str) -> List[Dict[str, Any]]:
+    async with _connect() as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM discovery_candidates WHERE session_id = ?", (session_id,)) as cur:
+            rows = await cur.fetchall()
+    return [dict(r) for r in rows]
 

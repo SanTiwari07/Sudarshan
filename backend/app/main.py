@@ -17,7 +17,7 @@ from slowapi.errors import RateLimitExceeded
 
 from app.rate_limit import limiter
 
-from app.routes import upload, report, intelligence, screenshots
+from app.routes import upload, report, intelligence, screenshots, discovery
 from app.routes.runtime_api import router as runtime_router
 from app.routes.cases import router as cases_router
 from app.auth.auth import router as auth_router
@@ -83,6 +83,7 @@ app.add_middleware(
 
 app.include_router(auth_router,          prefix="/api/v1",         tags=["Authentication"])
 app.include_router(upload.router,        prefix="/api/v1",         tags=["Analysis"])
+app.include_router(discovery.router,     prefix="/api/v1",         tags=["APK Discovery"])
 app.include_router(report.router,        prefix="/api/v1",         tags=["Reports & Export"])
 app.include_router(cases_router,         prefix="/api/v1",         tags=["Case History"])
 app.include_router(intelligence.router,  prefix="/api/v1",         tags=["Threat Intelligence"])

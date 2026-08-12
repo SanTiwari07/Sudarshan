@@ -1,11 +1,14 @@
+import { useState } from 'react';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { SocCard } from '../ui/Card';
+import UrlDiscoveryArea from '../discovery/UrlDiscoveryArea';
 import UploadDropZone from './UploadDropZone';
 import StageCard from './StageCard';
 import InvestigationProgress from './progress/InvestigationProgress';
 import CompletionScreen from './progress/CompletionScreen';
 import { useAnalysisSession } from './useAnalysisSession';
 import type { FraudCardData } from '../../App';
+import { getToken } from '../../pages/Login';
 
 type UploadPageProps = {
   onAnalysisComplete: (data: FraudCardData) => void;
@@ -21,6 +24,7 @@ const PIPELINE_OVERVIEW = [
 ];
 
 export default function UploadPage({ onAnalysisComplete }: UploadPageProps) {
+  const [mode, setMode] = useState<'apk' | 'url'>('apk');
   const session = useAnalysisSession(onAnalysisComplete);
   const { phase, file, setFile, error, smoothProgress, result, pipelineUi, isBusy, startAnalysis, reset } =
     session;
@@ -46,12 +50,62 @@ export default function UploadPage({ onAnalysisComplete }: UploadPageProps) {
     <div className="upload-fade-in flex justify-center px-4 py-10 sm:py-16">
       <div className="w-full max-w-[68rem]">
         <SocCard className="p-8 sm:p-10 lg:p-12 border-slate-200/80 shadow-sm">
-          <UploadDropZone
-            file={file}
-            onFile={setFile}
-            disabled={isBusy}
-            disabledMessage={isBusy ? 'Analysis in progress. Please wait.' : undefined}
-          />
+          <div className="flex border-b border-slate-200 mb-6 overflow-x-auto scrollbar-hide">
+            <button
+              onClick={() => setMode('apk')}
+              className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                mode === 'apk'
+                  ? 'border-blue-600 text-blue-700 bg-blue-50'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              Upload APK
+            </button>
+            <button
+              onClick={() => setMode('url')}
+              className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                mode === 'url'
+                  ? 'border-blue-600 text-blue-700 bg-blue-50'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              Website URL
+            </button>
+          </div>
+
+          {mode === 'apk' ? (
+            <UploadDropZone
+              file={file}
+              onFile={setFile}
+              disabled={isBusy}
+              disabledMessage={isBusy ? 'Analysis in progress. Please wait.' : undefined}
+            />
+          ) : (
+            <UrlDiscoveryArea 
+              disabled={isBusy}
+              onAnalyzeCandidate={async (candidateId, sessionId, filename) => {
+                try {
+                  const token = import.meta.env.VITE_DEV_TOKEN || getToken();
+                  const res = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:8000/api/v1'}/discovery/${sessionId}/analyze`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      ...(token ? { Authorization: `Bearer ${token}` } : {})
+                    },
+                    body: JSON.stringify({ candidate_id: candidateId })
+                  });
+                  if (!res.ok) {
+                    const data = await res.json();
+                    throw new Error(data.detail || 'Failed to queue analysis');
+                  }
+                  const data = await res.json();
+                  session.startAnalysisFromJob(data.job_id, filename);
+                } catch (e: any) {
+                  alert(e.message);
+                }
+              }}
+            />
+          )}
 
           <section className="mt-12" aria-labelledby="pipeline-overview-heading">
             <h2
@@ -83,21 +137,23 @@ export default function UploadPage({ onAnalysisComplete }: UploadPageProps) {
             </div>
           )}
 
-          <button
-            type="button"
-            disabled={!file || isBusy}
-            onClick={() => void startAnalysis()}
-            className="mt-10 w-full h-14 flex justify-center items-center gap-2 rounded-[13px] text-[15px] font-semibold text-white bg-blue-700 shadow-sm hover:bg-blue-800 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none disabled:cursor-not-allowed transition-all duration-200"
-          >
-            {isBusy ? (
-              <>
-                <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
-                Analysis in progress…
-              </>
-            ) : (
-              'Analyze application'
-            )}
-          </button>
+          {mode === 'apk' && (
+            <button
+              type="button"
+              disabled={!file || isBusy}
+              onClick={() => void startAnalysis()}
+              className="mt-10 w-full h-14 flex justify-center items-center gap-2 rounded-[13px] text-[15px] font-semibold text-white bg-blue-700 shadow-sm hover:bg-blue-800 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none disabled:cursor-not-allowed transition-all duration-200"
+            >
+              {isBusy ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+                  Analysis in progress…
+                </>
+              ) : (
+                'Analyze application'
+              )}
+            </button>
+          )}
         </SocCard>
       </div>
     </div>

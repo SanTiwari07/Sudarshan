@@ -40,3 +40,4 @@ yara-python
 # Streaming support for Investigation Assistant
 sse-starlette
 slowapi>=0.1.9
+beautifulsoup4

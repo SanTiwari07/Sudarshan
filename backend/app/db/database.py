@@ -275,10 +275,10 @@ async def save_case(sha256: str, result: Dict[str, Any], analyst_id: Optional[in
 
 
 async def get_case(sha256: str) -> Optional[Dict[str, Any]]:
-    """Retrieve a single case by SHA256."""
+    """Retrieve a single case by SHA256 (exact or prefix)."""
     async with _connect() as db:
         db.row_factory = aiosqlite.Row
-        async with db.execute("SELECT * FROM cases WHERE sha256 = ?", (sha256,)) as cur:
+        async with db.execute("SELECT * FROM cases WHERE sha256 = ? OR sha256 LIKE ?", (sha256, f"{sha256}%")) as cur:
             row = await cur.fetchone()
     if not row:
         return None

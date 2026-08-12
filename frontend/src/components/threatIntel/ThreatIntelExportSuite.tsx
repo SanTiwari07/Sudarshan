@@ -32,6 +32,8 @@ export default function ThreatIntelExportSuite({ sha256 }: { sha256: string }) {
       <SectionHeader icon={<FileText className="h-4 w-4" />} title="Export suite" subtitle="STIX, IOC, YARA, MITRE" />
       <div className="p-4 grid grid-cols-2 gap-2">
         {[
+          { id: 'pdf', label: 'PDF Report', path: `/report/pdf/${sha256}`, file: `sudarshan_report_${sha256.slice(0, 8)}.pdf`, icon: FileText },
+          { id: 'html', label: 'HTML Report', path: `/report/html/${sha256}`, file: `sudarshan_report_${sha256.slice(0, 8)}.html`, icon: FileText },
           { id: 'stix', label: 'STIX 2.1', path: `/report/stix/${sha256}`, file: `sudarshan_stix_${sha256.slice(0, 8)}.json`, icon: Globe },
           { id: 'csv', label: 'IOC CSV', path: `/report/iocs/${sha256}`, file: `sudarshan_iocs_${sha256.slice(0, 8)}.csv`, icon: Database },
           { id: 'yara', label: 'YARA', path: `/report/yara/${sha256}`, file: `sudarshan_rule_${sha256.slice(0, 8)}.yar`, icon: Code },

@@ -49,7 +49,12 @@ def cache_report(sha256: str, report: Any) -> None:
 
 
 def get_cached_report(sha256: str) -> Optional[Any]:
-    return _report_cache.get(sha256)
+    if sha256 in _report_cache:
+        return _report_cache[sha256]
+    for k, v in _report_cache.items():
+        if k.startswith(sha256):
+            return v
+    return None
 
 
 async def load_report(sha256: str) -> Optional[Any]:
@@ -147,14 +152,16 @@ async def export_html_report(sha256: str, user: dict = Depends(require_analyst))
 
 # ─── PDF Report Export ──────────────────────────────────────────────────────
 
-@router.get("/report/pdf/{sha256}", response_class=HTMLResponse)
+@router.get("/report/pdf/{sha256}")
 async def export_pdf_report(sha256: str, user: dict = Depends(require_analyst)):
     """
-    Export a print-ready Executive Malware Analysis Report for PDF generation.
-
-    Returns standalone single-file HTML with an embedded auto-print handler
-    that immediately opens the browser's native print-to-PDF dialog.
+    Export an Enterprise Malware Investigation PDF Report generated directly via ReportLab.
+    
+    Consumes the authoritative case object and persisted disk artifacts,
+    enforcing ReportData normalization and consistency validation before rendering.
     """
+    from fastapi.responses import Response
+
     report = await load_report(sha256)
     if not report:
         raise HTTPException(
@@ -163,11 +170,11 @@ async def export_pdf_report(sha256: str, user: dict = Depends(require_analyst)):
         )
 
     try:
-        from sudarshan_core.engines.report_generator import build_report
+        from sudarshan_core.engines.pdf_generator import build_pdf_report
     except ImportError as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Report generator unavailable: {e}"
+            detail=f"PDF generator engine unavailable: {e}"
         )
 
     apk_dir: Optional[Path] = None
@@ -185,21 +192,22 @@ async def export_pdf_report(sha256: str, user: dict = Depends(require_analyst)):
     else:
         report_dict = {}
 
-    html = build_report(report_dict, apk_dir=apk_dir)
-    
-    # Inject auto-print script for seamless PDF saving in browser
-    print_script = "<script>window.onload=function(){setTimeout(function(){window.print();},500);};</script></body>"
-    if "</body>" in html:
-        html = html.replace("</body>", print_script)
-    else:
-        html += print_script
+    try:
+        pdf_bytes = build_pdf_report(report_dict, apk_dir=apk_dir)
+    except Exception as e:
+        logger.exception(f"Failed to generate PDF for {sha256[:12]}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"PDF generation failed: {e}"
+        )
 
-    filename = f"sudarshan_report_{sha256[:12]}.html"
+    filename = f"sudarshan_report_{sha256[:12]}.pdf"
 
-    return HTMLResponse(
-        content=html,
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
         headers={
-            "Content-Disposition": f'inline; filename="{filename}"',
+            "Content-Disposition": f'attachment; filename="{filename}"',
         },
     )
 

@@ -79,6 +79,13 @@ _log_adb     = logging.getLogger("[ADB]")
 _log_analysis = logging.getLogger("[ANALYSIS]")
 _log_risk    = logging.getLogger("[RISK]")
 
+# The sandbox is one physical device shared by every concurrent job. Dynamic
+# analysis takes it exclusively; everything before it stays parallel. Created
+# lazily so it binds to the running event loop, not import-time.
+_DEVICE_LOCK = asyncio.Lock()
+# Single-element list so the counter is mutable from nested scopes.
+_DEVICE_LOCK_WAITERS = [0]
+
 app = FastAPI(
     title="Sudarshan APK Analysis Engine Microservice",
     version="2.3.0",
@@ -403,11 +410,32 @@ async def _execute_analysis_pipeline(
         timer.stage_completed("MANIFEST")
 
         # 4. Dynamic Sandbox Analysis via Frida & ADB
+        #
+        # Serialised: the sandbox is a single physical device. The backend runs
+        # two analysis workers, so two jobs reach this line concurrently and
+        # both drive the same emulator - installing, force-stopping, launching
+        # and attaching Frida over each other. The loser dies with
+        # "TransportError: the connection is closed" and reports as
+        # INSTRUMENTATION_FAILED, which looks like a flaky sandbox rather than a
+        # collision. Static analysis above stays parallel; only device access is
+        # exclusive.
         timer.stage_started("AGENTIC_EXPLORER")
-        dynamic_result = await run_frida_analysis(
-            apk_path=apk_path,
-            package_name=package_name,
-        )
+        _waiters = _DEVICE_LOCK_WAITERS[0]
+        if _DEVICE_LOCK.locked():
+            logger.info(
+                "[Engine] Sandbox busy - queueing dynamic analysis for %s "
+                "(%d already waiting)",
+                package_name or sha256_hash[:12], _waiters,
+            )
+        _DEVICE_LOCK_WAITERS[0] += 1
+        try:
+            async with _DEVICE_LOCK:
+                dynamic_result = await run_frida_analysis(
+                    apk_path=apk_path,
+                    package_name=package_name,
+                )
+        finally:
+            _DEVICE_LOCK_WAITERS[0] -= 1
         timer.stage_completed("AGENTIC_EXPLORER")
 
         # 5. mitmproxy HAR Net Ingest

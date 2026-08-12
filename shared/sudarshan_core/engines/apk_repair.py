@@ -19,7 +19,7 @@ import subprocess
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -272,6 +272,149 @@ def resign_apk_preserving_payload(original_apk_path: str) -> Tuple[bool, str, Di
     return True, resigned_apk, provenance
 
 
+def _authoritative_manifest_components(apk_path: str) -> Dict[str, Any]:
+    """
+    Read the real manifest components before falling back to guesswork.
+
+    A deliberately corrupt AXML defeats the regex scrape further down, but it
+    does NOT defeat aapt or androguard - both parse Teabot's manifest correctly.
+    Skipping them meant the rebuild invented a launcher from an arbitrary DEX
+    class, producing an app that installs and can never start.
+
+    Returns {} when nothing could be parsed, so callers keep their fallbacks.
+    """
+    out: Dict[str, Any] = {}
+
+    # ── aapt: authoritative for the LAUNCHER activity ────────────────────────
+    for tool in ("aapt2", "aapt"):
+        exe = shutil.which(tool)
+        if not exe:
+            continue
+        try:
+            res = subprocess.run(
+                [exe, "dump", "badging", apk_path],
+                capture_output=True, text=True, timeout=60,
+            )
+            for line in res.stdout.splitlines():
+                if line.startswith("package: name=") and "package_name" not in out:
+                    parts = line.split("'")
+                    if len(parts) >= 2:
+                        out["package_name"] = parts[1]
+                elif line.startswith("launchable-activity: name="):
+                    parts = line.split("'")
+                    if len(parts) >= 2:
+                        out["main_activity"] = parts[1]
+            if out.get("main_activity"):
+                logger.info(
+                    "[APKRepair] %s resolved launcher activity: %s",
+                    tool, out["main_activity"],
+                )
+                break
+        except Exception as exc:
+            logger.debug("[APKRepair] %s badging failed: %s", tool, exc)
+
+    # ── androguard: full component inventory ─────────────────────────────────
+    try:
+        try:
+            import loguru
+            loguru.logger.disable("androguard")
+        except ImportError:
+            pass
+        from androguard.core.apk import APK
+
+        apk = APK(apk_path)
+        pkg = apk.get_package()
+        if pkg and pkg not in ("Failed", "Unknown", "None"):
+            out.setdefault("package_name", pkg)
+        if not out.get("main_activity"):
+            act = apk.get_main_activity()
+            if act:
+                out["main_activity"] = act
+                logger.info(
+                    "[APKRepair] androguard resolved launcher activity: %s", act
+                )
+        activities = [a for a in (apk.get_activities() or []) if a]
+        services = [s for s in (apk.get_services() or []) if s]
+        receivers = [r for r in (apk.get_receivers() or []) if r]
+        if activities:
+            out["activities"] = activities
+        if services:
+            out["services"] = services
+        if receivers:
+            out["receivers"] = receivers
+
+        # Which service is the accessibility service, per the manifest itself.
+        #
+        # get_intent_filters() returns {} on obfuscated manifests like Teabot's -
+        # the decoded XML drops the `android:` prefix, so androguard's lookup
+        # misses. The declaration is still unambiguous in the raw XML: a service
+        # gated by BIND_ACCESSIBILITY_SERVICE, or carrying the accessibility
+        # intent action. Matching on those is sample-agnostic; matching on a
+        # class name is not.
+        accessibility: List[str] = []
+        try:
+            manifest_xml = apk.get_android_manifest_axml().get_xml().decode(
+                "utf-8", "ignore"
+            )
+        except Exception:
+            manifest_xml = ""
+
+        for match in re.finditer(r"<service\b[^>]*>(.*?)</service>|<service\b[^>]*/>",
+                                 manifest_xml, re.DOTALL):
+            block = match.group(0)
+            name_match = re.search(r'(?:android:)?name="([^"]+)"', block)
+            if not name_match:
+                continue
+            srv_name = name_match.group(1)
+            declares_a11y = (
+                "BIND_ACCESSIBILITY_SERVICE" in block
+                or "accessibilityservice" in block.lower()
+            )
+            if declares_a11y and srv_name not in accessibility:
+                accessibility.append(srv_name)
+
+        for srv in services:
+            try:
+                filters = apk.get_intent_filters("service", srv) or {}
+            except Exception:
+                filters = {}
+            actions = filters.get("action") or []
+            if any("accessibilityservice" in str(a).lower() for a in actions):
+                if srv not in accessibility:
+                    accessibility.append(srv)
+
+        if accessibility:
+            out["accessibility_services"] = accessibility
+            logger.info(
+                "[APKRepair] Manifest declares accessibility service(s): %s",
+                accessibility,
+            )
+    except Exception as exc:
+        logger.warning("[APKRepair] androguard component parse failed: %s", exc)
+
+    return out
+
+
+def _looks_like_activity_class(class_name: str) -> bool:
+    """
+    Reject DEX candidates that cannot be a launchable Activity.
+
+    The DEX scan yields every class in the binary - interfaces, inner classes,
+    JNI helpers - and the old code took element [0] of 6066. These filters do
+    not prove a class IS an Activity, they only drop entries that provably are
+    not one.
+    """
+    if not class_name or "." not in class_name:
+        return False
+    if class_name.startswith("L") and class_name.endswith(";"):
+        return False          # unstripped JVM type descriptor
+    if "$" in class_name:
+        return False          # inner/anonymous class
+    if class_name.startswith(("android.", "androidx.", "com.google.android.gms")):
+        return False          # framework/support library
+    return True
+
+
 def repair_obfuscated_apk(original_apk_path: str) -> Tuple[bool, str, Dict]:
     """
     Generate an isolated repaired derivative copy for sandbox installation.
@@ -378,22 +521,68 @@ def repair_obfuscated_apk(original_apk_path: str) -> Tuple[bool, str, Dict]:
             if rcv not in receivers:
                 receivers.append(rcv)
 
-    # Step 3: Extract real DEX classes if manifest extraction produced no activities or fake 'MainActivity'
-    if not activities or "MainActivity" in main_activity or main_activity == "MainActivity":
+    # Step 2b: Authoritative manifest read. aapt/androguard parse manifests the
+    # regex scrape above cannot - including the deliberately corrupt AXML that
+    # sent us down the DEX-guessing path in the first place. These values win.
+    authoritative = _authoritative_manifest_components(original_apk_path)
+    if authoritative.get("package_name"):
+        package_name = authoritative["package_name"]
+    if authoritative.get("activities"):
+        for act in authoritative["activities"]:
+            if act not in activities:
+                activities.append(act)
+    for srv in authoritative.get("services", []):
+        if srv not in services:
+            services.append(srv)
+    for rcv in authoritative.get("receivers", []):
+        if rcv not in receivers:
+            receivers.append(rcv)
+
+    authoritative_main = authoritative.get("main_activity")
+    if authoritative_main:
+        main_activity = authoritative_main
+        if main_activity not in activities:
+            activities.insert(0, main_activity)
+
+    # Step 3: DEX class scan - last resort only, when no manifest source could
+    # name a launcher. Never overrides an authoritative answer.
+    if not authoritative_main and (
+        not activities or "MainActivity" in main_activity or main_activity == "MainActivity"
+    ):
         dex_candidates = extract_activities_from_dex_files(out_dir, package_name)
-        if dex_candidates:
-            logger.info(f"[APKRepair] Discovered {len(dex_candidates)} real DEX classes in binary: {dex_candidates[:3]}")
-            pkg_classes = [c for c in dex_candidates if c.startswith(package_name)]
-            valid_classes = pkg_classes if pkg_classes else dex_candidates
+        plausible = [c for c in dex_candidates if _looks_like_activity_class(c)]
+        if plausible:
+            logger.warning(
+                "[APKRepair] No manifest source named a launcher; falling back to "
+                "DEX scan (%d classes, %d plausible). The rebuilt app may not start.",
+                len(dex_candidates), len(plausible),
+            )
+            pkg_classes = [c for c in plausible if c.startswith(package_name)]
+            valid_classes = pkg_classes if pkg_classes else plausible
             activities = valid_classes
             main_activity = valid_classes[0]
+        elif dex_candidates:
+            logger.error(
+                "[APKRepair] DEX scan found %d classes but none are plausible "
+                "activities - refusing to synthesise a launcher.",
+                len(dex_candidates),
+            )
 
     if not activities:
         activities = [main_activity]
 
+    # Exactly one activity may carry MAIN/LAUNCHER. Declaring two makes
+    # `cmd package resolve-activity` return the system ResolverActivity (the
+    # "which app?" chooser) instead of a component in the package, which reads
+    # downstream as "this package has no launcher" and aborts the run.
+    if main_activity in activities:
+        launcher_activity = main_activity
+    else:
+        launcher_activity = activities[0] if activities else main_activity
+
     activity_blocks = []
     for idx, act in enumerate(activities):
-        if act == main_activity or idx == 0:
+        if act == launcher_activity:
             block = f"""        <activity android:name="{act}" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
@@ -406,9 +595,14 @@ def repair_obfuscated_apk(original_apk_path: str) -> Tuple[bool, str, Dict]:
 
     activity_xml_str = "\n".join(activity_blocks)
 
+    # Which services are accessibility services comes from the parsed manifest.
+    # This used to carry a hardcoded Teabot class name, which only ever worked
+    # for that one sample and silently mis-declared every other.
+    declared_accessibility = set(authoritative.get("accessibility_services", []))
+
     service_blocks = []
     for srv in services:
-        if "accessibility" in srv.lower() or srv == "in.makaek.galbak.UIDNwaidobaWIODb":
+        if srv in declared_accessibility or "accessibility" in srv.lower():
             block = f"""        <service android:name="{srv}" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:exported="true">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService"/>

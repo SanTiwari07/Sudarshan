@@ -86,8 +86,14 @@ export type FRSBreakdown = {
   axes_excluded?: string[];
   concealed_payload?: boolean;
   verdict_floored_for_visibility?: boolean;
+  verdict_floored_for_evasion?: boolean;
   dynamic_ran?: boolean;
   dynamic_conclusive?: boolean;
+  /**
+   * Why the dynamic axis could not be scored. "We observed nothing bad" and
+   * "we never got to look" must not render identically.
+   */
+  dynamic_exclusion_reason?: string | null;
 };
 
 export type RiskExplanation = {

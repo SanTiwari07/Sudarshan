@@ -196,8 +196,11 @@ except ImportError:
         "[Frida] ui_explorer module not found - AgenticExplorer has no rollback target."
     )
 
-# Default analysis duration in seconds
-ANALYSIS_DURATION_SECONDS = int(os.getenv("FRIDA_ANALYSIS_DURATION", "30"))
+# Default analysis duration in seconds.
+# 30 s was too tight for droppers: the second stage lands after the first-run
+# delay, so the capture window closed before any weighted behaviour occurred and
+# BFCI read 0.0 for samples that are demonstrably active. Overridable per run.
+ANALYSIS_DURATION_SECONDS = int(os.getenv("FRIDA_ANALYSIS_DURATION", "90"))
 
 # ── Session lifecycle pacing ──────────────────────────────────────────────────
 # The session is OPEN -> ANALYSE -> CLOSE. Nothing may touch the UI until the
@@ -215,6 +218,11 @@ LAUNCH_STABLE_SECONDS: float = float(os.getenv("SUDARSHAN_LAUNCH_STABLE", "12.0"
 # Five seconds is enough to survive transient splash-screen sub-processes while
 # still detecting a crasher that dies in < 1 s.
 LAUNCH_PID_STABLE_MIN_SECONDS: float = float(os.getenv("SUDARSHAN_PID_STABLE_MIN", "5.0"))
+# After a stable PID appears, how long to wait for the package to actually own a
+# window. A stable PID alone is not a launch: a Teabot run held a PID for the
+# full session while first_activity/first_window stayed null, so no UI-driven
+# hook ever fired and the remaining launch strategies were never tried.
+LAUNCH_UI_RENDER_SECONDS: float = float(os.getenv("SUDARSHAN_LAUNCH_UI_RENDER", "6.0"))
 # Polling interval for the PID stability loop.
 LAUNCH_PID_POLL_SECONDS: float = 0.25
 
@@ -1046,6 +1054,38 @@ def _poll_pid_until_stable(
     return False, last_pid, reason
 
 
+def _poll_until_package_owns_window(
+    device: str,
+    package_name: str,
+    *,
+    total_timeout: float = LAUNCH_UI_RENDER_SECONDS,
+    poll_interval: float = 0.5,
+) -> bool:
+    """
+    Wait for *package_name* to own the foreground window.
+
+    A stable PID proves the process exists; it does not prove the app launched.
+    Android will happily keep a process alive that never inflates an Activity -
+    an ANR at start, a dropper stub that finishes onCreate and returns, or a
+    launcher intent that resolved to nothing. In that state every UI-driven hook
+    (accessibility, overlay, credential capture) is unreachable, so the run
+    yields no behaviour and the sample looks dormant.
+
+    Returns True as soon as dumpsys reports the package in the focused window.
+    """
+    deadline = time.monotonic() + total_timeout
+    while time.monotonic() < deadline:
+        ok, out = _adb(
+            "-s", device, "shell",
+            "dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'",
+            timeout=10,
+        )
+        if ok and out and package_name in out:
+            return True
+        time.sleep(poll_interval)
+    return False
+
+
 def _collect_crash_diagnostics(
     device: str,
     package_name: str,
@@ -1663,6 +1703,11 @@ class FridaSession:
         # Passed through to AgenticExplorer → ToolExecutor so the correct
         # component name is used in 'settings put secure enabled_accessibility_services'.
         self.accessibility_service_class: Optional[str] = None
+
+        # Set when every launch strategy produced a process but none produced a
+        # foreground window. Downstream this becomes dynamic_status
+        # NO_UI_RENDERED so a UI-less run is never scored as observed behaviour.
+        self.ui_render_failed: bool = False
         # True when the package was still alive after `am force-stop` at the end
         # of the session - a persistence signal (watchdog service, restart
         # receiver), surfaced in the result rather than swallowed.
@@ -2191,6 +2236,14 @@ class FridaSession:
             _launch_intent_ts = time.monotonic()  # first intent issued
             _launch_start_ts  = _launch_intent_ts
 
+            # A stable PID that never owns a window is only accepted once every
+            # strategy has been tried. Held here so the run still proceeds
+            # (headless malware is real) instead of being abandoned.
+            _ui_less_pid: Optional[int] = None
+            _ui_less_step: Optional[str] = None
+            # Only demand a window from packages that actually declare UI.
+            _launcher_activity_expected = bool(self.main_activity)
+
             def _am_start_w(activity_component: str) -> bool:
                 """Issue am start -W for an explicit component. Returns adb success."""
                 ok, _ = _adb(
@@ -2230,6 +2283,27 @@ class FridaSession:
                         "[Frida] Launch step '%s' produced stable PID %d",
                         step_label, pid,
                     )
+
+                    # A PID without a window is not a launch. Keep it as a
+                    # fallback, but let the ladder try the remaining strategies -
+                    # a resolved-launcher or monkey start often renders where a
+                    # bare intent did not.
+                    if _launcher_activity_expected:
+                        if _poll_until_package_owns_window(
+                            self.device_serial, self.package_name,
+                        ):
+                            return True
+                        logger.warning(
+                            "[Frida] Launch step '%s' produced PID %d but %s never "
+                            "owned the foreground window within %.0fs - trying the "
+                            "next launch strategy",
+                            step_label, pid, self.package_name,
+                            LAUNCH_UI_RENDER_SECONDS,
+                        )
+                        nonlocal _ui_less_pid, _ui_less_step
+                        if _ui_less_pid is None:
+                            _ui_less_pid, _ui_less_step = pid, step_label
+                        return False
                     return True
 
                 # Process crashed or never appeared.
@@ -2494,6 +2568,23 @@ class FridaSession:
                     launched = True
                 elif self.crash_report is not None:
                     _crash_on_step = "step7_monkey_launcher"
+
+            # ── Fallback: a process without a window is still a process ───────
+            # Every strategy ran and none produced UI. Rather than abandon the
+            # run, attach to the stable PID we did get and record that no UI ever
+            # rendered, so the risk engine can mark the dynamic axis inconclusive
+            # (NO_UI_RENDERED) instead of scoring the silence as benign.
+            if not launched and _crash_on_step is None and _ui_less_pid is not None:
+                self._stable_pid = _ui_less_pid
+                self.launch_method_used = _ui_less_step or "ui_less_pid"
+                self.ui_render_failed = True
+                launched = True
+                logger.warning(
+                    "[Frida] No launch strategy rendered UI for %s - proceeding with "
+                    "PID %d from '%s'. Behavioural coverage will be limited and the "
+                    "dynamic axis will be reported inconclusive.",
+                    self.package_name, _ui_less_pid, self.launch_method_used,
+                )
 
             # ── Gate: did any step succeed? ───────────────────────────────────
             if not launched:
@@ -3184,10 +3275,55 @@ async def _run_device_session(
         rep_p = provenance.get("repaired_apk_path")
         if rep_p and os.path.exists(rep_p):
             effective_apk_path = rep_p
+
+        # The manifest-derived launcher wins. This used to overwrite it
+        # unconditionally, so a rebuild that guessed its launcher from an
+        # arbitrary DEX class replaced the correct activity with one that cannot
+        # start - the app then installed and never rendered a window.
+        #
+        # The repaired APK is what is actually installed, so its activity is
+        # still used when the real launcher is not declared in the rebuild.
         rep_act = provenance.get("main_activity")
-        if rep_act and rep_act != "MainActivity":
+        rep_acts = provenance.get("activities") or []
+        if main_activity and (not rep_acts or main_activity in rep_acts):
+            logger.info(
+                "[Frida] Keeping manifest launcher activity: %s "
+                "(repaired derivative declares it)", main_activity,
+            )
+        elif rep_act and rep_act != "MainActivity":
+            logger.warning(
+                "[Frida] Manifest launcher %r is not declared by the repaired "
+                "derivative - falling back to its activity: %s",
+                main_activity, rep_act,
+            )
             main_activity = rep_act
-            logger.info(f"[Frida] Using repaired derivative main activity: {main_activity}")
+
+    # Post-install gate: can the platform actually resolve a launcher? A
+    # rebuilt manifest can name a class that is not an Activity, which installs
+    # cleanly and then cannot be started by any means.
+    resolved_component = await loop.run_in_executor(
+        None, _resolve_launcher_activity, device_serial, package_name,
+    )
+    # A component outside the package means the platform could not pick a
+    # launcher for it - typically ResolverActivity, the disambiguation chooser,
+    # which appears when a manifest declares zero or several LAUNCHER entries.
+    if resolved_component and package_name in resolved_component:
+        logger.info("[Frida] Launcher resolves post-install: %s", resolved_component)
+    else:
+        if resolved_component:
+            logger.error(
+                "[Frida] Launcher for %s resolves to %s, which is outside the "
+                "package - the manifest declares no single LAUNCHER activity.",
+                package_name, resolved_component,
+            )
+        base_result["launcher_unresolved"] = True
+        logger.error(
+            "[Frida] No launcher activity resolves for %s after install%s. The "
+            "app cannot be started from the launcher; UI-driven hooks will not "
+            "fire and the dynamic axis will be reported inconclusive.",
+            package_name,
+            " (repaired derivative)" if provenance.get("is_repaired_derivative") else "",
+        )
 
     await loop.run_in_executor(
         None,
@@ -3355,6 +3491,11 @@ async def _run_device_session(
             session.native_hooks_installed,
             session.java_bridge_source or "unknown",
         )
+    elif getattr(session, "ui_render_failed", False):
+        # The process ran but never owned a window, so no UI-driven hook could
+        # fire. Blaming the sample for that silence would score a launch failure
+        # as benign behaviour.
+        dynamic_status = "NO_UI_RENDERED"
     elif session.total_hook_events_received == 0:
         dynamic_status = "NO_BEHAVIOR_OBSERVED"
     else:

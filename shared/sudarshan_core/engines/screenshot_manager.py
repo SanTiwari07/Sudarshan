@@ -345,6 +345,27 @@ class ScreenshotManager:
             layout_hash=layout_hash,
         )
 
+    def capture_async(self, **kwargs: Any) -> None:
+        """
+        Capture on a background thread.
+
+        capture() shells out to adb three times (screencap, pull, rm) and blocks
+        for seconds. Callers on an event loop - the agentic explorer's action
+        loop in particular - must not stall there while a Frida session is live.
+        The thread is registered with the same bookkeeping _on_event uses, so
+        flush_manifest() still waits for it.
+        """
+        def _bg_capture() -> None:
+            try:
+                self.capture(**kwargs)
+            except Exception as exc:
+                logger.debug("[ScreenshotManager] async capture failed: %s", exc)
+
+        thread = threading.Thread(target=_bg_capture, daemon=True)
+        with self._lock:
+            self._pending_threads.add(thread)
+        thread.start()
+
     # -- Event-driven capture -------------------------------------------------
 
     def _on_event(self, event: Dict[str, Any]) -> None:

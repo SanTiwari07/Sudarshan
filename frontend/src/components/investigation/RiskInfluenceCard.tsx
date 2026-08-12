@@ -47,13 +47,21 @@ function buildRows(data: FraudCardData): InfluenceRow[] {
     !dynamicIncluded &&
     (dynamicStatus === 'INSTRUMENTATION_FAILED' || Boolean(dynResult?.error));
   const runtimeNotRun = !frs.dynamic_ran && !data.dynamic_available;
+  // An excluded axis reads as reassurance unless the reason is stated. A sample
+  // that never launched and a sample that actively blocked the sandbox both
+  // produce a zero here, and they are opposite findings.
+  const exclusionReason = frs.dynamic_exclusion_reason?.toUpperCase();
   const dynamicSummary = dynamicIncluded
     ? 'Observed sandbox behaviour contributed to the fraud risk score.'
     : runtimeNotRun
       ? 'Runtime analysis did not run for this case, so this axis was excluded from the final score.'
-      : instrumentationFailed
-        ? 'Runtime instrumentation failed, so sandbox evidence was excluded from the final score.'
-        : 'Runtime execution was inconclusive, so this axis was excluded from the final score.';
+      : exclusionReason === 'NO_UI_RENDERED'
+        ? 'The app never rendered a screen in the sandbox, so no runtime behaviour could be observed. Excluded from the score - this is not evidence the app is safe.'
+        : exclusionReason === 'EVASION_ONLY'
+          ? 'The app ran anti-analysis checks and then did nothing observable. Excluded from the score - evasion is not evidence of safety.'
+          : instrumentationFailed
+            ? 'Runtime instrumentation failed, so sandbox evidence was excluded from the final score.'
+            : 'Runtime execution was inconclusive, so this axis was excluded from the final score.';
   const dynamicContribution = dynamicIncluded
     ? computeWeightedContribution('dynamic', dynamicScore, axesUsed)
     : 0;

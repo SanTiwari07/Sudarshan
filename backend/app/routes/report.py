@@ -57,6 +57,47 @@ def get_cached_report(sha256: str) -> Optional[Any]:
     return None
 
 
+def _has_dynamic_payload(report: Any) -> bool:
+    """True when a report carries the dynamic block, under either key."""
+    if not isinstance(report, dict):
+        return True  # models carry their own shape; do not second-guess them
+    return bool(report.get("dynamic_analysis") or report.get("dynamic_result"))
+
+
+def _normalise_report_shape(report: Any) -> Any:
+    """
+    Reconcile the two names the dynamic block travels under.
+
+    The pipeline result calls it `dynamic_analysis`; the persisted case row calls
+    it `dynamic_result` and keeps `artifact_dir` nested inside it. Every export
+    consumer - report_generator.build_report, pdf_generator.build_pdf_report, and
+    the apk_dir resolution in this module - reads `dynamic_analysis` and a
+    top-level `artifact_dir`. Without this bridge a DB-rehydrated case renders
+    "[DYNAMIC-STATUS: NO TELEMETRY CAPTURED]" and drops every screenshot, even
+    though the telemetry and PNGs are on disk.
+
+    Returns a shallow copy; both key spellings are kept so nothing that reads the
+    original names breaks.
+    """
+    if not isinstance(report, dict):
+        return report
+
+    dyn = report.get("dynamic_analysis") or report.get("dynamic_result")
+    artifact_dir = report.get("artifact_dir") or report.get("_artifact_dir")
+    if isinstance(dyn, dict) and not artifact_dir:
+        artifact_dir = dyn.get("artifact_dir")
+
+    if (report.get("dynamic_analysis") is dyn) and (report.get("artifact_dir") == artifact_dir):
+        return report
+
+    normalised = dict(report)
+    if dyn is not None:
+        normalised["dynamic_analysis"] = dyn
+    if artifact_dir:
+        normalised["artifact_dir"] = artifact_dir
+    return normalised
+
+
 async def load_report(sha256: str) -> Optional[Any]:
     """
     Resolve a report: hot cache first, then the database.
@@ -71,19 +112,23 @@ async def load_report(sha256: str) -> Optional[Any]:
     intelligence.py already had this cache-then-DB shape; report.py never got it.
     """
     report = get_cached_report(sha256)
-    if report is not None:
-        return report
+    if report is not None and _has_dynamic_payload(report):
+        return _normalise_report_shape(report)
 
+    # Both cache writers in upload.py store a thin projection that omits the
+    # dynamic block entirely. Serving that would silently export a static-only
+    # report, so treat a dynamic-less cache entry as a miss and go to the row
+    # that actually holds the telemetry.
     from app.db.database import get_case
     row = await get_case(sha256)
     if row is None:
-        return None
+        return _normalise_report_shape(report) if report is not None else None
 
     # Re-populate the hot cache so repeat exports (HTML, then STIX, then IOCs)
     # do not each pay a database round trip.
     cache_report(sha256, row)
     logger.info(f"[Report] Rehydrated {sha256[:12]}… from the database")
-    return row
+    return _normalise_report_shape(row)
 
 
 # ─── HTML Report Export ──────────────────────────────────────────────────────

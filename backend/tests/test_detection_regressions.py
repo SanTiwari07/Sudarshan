@@ -106,6 +106,88 @@ def test_visibility_floor_lifts_only_for_a_CONCLUSIVE_dynamic_run():
     assert actually_observed["frs_breakdown"]["verdict_floored_for_visibility"] is False
 
 
+def test_empty_dynamic_run_cannot_certify_strong_static_capability_as_safe():
+    """
+    Regression: Cerberus scored 39.11 "Suspicious" then 25.42 "Safe" on the same
+    binary.
+
+    The difference was the sandbox. The first run captured no telemetry, so the
+    dynamic axis was excluded and the static evidence carried the verdict. The
+    second run reached the app, saw no fraud behaviour inside the window, and
+    that 0.0 at 0.35 weight - the heaviest axis - pulled it under the Safe
+    cutoff. Observing nothing scored better than failing to observe, which is
+    backwards: a 90 second window that does not trigger SMS interception is not
+    evidence that the declared SMS interception is absent.
+    """
+    cerberus_shaped = StaticAnalysisFlags(
+        has_sms_read_write=True,
+        has_accessibility_abuse=True,
+        has_system_alert_window=True,
+        has_reflection=True,
+        obfuscation_score=0.75,
+        all_permissions=[
+            "android.permission.READ_SMS",
+            "android.permission.SEND_SMS",
+            "android.permission.RECEIVE_SMS",
+            "android.permission.SYSTEM_ALERT_WINDOW",
+            "android.permission.GET_ACCOUNTS",
+        ],
+    )
+    empty_but_covered_run = {
+        "available": True,
+        "engine": "frida",
+        "dynamic_status": "EVENTS_CAPTURED",
+        "bfci": 0.0,
+        "bfci_components": {
+            "accessibility": 0.0, "sms": 0.0, "overlay": 0.0,
+            "banking": 0.0, "network": 0.0, "persistence": 0.0,
+        },
+        "api_calls": ["ClassLoader.loadClass"],
+        "launch_timeline": {"first_activity": "MainActivity", "first_window": "w"},
+    }
+    res = calculate_risk_score(flags=cerberus_shaped, dynamic_result=empty_but_covered_run)
+    assert res["risk_band"] != "Safe"
+    assert res["frs_breakdown"]["verdict_floored_for_static_evidence"] is True
+
+
+def test_dropper_with_incidental_activity_is_not_rated_safe():
+    """
+    Regression: Anubis scored 8.72 "Safe" on a real run.
+
+    It is a dropper stub - 4 permissions, no accessibility/SMS/overlay declared -
+    so every capability axis reads near zero. The sandbox ran fine and logged one
+    incidental API call, which was enough to mark the run conclusive and switch
+    the visibility floor off, even though BFCI stayed 0.0 because the second
+    stage never deployed. Withholding the payload is the dropper's entire design;
+    it must not be rewarded with a Safe verdict.
+    """
+    anubis_shaped = calculate_risk_score(
+        flags=StaticAnalysisFlags(
+            has_concealed_payload=True,
+            has_reflection=True,
+            obfuscation_score=0.80,
+            all_permissions=[
+                "android.permission.INTERNET",
+                "android.permission.ACCESS_NETWORK_STATE",
+                "android.permission.REQUEST_INSTALL_PACKAGES",
+            ],
+        ),
+        dynamic_result={
+            "available": True,
+            "engine": "frida",
+            "dynamic_status": "EVENTS_CAPTURED",
+            "bfci": 0.0,
+            "bfci_components": {
+                "accessibility": 0.0, "sms": 0.0, "overlay": 0.0,
+                "banking": 0.0, "network": 0.0, "persistence": 0.0,
+            },
+            "api_calls": ["ClassLoader.loadClass"],
+        },
+    )
+    assert anubis_shaped["risk_band"] != "Safe"
+    assert anubis_shaped["frs_breakdown"]["verdict_floored_for_visibility"] is True
+
+
 # ── Bug 4: permissions must reach the PR axis ────────────────────────────────
 # The analysis-engine never passed all_permissions, so _axis_pr fell back to an
 # empty list and the Permission Risk axis (10% of STEI) was always 0.
@@ -211,8 +293,16 @@ def test_conclusive_dynamic_run_is_included():
     assert "dynamic" not in b["axes_excluded"]
 
 
-def test_anti_analysis_events_make_run_conclusive():
-    """Sandbox evasion hooks are observable sample behaviour, not harness noise."""
+def test_anti_analysis_events_alone_do_not_make_a_run_conclusive():
+    """
+    Evasion is the sample resisting observation, not the sample behaving.
+
+    This previously asserted the opposite. Marking an evasion-only run conclusive
+    admitted the dynamic axis at its full 0.35 weight carrying a 0.0 - because
+    anti_analysis has no BFCI weight, the only observable act scores nothing. The
+    net effect was that fingerprinting the sandbox LOWERED a sample's score,
+    rewarding the evasion. The axis is now excluded and the weights renormalise.
+    """
     evasive = dict(_EMPTY_RUN)
     evasive.update(
         anti_analysis_events=[
@@ -222,7 +312,63 @@ def test_anti_analysis_events_make_run_conclusive():
         ],
     )
     res = calculate_risk_score(flags=StaticAnalysisFlags(**_TROJAN), dynamic_result=evasive)
-    assert res["frs_breakdown"]["dynamic_conclusive"] is True
+    b = res["frs_breakdown"]
+
+    assert b["dynamic_conclusive"] is False
+    assert "dynamic" in b["axes_excluded"]
+    assert b["dynamic_exclusion_reason"] == "EVASION_ONLY"
+
+
+def test_evasion_only_run_scores_above_the_same_run_scored_as_conclusive():
+    """An evasive sample must not end up cheaper than a cooperative one."""
+    evasive = dict(_EMPTY_RUN)
+    evasive.update(
+        anti_analysis_events=[{"data": {"hook": "frida_detected"}}],
+    )
+    cooperative = dict(_EMPTY_RUN)
+    cooperative.update(
+        bfci=0.0,
+        api_calls=["Activity.onCreate"],
+        activities_triggered=["MainActivity"],
+    )
+    evasive_res = calculate_risk_score(
+        flags=StaticAnalysisFlags(**_TROJAN), dynamic_result=evasive
+    )
+    cooperative_res = calculate_risk_score(
+        flags=StaticAnalysisFlags(**_TROJAN), dynamic_result=cooperative
+    )
+    assert evasive_res["final_risk_score"] > cooperative_res["final_risk_score"]
+
+
+def test_screenshot_records_alone_do_not_make_a_run_conclusive():
+    """`evidence_record_count` includes ScreenshotManager bookkeeping."""
+    harness_only = dict(_EMPTY_RUN)
+    harness_only.update(
+        evidence_record_count=3,
+        evidence=[{"category": "SCREENSHOT"} for _ in range(3)],
+    )
+    res = calculate_risk_score(
+        flags=StaticAnalysisFlags(**_TROJAN), dynamic_result=harness_only
+    )
+    assert res["frs_breakdown"]["dynamic_conclusive"] is False
+    assert "dynamic" in res["frs_breakdown"]["axes_excluded"]
+
+
+def test_run_without_rendered_ui_is_not_conclusive():
+    """Process started, no Activity or window - the launch failed, not the sample."""
+    never_rendered = dict(_EMPTY_RUN)
+    never_rendered.update(
+        launch_timeline={
+            "first_pid": 62.0,
+            "first_activity": None,
+            "first_window": None,
+        },
+    )
+    res = calculate_risk_score(
+        flags=StaticAnalysisFlags(**_TROJAN), dynamic_result=never_rendered
+    )
+    assert res["frs_breakdown"]["dynamic_conclusive"] is False
+    assert res["frs_breakdown"]["dynamic_exclusion_reason"] == "NO_UI_RENDERED"
 
 
 def test_conclusive_benign_dynamic_run_may_lower_the_score():
@@ -254,26 +400,56 @@ def test_instrumentation_failure_is_not_evidence_of_safety():
     assert "dynamic" in res["frs_breakdown"]["axes_excluded"]
 
 
-def test_instrumentation_failed_with_sample_behavior_is_conclusive():
-    """Native anti-analysis hooks can fire when the Java bridge fails."""
+def test_instrumentation_failed_with_real_sample_behavior_is_conclusive():
+    """
+    A harness fault does not veto behaviour the hooks did capture.
+
+    The original form of this test used anti_analysis events as the "sample
+    behaviour", which now reads as inconclusive by design. The property it was
+    guarding - INSTRUMENTATION_FAILED must not discard real captured behaviour -
+    is asserted here with behaviour that actually carries BFCI weight.
+    """
+    partially_instrumented = {
+        "available": True,
+        "engine": "frida",
+        "dynamic_status": "INSTRUMENTATION_FAILED",
+        "bfci": 0.0,
+        "api_calls": ["SmsManager.sendTextMessage"],
+        "network_logs": [],
+        "activities_triggered": [],
+        "files_accessed": [],
+        "anti_analysis_events": [{"data": {"hook": "frida_detected"}}],
+    }
+    res = calculate_risk_score(
+        flags=StaticAnalysisFlags(**_TROJAN), dynamic_result=partially_instrumented
+    )
+    assert res["frs_breakdown"]["dynamic_conclusive"] is True
+    assert "dynamic" not in res["frs_breakdown"]["axes_excluded"]
+
+
+def test_evasion_only_run_is_never_rated_safe():
+    """The evasion floor: resisting analysis is not evidence of safety."""
     evasive = {
         "available": True,
         "engine": "frida",
         "dynamic_status": "INSTRUMENTATION_FAILED",
         "bfci": 0.0,
-        "api_calls": [],
-        "network_logs": [],
-        "activities_triggered": [],
-        "files_accessed": [],
         "anti_analysis_events": [
             {"data": {"hook": "frida_detected"}},
             {"data": {"hook": "root_check"}},
-            {"data": {"hook": "debugger_check"}},
         ],
     }
-    res = calculate_risk_score(flags=StaticAnalysisFlags(**_TROJAN), dynamic_result=evasive)
-    assert res["frs_breakdown"]["dynamic_conclusive"] is True
-    assert "dynamic" not in res["frs_breakdown"]["axes_excluded"]
+    benign_flags = StaticAnalysisFlags(
+        has_reflection=True,
+        obfuscation_score=0.80,
+        all_permissions=["android.permission.INTERNET"],
+    )
+    clean_run = calculate_risk_score(flags=benign_flags)
+    assert clean_run["risk_band"] == "Safe", "fixture drifted - baseline must be Safe"
+
+    res = calculate_risk_score(flags=benign_flags, dynamic_result=evasive)
+    assert res["risk_band"] != "Safe"
+    assert res["frs_breakdown"]["verdict_floored_for_evasion"] is True
 
 
 def test_evidence_record_count_makes_run_conclusive():

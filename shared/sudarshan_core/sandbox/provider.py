@@ -37,6 +37,7 @@ from sudarshan_core.sandbox.exceptions import (
 )
 from sudarshan_core.sandbox.frida_assets import (
     FridaBinarySpec,
+    ensure_frida_server,
     locate_frida_server,
     missing_binary_message,
     supported_host_abis,
@@ -411,21 +412,37 @@ class SandboxProvider(ABC):
         return running, text
 
     def resolve_frida_binary(self, serial: str, abi: str = "", abilist: str = "") -> FridaBinarySpec:
-        """Locate the host Frida server matching the device ABI."""
+        """
+        Locate the host Frida server matching the device ABI, fetching it if absent.
+
+        The binary lives in a gitignored directory (it exceeds GitHub's file size
+        limit), so a fresh clone has none and dynamic analysis fails until
+        somebody downloads one by hand - the reason this works on one machine and
+        not the next. ensure_frida_server() downloads the pinned version for the
+        detected ABI on first use and caches it; set
+        SUDARSHAN_FRIDA_AUTO_DOWNLOAD=0 on air-gapped hosts to keep the old
+        locate-only behaviour.
+        """
         if not abi:
             info = self.get_device_info(serial)
             abi = info.abi
             abilist = info.abilist
-        search_dirs = None
         if self.config.frida_server_dir:
             from pathlib import Path
 
-            search_dirs = [Path(self.config.frida_server_dir)]
-        return locate_frida_server(
+            spec = locate_frida_server(
+                abi,
+                abilist=abilist,
+                version=self.config.frida_version,
+                search_dirs=[Path(self.config.frida_server_dir)],
+            )
+            if spec.found and spec.path is not None:
+                return spec
+
+        return ensure_frida_server(
             abi,
             abilist=abilist,
             version=self.config.frida_version,
-            search_dirs=search_dirs,
         )
 
     def push_frida_server(self, serial: str, abi: str = "", abilist: str = "") -> str:

@@ -61,12 +61,19 @@ FRIDA_SERVER_DIR = Path(
 
 
 def _resolve_frida_bin_for_device(serial: str):
-    """Locate ABI-matched frida-server; never silently use the wrong arch."""
-    from sudarshan_core.sandbox.frida_assets import locate_frida_server, missing_binary_message
+    """
+    Resolve the ABI-matched frida-server, downloading it when absent.
+
+    tools/ is gitignored (the binary exceeds GitHub's 100 MB file limit), so a
+    fresh clone has nothing to push and this script used to stop with "place the
+    binary here". Fetching the pinned version for the detected ABI makes setup
+    work on a machine that has only ever run `git clone`.
+    """
+    from sudarshan_core.sandbox.frida_assets import ensure_frida_server, missing_binary_message
 
     provider = get_sandbox_provider()
     info = provider.get_device_info(serial)
-    spec = locate_frida_server(
+    spec = ensure_frida_server(
         info.abi,
         abilist=info.abilist,
         version=CFG.frida_version,

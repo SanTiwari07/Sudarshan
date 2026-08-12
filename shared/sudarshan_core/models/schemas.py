@@ -83,11 +83,18 @@ class FRSBreakdown(BaseModel):
     # Why a verdict may be floored despite a low arithmetic score.
     concealed_payload: bool = False
     verdict_floored_for_visibility: bool = False
+    verdict_floored_for_evasion: bool = False
 
     # Distinguishes "the sandbox ran and saw nothing" from "the sandbox ran and
     # observed real behaviour" - only the latter is scored.
     dynamic_ran: bool = False
     dynamic_conclusive: bool = False
+
+    # Why the dynamic axis was excluded: NO_UI_RENDERED, EVASION_ONLY,
+    # INSTRUMENTATION_FAILED, NO_BEHAVIOR_OBSERVED, DYNAMIC_UNAVAILABLE, or None
+    # when the axis was scored. An excluded axis reads as a clean bill of health
+    # unless the reason travels with it.
+    dynamic_exclusion_reason: Optional[str] = None
 
 
 # ─── Threat Scenario Table ────────────────────────────────────────────────────

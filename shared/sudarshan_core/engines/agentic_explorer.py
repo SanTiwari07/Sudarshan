@@ -64,6 +64,14 @@ logger = logging.getLogger(__name__)
 # Maximum actions the agent may take before stopping.
 ACTION_BUDGET: int = int(os.getenv("SUDARSHAN_AGENT_ACTION_BUDGET", "25"))
 
+# Capture one screenshot per executed action so the report shows what every
+# click did. Perception's own screenshots are conditional and hash-deduped, so
+# without this a click that does not visibly change the screen leaves no trace.
+# Set SUDARSHAN_ACTION_EVIDENCE_FRAMES=0 to fall back to conditional capture.
+ACTION_EVIDENCE_FRAMES: bool = os.getenv(
+    "SUDARSHAN_ACTION_EVIDENCE_FRAMES", "1"
+).strip().lower() not in ("0", "false", "no")
+
 # Frida-silence threshold: stop if no new events for this many consecutive actions.
 FRIDA_SILENCE_THRESHOLD: int = int(os.getenv("SUDARSHAN_AGENT_SILENCE_THRESHOLD", "5"))
 
@@ -486,6 +494,33 @@ class AgenticExplorer:
 
                 if obs.screenshot_taken:
                     self.benchmark.record_screenshot()
+
+                # ── Per-action evidence frame ──────────────────────────────────
+                # Perception only screenshots when its 5-trigger tree fires and
+                # the screen hash changed, so an analyst reading the report could
+                # not see what each click actually did. Capture one frame per
+                # executed action, forced past the perceptual-hash dedup: two
+                # taps that look identical are still two distinct pieces of
+                # evidence about what the app was asked to do.
+                if self.screenshot_manager is not None and ACTION_EVIDENCE_FRAMES:
+                    try:
+                        # Async: capture() blocks on three adb round-trips, and
+                        # stalling this loop while a Frida session is live drops
+                        # the transport.
+                        self.screenshot_manager.capture_async(
+                            label=f"action_{actions_taken:02d}_{tool}",
+                            category="explorer_action",
+                            source="explorer",
+                            reason="EXPLORER_ACTION",
+                            explorer_action=f"{tool}:{target}" if target else tool,
+                            activity=obs.activity,
+                            stage=action.get("goal", ""),
+                            force=True,
+                        )
+                    except Exception as exc:
+                        logger.debug(
+                            "[AgenticExplorer] per-action capture failed: %s", exc
+                        )
 
                 # Log to attack_timeline
                 self.attack_timeline.append({

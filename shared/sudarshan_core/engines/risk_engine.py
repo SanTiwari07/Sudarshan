@@ -470,13 +470,36 @@ def _calculate_bfci_from_frida(dynamic: Dict) -> Tuple[float, List[str]]:
 # sample rather than evidence about the sandbox.
 _MIN_DYNAMIC_EVENTS = 1
 
+# STEI at or above this is strong declared fraud capability: SMS interception,
+# accessibility abuse, overlay, or a comparable combination. See the static
+# evidence floor in calculate_risk_score for why it matters.
+_STEI_STRONG = 50.0
+
+# BFCI at or above this is treated as a substantive behavioural observation:
+# enough to call a run conclusive on its own, and enough to accept that the
+# sandbox actually saw a concealed payload deploy.
+_BFCI_SUBSTANTIVE = 20.0
+
 _OBSERVED_BEHAVIOR_FIELDS = (
     "api_calls",
     "network_logs",
     "activities_triggered",
     "files_accessed",
-    "anti_analysis_events",
 )
+
+# Evidence categories the harness writes about ITSELF. A screenshot record proves
+# the sandbox took a screenshot; it says nothing about what the sample did, so it
+# must never satisfy the conclusiveness threshold.
+_HARNESS_EVIDENCE_CATEGORIES = frozenset({
+    "SCREENSHOT",
+    "HARNESS",
+    "DIAGNOSTIC",
+})
+
+# Evasion is the sample resisting observation, not the sample behaving. It is
+# counted separately so an evasion-only run reads as "we were blocked", never as
+# "we looked and found nothing".
+_EVASION_EVIDENCE_CATEGORIES = frozenset({"ANTI_ANALYSIS"})
 
 
 def _count_observed_sample_behavior(dynamic: Dict) -> int:
@@ -488,25 +511,82 @@ def _count_observed_sample_behavior(dynamic: Dict) -> int:
             observed += len(value or [])
         except TypeError:
             continue
+
+    # frida_events is a dict of per-category buckets. Every bucket except the
+    # evasion one is sample behaviour.
+    buckets = dynamic.get("frida_events")
+    if isinstance(buckets, dict):
+        for name, events in buckets.items():
+            if str(name).upper() in _EVASION_EVIDENCE_CATEGORIES:
+                continue
+            try:
+                observed += len(events or [])
+            except TypeError:
+                continue
     return observed
+
+
+def _count_behavioural_evidence_records(dynamic: Dict) -> int:
+    """
+    Flushed evidence records that describe the SAMPLE, not the harness.
+
+    `evidence_record_count` is a bare total that includes ScreenshotManager
+    bookkeeping - on an evasion-only run it read 4 (1 real finding + 3 screenshot
+    records) and single-handedly marked the run conclusive. Only the itemised
+    `evidence` list can be filtered, so when it is absent this returns 0 rather
+    than falling back to the unfiltered total.
+    """
+    records = dynamic.get("evidence")
+    if not isinstance(records, list):
+        return 0
+
+    behavioural = 0
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        category = str(record.get("category") or "").upper()
+        if category in _HARNESS_EVIDENCE_CATEGORIES:
+            continue
+        if category in _EVASION_EVIDENCE_CATEGORIES:
+            continue
+        behavioural += 1
+    return behavioural
+
+
+def _ui_never_rendered(dynamic: Dict) -> bool:
+    """
+    True when the process started but never presented an Activity or window.
+
+    A sample that never rendered UI never reached the code paths the behavioural
+    hooks cover, so a zero from that run describes the launch, not the sample.
+    """
+    timeline = dynamic.get("launch_timeline")
+    if not isinstance(timeline, dict):
+        return False
+    if "first_activity" not in timeline and "first_window" not in timeline:
+        return False
+    return timeline.get("first_activity") is None and timeline.get("first_window") is None
 
 
 def _dynamic_behavior_is_conclusive(dynamic: Dict) -> bool:
     """Whether observable sample behaviour exceeds the conclusive threshold."""
     observed = _count_observed_sample_behavior(dynamic)
-    try:
-        evidence_records = int(dynamic.get("evidence_record_count") or 0)
-    except (TypeError, ValueError):
-        evidence_records = 0
+    behavioural_records = _count_behavioural_evidence_records(dynamic)
     try:
         bfci_val = float(dynamic.get("bfci") or 0.0)
     except (TypeError, ValueError):
         bfci_val = 0.0
-    return (
-        observed >= _MIN_DYNAMIC_EVENTS
-        or evidence_records >= _MIN_DYNAMIC_EVENTS
-        or bfci_val >= 20.0
-    )
+
+    if bfci_val >= _BFCI_SUBSTANTIVE:
+        return True
+
+    if observed < _MIN_DYNAMIC_EVENTS and behavioural_records < _MIN_DYNAMIC_EVENTS:
+        return False
+
+    # Behaviour was seen; a run that never rendered UI is still trustworthy only
+    # if that behaviour is what produced the signal, which the checks above have
+    # now established.
+    return True
 
 
 def reconcile_frs_breakdown(
@@ -549,6 +629,7 @@ def reconcile_frs_breakdown(
             "dynamic_ran": dynamic_available,
             "dynamic_available": dynamic_available,
             "dynamic_conclusive": dynamic_conclusive,
+            "dynamic_exclusion_reason": dynamic_exclusion_reason(dynamic_result),
             "axes_used": axes_used,
             "axes_excluded": axes_excluded,
         }
@@ -556,41 +637,68 @@ def reconcile_frs_breakdown(
     return reconciled
 
 
+_INCONCLUSIVE_STATUSES = frozenset({
+    "NO_BEHAVIOR_OBSERVED",
+    "NO_UI_RENDERED",
+    "INSTRUMENTATION_FAILED",
+    "TIMEOUT",
+    "FAILED",
+})
+
+
+def dynamic_exclusion_reason(dynamic: Optional[Dict]) -> Optional[str]:
+    """
+    Why the dynamic axis cannot be scored, or None when it can.
+
+    Consumers (report copy, the frontend runtime-behaviour card) need to tell an
+    analyst *why* the axis reads zero. "No behaviour observed" and "the sample
+    blocked us" are opposite claims and must not render identically.
+    """
+    if not dynamic or not dynamic.get("available", False):
+        return "DYNAMIC_UNAVAILABLE"
+
+    status = str(dynamic.get("dynamic_status") or "").upper()
+    outcome = str(dynamic.get("outcome") or "").upper()
+
+    if _dynamic_behavior_is_conclusive(dynamic):
+        if status == "NO_BEHAVIOR_OBSERVED":
+            return "NO_BEHAVIOR_OBSERVED"
+        return None
+
+    if _ui_never_rendered(dynamic):
+        return "NO_UI_RENDERED"
+
+    evasion_events = dynamic.get("anti_analysis_events")
+    try:
+        evasion_seen = len(evasion_events or []) > 0
+    except TypeError:
+        evasion_seen = False
+    if evasion_seen:
+        return "EVASION_ONLY"
+
+    if status in _INCONCLUSIVE_STATUSES or outcome == "FAILED":
+        return status or "FAILED"
+
+    return "NO_BEHAVIOR_OBSERVED"
+
+
 def _dynamic_run_was_conclusive(dynamic: Optional[Dict]) -> bool:
     """
     Did the sandbox actually observe enough to reason about?
 
     A run is conclusive when the sample exhibited enough observable behaviour
-    (hook events, flushed evidence records, or BFCI >= 20). Harness faults
+    (hook events, behavioural evidence records, or BFCI >= 20). Harness faults
     (INSTRUMENTATION_FAILED) do not override real sample behaviour - native
     anti-analysis hooks can still fire when the Java bridge fails.
+
+    Three things deliberately do NOT make a run conclusive, because each would
+    let a launch failure masquerade as a clean bill of health at the dynamic
+    axis's full 0.35 weight:
+      * screenshot/harness evidence records (see _count_behavioural_evidence_records)
+      * anti-analysis events alone - evasion is resistance, not behaviour
+      * a run where the process started but never rendered UI
     """
-    if not dynamic or not dynamic.get("available", False):
-        return False
-
-    status = str(dynamic.get("dynamic_status") or "").upper()
-    outcome = str(dynamic.get("outcome") or "").upper()
-    observed = _count_observed_sample_behavior(dynamic)
-    try:
-        evidence_records = int(dynamic.get("evidence_record_count") or 0)
-    except (TypeError, ValueError):
-        evidence_records = 0
-    try:
-        bfci_val = float(dynamic.get("bfci") or 0.0)
-    except (TypeError, ValueError):
-        bfci_val = 0.0
-    behavior_conclusive = _dynamic_behavior_is_conclusive(dynamic)
-
-    if behavior_conclusive:
-        # Explicit dormancy: hooks ran but the sample produced zero events.
-        if status == "NO_BEHAVIOR_OBSERVED":
-            return False
-        return True
-
-    if status in {"NO_BEHAVIOR_OBSERVED", "INSTRUMENTATION_FAILED", "TIMEOUT", "FAILED"} or outcome == "FAILED":
-        return False
-
-    return False
+    return dynamic_exclusion_reason(dynamic) is None
 
 
 
@@ -897,17 +1005,107 @@ def calculate_risk_score(
     #
     # This does NOT assert the sample is malicious - the score is left untouched.
     # It refuses to certify as safe something that was never actually analysed,
-    # and says so in the evidence. Dynamic analysis, which sees the unpacked
-    # payload, is what resolves the ambiguity; if it ran, the score stands on its
-    # own and no floor is applied.
+    # and says so in the evidence.
+    #
+    # What resolves the ambiguity is dynamic analysis that ACTUALLY OBSERVED the
+    # payload, not merely a run that completed. Gating on `dynamic_conclusive`
+    # alone let a dropper walk: Anubis produced one incidental API call, enough
+    # to mark the run conclusive, while BFCI stayed 0.0 because the second stage
+    # never deployed inside the capture window. The floor switched off and a
+    # banking trojan scored 8.72 "Safe". A dropper that withholds its payload is
+    # exactly the case this floor exists for, so the test is whether the dynamic
+    # axis scored anything - not whether the sandbox managed to run.
+    # "Observed the payload" means the run produced a SUBSTANTIVE fraud-relevant
+    # signal, not a trickle. Two real cases set this bar:
+    #   * Anubis logged one incidental API call and zero weighted behaviour.
+    #   * Octo scored BFCI 4.8 - its network component maxed at 96 but network
+    #     carries a 0.05 weight - and that 4.8 was enough to lift the floor and
+    #     certify a heavily obfuscated sample with a concealed payload, static
+    #     accessibility and SMS flags, and 31 permissions as "Safe" at 29.49.
+    # Both the computed axis score and the sandbox's reported BFCI are consulted,
+    # because the axis recomputes from bfci_components and reads 0 when a payload
+    # reports bfci without them.
+    try:
+        _reported_bfci = float((dynamic_result or {}).get("bfci") or 0.0)
+    except (TypeError, ValueError):
+        _reported_bfci = 0.0
+    payload_was_observed = dynamic_conclusive and (
+        dynamic_score >= _BFCI_SUBSTANTIVE or _reported_bfci >= _BFCI_SUBSTANTIVE
+    )
+
     visibility_floored = False
-    if band == "Safe" and not dynamic_conclusive and flags_dict.get("has_concealed_payload"):
+    if band == "Safe" and flags_dict.get("has_concealed_payload") and not payload_was_observed:
         band = "Suspicious"
         visibility_floored = True
+        if dynamic_conclusive:
+            stei_evidence.append(
+                "VERDICT FLOORED: payload is concealed and the sandbox observed "
+                "no payload behaviour, so the code that actually runs was never "
+                "seen. Not rated Safe - a dropper withholding its second stage "
+                "produces exactly this result."
+            )
+        else:
+            stei_evidence.append(
+                "VERDICT FLOORED: payload is concealed and no dynamic analysis was "
+                "available, so static analysis could not observe the code that will "
+                "actually run. Not rated Safe - run dynamic analysis to resolve."
+            )
+
+    # ── Static evidence floor ─────────────────────────────────────────────────
+    # An empty sandbox run must not overturn strong declared capability.
+    #
+    # Cerberus: STEI 53.73 from READ/SEND/RECEIVE_SMS across 17 permissions. One
+    # run captured no telemetry, the dynamic axis was excluded, and it scored
+    # 39.11 "Suspicious". The next run reached the app, observed no fraud
+    # behaviour within the window, and that 0.0 at 0.35 weight pulled the same
+    # binary to 25.42 "Safe" - observing nothing scored worse than failing to
+    # observe. A 90 second window not triggering SMS interception is not evidence
+    # that the SMS interception is absent; the permissions are still declared.
+    #
+    # Scoring is untouched. This only refuses the Safe certification, and only
+    # when the sandbox produced no fraud-relevant signal at all.
+    static_evidence_floored = False
+    if (
+        band == "Safe"
+        and stei >= _STEI_STRONG
+        and dynamic_score <= 0.0
+        and _reported_bfci <= 0.0
+    ):
+        band = "Suspicious"
+        static_evidence_floored = True
         stei_evidence.append(
-            "VERDICT FLOORED: payload is concealed and no dynamic analysis was "
-            "available, so static analysis could not observe the code that will "
-            "actually run. Not rated Safe - run dynamic analysis to resolve."
+            f"VERDICT FLOORED: static analysis found strong fraud capability "
+            f"(STEI {stei:.1f}) and the sandbox observed no behaviour that "
+            f"refutes it. Not rated Safe - an empty run is not an acquittal."
+        )
+
+    # ── Evasion floor ─────────────────────────────────────────────────────────
+    # A sample that fingerprints the sandbox has told us something about itself,
+    # but it scores nothing: anti_analysis carries no BFCI weight, so the only
+    # observable act on an evasion-only run contributes exactly 0.0. Combined
+    # with the dynamic axis being excluded, active evasion could leave a verdict
+    # of "Safe" - the sample's counter-analysis working as designed.
+    #
+    # Like the visibility floor above, this does not invent a score. It refuses
+    # to certify as safe a sample that resisted being observed, and says so.
+    evasion_floored = False
+    evasion_reason = dynamic_exclusion_reason(dynamic_result) if dynamic_available else None
+    try:
+        evasion_event_count = len((dynamic_result or {}).get("anti_analysis_events") or [])
+    except TypeError:
+        evasion_event_count = 0
+    if (
+        band == "Safe"
+        and not dynamic_conclusive
+        and evasion_event_count > 0
+        and evasion_reason in {"EVASION_ONLY", "NO_UI_RENDERED", "INSTRUMENTATION_FAILED"}
+    ):
+        band = "Suspicious"
+        evasion_floored = True
+        dynamic_evidence.append(
+            f"VERDICT FLOORED: the sample performed {evasion_event_count} "
+            "anti-analysis check(s) and then produced no observable behaviour, so "
+            "the sandbox run cannot certify it. Evasion is not evidence of safety."
         )
 
     # ── Confidence ───────────────────────────────────────────────────────────
@@ -951,6 +1149,11 @@ def calculate_risk_score(
             "dynamic_ran": dynamic_available,
             "dynamic_conclusive": dynamic_conclusive,
             "verdict_floored_for_visibility": visibility_floored,
+            "verdict_floored_for_evasion": evasion_floored,
+            "verdict_floored_for_static_evidence": static_evidence_floored,
+            # Why the dynamic axis could not be scored. The UI must distinguish
+            # "nothing bad happened" from "we never got to look".
+            "dynamic_exclusion_reason": evasion_reason,
             "dynamic_available": dynamic_available,
             # 5-axis STEI breakdown
             "stei_axes": {

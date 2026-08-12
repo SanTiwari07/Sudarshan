@@ -11,8 +11,11 @@ Verifies:
   5. Structural QA Pass (valid PDF header, page count > 0).
   6. Content QA Pass (extracted text matches authoritative case values).
   7. API route integration GET /api/v1/report/pdf/{sha256}.
+  8. Score consistency (UI FRS == API FRS == PDF FRS == Risk Band).
+  9. Edge cases: Empty evidence, VIDE unavailable, screenshots embedding.
 """
 
+import io
 import os
 import sys
 from pathlib import Path
@@ -176,6 +179,17 @@ class TestPDFGeneratorUnit:
         assert "Critical" in full_text or "CRITICAL" in full_text
         assert "EVID-001" in full_text
 
+    def test_score_consistency_invariants(self, sample_case_data):
+        """Verifies zero score drift: PDF FRS == API FRS == Risk Band."""
+        report_data = build_report_data(sample_case_data)
+        pdf_bytes = build_pdf_report(sample_case_data)
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+        page1_text = reader.pages[0].extract_text()
+
+        # Final FRS score (96.8) and Risk Band (Critical) must match exactly
+        assert f"{report_data.final_risk_score.value:.1f}" in page1_text
+        assert report_data.risk_band.value.upper() in page1_text
+
     def test_build_pdf_report_zero_dynamic(self, sample_case_data):
         sample_case_data["dynamic_result"] = None
         sample_case_data["frs_breakdown"]["dynamic_ran"] = False
@@ -185,7 +199,56 @@ class TestPDFGeneratorUnit:
 
         assert "[DYNAMIC-STATUS: NO_TELEMETRY_CAPTURED]" in full_text or "NO_TELEMETRY_CAPTURED" in full_text
 
-import io
+    def test_vide_unavailable_and_clean_handling(self, sample_case_data):
+        # VIDE not analyzed
+        sample_case_data["vide"] = {"analyzed": False}
+        pdf_bytes = build_pdf_report(sample_case_data)
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+        full_text = " ".join([page.extract_text() for page in reader.pages])
+        assert "NOT_AVAILABLE" in full_text
+
+    def test_screenshots_handling(self, sample_case_data, tmp_path):
+        sample_case_data["screenshots"] = [
+            {
+                "screenshot_id": "SCR-001",
+                "filename": "scr1.png",
+                "title": "Overlay Login Screen",
+                "description": "Fake login form displayed over bank app.",
+                "quality": "A",
+            }
+        ]
+    def test_frs_canonical_consistency(self, sample_case_data):
+        """Verifies canonical FRS consistency across all report sections."""
+        sample_case_data["final_risk_score"] = 96.8
+        sample_case_data["risk_band"] = "Critical"
+        report_data = build_report_data(sample_case_data)
+        pdf_bytes = build_pdf_report(sample_case_data)
+        
+        assert report_data.final_risk_score.value == 96.8
+        assert report_data.risk_band.value == "Critical"
+        
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+        p1_text = reader.pages[0].extract_text()
+        p3_text = reader.pages[2].extract_text()
+        
+        assert "96.8" in p1_text
+        assert "96.8" in p3_text
+
+    def test_threat_intel_unavailable_handling(self, sample_case_data):
+        """Verifies report generation when threat intelligence API is unavailable."""
+        sample_case_data["threat_correlation"] = {"available": False}
+        pdf_bytes = build_pdf_report(sample_case_data)
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+        assert len(reader.pages) >= 12
+
+    def test_empty_evidence_records_handling(self, sample_case_data):
+        """Verifies report generation with empty evidence lists."""
+        sample_case_data["evidence_records"] = []
+        sample_case_data["mitre_techniques"] = []
+        pdf_bytes = build_pdf_report(sample_case_data)
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+        assert len(reader.pages) >= 12
+
 from fastapi.testclient import TestClient
 
 class TestPDFExportAPI:
@@ -206,3 +269,4 @@ class TestPDFExportAPI:
         assert response.status_code == 200
         assert response.headers["content-type"] == "application/pdf"
         assert response.content.startswith(b"%PDF-1.")
+

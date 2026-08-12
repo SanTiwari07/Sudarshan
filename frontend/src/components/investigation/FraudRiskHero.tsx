@@ -86,11 +86,11 @@ export default function FraudRiskHero({ data }: { data: FraudCardData }) {
               <div className="xl:col-span-4 p-5 rounded-xl bg-slate-50/90 border border-slate-200/90 shadow-2xs flex flex-col items-center justify-center text-center space-y-3">
                 <ScoreRing score={score} pct={pct} strokeClass={riskStyle.text} />
                 <div className="flex flex-col items-center space-y-1.5 pt-1">
-                  <span className="inline-flex items-center px-3 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200/80 shadow-2xs">
-                    SAFE
+                  <span className={`inline-flex items-center px-3 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider ${riskStyle.badge} border shadow-2xs`}>
+                    {data.risk_band ? data.risk_band.toUpperCase() : 'SAFE'}
                   </span>
                   <h3 className="text-2xl font-black text-slate-900 tracking-tight uppercase">
-                    LOW RISK
+                    {data.risk_band ? data.risk_band.toUpperCase() : 'LOW RISK'}
                   </h3>
                   <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600 font-mono tracking-wide uppercase">
                     <HelpTerm term="Risk Score">Fraud Risk Score (FRS)</HelpTerm>
@@ -160,7 +160,8 @@ export default function FraudRiskHero({ data }: { data: FraudCardData }) {
                 {/* Concise APK Assessment */}
                 <div className="pt-2 border-t border-slate-200/70">
                   <p className="text-xs sm:text-[12.5px] text-slate-700 leading-relaxed font-sans">
-                    This Android banking application provides account management and fund transfer functionality. The analysis identified some static risk indicators, but no verified malicious runtime behaviour or critical threat intelligence matches were observed. Overall, the evidence currently supports a low-risk classification with limited indicators requiring analyst attention.
+                    {data.intelligence_report?.plain_english_narrative ||
+                      `Analysis evaluated static threat indicators, runtime behavior, and threat intelligence correlation for ${packageName}. Evidence supports a ${data.risk_band || 'Safe'} classification.`}
                   </p>
                 </div>
               </div>
@@ -175,7 +176,8 @@ export default function FraudRiskHero({ data }: { data: FraudCardData }) {
                 </h4>
               </div>
               <p className="text-xs sm:text-sm text-slate-700 leading-relaxed font-sans">
-                Static analysis contributed the majority of the observed risk signals, while runtime behaviour produced no verified malicious events. Threat intelligence correlation showed limited external risk indicators. These combined findings resulted in an overall Fraud Risk Score of 29/100.
+                {data.risk_explanation?.evidence_lines?.[0] ||
+                  `Static analysis, runtime behaviour, and threat intelligence correlation were evaluated. These combined findings resulted in an overall Fraud Risk Score of ${Math.round(score)}/100 (${data.risk_band || 'Safe'}).`}
               </p>
             </div>
 

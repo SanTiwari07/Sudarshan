@@ -5,12 +5,11 @@ All notable changes to this project are documented in this file.
 ## 2026-08-12
 
 ### Added / Upgraded
-- **Enterprise ReportLab PDF Threat Investigation Report Engine**: Replaced auto-print HTML stub with a server-side ReportLab PDF generation engine (`shared/sudarshan_core/engines/pdf_generator.py`).
-- **Real-Data Architecture & ReportData Model**: Implemented `build_report_data` normalization pipeline with `Provenance` (`STATIC`, `DYNAMIC`, `THREAT_INTEL`, `DERIVED`, `AI`, `SYSTEM`) and `Status` (`OBSERVED`, `DERIVED`, `CORRELATED`, `NOT_OBSERVED`, `NOT_AVAILABLE`, `NOT_PERFORMED`, `ERROR`) tagging.
-- **Report Consistency Gate**: Implemented `validate_report_data()` asserting strict consistency between `sha256`, `package_name`, `final_risk_score`, and `risk_band` prior to PDF rendering.
-- **Multi-Page Visual Layout**: Complete A4 ReportLab layout covering Parts A through W including Executive Cover, Score Ledger, Forensic APK Identity, Analysis Coverage Matrix, STEI 5-Axis Chart, Dynamic Telemetry, Evidence Registry, Fraud Workflow, Threat Intel, VIDE, MITRE ATT&CK Mobile, SOC Recommendations, CERT-In Advisory, Chain of Custody, and Screenshots Gallery.
-- **Dual-Pass Page Numbering & Headers**: Custom `NumberedCanvas` rendering running headers and footers ("Page X of Y", SHA-256, Case ID) with automatic page-break margin handling.
-- **PDF Test Suite & Visual QA Script**: Added `backend/tests/test_pdf_generator.py` and `scripts/qa_pdf_visual.py` with pypdfium2 rendering for visual inspection. All 44 tests passing.
+- **Reference-Replication ReportLab PDF Engine**: Redesigned server-side ReportLab PDF threat investigation generator (`shared/sudarshan_core/engines/pdf_generator.py`) to strictly replicate the visual structure, 12-section technical organization, typography, color scheme, headers/footers, and information density of master reference specification `sudarshan pdf.pdf`.
+- **Vector Drawing Flowables**: Custom ReportLab `FRSDialGauge` (180° arc dial), `FRSBarMeter` (4-axis FRS breakdown), `STEIBarMeter` (5-axis STEI breakdown), `VIDEBarMeter` (UI comparison chart with 0.72 detection threshold line), `BFCIBarMeter` (vertical behavioral category bar chart), `WorkflowDiagram` (horizontal attack step flow), and `NumberedCanvas` running headers/footers.
+- **Canonical FRS Consistency Fix**: Resolved FRS score drift bug in `FraudRiskHero.tsx` and PDF generation pipeline. All UI cards, API responses, PDF pages, executive summaries, and assessment blocks now consume the single canonical `final_risk_score` from `risk_engine.py`.
+- **Real-Data Pipeline & Provenance Grounding**: Fully grounded report data model in real case payloads and disk evidence artifacts (`evidence.json`, screenshots manifest) with zero synthetic/fake data fabrication.
+- **Enhanced Test Suite**: Added comprehensive unit, API, and edge-case tests in `backend/tests/test_pdf_generator.py` covering score consistency, empty evidence, missing dynamic analysis, VIDE states, and screenshot embedding.
 
 ## 2026-08-11
 

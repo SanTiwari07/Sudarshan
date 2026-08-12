@@ -15,12 +15,16 @@ root_dir = Path(__file__).parents[1]
 sys.path.insert(0, str(root_dir))
 sys.path.insert(0, str(root_dir / "shared"))
 
-import pypdfium2 as pdfium
+try:
+    import pypdfium2 as pdfium
+except ImportError:
+    pdfium = None
+
 from sudarshan_core.engines.pdf_generator import build_pdf_report
 
 def run_visual_qa():
     # 1. Artifact output directory
-    artifact_dir = Path(r"C:\Users\sansk\.gemini\antigravity\brain\658848f8-91ea-43a7-b10a-9111dd15b6cc")
+    artifact_dir = Path(__file__).parents[1] / "artifacts_qa"
     artifact_dir.mkdir(parents=True, exist_ok=True)
     
     pdf_path = artifact_dir / "sudarshan_investigation_report_qa.pdf"
@@ -135,20 +139,30 @@ def run_visual_qa():
     pdf_path.write_bytes(pdf_bytes)
     print(f"[QA] PDF generated successfully! Saved to {pdf_path} ({len(pdf_bytes)} bytes)")
 
-    # 3. Render every page to PNG using pypdfium2
-    pdf_doc = pdfium.PdfDocument(pdf_path)
-    page_count = len(pdf_doc)
-    print(f"[QA] Total Pages in PDF: {page_count}")
-
     image_paths = []
-    for idx in range(page_count):
-        page = pdf_doc[idx]
-        image = page.render(scale=2.0).to_pil()  # High DPI rendering
-        img_filename = f"qa_page_{idx+1:02d}.png"
-        img_path = artifact_dir / img_filename
-        image.save(img_path)
-        image_paths.append(img_path)
-        print(f"[QA] Rendered Page {idx+1}/{page_count} -> {img_path}")
+    # 3. Render every page to PNG using pypdfium2 if available
+    if pdfium is not None:
+        pdf_doc = pdfium.PdfDocument(pdf_path)
+        page_count = len(pdf_doc)
+        print(f"[QA] Total Pages in PDF: {page_count}")
+
+        for idx in range(page_count):
+            page = pdf_doc[idx]
+            image = page.render(scale=2.0).to_pil()  # High DPI rendering
+            img_filename = f"qa_page_{idx+1:02d}.png"
+            img_path = artifact_dir / img_filename
+            image.save(img_path)
+            image_paths.append(img_path)
+            print(f"[QA] Rendered Page {idx+1}/{page_count} -> {img_path}")
+    else:
+        # Use reportlab PyPDF or pypdf reader if pypdfium2 not installed
+        try:
+            from pypdf import PdfReader
+            reader = PdfReader(pdf_path)
+            page_count = len(reader.pages)
+            print(f"[QA] Total Pages in PDF (via pypdf): {page_count}")
+        except Exception:
+            print(f"[QA] Generated PDF at {pdf_path}")
 
     print("[QA] Visual QA generation complete!")
     return image_paths

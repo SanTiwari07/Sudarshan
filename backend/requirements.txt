@@ -36,6 +36,7 @@ python-dotenv
 pytesseract
 Pillow
 yara-python
+reportlab
 
 # Streaming support for Investigation Assistant
 sse-starlette

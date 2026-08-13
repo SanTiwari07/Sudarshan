@@ -302,15 +302,101 @@ export type VideSignerResult = {
   evidence_lines?: string[];
 };
 
+/** One node of the normalised suspect view hierarchy (VIDE AST). */
+export type VideAstNode = {
+  role: string;
+  tag?: string;
+  text?: string;
+  children?: VideAstNode[];
+};
+
+export type VideColorMatch = {
+  baseline: string;
+  suspect: string;
+  score: number;
+  distance: number;
+};
+
+export type VideCorpusRanked = {
+  institution_id: string;
+  display_name: string;
+  bank?: string;
+  confidence: number;
+  scores?: {
+    string_containment?: number;
+    structural?: number;
+    color?: number;
+  };
+  matched_strings?: string[];
+  matched_signatures?: string[];
+  color_matches?: VideColorMatch[];
+};
+
+export type VideCorpusCompare = {
+  rule_id?: string;
+  detected?: boolean;
+  institution_id?: string;
+  institution_display?: string;
+  bank?: string;
+  confidence?: number;
+  banking_shape_score?: number;
+  attribution?: {
+    margin?: number;
+    ambiguous?: boolean;
+    candidates?: string[];
+  };
+  suspect_signatures?: string[];
+  scores?: {
+    string_containment?: number;
+    structural?: number;
+    color?: number;
+  };
+  matched_strings?: string[];
+  color_matches?: VideColorMatch[];
+  ranked?: VideCorpusRanked[];
+  evidence_lines?: string[];
+};
+
+/** Advisory LLM assessment. Never the verdict - see semantic_matcher.py. */
+export type VideSemanticMatch = {
+  status?: string;
+  advisory?: boolean;
+  institution_id?: string;
+  model?: string;
+  semantic_match?: boolean;
+  semantic_confidence?: number;
+  matched_design_elements?: string[];
+  divergences?: string[];
+  impersonation_rationale?: string;
+  injection_suspected?: boolean;
+  error?: string;
+};
+
+/** Raw HTML overlay intercepted from a WebView hook. Evidence, never rendered. */
+export type VideOverlayPayload = {
+  sha256?: string;
+  source?: string;
+  hook?: string;
+  length?: number;
+  html?: string;
+  truncated?: boolean;
+};
+
 export type VideResult = {
   available?: boolean;
   status?: string;
   error?: string;
   vide_compare?: VideCompareResult;
+  corpus_compare?: VideCorpusCompare;
+  semantic_match?: VideSemanticMatch;
+  suspect_ast?: VideAstNode | null;
+  overlay_payloads?: VideOverlayPayload[];
   signer_impersonation?: VideSignerResult;
   suspect_profile_summary?: {
     string_count?: number;
     view_node_count?: number;
+    ast_node_count?: number;
+    ast_depth?: number;
     sources?: string;
   };
   critical_visual_cluster?: boolean;

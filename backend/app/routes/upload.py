@@ -810,6 +810,20 @@ async def _run_analysis_pipeline(
     )
     timer.stage_completed("VIDE_DYNAMIC")
 
+    # Advisory only: explains *why* the UI reads as a clone of the attributed
+    # bank, using that bank's design.md schema. The deterministic verdict above
+    # is already final and is not revised by this call.
+    if isinstance(vide_result, dict) and suspect_ui is not None:
+        try:
+            from sudarshan_core.engines.vide.baseline_store import get_baselines
+            from sudarshan_core.engines.vide.semantic_matcher import enrich_with_semantics
+
+            vide_result = await enrich_with_semantics(
+                vide_result, suspect_ui, get_baselines()
+            )
+        except Exception as exc:
+            logger.warning("[Upload] VIDE semantic enrichment skipped: %s", exc)
+
     if dynamic_result and dynamic_result.get("artifact_dir"):
         try:
             from sudarshan_core.visual_evidence.enrich import enrich_visual_evidence_artifact

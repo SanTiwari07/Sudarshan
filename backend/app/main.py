@@ -17,12 +17,13 @@ from slowapi.errors import RateLimitExceeded
 
 from app.rate_limit import limiter
 
-from app.routes import upload, report, intelligence, screenshots, discovery
+from app.routes import upload, report, intelligence, screenshots, discovery, baselines
 from app.routes.runtime_api import router as runtime_router
 from app.routes.cases import router as cases_router
 from app.auth.auth import router as auth_router
 from app.db.database import init_db
 from app.workers.analysis_queue import start_workers, stop_workers
+from app.workers.baseline_refresh import start_baseline_refresh, stop_baseline_refresh
 from app.auth.auth import hash_password, username_exists, create_user
 
 # ─── Structured Logging Configuration ────────────────────────────────────────
@@ -88,6 +89,7 @@ app.include_router(report.router,        prefix="/api/v1",         tags=["Report
 app.include_router(cases_router,         prefix="/api/v1",         tags=["Case History"])
 app.include_router(intelligence.router,  prefix="/api/v1",         tags=["Threat Intelligence"])
 app.include_router(screenshots.router,   prefix="/api/v1",         tags=["Screenshots"])
+app.include_router(baselines.router,     prefix="/api/v1",         tags=["VIDE Baselines"])
 app.include_router(runtime_router,       prefix="/api",            tags=["Runtime Telemetry"])
 
 
@@ -164,13 +166,20 @@ async def startup():
     except Exception as e:
         logger.warning(f"[Startup] Telemetry sink not registered ({e})")
 
-    # 5. Start async analysis worker pool
+    # 5. Warm the VIDE baseline corpus and schedule periodic re-ingestion.
+    #    Loading is cached in-process so static analysis does not re-read the
+    #    ~40 corpus files per sample; the admin refresh endpoint and this
+    #    worker are the two ways the cache is invalidated.
+    await start_baseline_refresh()
+
+    # 6. Start async analysis worker pool
     await start_workers()
     logger.info("[Startup] Analysis worker pool started")
 
 
 @app.on_event("shutdown")
 async def shutdown():
+    await stop_baseline_refresh()
     await stop_workers()
     logger.info("[Shutdown] Analysis workers stopped")
 

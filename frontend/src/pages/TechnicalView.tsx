@@ -5,6 +5,8 @@ import {
 } from 'lucide-react';
 import type { FraudCardData } from '../App';
 import VisualImpersonationPanel from '../components/investigation/VisualImpersonationPanel';
+import VisualDiffViewer from '../components/investigation/VisualDiffViewer';
+import OverlayEvidenceViewer from '../components/investigation/OverlayEvidenceViewer';
 import SocCard from '../components/ui/Card';
 import SectionHeader from '../components/ui/SectionHeader';
 import CopyButton from '../components/ui/CopyButton';
@@ -929,6 +931,8 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
 
       <EvidenceSection title="Static analysis" description="Permissions, bytecode signals, manifest, and attack surface.">
         <VisualImpersonationPanel data={data} />
+        {data.vide && <VisualDiffViewer vide={data.vide} />}
+        {data.vide && <OverlayEvidenceViewer vide={data.vide} />}
         <div className="analyst-grid-2">
           <PermissionTable data={data} />
           <DangerousAPITable data={data} />

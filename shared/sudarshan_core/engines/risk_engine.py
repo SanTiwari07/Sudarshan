@@ -961,11 +961,36 @@ def calculate_risk_score(
 
     # CH06 / VIDE deterministic escalations (P1: cluster required for visual-only)
     vide_evidence: List[str] = []
+    ch27_triad = False
     if vide_result:
         for line in (vide_result.get("vide_compare") or {}).get("evidence_lines") or []:
             vide_evidence.append(line)
         for line in (vide_result.get("signer_impersonation") or {}).get("evidence_lines") or []:
             vide_evidence.append(line)
+
+        # ── CH27: the On-Device Fraud triad ───────────────────────────────
+        # A high-confidence visual clone, signed by someone other than the
+        # bank, that also asks for the accessibility service is the complete
+        # ATS kill chain: it looks like the bank, it is not the bank, and it
+        # can drive the screen. Each signal alone is defensible - a skinned
+        # theme, a re-signed build, a legitimate screen reader - so CRITICAL
+        # is reserved for all three together.
+        ch27_confidence = float(
+            vide_result.get("visual_impersonation_confidence") or 0.0
+        )
+        ch27_triad = (
+            ch27_confidence > 0.85
+            and bool(vide_result.get("signer_impersonation", {}).get("detected"))
+            and bool(flags_dict.get("has_accessibility_abuse"))
+        )
+        if ch27_triad:
+            final_score = max(final_score, 95.0)
+            vide_evidence.append(
+                "CH27: visual impersonation "
+                f"({ch27_confidence:.2f} confidence) + signer mismatch + "
+                "BIND_ACCESSIBILITY_SERVICE - complete on-device fraud chain"
+            )
+
         if vide_result.get("signer_impersonation", {}).get("detected"):
             final_score = max(final_score, 92.0)
         elif vide_result.get("critical_visual_cluster"):
@@ -987,7 +1012,9 @@ def calculate_risk_score(
     else:
         band = "Critical"
 
-    if vide_result and vide_result.get("signer_impersonation", {}).get("detected"):
+    if ch27_triad:
+        band = "Critical"
+    elif vide_result and vide_result.get("signer_impersonation", {}).get("detected"):
         band = "Critical"
     elif vide_result and vide_result.get("critical_visual_cluster"):
         band = "Critical"

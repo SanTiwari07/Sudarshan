@@ -6,6 +6,35 @@
 export const API_BASE: string =
   import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api/v1';
 
+type UnauthorizedHandler = () => void;
+let on401Handler: UnauthorizedHandler | null = null;
+
+export function register401Handler(handler: UnauthorizedHandler) {
+  on401Handler = handler;
+}
+
+export function handle401Response() {
+  if (on401Handler) {
+    on401Handler();
+  }
+}
+
+// Global fetch interceptor to trigger handle401 on any 401 response (except auth endpoints)
+if (typeof window !== 'undefined' && !(window as any).__sudarshan_fetch_intercepted) {
+  (window as any).__sudarshan_fetch_intercepted = true;
+  const originalFetch = window.fetch;
+  window.fetch = async function (...args) {
+    const response = await originalFetch.apply(this, args);
+    if (response.status === 401) {
+      const url = typeof args[0] === 'string' ? args[0] : (args[0] as Request)?.url || '';
+      if (!url.includes('/auth/login') && !url.includes('/auth/register')) {
+        handle401Response();
+      }
+    }
+    return response;
+  };
+}
+
 /** Bearer header for authenticated calls, or {} when there is no token. */
 export function authHeaders(): Record<string, string> {
   const token = localStorage.getItem('sudarshan_token');

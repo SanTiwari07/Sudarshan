@@ -67,7 +67,7 @@ def test_ioc_collector_sweep_uses_sandbox_provider():
     assert args[2] == "shell"
 
 
-def test_adb_bootstrap_rejects_host_docker_internal_connect(monkeypatch):
+def test_adb_bootstrap_rejects_host_docker_internal_connect(monkeypatch, capsys):
     import importlib.util
     from pathlib import Path
 
@@ -86,5 +86,80 @@ def test_adb_bootstrap_rejects_host_docker_internal_connect(monkeypatch):
     monkeypatch.setenv("ADB_HOST", "host.docker.internal")
     monkeypatch.setenv("ADB_PORT", "5555")
     monkeypatch.setenv("SANDBOX_PROVIDER", "genymotion")
-    with pytest.raises(ContainmentViolation):
-        bootstrap_adb_connect(max_attempts=1, retry_sleep_seconds=0)
+    
+    # Run the bootstrap, it shouldn't raise, but it should print the rejection
+    res = bootstrap_adb_connect(max_attempts=1, retry_sleep_seconds=0)
+    assert res == 0
+    captured = capsys.readouterr().out
+    assert "Genymotion requires a valid VM IP" in captured
+    assert "target=auto" in captured
+    assert "tcp_connect=SKIPPED" in captured
+
+def test_adb_bootstrap_android_studio_resolves_host_docker_internal(monkeypatch, capsys):
+    import importlib.util
+    from pathlib import Path
+    module_path = Path(__file__).resolve().parents[2] / "analysis-engine" / "app" / "adb_bootstrap.py"
+    spec = importlib.util.spec_from_file_location("adb_bootstrap", module_path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    
+    monkeypatch.setenv("ADB_HOST", "host.docker.internal")
+    monkeypatch.setenv("ADB_PORT", "5555")
+    monkeypatch.setenv("SANDBOX_PROVIDER", "android_studio")
+    
+    # Mock check_tcp to fail so it doesn't wait
+    monkeypatch.setattr(mod, "check_tcp", lambda h, p, t=3: False)
+    
+    res = mod.bootstrap_adb_connect(max_attempts=1, retry_sleep_seconds=0)
+    assert res == 0
+    captured = capsys.readouterr().out
+    assert "target=host.docker.internal:5555" in captured
+    assert "provider=android_avd" in captured
+    assert "tcp_connect=FAIL" in captured
+
+def test_adb_bootstrap_device_serial_overrides(monkeypatch, capsys):
+    import importlib.util
+    from pathlib import Path
+    module_path = Path(__file__).resolve().parents[2] / "analysis-engine" / "app" / "adb_bootstrap.py"
+    spec = importlib.util.spec_from_file_location("adb_bootstrap", module_path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    
+    monkeypatch.setenv("ADB_HOST", "192.168.56.101")
+    monkeypatch.setenv("DEVICE_SERIAL", "192.168.56.200:5555")
+    monkeypatch.setenv("SANDBOX_PROVIDER", "genymotion")
+    monkeypatch.setattr(mod, "check_tcp", lambda h, p, t=3: False)
+    
+    res = mod.bootstrap_adb_connect(max_attempts=1, retry_sleep_seconds=0)
+    captured = capsys.readouterr().out
+    assert "target=192.168.56.200:5555" in captured
+
+def test_adb_bootstrap_offline_device_not_ready(monkeypatch, capsys):
+    import importlib.util
+    from pathlib import Path
+    module_path = Path(__file__).resolve().parents[2] / "analysis-engine" / "app" / "adb_bootstrap.py"
+    spec = importlib.util.spec_from_file_location("adb_bootstrap", module_path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    
+    monkeypatch.setattr(mod, "check_tcp", lambda h, p, t=3: False)
+    
+    class MockProvider:
+        name = "auto"
+        def list_devices(self):
+            class D:
+                serial = "emulator-5554"
+                state = "offline"
+            return [D()]
+        def select_device(self, s):
+            class D:
+                serial = "emulator-5554"
+                state = "offline"
+            return D()
+            
+    monkeypatch.setattr(mod, "get_sandbox_provider", lambda c: MockProvider())
+    
+    res = mod.bootstrap_adb_connect(max_attempts=1, retry_sleep_seconds=0)
+    captured = capsys.readouterr().out
+    assert "state=offline" in captured
+    assert "sandbox=UNAVAILABLE" in captured

@@ -127,6 +127,8 @@ class ReportData:
     risk_band: FieldValue[str]
     recommended_action: FieldValue[str]
     ai_confidence_multiplier: FieldValue[float]
+    correlation_score: FieldValue[float]
+    banking_impact_score: FieldValue[float]
     
     # STEI Breakdown
     stei_total: FieldValue[float]
@@ -253,6 +255,9 @@ def build_report_data(case_data: Dict[str, Any], apk_dir: Optional[Path] = None)
     stei_axes = get_val(frs_breakdown, "stei_axes") or {}
     if not isinstance(stei_axes, dict):
         stei_axes = {}
+
+    correlation_score_val = safe_float(get_val(frs_breakdown, "correlation"), 0.0)
+    banking_impact_score_val = safe_float(get_val(frs_breakdown, "banking_impact"), 0.0)
 
     stei_total_val = safe_float(get_val(frs_breakdown, "stei"), 0.0)
     stei_ct_val = safe_float(get_val(stei_axes, "CT", get_val(stei_axes, "ct")), 0.0)
@@ -431,6 +436,8 @@ def build_report_data(case_data: Dict[str, Any], apk_dir: Optional[Path] = None)
         risk_band=FieldValue(value=risk_band_val, source=Provenance.DERIVED, status=Status.DERIVED),
         recommended_action=FieldValue(value=rec_action_val, source=Provenance.DERIVED, status=Status.DERIVED),
         ai_confidence_multiplier=FieldValue(value=ai_mult_val, source=Provenance.DERIVED, status=Status.DERIVED),
+        correlation_score=FieldValue(value=correlation_score_val, source=Provenance.DERIVED, status=Status.DERIVED),
+        banking_impact_score=FieldValue(value=banking_impact_score_val, source=Provenance.DERIVED, status=Status.DERIVED),
 
         stei_total=FieldValue(value=stei_total_val, source=Provenance.STATIC, status=Status.DERIVED),
         stei_ct=FieldValue(value=stei_ct_val, source=Provenance.STATIC, status=Status.DERIVED),
@@ -1145,7 +1152,7 @@ class ReportLabPDFGenerator:
             stei=self.data.stei_total.value if hasattr(self.data, 'stei_total') and self.data.stei_total else 0.0,
             bfci=self.data.bfci_total.value if hasattr(self.data, 'bfci_total') and self.data.bfci_total else 0.0,
             corr=self.data.correlation_score.value if hasattr(self.data, 'correlation_score') and self.data.correlation_score else 0.0,
-            bank=self.data.banking_impact.value if hasattr(self.data, 'banking_impact') and self.data.banking_impact else 0.0,
+            bank=self.data.banking_impact_score.value if hasattr(self.data, 'banking_impact_score') and self.data.banking_impact_score else 0.0,
         )
         elements.append(frs_meter)
         elements.append(Spacer(1, 6))
@@ -1154,7 +1161,7 @@ class ReportLabPDFGenerator:
         stei_val = self.data.stei_total.value if hasattr(self.data, 'stei_total') and self.data.stei_total else 0.0
         bfci_val = self.data.bfci_total.value if hasattr(self.data, 'bfci_total') and self.data.bfci_total else 0.0
         corr_val = self.data.correlation_score.value if hasattr(self.data, 'correlation_score') and self.data.correlation_score else 0.0
-        bank_val = self.data.banking_impact.value if hasattr(self.data, 'banking_impact') and self.data.banking_impact else 0.0
+        bank_val = self.data.banking_impact_score.value if hasattr(self.data, 'banking_impact_score') and self.data.banking_impact_score else 0.0
 
         axis_data = [
             [Paragraph("Axis", self.table_header), Paragraph("Nom. Wt.", self.table_header), Paragraph("Included because...", self.table_header), Paragraph("Score", self.table_header), Paragraph("Wtd.", self.table_header), Paragraph("Status", self.table_header)],

@@ -115,6 +115,17 @@ from sudarshan_core.engines.pipeline_state import (
     AnalysisOutcome,
 )
 
+from enum import Enum
+
+class DynamicAnalysisStatus(str, Enum):
+    FRIDA_ATTACH_FAILED = "FRIDA_ATTACH_FAILED"
+    PID_NOT_FOUND = "PID_NOT_FOUND"
+    INSTRUMENTATION_FAILED = "INSTRUMENTATION_FAILED"
+    RUNTIME_COMPLETED_NO_EVENTS = "RUNTIME_COMPLETED_NO_EVENTS"
+    INCONCLUSIVE = "INCONCLUSIVE"
+    EVENTS_CAPTURED = "EVENTS_CAPTURED"
+    NO_UI_RENDERED = "NO_UI_RENDERED"
+
 # Path to the Frida JS hooks script (banking_trojan.js)
 _HOOKS_DIR = Path(__file__).parent / "frida_hooks"
 _HOOKS_SOURCE = _HOOKS_DIR / "banking_trojan.js"
@@ -3476,13 +3487,13 @@ async def _run_device_session(
     bfci, components, evidence = calculate_bfci(session.collected_events)
 
     if not session.canary_received:
-        dynamic_status = "INSTRUMENTATION_FAILED"
+        dynamic_status = DynamicAnalysisStatus.INSTRUMENTATION_FAILED.value
     elif session.java_bridge_failed or session.java_hooks_installed == 0:
         # The script loaded and native hooks installed, but the Java bridge did
         # not, so accessibility / SMS / overlay / banking could never fire.
         # Calling that NO_BEHAVIOR_OBSERVED would blame the sample for a
         # harness fault, and risk_engine would treat it as a real observation.
-        dynamic_status = "INSTRUMENTATION_FAILED"
+        dynamic_status = DynamicAnalysisStatus.INSTRUMENTATION_FAILED.value
         logger.error(
             "[Frida] NO Java hooks installed (%d native only; bridge: %s). "
             "Accessibility, SMS, overlay and banking hooks could never fire, so "
@@ -3495,11 +3506,11 @@ async def _run_device_session(
         # The process ran but never owned a window, so no UI-driven hook could
         # fire. Blaming the sample for that silence would score a launch failure
         # as benign behaviour.
-        dynamic_status = "NO_UI_RENDERED"
+        dynamic_status = DynamicAnalysisStatus.NO_UI_RENDERED.value
     elif session.total_hook_events_received == 0:
-        dynamic_status = "NO_BEHAVIOR_OBSERVED"
+        dynamic_status = DynamicAnalysisStatus.RUNTIME_COMPLETED_NO_EVENTS.value
     else:
-        dynamic_status = "EVENTS_CAPTURED"
+        dynamic_status = DynamicAnalysisStatus.EVENTS_CAPTURED.value
 
     # ── Step 6: Build structured result ───────────────────────────────────────
     # Flatten API calls for risk_engine.py compatibility

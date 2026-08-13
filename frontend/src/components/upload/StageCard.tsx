@@ -48,10 +48,27 @@ export default function StageCard({ title, description, icon, status, compact, o
   if (overview) {
     return (
       <div
-        className="group flex h-full flex-col gap-4 rounded-xl border border-slate-200/90 bg-white p-5 shadow-sm transition-all duration-200 hover:border-slate-300 hover:shadow-md"
+        className={`group flex h-full flex-col gap-4 rounded-xl border bg-white p-5 shadow-sm transition-all duration-300 hover:shadow-md ${
+          status === 'active'
+            ? 'border-blue-300 ring-2 ring-blue-100 upload-stage-pulse'
+            : status === 'complete'
+              ? 'border-emerald-200'
+              : 'border-slate-200/90 hover:border-slate-300'
+        }`}
       >
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition-colors group-hover:bg-blue-50 group-hover:text-blue-700">
-          <Icon className="h-5 w-5" aria-hidden />
+        <div className="flex justify-between items-start">
+          <div
+            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-colors ${
+              status === 'active'
+                ? 'bg-blue-100 text-blue-700'
+                : status === 'complete'
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : 'bg-slate-100 text-slate-600 group-hover:bg-blue-50 group-hover:text-blue-700'
+            }`}
+          >
+            <Icon className="h-5 w-5" aria-hidden />
+          </div>
+          {statusIcon && <div className="mt-1">{statusIcon}</div>}
         </div>
         <div className="min-w-0 flex-1 flex flex-col">
           <h4 className="text-[15px] font-semibold text-slate-900 leading-snug">{title}</h4>

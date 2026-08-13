@@ -41,12 +41,28 @@ The DAE communicates with the emulator **only** through `sudarshan_core.sandbox.
 
 ---
 
-## 2. Dynamic Execution Architecture
+## 2. Dynamic Execution Architecture & 7-Step Launch Fallback Ladder
 
 ```mermaid
 graph TD
-    PREP[ADB Sandbox Prep & Low-SDK Install] --> LAUNCH[Launch Target Activity & PID Resolve]
-    LAUNCH --> ATTACH[Attach Frida 17 Script via PID]
+    PREP[ADB Sandbox Prep & Low-SDK Install] --> LAUNCH[Launch Fallback Ladder]
+    LAUNCH --> L1[Step 1: am start_main]
+    L1 -->|Fail| L1b[Step 1b: implicit intent]
+    L1b -->|Fail| L2[Step 2: explicit intent]
+    L2 -->|Fail| L3[Step 3: exported activity]
+    L3 -->|Fail| L4[Step 4: boot broadcasts]
+    L4 -->|Fail| L5[Step 5: deep links]
+    L5 -->|Fail| L6[Step 6: force stop & retry]
+    L6 -->|Fail| L7[Step 7: monkey launcher]
+    L7 --> ATTACH
+    L1 -->|Success| ATTACH[Attach Frida 17 Script via PID]
+    L1b -->|Success| ATTACH
+    L2 -->|Success| ATTACH
+    L3 -->|Success| ATTACH
+    L4 -->|Success| ATTACH
+    L5 -->|Success| ATTACH
+    L6 -->|Success| ATTACH
+    
     ATTACH --> DEOPT[Execute Java.deoptimizeEverything]
     ATTACH --> CANARY[Emit Fail-Loud Canary Event]
 
@@ -167,6 +183,11 @@ graph TD
     S8 --> S10
     S9 --> S10
     S10 --> S11[Stage 11: C2 Exfiltration]
+    S11 --> S12[Stage 12: Anti-Analysis Evasion]
+    S11 --> S13[Stage 13: Local Data Theft]
+    S12 --> S14[Stage 14: Secondary Payload Execution]
+    S13 --> S14
+    S14 --> S15[Stage 15: Deep Root Persistence]
 ```
 
 - **Loop Detection**: Maintains screen view hashes to break out of redundant navigation loops.

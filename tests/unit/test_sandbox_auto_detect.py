@@ -181,6 +181,15 @@ def test_select_none_raises_actionable():
     with pytest.raises(ValueError, match="No Android sandbox detected"):
         select_sandbox_device([])
 
+def test_select_deterministic_fallback_no_serial():
+    devices = [
+        DeviceInfo(serial="emulator-5556", provider="android_avd", is_emulator=True, rooted=False),
+        DeviceInfo(serial="emulator-5554", provider="android_avd", is_emulator=True, rooted=True),
+    ]
+    # No preferred_serial provided, should fall back to rank_devices
+    chosen = select_sandbox_device(devices)
+    assert chosen.serial == "emulator-5554"
+
 
 def test_rank_prefers_rooted():
     devices = [

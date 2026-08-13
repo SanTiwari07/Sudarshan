@@ -2,6 +2,7 @@
   "available": false,
   "engine": "frida",
   "dynamic_status": "INSTRUMENTATION_FAILED",
+  "sha256": "b18af2a0e44d7634bbcdf93664d9c78a2695e050393fcfbb5e8b91f902d194a4",
   "bfci": 0.0,
   "bfci_components": {},
   "bfci_weights": {
@@ -20,36 +21,52 @@
   "logcat": "",
   "evidence": [],
   "hook_errors": [],
-  "duration_seconds": 30,
+  "duration_seconds": 90,
   "sandbox_connection": {
     "ok": true,
     "device": {
-      "serial": "192.168.56.101:5555",
+      "serial": "emulator-5554",
       "state": "device",
-      "provider": "genymotion",
-      "android_version": "11",
-      "api_level": "30",
+      "provider": "android_avd",
+      "android_version": "17",
+      "api_level": "37",
       "abi": "x86_64",
-      "model": "Phone",
-      "manufacturer": "Genymobile",
+      "abilist": "x86_64,arm64-v8a",
+      "model": "sdk_gphone16k_x86_64",
+      "manufacturer": "Google",
       "ip": "192.168.56.101",
+      "transport": "emulator",
+      "is_emulator": true,
+      "avd_name": "Pixel_6",
       "rooted": true,
+      "root_available": true,
       "frida_running": true,
+      "frida_available": true,
       "frida_version": "17.16.4",
-      "connection_time_ms": 2617.4920000003112,
-      "extra": {}
+      "frida_port": "27042",
+      "adb_forwarding": true,
+      "connection_time_ms": 2300.625200000468,
+      "extra": {
+        "product": "emu64xa16k",
+        "device": "emu64xa16k",
+        "hardware": "ranchu",
+        "fingerprint": "google/sdk_gphone16k_x86_64/emu64xa16k:17/CP31.260618.005/15731206:userdebug/dev-keys"
+      }
     },
     "frida": {
       "available": true,
       "running": true,
       "binary_path": "",
       "binary_name": "sudarshan_agent_srv",
-      "port": "27055",
+      "host_binary": "",
+      "port": "27042",
       "version": "",
       "host_version": "17.16.4",
+      "abi": "x86_64",
       "compatible": true,
       "restarted": false,
-      "message": "frida agent running (root           4519      1 11919096 142240 poll_schedule_timeout 7946cb13aa0a S sudarshan_agent_srv)"
+      "forwarded": true,
+      "message": "frida agent running (8053)"
     },
     "error_code": null,
     "error_message": null,
@@ -62,22 +79,22 @@
       {
         "stage": "device_detect",
         "ok": true,
-        "detail": "192.168.56.101:5555"
+        "detail": "emulator-5554"
       },
       {
         "stage": "online",
         "ok": true,
-        "detail": "192.168.56.101:5555"
+        "detail": "emulator-5554"
       },
       {
         "stage": "props",
         "ok": true,
-        "detail": "android=11 api=30 abi=x86_64"
+        "detail": "android=17 api=37 abi=x86_64"
       },
       {
         "stage": "root",
         "ok": true,
-        "detail": "whoami=root"
+        "detail": "available"
       },
       {
         "stage": "selinux",
@@ -87,12 +104,12 @@
       {
         "stage": "frida",
         "ok": true,
-        "detail": "frida agent running (root           4519      1 11919096 142240 poll_schedule_timeout 7946cb13aa0a S sudarshan_agent_srv)"
+        "detail": "frida agent running (8053)"
       }
     ],
-    "connection_time_ms": 2617.4920000003112
+    "connection_time_ms": 2300.625200000468
   },
-  "sandbox_provider": "genymotion",
+  "sandbox_provider": "auto",
   "provenance": {
     "is_repaired_derivative": false,
     "original_sha256": "b18af2a0e44d7634bbcdf93664d9c78a2695e050393fcfbb5e8b91f902d194a4",
@@ -101,45 +118,20 @@
     "repair_reason": null,
     "modifications_performed": [],
     "signature_used": "Original APK Signature",
-    "timestamp": "2026-08-06T03:26:39Z"
+    "timestamp": "2026-08-13T13:04:54Z"
   },
-  "error": "APK install failed: Failed to install APK after retries. Last error: Performing Streamed Install\nadb.EXE: failed to install D:\\Projects\\Sudarshan BOI\\backend\\test_sample.apk: \nException occurred while executing 'install':\njava.lang.IllegalStateException: Cannot access system provider: 'settings' before system providers are installed!\n\tat com.android.server.am.ActivityManagerService.getContentProviderImpl(ActivityManagerService.java:7259)\n\tat com.android.server.am.ActivityManagerService.getContentProvider(ActivityManagerService.java:7578)\n\tat android.app.ActivityThread.acquireProvider(ActivityThread.java:6816)\n\tat android.app.ContextImpl$ApplicationContentResolver.acquireProvide",
-  "dae_pipeline": {
-    "session_id": "",
-    "package_name": "com.android.insecurebankv2",
-    "current_stage": "FAILED",
-    "failure_reason": "APK install failed: Failed to install APK after retries. Last error: Performing Streamed Install\nadb.EXE: failed to install D:\\Projects\\Sudarshan BOI\\backend\\test_sample.apk: \nException occurred while executing 'install':\njava.lang.IllegalStateException: Cannot access system provider: 'settings' before system providers are installed!\n\tat com.android.server.am.ActivityManagerService.getContentProviderImpl(ActivityManagerService.java:7259)\n\tat com.android.server.am.ActivityManagerService.getContentProvider(ActivityManagerService.java:7578)\n\tat android.app.ActivityThread.acquireProvider(ActivityThread.java:6816)\n\tat android.app.ContextImpl$ApplicationContentResolver.acquireProvide",
-    "suggested_recovery": "",
-    "metrics": {
-      "screenshots_captured": 0,
-      "screenshots_skipped_duplicate": 0,
-      "events_captured": 0,
-      "hooks_installed": 0,
-      "crashes_recovered": 0,
-      "launch_retries": 0,
-      "explorer_actions": 0,
-      "current_activity": "",
-      "current_fragment": "",
-      "workflow_stage": "",
-      "coverage_percent": 0.0
-    },
-    "transitions": [
-      {
-        "from": "INITIALIZING",
-        "to": "INSTALLING",
-        "timestamp": 1785986799.7420282,
-        "reason": "adb install",
-        "detail": {}
-      },
-      {
-        "from": "INSTALLING",
-        "to": "FAILED",
-        "timestamp": 1785986801.9503489,
-        "reason": "APK install failed: Failed to install APK after retries. Last error: Performing Streamed Install\nadb.EXE: failed to install D:\\Projects\\Sudarshan BOI\\backend\\test_sample.apk: \nException occurred while executing 'install':\njava.lang.IllegalStateException: Cannot access system provider: 'settings' before system providers are installed!\n\tat com.android.server.am.ActivityManagerService.getContentProviderImpl(ActivityManagerService.java:7259)\n\tat com.android.server.am.ActivityManagerService.getContentProvider(ActivityManagerService.java:7578)\n\tat android.app.ActivityThread.acquireProvider(ActivityThread.java:6816)\n\tat android.app.ContextImpl$ApplicationContentResolver.acquireProvide",
-        "detail": {
-          "recovery": ""
-        }
-      }
-    ]
-  }
+  "error": "Exception: Frida could not instrument com.android.insecurebankv2. The process IS running (pid=8105) but could not be attached, so this is an injection/permission problem, not a launch problem. Last spawn errors: NotSupportedError: need Gadget to attach on jailed Android; its default location is: C:\\Users\\sansk\\AppData\\Local\\Microsoft\\Windows\\INetCache\\frida\\gadget-android-arm64.so",
+  "launch_timeline": {
+    "apk_install": 0.0,
+    "launch_intent": 18.945,
+    "first_pid": 24.24,
+    "first_activity": 26.903,
+    "first_window": 26.903,
+    "first_ui_dump": 29.278,
+    "frida_attach": 29.278,
+    "canary_received": null,
+    "explorer_start": null,
+    "first_hook_event": null
+  },
+  "launch_method_used": "am_start_main_activity"
 }

@@ -36,12 +36,26 @@ Version and architecture are never guessed:
 - Architecture comes from the device's own `ro.product.cpu.abi`. An x86_64
   binary is never pushed to an arm64 device.
 
-**Device selection is automatic.** `adb devices` is enumerated at runtime; set
-`DEVICE_SERIAL` only when more than one device is online.
+**Device selection is automatic.** `adb devices -l` is enumerated at runtime; set
+`ANDROID_DEVICE_SERIAL` (or `DEVICE_SERIAL`) only when more than one sandbox is online.
+The engine no longer falls back to a hardcoded `192.168.56.101` Genymotion IP.
+
+**Reliable Docker Connectivity.** Inside Docker environments, connecting Frida via the proxy USB
+ADB interface can be unstable (resulting in `TransportError` or timeouts). The `frida_sandbox.py`
+engine now mitigates this by automatically mapping an `adb forward tcp:27042` tunnel to the emulator
+and prioritizing a remote TCP connection (`host.docker.internal:27042`) over local USB enumeration.
 
 **Nothing is hardcoded to one host.** There are no absolute user paths, serials,
 or emulator names in the engine — the `emulator-5554` strings in the codebase are
-docstrings.
+docstrings. Furthermore, the `ADB_HOST` fallback in `bootstrap_sandbox.py` and
+`setup_dynamic_analysis.py` no longer forces `host.docker.internal`, which previously
+broke the analysis on standard local/non-Docker desktop runs.
+
+**Concurrent Device Execution.** The engine is now completely capable of parallel
+dynamic analysis. `_DEVICE_LOCK` was removed from the global `main.py` entrypoint.
+Now `frida_sandbox.py` tracks an asynchronous lock mapped by the actual device serial,
+so multiple submissions to the API can be run simultaneously as long as there is an
+available free device (or using multi-device logic).
 
 ## Environment knobs
 
@@ -70,9 +84,6 @@ frida-server left running from a previous session.
 ## What is still environment-dependent
 
 - **A rooted Android emulator must be running.** The engine does not create one.
-- **The container reaches adb over `host.docker.internal:5037`.** This works with
-  Docker Desktop; on a Linux host the adb server may need to listen on all
-  interfaces, or set `ADB_SERVER_SOCKET` to a reachable address.
 - **Emulator image.** Verified on API 37 x86_64 including the 16 KB-page image.
   Java hooking works there with frida 17.16.4; see the notes in
   `frida_hooks/banking_trojan.bundle.js` for the API 34+ deoptimisation path.

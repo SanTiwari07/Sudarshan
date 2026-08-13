@@ -129,10 +129,10 @@ export default function AppSidebar({ onLogout }: AppSidebarProps) {
 
         {/* Primary Navigation Items */}
         <nav className="flex-1 py-3 space-y-1 overflow-y-auto scrollbar-hidden">
-          {ENTERPRISE_NAV_MAIN.map(renderNavItem)}
+          {pathname !== '/' && ENTERPRISE_NAV_MAIN.map(renderNavItem)}
 
           {/* Subtle Divider */}
-          <div className="my-3 border-t border-slate-800/80 mx-2" />
+          {pathname !== '/' && <div className="my-3 border-t border-slate-800/80 mx-2" />}
 
           {/* Secondary Navigation Items */}
           {ENTERPRISE_NAV_END.map(renderNavItem)}

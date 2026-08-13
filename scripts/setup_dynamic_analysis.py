@@ -314,7 +314,7 @@ def print_summary(serial: Optional[str]):
 
   Docker container will connect via:
     SANDBOX_PROVIDER={CFG.provider}
-    ADB_HOST=host.docker.internal
+    ADB_HOST={CFG.adb_host or '(auto)'}
     ADB_PORT={ADB_TCP_PORT}
     DEVICE_SERIAL={serial}
 

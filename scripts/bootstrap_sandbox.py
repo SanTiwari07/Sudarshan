@@ -98,7 +98,6 @@ def bootstrap(serial: Optional[str] = None, push_frida: bool = True) -> Dict[str
         cfg.auto_connect
         and host
         and host.lower() not in (
-            "host.docker.internal",
             "host.containers.internal",
             "gateway.docker.internal",
         )
@@ -192,8 +191,9 @@ def _export_env(result: Dict[str, Any], selected, cfg) -> None:
         )
     elif selected.transport == "emulator" or selected.provider == "android_avd":
         # Host ADB multiplexer exposes emulator-*; containers reach it via the
-        # Docker host gateway. Never keep a stale Genymotion IP here.
-        env["ADB_HOST"] = "host.docker.internal"
+        # Docker host gateway.
+        if cfg.adb_host:
+            env["ADB_HOST"] = cfg.adb_host
         env["ADB_PORT"] = cfg.adb_port
     else:
         if selected.ip:

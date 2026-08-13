@@ -78,9 +78,10 @@ deserves analysis**.
 known-infrastructure match. Runs concurrently with T0–T2 because it's I/O-bound and can
 short-circuit everything.
 
-```
+```text
         ┌─────────────────────────────────────────┐
-        │  T0 ─► T1 ─► T2   (sequential, CPU)     │
+        │  T0, T1, T2 (Parallel Concurrent Exec)  │
+        │  Bounded by asyncio.Semaphore(2) (4G/2C)│
         │   ╲                                     │
         │    ╲   TE  (parallel, I/O - TI lookups) │
         │     ╲   │                               │

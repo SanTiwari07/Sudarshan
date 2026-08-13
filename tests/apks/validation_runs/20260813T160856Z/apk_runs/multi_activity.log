@@ -1,0 +1,58 @@
+2026-08-13 22:01:12,534 [WARNING] sudarshan_core.security.sandbox_containment: [Containment] GUEST_FULL_COMPROMISE_EXPECTED: ROOT_REQUIRED=true and SELinux permissive are required for Frida. Treat the Android guest as fully compromised after each session; never reuse it for trusted workloads.
+2026-08-13 22:01:12,535 [INFO] sudarshan_core.sandbox.provider: [auto] connect/adb: OK C:\Users\sansk\AppData\Local\Android\Sdk\platform-tools\adb.EXE
+2026-08-13 22:01:15,242 [INFO] sudarshan_core.sandbox.provider: [auto] Detected Android devices:
+2026-08-13 22:01:15,242 [INFO] sudarshan_core.sandbox.provider:   [1] Android Studio AVD — emulator-5554 — x86_64 — Android 17 — Pixel_6
+2026-08-13 22:01:15,396 [INFO] sudarshan_core.sandbox.auto: [auto] Selected sandbox: Android Studio AVD (emulator-5554)
+2026-08-13 22:01:15,396 [INFO] sudarshan_core.sandbox.provider: [auto] connect/device_detect: OK emulator-5554
+2026-08-13 22:01:15,437 [INFO] sudarshan_core.sandbox.provider: [auto] connect/online: OK emulator-5554
+2026-08-13 22:01:16,511 [INFO] sudarshan_core.sandbox.provider: [auto] connect/props: OK android=17 api=37 abi=x86_64
+2026-08-13 22:01:16,628 [INFO] sudarshan_core.sandbox.provider: [auto] Root already available on emulator-5554
+2026-08-13 22:01:16,628 [INFO] sudarshan_core.sandbox.provider: [auto] connect/root: OK available
+2026-08-13 22:01:16,700 [INFO] sudarshan_core.sandbox.provider: [auto] connect/selinux: OK Permissive
+2026-08-13 22:01:16,963 [INFO] sudarshan_core.sandbox.provider: [auto] Frida forwarded tcp:27042 -> emulator-5554:27042
+2026-08-13 22:01:16,964 [INFO] sudarshan_core.sandbox.provider: [auto] connect/frida: OK frida agent running (16197)
+2026-08-13 22:01:16,964 [INFO] sudarshan_core.sandbox.provider: [auto] Connected serial=emulator-5554 provider=android_avd transport=emulator ip= android=17 abi=x86_64 root=True frida=True forward=True connect_ms=4440.4
+2026-08-13 22:01:16,964 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Using sandbox provider=auto serial=emulator-5554 android=17 abi=x86_64 root=True frida=True connect_ms=4440.4
+2026-08-13 22:01:16,965 [INFO] sudarshan_core.engines.frida_sandbox: [Pipeline 01] emulator ready — serial=emulator-5554
+2026-08-13 22:01:16,965 [INFO] sudarshan_core.engines.frida_sandbox: [Pipeline 04] Frida device connected — auto
+2026-08-13 22:01:17,681 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] SELinux mode: Permissive
+2026-08-13 22:01:17,681 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Configured Frida agent verified by SandboxProvider.
+2026-08-13 22:01:18,016 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Target package: com.android.insecurebankv2 (Main Activity: com.android.insecurebankv2.LoginActivity)
+2026-08-13 22:01:18,017 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Artifacts for this sample: D:\Projects\Sudarshan BOI\tests\apks\categories\sudarshan_artifacts\insecurebankv2_2ebde24e
+2026-08-13 22:01:18,019 [INFO] sudarshan_core.engines.frida_sandbox: [Pipeline 02] APK installed — starting adb install
+2026-08-13 22:01:18,020 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] INITIALIZING → INSTALLING (adb install)
+2026-08-13 22:01:19,259 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Retrying install with --bypass-low-target-sdk-block
+2026-08-13 22:01:21,884 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Original APK installed with SDK bypass: insecurebankv2.apk
+2026-08-13 22:01:21,884 [INFO] sudarshan_core.engines.frida_sandbox: [Pipeline 02] APK installed — com.android.insecurebankv2
+2026-08-13 22:01:21,884 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] INSTALLING → VERIFY_INSTALL (pm path verification)
+2026-08-13 22:01:22,356 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] APK installed: com.android.insecurebankv2 (Derivative Repaired: False)
+2026-08-13 22:01:22,449 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Launcher resolves post-install: com.android.insecurebankv2/.LoginActivity
+2026-08-13 22:01:28,715 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Pre-granted 12 declared permission(s) for com.android.insecurebankv2 before launch
+2026-08-13 22:01:46,130 [INFO] sudarshan_core.engines.permission_orchestrator: [PermissionOrchestrator] No accessibility service declared in 'com.android.insecurebankv2' manifest - this sample does not use accessibility abuse via a bound service.
+2026-08-13 22:01:46,138 [WARNING] sudarshan_core.engines.frida_sandbox: [Frida] YARA scanning DISABLED - no .yar/.yara rules found in D:\Projects\Sudarshan BOI\shared\sudarshan_core\engines\yara_rules. Set SUDARSHAN_YARA_RULES_DIR to enable it.
+2026-08-13 22:01:46,419 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Connecting to device emulator-5554
+2026-08-13 22:01:47,748 [INFO] sudarshan_core.sandbox.provider: [auto] Frida forwarded tcp:27042 -> emulator-5554:27042
+2026-08-13 22:01:48,749 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Available devices: ['local', 'socket', 'barebone', 'emulator-5554']
+2026-08-13 22:01:48,750 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Waking up device screen...
+2026-08-13 22:01:50,608 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] VERIFY_INSTALL → RESOLVE_ACTIVITY (launch ladder)
+2026-08-13 22:01:50,608 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] RESOLVE_ACTIVITY → LAUNCHING (issuing launch intents)
+2026-08-13 22:01:50,608 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Launch step 1: am start -W -n com.android.insecurebankv2/com.android.insecurebankv2.LoginActivity
+2026-08-13 22:01:57,648 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Stability monitor: waiting up to 12s for com.android.insecurebankv2 (requires 5s of continuous PID presence, polling every 250ms)
+2026-08-13 22:02:03,111 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] PID 16643 stable for 5.1s (>= 5s required) - process confirmed alive for com.android.insecurebankv2
+2026-08-13 22:02:03,112 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Launch step 'am_start_main_activity' produced stable PID 16643
+2026-08-13 22:02:03,594 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] App launched and stable via 'am_start_main_activity' (PID=16643)
+2026-08-13 22:02:10,642 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] LAUNCHING → ATTACH_FRIDA (attaching to stable PID)
+2026-08-13 22:02:11,689 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Attached to com.android.insecurebankv2 (pid=16643, attempt 1)
+2026-08-13 22:02:11,936 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] ATTACH_FRIDA → VERIFY_HOOKS (canary received)
+2026-08-13 22:02:11,937 [INFO] sudarshan_core.engines.frida_sandbox: [Frida Canary] Script load canary received: script_loaded_v4_frida17
+2026-08-13 22:02:11,937 [INFO] sudarshan_core.engines.frida_sandbox: [Frida DIAG] {'type': 'diag', 'msg': 'java_bridge_ready', 'source': 'frida-java-bridge'}
+2026-08-13 22:02:12,013 [INFO] sudarshan_core.engines.frida_sandbox: [Frida DIAG] {'type': 'diag', 'msg': 'java_gate_passed', 'ts': 1786638731856}
+2026-08-13 22:02:12,014 [INFO] sudarshan_core.engines.frida_sandbox: [Frida DIAG] {'type': 'diag', 'msg': 'deoptimizeEverything_skipped_api34_plus', 'sdk_int': 37, 'ts': 1786638731859}
+2026-08-13 22:02:12,022 [INFO] sudarshan_core.engines.frida_sandbox: [Frida DIAG] {'type': 'diag', 'msg': 'deoptimizeBootImage_success', 'ts': 1786638731869}
+2026-08-13 22:02:12,033 [INFO] sudarshan_core.engines.frida_sandbox: [Frida DIAG] {'type': 'diag', 'msg': 'package_detected', 'package': 'com.android.insecurebankv2'}
+2026-08-13 22:02:12,320 [WARNING] sudarshan_core.engines.frida_sandbox: [Frida] Hook failed: OkHttp - java.lang.ClassNotFoundException: Didn't find class "okhttp3.internal.connection.RealCall" on path: DexPathList[[zip file "/data/app/~~eXHbutJo8qOTUnQ8SBHIIA==/com.android.insecurebankv2-PEHeus3T-Qee9oA55CmpQw==/base.apk"],nativeLibraryDirectories=[/data/app/~~eXHbutJo8qOTUnQ8SBHIIA==/com.android.insecurebankv2-PEHeus3T-Qee9oA55CmpQw==/lib/x86_64, /system/lib64, /system_ext/lib64]]
+2026-08-13 22:02:13,858 [WARNING] sudarshan_core.engines.frida_sandbox: [Frida] Hook failed: Retrofit.OkHttpCall.execute - java.lang.ClassNotFoundException: Didn't find class "retrofit2.OkHttpCall" on path: DexPathList[[zip file "/data/app/~~eXHbutJo8qOTUnQ8SBHIIA==/com.android.insecurebankv2-PEHeus3T-Qee9oA55CmpQw==/base.apk"],nativeLibraryDirectories=[/data/app/~~eXHbutJo8qOTUnQ8SBHIIA==/com.android.insecurebankv2-PEHeus3T-Qee9oA55CmpQw==/lib/x86_64, /system/lib64, /system_ext/lib64]]
+2026-08-13 22:02:13,859 [INFO] sudarshan_core.engines.frida_sandbox: [Pipeline 10] RuntimeEvent emitted — category=anti_analysis hook=Build.<static fields>
+2026-08-13 22:02:13,859 [INFO] sudarshan_core.engines.evidence_store: [EvidenceStore] [HIGH] [EVID-001] Build.<static fields>  - Emulator-identifying Build fields replaced: FINGERPRINT="google/sdk_gphone16k_x8
+2026-08-13 22:02:13,860 [WARNING] sudarshan_core.engines.anti_analysis_detector: [AntiAnalysis] Detected evasion attempt: unknown via Build.<static fields>
+2026-08-13 22:02:36,835 [ERROR] sudarshan_core.engines.frida_sandbox: [Frida] Session failed: TransportError: timeout was reached

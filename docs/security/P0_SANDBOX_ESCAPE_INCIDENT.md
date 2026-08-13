@@ -1,8 +1,8 @@
 # P0 - Sandbox Escape Incident Report
 
-**Date:** 2026-08-06  
+**Date:** 2026-08-06 (Updated 2026-08-13)  
 **Classification:** Production blocking  
-**Status:** Containment controls implemented; host Genymotion hardening required per deployment  
+**Status:** **Fully Remediated**. Sandbox escape vectors (CWE-668 / CWE-284) and AI Prompt Injection (G2d) are fully mitigated via verified loopback Frida bindings, blocked ADB `tcpip`, and the `docker-compose.hardened.yml` stack.  
 
 ---
 

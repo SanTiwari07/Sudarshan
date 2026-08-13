@@ -89,6 +89,7 @@ export function resolvePipelineUi(state: BackendPipelineState | null): {
   title: string;
   description: string;
   substage?: string;
+  rawStage: string;
 } {
   const stage = state?.pipeline_stage || 'QUEUED';
   const copy = STAGE_COPY[stage] || {
@@ -106,5 +107,6 @@ export function resolvePipelineUi(state: BackendPipelineState | null): {
     title: copy.title,
     description: substage ? `${description} (${substage})` : description,
     substage,
+    rawStage: stage,
   };
 }

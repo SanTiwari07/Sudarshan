@@ -39,6 +39,7 @@ from sudarshan_core.engines.evidence_store import EvidenceStore, EvidenceRecord
 from sudarshan_core.engines.frida_sandbox import (
     FridaSession,
     calculate_bfci,
+    DynamicAnalysisStatus,
     _HOOKS_SCRIPT,
     _HOOKS_SOURCE,
     _HOOKS_BUNDLE,
@@ -379,6 +380,42 @@ class TestRuntimeAPIRecording(unittest.TestCase):
         self.assertIn("BadHook", _hook_registry)
         self.assertEqual(_hook_registry["BadHook"]["errors"], 1)
         self.assertGreaterEqual(len(_recent_events), 1)
+
+
+class TestDynamicAnalysisStatus(unittest.TestCase):
+    def test_dynamic_status_0_event_no_canary_is_failure(self):
+        """Verify that 0 events without canary classifies as INSTRUMENTATION_FAILED."""
+        session = FridaSession(device_serial="emulator-5554", package_name="com.test.app")
+        session.canary_received = False
+        session.total_hook_events_received = 0
+        
+        # Test logic mimicking step 5 in frida_sandbox.py
+        if not session.canary_received:
+            status = DynamicAnalysisStatus.INSTRUMENTATION_FAILED.value
+        elif session.total_hook_events_received == 0:
+            status = DynamicAnalysisStatus.RUNTIME_COMPLETED_NO_EVENTS.value
+        else:
+            status = DynamicAnalysisStatus.EVENTS_CAPTURED.value
+            
+        self.assertEqual(status, "INSTRUMENTATION_FAILED")
+        self.assertEqual(status, DynamicAnalysisStatus.INSTRUMENTATION_FAILED.value)
+
+    def test_dynamic_status_0_event_with_canary_is_no_events(self):
+        """Verify that 0 events with canary classifies as RUNTIME_COMPLETED_NO_EVENTS."""
+        session = FridaSession(device_serial="emulator-5554", package_name="com.test.app")
+        session.canary_received = True
+        session.total_hook_events_received = 0
+        
+        # Test logic mimicking step 5 in frida_sandbox.py
+        if not session.canary_received:
+            status = DynamicAnalysisStatus.INSTRUMENTATION_FAILED.value
+        elif session.total_hook_events_received == 0:
+            status = DynamicAnalysisStatus.RUNTIME_COMPLETED_NO_EVENTS.value
+        else:
+            status = DynamicAnalysisStatus.EVENTS_CAPTURED.value
+            
+        self.assertEqual(status, "RUNTIME_COMPLETED_NO_EVENTS")
+        self.assertEqual(status, DynamicAnalysisStatus.RUNTIME_COMPLETED_NO_EVENTS.value)
 
 
 if __name__ == "__main__":

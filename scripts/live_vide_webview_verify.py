@@ -16,7 +16,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "shared"))
 
-ADB_SERIAL = os.getenv("SUDARSHAN_ADB_SERIAL", "192.168.56.101:5555")
+ADB_SERIAL = os.getenv("SUDARSHAN_ADB_SERIAL", "")
 FRIDA_PORT = int(os.getenv("SUDARSHAN_FRIDA_PORT", "27042"))
 TARGET_PKG = os.getenv("VIDE_LIVE_TARGET_PKG", "com.android.insecurebankv2")
 PROBE_BUNDLE = REPO / "scripts" / "vide_live_probe.bundle.js"

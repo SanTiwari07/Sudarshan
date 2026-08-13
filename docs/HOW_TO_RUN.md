@@ -50,9 +50,12 @@ GEMINI_MODEL="gemini-2.5-flash"
 
 # ── Dynamic Sandbox & ADB ──
 SANDBOX_PROVIDER="genymotion"
-# Genymotion: VM IP from `adb devices` (leave blank only if provider resolves serial locally)
+# ADB_HOST controls where the container connects to ADB. When left blank (default),
+# the analysis-engine automatically determines the host interface based on the
+# chosen SANDBOX_PROVIDER. Override this only if your host network topology requires it.
 ADB_HOST=""
 ADB_PORT="5555"
+# Only needed when multiple physical devices/emulators are attached simultaneously.
 DEVICE_SERIAL=""
 FRIDA_PORT="27055"
 AUTO_CONNECT="true"

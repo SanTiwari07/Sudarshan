@@ -2,6 +2,7 @@ import type { FraudCardData } from '../../App';
 import type { InvestigationBundle } from '../../types/investigation';
 import { useInvestigationUI } from '../../context/InvestigationUIContext';
 import { mapFindingEvidence } from '../../lib/findingEvidenceMapper';
+import { TYPOGRAPHY } from '../../theme/typography';
 import {
   isFindingDetected,
   SEVERITY_DISPLAY,
@@ -28,8 +29,8 @@ export default function CoreFindingsList({
   const clear = definitions.filter((d: any) => !isFindingDetected(d.id, data));
 
   const evidenceCount = (id: any) => {
-    const ev = mapFindingEvidence(id, data);
-    return Array.isArray(ev.records) ? ev.records.length : 1;
+    const ev = mapFindingEvidence(id, data, bundle);
+    return Array.isArray(ev) ? ev.length : 1;
   };
 
   return (
@@ -42,8 +43,8 @@ export default function CoreFindingsList({
       <div className="p-5 sm:p-6 space-y-3">
         {detected.length === 0 && (
           <div className="text-center py-8 px-4 rounded-xl border border-dashed border-slate-200 bg-white">
-            <p className="text-sm text-slate-700">No high-priority fraud patterns were flagged on this case.</p>
-            <p className="text-xs text-slate-500 mt-2">Review verified evidence and threat indicators before clearing.</p>
+            <p className={TYPOGRAPHY.body}>No high-priority fraud patterns were flagged on this case.</p>
+            <p className={`${TYPOGRAPHY.caption} mt-2`}>Review verified evidence and threat indicators before clearing.</p>
           </div>
         )}
         {detected.map((row: any) => {
@@ -67,20 +68,20 @@ export default function CoreFindingsList({
                 }}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                  <h3 className="text-sm font-bold text-slate-900 inline-flex items-center gap-1">
+                  <h3 className={`${TYPOGRAPHY.h3} inline-flex items-center gap-1`}>
                     {row.title}
                     <ExplainFindingButton findingId={row.id} />
                   </h3>
-                  <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${sevClass}`}>
-                    {SEVERITY_DISPLAY[row.severity]?.label || 'Risk'}
+                  <span className={`${TYPOGRAPHY.badge} ${sevClass}`}>
+                    {SEVERITY_DISPLAY[row.severity] || 'Risk'}
                   </span>
                 </div>
-                <p className="text-xs text-slate-600 leading-relaxed">{row.summary}</p>
+                <p className={TYPOGRAPHY.bodySmall}>{row.summary}</p>
               </div>
               <button
                 type="button"
                 onClick={() => openFindingEvidence(row.id)}
-                className="text-[11px] text-blue-700 font-semibold mt-3 hover:underline"
+                className={`${TYPOGRAPHY.linkAction} mt-3`}
               >
                 Verified evidence · {count} observation{count === 1 ? '' : 's'}
               </button>
@@ -89,14 +90,14 @@ export default function CoreFindingsList({
         })}
         {clear.length > 0 && detected.length > 0 && (
           <div className="pt-2 border-t border-slate-100">
-            <div className="text-[10px] font-bold uppercase text-slate-400 mb-2">Not detected</div>
+            <div className={`${TYPOGRAPHY.label} mb-2`}>Not detected</div>
             <div className="flex flex-wrap gap-2">
               {clear.map((row: any) => (
                 <button
                   key={row.id}
                   type="button"
                   onClick={() => openFindingExplanation(row.id)}
-                  className="text-[11px] px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100"
+                  className={`${TYPOGRAPHY.buttonSm} bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100`}
                 >
                   {row.title}
                 </button>

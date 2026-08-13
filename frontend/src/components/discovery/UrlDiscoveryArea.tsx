@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, Loader2, AlertCircle, CheckCircle2, FileArchive, ArrowRight } from 'lucide-react';
 import { API_BASE } from '../../config';
 import { getToken } from '../../pages/Login';
@@ -210,7 +210,7 @@ export default function UrlDiscoveryArea({ onAnalyzeCandidate, disabled }: UrlDi
               </div>
 
               <button
-                onClick={() => onAnalyzeCandidate(c.id, c.session_id, c.filename || c.package_id || 'URL Candidate')}
+                onClick={() => onAnalyzeCandidate(c.id, sessionId || '', c.filename || c.package_id || 'URL Candidate')}
                 disabled={c.validation_status !== 'valid_apk' || disabled}
                 className="flex items-center gap-2 rounded-lg bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >

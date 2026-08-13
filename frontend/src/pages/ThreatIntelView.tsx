@@ -13,6 +13,7 @@ import ThreatEvidenceExplorer from '../components/threatIntel/ThreatEvidenceExpl
 import ThreatIocRegistry from '../components/threatIntel/ThreatIocRegistry';
 import ThreatIntelPageShell from '../components/threatIntel/ThreatIntelPageShell';
 import { INTEL } from '../components/threatIntel/intelTokens';
+import { TYPOGRAPHY } from '../theme/typography';
 import {
   buildThreatDna,
   buildAttackChain,
@@ -65,13 +66,13 @@ export default function ThreatIntelView({ data }: { data: FraudCardData | null }
     <ThreatIntelPageShell>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 pb-4">
         <div>
-          <h2 className="text-lg font-semibold text-slate-800">Threat intelligence</h2>
-          <p className={INTEL.subtitle}>Banking threat comparison for the active case</p>
+          <h2 className={TYPOGRAPHY.h2}>Threat intelligence</h2>
+          <p className={TYPOGRAPHY.caption}>Banking threat comparison for the active case</p>
         </div>
         <button
           type="button"
           onClick={fetchIntelligence}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-800 shadow-sm transition-colors"
+          className={`inline-flex items-center justify-center gap-2 ${TYPOGRAPHY.buttonSm} border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 shadow-sm transition-colors`}
         >
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
           Refresh
@@ -83,11 +84,11 @@ export default function ThreatIntelView({ data }: { data: FraudCardData | null }
       ) : error ? (
         <SocCard className="p-10 text-center">
           <AlertTriangle className="h-10 w-10 text-amber-500 mx-auto mb-3" />
-          <p className="font-semibold text-slate-800">{error}</p>
+          <p className={`${TYPOGRAPHY.bodySmall} font-bold text-slate-800`}>{error}</p>
           <button
             type="button"
             onClick={fetchIntelligence}
-            className="mt-4 px-4 py-2 text-xs font-semibold text-white bg-blue-700 rounded-lg hover:bg-blue-800"
+            className={`mt-4 ${TYPOGRAPHY.button} text-white bg-blue-700 hover:bg-blue-800`}
           >
             Retry
           </button>

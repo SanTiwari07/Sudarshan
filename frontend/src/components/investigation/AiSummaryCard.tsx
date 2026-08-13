@@ -5,6 +5,7 @@ import {
   buildDetailedRiskFactors,
 } from '../../lib/executiveIntelligence';
 import { riskRecommendedAction } from '../../lib/analystCopy';
+import { TYPOGRAPHY } from '../../theme/typography';
 import { Sparkles, AlertTriangle, FileText, Info, ShieldCheck } from 'lucide-react';
 
 export type DecisionAction = 'BLOCK' | 'ESCALATE' | 'REVIEW' | 'ALLOW WITH CAUTION' | 'ALLOW';
@@ -22,7 +23,7 @@ export function getDecisionAction(data: FraudCardData): {
   if (band === 'critical' || score >= 80) {
     return {
       action: 'BLOCK',
-      badgeClass: 'bg-red-600 text-white font-black',
+      badgeClass: 'bg-red-600 text-white font-bold',
       containerClass: 'border-red-300 bg-red-50/90 text-red-950',
       explanation,
     };
@@ -30,7 +31,7 @@ export function getDecisionAction(data: FraudCardData): {
   if (band === 'high' || score >= 60) {
     return {
       action: 'ESCALATE',
-      badgeClass: 'bg-orange-600 text-white font-black',
+      badgeClass: 'bg-orange-600 text-white font-bold',
       containerClass: 'border-orange-300 bg-orange-50/90 text-orange-950',
       explanation,
     };
@@ -38,7 +39,7 @@ export function getDecisionAction(data: FraudCardData): {
   if (band === 'medium' || score >= 35) {
     return {
       action: 'REVIEW',
-      badgeClass: 'bg-amber-500 text-slate-950 font-black',
+      badgeClass: 'bg-amber-500 text-slate-950 font-bold',
       containerClass: 'border-amber-300 bg-amber-50/90 text-amber-950',
       explanation,
     };
@@ -46,14 +47,14 @@ export function getDecisionAction(data: FraudCardData): {
   if (band === 'low' || score >= 10) {
     return {
       action: 'ALLOW WITH CAUTION',
-      badgeClass: 'bg-blue-600 text-white font-black',
+      badgeClass: 'bg-blue-600 text-white font-bold',
       containerClass: 'border-blue-300 bg-blue-50/90 text-blue-950',
       explanation,
     };
   }
   return {
     action: 'ALLOW',
-    badgeClass: 'bg-emerald-600 text-white font-black',
+    badgeClass: 'bg-emerald-600 text-white font-bold',
     containerClass: 'border-emerald-300 bg-emerald-50/90 text-emerald-950',
     explanation,
   };
@@ -68,7 +69,6 @@ export default function AiSummaryCard({ data }: { data: FraudCardData }) {
   const score = Math.round(data.final_risk_score);
   const band = (data.risk_band ?? '').toLowerCase();
 
-  // Dynamically constructed action explanation covering action, rationale, monitoring, and re-scan
   const capsBrief: string[] = [];
   if (data.has_accessibility_abuse) capsBrief.push('accessibility service usage');
   if (data.has_sms_read_write) capsBrief.push('SMS/OTP access');
@@ -129,10 +129,10 @@ export default function AiSummaryCard({ data }: { data: FraudCardData }) {
             <Sparkles className="h-5 w-5 sm:h-6 sm:w-6" />
           </span>
           <div>
-            <h3 className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-900 font-mono">
+            <h3 className={TYPOGRAPHY.cardTitle}>
               EXECUTIVE ASSESSMENT & FRAUD SUMMARY
             </h3>
-            <p className="text-[12px] sm:text-[13px] text-slate-600 font-medium mt-0.5">
+            <p className={`${TYPOGRAPHY.caption} mt-0.5`}>
               Decision-useful security intelligence for banking leadership and fraud analysts
             </p>
           </div>
@@ -143,13 +143,13 @@ export default function AiSummaryCard({ data }: { data: FraudCardData }) {
       <div className="space-y-5 sm:space-y-6">
         {/* 1. OVERALL ASSESSMENT */}
         <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-700 font-mono mb-2 flex items-center gap-1.5">
+          <p className={`${TYPOGRAPHY.sectionTitle} mb-2`}>
             <FileText className="h-4 w-4 text-blue-600" />
             1. OVERALL ASSESSMENT
           </p>
           <div className="rounded-lg border border-slate-200/90 bg-white p-4 space-y-3">
             {assessmentParagraphs.map((para, idx) => (
-              <p key={idx} className="text-[13.5px] sm:text-[14px] font-normal text-slate-800 leading-[1.55]">
+              <p key={idx} className={TYPOGRAPHY.body}>
                 {para}
               </p>
             ))}
@@ -158,7 +158,7 @@ export default function AiSummaryCard({ data }: { data: FraudCardData }) {
 
         {/* 2. CUSTOMER & BANKING IMPACT */}
         <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-700 font-mono mb-2 flex items-center gap-1.5">
+          <p className={`${TYPOGRAPHY.sectionTitle} mb-2`}>
             <AlertTriangle className="h-4 w-4 text-amber-600" />
             2. CUSTOMER & BANKING IMPACT
           </p>
@@ -166,10 +166,10 @@ export default function AiSummaryCard({ data }: { data: FraudCardData }) {
             {/* Customer Impact Card */}
             <div className="rounded-lg border border-slate-200/90 bg-white p-3.5 space-y-1.5 flex flex-col justify-between">
               <div>
-                <span className="text-[11px] font-bold uppercase tracking-wider text-amber-800 font-mono block mb-1">
+                <span className={`${TYPOGRAPHY.label} text-amber-800 block mb-1`}>
                   Customer Impact
                 </span>
-                <p className="text-[13px] sm:text-[13.5px] text-slate-700 leading-[1.5]">
+                <p className={TYPOGRAPHY.bodySmall}>
                   {impact.customerImpact}
                 </p>
               </div>
@@ -178,10 +178,10 @@ export default function AiSummaryCard({ data }: { data: FraudCardData }) {
             {/* Banking Impact Card */}
             <div className="rounded-lg border border-slate-200/90 bg-white p-3.5 space-y-1.5 flex flex-col justify-between">
               <div>
-                <span className="text-[11px] font-bold uppercase tracking-wider text-blue-800 font-mono block mb-1">
+                <span className={`${TYPOGRAPHY.label} text-blue-800 block mb-1`}>
                   Banking Impact
                 </span>
-                <p className="text-[13px] sm:text-[13.5px] text-slate-700 leading-[1.5]">
+                <p className={TYPOGRAPHY.bodySmall}>
                   {impact.bankingImpact}
                 </p>
               </div>
@@ -190,10 +190,10 @@ export default function AiSummaryCard({ data }: { data: FraudCardData }) {
             {/* Business Interpretation Card */}
             <div className="rounded-lg border border-blue-200/80 bg-blue-50/60 p-3.5 space-y-1.5 flex flex-col justify-between">
               <div>
-                <span className="text-[11px] font-bold uppercase tracking-wider text-blue-900 font-mono block mb-1">
+                <span className={`${TYPOGRAPHY.label} text-blue-900 block mb-1`}>
                   Business Interpretation
                 </span>
-                <p className="text-[13px] sm:text-[13.5px] font-semibold text-slate-900 leading-[1.5]">
+                <p className={`${TYPOGRAPHY.bodySmall} font-semibold text-slate-900`}>
                   {impact.businessInterpretation}
                 </p>
               </div>
@@ -203,7 +203,7 @@ export default function AiSummaryCard({ data }: { data: FraudCardData }) {
 
         {/* 3. WHY THIS SCORE? (KEY RISK FACTORS) */}
         <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-700 font-mono mb-2 flex items-center gap-1.5">
+          <p className={`${TYPOGRAPHY.sectionTitle} mb-2`}>
             <Info className="h-4 w-4 text-indigo-600" />
             3. WHY THIS SCORE? (KEY RISK FACTORS)
           </p>
@@ -217,52 +217,52 @@ export default function AiSummaryCard({ data }: { data: FraudCardData }) {
                 >
                   {/* Header & Badge */}
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 pb-2">
-                    <span className="text-[14px] font-bold text-slate-900 flex items-center gap-1.5">
+                    <span className={`${TYPOGRAPHY.h3} flex items-center gap-1.5`}>
                       <span className="h-2 w-2 rounded-full bg-blue-600" />
                       {factor.name}
                     </span>
                     {factor.badge && (
-                      <span className="text-[11px] font-mono px-2 py-0.5 rounded font-semibold bg-slate-200/80 text-slate-800">
+                      <span className={`${TYPOGRAPHY.badge} bg-slate-200/80 text-slate-800 border-slate-300`}>
                         {factor.badge}
                       </span>
                     )}
                   </div>
 
                   {/* 4-part breakdown */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[13px] text-slate-700 pt-0.5">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-0.5">
                     <div className="bg-white/80 p-2.5 rounded border border-slate-200/60">
-                      <strong className="text-slate-900 font-semibold block text-[11px] font-mono uppercase text-slate-500 mb-0.5">
+                      <strong className={`${TYPOGRAPHY.label} block mb-0.5`}>
                         What was detected
                       </strong>
-                      <span className="leading-snug block">{factor.detected}</span>
+                      <span className={`${TYPOGRAPHY.bodySmall} block`}>{factor.detected}</span>
                     </div>
 
                     <div className="bg-white/80 p-2.5 rounded border border-slate-200/60">
-                      <strong className="text-slate-900 font-semibold block text-[11px] font-mono uppercase text-slate-500 mb-0.5">
+                      <strong className={`${TYPOGRAPHY.label} block mb-0.5`}>
                         Capability Enabled
                       </strong>
-                      <span className="leading-snug block">{factor.capability}</span>
+                      <span className={`${TYPOGRAPHY.bodySmall} block`}>{factor.capability}</span>
                     </div>
 
                     <div className="bg-white/80 p-2.5 rounded border border-slate-200/60">
-                      <strong className="text-slate-900 font-semibold block text-[11px] font-mono uppercase text-slate-500 mb-0.5">
+                      <strong className={`${TYPOGRAPHY.label} block mb-0.5`}>
                         Why it matters
                       </strong>
-                      <span className="leading-snug block">{factor.whyItMatters}</span>
+                      <span className={`${TYPOGRAPHY.bodySmall} block`}>{factor.whyItMatters}</span>
                     </div>
 
                     <div className="bg-blue-50/50 p-2.5 rounded border border-blue-200/60">
-                      <strong className="text-blue-900 font-semibold block text-[11px] font-mono uppercase text-blue-700 mb-0.5">
+                      <strong className={`${TYPOGRAPHY.label} text-blue-700 block mb-0.5`}>
                         Supporting Evidence
                       </strong>
-                      <span className="leading-snug block font-medium text-slate-800">{factor.evidence}</span>
+                      <span className={`${TYPOGRAPHY.bodySmall} font-medium text-slate-800 block`}>{factor.evidence}</span>
                     </div>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-[13.5px] font-medium text-slate-800 leading-relaxed bg-white p-4 rounded-lg border border-slate-200/80">
+            <p className={`${TYPOGRAPHY.body} bg-white p-4 rounded-lg border border-slate-200/80`}>
               This score reflects multi-axis evaluation across static manifest indicators, behavioral code analysis, and global threat intelligence correlation. No individual critical risk triggers were isolated.
             </p>
           )}
@@ -271,38 +271,38 @@ export default function AiSummaryCard({ data }: { data: FraudCardData }) {
         {/* 4. RECOMMENDED ACTION */}
         <div className={`rounded-xl border p-4 sm:p-5 ${decision.containerClass}`}>
           <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
-            <span className="text-xs font-extrabold uppercase tracking-wider font-mono text-slate-900 flex items-center gap-1.5">
+            <span className={`${TYPOGRAPHY.sectionTitle} text-slate-900`}>
               <ShieldCheck className="h-4 w-4" />
               RECOMMENDED ACTION
             </span>
-            <span className={`text-xs font-mono px-3.5 py-1 rounded-md tracking-wider uppercase font-black shadow-xs ${decision.badgeClass}`}>
+            <span className={`${TYPOGRAPHY.badgePill} ${decision.badgeClass}`}>
               {decision.action}
             </span>
           </div>
 
-          <p className="text-[13.5px] sm:text-[14px] leading-relaxed font-bold text-slate-900 mb-3">
+          <p className={`${TYPOGRAPHY.body} font-bold text-slate-900 mb-3`}>
             {recExplanation}
           </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-[12px] pt-2 border-t border-slate-300/60">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-2 border-t border-slate-300/60">
             <div>
-              <span className="font-mono text-[10px] uppercase font-bold text-slate-600 block">Recommended Action</span>
-              <span className="font-bold text-slate-900">{recDetails.action}</span>
+              <span className={`${TYPOGRAPHY.label} text-slate-600 block`}>Recommended Action</span>
+              <span className={`${TYPOGRAPHY.bodySmall} font-bold text-slate-900`}>{recDetails.action}</span>
             </div>
 
             <div>
-              <span className="font-mono text-[10px] uppercase font-bold text-slate-600 block">Rationale</span>
-              <span className="font-medium text-slate-800">{recDetails.why}</span>
+              <span className={`${TYPOGRAPHY.label} text-slate-600 block`}>Rationale</span>
+              <span className={`${TYPOGRAPHY.bodySmall} text-slate-800`}>{recDetails.why}</span>
             </div>
 
             <div>
-              <span className="font-mono text-[10px] uppercase font-bold text-slate-600 block">Monitoring Required</span>
-              <span className="font-medium text-slate-800">{recDetails.monitoring}</span>
+              <span className={`${TYPOGRAPHY.label} text-slate-600 block`}>Monitoring Required</span>
+              <span className={`${TYPOGRAPHY.bodySmall} text-slate-800`}>{recDetails.monitoring}</span>
             </div>
 
             <div>
-              <span className="font-mono text-[10px] uppercase font-bold text-slate-600 block">Re-Scan Condition</span>
-              <span className="font-medium text-slate-800">{recDetails.rescan}</span>
+              <span className={`${TYPOGRAPHY.label} text-slate-600 block`}>Re-Scan Condition</span>
+              <span className={`${TYPOGRAPHY.bodySmall} text-slate-800`}>{recDetails.rescan}</span>
             </div>
           </div>
         </div>

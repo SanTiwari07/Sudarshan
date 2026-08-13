@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, LogIn, Eye, EyeOff, AlertCircle, UserPlus } from 'lucide-react';
 import { API_BASE } from '../config';
-
-
+import { TYPOGRAPHY } from '../theme/typography';
 
 // Persist JWT token to localStorage
 export function saveToken(token: string, username: string, role: string) {
@@ -91,11 +90,11 @@ export default function Login() {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-600/20 border border-blue-500/30 mb-4">
             <Shield className="h-8 w-8 text-blue-400" />
           </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">SUDARSHAN</h1>
-          <p className="text-sm text-blue-300 mt-1 font-mono uppercase tracking-widest">
+          <h1 className={`${TYPOGRAPHY.h1} text-white font-extrabold tracking-wider`}>SUDARSHAN</h1>
+          <p className={`${TYPOGRAPHY.label} text-blue-300 mt-1`}>
             Banking Threat Intelligence Platform
           </p>
-          <p className="text-xs text-blue-400/70 mt-2">Bank of India - Cyber Security Operations</p>
+          <p className={`${TYPOGRAPHY.caption} text-blue-400/70 mt-2`}>Bank of India - Cyber Security Operations</p>
         </div>
 
         {/* Card */}
@@ -104,7 +103,7 @@ export default function Login() {
           <div className="flex border-b border-white/10">
             <button
               onClick={() => { setMode('login'); setError(null); setSuccess(null); }}
-              className={`flex-1 py-3 text-sm font-semibold transition-colors ${
+              className={`flex-1 py-3 ${TYPOGRAPHY.button} transition-colors ${
                 mode === 'login'
                   ? 'bg-blue-600/20 text-blue-300 border-b-2 border-blue-400'
                   : 'text-white/50 hover:text-white/80'
@@ -115,7 +114,7 @@ export default function Login() {
             </button>
             <button
               onClick={() => { setMode('register'); setError(null); setSuccess(null); }}
-              className={`flex-1 py-3 text-sm font-semibold transition-colors ${
+              className={`flex-1 py-3 ${TYPOGRAPHY.button} transition-colors ${
                 mode === 'register'
                   ? 'bg-blue-600/20 text-blue-300 border-b-2 border-blue-400'
                   : 'text-white/50 hover:text-white/80'
@@ -129,20 +128,20 @@ export default function Login() {
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
             {/* Error / Success banners */}
             {error && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/20 border border-red-500/30 text-red-300 text-sm">
+              <div className={`flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/20 border border-red-500/30 text-red-300 ${TYPOGRAPHY.bodySmall}`}>
                 <AlertCircle className="h-4 w-4 flex-shrink-0" />
                 {error}
               </div>
             )}
             {success && (
-              <div className="px-3 py-2 rounded-lg bg-green-500/20 border border-green-500/30 text-green-300 text-sm">
+              <div className={`px-3 py-2 rounded-lg bg-green-500/20 border border-green-500/30 text-green-300 ${TYPOGRAPHY.bodySmall}`}>
                 {success}
               </div>
             )}
 
             {/* Username */}
             <div>
-              <label className="block text-xs font-medium text-blue-300 mb-1.5 uppercase tracking-wide">
+              <label className={`block ${TYPOGRAPHY.label} text-blue-300 mb-1.5`}>
                 Username
               </label>
               <input
@@ -152,14 +151,14 @@ export default function Login() {
                 required
                 autoComplete="username"
                 placeholder="analyst_name"
-                className="w-full px-3 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30
-                           focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-sm transition-colors"
+                className={`w-full px-3 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30
+                           focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 ${TYPOGRAPHY.bodySmall} transition-colors`}
               />
             </div>
 
             {/* Password */}
             <div>
-              <label className="block text-xs font-medium text-blue-300 mb-1.5 uppercase tracking-wide">
+              <label className={`block ${TYPOGRAPHY.label} text-blue-300 mb-1.5`}>
                 Password
               </label>
               <div className="relative">
@@ -170,8 +169,8 @@ export default function Login() {
                   required
                   autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                   placeholder="••••••••"
-                  className="w-full px-3 py-2.5 pr-10 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30
-                             focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-sm transition-colors"
+                  className={`w-full px-3 py-2.5 pr-10 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30
+                             focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 ${TYPOGRAPHY.bodySmall} transition-colors`}
                 />
                 <button
                   type="button"
@@ -186,19 +185,19 @@ export default function Login() {
             {/* Role selector (register only) */}
             {mode === 'register' && (
               <div>
-                <label className="block text-xs font-medium text-blue-300 mb-1.5 uppercase tracking-wide">
+                <label className={`block ${TYPOGRAPHY.label} text-blue-300 mb-1.5`}>
                   Role
                 </label>
                 <select
                   value={role}
                   onChange={e => setRole(e.target.value as 'analyst' | 'soc_lead')}
-                  className="w-full px-3 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white
-                             focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-sm transition-colors"
+                  className={`w-full px-3 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white
+                             focus:outline-none focus:ring-2 focus:ring-blue-500/50 ${TYPOGRAPHY.bodySmall} transition-colors`}
                 >
                   <option value="analyst" className="bg-slate-800">Analyst</option>
                   <option value="soc_lead" className="bg-slate-800">SOC Lead</option>
                 </select>
-                <p className="mt-1 text-xs text-white/40">
+                <p className={`mt-1 ${TYPOGRAPHY.caption} text-white/40`}>
                   Admin accounts can only be created by a current admin.
                 </p>
               </div>
@@ -208,9 +207,9 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 active:bg-blue-700
-                         text-white font-semibold text-sm transition-colors disabled:opacity-60
-                         disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className={`w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 active:bg-blue-700
+                         text-white ${TYPOGRAPHY.button} transition-colors disabled:opacity-60
+                         disabled:cursor-not-allowed flex items-center justify-center gap-2`}
             >
               {loading ? (
                 <>
@@ -224,15 +223,10 @@ export default function Login() {
                 </>
               )}
             </button>
-
-            {/* Never print credentials here - this screen is reachable by
-                anyone who can reach the app. The admin password is set via
-                ADMIN_PASSWORD, or generated once at first boot and written to
-                the backend log. */}
           </form>
         </div>
 
-        <p className="text-center text-xs text-blue-400/40 mt-6">
+        <p className={`text-center ${TYPOGRAPHY.caption} text-blue-400/40 mt-6`}>
           Protected by JWT - all sessions expire after 12 hours
         </p>
       </div>

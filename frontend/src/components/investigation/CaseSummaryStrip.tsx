@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import type { InvestigationCounts } from '../../types/investigation';
 import { useInvestigationUI } from '../../context/InvestigationUIContext';
 import { securityFindingsTotal } from '../../lib/analystCopy';
+import { TYPOGRAPHY } from '../../theme/typography';
 import {
   Camera,
   ArrowRight,
@@ -47,7 +48,7 @@ function MetricCard({
       <div>
         {/* Top Header: Title & Icon */}
         <div className="flex items-center justify-between gap-2 mb-2.5">
-          <span className="text-xs font-bold text-slate-700 font-mono uppercase tracking-wider">
+          <span className={TYPOGRAPHY.label}>
             {title}
           </span>
           <div className="p-1.5 rounded bg-slate-100 text-slate-600 border border-slate-200/60 shrink-0">
@@ -57,21 +58,21 @@ function MetricCard({
 
         {/* Metric Value & Optional Status Badge */}
         <div className="flex items-baseline justify-between gap-2 mb-2 font-mono">
-          <span className="text-3xl font-black text-slate-900 tracking-tight">
+          <span className="text-3xl font-bold font-mono text-slate-900 tracking-tight">
             {value}
           </span>
           {statusBadge}
         </div>
 
         {/* Descriptive Blurb */}
-        <p className="text-[11px] text-slate-500 leading-relaxed font-sans font-normal">
+        <p className={TYPOGRAPHY.caption}>
           {blurb}
         </p>
       </div>
 
       {/* Footer link button */}
       {onClick && (
-        <div className="pt-2.5 mt-3 border-t border-slate-100 flex items-center justify-between text-[11px] font-mono font-bold text-slate-500 group-hover:text-blue-600 transition-colors">
+        <div className={`pt-2.5 mt-3 border-t border-slate-100 flex items-center justify-between ${TYPOGRAPHY.linkAction} group-hover:text-blue-600`}>
           <span>View details</span>
           <ArrowRight className="h-3.5 w-3.5 text-slate-400 group-hover:text-blue-600 transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden />
         </div>
@@ -98,15 +99,15 @@ export default function CaseSummaryStrip({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3.5">
         <div className="space-y-1">
           <div className="flex items-center gap-2.5">
-            <h3 className="text-sm sm:text-base font-bold font-mono text-slate-900 uppercase tracking-wider">
+            <h3 className={TYPOGRAPHY.sectionTitle}>
               Evidence &amp; Risk Signals
             </h3>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[11px] font-mono font-bold bg-slate-900 text-slate-100 border border-slate-800">
+            <span className={`${TYPOGRAPHY.badgePill} bg-slate-900 text-slate-100 border-slate-800 gap-1.5`}>
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               {totalSignals} SIGNALS
             </span>
           </div>
-          <p className="text-xs text-slate-500 font-sans">
+          <p className={TYPOGRAPHY.bodySmall}>
             Supporting evidence collected across static analysis, runtime investigation, threat intelligence, and the case evidence ledger.
           </p>
         </div>
@@ -122,11 +123,11 @@ export default function CaseSummaryStrip({
           accentBarColor={findings > 0 ? 'bg-red-500' : 'bg-emerald-500'}
           statusBadge={
             findings > 0 ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-red-50 text-red-700 border border-red-200">
+              <span className={`${TYPOGRAPHY.badge} bg-red-50 text-red-700 border-red-200`}>
                 Action Needed
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className={`${TYPOGRAPHY.badge} bg-emerald-50 text-emerald-700 border-emerald-200`}>
                 Clean
               </span>
             )
@@ -142,11 +143,11 @@ export default function CaseSummaryStrip({
           accentBarColor={counts.iocMatches > 0 ? 'bg-red-500' : 'bg-emerald-500'}
           statusBadge={
             counts.iocMatches === 0 ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className={`${TYPOGRAPHY.badge} bg-emerald-50 text-emerald-700 border-emerald-200`}>
                 Clean
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-red-50 text-red-700 border border-red-200">
+              <span className={`${TYPOGRAPHY.badge} bg-red-50 text-red-700 border-red-200`}>
                 Matched
               </span>
             )
@@ -162,7 +163,7 @@ export default function CaseSummaryStrip({
           accentBarColor="bg-blue-600"
           statusBadge={
             counts.mitreTechniques > 0 ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-blue-50 text-blue-700 border border-blue-200">
+              <span className={`${TYPOGRAPHY.badge} bg-blue-50 text-blue-700 border-blue-200`}>
                 MITRE
               </span>
             ) : undefined
@@ -177,7 +178,7 @@ export default function CaseSummaryStrip({
           blurb="Observations logged in the case ledger."
           accentBarColor="bg-blue-600"
           statusBadge={
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-slate-100 text-slate-700 border border-slate-200">
+            <span className={`${TYPOGRAPHY.badge} bg-slate-100 text-slate-700 border-slate-200`}>
               Ledger
             </span>
           }
@@ -191,7 +192,7 @@ export default function CaseSummaryStrip({
           blurb="Frames captured during emulator sandbox run."
           accentBarColor="bg-blue-600"
           statusBadge={
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-slate-100 text-slate-700 border border-slate-200">
+            <span className={`${TYPOGRAPHY.badge} bg-slate-100 text-slate-700 border-slate-200`}>
               Sandbox
             </span>
           }

@@ -265,6 +265,11 @@ def _sandbox_env():
 # Module-level mirrors kept for backwards-compatible imports / status APIs.
 # Re-read on each call site that needs freshness via _sandbox_env().
 ADB_HOST = os.getenv("ADB_HOST", "")   # e.g. Genymotion VM IP or host.docker.internal for AVD
+
+# The only guest port frida's USB/ADB transport will talk to. Running
+# frida-server anywhere else forces that transport into jailed mode, where
+# attach() cannot work - see the transport selection in start_session().
+FRIDA_USB_TRANSPORT_PORT = 27042
 ADB_PORT = os.getenv("ADB_PORT", "5555")
 DEVICE_SERIAL = os.getenv("ANDROID_DEVICE_SERIAL") or os.getenv("DEVICE_SERIAL", "")
 SANDBOX_PROVIDER_NAME = (
@@ -2163,43 +2168,86 @@ class FridaSession:
             except Exception as st_err:
                 logger.warning(f"[Frida] Sandbox provider ensure_frida check: {st_err}")
 
+            # Transport order is load-bearing.
+            #
+            # Frida's USB/ADB transport only ever talks to port 27042 on the
+            # guest. We run frida-server on FRIDA_PORT (27055 by default). When
+            # those differ the USB transport does NOT fail - it silently
+            # degrades to "jailed" mode, answering enumerate_processes() and
+            # query_system_parameters() over plain adb. The device therefore
+            # looks perfectly healthy right up until attach(), which dies with
+            # ServerNotRunningError, and spawn(), which then demands a Gadget
+            # ("need Gadget to attach on jailed Android"). That Gadget message
+            # is a symptom, never the cure.
+            #
+            # So when the configured port is not frida's default, dial the real
+            # server over TCP first and treat USB as the fallback.
+            candidate_ports: List[int] = []
+            for p_env in (
+                os.getenv("SUDARSHAN_FRIDA_PORT"),
+                os.getenv("FRIDA_SERVER_PORT"),
+                str(FRIDA_USB_TRANSPORT_PORT),
+                "27055",
+            ):
+                if p_env and str(p_env).isdigit() and int(p_env) not in candidate_ports:
+                    candidate_ports.append(int(p_env))
+
+            def _connect_usb() -> Optional[Any]:
+                try:
+                    all_devices = frida.enumerate_devices()
+                    logger.info(f"[Frida] Available devices: {[d.id for d in all_devices]}")
+                except Exception as enum_err:
+                    logger.debug(f"[Frida] enumerate_devices failed: {enum_err}")
+                    return None
+                for d in all_devices:
+                    if d.id == self.device_serial:
+                        logger.info("[Frida] Using USB/ADB transport")
+                        return d
+                return None
+
+            def _connect_tcp() -> Optional[Any]:
+                from sudarshan_core.sandbox.config import frida_client_hosts
+
+                for f_port in candidate_ports:
+                    # `adb forward` runs wherever the ADB SERVER runs. With
+                    # ADB_SERVER_SOCKET set (the container default) that is the
+                    # host, so the forwarded port is bound on the host - dialling
+                    # this container's 127.0.0.1 would never connect.
+                    _adb(
+                        "-s", self.device_serial, "forward",
+                        f"tcp:{f_port}", f"tcp:{f_port}", timeout=10,
+                    )
+                    for frida_host in frida_client_hosts():
+                        try:
+                            dev_remote = frida.get_device_manager().add_remote_device(
+                                f"{frida_host}:{f_port}"
+                            )
+                            dev_remote.enumerate_processes()
+                            logger.info(
+                                f"[Frida] TCP remote device connected: {frida_host}:{f_port}"
+                            )
+                            return dev_remote
+                        except Exception:
+                            continue
+                return None
+
+            configured_port = candidate_ports[0] if candidate_ports else FRIDA_USB_TRANSPORT_PORT
+            if configured_port == FRIDA_USB_TRANSPORT_PORT:
+                connectors = (_connect_usb, _connect_tcp)
+            else:
+                logger.info(
+                    f"[Frida] frida-server port {configured_port} != USB transport port "
+                    f"{FRIDA_USB_TRANSPORT_PORT} - preferring TCP transport"
+                )
+                connectors = (_connect_tcp, _connect_usb)
+
             device = None
             for attempt in range(3):
                 try:
-                    # 1. Standard USB / ADB device transport (uses port 27042 forward)
-                    try:
-                        all_devices = frida.enumerate_devices()
-                        logger.info(f"[Frida] Available devices: {[d.id for d in all_devices]}")
-                        for d in all_devices:
-                            if d.id == self.device_serial:
-                                device = d
-                                break
-                    except Exception as enum_err:
-                        logger.debug(f"[Frida] enumerate_devices failed: {enum_err}")
-
-                    # 2. Remote TCP fallback (for Docker / remote hosts)
-                    if not device:
-                        candidate_ports = []
-                        for p_env in [os.getenv("SUDARSHAN_FRIDA_PORT"), os.getenv("FRIDA_SERVER_PORT"), "27042", "27055"]:
-                            if p_env and p_env.isdigit():
-                                p_int = int(p_env)
-                                if p_int not in candidate_ports:
-                                    candidate_ports.append(p_int)
-
-                        for f_port in candidate_ports:
-                            _adb("-s", self.device_serial, "forward", f"tcp:{f_port}", f"tcp:{f_port}", timeout=10)
-                            hosts_to_try = ("127.0.0.1",) if not ADB_HOST else ("127.0.0.1", ADB_HOST)
-                            for frida_host in hosts_to_try:
-                                try:
-                                    dev_remote = frida.get_device_manager().add_remote_device(f"{frida_host}:{f_port}")
-                                    dev_remote.enumerate_processes()
-                                    device = dev_remote
-                                    logger.info(f"[Frida] TCP remote device connected: {frida_host}:{f_port}")
-                                    break
-                                except Exception:
-                                    pass
-                            if device:
-                                break
+                    for connect in connectors:
+                        device = connect()
+                        if device:
+                            break
 
                     if device:
                         break

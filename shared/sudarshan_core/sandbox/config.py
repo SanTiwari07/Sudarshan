@@ -27,6 +27,43 @@ def _first_env(*names: str, default: str = "") -> str:
     return default
 
 
+def adb_server_host() -> str:
+    """
+    Host running the ADB server this process talks to, or "" when it is local.
+
+    ``ADB_SERVER_SOCKET=tcp:<host>:<port>`` makes every adb subcommand execute
+    on THAT host. ``adb forward`` therefore binds its port in the remote host's
+    network namespace, not this one -- so a client of a forwarded port (the
+    Frida client, above all) has to dial the same host. Assuming 127.0.0.1 is
+    what makes Frida unreachable from inside the containers even though
+    ``adb devices`` lists the emulator perfectly.
+    """
+    raw = (os.getenv("ADB_SERVER_SOCKET") or "").strip()
+    if not raw:
+        return ""
+    value = raw[4:] if raw.lower().startswith("tcp:") else raw
+    host = value.rsplit(":", 1)[0] if ":" in value else value
+    host = host.strip().strip("[]")
+    if host.lower() in ("", "127.0.0.1", "localhost", "::1"):
+        return ""
+    return host
+
+
+def frida_client_hosts() -> list:
+    """
+    Ordered, de-duplicated hosts to try when dialling a forwarded Frida port.
+
+    Local loopback first (host runs), then the ADB server host (container runs
+    against a host ADB server), then an explicit ADB_HOST.
+    """
+    hosts = ["127.0.0.1", adb_server_host(), os.getenv("ADB_HOST", "").strip()]
+    out: list = []
+    for host in hosts:
+        if host and host not in out:
+            out.append(host)
+    return out
+
+
 @dataclass(frozen=True)
 class SandboxConfig:
     """Runtime configuration for the sandbox abstraction layer."""

@@ -89,6 +89,37 @@ def default_frida_version() -> str:
     ).strip() or DEFAULT_FRIDA_VERSION
 
 
+# Files that only ever exist at the top of a Sudarshan checkout.
+_REPO_MARKERS = ("docker-compose.yml", ".env.example", ".git")
+
+
+def detect_repo_root(start: Optional[Path] = None) -> Path:
+    """
+    Locate the repository root, or the best stand-in for it.
+
+    ``parents[3]`` is correct only for the on-disk layout
+    (``shared/sudarshan_core/sandbox/frida_assets.py`` → repo root). Inside the
+    containers ``shared/`` is bind-mounted at ``/opt/sudarshan-core``, so the
+    same arithmetic yields **/opt** - which is why the frida-server cache landed
+    in the container's writable layer and was discarded on every rebuild.
+
+    Resolution order:
+      1. ``SUDARSHAN_REPO_ROOT`` - explicit override (set it in a container)
+      2. the nearest ancestor holding a repo marker
+      3. ``parents[3]`` - the host layout, unchanged
+    """
+    env_root = (os.getenv("SUDARSHAN_REPO_ROOT") or "").strip()
+    if env_root:
+        return Path(env_root).expanduser()
+
+    here = (start or Path(__file__)).resolve()
+    for parent in here.parents:
+        if any((parent / marker).exists() for marker in _REPO_MARKERS):
+            return parent
+
+    return here.parents[3] if len(here.parents) > 3 else here.parent
+
+
 def frida_server_search_dirs(repo_root: Optional[Path] = None) -> List[Path]:
     """Ordered directories that may contain frida-server binaries."""
     roots: List[Path] = []
@@ -101,8 +132,7 @@ def frida_server_search_dirs(repo_root: Optional[Path] = None) -> List[Path]:
         roots.append(Path(env_dir).expanduser())
 
     if repo_root is None:
-        # shared/sudarshan_core/sandbox/frida_assets.py → repo root
-        repo_root = Path(__file__).resolve().parents[3]
+        repo_root = detect_repo_root()
 
     version = default_frida_version()
     roots.extend(
@@ -113,6 +143,10 @@ def frida_server_search_dirs(repo_root: Optional[Path] = None) -> List[Path]:
             repo_root / f"frida-server-{version}-android-arm",
             repo_root / "frida-server",
             repo_root / "bin" / "frida-server",
+            # auto_download_dir() caches into tools/, so it MUST be searched -
+            # without it a downloaded or hand-placed binary is invisible to
+            # locate_frida_server() and only the download short-circuit finds it.
+            repo_root / "tools",
             repo_root / "tools" / "frida-server",
             repo_root,
         ]
@@ -232,7 +266,7 @@ def auto_download_dir(repo_root: Optional[Path] = None) -> Path:
     if env_dir:
         return Path(env_dir).expanduser()
     if repo_root is None:
-        repo_root = Path(__file__).resolve().parents[3]
+        repo_root = detect_repo_root()
     return repo_root / "tools"
 
 

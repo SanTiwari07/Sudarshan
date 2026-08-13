@@ -82,8 +82,15 @@ services:
       dockerfile: analysis-engine/Dockerfile
     container_name: sudarshan-analysis-engine
     env_file:
-      - .env
-      - analysis-engine/.env
+      # The root .env carries every value this service needs. analysis-engine/.env
+      # is an optional per-service override and is gitignored, so a fresh clone
+      # does not have one. Declared as a plain string it is mandatory, and Compose
+      # aborts the whole stack on a missing file - the "boots on my laptop, not
+      # on yours" failure. required: false lets the override stay optional.
+      - path: .env
+        required: true
+      - path: analysis-engine/.env
+        required: false
     # NOT published. This service has no authentication of its own; the backend
     # reaches it as http://analysis-engine:8001 on the internal compose network.
     expose:
@@ -100,6 +107,11 @@ services:
       - ANDROID_SANDBOX_PROVIDER=${ANDROID_SANDBOX_PROVIDER:-${SANDBOX_PROVIDER:-auto}}
       - FRIDA_PORT=${FRIDA_PORT:-27055}
       - FRIDA_VERSION=${FRIDA_VERSION:-17.16.4}
+      # frida-server is ~106 MB (over GitHub's file limit) so tools/ is
+      # gitignored. Pointing the cache at the bind-mounted host directory means
+      # it is downloaded once per machine instead of once per container build -
+      # the container's writable layer is discarded on every `--build`.
+      - FRIDA_SERVER_DIR=${FRIDA_SERVER_DIR:-/opt/frida-cache}
       - AUTO_CONNECT=${AUTO_CONNECT:-true}
       - ROOT_REQUIRED=${ROOT_REQUIRED:-true}
       - MOBSF_HOST=http://mobsf:8000
@@ -135,6 +147,10 @@ services:
       - ./.env:/app/.env:ro
       - uploads:/app/uploads
       - ~/.android:/root/.android:ro
+      # Host-side frida-server cache (see FRIDA_SERVER_DIR above). Writable on
+      # purpose: the engine downloads the ABI-matched binary here on first use
+      # and every later container reuses it.
+      - ./tools:/opt/frida-cache
       - mitmproxy_har:/mitmproxy_har:ro
     mem_limit: 4g
     cpus: 2.0

@@ -136,6 +136,14 @@ if (-not (Test-Path (Join-Path $Root ".env"))) {
 
 Import-DotEnv -Path (Join-Path $Root ".env")
 
+# analysis-engine/.env is an OPTIONAL per-service override (docker-compose marks
+# it required: false). It is gitignored, so a fresh clone never has one and the
+# root .env supplies every value the engine needs. Say so, because its absence
+# used to abort the whole stack.
+if (Test-Path (Join-Path $Root "analysis-engine\.env")) {
+    Write-Info "analysis-engine/.env present -- layered over the root .env"
+}
+
 $jwt = $env:JWT_SECRET_KEY
 if ([string]::IsNullOrWhiteSpace($jwt)) {
     $secretKey = -join ((1..64) | ForEach-Object { "{0:x}" -f (Get-Random -Max 16) })
@@ -169,6 +177,21 @@ if ([string]::IsNullOrWhiteSpace($env:DEVICE_SERIAL) -and $env:ANDROID_DEVICE_SE
 }
 if ([string]::IsNullOrWhiteSpace($env:ANDROID_DEVICE_SERIAL) -and $env:DEVICE_SERIAL) {
     $env:ANDROID_DEVICE_SERIAL = $env:DEVICE_SERIAL
+}
+
+# Config-only preflight (no ADB / Frida probes -- the sandbox bootstrap below
+# covers those on the host). Catches the silent degraders early: a missing
+# GEMINI_API_KEY downgrades the agentic explorer to the fallback planner, and
+# SUDARSHAN_DISABLE_SCREENSHOTS empties the evidence gallery. Advisory only.
+$preflight = Join-Path $Root "scripts\preflight.py"
+if (Test-Path $preflight) {
+    $pyCfg = Find-Python
+    if ($pyCfg) {
+        & $pyCfg $preflight --no-device
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warn "Preflight reported blocking issues (see above)"
+        }
+    }
 }
 
 Write-Info "Sandbox provider mode: $($env:SANDBOX_PROVIDER)"
@@ -263,11 +286,42 @@ if ($Detach) {
         exit $LASTEXITCODE
     }
     Write-Ok "Stack started in background"
+
+    # The check that actually matters: `adb devices` resolves differently inside
+    # the engine than on the host. The host ADB server binds 127.0.0.1, so
+    # ADB_SERVER_SOCKET=tcp:host.docker.internal:5037 only reaches it when the
+    # host server was started listening on all interfaces. Without this the run
+    # completes with zero devices and an empty screenshot gallery.
+    Write-Host ""
+    Write-Info "Waiting for analysis-engine before running the in-container preflight..."
+    $engineUp = $false
+    foreach ($attempt in 1..30) {
+        $state = & docker compose ps --status running --services 2>$null
+        if ($state -and ($state -split "\r?\n") -contains "analysis-engine") {
+            $engineUp = $true
+            break
+        }
+        Start-Sleep -Seconds 3
+    }
+
+    if (-not $engineUp) {
+        Write-Warn "analysis-engine did not reach running state -- skipping in-container preflight"
+        Write-Info "Run it later with: docker compose exec analysis-engine python -m sudarshan_core.preflight"
+    } else {
+        & docker compose exec -T analysis-engine python -m sudarshan_core.preflight
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warn "In-container preflight found blocking issues -- dynamic analysis will not produce runtime evidence until they are fixed"
+        } else {
+            Write-Ok "In-container preflight passed"
+        }
+    }
+
     Write-Host ""
     Write-Host "Useful commands:" -ForegroundColor DarkGray
     Write-Host "  docker compose ps"
     Write-Host "  docker compose logs -f backend"
     Write-Host "  docker compose down"
+    Write-Host "  python scripts/preflight.py --container   # re-run all preflight checks"
     exit 0
 }
 

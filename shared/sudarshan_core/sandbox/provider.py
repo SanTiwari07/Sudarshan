@@ -379,37 +379,57 @@ class SandboxProvider(ABC):
         return paths
 
     def _frida_process_running(self, serial: str, names: List[str]) -> Tuple[bool, str]:
-        """Detect frida-server via pgrep (ps NAME column may truncate long binary names)."""
-        patterns: List[str] = []
+        """
+        Detect a running frida-server by process NAME, never by command line.
+
+        `pgrep -f frida-server` also matches the `sh -c '... frida-server ...'`
+        that runs the probe, because -f searches the full argv and the pattern
+        is literally in it. That self-match made this return True on a device
+        where no agent was running at all, so ensure_frida() took its
+        already-running early return and never started one. Instrumentation
+        then failed on every machine where nobody had launched frida-server by
+        hand - while the connection summary still cheerfully reported
+        frida=True.
+
+        Both probes below match the NAME/comm column only, which is `sh` for
+        the probe itself and so cannot self-match.
+        """
+        candidates: List[str] = []
         for n in names:
             if not n:
                 continue
-            patterns.append(n)
+            candidates.append(n)
+            # The kernel truncates comm to 15 chars (sudarshan_agent_srv ->
+            # sudarshan_agent), so match the truncated form too.
             if len(n) > 15:
-                patterns.append(n[:15])
-        if not patterns:
-            patterns = ["frida-server"]
-        seen = set()
-        uniq = []
-        for p in patterns:
-            if p not in seen:
-                seen.add(p)
-                uniq.append(p)
-        grep_pat = "|".join(uniq)
-        ok, out = self.adb_shell(
-            serial,
-            f"su 0 pgrep -f '{uniq[0]}' 2>/dev/null || su 0 pgrep -f frida-server 2>/dev/null || "
-            f"su 0 ps -A 2>/dev/null | grep -E '{grep_pat}' || "
-            f"pgrep -f '{uniq[0]}' 2>/dev/null || ps -A 2>/dev/null | grep -E '{grep_pat}' || true",
-            timeout=20,
-        )
-        text = out or ""
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
-        running = bool(lines) and (
-            any(p in text for p in uniq)
-            or any(line.isdigit() for line in lines)
-        )
-        return running, text
+                candidates.append(n[:15])
+        if not candidates:
+            candidates = ["frida-server"]
+        uniq = list(dict.fromkeys(candidates))
+
+        # pidof resolves a process name to PIDs and ignores the caller's argv.
+        probe = " ; ".join(f"pidof {n} 2>/dev/null" for n in uniq)
+        ok, out = self.adb_shell(serial, probe, timeout=20)
+        text = (out or "").strip()
+        if ok and any(tok.isdigit() for line in text.splitlines() for tok in line.split()):
+            return True, text
+
+        # Fallback for images without pidof: exact match on the NAME column.
+        ok2, out2 = self.adb_shell(serial, "ps -A -o PID,NAME", timeout=20)
+        if not ok2:
+            return False, text or (out2 or "")
+        wanted = {n.lower() for n in uniq}
+        matched: List[str] = []
+        for line in (out2 or "").splitlines():
+            parts = line.split()
+            # Require a numeric PID column. This skips the "PID NAME" header
+            # without assuming one is present, and rejects any line that is not
+            # a real process row.
+            if len(parts) < 2 or not parts[0].isdigit():
+                continue
+            if parts[-1].lower() in wanted:
+                matched.append(line.strip())
+        return bool(matched), "\n".join(matched) if matched else text
 
     def resolve_frida_binary(self, serial: str, abi: str = "", abilist: str = "") -> FridaBinarySpec:
         """

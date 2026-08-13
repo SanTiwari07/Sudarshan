@@ -279,14 +279,24 @@ def test_ensure_frida_restarts(geny_cfg):
     p = GenymotionProvider(geny_cfg)
     calls = {"n": 0}
 
+    # The agent is detected by process NAME (pidof, then `ps -A -o PID,NAME`),
+    # never by `pgrep -f`, which would also match the shell running the probe.
+    started = {"yes": False}
+
     def fake_shell(serial, command, timeout=30):
         calls["n"] += 1
-        if ("pgrep" in command or "ps -A" in command) and calls["n"] <= 2:
-            return True, ""  # not running initially
         if command.startswith("ls "):
             return True, "/data/local/tmp/sudarshan_agent_srv"
-        if "pgrep" in command or "ps -A" in command:
-            return True, "sudarshan_agent_srv"
+        if "pidof" in command:
+            return (True, "4242") if started["yes"] else (True, "")
+        if "ps -A" in command:
+            if started["yes"]:
+                return True, "PID NAME\n 4242 sudarshan_agent"
+            return True, "PID NAME"
+        if "pkill" in command:
+            return True, ""
+        # Anything else is the start command itself.
+        started["yes"] = True
         return True, ""
 
     with patch.object(p, "adb_shell", side_effect=fake_shell):

@@ -162,12 +162,12 @@ export default function EvidenceInspectionModal({
   if (!entry) return null;
 
   // Metadata extraction for panel
-  const screenshotId = entry.screenshot_id || entry.id || ve?.id || 'SCR-000';
+  const screenshotId = entry.screenshot_id || entry.id || ve?.screenshot_id || 'SCR-000';
   const timestampText = formatScreenshotTime(entry.timestamp_ms);
   const evidenceIds = ve?.linked_evidence_ids && ve.linked_evidence_ids.length > 0
     ? ve.linked_evidence_ids
-    : entry.evidence_ids && entry.evidence_ids.length > 0
-    ? entry.evidence_ids
+    : entry.linked_evidence_ids && entry.linked_evidence_ids.length > 0
+    ? entry.linked_evidence_ids
     : null;
 
   const quality = ve?.quality || entry.quality || null;
@@ -176,16 +176,16 @@ export default function EvidenceInspectionModal({
   const observation = ve?.investigative_claim || entry.investigative_claim || entry.reason || entry.label || screenshotDescription(entry);
   const findingKeys = ve?.linked_finding_keys && ve.linked_finding_keys.length > 0
     ? ve.linked_finding_keys
-    : entry.findings && entry.findings.length > 0
-    ? entry.findings
+    : entry.linked_finding_keys && entry.linked_finding_keys.length > 0
+    ? entry.linked_finding_keys
     : null;
 
   const trigger = ve?.capture_trigger || entry.capture_trigger || entry.activity || entry.reason || null;
-  const corroboration = ve?.corroboration_summary || entry.corroboration_summary || null;
-  const analystNote = ve?.analyst_note || entry.analyst_note || null;
-  const mitreTech = ve?.mitre || entry.mitre_technique || entry.mitre || null;
-  const confidenceVal = entry.phish_confidence
-    ? `${Math.round(entry.phish_confidence * 100)}%`
+  const corroboration = (entry as any).corroboration_summary || null;
+  const analystNote = (entry as any).analyst_note || null;
+  const mitreTech = (entry as any).mitre_technique || (entry as any).mitre || null;
+  const confidenceVal = (entry as any).phish_confidence
+    ? `${Math.round((entry as any).phish_confidence * 100)}%`
     : ve?.priority
     ? `Priority ${ve.priority}`
     : null;

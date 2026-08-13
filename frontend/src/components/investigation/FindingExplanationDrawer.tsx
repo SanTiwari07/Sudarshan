@@ -28,7 +28,7 @@ export default function FindingExplanationDrawer({
       open
       onClose={closeFindingExplanation}
       title={vm.title}
-      subtitle={vm.summary}
+      subtitle={vm.subtitle}
       headerExtra={
         <div className="flex flex-wrap items-center gap-2 mt-2">
           <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${sevClass}`}>

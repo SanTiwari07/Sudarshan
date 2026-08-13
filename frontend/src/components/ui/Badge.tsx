@@ -1,4 +1,5 @@
 import { getRiskStyle, getSeverityStyle } from '../../theme/colors';
+import { TYPOGRAPHY } from '../../theme/typography';
 
 interface BadgeProps {
   label: string;
@@ -17,7 +18,7 @@ export default function Badge({ label, variant = 'custom', className = '' }: Bad
   }
 
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wide ${styleClass}`}>
+    <span className={`${TYPOGRAPHY.badge} ${styleClass}`.trim()}>
       {label}
     </span>
   );

@@ -18,8 +18,51 @@
   }
 
   body {
-    @apply antialiased text-slate-900 bg-slate-50 min-w-0;
+    @apply antialiased text-slate-900 bg-slate-50 min-w-0 font-sans;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+@layer utilities {
+  /* Centralized Typography System Utilities */
+  .typo-display {
+    @apply font-mono text-5xl sm:text-6xl font-extrabold tracking-tight text-slate-900 tabular-nums leading-none;
+  }
+  .typo-h1 {
+    @apply font-sans text-xl sm:text-2xl font-bold tracking-tight text-slate-900 leading-snug;
+  }
+  .typo-h2 {
+    @apply font-sans text-lg sm:text-xl font-semibold tracking-tight text-slate-900 leading-snug;
+  }
+  .typo-h3 {
+    @apply font-sans text-sm sm:text-base font-semibold tracking-tight text-slate-900 leading-snug;
+  }
+  .typo-card-title {
+    @apply font-sans text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center gap-1.5;
+  }
+  .typo-section-title {
+    @apply font-sans text-xs font-bold uppercase tracking-widest text-slate-800 flex items-center gap-2;
+  }
+  .typo-body {
+    @apply font-sans text-sm font-normal text-slate-800 leading-relaxed;
+  }
+  .typo-body-sm {
+    @apply font-sans text-xs font-normal text-slate-600 leading-normal;
+  }
+  .typo-label {
+    @apply font-sans text-[11px] font-semibold uppercase tracking-wider text-slate-500 shrink-0;
+  }
+  .typo-caption {
+    @apply font-sans text-[11px] font-normal text-slate-500 leading-normal;
+  }
+  .typo-badge {
+    @apply font-sans text-[11px] font-bold uppercase tracking-wider inline-flex items-center px-2 py-0.5 rounded border shadow-2xs;
+  }
+  .typo-button {
+    @apply font-sans text-xs font-semibold uppercase tracking-wider inline-flex items-center justify-center gap-2 rounded-md shadow-xs transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-60;
+  }
+  .typo-code {
+    @apply font-mono text-xs font-medium text-slate-800 tabular-nums break-all select-all;
   }
 }
 

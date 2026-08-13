@@ -9,6 +9,7 @@ import CompletionScreen from './progress/CompletionScreen';
 import { useAnalysisSession } from './useAnalysisSession';
 import type { FraudCardData } from '../../App';
 import { getToken } from '../../pages/Login';
+import { TYPOGRAPHY } from '../../theme/typography';
 
 type UploadPageProps = {
   onAnalysisComplete: (data: FraudCardData) => void;
@@ -53,7 +54,7 @@ export default function UploadPage({ onAnalysisComplete }: UploadPageProps) {
           <div className="flex border-b border-slate-200 mb-6 overflow-x-auto scrollbar-hide">
             <button
               onClick={() => setMode('apk')}
-              className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+              className={`px-6 py-3 ${TYPOGRAPHY.button} border-b-2 transition-colors ${
                 mode === 'apk'
                   ? 'border-blue-600 text-blue-700 bg-blue-50'
                   : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
@@ -63,7 +64,7 @@ export default function UploadPage({ onAnalysisComplete }: UploadPageProps) {
             </button>
             <button
               onClick={() => setMode('url')}
-              className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+              className={`px-6 py-3 ${TYPOGRAPHY.button} border-b-2 transition-colors ${
                 mode === 'url'
                   ? 'border-blue-600 text-blue-700 bg-blue-50'
                   : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
@@ -110,11 +111,11 @@ export default function UploadPage({ onAnalysisComplete }: UploadPageProps) {
           <section className="mt-12" aria-labelledby="pipeline-overview-heading">
             <h2
               id="pipeline-overview-heading"
-              className="text-base font-semibold text-slate-900 tracking-tight"
+              className={TYPOGRAPHY.h2}
             >
               Pipeline overview
             </h2>
-            <p className="text-sm text-slate-500 mt-1 mb-6">
+            <p className={`${TYPOGRAPHY.bodySmall} mt-1 mb-6`}>
               Stages executed automatically after you submit an APK.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -133,7 +134,7 @@ export default function UploadPage({ onAnalysisComplete }: UploadPageProps) {
           {error && (
             <div className="mt-8 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">
               <AlertTriangle className="h-5 w-5 shrink-0" aria-hidden />
-              <p className="text-sm">{error}</p>
+              <p className={TYPOGRAPHY.bodySmall}>{error}</p>
             </div>
           )}
 
@@ -142,7 +143,7 @@ export default function UploadPage({ onAnalysisComplete }: UploadPageProps) {
               type="button"
               disabled={!file || isBusy}
               onClick={() => void startAnalysis()}
-              className="mt-10 w-full h-14 flex justify-center items-center gap-2 rounded-[13px] text-[15px] font-semibold text-white bg-blue-700 shadow-sm hover:bg-blue-800 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none disabled:cursor-not-allowed transition-all duration-200"
+              className={`mt-10 w-full h-14 flex justify-center items-center gap-2 rounded-[13px] ${TYPOGRAPHY.button} text-white bg-blue-700 shadow-sm hover:bg-blue-800 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none disabled:cursor-not-allowed transition-all duration-200`}
             >
               {isBusy ? (
                 <>

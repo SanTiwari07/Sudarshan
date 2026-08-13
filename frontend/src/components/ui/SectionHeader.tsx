@@ -1,4 +1,5 @@
 import React from 'react';
+import { TYPOGRAPHY } from '../../theme/typography';
 
 interface SectionHeaderProps {
   icon: React.ReactNode;
@@ -19,9 +20,9 @@ export default function SectionHeader({ icon, title, subtitle, badge, action, cl
           {icon}
         </span>
         <div className="min-w-0 pt-0.5">
-          <h2 className="text-xs font-bold text-slate-900 tracking-wider uppercase">{title}</h2>
+          <h2 className={TYPOGRAPHY.cardTitle}>{title}</h2>
           {subtitle && (
-            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">{subtitle}</p>
+            <p className={`${TYPOGRAPHY.caption} mt-0.5`}>{subtitle}</p>
           )}
         </div>
       </div>

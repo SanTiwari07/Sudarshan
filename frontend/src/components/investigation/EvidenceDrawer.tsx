@@ -5,6 +5,7 @@ import { findEvidenceById } from '../../hooks/useInvestigationModel';
 import type { InvestigationBundle } from '../../types/investigation';
 import { useInvestigationUI } from '../../context/InvestigationUIContext';
 import { fetchScreenshotBlob } from '../../lib/screenshots';
+import { TYPOGRAPHY } from '../../theme/typography';
 import {
   buildFindingExplanation,
   findingHeadline,
@@ -20,8 +21,8 @@ import ScreenshotLightbox from './ScreenshotLightbox';
 function ExplainSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="border-t border-slate-100 pt-4 first:border-0 first:pt-0">
-      <h3 className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 mb-2">{title}</h3>
-      <div className="text-[13px] text-slate-700 leading-relaxed">{children}</div>
+      <h3 className={`${TYPOGRAPHY.label} mb-2`}>{title}</h3>
+      <div className={TYPOGRAPHY.bodySmall}>{children}</div>
     </section>
   );
 }
@@ -41,7 +42,7 @@ function CollapsibleBlock({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 text-left text-[12px] font-semibold text-slate-800 hover:text-slate-900"
+        className={`flex items-center gap-1.5 text-left ${TYPOGRAPHY.buttonSm} text-slate-800 hover:text-slate-900`}
       >
         {open ? <ChevronDown className="h-3.5 w-3.5 text-slate-400" /> : <ChevronRight className="h-3.5 w-3.5 text-slate-400" />}
         {title}
@@ -99,11 +100,10 @@ export default function EvidenceDrawer({
   const explanation = evidence ? buildFindingExplanation(evidence, data) : null;
   const headline = evidence ? findingHeadline(evidence) : null;
   const artifacts = evidence?.artifactRefs ?? [];
-  const visualSingle = drawerEvidenceId
+  const visualEntries = drawerEvidenceId
     ? illustratedByEvidenceId(drawerEvidenceId, screenshotManifestEntries)
-    : null;
-  const visualEntries = visualSingle ? [visualSingle] : [];
-  const sourceLabel = evidence ? sourceDisplayLabel(evidence.sourceEngine || evidence.category) : '';
+    : [];
+  const sourceLabel = evidence ? sourceDisplayLabel(evidence) : '';
 
   return (
     <>
@@ -113,8 +113,8 @@ export default function EvidenceDrawer({
           <div className="px-5 py-4 border-b border-slate-200 shrink-0">
             <div className="flex justify-between items-start gap-3">
               <div className="min-w-0">
-                <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Evidence</h2>
-                <p className="font-mono text-[12px] text-slate-600 mt-1">{drawerEvidenceId}</p>
+                <h2 className={TYPOGRAPHY.label}>Evidence</h2>
+                <p className={`${TYPOGRAPHY.codeSm} text-slate-600 mt-1`}>{drawerEvidenceId}</p>
               </div>
               <button
                 type="button"
@@ -132,18 +132,19 @@ export default function EvidenceDrawer({
                   <SeverityIndicator severity={evidence.severity} />
                   <span className="text-slate-300" aria-hidden>|</span>
                   <div>
-                    <span className="text-[15px] font-semibold text-slate-900 tabular-nums leading-none">
+                    <span className={`${TYPOGRAPHY.h2} tabular-nums leading-none`}>
                       {evidence.confidence}%
                     </span>
-                    <p className="text-[11px] text-slate-600 mt-0.5">{explanation.confidenceTierLabel}</p>
-                    <p className="text-[10px] text-slate-400">Verified evidence</p>
+                    <p className={`${TYPOGRAPHY.caption} font-medium mt-0.5`}>{explanation.confidenceTierLabel}</p>
+                    <p className={TYPOGRAPHY.caption}>Verified evidence</p>
                   </div>
-                  <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 ml-auto sm:ml-0">
+                  <span className={`${TYPOGRAPHY.label} ml-auto sm:ml-0`}>
                     {sourceLabel}
                   </span>
                 </div>
                 <div>
-                  <p className="text-[15px] font-semibold text-slate-900 leading-snug">{headline}</p>
+                  <p className={`${TYPOGRAPHY.h3} leading-snug`}>{headline.title}</p>
+                  {headline.subtitle && <p className={`${TYPOGRAPHY.bodySmall} mt-1`}>{headline.subtitle}</p>}
                 </div>
               </div>
             )}
@@ -157,16 +158,16 @@ export default function EvidenceDrawer({
               <ExplainSection title="What does the evidence show?">{explanation.evidenceInterpretation}</ExplainSection>
 
               <section className="border-t border-slate-100 pt-4">
-                <h3 className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 mb-2">
+                <h3 className={`${TYPOGRAPHY.label} mb-2`}>
                   Where was it found?
                 </h3>
-                <p className="text-[13px] text-slate-700 leading-relaxed">{explanation.artifactIntro}</p>
+                <p className={TYPOGRAPHY.bodySmall}>{explanation.artifactIntro}</p>
                 {artifacts.length > 0 && (
                   <div className="mt-3">
                     <button
                       type="button"
                       onClick={() => setArtifactsOpen((v) => !v)}
-                      className="flex items-center gap-1.5 text-[12px] font-semibold text-slate-800 hover:text-slate-900"
+                      className={`flex items-center gap-1.5 ${TYPOGRAPHY.buttonSm} text-slate-800 hover:text-slate-900`}
                     >
                       {artifactsOpen ? (
                         <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
@@ -178,7 +179,7 @@ export default function EvidenceDrawer({
                     {artifactsOpen && (
                       <ul className="mt-2 space-y-1.5 pl-1">
                         {artifacts.map((a) => (
-                          <li key={a} className="font-mono text-[11px] text-slate-600 break-all">{a}</li>
+                          <li key={a} className={`${TYPOGRAPHY.codeSm} break-all`}>{a}</li>
                         ))}
                       </ul>
                     )}
@@ -190,7 +191,7 @@ export default function EvidenceDrawer({
 
               {visualEntries.length > 0 && (
                 <section className="border-t border-slate-100 pt-4 space-y-2">
-                  <h3 className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                  <h3 className={TYPOGRAPHY.label}>
                     Visual evidence
                   </h3>
                   {visualEntries.map((entry) => (
@@ -206,7 +207,7 @@ export default function EvidenceDrawer({
 
               {evidence.screenshotRef && visualEntries.length === 0 && (
                 <section className="border-t border-slate-100 pt-4">
-                  <h3 className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 mb-2">
+                  <h3 className={`${TYPOGRAPHY.label} mb-2`}>
                     Runtime screenshot
                   </h3>
                   {thumb ? (
@@ -214,19 +215,19 @@ export default function EvidenceDrawer({
                       <img src={thumb} alt="" className="w-full max-w-[12rem] rounded-md border border-slate-200" />
                     </button>
                   ) : (
-                    <span className="text-[13px] text-slate-500">Loading preview…</span>
+                    <span className={TYPOGRAPHY.caption}>Loading preview…</span>
                   )}
                 </section>
               )}
 
               {evidence.hookNames && evidence.hookNames.length > 0 && (
                 <section className="border-t border-slate-100 pt-4">
-                  <h3 className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 mb-2">
+                  <h3 className={`${TYPOGRAPHY.label} mb-2`}>
                     Runtime hooks
                   </h3>
                   <ul className="space-y-1">
                     {evidence.hookNames.map((hook) => (
-                      <li key={hook} className="font-mono text-[11px] text-slate-600 break-all">{hook}</li>
+                      <li key={hook} className={`${TYPOGRAPHY.codeSm} break-all`}>{hook}</li>
                     ))}
                   </ul>
                 </section>
@@ -235,79 +236,79 @@ export default function EvidenceDrawer({
               <CollapsibleBlock title="Technical details">
                 <dl className="grid grid-cols-1 gap-2 text-[12px]">
                   <div>
-                    <dt className="text-slate-500">Finding ID</dt>
-                    <dd className="font-mono text-slate-800">{evidence.id}</dd>
+                    <dt className={TYPOGRAPHY.caption}>Finding ID</dt>
+                    <dd className={TYPOGRAPHY.codeSm}>{evidence.id}</dd>
                   </div>
                   <div>
-                    <dt className="text-slate-500">Source</dt>
-                    <dd className="text-slate-800">{evidence.sourceEngine}</dd>
+                    <dt className={TYPOGRAPHY.caption}>Source</dt>
+                    <dd className={TYPOGRAPHY.bodySmall}>{evidence.sourceEngine}</dd>
                   </div>
                   <div>
-                    <dt className="text-slate-500">Category</dt>
-                    <dd className="text-slate-800">{evidence.category}</dd>
+                    <dt className={TYPOGRAPHY.caption}>Category</dt>
+                    <dd className={TYPOGRAPHY.bodySmall}>{evidence.category}</dd>
                   </div>
                   <div>
-                    <dt className="text-slate-500">Confidence</dt>
-                    <dd className="text-slate-800 tabular-nums">{evidence.confidence}%</dd>
+                    <dt className={TYPOGRAPHY.caption}>Confidence</dt>
+                    <dd className={`${TYPOGRAPHY.bodySmall} tabular-nums`}>{evidence.confidence}%</dd>
                   </div>
                   <div>
-                    <dt className="text-slate-500">Severity (raw)</dt>
-                    <dd className="text-slate-800">{evidence.severity}</dd>
+                    <dt className={TYPOGRAPHY.caption}>Severity (raw)</dt>
+                    <dd className={TYPOGRAPHY.bodySmall}>{evidence.severity}</dd>
                   </div>
                   {evidence.contributionLabel && (
                     <div>
-                      <dt className="text-slate-500">Score contribution</dt>
-                      <dd className="text-slate-800">{evidence.contributionLabel}</dd>
+                      <dt className={TYPOGRAPHY.caption}>Score contribution</dt>
+                      <dd className={TYPOGRAPHY.bodySmall}>{evidence.contributionLabel}</dd>
                     </div>
                   )}
                   {evidence.runtimeSubcategory && (
                     <div>
-                      <dt className="text-slate-500">Runtime subcategory</dt>
-                      <dd className="text-slate-800">{evidence.runtimeSubcategory}</dd>
+                      <dt className={TYPOGRAPHY.caption}>Runtime subcategory</dt>
+                      <dd className={TYPOGRAPHY.bodySmall}>{evidence.runtimeSubcategory}</dd>
                     </div>
                   )}
                   <div>
-                    <dt className="text-slate-500">Artifact count</dt>
-                    <dd className="text-slate-800 tabular-nums">{artifacts.length}</dd>
+                    <dt className={TYPOGRAPHY.caption}>Artifact count</dt>
+                    <dd className={`${TYPOGRAPHY.bodySmall} tabular-nums`}>{artifacts.length}</dd>
                   </div>
                   {evidence.mitreId && (
                     <div>
-                      <dt className="text-slate-500">MITRE</dt>
-                      <dd className="font-mono text-slate-800">
+                      <dt className={TYPOGRAPHY.caption}>MITRE</dt>
+                      <dd className={TYPOGRAPHY.codeSm}>
                         {evidence.mitreId}
                         {evidence.mitreName ? ` - ${evidence.mitreName}` : ''}
                       </dd>
                     </div>
                   )}
                   <div>
-                    <dt className="text-slate-500">Raw finding title</dt>
-                    <dd className="text-slate-800">{evidence.title}</dd>
+                    <dt className={TYPOGRAPHY.caption}>Raw finding title</dt>
+                    <dd className={TYPOGRAPHY.bodySmall}>{evidence.title}</dd>
                   </div>
                   {evidence.description?.trim() && (
                     <div>
-                      <dt className="text-slate-500">Raw description</dt>
-                      <dd className="text-slate-800 leading-relaxed">{evidence.description.trim()}</dd>
+                      <dt className={TYPOGRAPHY.caption}>Raw description</dt>
+                      <dd className={TYPOGRAPHY.bodySmall}>{evidence.description.trim()}</dd>
                     </div>
                   )}
                 </dl>
                 {artifacts.length > 0 && (
                   <div className="mt-3">
-                    <p className="text-[11px] font-semibold text-slate-500 mb-1">Artifact paths</p>
+                    <p className={`${TYPOGRAPHY.label} mb-1`}>Artifact paths</p>
                     <ul className="space-y-1">
                       {artifacts.map((a) => (
-                        <li key={a} className="font-mono text-[10px] text-slate-600 break-all">{a}</li>
+                        <li key={a} className={`${TYPOGRAPHY.codeSm} break-all`}>{a}</li>
                       ))}
                     </ul>
                   </div>
                 )}
               </CollapsibleBlock>
 
-              <p className="text-[11px] text-slate-400 pt-4 border-t border-slate-100 mt-4 leading-relaxed">
+              <p className={`${TYPOGRAPHY.caption} pt-4 border-t border-slate-100 mt-4`}>
                 {explanation.confidenceTierExplanation}
               </p>
             </div>
           ) : (
-            <div className="p-5 text-sm text-slate-500">
+            <div className={`p-5 ${TYPOGRAPHY.bodySmall}`}>
               No structured record for this ID. Check ledger lines or related findings in the registry.
             </div>
           )}

@@ -49,7 +49,7 @@ export default function VisualEvidenceCard({
           >
             <img
               src={thumb}
-              alt={ve.caption || ve.investigative_claim || ''}
+              alt={ve.claim || ve.investigative_claim || ''}
               className="h-20 w-20 object-cover rounded-md border border-slate-200 group-hover/thumb:scale-105 transition-transform duration-200"
             />
             <div className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover/thumb:opacity-100 flex items-center justify-center transition-opacity rounded-md">

@@ -1,6 +1,7 @@
 import { BarChart2, FileText, ShieldCheck } from 'lucide-react';
 import type { FraudCardData } from '../../App';
 import { getRiskStyle } from '../../theme/colors';
+import { TYPOGRAPHY } from '../../theme/typography';
 import { extractAppMetadata } from '../../lib/analystCopy';
 import HelpTerm from './HelpTerm';
 import CopyButton from '../ui/CopyButton';
@@ -31,10 +32,10 @@ function ScoreRing({ score, pct, strokeClass }: { score: number; pct: number; st
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-6xl sm:text-7xl font-black tabular-nums text-slate-900 leading-none tracking-tight font-mono">
+        <span className={TYPOGRAPHY.display}>
           {score.toFixed(0)}
         </span>
-        <span className="text-xs sm:text-sm font-bold text-slate-400 mt-1 select-none font-mono">/ 100</span>
+        <span className={TYPOGRAPHY.displaySub}>/ 100</span>
       </div>
     </div>
   );
@@ -86,13 +87,13 @@ export default function FraudRiskHero({ data }: { data: FraudCardData }) {
               <div className="xl:col-span-4 p-5 rounded-xl bg-slate-50/90 border border-slate-200/90 shadow-2xs flex flex-col items-center justify-center text-center space-y-3">
                 <ScoreRing score={score} pct={pct} strokeClass={riskStyle.text} />
                 <div className="flex flex-col items-center space-y-1.5 pt-1">
-                  <span className={`inline-flex items-center px-3 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider ${riskStyle.badge} border shadow-2xs`}>
+                  <span className={`${TYPOGRAPHY.badgePill} ${riskStyle.badge}`}>
                     {data.risk_band ? data.risk_band.toUpperCase() : 'SAFE'}
                   </span>
-                  <h3 className="text-2xl font-black text-slate-900 tracking-tight uppercase">
+                  <h3 className={TYPOGRAPHY.h2}>
                     {data.risk_band ? data.risk_band.toUpperCase() : 'LOW RISK'}
                   </h3>
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600 font-mono tracking-wide uppercase">
+                  <div className={`flex items-center gap-1.5 ${TYPOGRAPHY.label}`}>
                     <HelpTerm term="Risk Score">Fraud Risk Score (FRS)</HelpTerm>
                   </div>
                 </div>
@@ -103,7 +104,7 @@ export default function FraudRiskHero({ data }: { data: FraudCardData }) {
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 pb-2.5 border-b border-slate-200/80">
                     <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 shrink-0" />
-                    <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-900 font-mono">
+                    <h3 className={TYPOGRAPHY.cardTitle}>
                       APK OVERVIEW
                     </h3>
                   </div>
@@ -111,45 +112,45 @@ export default function FraudRiskHero({ data }: { data: FraudCardData }) {
                   {/* Structured Metadata Grid */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
                     <div className="flex items-center justify-between gap-2 py-1 border-b border-slate-100">
-                      <span className="font-bold text-slate-500 uppercase tracking-wider text-[11px] font-mono">App name:</span>
-                      <span className="font-semibold text-slate-900 text-right truncate max-w-[180px]">{appName}</span>
+                      <span className={TYPOGRAPHY.label}>App name:</span>
+                      <span className={`${TYPOGRAPHY.bodySmall} font-semibold text-slate-900 text-right truncate max-w-[180px]`}>{appName}</span>
                     </div>
                     <div className="flex items-center justify-between gap-2 py-1 border-b border-slate-100">
-                      <span className="font-bold text-slate-500 uppercase tracking-wider text-[11px] font-mono">Package name:</span>
-                      <span className="font-mono font-semibold text-slate-800 text-right truncate max-w-[180px]">{packageName}</span>
+                      <span className={TYPOGRAPHY.label}>Package name:</span>
+                      <span className={`${TYPOGRAPHY.codeSm} text-right truncate max-w-[180px]`}>{packageName}</span>
                     </div>
                     <div className="flex items-center justify-between gap-2 py-1 border-b border-slate-100">
-                      <span className="font-bold text-slate-500 uppercase tracking-wider text-[11px] font-mono">Version:</span>
-                      <span className="font-mono font-semibold text-slate-800 text-right">{appVersion}</span>
+                      <span className={TYPOGRAPHY.label}>Version:</span>
+                      <span className={`${TYPOGRAPHY.bodySmall} font-medium text-slate-800 text-right`}>{appVersion}</span>
                     </div>
                     <div className="flex items-center justify-between gap-2 py-1 border-b border-slate-100">
-                      <span className="font-bold text-slate-500 uppercase tracking-wider text-[11px] font-mono">Size:</span>
-                      <span className="font-mono font-semibold text-slate-800 text-right">{appSize}</span>
+                      <span className={TYPOGRAPHY.label}>Size:</span>
+                      <span className={`${TYPOGRAPHY.bodySmall} font-medium text-slate-800 text-right`}>{appSize}</span>
                     </div>
                     <div className="flex items-center justify-between gap-2 py-1 border-b border-slate-100 sm:col-span-2">
-                      <span className="font-bold text-slate-500 uppercase tracking-wider text-[11px] font-mono shrink-0">SHA256:</span>
+                      <span className={TYPOGRAPHY.label}>SHA256:</span>
                       <div className="flex items-center gap-1.5 min-w-0 flex-1 justify-end">
-                        <span className="font-mono text-[11px] font-semibold text-slate-700 break-all text-right select-all" title={fullSha256}>
+                        <span className={`${TYPOGRAPHY.hash} text-right`} title={fullSha256}>
                           {fullSha256}
                         </span>
                         {fullSha256 && <CopyButton value={fullSha256} className="h-5 w-5 p-0.5 shrink-0 text-slate-400 hover:text-slate-600" />}
                       </div>
                     </div>
                     <div className="flex items-center justify-between gap-2 py-1 border-b border-slate-100">
-                      <span className="font-bold text-slate-500 uppercase tracking-wider text-[11px] font-mono">Analysis date:</span>
-                      <span className="font-mono font-semibold text-slate-800 text-right">{analysisDate}</span>
+                      <span className={TYPOGRAPHY.label}>Analysis date:</span>
+                      <span className={`${TYPOGRAPHY.bodySmall} font-medium text-slate-800 text-right`}>{analysisDate}</span>
                     </div>
                     <div className="flex items-center justify-between gap-2 py-1 border-b border-slate-100">
-                      <span className="font-bold text-slate-500 uppercase tracking-wider text-[11px] font-mono">Platform:</span>
-                      <span className="font-semibold text-slate-800 text-right">Android (APK)</span>
+                      <span className={TYPOGRAPHY.label}>Platform:</span>
+                      <span className={`${TYPOGRAPHY.bodySmall} font-medium text-slate-800 text-right`}>Android (APK)</span>
                     </div>
                     <div className="flex items-center justify-between gap-2 py-1 border-b border-slate-100">
-                      <span className="font-bold text-slate-500 uppercase tracking-wider text-[11px] font-mono">Analysis type:</span>
-                      <span className="font-semibold text-slate-800 text-right">Static • Dynamic • Threat</span>
+                      <span className={TYPOGRAPHY.label}>Analysis type:</span>
+                      <span className={`${TYPOGRAPHY.bodySmall} font-medium text-slate-800 text-right`}>Static • Dynamic • Threat</span>
                     </div>
                     <div className="flex items-center justify-between gap-2 py-1 border-b border-slate-100">
-                      <span className="font-bold text-slate-500 uppercase tracking-wider text-[11px] font-mono">Status:</span>
-                      <span className="inline-flex items-center gap-1.5 font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded text-[11px] border border-emerald-200/80">
+                      <span className={TYPOGRAPHY.label}>Status:</span>
+                      <span className={`${TYPOGRAPHY.badge} text-emerald-700 bg-emerald-50 border-emerald-200/80 gap-1.5`}>
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                         Analysis Completed
                       </span>
@@ -159,7 +160,7 @@ export default function FraudRiskHero({ data }: { data: FraudCardData }) {
 
                 {/* Concise APK Assessment */}
                 <div className="pt-2 border-t border-slate-200/70">
-                  <p className="text-xs sm:text-[12.5px] text-slate-700 leading-relaxed font-sans">
+                  <p className={TYPOGRAPHY.bodySmall}>
                     {data.intelligence_report?.plain_english_narrative ||
                       `Analysis evaluated static threat indicators, runtime behavior, and threat intelligence correlation for ${packageName}. Evidence supports a ${data.risk_band || 'Safe'} classification.`}
                   </p>
@@ -171,11 +172,11 @@ export default function FraudRiskHero({ data }: { data: FraudCardData }) {
             <div className="p-4 rounded-xl bg-white border border-slate-200/90 shadow-2xs space-y-1.5">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="h-4 w-4 text-blue-700 shrink-0" />
-                <h4 className="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-900 font-mono">
+                <h4 className={TYPOGRAPHY.cardTitle}>
                   Assessment
                 </h4>
               </div>
-              <p className="text-xs sm:text-sm text-slate-700 leading-relaxed font-sans">
+              <p className={TYPOGRAPHY.body}>
                 {data.risk_explanation?.evidence_lines?.[0] ||
                   `Static analysis, runtime behaviour, and threat intelligence correlation were evaluated. These combined findings resulted in an overall Fraud Risk Score of ${Math.round(score)}/100 (${data.risk_band || 'Safe'}).`}
               </p>
@@ -186,14 +187,14 @@ export default function FraudRiskHero({ data }: { data: FraudCardData }) {
               <button
                 type="button"
                 onClick={() => openLedger('full')}
-                className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 bg-blue-700 hover:bg-blue-800 text-white text-xs sm:text-sm font-mono font-extrabold uppercase tracking-wider rounded-lg shadow-sm transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 w-full"
+                className={`${TYPOGRAPHY.button} bg-blue-700 hover:bg-blue-800 text-white px-6 py-3.5 rounded-lg shadow-sm w-full`}
               >
                 <BarChart2 className="h-4 w-4 sm:h-5 sm:w-5" />
                 View Score Breakdown
               </button>
               <DownloadReportButton
                 sha256={data.sha256}
-                className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 bg-blue-700 hover:bg-blue-800 text-white text-xs sm:text-sm font-mono font-extrabold uppercase tracking-wider rounded-lg shadow-sm transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-60 w-full"
+                className={`${TYPOGRAPHY.button} bg-blue-700 hover:bg-blue-800 text-white px-6 py-3.5 rounded-lg shadow-sm w-full`}
               />
             </div>
           </div>

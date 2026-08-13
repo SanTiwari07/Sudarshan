@@ -3,6 +3,7 @@ import type { InvestigationBundle, InvestigationEvidence } from '../../types/inv
 import SocCard from '../ui/Card';
 import { useInvestigationUI } from '../../context/InvestigationUIContext';
 import { buildFindingExplanation } from '../../lib/findingExplanation';
+import { TYPOGRAPHY } from '../../theme/typography';
 import {
   isCriticalSeverity,
 } from '../../lib/findingAnalystView';
@@ -35,7 +36,7 @@ function WhyMattersCell({ evidence }: { evidence: InvestigationEvidence }) {
   const generic = text === GENERIC_SUMMARY;
   return (
     <p
-      className={`text-[12px] leading-relaxed break-words break-all ${
+      className={`${TYPOGRAPHY.bodySmall} break-words break-all ${
         generic ? 'text-slate-400' : 'text-slate-600'
       }`}
     >
@@ -47,8 +48,8 @@ function WhyMattersCell({ evidence }: { evidence: InvestigationEvidence }) {
 function FindingCell({ row }: { row: InvestigationEvidence }) {
   return (
     <div className="min-w-0 space-y-0.5">
-      <p className="font-mono text-[11px] text-slate-400 leading-none">{row.id}</p>
-      <p className="text-[13px] font-semibold text-slate-900 leading-snug break-words break-all">{row.title}</p>
+      <p className={`${TYPOGRAPHY.codeSm} text-slate-400 leading-none`}>{row.id}</p>
+      <p className={`${TYPOGRAPHY.bodySmall} font-bold text-slate-900 leading-snug break-words break-all`}>{row.title}</p>
     </div>
   );
 }
@@ -70,7 +71,7 @@ function FindingRowMobile({
       <div className="mt-1.5 flex flex-wrap items-center gap-3">
         <SeverityIndicator severity={row.severity} />
         <SourceIndicator evidence={row} />
-        <span className="text-[12px] font-semibold text-slate-700 tabular-nums">{row.confidence}%</span>
+        <span className={`${TYPOGRAPHY.codeSm} font-bold text-slate-700 tabular-nums`}>{row.confidence}%</span>
       </div>
       <div className="mt-1">
         <WhyMattersCell evidence={row} />
@@ -114,7 +115,7 @@ export default function FindingsRegistryTable({
         />
       )}
       {!embedded && (
-        <div className="px-3 py-2 border-b border-slate-200 text-[11px] text-slate-500 bg-slate-50/50 font-mono">
+        <div className={`px-3 py-2 border-b border-slate-200 bg-slate-50/50 ${TYPOGRAPHY.label}`}>
           {bundle.evidenceRecords.length} VERIFIED RECORDS · EVIDENCE-BACKED FINDINGS ONLY
         </div>
       )}
@@ -124,13 +125,13 @@ export default function FindingsRegistryTable({
           <table className="soc-table">
             <thead>
               <tr>
-                <th className="py-2 px-3 w-[38%] !bg-slate-50/80">
+                <th className={`py-2 px-3 w-[38%] !bg-slate-50/80 ${TYPOGRAPHY.tableHeader}`}>
                   Finding
                 </th>
-                <th className="py-2 px-3 w-[48%] !bg-slate-50/80">
+                <th className={`py-2 px-3 w-[48%] !bg-slate-50/80 ${TYPOGRAPHY.tableHeader}`}>
                   Why It Matters
                 </th>
-                <th className="py-2 px-3 w-[14%] text-right pr-4 whitespace-nowrap !bg-slate-50/80">
+                <th className={`py-2 px-3 w-[14%] text-right pr-4 whitespace-nowrap !bg-slate-50/80 ${TYPOGRAPHY.tableHeader}`}>
                   Severity
                 </th>
               </tr>
@@ -138,7 +139,7 @@ export default function FindingsRegistryTable({
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="py-8 text-center text-xs text-slate-500 font-mono">
+                  <td colSpan={3} className={`py-8 text-center ${TYPOGRAPHY.caption}`}>
                     No findings match your search or filters.
                   </td>
                 </tr>
@@ -175,7 +176,7 @@ export default function FindingsRegistryTable({
 
       <div className="md:hidden border-t border-slate-200 divide-y divide-slate-150">
         {rows.length === 0 ? (
-          <p className="py-6 text-center text-xs text-slate-500 font-mono">No findings match your search or filters.</p>
+          <p className={`py-6 text-center ${TYPOGRAPHY.caption}`}>No findings match your search or filters.</p>
         ) : (
           rows.map((row) => (
             <FindingRowMobile key={row.id} row={row} onOpen={() => openRow(row.id)} />

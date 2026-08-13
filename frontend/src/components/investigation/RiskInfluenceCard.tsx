@@ -7,6 +7,7 @@ import {
 } from '../../lib/scoreInfluenceModel';
 import type { ScoreInfluenceAxis } from '../../lib/scoreInfluenceModel';
 import { useInvestigationUI } from '../../context/InvestigationUIContext';
+import { TYPOGRAPHY } from '../../theme/typography';
 import SocCard from '../ui/Card';
 import SectionHeader from '../ui/SectionHeader';
 import HelpTerm from './HelpTerm';
@@ -47,9 +48,6 @@ function buildRows(data: FraudCardData): InfluenceRow[] {
     !dynamicIncluded &&
     (dynamicStatus === 'INSTRUMENTATION_FAILED' || Boolean(dynResult?.error));
   const runtimeNotRun = !frs.dynamic_ran && !data.dynamic_available;
-  // An excluded axis reads as reassurance unless the reason is stated. A sample
-  // that never launched and a sample that actively blocked the sandbox both
-  // produce a zero here, and they are opposite findings.
   const exclusionReason = frs.dynamic_exclusion_reason?.toUpperCase();
   const dynamicSummary = dynamicIncluded
     ? 'Observed sandbox behaviour contributed to the fraud risk score.'
@@ -136,19 +134,19 @@ export default function RiskInfluenceCard({ data, embedded = false }: { data: Fr
         >
           <div>
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <span className="text-sm sm:text-base font-extrabold text-slate-900">
+              <span className={TYPOGRAPHY.h3}>
                 <HelpTerm term={row.term}>{row.label}</HelpTerm>
               </span>
-              <span className="text-xs font-black text-blue-800 uppercase tracking-wider">{row.influence}</span>
+              <span className={`${TYPOGRAPHY.badge} text-blue-800 bg-blue-50 border-blue-200`}>{row.influence}</span>
             </div>
             <div className="mt-2 mb-2.5 flex items-baseline gap-1.5 font-mono">
               {row.included ? (
                 <>
-                  <span className="text-2xl sm:text-3xl font-black text-blue-700 leading-none tracking-tight">
+                  <span className="text-2xl sm:text-3xl font-bold text-blue-700 leading-none tracking-tight font-mono">
                     {row.value}
                   </span>
                   {row.unit && (
-                    <span className="leading-none">
+                    <span className="leading-none font-mono">
                       {row.unit.startsWith('/') ? (
                         <span className="inline-flex items-baseline gap-1">
                           <span className="text-xs font-semibold text-slate-400">/</span>
@@ -161,20 +159,20 @@ export default function RiskInfluenceCard({ data, embedded = false }: { data: Fr
                   )}
                 </>
               ) : (
-                <span className="text-xs sm:text-sm font-semibold text-slate-400">
+                <span className={TYPOGRAPHY.caption}>
                   {row.value}
                 </span>
               )}
             </div>
-            <p className="text-xs sm:text-[13px] text-slate-600 leading-relaxed">{row.summary}</p>
+            <p className={TYPOGRAPHY.bodySmall}>{row.summary}</p>
             {row.key === 'dynamic' && !row.included && row.score > 0 && (
-              <p className="text-xs font-medium text-amber-800 mt-2">
+              <p className={`${TYPOGRAPHY.caption} text-amber-800 mt-2 font-medium`}>
                 Observed runtime score {row.score.toFixed(1)} / 100 - excluded from final FRS because evidence was
                 inconclusive.
               </p>
             )}
           </div>
-          <div className="flex items-center justify-end gap-1 mt-3 text-xs sm:text-sm font-bold text-blue-700">
+          <div className={`flex items-center justify-end gap-1 mt-3 ${TYPOGRAPHY.linkAction}`}>
             View details
             <ChevronRight className="h-4 w-4" aria-hidden />
           </div>
@@ -184,7 +182,7 @@ export default function RiskInfluenceCard({ data, embedded = false }: { data: Fr
         <button
           type="button"
           onClick={() => openLedger('full')}
-          className="w-full text-center text-xs sm:text-sm font-bold text-blue-700 py-2.5 rounded-lg border border-blue-200 hover:bg-blue-50 transition-colors"
+          className={`${TYPOGRAPHY.button} w-full text-blue-700 py-2.5 rounded-lg border border-blue-200 hover:bg-blue-50`}
         >
           View score breakdown
         </button>
@@ -196,7 +194,7 @@ export default function RiskInfluenceCard({ data, embedded = false }: { data: Fr
     return (
       <div className="h-full flex flex-col justify-between">
         <div className="mb-3 sm:mb-4">
-          <p className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight">What influenced the score?</p>
+          <p className={TYPOGRAPHY.h2}>What influenced the score?</p>
         </div>
         {body}
       </div>

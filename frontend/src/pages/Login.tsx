@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, Location } from 'react-router-dom';
 import { Shield, LogIn, Eye, EyeOff, AlertCircle, UserPlus } from 'lucide-react';
 import { API_BASE } from '../config';
 import { TYPOGRAPHY } from '../theme/typography';
+import { useAuth } from '../context/AuthContext';
 
-// Persist JWT token to localStorage
+// Persist JWT token to localStorage (backwards compatibility)
 export function saveToken(token: string, username: string, role: string) {
   localStorage.setItem('sudarshan_token', token);
   localStorage.setItem('sudarshan_user', username);
@@ -32,6 +33,8 @@ export function clearToken() {
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const auth = useAuth();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -40,6 +43,9 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  const rawFrom = (location.state as { from?: Location })?.from?.pathname || '/';
+  const from = rawFrom === '/login' ? '/' : rawFrom;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,8 +62,8 @@ export default function Login() {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Login failed');
-        saveToken(data.access_token, data.username, data.role);
-        navigate('/');
+        auth.login(data.access_token, data.username, data.role);
+        navigate(from, { replace: true });
       } else {
         const res = await fetch(`${API_BASE}/auth/register`, {
           method: 'POST',

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Shield, LogOut, User } from 'lucide-react';
-import { getUser } from '../../pages/Login';
+import { useAuth } from '../../context/AuthContext';
 import {
   ENTERPRISE_NAV_MAIN,
   ENTERPRISE_NAV_END,
@@ -16,7 +16,7 @@ type AppSidebarProps = {
 export default function AppSidebar({ onLogout }: AppSidebarProps) {
   const [isHovered, setIsHovered] = useState(false);
   const { pathname } = useLocation();
-  const user = getUser();
+  const { user: username, role } = useAuth();
   const hoverTimeoutRef = useRef<any>(null);
 
   // Clean up timer on unmount
@@ -143,12 +143,12 @@ export default function AppSidebar({ onLogout }: AppSidebarProps) {
           {/* User Profile Info */}
           <div
             className="group relative flex items-center h-10 transition-all duration-200 select-none hover:bg-slate-900/80 border-l-2 border-transparent hover:border-blue-500/40 cursor-default"
-            title={!isHovered ? `${user?.username || 'User'} (${user?.role || 'SOC Analyst'})` : undefined}
+            title={!isHovered ? `${username || 'User'} (${role || 'SOC Analyst'})` : undefined}
           >
             <div className="w-12 h-10 flex items-center justify-center shrink-0">
               <div className="relative flex items-center justify-center">
                 <div className="h-6 w-6 rounded bg-blue-950/90 border border-blue-800/80 flex items-center justify-center text-blue-400 font-mono text-[10px] font-bold shadow-xs group-hover:border-blue-500 transition-colors">
-                  {user?.username?.[0]?.toUpperCase() || <User className="h-3.5 w-3.5" />}
+                  {username?.[0]?.toUpperCase() || <User className="h-3.5 w-3.5" />}
                 </div>
                 <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-slate-950" />
               </div>
@@ -160,16 +160,16 @@ export default function AppSidebar({ onLogout }: AppSidebarProps) {
               }`}
             >
               <div className="text-xs font-mono font-bold text-slate-200 truncate group-hover:text-white">
-                {user?.username || 'Analyst'}
+                {username || 'Analyst'}
               </div>
               <div className="text-[9px] text-blue-400/90 truncate font-mono uppercase tracking-wider font-semibold">
-                {user?.role || 'SOC Analyst'}
+                {role || 'SOC Analyst'}
               </div>
             </div>
 
             {!isHovered && (
               <div className="fixed left-14 px-2.5 py-1 bg-slate-900 text-slate-100 text-[11px] font-mono rounded-md shadow-xl border border-slate-800 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 z-[70]">
-                {user?.username || 'Analyst'} ({user?.role || 'SOC Analyst'})
+                {username || 'Analyst'} ({role || 'SOC Analyst'})
               </div>
             )}
           </div>

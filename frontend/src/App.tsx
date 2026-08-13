@@ -1,10 +1,11 @@
-import { Routes, Route, useNavigate, Navigate, useParams } from 'react-router-dom';
-import Login, { getToken, clearToken } from './pages/Login';
+import { Routes, Route, Navigate, useParams, useLocation, Location } from 'react-router-dom';
+import Login from './pages/Login';
 import AppShell from './components/layout/AppShell';
-import { lazy, Suspense, useEffect, useCallback } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import ErrorBoundary from './components/ErrorBoundary';
 import InvestigationShell from './components/investigation/InvestigationShell';
 import { AnalysisProvider, useAnalysis } from './context/AnalysisContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoadingSpinner, ErrorState } from './components/ui/Skeleton';
 
 function lazyWithRetry<T extends React.ComponentType<any>>(
@@ -325,14 +326,48 @@ function RouteFallback() {
   return <LoadingSpinner label="Loading view…" />;
 }
 
+function AuthLoadingScreen() {
+  return (
+    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white">
+      <LoadingSpinner label="Initializing authentication..." />
+    </div>
+  );
+}
+
 function RequireAuth({ children, label }: { children: React.ReactNode; label?: string }) {
-  const token = getToken();
-  if (!token) return <Navigate to="/login" replace />;
+  const { status } = useAuth();
+  const location = useLocation();
+
+  if (status === 'INITIALIZING') {
+    return <AuthLoadingScreen />;
+  }
+
+  if (status === 'UNAUTHENTICATED') {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
   return (
     <ErrorBoundary label={label}>
       <Suspense fallback={<RouteFallback />}>{children}</Suspense>
     </ErrorBoundary>
   );
+}
+
+function PublicOnlyRoute({ children }: { children: React.ReactNode }) {
+  const { status } = useAuth();
+  const location = useLocation();
+
+  if (status === 'INITIALIZING') {
+    return <AuthLoadingScreen />;
+  }
+
+  if (status === 'AUTHENTICATED') {
+    const rawFrom = (location.state as { from?: Location })?.from?.pathname || '/';
+    const from = rawFrom === '/login' ? '/' : rawFrom;
+    return <Navigate to={from} replace />;
+  }
+
+  return <>{children}</>;
 }
 
 function CaseDetailRoute() {
@@ -360,20 +395,19 @@ function ActiveCaseRoute({ component: Component }: { component: React.ComponentT
 // ─── App Structure ──────────────────────────────────────────────────────────
 
 function AppContent() {
-  const navigate = useNavigate();
-  const isAuthed = !!getToken();
-  const { setAnalysisResult, clearAnalysis } = useAnalysis();
-
-  const handleLogout = useCallback(() => {
-    clearToken();
-    clearAnalysis();
-    navigate('/login');
-  }, [navigate, clearAnalysis]);
+  const { setAnalysisResult } = useAnalysis();
 
   return (
-    <AppShell isAuthed={isAuthed} onLogout={handleLogout}>
+    <AppShell>
       <Routes>
-        <Route path="/login" element={<Login />} />
+        <Route
+          path="/login"
+          element={
+            <PublicOnlyRoute>
+              <Login />
+            </PublicOnlyRoute>
+          }
+        />
         <Route
           path="/"
           element={
@@ -444,6 +478,7 @@ function AppContent() {
             </RequireAuth>
           }
         />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppShell>
   );
@@ -451,8 +486,10 @@ function AppContent() {
 
 export default function App() {
   return (
-    <AnalysisProvider>
-      <AppContent />
-    </AnalysisProvider>
+    <AuthProvider>
+      <AnalysisProvider>
+        <AppContent />
+      </AnalysisProvider>
+    </AuthProvider>
   );
 }

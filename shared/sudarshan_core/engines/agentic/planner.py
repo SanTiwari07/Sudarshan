@@ -67,6 +67,10 @@ from sudarshan_core.engines.agentic.agent_memory import AgentMemory
 from sudarshan_core.engines.agentic.goal_tracker import FraudGoal, GoalTracker
 from sudarshan_core.engines.agentic.perception import Observation
 from sudarshan_core.engines.agentic.device_properties import get_screen_size
+from sudarshan_core.engines.agentic.remediation import (
+    generate_remedial_suggestions,
+    suggestions_to_dicts,
+)
 from sudarshan_core.engines.agentic.tool_registry import (
     TOOL_REGISTRY,
     is_registered,
@@ -212,6 +216,33 @@ class AgentPlanner:
                 logger.warning(f"[Planner] Gemini init failed: {e} - FallbackPlanner active")
         else:
             logger.warning("[Planner] No GEMINI_API_KEY - FallbackPlanner active")
+
+    # ── Post-run forensic remediation ──────────────────────────────────────────
+
+    def generate_remedial_suggestions(
+        self,
+        unfulfilled_goals: Optional[List[Dict[str, Any]]] = None,
+        *,
+        execution_assertions: Optional[Dict[str, Any]] = None,
+        target_bank_packages: Optional[List[Any]] = None,
+        limit: int = 8,
+    ) -> List[Dict[str, Any]]:
+        """
+        Rank what to do next when a run produced no evidence.
+
+        Deliberately deterministic and independent of the LLM client: these
+        suggestions land in a forensic report, so they must be reproducible and
+        must still be produced on a deployment with no model access. The
+        planner exposes them because it owns the run's context; the ranking
+        itself lives in :mod:`remediation`.
+        """
+        suggestions = generate_remedial_suggestions(
+            unfulfilled_goals,
+            execution_assertions=execution_assertions,
+            target_bank_packages=target_bank_packages,
+            limit=limit,
+        )
+        return suggestions_to_dicts(suggestions)
 
     # ── Action cache ───────────────────────────────────────────────────────────
 

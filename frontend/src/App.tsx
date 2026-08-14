@@ -201,6 +201,13 @@ export type FraudCardData = {
   risk_band: string;
   confidence: number;
   recommended_action: string;
+  /**
+   * `risk_band` in the ordinary case, `INCOMPLETE_EXERCISE` when the sandbox
+   * ran but never exercised the sample. Optional so cases stored before the
+   * Execution Assertion Matrix existed still typecheck.
+   */
+  verdict?: string;
+  execution_assertions?: ExecutionAssertions;
   frs_breakdown?: FRSBreakdown;
   risk_explanation?: RiskExplanation;
   threat_scenario_table?: ThreatScenarioRow[];
@@ -274,6 +281,27 @@ export type FraudCardData = {
     decoded_manifest_excerpts: string[];
   };
   vide?: VideResult;
+};
+
+/** One fraud precondition and whether the sandbox run reached it. */
+export type ExecutionAssertion = {
+  key: string;
+  label: string;
+  fired: boolean;
+  evidence: string;
+  remediation: string;
+};
+
+export type ExecutionAssertions = {
+  verdict: string;
+  incomplete_exercise: boolean;
+  dynamic_ran: boolean;
+  threat_events_observed: number;
+  coverage_ratio: number;
+  fired_count: number;
+  total_count: number;
+  assertions: ExecutionAssertion[];
+  unfired_keys: string[];
 };
 
 export type VideCompareScores = {

@@ -14,6 +14,7 @@ import WorkflowDiagram from '../components/WorkflowDiagram';
 import EvidenceRegistrySection from '../components/investigation/EvidenceRegistrySection';
 import ScreenshotGallery from '../components/investigation/ScreenshotGallery';
 import DynamicAnalysisSummary from '../components/investigation/DynamicAnalysisSummary';
+import ResiliencePanel from '../components/investigation/ResiliencePanel';
 import HelpTerm from '../components/investigation/HelpTerm';
 import {
   resolveRuntimeDynamicStatus,
@@ -917,6 +918,13 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
   return (
     <div className="technical-view">
       <EvidenceRegistrySection data={data} bundle={investigationBundle} loading={loading} />
+
+      <EvidenceSection
+        title="Investigation resilience"
+        description="Which fraud triggers this run reached, and the controls to reach the ones it missed."
+      >
+        <ResiliencePanel sessionId={data.sha256} packageName={data.package_name} />
+      </EvidenceSection>
 
       <EvidenceSection title="Overview" description="Classification summary and APK identifiers.">
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-stretch">

@@ -721,3 +721,84 @@ class ToolExecutor:
         await asyncio.sleep(_paced(1.0))
         return ToolResult(success=ok, tool="enable_mobile_data", output=out,
                           error=out if not ok else None)
+
+    # ── Investigation resilience ───────────────────────────────────────────────
+
+    async def _tool_fast_forward_time(self, action: Dict) -> ToolResult:
+        """
+        Advance the device clock and release deferred work.
+
+        The engine is synchronous and does several slow ADB round-trips
+        (dumpsys jobscheduler alone can take seconds), so it runs in a worker
+        thread rather than blocking the agent's event loop.
+        """
+        from sudarshan_core.engines.time_warp import TimeWarpEngine
+
+        try:
+            hours = float(action.get("hours", 24.0))
+        except (TypeError, ValueError):
+            hours = 24.0
+        force_jobs = bool(action.get("force_jobs", True))
+
+        engine = TimeWarpEngine(self.device_serial)
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: engine.fast_forward_time(
+                hours, force_jobs, package_name=self.package_name
+            ),
+        )
+        payload = result.to_dict()
+        summary = (
+            f"clock {result.observed_shift_hours:+.2f}h via {result.method or 'n/a'}, "
+            f"{len(result.jobs_forced)} job(s) forced"
+        )
+        return ToolResult(
+            success=result.ok,
+            tool="fast_forward_time",
+            output=f"{summary} | {payload}",
+            error="; ".join(result.errors) if result.errors else None,
+        )
+
+    async def _tool_inject_test_sms(self, action: Dict) -> ToolResult:
+        """
+        Deliver a synthetic SMS so interception hooks have an event to catch.
+
+        Two delivery paths, because neither works everywhere: `emu sms send`
+        is the emulator console command and produces a genuine SMS_RECEIVED
+        broadcast (what a receiver-based stealer actually waits for), while a
+        direct provider insert only populates the inbox. The broadcast path is
+        tried first for that reason.
+        """
+        sender = str(action.get("sender") or "AD-BANKSM")
+        body = str(action.get("body") or "OTP 481902 is valid for 10 minutes. Do not share it.")
+
+        ok, out = await self._adb("emu", "sms", "send", sender, body)
+        if ok and "KO" not in (out or ""):
+            await asyncio.sleep(_paced(2.0))
+            return ToolResult(
+                success=True,
+                tool="inject_test_sms",
+                output=f"emu sms send -> {out or 'OK'}",
+            )
+
+        # Provider insert: no broadcast, but a sample that polls the inbox or
+        # reads it on demand will still see the message.
+        from sudarshan_core.engines.device_state_simulator import sh_quote
+
+        timestamp_ms = int(time.time() * 1000)
+        command = (
+            f"content insert --uri content://sms/inbox "
+            f"--bind address:s:{sh_quote(sender)} "
+            f"--bind body:s:{sh_quote(body)} "
+            f"--bind date:l:{timestamp_ms} "
+            f"--bind read:i:0 --bind type:i:1"
+        )
+        ok2, out2 = await self._adb("shell", command)
+        await asyncio.sleep(_paced(1.5))
+        return ToolResult(
+            success=ok2,
+            tool="inject_test_sms",
+            output=f"provider insert -> {out2}",
+            error=None if ok2 else (out2 or "SMS injection refused by the device"),
+        )

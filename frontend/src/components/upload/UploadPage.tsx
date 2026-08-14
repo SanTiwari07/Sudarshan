@@ -4,11 +4,11 @@ import { SocCard } from '../ui/Card';
 import UrlDiscoveryArea from '../discovery/UrlDiscoveryArea';
 import UploadDropZone from './UploadDropZone';
 import StageCard from './StageCard';
-import InvestigationProgress from './progress/InvestigationProgress';
 import CompletionScreen from './progress/CompletionScreen';
 import { useAnalysisSession } from './useAnalysisSession';
 import type { FraudCardData } from '../../App';
 import { getToken } from '../../pages/Login';
+import type { StageStatus } from './pipelineStages';
 import { TYPOGRAPHY } from '../../theme/typography';
 
 type UploadPageProps = {
@@ -34,9 +34,9 @@ export default function UploadPage({ onAnalysisComplete }: UploadPageProps) {
     return <CompletionScreen fileName={file?.name ?? result.app_name ?? 'APK'} />;
   }
 
-  const getCardStatus = (cardIndex: number): 'pending' | 'active' | 'complete' | 'error' | undefined => {
+  const getCardStatus = (cardIndex: number): StageStatus | undefined => {
     if (phase === 'idle' || phase === 'uploading') return undefined;
-    if (phase === 'error') return 'error' as any;
+    if (phase === 'error') return 'error';
     if (phase === 'complete') return 'complete';
     
     const stageOrder = [

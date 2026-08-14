@@ -24,6 +24,12 @@ import logging
 import math
 from typing import Any, Dict, List, Optional, Tuple
 
+from sudarshan_core.engines.execution_assertions import (
+    INCOMPLETE_EXERCISE_CONFIDENCE_PENALTY,
+    VERDICT_INCOMPLETE_EXERCISE,
+    build_execution_assertions,
+)
+
 logger = logging.getLogger(__name__)
 
 # ─── Malware Family Severity Weights ─────────────────────────────────────────
@@ -1135,6 +1141,43 @@ def calculate_risk_score(
             "the sandbox run cannot certify it. Evasion is not evidence of safety."
         )
 
+    # ── Execution Assertion Matrix / INCOMPLETE_EXERCISE ─────────────────────
+    # "Nothing happened" is not a finding about the sample until we know the
+    # sample was actually exercised.
+    #
+    # The floors above each answer "we could not see" for a specific reason
+    # (concealed payload, active evasion, strong static capability). This one
+    # answers a different question: were the sample's own trigger conditions
+    # ever reached? Anatsa waits for a targeted bank app to come to the
+    # foreground; SOVA waits on an accessibility grant; an SMS stealer waits for
+    # a message to arrive. A sterile run meets none of them, and the resulting
+    # silence describes the harness, not the malware.
+    assertions = build_execution_assertions(
+        dynamic_result,
+        target_bank_packages=flags_dict.get("indian_bank_packages_found"),
+        threat_events_observed=(
+            _count_observed_sample_behavior(dynamic_result) if dynamic_available else 0
+        ),
+    )
+    incomplete_exercise = assertions.incomplete_exercise
+    verdict = VERDICT_INCOMPLETE_EXERCISE if incomplete_exercise else band
+    incomplete_exercise_floored = False
+    if incomplete_exercise:
+        dynamic_evidence.extend(assertions.evidence_lines())
+        if band == "Safe":
+            # Same treatment as the other floors: the score is not invented,
+            # the Safe certification is refused. `risk_band` keeps its existing
+            # four-value vocabulary so every downstream consumer keeps working;
+            # `verdict` carries the INCOMPLETE_EXERCISE label.
+            band = "Suspicious"
+            incomplete_exercise_floored = True
+            dynamic_evidence.append(
+                "VERDICT FLOORED: no fraud trigger condition was reached during "
+                "the sandbox run, so the absence of malicious behaviour is "
+                "unexplained rather than exonerating. Re-run with the suggested "
+                "triggers before drawing a conclusion."
+            )
+
     # ── Confidence ───────────────────────────────────────────────────────────
     sources_available = sum([
         1,                                              # Static always available
@@ -1150,6 +1193,11 @@ def calculate_risk_score(
     # confidence via sources_available.
     if dynamic_available and not dynamic_conclusive:
         confidence = min(confidence, 60.0)
+    # An unexercised run produced no information about the sample, so whatever
+    # confidence the other axes earned must not be reported as if the sandbox
+    # corroborated them.
+    if incomplete_exercise:
+        confidence = round(confidence * INCOMPLETE_EXERCISE_CONFIDENCE_PENALTY, 1)
     confidence = min(confidence, 99.0)
 
     all_evidence = stei_evidence + dynamic_evidence + corr_evidence + banking_evidence + vide_evidence
@@ -1160,6 +1208,14 @@ def calculate_risk_score(
         "ai_confidence_multiplier": round(ai_multiplier, 2),
         "final_risk_score": final_rounded,
         "risk_band": band,
+
+        # Verdict is `risk_band` in the ordinary case and INCOMPLETE_EXERCISE
+        # when the sandbox never exercised the sample. Kept as a separate field
+        # so `risk_band` retains its four-value vocabulary for the report
+        # renderers, the PDF and the frontend badge colours.
+        "verdict": verdict,
+        "execution_assertions": assertions.to_dict(),
+        "incomplete_exercise": incomplete_exercise,
 
         # Full FRS breakdown with 5-axis STEI
         "frs_breakdown": {
@@ -1178,6 +1234,7 @@ def calculate_risk_score(
             "verdict_floored_for_visibility": visibility_floored,
             "verdict_floored_for_evasion": evasion_floored,
             "verdict_floored_for_static_evidence": static_evidence_floored,
+            "verdict_floored_for_incomplete_exercise": incomplete_exercise_floored,
             # Why the dynamic axis could not be scored. The UI must distinguish
             # "nothing bad happened" from "we never got to look".
             "dynamic_exclusion_reason": evasion_reason,

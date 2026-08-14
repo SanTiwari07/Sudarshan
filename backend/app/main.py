@@ -17,7 +17,9 @@ from slowapi.errors import RateLimitExceeded
 
 from app.rate_limit import limiter
 
-from app.routes import upload, report, intelligence, screenshots, discovery, baselines
+from app.routes import (
+    upload, report, intelligence, screenshots, discovery, baselines, resilience,
+)
 from app.routes.runtime_api import router as runtime_router
 from app.routes.cases import router as cases_router
 from app.auth.auth import router as auth_router
@@ -90,6 +92,7 @@ app.include_router(cases_router,         prefix="/api/v1",         tags=["Case H
 app.include_router(intelligence.router,  prefix="/api/v1",         tags=["Threat Intelligence"])
 app.include_router(screenshots.router,   prefix="/api/v1",         tags=["Screenshots"])
 app.include_router(baselines.router,     prefix="/api/v1",         tags=["VIDE Baselines"])
+app.include_router(resilience.router,    prefix="/api/v1",         tags=["Investigation Resilience"])
 app.include_router(runtime_router,       prefix="/api",            tags=["Runtime Telemetry"])
 
 

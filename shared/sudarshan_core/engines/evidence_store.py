@@ -32,10 +32,12 @@ Usage::
 from __future__ import annotations
 
 import json
+import sqlite3
 import threading
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
+from dataclasses import fields as dataclass_fields
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -230,6 +232,9 @@ class EvidenceStore:
         package_name: str = "",
         analysis_stage: str = "single",
         case_id: str = "",
+        *,
+        persist: bool = True,
+        db_path: Optional[Path] = None,
     ):
         self._records: List[EvidenceRecord] = []
         self._lock    = threading.Lock()
@@ -242,10 +247,150 @@ class EvidenceStore:
             "pid":            0,   # updated externally if needed
         }
 
+        # ── Durable backing ───────────────────────────────────────────────────
+        # `flush()` writes evidence.json at the END of a run. A sandbox that
+        # crashes - which is the normal outcome when the sample is hostile -
+        # therefore loses every record it collected, including the ones that
+        # justify the verdict. Records are now also appended to a WAL-mode
+        # SQLite file as they arrive, so a killed process leaves the evidence
+        # intact and a resumed session can read back what it already had.
+        self._db_path: Optional[Path] = None
+        self._db_lock = threading.Lock()
+        self._db_failed = False
+        if persist:
+            self._init_db(db_path, case_id or package_name)
+
         self.event_bus = event_bus
         if event_bus is not None:
             event_bus.subscribe(self._on_event)
             logger.debug("[EvidenceStore] Subscribed to RuntimeEventBus")
+
+    # ── Durable persistence (WAL SQLite) ──────────────────────────────────────
+
+    def _init_db(self, db_path: Optional[Path], name_hint: str) -> None:
+        try:
+            from sudarshan_core import runtime_paths
+
+            if db_path is not None:
+                path = Path(db_path)
+                path.parent.mkdir(parents=True, exist_ok=True)
+            else:
+                base = runtime_paths.artifacts_dir() / "evidence"
+                base.mkdir(parents=True, exist_ok=True)
+                stem = runtime_paths.safe_component(name_hint or "session")
+                path = base / f"{stem}.evidence.db"
+
+            with sqlite3.connect(path, timeout=10.0) as conn:
+                # WAL: a reader (the recovery path, or the API serving a live
+                # case) can read while the analysis thread is still appending,
+                # and an abrupt process death leaves a recoverable journal
+                # rather than a half-written page.
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.execute("PRAGMA synchronous=NORMAL")
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS evidence (
+                        id            TEXT PRIMARY KEY,
+                        finding_id    TEXT,
+                        timestamp_ms  INTEGER,
+                        category      TEXT,
+                        severity      TEXT,
+                        api           TEXT,
+                        record_json   TEXT NOT NULL
+                    )
+                    """
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_evidence_ts ON evidence(timestamp_ms)"
+                )
+            self._db_path = path
+            logger.debug("[EvidenceStore] Durable evidence log at %s", path)
+        except (sqlite3.Error, OSError) as exc:
+            # Persistence is a resilience feature, not a precondition. If the
+            # artifacts directory is read-only the analysis must still run.
+            self._db_failed = True
+            logger.warning("[EvidenceStore] Durable log unavailable: %s", exc)
+
+    def _persist(self, record: EvidenceRecord) -> None:
+        if self._db_path is None or self._db_failed:
+            return
+        try:
+            with self._db_lock, sqlite3.connect(self._db_path, timeout=10.0) as conn:
+                conn.execute(
+                    "INSERT OR REPLACE INTO evidence "
+                    "(id, finding_id, timestamp_ms, category, severity, api, record_json) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        record.id,
+                        record.finding_id,
+                        int(record.timestamp_ms or 0),
+                        record.category,
+                        record.severity,
+                        record.api,
+                        json.dumps(asdict(record), ensure_ascii=False, default=str),
+                    ),
+                )
+        except (sqlite3.Error, TypeError, ValueError) as exc:
+            # One bad record must not stop the run or spam the log on every
+            # subsequent event.
+            self._db_failed = True
+            logger.warning("[EvidenceStore] Durable write failed, disabling: %s", exc)
+
+    @property
+    def db_path(self) -> Optional[Path]:
+        return self._db_path
+
+    def recover_records(self, db_path: Optional[Path] = None) -> int:
+        """
+        Reload evidence from the durable log after a crash.
+
+        Returns the number of records added. Records already held in memory are
+        skipped by id, so calling this on a live store is safe and cannot
+        double-count evidence - which matters because the verdict is computed
+        from these counts.
+        """
+        path = Path(db_path) if db_path else self._db_path
+        if path is None or not path.is_file():
+            return 0
+        try:
+            with sqlite3.connect(path, timeout=10.0) as conn:
+                rows = conn.execute(
+                    "SELECT record_json FROM evidence ORDER BY timestamp_ms ASC"
+                ).fetchall()
+        except sqlite3.Error as exc:
+            logger.warning("[EvidenceStore] Recovery read failed: %s", exc)
+            return 0
+
+        known_fields = {f.name for f in dataclass_fields(EvidenceRecord)}
+        added = 0
+        with self._lock:
+            existing = {r.id for r in self._records}
+            for (blob,) in rows:
+                try:
+                    data = json.loads(blob)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(data, dict) or data.get("id") in existing:
+                    continue
+                try:
+                    record = EvidenceRecord(
+                        **{k: v for k, v in data.items() if k in known_fields}
+                    )
+                except TypeError:
+                    continue
+                self._records.append(record)
+                existing.add(record.id)
+                added += 1
+            # Keep the EVID-NNN sequence ahead of anything recovered so a
+            # resumed run cannot reissue an identifier already cited in a
+            # report.
+            for record in self._records:
+                suffix = str(record.finding_id or "").rsplit("-", 1)[-1]
+                if suffix.isdigit():
+                    self._evid_counter = max(self._evid_counter, int(suffix))
+        if added:
+            logger.info("[EvidenceStore] Recovered %d evidence record(s) from %s", added, path)
+        return added
 
     def _next_evid(self) -> str:
         """Return the next sequential finding ID, e.g. EVID-001."""
@@ -347,6 +492,10 @@ class EvidenceStore:
 
             with self._lock:
                 self._records.append(record)
+            # Durable write happens outside the lock: SQLite has its own, and
+            # holding both would serialise the Frida callback thread behind
+            # disk I/O.
+            self._persist(record)
 
             # Same-bus subscribers (e.g. ScreenshotManager) can read causal targets.
             if etype not in ("SCREENSHOT_CAPTURED", "EVIDENCE_CREATED"):

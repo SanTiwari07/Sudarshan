@@ -33,9 +33,10 @@ from __future__ import annotations
 import hashlib
 import logging
 from collections import OrderedDict, defaultdict, deque
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timezone
 from typing import Any, Deque, Dict, List, Optional, Set, Tuple
+from uuid import uuid4
 
 from sudarshan_core.engines.agentic.sanitizer import sanitize, sanitize_all
 
@@ -107,6 +108,46 @@ class ScreenRecord:
     first_seen:     str
     action_count:   int = 0
     frida_triggered: bool = False
+
+
+#: Trailing actions kept in a snapshot. Enough for the resumed run to detect an
+#: action loop it was already in; the complete history lives in the audit log.
+MAX_SNAPSHOT_ACTIONS = 40
+
+
+@dataclass
+class CheckpointSnapshot:
+    """
+    A resumable point in an exploration run.
+
+    Serialised as UTF-8 JSON with no OS-specific line endings, so a checkpoint
+    written on one platform restores on another - the analysis engine and the
+    backend do not necessarily run on the same host.
+    """
+
+    snapshot_id: str
+    timestamp: str
+    iteration: int = 0
+    current_activity: str = "unknown"
+    current_screen_hash: str = ""
+    satisfied_goals: List[str] = field(default_factory=list)
+    frida_events_captured: int = 0
+    screenshot_index: int = 0
+    visited_screens: List[Dict[str, Any]] = field(default_factory=list)
+    total_screens_seen: int = 0
+    permissions_granted: List[str] = field(default_factory=list)
+    permissions_denied: List[str] = field(default_factory=list)
+    frida_event_counts: Dict[str, int] = field(default_factory=dict)
+    network_events: List[str] = field(default_factory=list)
+    action_history: List[Dict[str, Any]] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "CheckpointSnapshot":
+        known = {f.name for f in fields(cls)}
+        return cls(**{k: v for k, v in (data or {}).items() if k in known})
 
 
 # ─── Agent Memory ─────────────────────────────────────────────────────────────
@@ -389,6 +430,165 @@ class AgentMemory:
     def advance_iteration(self) -> None:
         """Call at the start of each agent loop cycle."""
         self.iteration += 1
+
+    # ── Checkpoint snapshot / restore ──────────────────────────────────────────
+
+    def create_snapshot(
+        self,
+        *,
+        satisfied_goals: Optional[List[str]] = None,
+        frida_events_captured: int = -1,
+        screenshot_index: int = 0,
+        snapshot_id: str = "",
+    ) -> "CheckpointSnapshot":
+        """
+        Capture enough state to resume this run without repeating it.
+
+        A dynamic analysis session dies for mundane reasons - the sample kills
+        the Frida agent, the emulator ANRs, the host drops the ADB transport -
+        and restarting from zero re-drives every screen the agent already
+        explored. Worse, re-executing a completed goal can double-count its
+        evidence, so a crash mid-run could inflate the very numbers the verdict
+        rests on.
+
+        What is captured is what makes resumption *safe*: which goals are
+        already satisfied, which screens have been visited, and how much
+        evidence was already counted. The Frida event payloads themselves are
+        not - they are flushed to the evidence store, which is the durable
+        record, and duplicating them here would make snapshots unbounded.
+        """
+        return CheckpointSnapshot(
+            snapshot_id=snapshot_id or f"snap-{self.iteration:04d}-{uuid4().hex[:8]}",
+            timestamp=_utcnow(),
+            iteration=self.iteration,
+            current_activity=self.current_activity,
+            current_screen_hash=self.current_screen_hash,
+            satisfied_goals=list(satisfied_goals or []),
+            frida_events_captured=(
+                frida_events_captured
+                if frida_events_captured >= 0
+                else sum(self._frida_event_counts.values())
+            ),
+            screenshot_index=int(screenshot_index),
+            visited_screens=[
+                {
+                    "screen_hash": record.screen_hash,
+                    "activity_name": record.activity_name,
+                    "first_seen": record.first_seen,
+                    "action_count": record.action_count,
+                    "frida_triggered": record.frida_triggered,
+                }
+                for record in self.visited_screens.values()
+            ],
+            total_screens_seen=self._total_screens_seen,
+            permissions_granted=sorted(self.permissions_granted),
+            permissions_denied=sorted(self.permissions_denied),
+            frida_event_counts=dict(self._frida_event_counts),
+            network_events=list(self.network_events),
+            # Bounded: the tail is what a resumed run needs for loop detection;
+            # the full history lives in the audit log.
+            action_history=[
+                {
+                    "iteration": record.iteration,
+                    "screen_hash": record.screen_hash,
+                    "tool": record.tool,
+                    "target": record.target,
+                    "goal_name": record.goal_name,
+                    "success": record.success,
+                    "timestamp": record.timestamp,
+                }
+                for record in list(self._action_history)[-MAX_SNAPSHOT_ACTIONS:]
+            ],
+        )
+
+    def restore_snapshot(self, snapshot: Any) -> bool:
+        """
+        Re-hydrate this memory from a snapshot dict or CheckpointSnapshot.
+
+        Returns True when state was applied. Restoring is additive on screen
+        history and authoritative on counters, so a resumed run treats
+        already-visited screens as visited and does not re-explore them.
+        """
+        data = (
+            snapshot.to_dict()
+            if isinstance(snapshot, CheckpointSnapshot)
+            else dict(snapshot or {})
+        )
+        if not data:
+            return False
+
+        try:
+            self.iteration = int(data.get("iteration") or 0)
+        except (TypeError, ValueError):
+            self.iteration = 0
+        self.current_activity = str(data.get("current_activity") or "unknown")
+        self.current_screen_hash = str(data.get("current_screen_hash") or "")
+
+        for entry in data.get("visited_screens") or []:
+            if not isinstance(entry, dict):
+                continue
+            screen_hash = str(entry.get("screen_hash") or "")
+            if not screen_hash or screen_hash in self.visited_screens:
+                continue
+            self.visited_screens[screen_hash] = ScreenRecord(
+                screen_hash=screen_hash,
+                activity_name=str(entry.get("activity_name") or "unknown"),
+                first_seen=str(entry.get("first_seen") or _utcnow()),
+                action_count=int(entry.get("action_count") or 0),
+                frida_triggered=bool(entry.get("frida_triggered")),
+            )
+        # Restoring must respect the same bound as live registration, or a
+        # long run's snapshot would grow memory past its cap on every resume.
+        self._evict_oldest(self.visited_screens, MAX_VISITED_SCREENS, "screen")
+
+        try:
+            self._total_screens_seen = max(
+                int(data.get("total_screens_seen") or 0), len(self.visited_screens)
+            )
+        except (TypeError, ValueError):
+            self._total_screens_seen = len(self.visited_screens)
+
+        self.permissions_granted |= {str(p) for p in data.get("permissions_granted") or []}
+        self.permissions_denied |= {str(p) for p in data.get("permissions_denied") or []}
+
+        for goal, count in (data.get("frida_event_counts") or {}).items():
+            try:
+                self._frida_event_counts[str(goal)] = int(count)
+            except (TypeError, ValueError):
+                continue
+
+        for url in data.get("network_events") or []:
+            text = str(url)
+            if text not in self._network_seen:
+                self._network_seen.add(text)
+                self.network_events.append(text)
+
+        for entry in data.get("action_history") or []:
+            if not isinstance(entry, dict):
+                continue
+            self._action_history.append(
+                ActionRecord(
+                    iteration=int(entry.get("iteration") or 0),
+                    screen_hash=str(entry.get("screen_hash") or ""),
+                    tool=str(entry.get("tool") or ""),
+                    target=str(entry.get("target") or ""),
+                    goal_name=str(entry.get("goal_name") or ""),
+                    reasoning="",
+                    success=bool(entry.get("success")),
+                    error=None,
+                    timestamp=str(entry.get("timestamp") or _utcnow()),
+                )
+            )
+
+        logger.info(
+            "[AgentMemory] Restored snapshot %s: iteration %s, %s screen(s), "
+            "%s goal(s) already satisfied",
+            data.get("snapshot_id", "?"),
+            self.iteration,
+            len(self.visited_screens),
+            len(data.get("satisfied_goals") or []),
+        )
+        return True
 
     # ── Summary for reports ────────────────────────────────────────────────────
 

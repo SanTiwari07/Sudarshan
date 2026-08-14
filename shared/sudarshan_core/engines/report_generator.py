@@ -1060,6 +1060,101 @@ def _build_exploration_coverage(r: Dict, apk_dir: Optional[Path], idx: _FindingI
 
 
 
+def _build_execution_assertions(r: Dict, idx: _FindingIndex) -> str:
+    """
+    Execution Assertion Matrix and INCOMPLETE EXERCISE gap analysis.
+
+    Sits alongside coverage because it answers the same question from the other
+    side: coverage says how much of the app we walked, this says which of the
+    sample's own fraud preconditions were ever met. A reader interpreting "no
+    malicious behaviour observed" needs the second one to know what that
+    sentence is worth.
+    """
+    assertions = _get(r, "execution_assertions") or {}
+    rows = _get(assertions, "assertions") or []
+    if not rows:
+        return ""
+
+    incomplete = bool(_get(assertions, "incomplete_exercise"))
+    fired = int(_get(assertions, "fired_count", default=0) or 0)
+    total = int(_get(assertions, "total_count", default=len(rows)) or len(rows))
+    fid = idx.next("INTEL", "Execution Assertion Matrix")
+
+    banner = ""
+    if incomplete:
+        banner = (
+            '<div style="background:rgba(245,158,11,.12);border:1px solid #f59e0b;'
+            'border-radius:8px;padding:12px 14px;margin-bottom:12px">'
+            '<div style="font-weight:700;color:#b45309;margin-bottom:4px">'
+            '&#9888; INCOMPLETE EXERCISE &mdash; verdict qualified</div>'
+            '<div style="font-size:13px;line-height:1.5">'
+            'This run did not exercise the sample. The sandbox reached none of the '
+            'trigger conditions below and observed no threat behaviour. '
+            '<b>Absence of evidence is not evidence of absence</b> &mdash; an '
+            'evasion-first banking trojan waiting on a target app, an OTP, an '
+            'accessibility grant or a dormancy timer produces exactly this result. '
+            'Reported confidence is reduced by 50%, and this run does not certify '
+            'the sample as benign.'
+            '</div></div>'
+        )
+
+    body = [
+        '<div class="section">',
+        _section_header(
+            "&#9201;",
+            "rgba(245,158,11,.15)",
+            "Execution Assertion Matrix",
+            f"[{fid}] &mdash; {fired}/{total} trigger conditions reached",
+        ),
+        banner,
+        '<table class="tbl"><thead><tr>'
+        '<th>Trigger condition</th><th>Reached</th><th>Evidence / remediation</th>'
+        '</tr></thead><tbody>',
+    ]
+    for row in rows:
+        reached = bool(_get(row, "fired"))
+        detail = _get(row, "evidence") if reached else _get(row, "remediation")
+        mark = (
+            '<span style="color:#15803d;font-weight:700">YES</span>'
+            if reached
+            else '<span style="color:#b45309;font-weight:700">NO</span>'
+        )
+        body.append(
+            f'<tr><td><b>{_esc(_get(row, "label", default=""))}</b></td>'
+            f"<td>{mark}</td>"
+            f'<td>{_esc(str(detail or "&mdash;")[:300])}</td></tr>'
+        )
+    body.append("</tbody></table>")
+    body.append(
+        '<div class="muted" style="font-size:12px;margin-top:6px">'
+        'A &ldquo;NO&rdquo; row is an unmet precondition, not a cleared check: the '
+        'corresponding fraud behaviour could not have been observed during this '
+        'run regardless of whether the sample implements it.</div>'
+    )
+
+    suggestions = _get(r, "remedial_suggestions") or []
+    if suggestions:
+        body.append(
+            '<h3 style="margin:14px 0 6px">Gap analysis &mdash; recommended re-run actions</h3>'
+        )
+        body.append(
+            '<table class="tbl"><thead><tr><th>Priority</th><th>Action</th>'
+            "<th>Why it matters</th></tr></thead><tbody>"
+        )
+        for suggestion in suggestions[:8]:
+            rationale = str(_get(suggestion, "rationale", default="") or "")
+            context = str(_get(suggestion, "threat_context", default="") or "")
+            body.append(
+                f'<tr><td><b>{_esc(_get(suggestion, "priority", default=""))}</b></td>'
+                f'<td>{_esc(_get(suggestion, "title", default=""))}</td>'
+                f"<td>{_esc(f'{rationale} {context}'.strip()[:320])}</td></tr>"
+            )
+        body.append("</tbody></table>")
+
+    body.append("</div>")
+    return "".join(body)
+
+
 def _build_recommendations(r: Dict) -> str:
     intel = _get(r, "intelligence_report") or {}
     actions = _get(intel, "recommended_actions") or []
@@ -1245,6 +1340,7 @@ class ReportGenerator:
             + _build_visual_gallery(self.apk_dir, idx, self.r)
             + visual_tech
             + _build_exploration_coverage(self.r, self.apk_dir, idx)
+            + _build_execution_assertions(self.r, idx)
             + _build_recommendations(self.r)
             + visual_appendix
             + _build_ledger(idx)

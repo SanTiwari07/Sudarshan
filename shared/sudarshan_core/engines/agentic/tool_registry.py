@@ -424,6 +424,71 @@ TOOL_REGISTRY: Dict[str, ToolDef] = {
         failure_strategy="log_and_continue",
         min_android_api=21,
     ),
+
+    # ── Investigation resilience ──────────────────────────────────────────
+    "fast_forward_time": ToolDef(
+        name="fast_forward_time",
+        description=(
+            "Advance the device clock and force pending background jobs. Use "
+            "when the app has been idle for several iterations and appears to "
+            "be waiting on a timer - droppers commonly delay their payload by "
+            "hours to outlast analysis."
+        ),
+        params=[
+            ToolParam(
+                name="hours",
+                type="float",
+                required=False,
+                description="How many hours to advance. Defaults to 24.",
+                min_val=0.1,
+                max_val=2160.0,
+            ),
+            ToolParam(
+                name="force_jobs",
+                type="bool",
+                required=False,
+                description="Also force scheduled JobScheduler work and cycle Doze.",
+            ),
+        ],
+        # Setting the clock, reading dumpsys jobscheduler and cycling Doze are
+        # each slow on a loaded emulator; the whole sequence needs room.
+        timeout_seconds=180,
+        retry_count=0,
+        failure_strategy="log_and_continue",
+        min_android_api=21,
+        notes=(
+            "Changes device-wide state. Automatic time sync is disabled for the "
+            "duration and restored by the session teardown."
+        ),
+    ),
+
+    "inject_test_sms": ToolDef(
+        name="inject_test_sms",
+        description=(
+            "Deliver a synthetic SMS to the device so SMS-interception hooks "
+            "have something to observe. Use when the sample declares SMS "
+            "permissions but no message has arrived during the run."
+        ),
+        params=[
+            ToolParam(
+                name="sender",
+                type="str",
+                required=False,
+                description="Sender address, e.g. an alphanumeric bank short code.",
+            ),
+            ToolParam(
+                name="body",
+                type="str",
+                required=False,
+                description="Message text. Defaults to a synthetic OTP.",
+            ),
+        ],
+        timeout_seconds=30,
+        retry_count=1,
+        failure_strategy="log_and_continue",
+        min_android_api=21,
+        notes="Emulator-only on most images; requires `emu sms` or root.",
+    ),
 }
 
 

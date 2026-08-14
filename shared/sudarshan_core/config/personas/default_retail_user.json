@@ -1,0 +1,92 @@
+{
+  "persona_id": "default_retail_user",
+  "display_name": "Retail banking customer (default)",
+  "description": "A plausible mid-tenure Android user: a populated address book, months of SMS including bank alerts, camera-roll photos, and a call log. Targets the emptiness checks evasive banking trojans run before unpacking.",
+  "locale": "en_IN",
+  "rationale": [
+    "Anatsa and Xenomorph droppers query the contacts and SMS providers and stay dormant when they return zero rows - an empty address book is the cheapest sandbox tell there is.",
+    "SOVA and CraxsRAT samples look for existing bank-alert SMS to decide which institution to overlay, so the inbox has to name real senders.",
+    "A device with no photos and no call history is not a device anyone banks from."
+  ],
+  "contacts": {
+    "count": 120,
+    "given_names": [
+      "Aarav", "Vivaan", "Aditya", "Vihaan", "Arjun", "Reyansh", "Ayaan", "Krishna",
+      "Ishaan", "Shaurya", "Ananya", "Diya", "Aadhya", "Saanvi", "Pari", "Anika",
+      "Navya", "Myra", "Sara", "Kiara", "Rohan", "Kabir", "Dhruv", "Advait",
+      "Meera", "Riya", "Tara", "Nisha", "Kavya", "Isha"
+    ],
+    "family_names": [
+      "Sharma", "Verma", "Patel", "Reddy", "Nair", "Iyer", "Singh", "Gupta",
+      "Mehta", "Joshi", "Desai", "Kulkarni", "Chatterjee", "Banerjee", "Rao",
+      "Malhotra", "Kapoor", "Bhat", "Pillai", "Shetty"
+    ],
+    "labels": ["Home", "Work", "Mobile"],
+    "phone_prefixes": ["+9198", "+9197", "+9199", "+9188", "+9187"]
+  },
+  "sms": [
+    {
+      "address": "AD-SBIINB",
+      "body": "Dear Customer, Rs.2,450.00 debited from A/c XX4417 on 04-Aug-26 to VPA merchant@upi. Not you? Call 1800-11-2211.",
+      "days_ago": 11,
+      "read": 1
+    },
+    {
+      "address": "VM-HDFCBK",
+      "body": "Rs.18,900.00 credited to your HDFC Bank A/c XX8802 on 01-Aug-26 by SALARY. Avl Bal Rs.63,118.42.",
+      "days_ago": 14,
+      "read": 1
+    },
+    {
+      "address": "AX-ICICIB",
+      "body": "OTP 481902 is valid for 10 mins. Do not share with anyone including bank staff.",
+      "days_ago": 9,
+      "read": 1
+    },
+    {
+      "address": "JD-AXISBK",
+      "body": "Your Axis Bank Credit Card XX2291 statement of Rs.7,318.00 is due on 18-Aug-26.",
+      "days_ago": 6,
+      "read": 0
+    },
+    {
+      "address": "AD-BOIIND",
+      "body": "UPI mandate of Rs.499.00 to NETFLIX will be debited from A/c XX3390 on 16-Aug-26.",
+      "days_ago": 4,
+      "read": 0
+    },
+    {
+      "address": "TM-PNBSMS",
+      "body": "Rs.500.00 withdrawn at ATM ID S1BX0921 on 07-Aug-26. Avl Bal Rs.12,004.10.",
+      "days_ago": 8,
+      "read": 1
+    },
+    {
+      "address": "+919845012233",
+      "body": "Sending the rent transfer tonight, remind me if I forget",
+      "days_ago": 3,
+      "read": 1
+    },
+    {
+      "address": "AD-AMAZON",
+      "body": "Your order has been delivered. Rate your experience in the app.",
+      "days_ago": 2,
+      "read": 1
+    }
+  ],
+  "call_log": {
+    "count": 24,
+    "incoming_ratio": 0.45,
+    "missed_ratio": 0.15,
+    "max_days_ago": 30
+  },
+  "gallery": {
+    "count": 18,
+    "width": 1080,
+    "height": 1920,
+    "album": "Camera"
+  },
+  "accounts_hint": [
+    "A seeded persona cannot create real Google accounts. Where an image allows it, add one manually before the run; several droppers check AccountManager."
+  ]
+}

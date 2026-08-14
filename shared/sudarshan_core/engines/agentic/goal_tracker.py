@@ -30,7 +30,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -633,3 +633,83 @@ class GoalTracker:
         goal = self.get_goal_by_name(goal_name)
         if goal:
             goal.attempts += 1
+
+    # ── Post-run gap audit ─────────────────────────────────────────────────────
+
+    def audit_unfulfilled_goals(self) -> List[Dict[str, Any]]:
+        """
+        Which fraud goals finished the run without evidence, and why.
+
+        This is the forensic counterpart to :meth:`completion_summary`. That
+        method reports *what* happened; this one reports what did **not**, and
+        distinguishes the three reasons a goal can end unfulfilled - because
+        they call for different remediation:
+
+        ``blocked``
+            A dependency stage never completed, so the agent could not legally
+            attempt this goal. Fixing the dependency fixes this one for free.
+        ``attempted``
+            The agent tried and could not trigger the behaviour. This is the
+            interesting case: it may be evasion, or a missing precondition.
+        ``never_attempted``
+            The run ended - budget, timeout or crash - before the goal came up.
+            Says nothing about the sample at all.
+
+        Ordered by stage so the earliest unmet goal, which usually unblocks the
+        rest, is first.
+        """
+        completed = self._completed_stages()
+        audit: List[Dict[str, Any]] = []
+
+        for goal in sorted(self._goals, key=lambda g: g.stage):
+            if goal.status == GoalStatus.COMPLETED:
+                continue
+            if goal.evidence_collected:
+                # Evidence arrived even though the status never advanced; not a
+                # gap, and reporting it as one would send an analyst chasing a
+                # trigger that already fired.
+                continue
+
+            unblocked = goal.is_unblocked(completed)
+            if not unblocked:
+                reason = "blocked"
+            elif goal.attempts > 0 or goal.status == GoalStatus.FAILED:
+                reason = "attempted"
+            else:
+                reason = "never_attempted"
+
+            blocking_stages = [s for s in goal.depends_on if s not in completed]
+            audit.append(
+                {
+                    "goal_name": goal.name,
+                    "stage": goal.stage,
+                    "status": goal.status.value,
+                    "description": goal.description,
+                    "reason": reason,
+                    "attempts": goal.attempts,
+                    "retries_used": goal.retries_used,
+                    "evidence_count": 0,
+                    "blocked_by_stages": blocking_stages,
+                    "blocked_by_goals": [
+                        g.name for g in self._goals if g.stage in blocking_stages
+                    ],
+                    "frida_categories": list(goal.frida_categories),
+                    "skippable": goal.skip_if_missing,
+                }
+            )
+        return audit
+
+    def coverage_report(self) -> Dict[str, Any]:
+        """Goal-graph coverage for the report's gap-analysis section."""
+        total = len(self._goals)
+        by_status: Dict[str, int] = {}
+        for goal in self._goals:
+            by_status[goal.status.value] = by_status.get(goal.status.value, 0) + 1
+        satisfied = by_status.get(GoalStatus.COMPLETED.value, 0)
+        return {
+            "total_goals": total,
+            "satisfied_goals": satisfied,
+            "coverage_ratio": round(satisfied / total, 4) if total else 0.0,
+            "by_status": by_status,
+            "unfulfilled": self.audit_unfulfilled_goals(),
+        }

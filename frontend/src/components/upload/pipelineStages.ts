@@ -1,4 +1,7 @@
-export type StageStatus = 'pending' | 'active' | 'complete';
+// 'error' is included because UploadPage already passes it when the pipeline
+// fails; the type omitted it, so that call site did not typecheck and the
+// build failed. StageCard renders it as the neutral fallthrough.
+export type StageStatus = 'pending' | 'active' | 'complete' | 'error';
 
 export type PipelineStageDef = {
   id: string;

@@ -1,0 +1,43 @@
+{
+  "persona_id": "minimal_privacy_user",
+  "display_name": "Light user (fast seed)",
+  "description": "A smaller footprint for quick runs and for images where content-provider writes are slow. Enough to clear a zero-row emptiness check without the cost of a full seed.",
+  "locale": "en_IN",
+  "rationale": [
+    "Most dormancy checks test for zero rows rather than for a realistic volume, so a light seed clears them at a fraction of the seeding time.",
+    "Use this when the run budget is short; use default_retail_user when the sample is known to profile the device in depth."
+  ],
+  "contacts": {
+    "count": 25,
+    "given_names": ["Aarav", "Diya", "Rohan", "Meera", "Kabir", "Anika", "Vivaan", "Riya"],
+    "family_names": ["Sharma", "Patel", "Nair", "Singh", "Rao", "Mehta"],
+    "labels": ["Mobile", "Home"],
+    "phone_prefixes": ["+9198", "+9197"]
+  },
+  "sms": [
+    {
+      "address": "AD-SBIINB",
+      "body": "Rs.1,200.00 debited from A/c XX4417 on 09-Aug-26. Not you? Call 1800-11-2211.",
+      "days_ago": 5,
+      "read": 1
+    },
+    {
+      "address": "VM-HDFCBK",
+      "body": "OTP 305118 for your transaction. Valid 10 minutes. Never share it.",
+      "days_ago": 3,
+      "read": 1
+    }
+  ],
+  "call_log": {
+    "count": 6,
+    "incoming_ratio": 0.5,
+    "missed_ratio": 0.17,
+    "max_days_ago": 14
+  },
+  "gallery": {
+    "count": 4,
+    "width": 720,
+    "height": 1280,
+    "album": "Camera"
+  }
+}

@@ -197,6 +197,12 @@ class ReportData:
     providers: List[str]
     certificate: Dict[str, Any]
 
+    # Investigation resilience. Defaulted so an older stored case - written
+    # before the Execution Assertion Matrix existed - still renders.
+    verdict: str = ""
+    execution_assertions: Dict[str, Any] = field(default_factory=dict)
+    remedial_suggestions: List[Dict[str, Any]] = field(default_factory=list)
+
 # ---------------------------------------------------------------------------
 # Data Resolution & Normalization
 # ---------------------------------------------------------------------------
@@ -418,6 +424,49 @@ def build_report_data(case_data: Dict[str, Any], apk_dir: Optional[Path] = None)
     providers_list = get_val(case_data, "providers", [])
     cert_dict = get_val(case_data, "certificate", {})
 
+    # ── Investigation resilience ──────────────────────────────────────────────
+    # The assertion matrix is computed by the risk engine and stored on the
+    # case. Recomputing it here when absent keeps older stored cases - and any
+    # caller that hands us a raw dynamic result - renderable.
+    assertions_dict = get_val(case_data, "execution_assertions") or {}
+    if not isinstance(assertions_dict, dict) or not assertions_dict:
+        try:
+            from sudarshan_core.engines.execution_assertions import (
+                build_execution_assertions,
+            )
+
+            assertions_dict = build_execution_assertions(
+                dynamic_res if isinstance(dynamic_res, dict) else {},
+                target_bank_packages=get_val(case_data, "indian_bank_packages_found") or [],
+            ).to_dict()
+        except Exception:  # noqa: BLE001
+            assertions_dict = {}
+
+    suggestions_list = get_val(case_data, "remedial_suggestions") or []
+    if not suggestions_list and assertions_dict.get("incomplete_exercise"):
+        try:
+            from sudarshan_core.engines.agentic.remediation import (
+                generate_remedial_suggestions,
+                suggestions_to_dicts,
+            )
+
+            suggestions_list = suggestions_to_dicts(
+                generate_remedial_suggestions(
+                    None,
+                    execution_assertions=assertions_dict,
+                    target_bank_packages=get_val(
+                        case_data, "indian_bank_packages_found"
+                    )
+                    or [],
+                )
+            )
+        except Exception:  # noqa: BLE001
+            suggestions_list = []
+
+    verdict_val = safe_str(
+        get_val(case_data, "verdict") or risk_band_val, risk_band_val
+    )
+
     return ReportData(
         case_id=FieldValue(value=case_id_val, source=Provenance.SYSTEM, status=Status.OBSERVED),
         sha256=FieldValue(value=sha256_val, source=Provenance.STATIC, status=Status.OBSERVED),
@@ -498,6 +547,9 @@ def build_report_data(case_data: Dict[str, Any], apk_dir: Optional[Path] = None)
         receivers=receivers_list,
         providers=providers_list,
         certificate=cert_dict,
+        verdict=verdict_val,
+        execution_assertions=assertions_dict,
+        remedial_suggestions=suggestions_list,
     )
 
 # ---------------------------------------------------------------------------
@@ -1300,7 +1352,7 @@ class ReportLabPDFGenerator:
         ]
         
         # Check permissions for specific capabilities
-        perms = self.data.permissions if hasattr(self.data, 'permissions') else []
+        perms = self._permission_names()
         if any('BIND_ACCESSIBILITY_SERVICE' in p for p in perms):
              findings_data.append([Paragraph("Accessibility service declared", self.table_cell_bold), Paragraph("BIND_ACCESSIBILITY_SERVICE", self.table_cell), Paragraph("STATIC INDICATOR", self.table_cell_bold)])
         if any('SMS' in p for p in perms):
@@ -1370,6 +1422,9 @@ class ReportLabPDFGenerator:
         ]
         
         has_mapped = False
+        # `perms` was referenced here but never assigned - an unconditional
+        # NameError that made PDF export fail for every case.
+        perms = self._permission_names()
         if any('BIND_ACCESSIBILITY_SERVICE' in p for p in perms):
              map_data.append([Paragraph("Accessibility-service declaration", self.table_cell_bold), Paragraph("T1628 — Input Capture via Accessibility Service", self.table_cell), Paragraph("Banking-app manipulation / ATS", self.table_cell)])
              has_mapped = True
@@ -1704,9 +1759,166 @@ class ReportLabPDFGenerator:
         ]))
         elements.append(mitre_table)
 
+    def _permission_names(self) -> List[str]:
+        """
+        Declared permissions as plain strings.
+
+        ``ReportData.permissions`` is a ``List[Dict[str, Any]]`` - the intake
+        layer carries a protection level and a rationale alongside each name -
+        but the page builders were written against a ``List[str]``. One called
+        ``.replace()`` on a dict; another referenced an undefined ``perms`` and
+        raised NameError before it could. Between them, PDF export failed for
+        every case. Normalising in one place fixes both, and a list of bare
+        strings - which some stored cases contain - still works.
+        """
+        raw = getattr(self.data, "permissions", None) or []
+        names: List[str] = []
+        for entry in raw:
+            if isinstance(entry, str):
+                name = entry
+            elif isinstance(entry, dict):
+                name = str(
+                    entry.get("permission")
+                    or entry.get("name")
+                    or entry.get("id")
+                    or ""
+                )
+            else:
+                name = str(entry)
+            name = name.strip()
+            if name:
+                names.append(name)
+        return names
+
+    def _build_execution_assertion_matrix(self, elements: List[Any]):
+        """
+        Execution Assertion Matrix + INCOMPLETE EXERCISE gap analysis.
+
+        Placed in Part C, next to the coverage matrix, because it answers the
+        same class of question: what did this analysis actually establish? The
+        coverage matrix says which *tools* ran; this says which of the sample's
+        own *trigger conditions* were reached. A reader who sees "no malicious
+        behaviour observed" needs both to interpret it.
+        """
+        assertions = getattr(self.data, "execution_assertions", None) or {}
+        rows = assertions.get("assertions") or []
+        if not rows:
+            return
+
+        incomplete = bool(assertions.get("incomplete_exercise"))
+
+        if incomplete:
+            elements.append(
+                Paragraph("INCOMPLETE EXERCISE - VERDICT QUALIFIED", self.section_bar)
+            )
+            banner = Table(
+                [[
+                    Paragraph(
+                        "<b>This run did not exercise the sample.</b> The sandbox "
+                        "reached none of the fraud trigger conditions below and "
+                        "observed no threat behaviour. Absence of evidence here is "
+                        "<b>not</b> evidence of absence: an evasion-first banking "
+                        "trojan waiting on a target app, an OTP, an accessibility "
+                        "grant or a dormancy timer produces exactly this result. "
+                        "Reported confidence is reduced by 50% and the sample is "
+                        "not certified benign on the strength of this run.",
+                        self.table_cell,
+                    )
+                ]],
+                colWidths=[523.0],
+            )
+            banner.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFF8E1")),
+                ("BOX", (0, 0), (-1, -1), 1.0, colors.HexColor("#F59E0B")),
+                ("PADDING", (0, 0), (-1, -1), 6),
+            ]))
+            elements.append(banner)
+            elements.append(Spacer(1, 6))
+
+        fired = int(assertions.get("fired_count") or 0)
+        total = int(assertions.get("total_count") or len(rows))
+        elements.append(
+            Paragraph(
+                f"EXECUTION ASSERTION MATRIX - {fired}/{total} trigger conditions reached",
+                self.section_bar,
+            )
+        )
+
+        table_data = [[
+            Paragraph("Trigger condition", self.table_header),
+            Paragraph("Reached", self.table_header),
+            Paragraph("Evidence / remediation", self.table_header),
+        ]]
+        for row in rows:
+            reached = bool(row.get("fired"))
+            detail = row.get("evidence") if reached else row.get("remediation")
+            table_data.append([
+                Paragraph(str(row.get("label", "")), self.table_cell_bold),
+                Paragraph("YES" if reached else "NO", self.table_cell_bold),
+                Paragraph(str(detail or "-")[:240], self.table_cell),
+            ])
+
+        matrix = Table(table_data, colWidths=[150.0, 55.0, 318.0], repeatRows=1)
+        style = [
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
+            ("PADDING", (0, 0), (-1, -1), 3.5),
+        ]
+        # Colour the Reached column so gaps are legible at a glance in print,
+        # where an analyst scans rather than reads.
+        for index, row in enumerate(rows, start=1):
+            if row.get("fired"):
+                style.append(("TEXTCOLOR", (1, index), (1, index), colors.HexColor("#15803D")))
+            else:
+                style.append(("TEXTCOLOR", (1, index), (1, index), colors.HexColor("#B45309")))
+                style.append(("BACKGROUND", (1, index), (1, index), colors.HexColor("#FFFBEB")))
+        matrix.setStyle(TableStyle(style))
+        elements.append(matrix)
+        elements.append(
+            Paragraph(
+                "<font size=6 color='#57606A'>A \"NO\" row is an unmet precondition, "
+                "not a cleared check. It means the corresponding fraud behaviour "
+                "could not have been observed during this run regardless of "
+                "whether the sample implements it.</font>",
+                self.body_style,
+            )
+        )
+        elements.append(Spacer(1, 6))
+
+        suggestions = getattr(self.data, "remedial_suggestions", None) or []
+        if suggestions:
+            elements.append(
+                Paragraph("GAP ANALYSIS - RECOMMENDED RE-RUN ACTIONS", self.section_bar)
+            )
+            gap_data = [[
+                Paragraph("Priority", self.table_header),
+                Paragraph("Action", self.table_header),
+                Paragraph("Why it matters", self.table_header),
+            ]]
+            for suggestion in suggestions[:8]:
+                rationale = str(suggestion.get("rationale") or "")
+                context = str(suggestion.get("threat_context") or "")
+                combined = f"{rationale} {context}".strip()
+                gap_data.append([
+                    Paragraph(str(suggestion.get("priority", "")), self.table_cell_bold),
+                    Paragraph(str(suggestion.get("title", "")), self.table_cell),
+                    Paragraph(combined[:300], self.table_cell),
+                ])
+            gap_table = Table(gap_data, colWidths=[62.0, 180.0, 281.0], repeatRows=1)
+            gap_table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
+                ("PADDING", (0, 0), (-1, -1), 3.5),
+            ]))
+            elements.append(gap_table)
+            elements.append(Spacer(1, 6))
+
     def _build_page11_coverage_and_evidence_ledger(self, elements: List[Any]):
         """PAGE 11 — PART C · AUDIT & TRACEABILITY — COVERAGE & EVIDENCE LEDGER."""
         elements.append(Paragraph("PART C · AUDIT & TRACEABILITY — COVERAGE, LIMITATIONS & EVIDENCE LEDGER", self.part_header))
+
+        self._build_execution_assertion_matrix(elements)
+
         elements.append(Paragraph("ANALYSIS COVERAGE & LIMITATIONS MATRIX", self.section_bar))
 
         cov_data = [
@@ -1781,7 +1993,7 @@ class ReportLabPDFGenerator:
 
         c2_url_str = self.data.iocs[0]['indicator'] if self.data.iocs else 'http://194.163.142.89/drinik/gate.php'
 
-        perms = self.data.permissions if hasattr(self.data, 'permissions') else []
+        perms = self._permission_names()
         
         ioc_data = [
             [Paragraph("FILE INDICATORS", self.table_header), Paragraph("NETWORK / ANDROID INDICATORS", self.table_header)],

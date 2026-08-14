@@ -2,8 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
-## 2026-08-11
+## 2026-08-14
 
+### Bug Fixes
+- **PDF Generator Crash**: Fixed a `TypeError` in `pdf_generator.py` (lines 1155, 1164) that caused a 500 Internal Server Error when `banking_impact` was absent or null, ensuring fallback to `0.0`.
+- **Prompt Sanitization Coverage**: Updated `sanitizer.py`'s `_INJECTION_PHRASES` to cover non-English (Spanish, French, German, Chinese, Italian, Portuguese, Polish, Russian) and persona-based prompt injection / jailbreak attempts.
+
+### Documentation
+- **Zero-Drift Master Knowledge Base**: Synthesized 16 subsystem audit reports into a single, comprehensive 58-section `SUDARSHAN_MASTER.md` document that serves as the ultimate source of truth, superseding previous fragmented documentation files.
+
+## 2026-08-11
 ### Documentation
 - **Full Documentation Audit (2026-08-11)**: Complete codebase-verified documentation pass against all files in `docs/`.
 - **Version corrected**: All docs now state `v2.1.0` (from `backend/app/main.py`); prior docs incorrectly stated `v2.5.0-STABLE`.

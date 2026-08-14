@@ -76,6 +76,18 @@ _INJECTION_PHRASES = re.compile(
     r"|system\s+prompt"
     r"|you\s+are\s+now\s+"
     r"|new\s+instructions?\s*:"
+    r"|act\s+as\s+"
+    r"|simulate\s+"
+    r"|pretend\s+to\s+be\s+"
+    r"|persona\s*:"
+    r"|ignora\s+(?:todas\s+)?(?:las\s+)?instrucciones"
+    r"|ignorer\s+(?:toutes\s+)?les\s+instructions"
+    r"|ignoriere\s+(?:alle\s+)?vorherigen\s+anweisungen"
+    r"|忽略(?:所有)?(?:之前的)?指示"
+    r"|ignora\s+(?:tutte\s+)?le\s+istruzioni"
+    r"|ignorar\s+(?:todas\s+)?(?:as\s+)?instruções"
+    r"|ignoruj\s+(?:wszystkie\s+)?instrukcje"
+    r"|игнорируй\s+(?:все\s+)?(?:предыдущие\s+)?инструкции"
     r")"
 )
 

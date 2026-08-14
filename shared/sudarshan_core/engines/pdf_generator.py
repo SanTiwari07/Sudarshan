@@ -1152,7 +1152,7 @@ class ReportLabPDFGenerator:
             stei=self.data.stei_total.value if hasattr(self.data, 'stei_total') and self.data.stei_total else 0.0,
             bfci=self.data.bfci_total.value if hasattr(self.data, 'bfci_total') and self.data.bfci_total else 0.0,
             corr=self.data.correlation_score.value if hasattr(self.data, 'correlation_score') and self.data.correlation_score else 0.0,
-            bank=self.data.banking_impact_score.value if hasattr(self.data, 'banking_impact_score') and self.data.banking_impact_score else 0.0,
+            bank=float(self.data.banking_impact_score.value) if hasattr(self.data, 'banking_impact_score') and getattr(self.data.banking_impact_score, 'value', None) else 0.0,
         )
         elements.append(frs_meter)
         elements.append(Spacer(1, 6))
@@ -1161,7 +1161,7 @@ class ReportLabPDFGenerator:
         stei_val = self.data.stei_total.value if hasattr(self.data, 'stei_total') and self.data.stei_total else 0.0
         bfci_val = self.data.bfci_total.value if hasattr(self.data, 'bfci_total') and self.data.bfci_total else 0.0
         corr_val = self.data.correlation_score.value if hasattr(self.data, 'correlation_score') and self.data.correlation_score else 0.0
-        bank_val = self.data.banking_impact_score.value if hasattr(self.data, 'banking_impact_score') and self.data.banking_impact_score else 0.0
+        bank_val = float(self.data.banking_impact_score.value) if hasattr(self.data, 'banking_impact_score') and getattr(self.data.banking_impact_score, 'value', None) else 0.0
 
         axis_data = [
             [Paragraph("Axis", self.table_header), Paragraph("Nom. Wt.", self.table_header), Paragraph("Included because...", self.table_header), Paragraph("Score", self.table_header), Paragraph("Wtd.", self.table_header), Paragraph("Status", self.table_header)],

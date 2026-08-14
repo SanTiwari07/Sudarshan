@@ -8,25 +8,28 @@ All documentation herein is strictly derived from and cross-verified against the
 
 ## Document Index & Directory Matrix
 
+> **IMPORTANT**: As of 2026-08-14, the single source of truth for the entire platform is the [**SUDARSHAN_MASTER.md**](SUDARSHAN_MASTER.md). The documents listed below are legacy fragmented files, preserved for historical reference but superseded by the Master Knowledge Base.
+
 | Document | Title | Primary Focus & System Scope |
 | :--- | :--- | :--- |
+| [**SUDARSHAN_MASTER.md**](SUDARSHAN_MASTER.md) | **Master Knowledge Base** | **The ultimate, 58-section, zero-drift source of truth for the entire platform.** |
 | [**01 - Introduction**](01_INTRODUCTION.md) | Problem Statement & Scope | Threat model, operational challenges in mobile banking fraud, target audience. |
 | [**02 - System Overview**](02_SYSTEM_OVERVIEW.md) | Platform Architecture & Data Flow | End-to-end processing pipeline, microservices layout, container network topology, runtime telemetry. |
 | [**ARCHITECTURE.md**](ARCHITECTURE.md) | System Design & Technical Spec | In-depth technical specification of backend, frontend, engines, database, `/api/runtime/*` APIs, and zero-copy volumes. |
 | [**MIGRATION.md**](MIGRATION.md) | Microservice Migration Guide | Architectural specification of `analysis-engine` microservice container, REST APIs, zero-copy shared volume, and entrypoint healthchecks. |
 | [**03 - Static Threat Intelligence**](architecture/03_STATIC_THREAT_INTELLIGENCE.md) | Static Analysis & Decompilation | Containerized static engine, MobSF, native `apk_analyzer.py`, `apk_repair.py` AXML recovery, APKTool 2.10.0, JADX 1.5.1, `manifest.py` Investigation Manifest, STEI formula, static UI profiles for VIDE. |
 | [**VIDE - Visual Impersonation Detection**](architecture/VIDE.md) | Visual Impersonation (deterministic) | UI baseline compare, VIDE-F001, signer registry, FRS escalation; static verified; live WebView path device-gated. |
-| [**04 - Dynamic Analysis Engine**](architecture/04_DYNAMIC_ANALYSIS_ENGINE.md) | Dynamic Sandbox & Agentic Explorer | Frida 17 PID attach, containment policy (`sandbox_containment.py`, `adb_gateway`), Genymotion `ADB_HOST` / AVD serial, mitmproxy HAR, Agentic Explorer. |
+| [**04 - Dynamic Analysis Engine**](architecture/04_DYNAMIC_ANALYSIS_ENGINE.md) | Dynamic Sandbox & Agentic Explorer | Frida 17 exact PID attach, explicit TCP transport, `sudarshan_core.preflight` pipeline, containment policy (`sandbox_containment.py`), mitmproxy HAR, Agentic Explorer. |
 | [**05 - AI Investigation Engine**](architecture/05_AI_INVESTIGATION_ENGINE.md) | AI Core, RAG & Prompt Safety | Gemini 2.5 Flash (`GEMINI_MODEL`), vector RAG index (`gemini_rag.py`), prompt sanitizer. |
 | [**06 - Evidence Processing**](architecture/06_EVIDENCE_PROCESSING.md) | Event Bus & Workflow Engine | `EventBus`, `EvidenceStore`, `WorkflowReconstructor` causal chain engine, runtime telemetry sink (`runtime_api.py`). |
 | [**07 - Fraud Intelligence Engine**](architecture/07_FRAUD_INTELLIGENCE_ENGINE.md) | Threat Correlation & Attribution | VirusTotal, AlienVault OTX, AbuseIPDB lookup, 24h TTL SQLite IOC reputation cache, deterministic family classifier. |
 | [**08 - Deterministic Risk Engine**](architecture/08_DETERMINISTIC_RISK_ENGINE.md) | Risk Scoring & Math Formulas | 5-axis STEI, logarithmic volume-aware BFCI v2, 4-axis FRS formula, static fallback. |
 | [**09 - AI Report Generation**](architecture/09_AI_REPORT_GENERATION.md) | Security Reporting & Export | Executive Fraud Cards, HTML security reports, PDF report exporter, STIX 2.1 exporter, CSV IOC feed. |
 | [**10 - Analyst Dashboard**](dashboard/10_DASHBOARD.md) | Analyst UI & Visual Workflows | React 18 SPA, `InvestigationShell`, Executive View (`FraudCard.tsx`), Technical SOC View, VIDE panels, `WorkflowDiagram.tsx` timeline. |
-| [**11 - Evaluation Strategy**](evaluation/11_EVALUATION.md) | Verification & Testing | Automated test suite in `tests/` & `backend/tests/` (**583 collected & verified tests** as of 2026-08-11), benchmarks, determinism baselines. |
+| [**11 - Evaluation Strategy**](evaluation/11_EVALUATION.md) | Verification & Testing | Automated test suite in `tests/` & `backend/tests/` (**730 collected & verified tests** as of 2026-08-14), benchmarks, determinism baselines. |
 | [**HOW_TO_RUN.md**](HOW_TO_RUN.md) | Installation & Operations | Prerequisites, Docker Compose setup, single-command `start.ps1`, Vite polling mode, environment variables. |
 | [**VALIDATION.md**](VALIDATION.md) | Validation Protocols | Determinism replay, ground-truth matrix, pytest suite (**583**), dynamic APK corpus (`validate_dynamic_pipeline.py`). |
-| [**DAE_CURRENT_STATE.md**](DAE_CURRENT_STATE.md) | Technical Resolution Audit | Resolution state of containerization, Frida 17 Java bridge, ART JIT deopt, PID attach, BFCI v2, manifest, and HAR merger. |
+| [**DAE_CURRENT_STATE.md**](DAE_CURRENT_STATE.md) | Technical Resolution Audit | Resolution state of containerization, explicit TCP transport, preflight pipeline, Frida 17 Java bridge, exact PID attach, BFCI v2. |
 | [**CONTRIBUTING.md**](CONTRIBUTING.md) | Developer Guidelines | Code standards, PEP-8/ESLint style, pytest testing workflows, pull request process. |
 | [**CHANGELOG.md**](CHANGELOG.md) | Release Notes & Version History | Version history (`v2.1.0`), release highlights, and commit traceability. |
 | [**DOCUMENTATION_AUDIT_REPORT.md**](DOCUMENTATION_AUDIT_REPORT.md) | Master Audit Report | Summary of audit changes, updated files, new files, and link verification results. |
@@ -112,7 +115,7 @@ graph TD
 The Sudarshan platform codebase is backed by an automated regression and determinism verification test suite:
 
 - **Test Suite Command**: `$env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests`
-- **Verification Metric**: **583 / 583 tests collected** (verified 2026-08-11).
+- **Verification Metric**: **730 / 730 tests collected** (verified 2026-08-14).
 - **Key Test Modules (in [`tests/`](file:///d:/Projects/Sudarshan%20BOI/tests/) and [`backend/tests/`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/))**:
   - `test_remaining_features.py`: Tests `InvestigationManifest`, `ApktoolEngine`, `JadxEngine`, and `NetworkCapture` mitmproxy HAR parsing.
   - `test_bfci_scorer.py`: Tests logarithmic volume scoring and sequence bonuses.
@@ -125,4 +128,5 @@ The Sudarshan platform codebase is backed by an automated regression and determi
   - `test_detection_regressions.py`: Validates detection regression assertions across malware samples.
   - `test_vide_*.py`: VIDE pipeline, compare, baseline shortlist, Frida HTML extraction, risk escalation, determinism.
   - `test_frida_preflight.py`: Verifies Frida attach SELinux preflight and Java-bridge execution.
+  - `analysis-engine/test_frida_*.py`, `test_frida_pipeline_full.py`, `test_dynamic_pipeline_regression.py`: Automated dynamic analysis pipeline testing.
 

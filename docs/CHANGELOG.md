@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 ## 2026-08-14
 
+### Added
+- **Preflight Checks**: Added `scripts/preflight.py` and `shared/sudarshan_core/preflight.py` to turn silent dynamic analysis degradations into an explicit checklist with remediation, runnable on the host and inside the analysis engine.
+- **Dynamic Analysis Testing Pipeline**: Implemented automated test pipeline for Frida with standalone test files (`analysis-engine/test_frida_*.py`, `tests/unit/test_frida_pipeline_full.py`, `tests/unit/test_dynamic_pipeline_regression.py`).
+
+### Changed
+- **Frida Transport Selection Fixes**: Prefer the remote TCP device whenever the configured port is not 27042. Frida's USB/ADB transport only talks to port 27042. When those differ, transport falls back to jailed mode.
+- **ADB Forward Binding**: Added `adb_server_host()` and `frida_client_hosts()` to dial forwarded ports through the correct host instead of `127.0.0.1` inside containers.
+- **Process Verification**: `_frida_process_running()` now matches on exact process name via `pidof` and `ps -A -o PID,NAME` rather than `pgrep -f`, preventing false positives on shells running the probe.
+- **Frida Asset Caching**: `auto_download_dir()` caches `frida-server` into `tools/`. Bind-mounted `tools/` into containers so the 106 MB binary is fetched once per machine rather than once per container build.
+- **Optional Analysis Engine Env**: Made `analysis-engine/.env` optional to prevent fresh clones from aborting the whole stack on a missing env file.
+- **Upload Page Pipeline Visualization**: Updated `frontend/src/components/upload/UploadPage.tsx` and `StageCard.tsx` to handle expanded backend pipeline stages.
+
 ### Bug Fixes
 - **PDF Generator Crash**: Fixed a `TypeError` in `pdf_generator.py` (lines 1155, 1164) that caused a 500 Internal Server Error when `banking_impact` was absent or null, ensuring fallback to `0.0`.
 - **Prompt Sanitization Coverage**: Updated `sanitizer.py`'s `_INJECTION_PHRASES` to cover non-English (Spanish, French, German, Chinese, Italian, Portuguese, Polish, Russian) and persona-based prompt injection / jailbreak attempts.

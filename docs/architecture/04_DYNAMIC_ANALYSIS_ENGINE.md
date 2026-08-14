@@ -15,7 +15,7 @@ Primary Files:       analysis-engine/app/main.py
                      shared/sudarshan_core/engines/frida_hooks/java_probe.js
                      shared/sudarshan_core/engines/frida_hooks/bisect_sec.js
                      frontend/src/components/WorkflowDiagram.tsx
-Test Suite:          tests/unit/test_frida_pipeline_full.py, scripts/verify_runtime_pipeline.py, backend/tests/test_analysis_client.py, backend/tests/test_agentic_explorer.py, backend/tests/test_frida_preflight.py
+Test Suite:          tests/unit/test_frida_pipeline_full.py, scripts/verify_runtime_pipeline.py, scripts/preflight.py, analysis-engine/test_frida_*.py, backend/tests/test_analysis_client.py, backend/tests/test_agentic_explorer.py, backend/tests/test_frida_preflight.py
 ```
 
 ---
@@ -81,7 +81,13 @@ graph TD
 
 ---
 
-## 2a. SELinux Preflight (required)
+## 2a. Preflight Checklist & SELinux (required)
+
+Before dynamic analysis is attempted, the robust `sudarshan_core.preflight` pipeline automatically checks the host and sandbox environments for common silent degradation causes. You can manually run this via:
+
+```powershell
+python scripts/preflight.py
+```
 
 Before `frida-server` is checked, `run_frida_analysis` performs:
 
@@ -123,7 +129,8 @@ The analysis-engine exposes port **8001** only on the internal Docker network an
 
 ## 3. Frida 17 Runtime & ART Deoptimization
 
-- **PID Attachment**: Resolves running application process ID via `adb shell pidof <package>`, avoiding package label retries.
+- **PID Attachment**: Resolves exact running application process name and ID via `pidof` and `ps -A -o PID,NAME`, preventing silent false positives on shells running the probe.
+- **Transport Selection & Port Forwarding**: Frida explicitly prefers the remote TCP device when the configured port differs from the USB/ADB default (27042). If transport ports differ, Frida falls back to jailed mode. ADB forward binding is resolved through explicit host routing (`adb_server_host()`, `frida_client_hosts()`) rather than defaulting to container loopback (`127.0.0.1`), ensuring consistent behavior across host and Docker container execution.
 - **Unconditional ART Deoptimization ([`banking_trojan.js`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/frida_hooks/banking_trojan.js))**:
   ```javascript
   if (Java.available) {

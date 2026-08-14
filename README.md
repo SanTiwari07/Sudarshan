@@ -8,7 +8,7 @@
   </p>
   
   <p>
-    <b>583</b> Automated Unit &amp; Integration Tests &nbsp;&nbsp;|&nbsp;&nbsp;
+    <b>730</b> Automated Unit &amp; Integration Tests &nbsp;&nbsp;|&nbsp;&nbsp;
     <b>VIDE Visual Impersonation Detection</b> &nbsp;&nbsp;|&nbsp;&nbsp;
     <b>Deterministic Fraud Scoring</b> &nbsp;&nbsp;|&nbsp;&nbsp;
     <b>Containerized Microservices</b>
@@ -395,7 +395,7 @@ Run the automated bootstrapper script from PowerShell:
 ```
 
 ### Automated Test Suite Execution
-Run the full automated test suite (**583 tests collected**, verified 2026-08-11):
+Run the full automated test suite (**730 tests collected**, verified 2026-08-14):
 ```powershell
 $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests
 ```
@@ -416,23 +416,26 @@ Enable local git hooks (strips Cursor attribution trailers on commit):
 
 ## Documentation Portal Index
 
-The detailed documentation portal is available under [`docs/`](docs/README.md):
+The detailed documentation portal is available under [`docs/`](docs/README.md). 
+
+> **IMPORTANT**: As of 2026-08-14, all documentation has been synchronized and consolidated into a single master document.
 
 | Guide / Document | Summary |
 | :--- | :--- |
+| [**SUDARSHAN_MASTER.md**](docs/SUDARSHAN_MASTER.md) | **Master Knowledge Base** (The ultimate, 58-section, zero-drift source of truth) |
 | [**Docs Portal Index**](docs/README.md) | Central entry point, component inventory, data flow specifications. |
 | [**01 - Introduction**](docs/01_INTRODUCTION.md) | Problem statement, threat model, target banking operational scope. |
 | [**02 - System Overview**](docs/02_SYSTEM_OVERVIEW.md) | Platform architecture, microservices layout, container topology. |
 | [**03 - Static Threat Intelligence**](docs/architecture/03_STATIC_THREAT_INTELLIGENCE.md) | APKTool, JADX, MobSF, Androguard, Manifest serialization, STEI formula, VIDE static UI profiles. |
 | [**VIDE - Visual Impersonation**](docs/architecture/VIDE.md) | Deterministic UI baseline compare, VIDE-F001, signer registry, FRS escalation. |
-| [**04 - Dynamic Analysis Engine**](docs/architecture/04_DYNAMIC_ANALYSIS_ENGINE.md) | Frida 17 PID attach, ART deopt, mitmproxy HAR, Agentic Explorer 15-stage DAG. |
+| [**04 - Dynamic Analysis Engine**](docs/architecture/04_DYNAMIC_ANALYSIS_ENGINE.md) | Frida 17 exact PID attach, explicit TCP transport, preflight pipeline, ART deopt, mitmproxy HAR, Agentic Explorer. |
 | [**05 - AI Investigation Engine**](docs/architecture/05_AI_INVESTIGATION_ENGINE.md) | RAG graph index, Gemini 2.5 Flash, prompt sanitization. |
 | [**06 - Evidence Processing**](docs/architecture/06_EVIDENCE_PROCESSING.md) | EventBus, EvidenceStore, WorkflowReconstructor causal chain engine. |
 | [**07 - Fraud Intelligence Engine**](docs/architecture/07_FRAUD_INTELLIGENCE_ENGINE.md) | Threat correlation (VirusTotal/OTX/AbuseIPDB) & family classifier. |
 | [**08 - Deterministic Risk Engine**](docs/architecture/08_DETERMINISTIC_RISK_ENGINE.md) | Math formulas for 5-axis STEI, BFCI v2, FRS, Threat Scenario Matrix. |
 | [**09 - AI Report Generation**](docs/architecture/09_AI_REPORT_GENERATION.md) | HTML security reports, PDF report exporter, JSON report feed. |
 | [**10 - Analyst Dashboard**](docs/dashboard/10_DASHBOARD.md) | React 18 SPA, `InvestigationShell`, Executive Fraud Card, Technical View, VIDE panels, Workflow UI. |
-| [**11 - Evaluation Strategy**](docs/evaluation/11_EVALUATION.md) | Automated testing suite (**583** tests in `pytest tests/ backend/tests`, verified 2026-08-11), benchmarks, determinism baselines. |
+| [**11 - Evaluation Strategy**](docs/evaluation/11_EVALUATION.md) | Automated testing suite (**730** tests in `pytest tests/ backend/tests`, verified 2026-08-14), benchmarks, determinism baselines. |
 | [**How to Run Guide**](docs/HOW_TO_RUN.md) | Comprehensive installation, configuration, and execution guide. |
 | [**DAE Current State**](docs/DAE_CURRENT_STATE.md) | Complete resolution audit and technical current state document. |
 | [**Documentation Audit Report**](docs/DOCUMENTATION_AUDIT_REPORT.md) | Formal documentation audit, file mapping, and verification report. |

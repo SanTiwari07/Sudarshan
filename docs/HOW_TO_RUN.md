@@ -3,7 +3,7 @@
 ```yaml
 Document Title:      Sudarshan Installation & Execution Manual
 Version:             2.1.0
-Last Revision:       2026-08-08
+Last Revision:       2026-08-14
 Target OS:           Windows 10/11, Linux (Ubuntu 22.04+), macOS 13+
 ```
 
@@ -82,6 +82,9 @@ SUDARSHAN_ENV=""                    # Set to production for strict containment +
 # SUDARSHAN_ALLOW_GATEWAY_DYNAMIC=false  # Never enable in production (dev-only local dynamic fallback)
 FRIDA_LISTEN_HOST="127.0.0.1"
 ```
+
+> [!NOTE]
+> The `analysis-engine/.env` file is now optional. Fresh clones will gracefully fallback to default configurations without aborting the stack due to a missing environment file.
 
 ---
 
@@ -190,6 +193,11 @@ Verify all microservice endpoints:
 Run system health diagnostic script:
 ```powershell
 $env:PYTHONPATH="backend;shared"; backend\.venv\Scripts\python.exe scripts/health_check.py
+```
+
+Run environmental preflight diagnostic script to prevent silent sandbox degradations:
+```powershell
+$env:PYTHONPATH="backend;shared"; backend\.venv\Scripts\python.exe scripts/preflight.py
 ```
 
 Run runtime pipeline telemetry verification script:

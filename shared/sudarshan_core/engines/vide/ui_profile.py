@@ -16,6 +16,15 @@ class UIProfile:
     colors: List[str] = field(default_factory=list)
     asset_hashes: List[str] = field(default_factory=list)
 
+    @property
+    def color_palette(self) -> List[str]:
+        """Alias for :attr:`colors` - the name the corpus schema uses."""
+        return self.colors
+
+    @color_palette.setter
+    def color_palette(self, value: List[str]) -> None:
+        self.colors = list(value)
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "source": self.source,
@@ -45,6 +54,9 @@ class VIDECompareResult:
     institution_id: str = ""
     institution_display: str = ""
     confidence: float = 0.0
+    #: String-axis score. Named for the Jaccard index it originally held; it is
+    #: now fuzzy token-set containment (see :mod:`fuzzy`). The wire name is kept
+    #: because the API, the frontend panels and the PDF generator all read it.
     string_jaccard: float = 0.0
     tree_similarity: float = 0.0
     color_match: float = 0.0

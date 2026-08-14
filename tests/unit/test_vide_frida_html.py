@@ -68,4 +68,5 @@ def test_frida_html_feeds_vide_compare():
     assert result["suspect_profile_summary"]["string_count"] > empty["suspect_profile_summary"]["string_count"]
     scores = result["vide_compare"]["scores"]
     assert scores["string_jaccard"] > 0.3
-    assert "enter upi pin" in (result["vide_compare"].get("matched_strings") or [])
+    matched = result["vide_compare"].get("matched_strings") or []
+    assert "enter upi pin" in [s.lower() for s in matched]

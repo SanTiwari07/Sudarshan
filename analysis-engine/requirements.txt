@@ -25,3 +25,4 @@ python-dotenv       # loaded alongside google-genai
 yara-python         # engines/yara_scanner.py
 pytesseract         # engines/ui_explorer.py - OCR of device screenshots
 Pillow              # image handling for the above
+rapidfuzz           # engines/vide/fuzzy.py - fuzzy UI string matching

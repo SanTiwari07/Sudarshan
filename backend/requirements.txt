@@ -42,3 +42,8 @@ reportlab
 sse-starlette
 slowapi>=0.1.9
 beautifulsoup4
+
+# VIDE fuzzy string matching (engines/vide/fuzzy.py). Soft dependency - a pure
+# Python fallback implements the same algorithm - but it is ~100x slower, and
+# the string axis runs over every baseline on every analysis.
+rapidfuzz>=3.6

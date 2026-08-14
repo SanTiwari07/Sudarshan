@@ -22,7 +22,7 @@ from sudarshan_core.engines.vide.semantic_matcher import (
 from sudarshan_core.engines.vide.ui_profile import UIProfile
 
 requires_corpus = pytest.mark.skipif(
-    find_corpus_root() is None, reason="apk_details corpus not available"
+    find_corpus_root() is None, reason="banking baseline corpus not available"
 )
 
 INJECTION_STRINGS = [

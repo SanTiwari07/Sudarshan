@@ -31,7 +31,9 @@ def test_compare_detects_high_overlap():
     assert result.detected is True
     assert result.institution_id == "demo_sbi"
     assert result.confidence >= 0.72
-    assert "enter upi pin" in result.matched_strings
+    # Matched labels are reported in the baseline's own casing, so an analyst
+    # reads the bank's actual string rather than a normalised form.
+    assert "enter upi pin" in [s.lower() for s in result.matched_strings]
 
 
 def test_compare_rejects_unrelated_ui():

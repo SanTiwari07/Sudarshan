@@ -108,6 +108,53 @@ def classify_html(tag: str) -> str:
     return _HTML_ROLES.get(tag.strip().lower(), ROLE_OTHER)
 
 
+_ROLE_VOCABULARY = frozenset(
+    {
+        ROLE_CONTAINER,
+        ROLE_TEXT,
+        ROLE_INPUT,
+        ROLE_BUTTON,
+        ROLE_IMAGE,
+        ROLE_LIST,
+        ROLE_WEBVIEW,
+        ROLE_NAV,
+        ROLE_OTHER,
+    }
+)
+# Corpus ``regionOrder`` entries - HEADER, PRIMARY_CONTENT, NUMERIC_KEYPAD - are
+# a normalised vocabulary of their own and must survive translation unchanged.
+_ALREADY_NORMALISED = re.compile(r"^[A-Z][A-Z0-9_]*$")
+
+
+def normalize_view_tag(tag: str) -> str:
+    """
+    Translate any view tag into the shared role vocabulary.
+
+    One entry point for every toolkit VIDE sees, so a comparison never fails
+    merely because two apps spell the same widget differently:
+    ``TextInputEditText``, ``AppCompatEditText``, ``EditText`` and HTML
+    ``<input>`` all reduce to ``INPUT``.
+
+    Tags that are already normalised - role constants, corpus region names -
+    pass through, so a translated sequence can be re-translated safely.
+    """
+    value = (tag or "").strip()
+    if not value:
+        return ROLE_OTHER
+    if value in _ROLE_VOCABULARY or _ALREADY_NORMALISED.match(value):
+        return value
+    short = value.rsplit(".", 1)[-1]
+    html_role = classify_html(short)
+    if html_role != ROLE_OTHER:
+        return html_role
+    return classify_android(short)
+
+
+def normalize_view_sequence(tags: Iterable[str]) -> List[str]:
+    """:func:`normalize_view_tag` over a sequence."""
+    return [normalize_view_tag(t) for t in tags]
+
+
 # ── tree ───────────────────────────────────────────────────────────────────
 
 

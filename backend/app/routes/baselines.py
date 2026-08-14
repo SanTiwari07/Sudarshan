@@ -2,7 +2,7 @@
 VIDE baseline corpus API.
 
 The Visual Impersonation Detection Engine compares suspect app UIs against a
-corpus of legitimate banking baselines (``apk_details/``). Those baselines are
+corpus of legitimate banking baselines (``banking-baseline-corpus/``). Those baselines are
 cached in-memory so Tier 1/2 static analysis can look them up per-sample
 without re-reading ~40 files each time.
 

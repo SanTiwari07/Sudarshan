@@ -16,9 +16,24 @@ from sudarshan_core.engines.vide.ast_builders import (
     build_from_uiautomator,
     merge_forest,
 )
-from sudarshan_core.engines.vide.baseline_store import InstitutionBaseline, get_baselines
-from sudarshan_core.engines.vide.compare import RULE_ID, compare_against_baselines
-from sudarshan_core.engines.vide.corpus_compare import CorpusVerdict, compare_against_corpus
+from sudarshan_core.engines.vide.baseline_store import (
+    SOURCE_CORPUS,
+    InstitutionBaseline,
+    get_baselines,
+)
+from sudarshan_core.engines.vide.compare import (
+    RULE_ID,
+    claims_official_identity,
+    compare_against_baselines,
+)
+from sudarshan_core.engines.vide.corpus_compare import (
+    DETECTION_THRESHOLD as CORPUS_DETECTION_THRESHOLD,
+)
+from sudarshan_core.engines.vide.corpus_compare import (
+    MIN_SHAPE_EVIDENCE,
+    CorpusVerdict,
+    compare_against_corpus,
+)
 from sudarshan_core.engines.vide.html_profile import profile_from_html
 from sudarshan_core.engines.vide.js_bundle import build_bundle_ast, profile_from_js_bundle
 from sudarshan_core.engines.vide.layout_extractor import extract_from_decode_dir
@@ -236,6 +251,86 @@ def collect_overlay_payloads(dynamic_result: Dict[str, Any]) -> List[Dict[str, A
     return payloads[:25]
 
 
+def build_findings(
+    vide_compare: VIDECompareResult,
+    corpus_verdict: Optional[CorpusVerdict],
+    signer_check: SignerImpersonationResult,
+) -> List[Dict[str, Any]]:
+    """
+    Flatten the VIDE verdicts into one rule-keyed findings list.
+
+    The three comparers answer different questions and each has its own result
+    shape. Consumers - the risk engine, the report generator, the API - want a
+    single ordered list of "which rules fired, on what evidence", so it is
+    assembled once here rather than re-derived at each call site.
+
+    Ordered by severity: an impersonation finding outranks the visual match
+    that supports it.
+    """
+    findings: List[Dict[str, Any]] = []
+
+    if signer_check.detected:
+        findings.append(
+            {
+                "rule_id": signer_check.rule_id,
+                "capability": "signer_impersonation",
+                "severity": "CRITICAL",
+                "confidence": 1.0,
+                "institution_id": signer_check.institution_id,
+                "institution_display": "",
+                "package_name": signer_check.package_name,
+                "evidence_lines": list(signer_check.evidence_lines),
+            }
+        )
+
+    if vide_compare.detected:
+        findings.append(
+            {
+                "rule_id": vide_compare.rule_id,
+                "capability": "visual_impersonation",
+                "severity": "HIGH",
+                "confidence": round(vide_compare.confidence, 4),
+                "institution_id": vide_compare.institution_id,
+                "institution_display": vide_compare.institution_display,
+                "matched_strings": vide_compare.matched_strings[:20],
+                "scores": {
+                    "string_similarity": round(vide_compare.string_jaccard, 4),
+                    "tree_similarity": round(vide_compare.tree_similarity, 4),
+                    "color_match": round(vide_compare.color_match, 4),
+                },
+                "evidence_lines": list(vide_compare.evidence_lines),
+            }
+        )
+
+    # A corpus match that the attribution margin refused to name is still a
+    # reportable finding - "this is dressed as a bank, and these are the
+    # candidates" is actionable, and dropping it would lose the detection
+    # entirely just because it could not be narrowed to one institution.
+    if (
+        corpus_verdict
+        and not corpus_verdict.detected
+        and not vide_compare.detected
+        and corpus_verdict.attribution_ambiguous
+        and corpus_verdict.banking_shape_score >= MIN_SHAPE_EVIDENCE
+        and corpus_verdict.best
+        and corpus_verdict.best.confidence >= CORPUS_DETECTION_THRESHOLD
+    ):
+        findings.append(
+            {
+                "rule_id": corpus_verdict.rule_id,
+                "capability": "visual_impersonation_unattributed",
+                "severity": "MEDIUM",
+                "confidence": round(corpus_verdict.best.confidence, 4),
+                "institution_id": "",
+                "institution_display": "",
+                "candidates": list(corpus_verdict.candidates),
+                "evidence_lines": list(corpus_verdict.evidence_lines),
+            }
+        )
+
+    return findings
+
+
 def _empty_vide_payload(
     *,
     status: str,
@@ -274,6 +369,16 @@ def _empty_vide_payload(
             "suspect_signatures": [],
             "ranked": [],
             "evidence_lines": [],
+        },
+        "findings": [],
+        "matched_baseline": None,
+        "similarity_score": 0.0,
+        "extracted_profile": {
+            "source": "",
+            "strings": [],
+            "view_sequence": [],
+            "colors": [],
+            "asset_hashes": [],
         },
         "suspect_ast": None,
         "overlay_payloads": [],
@@ -320,9 +425,13 @@ def safe_run_vide_analysis(
         out["vide_compare"]["evidence_lines"] = [
             "VIDE: static UI profile unavailable (apktool missing or failed)"
         ]
-        out["signer_impersonation"] = check_signer_impersonation(
-            package_name, certificate or {}
-        ).to_dict()
+        # CH06 needs only the manifest package and the certificate, so it still
+        # answers even when no UI could be extracted at all.
+        signer_check = check_signer_impersonation(package_name, certificate or {})
+        out["signer_impersonation"] = signer_check.to_dict()
+        out["findings"] = build_findings(
+            VIDECompareResult(rule_id=RULE_ID), None, signer_check
+        )
         return out
 
     try:
@@ -345,9 +454,11 @@ def safe_run_vide_analysis(
         logger.warning("[VIDE] run_vide_analysis failed: %s", exc, exc_info=True)
         out = _empty_vide_payload(status="ERROR", available=False, error=str(exc))
         try:
-            out["signer_impersonation"] = check_signer_impersonation(
-                package_name, certificate or {}
-            ).to_dict()
+            signer_check = check_signer_impersonation(package_name, certificate or {})
+            out["signer_impersonation"] = signer_check.to_dict()
+            out["findings"] = build_findings(
+                VIDECompareResult(rule_id=RULE_ID), None, signer_check
+            )
         except Exception:
             pass
         return out
@@ -429,10 +540,44 @@ def run_vide_analysis(
 
     suspect_ast = build_suspect_ast(decode_dir, dynamic_result)
 
+    signer_sha256 = extract_signer_sha256(certificate or {})
+
     # Two comparers: the corpus one understands per-screen signatures and brand
-    # palettes; the legacy one still serves the hand-written lab baselines.
+    # palettes; the legacy one still serves the hand-written lab baselines and
+    # is the fallback when the corpus comparer cannot attribute.
     corpus_verdict: CorpusVerdict = compare_against_corpus(suspect, bl, suspect_ast)
-    vide_compare: VIDECompareResult = compare_against_baselines(suspect, bl)
+    vide_compare: VIDECompareResult = compare_against_baselines(
+        suspect, bl, package_name=package_name, signer_sha256=signer_sha256
+    )
+
+    # The corpus comparer refuses to name an institution when the candidates do
+    # not separate. The generic comparer scores each baseline independently and
+    # so has no view of that tie - letting it name one anyway would route around
+    # a deliberate safeguard and put a bank's name in a CERT-In report on
+    # evidence that does not single it out.
+    corpus_ids = {b.institution_id for b in bl if b.source == SOURCE_CORPUS}
+    if (
+        corpus_verdict.attribution_ambiguous
+        and vide_compare.detected
+        and vide_compare.institution_id in corpus_ids
+    ):
+        vide_compare = VIDECompareResult(
+            rule_id=vide_compare.rule_id,
+            detected=True,
+            institution_id="",
+            institution_display="",
+            confidence=vide_compare.confidence,
+            string_jaccard=vide_compare.string_jaccard,
+            tree_similarity=vide_compare.tree_similarity,
+            color_match=vide_compare.color_match,
+            matched_strings=vide_compare.matched_strings,
+            evidence_lines=vide_compare.evidence_lines
+            + [
+                "VIDE: institution not named - the corpus comparison could not "
+                "separate one bank from the others "
+                f"(candidates: {', '.join(corpus_verdict.candidates) or 'none'})"
+            ],
+        )
 
     if corpus_verdict.detected and corpus_verdict.best:
         best = corpus_verdict.best
@@ -452,23 +597,23 @@ def run_vide_analysis(
         package_name, certificate or {}
     )
 
-    # Allowlist: same institution baseline signer → suppress visual FP
+    # Allowlist: the institution's own app, signed with its own certificate, is
+    # not impersonating itself. compare.py already applies this to its own
+    # verdict; this re-applies it after the corpus verdict may have replaced it.
     if vide_compare.detected and package_name:
         for bl_entry in bl:
             if bl_entry.institution_id != vide_compare.institution_id:
                 continue
-            if package_name in bl_entry.package_names:
-                signer = extract_signer_sha256(certificate or {})
-                allowed = bl_entry.allowed_signers_sha256
-                if allowed and signer and signer.lower() in [a.lower() for a in allowed]:
-                    vide_compare = VIDECompareResult(
-                        rule_id=vide_compare.rule_id,
-                        detected=False,
-                        evidence_lines=[
-                            "VIDE suppressed: package matches allowlisted legitimate app signer"
-                        ],
-                    )
-                break
+            if claims_official_identity(bl_entry, package_name, signer_sha256):
+                vide_compare = VIDECompareResult(
+                    rule_id=vide_compare.rule_id,
+                    detected=False,
+                    evidence_lines=[
+                        f"VIDE suppressed: package {package_name} is signed with a "
+                        f"certificate on record for {bl_entry.display_name}"
+                    ],
+                )
+            break
 
     cluster_support = bool(
         dynamic_result and dynamic_result.get("has_high_risk_capabilities")
@@ -479,9 +624,45 @@ def run_vide_analysis(
         and vide_compare.confidence >= 0.80
     )
 
+    findings = build_findings(vide_compare, corpus_verdict, signer_check)
+
+    # The best-scoring institution, whether or not the finding fired. A score
+    # below threshold is still the analyst's starting point, so it is reported
+    # rather than being collapsed into a bare "no detection".
+    best_corpus = corpus_verdict.best
+    if vide_compare.detected and vide_compare.institution_id:
+        matched_baseline: Optional[Dict[str, Any]] = {
+            "institution_id": vide_compare.institution_id,
+            "display_name": vide_compare.institution_display,
+            "bank": best_corpus.bank if best_corpus else "",
+            "source": "vide_compare",
+        }
+        similarity_score = vide_compare.confidence
+    elif best_corpus:
+        matched_baseline = {
+            "institution_id": best_corpus.institution_id,
+            "display_name": best_corpus.display_name,
+            "bank": best_corpus.bank,
+            "source": "corpus_compare",
+        }
+        similarity_score = best_corpus.confidence
+    else:
+        matched_baseline = None
+        similarity_score = vide_compare.confidence
+
     return {
         "vide_compare": vide_compare.to_dict(),
         "corpus_compare": corpus_verdict.to_dict(),
+        "findings": findings,
+        "matched_baseline": matched_baseline,
+        "similarity_score": round(similarity_score, 4),
+        "extracted_profile": {
+            "source": suspect.source,
+            "strings": list(suspect.strings[:150]),
+            "view_sequence": list(suspect.view_sequence[:200]),
+            "colors": list(suspect.color_palette[:40]),
+            "asset_hashes": list(suspect.asset_hashes[:25]),
+        },
         "suspect_ast": suspect_ast.to_dict() if suspect_ast else None,
         "overlay_payloads": overlay_payloads,
         "signer_impersonation": signer_check.to_dict(),

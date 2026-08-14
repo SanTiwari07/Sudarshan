@@ -139,3 +139,9 @@ test apk/
 *.apk
 *.zip
 
+# Banking baseline corpus - a separate repository, checked out here. Both names
+# are resolved at runtime (see engines/vide/corpus_loader.py).
+banking-baseline-corpus/
+apk_details/
+
+.claude/

@@ -1,8 +1,8 @@
-"""Load the ``apk_details`` banking baseline corpus into VIDE baselines.
+"""Load the banking baseline corpus into VIDE baselines.
 
 The corpus ships one self-contained package per protected institution::
 
-    apk_details/
+    banking-baseline-corpus/
       baselines_index.json                     master registry (10 banks)
       baseline-library/<BASE-ID>/
         design.md                  brand + design schema (colour tokens, type)
@@ -13,6 +13,9 @@ The corpus ships one self-contained package per protected institution::
 ``design.md`` is the design-schema source: it carries the colour system table
 that lets VIDE answer "is this suspect app dressed as this bank?" rather than
 only "does it share some strings".
+
+The corpus is a separate repository, so its checkout location varies. It is
+resolved at runtime rather than hardcoded - see :func:`find_corpus_root`.
 
 Corpus JSON is written by a PowerShell producer and carries a UTF-8 BOM, so
 every read here goes through ``utf-8-sig``.
@@ -33,7 +36,19 @@ from sudarshan_core.engines.vide.ui_profile import UIProfile
 logger = logging.getLogger(__name__)
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
-_DEFAULT_CORPUS_DIR = _REPO_ROOT / "apk_details"
+
+# Environment overrides, most specific first. ``BANKING_BASELINE_CORPUS_DIR`` is
+# the documented name; ``VIDE_CORPUS_DIR`` predates it and is still honoured so
+# existing deployments and tests keep working.
+_CORPUS_ENV_VARS = ("BANKING_BASELINE_CORPUS_DIR", "VIDE_CORPUS_DIR")
+
+# In-repo checkout locations. ``banking-baseline-corpus`` is the corpus
+# repository's own name; ``apk_details`` is the name it was first vendored under
+# here and is kept so an existing working copy is still found.
+_DEFAULT_CORPUS_DIRS = (
+    _REPO_ROOT / "banking-baseline-corpus",
+    _REPO_ROOT / "apk_details",
+)
 
 # `| primary | `#1B4AA0` (deep blue) | ...`  and the combined states row
 # `| success `#178C4E` / warning `#E8A100` / error `#ED232A` | ... |`
@@ -195,14 +210,21 @@ def parse_fingerprints(data: Dict[str, Any]) -> List[BaselineScreen]:
 
 
 def find_corpus_root(explicit: Optional[Path] = None) -> Optional[Path]:
-    """Locate the ``apk_details`` corpus: explicit > env > repo default."""
+    """
+    Locate the baseline corpus: explicit > environment > in-repo checkout.
+
+    A candidate only counts if it actually carries ``baselines_index.json``, so
+    a stale environment variable pointing at a deleted directory falls through
+    to the in-repo copy instead of silently disabling corpus detection.
+    """
     candidates: List[Path] = []
     if explicit:
         candidates.append(Path(explicit))
-    env_dir = os.environ.get("VIDE_CORPUS_DIR")
-    if env_dir:
-        candidates.append(Path(env_dir))
-    candidates.append(_DEFAULT_CORPUS_DIR)
+    for var in _CORPUS_ENV_VARS:
+        env_dir = os.environ.get(var)
+        if env_dir:
+            candidates.append(Path(env_dir))
+    candidates.extend(_DEFAULT_CORPUS_DIRS)
 
     for candidate in candidates:
         if (candidate / "baselines_index.json").is_file():

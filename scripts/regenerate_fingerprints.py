@@ -45,9 +45,12 @@ from typing import Dict, List, Optional, Set, Tuple
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "shared"))
 
+from sudarshan_core.engines.vide.corpus_loader import find_corpus_root  # noqa: E402
 from sudarshan_core.engines.vide.js_bundle import iter_string_literals  # noqa: E402
 
-CORPUS = REPO_ROOT / "apk_details"
+# Resolved rather than hardcoded: the corpus is a separate repository, so its
+# checkout location varies (see BANKING_BASELINE_CORPUS_DIR).
+CORPUS = find_corpus_root() or (REPO_ROOT / "banking-baseline-corpus")
 LIBRARY = CORPUS / "baseline-library"
 APK_DIR = CORPUS / "built_apks"
 

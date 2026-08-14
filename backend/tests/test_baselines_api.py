@@ -27,7 +27,7 @@ from sudarshan_core.engines.vide.corpus_loader import (  # noqa: E402
 
 CORPUS_PRESENT = find_corpus_root() is not None
 requires_corpus = pytest.mark.skipif(
-    not CORPUS_PRESENT, reason="apk_details corpus not available"
+    not CORPUS_PRESENT, reason="banking baseline corpus not available"
 )
 
 
@@ -150,10 +150,11 @@ def test_refresh_invalidates_and_reports():
 
 def test_missing_corpus_degrades_to_empty(tmp_path, monkeypatch):
     """A missing corpus must not raise - VIDE falls back to lab baselines."""
-    monkeypatch.setenv("VIDE_CORPUS_DIR", str(tmp_path / "nope"))
+    monkeypatch.setenv("BANKING_BASELINE_CORPUS_DIR", str(tmp_path / "nope"))
+    monkeypatch.setenv("VIDE_CORPUS_DIR", str(tmp_path / "also-nope"))
     monkeypatch.setattr(
-        "sudarshan_core.engines.vide.corpus_loader._DEFAULT_CORPUS_DIR",
-        tmp_path / "also-nope",
+        "sudarshan_core.engines.vide.corpus_loader._DEFAULT_CORPUS_DIRS",
+        (tmp_path / "neither",),
     )
     assert load_corpus_baselines() == []
 

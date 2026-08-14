@@ -7,7 +7,7 @@ Two questions, deliberately kept apart:
 2. **Attribution** - *which* bank is it dressed as? Answered by the brand
    palette.
 
-They are separated because in the ``apk_details`` corpus all ten banks ship
+They are separated because in the baseline corpus all ten banks ship
 identical screen strings ("User ID", "Login", "Enter 6-Digit MPIN", ...) and
 identical structural signatures. Those axes therefore prove *banking-ness* but
 carry no information about which institution. Only colour discriminates.

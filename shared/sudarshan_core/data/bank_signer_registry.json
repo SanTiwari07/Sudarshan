@@ -1,14 +1,107 @@
 {
-  "com.sbi.lotus": {
-    "display_name": "SBI YONO",
-    "allowed_signers_sha256": [
-      "0000000000000000000000000000000000000000000000000000000000000001"
-    ]
-  },
-  "com.sbi.lotusintouch": {
-    "display_name": "SBI Lotus",
-    "allowed_signers_sha256": [
-      "0000000000000000000000000000000000000000000000000000000000000001"
-    ]
+  "_comment": [
+    "CH06-SIGNER-IMPERSONATION registry: which signing certificates may claim a",
+    "protected bank package name. Keyed by the official Play Store package for",
+    "each of the ten institutions in the banking baseline corpus (BASE-01-SBI",
+    "through BASE-10-UNION); the same list lives in code at",
+    "shared/sudarshan_core/engines/vide/official_packages.py.",
+    "",
+    "allowed_signers_sha256 holds the SHA-256 fingerprints of the certificates",
+    "the genuine app is signed with. An EMPTY list is meaningful, not missing",
+    "data: it means no canonical fingerprint has been provisioned for that",
+    "package yet, so ANY APK claiming it is treated as impersonation. That is",
+    "the conservative reading and matches the rule VIDE enforces - a package",
+    "name is an identity claim, and an unverifiable claim is not a valid one.",
+    "",
+    "Populate these from Play Store signing certificates before deploying",
+    "against real-world traffic, or genuine bank apps will be flagged. Set",
+    "signers_provisioned to true once a package's fingerprints are filled in."
+  ],
+  "_schema_version": "2.0",
+  "packages": {
+    "com.sbi.lotus": {
+      "display_name": "YONO SBI",
+      "bank": "State Bank of India",
+      "baseline_id": "BASE-01-SBI",
+      "signers_provisioned": false,
+      "allowed_signers_sha256": []
+    },
+    "com.sbi.lotusintouch": {
+      "display_name": "YONO Lite SBI",
+      "bank": "State Bank of India",
+      "baseline_id": "BASE-01-SBI",
+      "signers_provisioned": false,
+      "allowed_signers_sha256": []
+    },
+    "com.snapwork.hdfc": {
+      "display_name": "HDFC Bank MobileBanking",
+      "bank": "HDFC Bank",
+      "baseline_id": "BASE-02-HDFC",
+      "signers_provisioned": false,
+      "allowed_signers_sha256": []
+    },
+    "com.hdfc.bank": {
+      "display_name": "HDFC Bank",
+      "bank": "HDFC Bank",
+      "baseline_id": "BASE-02-HDFC",
+      "signers_provisioned": false,
+      "allowed_signers_sha256": []
+    },
+    "com.csam.icici.bank.imobile": {
+      "display_name": "iMobile Pay",
+      "bank": "ICICI Bank",
+      "baseline_id": "BASE-03-ICICI",
+      "signers_provisioned": false,
+      "allowed_signers_sha256": []
+    },
+    "com.axis.mobile": {
+      "display_name": "Axis Mobile",
+      "bank": "Axis Bank",
+      "baseline_id": "BASE-04-AXIS",
+      "signers_provisioned": false,
+      "allowed_signers_sha256": []
+    },
+    "com.mconnect": {
+      "display_name": "bob World",
+      "bank": "Bank of Baroda",
+      "baseline_id": "BASE-05-BOB",
+      "signers_provisioned": false,
+      "allowed_signers_sha256": []
+    },
+    "com.pnb.pnbone": {
+      "display_name": "PNB ONE",
+      "bank": "Punjab National Bank",
+      "baseline_id": "BASE-06-PNB",
+      "signers_provisioned": false,
+      "allowed_signers_sha256": []
+    },
+    "com.boi.mobile": {
+      "display_name": "BOI Mobile",
+      "bank": "Bank of India",
+      "baseline_id": "BASE-07-BOI",
+      "signers_provisioned": false,
+      "allowed_signers_sha256": []
+    },
+    "com.msf.k8": {
+      "display_name": "Kotak811",
+      "bank": "Kotak Mahindra Bank",
+      "baseline_id": "BASE-08-KOTAK",
+      "signers_provisioned": false,
+      "allowed_signers_sha256": []
+    },
+    "com.indusind.indusmobile": {
+      "display_name": "IndusMobile",
+      "bank": "IndusInd Bank",
+      "baseline_id": "BASE-09-INDUS",
+      "signers_provisioned": false,
+      "allowed_signers_sha256": []
+    },
+    "com.infrasofttech.uboi": {
+      "display_name": "Vyom",
+      "bank": "Union Bank of India",
+      "baseline_id": "BASE-10-UNION",
+      "signers_provisioned": false,
+      "allowed_signers_sha256": []
+    }
   }
 }

@@ -2,7 +2,7 @@
 Periodic VIDE baseline corpus refresh.
 
 Half of the hybrid update model described in the VIDE design: this background
-task re-ingests ``apk_details/`` on an interval so a corpus updated on disk is
+task re-ingests the baseline corpus on an interval so a corpus updated on disk is
 picked up without a restart. The other half is the admin-triggered
 ``POST /api/v1/baselines/refresh`` for immediate invalidation.
 

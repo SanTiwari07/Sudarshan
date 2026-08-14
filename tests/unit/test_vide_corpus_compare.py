@@ -8,8 +8,11 @@ from sudarshan_core.engines.vide.ast_builders import (
 )
 from sudarshan_core.engines.vide.baseline_store import get_baselines
 from sudarshan_core.engines.vide.color_match import (
+    IDENTICAL_DELTA_E,
+    MAX_MATCH_DELTA_E,
     color_distance,
     is_brand_color,
+    match_score,
     palette_similarity,
     parse_hex,
 )
@@ -28,7 +31,7 @@ from sudarshan_core.engines.vide.view_ast import (
 )
 
 requires_corpus = pytest.mark.skipif(
-    find_corpus_root() is None, reason="apk_details corpus not available"
+    find_corpus_root() is None, reason="banking baseline corpus not available"
 )
 
 
@@ -90,10 +93,17 @@ def test_parse_hex_forms():
 
 
 def test_near_colors_match_and_far_colors_do_not():
-    # A clone re-drawn by hand lands a few units off the official brand colour.
-    assert color_distance("#004c8f", "#014d91") < 25
-    # Two different banks' blues must stay distinguishable.
-    assert color_distance("#004c8f", "#97144d") > 120
+    """Distances are CIE ΔE₂₀₀₀: ~1 is the just-noticeable difference."""
+    # A clone re-drawn by hand lands a few units off the official brand colour,
+    # which is invisible to a victim and must score as a full match.
+    assert color_distance("#004c8f", "#014d91") < IDENTICAL_DELTA_E
+    assert match_score(color_distance("#004c8f", "#014d91")) == 1.0
+    # The PRD's worked example: two renderings of the same SBI blue.
+    assert color_distance("#1B4AA0", "#1C4CA5") < IDENTICAL_DELTA_E
+    # Different banks' brand colours must stay distinguishable - far enough
+    # apart to score zero, not merely a larger number.
+    assert color_distance("#004c8f", "#97144d") > MAX_MATCH_DELTA_E
+    assert match_score(color_distance("#004c8f", "#97144d")) == 0.0
 
 
 def test_achromatic_colors_are_not_brand_colors():

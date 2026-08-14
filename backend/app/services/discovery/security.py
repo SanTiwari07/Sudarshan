@@ -51,30 +51,9 @@ def resolve_and_check_url(url: str) -> None:
 class SSRFSafeAsyncClient(httpx.AsyncClient):
     """
     An httpx.AsyncClient that checks the URL against an IP denylist before fetching.
-    It also intercepts redirects and re-validates the Location header.
+    By overriding `send`, we ensure that all requests, including streams and 
+    automatically followed redirects, are intercepted and validated.
     """
-    async def request(self, method: str, url: str, *args, **kwargs):
-        resolve_and_check_url(str(url))
-        
-        # Disable automatic redirect following to manually check each hop
-        allow_redirects = kwargs.pop("follow_redirects", False)
-        
-        response = await super().request(method, url, follow_redirects=False, *args, **kwargs)
-        
-        if allow_redirects:
-            redirect_count = 0
-            max_redirects = 5
-            while response.is_redirect and redirect_count < max_redirects:
-                redirect_count += 1
-                next_url = response.headers.get("location")
-                if not next_url:
-                    break
-                # Handle relative redirects
-                next_url = str(response.url.join(next_url))
-                resolve_and_check_url(next_url)
-                response = await super().request("GET", next_url, follow_redirects=False, *args, **kwargs)
-                
-            if response.is_redirect:
-                raise HTTPException(status_code=400, detail="Too many redirects.")
-                
-        return response
+    async def send(self, request: httpx.Request, *args, **kwargs):
+        resolve_and_check_url(str(request.url))
+        return await super().send(request, *args, **kwargs)

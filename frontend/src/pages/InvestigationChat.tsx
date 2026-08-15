@@ -986,7 +986,7 @@ Everything is grounded strictly in investigation evidence.`,
         </div>
 
         <p className="text-[10px] text-slate-400 text-center font-mono">
-          RAG-Grounded Evidence Engine · Gemini explains, deterministic engine decides
+          RAG-Grounded Evidence Engine · AI explains, deterministic engine decides
         </p>
       </div>
     </div>

@@ -59,7 +59,7 @@ const STAGE_COPY: Record<
   },
   INTELLIGENCE_GENERATION: {
     title: 'AI investigation',
-    description: 'RAG indexing and Gemini 2.5 Flash narrative synthesis.',
+    description: 'RAG indexing and narrative synthesis.',
     progressAnchor: 93,
   },
   REPORT_GENERATION: {
@@ -102,10 +102,17 @@ export function resolvePipelineUi(state: BackendPipelineState | null): {
   const progress = Math.min(99, Math.max(0, backendPct));
   const description = state?.pipeline_message?.trim() || copy.description;
   const substage = state?.pipeline_substage?.trim() || undefined;
+
+  // The backend often sets pipeline_message and pipeline_substage to the same
+  // string, which rendered as "Narrative synthesis (Narrative synthesis)".
+  // Only append the substage when it actually adds something.
+  const showSubstage =
+    !!substage && substage.toLowerCase() !== description.toLowerCase();
+
   return {
     progress,
     title: copy.title,
-    description: substage ? `${description} (${substage})` : description,
+    description: showSubstage ? `${description} (${substage})` : description,
     substage,
     rawStage: stage,
   };

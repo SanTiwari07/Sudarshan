@@ -44,211 +44,41 @@ Rather than producing generic static vulnerability summaries, Sudarshan performs
 The flowchart below represents the verified operational data flow of the Sudarshan platform. **All core nodes and failure paths are fully operational in the codebase.**
 
 ```mermaid
-flowchart TB
-
-%% =====================================================
-%% INPUT
-%% =====================================================
-
-APK([APK Upload])
-
-%% =====================================================
-%% STATIC ANALYSIS
-%% =====================================================
-
-subgraph STATIC["Static Intelligence Layer"]
-
-SA["Static Analysis"]
-
-MobSF["MobSF Engine"]
-Andro["Androguard & Native Parser"]
-APKT["APKTool Engine"]
-JADX["JADX Engine"]
-
-Normalize["Evidence Normalizer"]
-
-STEI["STEI Score (5-Axis)"]
-Planner["Investigation Planner"]
-
-SA --> MobSF
-SA --> Andro
-SA --> APKT
-SA --> JADX
-
-MobSF --> Normalize
-Andro --> Normalize
-APKT --> Normalize
-JADX --> Normalize
-
-Normalize --> STEI
-Normalize --> Planner
-Normalize --> VIDE["VIDE (UI baseline compare)"]
-
-VIDE --> STEI
-
-end
-
-APK --> SA
-
-%% =====================================================
-%% PLANNING
-%% =====================================================
-
-subgraph PLAN["Planning Layer"]
-
-Manifest["Investigation Manifest"]
-
-Goals["15-Stage Fraud Goals"]
-Sandbox["Sandbox Config"]
-Profiles["Dynamic Hook Profiles"]
-UIGoals["UI Exploration Goals"]
-
-Planner --> Manifest
-
-Manifest --> Goals
-Manifest --> Sandbox
-Manifest --> Profiles
-Manifest --> UIGoals
-
-end
-
-%% =====================================================
-%% DYNAMIC EXECUTION
-%% =====================================================
-
-subgraph DYNAMIC["Dynamic Analysis Layer"]
-
-Prepare["Prepare Android Sandbox"]
-
-Install["Install APK (Bypass SDK)"]
-
-Launch["Launch Application"]
-
-Explorer["Agentic UI Explorer"]
-
-Frida["Frida 17 (ART Deopt)"]
-
-Proxy["mitmproxy Sidecar"]
-
-Logcat["Logcat Collector"]
-
-Prepare --> Install
-Install --> Launch
-
-Launch --> Explorer
-Launch --> Frida
-Launch --> Proxy
-Launch --> Logcat
-
-end
-
-Manifest --> Prepare
-
-%% =====================================================
-%% EVIDENCE COLLECTION
-%% =====================================================
-
-subgraph EVIDENCE["Runtime Evidence"]
-
-Collector["Versioned Event Collector"]
-
-Evidence["Evidence Store"]
-
-Explorer --> Collector
-Frida --> Collector
-Proxy --> Collector
-Logcat --> Collector
-
-Decision{"Stop Conditions Met?"}
-
-Collector --> Decision
-
-Decision -- "No" --> Explorer
-
-Decision -- "Yes" --> Evidence
-
-end
-
-%% =====================================================
-%% FAILURE PATH
-%% =====================================================
-
-Instrumentation{"Runtime Evidence Collected?"}
-
-Evidence --> Instrumentation
-
-Instrumentation -- "No" --> Failed["Instrumentation Failed"]
-
-%% =====================================================
-%% INTELLIGENCE
-%% =====================================================
-
-Instrumentation -- "Yes" --> BFCI
-
-subgraph INTEL["Fraud Intelligence"]
-
-BFCI["BFCI v2 Scorer"]
-
-Workflow["Behavior Workflow Reconstruction"]
-
-ThreatIntel["Threat Intelligence Correlation"]
-
-BankImpact["Banking Impact"]
-
-Evidence --> Workflow
-
-Workflow --> ThreatIntel
-
-Workflow --> BFCI
-
-Risk["Fraud Risk Engine"]
-
-STEI --> Risk
-BFCI --> Risk
-ThreatIntel --> Risk
-BankImpact --> Risk
-
-FRS["Fraud Risk Score (FRS)"]
-
-Risk --> FRS
-
-Confidence["Rule-derived AI Confidence Clamp"]
-
-FRS --> Confidence
-
-Report["AI Investigation Report"]
-
-Confidence --> Report
-
-end
-
-%% =====================================================
-%% STATIC FALLBACK
-%% =====================================================
-
-Gate{"Dynamic Analysis Available?"}
-
-STEI --> Gate
-
-Gate -- "No" --> StaticRisk["Static Fallback Risk Engine"]
-
-ThreatIntel --> StaticRisk
-
-BankImpact --> StaticRisk
-
-StaticRisk --> Confidence
-
-Gate -- "Yes" --> Prepare
-
-%% =====================================================
-%% OUTPUT
-%% =====================================================
-
-Dashboard([Analyst Dashboard])
-
-Report --> Dashboard
-
-Failed --> Dashboard
+flowchart TD
+    classDef default fill:#1E1E2E,stroke:#302D41,color:#D9E0EE;
+    
+    USER([SOC Analyst]) --> LOGIN[Authenticate (JWT)]
+    LOGIN --> UPLOAD[Upload Suspect APK]
+    UPLOAD --> REPAIR{Malformed Header?}
+    REPAIR -->|Yes| RESIGN[Rebuild & Resign APK]
+    REPAIR -->|No| STATIC[Static Analysis\nAndroguard / JADX]
+    RESIGN --> STATIC
+    
+    STATIC --> MANIFEST[Investigation Manifest\nGenerate Minimal Hook Profile]
+    
+    MANIFEST --> SANDBOX[Host-Only Android Sandbox]
+    SANDBOX --> SELINUX[setenforce 0]
+    SELINUX --> ATTACH[Frida Attach (PID/Spawn)]
+    ATTACH --> AGENT[Agentic UI Explorer\nNavigate & Click]
+    
+    AGENT --> NETWORK[Mitmproxy TLS Capture]
+    AGENT --> HOOKS[Frida API Hooks]
+    
+    NETWORK & HOOKS --> EVIDENCE[Evidence Store Normalization]
+    
+    EVIDENCE --> TI[Query Threat Intel\nVT / OTX]
+    EVIDENCE --> VIDE[VIDE Layout Check]
+    EVIDENCE --> WORKFLOW[Fraud Causal Chain Mapping]
+    
+    TI & VIDE & WORKFLOW --> RISK[Deterministic Risk Engine\nSTEI / BFCI / FRS]
+    
+    RISK --> RAG[RAG Context Construction]
+    RAG --> AI[Gemini API / Fallback Narrative]
+    
+    AI --> REPORT[HTML / STIX / PDF Generation]
+    AI --> DASHBOARD[Live Pipeline & Technical UI]
+    
+    REPORT & DASHBOARD --> DECISION([Final Block/Isolate Decision])
 ```
 
 ---

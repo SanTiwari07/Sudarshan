@@ -4,7 +4,7 @@
 Document Title:      Sudarshan Platform Architectural Specification
 Version:             2.1.0
 Last Revision:       2026-08-08
-Repository Scope:    SanTiwari07/Sudarshan (d:/Projects/Sudarshan BOI)
+Repository Scope:    SanTiwari07/Sudarshan (C:/Projects/Sudarshan)
 Target Audience:     Enterprise Security Engineers, SOC Analysts, System Architects
 Verification Status: 923 tests collected (verified 2026-08-15; 3 errors are infrastructure-dependent)
 ```
@@ -139,7 +139,7 @@ d:\Projects\Sudarshan BOI\
 │   │   ├── routes/                  # Gateway API routers (upload.py, report.py, cases.py, runtime_api.py)
 │   │   └── workers/                 # Async worker pool (analysis_queue.py)
 │   └── tests/                       # Automated unit & regression tests
-├── tests/                           # 583 automated unit & integration tests
+├── tests/                           # 923 collected unit & integration tests (verified 2026-08-15)
 ├── docker-compose.hardened.yml      # Production overlay (read-only rootfs, seccomp, containment)
 ├── deploy/security/                 # seccomp profiles for hardened analysis-engine
 ├── analysis-engine/                 # Containerized Analysis Microservice (Port 8001)

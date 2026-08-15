@@ -97,9 +97,10 @@ This section (19. MALWARE FAMILY CLASSIFICATION) details the sub-component as ma
 
 ## 20. STEI
 
-The Deterministic Risk Engine (`risk_engine.py` and `bfci_scorer.py`) relies exclusively on programmatic rule matching, devoid of non-deterministic LLM behavior. The FRS (Fraud Risk Score) formula is deterministic:
+The Deterministic Risk Engine (`risk_engine.py` and `bfci_scorer.py`) relies exclusively on programmatic rule matching, devoid of non-deterministic LLM behavior. The FRS (Fraud Risk Score) formula uses **nominal** axis weights that **renormalize** over only the axes that have data — an absent axis is excluded rather than scored as zero:
 
-`FRS = 0.25 × STEI + 0.35 × Dynamic (BFCI) + 0.20 × Correlation + 0.20 × BankingImpact`
+`FRS_base = weighted_mean(stei×0.25, dynamic×0.35, correlation×0.20, banking_impact×0.20)`  
+`final_risk_score = min(FRS_base × ai_confidence_multiplier, 100.0)`
 
 This provides exact mathematical attribution for scores and facilitates exact risk banding.
 
@@ -224,7 +225,7 @@ This section (45. CURRENT IMPLEMENTATION STATUS) details the sub-component as ma
 2. The YARA rules scanning is a no-op as the target directory `yara_rules/` does not exist.
 3. OTX cache currently bypasses on 404s, hitting network redundantly.
 4. Bank signer registry uses LAB/HACKATHON BASELINE placeholder hashes and MUST be updated for production.
-5. 18 endpoints are completely missing from the API documentation overview.
+5. The API endpoints documentation has been fully rewritten and now covers all 37 verified routes across 9 groups (see `docs/api/ENDPOINTS.md`, updated 2026-08-15).
 
 ## 47. SECURITY LIMITATIONS
 

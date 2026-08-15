@@ -2,7 +2,7 @@
 
 ```yaml
 Module Title:        AI Report Generation & Export Engine
-Version:             3.1.0
+Version:             2.1.0
 Primary Files:       shared/sudarshan_core/engines/pdf_generator.py
                      shared/sudarshan_core/engines/report_generator.py
                      backend/app/routes/report.py

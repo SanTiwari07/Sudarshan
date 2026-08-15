@@ -34,7 +34,7 @@ Do not cite **[CLAIMED]** items as fact. Several are recorded here precisely bec
 > AI may **not** decide malware verdicts.
 > Only deterministic evidence contributes to risk scoring.
 
-**[VERIFIED]** This invariant currently holds at the scoring layer. Identical recorded evidence produces a byte-identical verdict, and LLM-authored fields merged into the dynamic payload do not move the score. Verified across **583 / 583 tests collected** (`pytest tests/ backend/tests --collect-only`).
+**[VERIFIED]** This invariant currently holds at the scoring layer. Identical recorded evidence produces a byte-identical verdict, and LLM-authored fields merged into the dynamic payload do not move the score. Verified across **923 tests collected** (`pytest tests/ backend/tests --collect-only`, 2026-08-15).
 
 ---
 
@@ -46,7 +46,7 @@ Do not cite **[CLAIMED]** items as fact. Several are recorded here precisely bec
 | Gateway Backend | Python 3.12/3.13, FastAPI, Uvicorn (Port 8000) |
 | Analysis Engine | Containerized Python 3.12 + Java 17 + Ubuntu 24.04 (Internal Port 8001) |
 | Shared Core | `sudarshan_core` python package mounted as `/opt/sudarshan-core` |
-| Persistence | SQLite (`sudarshan.db`), aiosqlite, SQLAlchemy, 24h IOC reputation cache |
+| Persistence | SQLite (`sudarshan.db`), aiosqlite (raw SQL — no ORM), 24h IOC reputation cache |
 | Auth | JWT Bearer, passlib/bcrypt |
 | Static analysis | Androguard, MobSF (Port 8008), `apk_repair.py` AXML recovery, APKTool 2.10.0, JADX 1.5.1 |
 | Dynamic analysis | Frida 17.16.4 + frida-tools, Java bridge sub-probes, ADB via **SandboxProvider** (`ADB_HOST` / `DEVICE_SERIAL`; Genymotion default, Android Studio optional) |
@@ -173,7 +173,7 @@ static / inconclusive dynamic: dynamic axis excluded; correlation excluded when 
 
 ## 5. Verification & Test Suite
 
-**[VERIFIED]** **583 / 583 tests collected & verified** (`pytest tests/ backend/tests --collect-only`, 2026-08-08).
+**[VERIFIED]** **923 tests collected** (`pytest tests/ backend/tests --collect-only`, 2026-08-15). 3 collection errors are infrastructure-dependent.
 
 Execution command:
 ```powershell

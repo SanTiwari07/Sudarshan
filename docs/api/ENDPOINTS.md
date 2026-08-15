@@ -1,44 +1,105 @@
 # SUDARSHAN - API Endpoints Documentation
 
-## Core Analysis Endpoints
+> All endpoints verified against source 2026-08-15 by grepping `@router.(get|post|patch)` in `backend/app/routes/*.py` and `backend/app/auth/auth.py`.
+> Runtime telemetry endpoints share prefix `/api` (not `/api/v1`) as registered in `backend/app/main.py:96`.
+> All other endpoints use prefix `/api/v1`.
+
+## Authentication (`/api/v1` — `auth.py`)
 | Endpoint | Method | Description |
 | :--- | :--- | :--- |
-| `/api/v1/analyze` | POST | Upload APK for analysis |
-| `/api/v1/cases/{sha256}` | GET | Retrieve full analysis results |
+| `/api/v1/register` | POST | Register a new user account |
+| `/api/v1/login` | POST | Authenticate and receive JWT Bearer token |
+| `/api/v1/me` | GET | Return current authenticated user info |
+| `/api/v1/users/{user_id}/role` | PATCH | Update a user's role (admin only) |
 
-## 18 Newly Documented Telemetry & Export Endpoints
-The following endpoints were discovered during the August 2026 Audit and provide critical diagnostic, streaming, and export functionality.
-
-### Runtime Telemetry & Streaming
+## Analysis (`/api/v1` — `upload.py`)
 | Endpoint | Method | Description |
 | :--- | :--- | :--- |
-| `/api/runtime/status` | GET | Returns high-level pipeline health summary and active `PipelineTracker` states across analysis jobs. |
-| `/api/runtime/hooks` | GET | Tracks Frida hook installation status, hit counters, and runtime error rates per hook. |
-| `/api/runtime/events` | GET | Exposes a ring buffer of recent telemetry events (max 500 events) for real-time analyst streaming. |
-| `/api/runtime/pipeline` | GET | Reports state machine transitions across `INIT`, `DECOMPILING`, `SANDBOXING`, `CORRELATING`, `SCORING`, `RAG_INDEXING`, and `COMPLETED`. |
-| `/api/runtime/metrics` | GET | Calculates rolling event processing rate (events/sec), dropped event metrics, and error totals. |
-| `/api/runtime/evidence` | GET | Provides snapshots of `evidence.json` generated during dynamic analysis runs. |
+| `/api/v1/analyze` | POST | Upload APK for synchronous analysis |
+| `/api/v1/analyze/async` | POST | Upload APK for asynchronous (queued) analysis; returns `job_id` |
+| `/api/v1/status/{job_id}` | GET | Poll async job status |
+| `/api/v1/sandbox/status` | GET | Check dynamic sandbox availability |
+| `/api/v1/sandbox/debug/{case_id}` | GET | Return sandbox debug info for a specific case |
 
-### Diagnostic Trackers
+## Case History (`/api/v1` — `cases.py`)
 | Endpoint | Method | Description |
 | :--- | :--- | :--- |
-| `/api/diagnostics/memory` | GET | Returns memory usage profiles for the `analysis-engine` containers. |
-| `/api/diagnostics/cache` | GET | Inspects Hit/Miss/TTL ratios for Threat Correlator caches. |
-| `/api/diagnostics/queue` | GET | Async task queue depth, starvation alerts, and worker availability. |
-| `/api/diagnostics/frida` | GET | Details of connected Frida bridges, process IDs, and stability scores. |
+| `/api/v1/cases` | GET | List all historical analysis cases |
+| `/api/v1/cases/{sha256}` | GET | Retrieve full analysis results for a case |
+| `/api/v1/cases/{sha256}/evidence` | GET | Retrieve runtime evidence records for a case |
+| `/api/v1/cases/{sha256}/notes` | GET | Retrieve analyst notes for a case |
+| `/api/v1/cases/{sha256}/notes` | POST | Save analyst notes for a case |
 
-### Discovery & Evidence
+## Threat Intelligence (`/api/v1` — `intelligence.py`)
 | Endpoint | Method | Description |
 | :--- | :--- | :--- |
-| `/api/discovery/packages` | GET | Lists all unique package names intercepted across all historical cases. |
-| `/api/discovery/families` | GET | Lists aggregated family classifications (e.g. Cerberus, Anubis). |
-| `/api/evidence/screenshots`| GET | Retreive screenshot timeline metadata for a specific case. |
-| `/api/evidence/network` | GET | Retrieve decrypted `mitmproxy` HAR dumps for a case. |
+| `/api/v1/intelligence/{sha256}` | GET | Retrieve correlated threat intelligence for a case |
 
-### Advanced Exports
+## Reports & Export (`/api/v1` — `report.py`)
 | Endpoint | Method | Description |
 | :--- | :--- | :--- |
-| `/api/export/{sha256}/stix` | GET | Export IOCs and C2 observables as a STIX 2.1 JSON bundle. |
-| `/api/export/{sha256}/csv` | GET | Export high-confidence IOCs as a flattened CSV. |
-| `/api/export/{sha256}/pdf` | GET | Export narrative audit as an executive PDF (Currently impacted by Type Bug). |
-| `/api/export/{sha256}/html`| GET | Export narrative audit as an offline HTML package. |
+| `/api/v1/report/html/{sha256}` | GET | Serve standalone HTML security report |
+| `/api/v1/report/pdf/{sha256}` | GET | Serve ReportLab PDF threat investigation report |
+| `/api/v1/report/stix/{sha256}` | GET | Export IOCs as STIX 2.1 JSON bundle |
+| `/api/v1/report/iocs/{sha256}` | GET | Export high-confidence IOCs as CSV |
+| `/api/v1/report/iocs-txt/{sha256}` | GET | Export IOCs as plain text |
+| `/api/v1/report/yara/{sha256}` | GET | YARA export endpoint (NOT IMPLEMENTED — no `.yar` files deployed; returns empty) |
+| `/api/v1/report/mitre/{sha256}` | GET | Export MITRE ATT&CK technique mapping |
+| `/api/v1/report/technical-pdf/{sha256}` | GET | Serve technical-grade HTML report |
+| `/api/v1/chat/stream` | POST | SSE streaming chat with RAG-grounded Gemini |
+| `/api/v1/chat` | POST | Non-streaming chat with RAG-grounded Gemini |
+
+## Screenshots (`/api/v1` — `screenshots.py`)
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/api/v1/screenshots/{sha256}/manifest` | GET | Retrieve screenshot timeline manifest for a case |
+| `/api/v1/screenshots/{sha256}/{filename}` | GET | Serve authenticated screenshot image file |
+
+## VIDE Baselines (`/api/v1` — `baselines.py`)
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/api/v1/baselines` | GET | List available VIDE institution baselines (LAB/DEMO only) |
+| `/api/v1/baselines/{institution_id}` | GET | Retrieve a specific VIDE baseline |
+| `/api/v1/baselines/refresh` | POST | Trigger baseline corpus reload |
+
+## APK Discovery (`/api/v1` — `discovery.py`)
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/api/v1/discovery/start` | POST | Start APK URL discovery session |
+| `/api/v1/discovery/{session_id}/status` | GET | Poll discovery session status |
+| `/api/v1/discovery/{session_id}/results` | GET | Retrieve discovered APK candidates |
+| `/api/v1/discovery/{session_id}/analyze` | POST | Enqueue a discovered candidate for analysis |
+
+## Investigation Resilience (`/api/v1` — `resilience.py`)
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/api/v1/resilience/personas` | GET | List available analysis personas |
+| `/api/v1/resilience/{session_id}/assertions` | POST | Submit investigation assertions |
+| `/api/v1/resilience/{session_id}/suggestions` | GET | Get investigation suggestions |
+| `/api/v1/resilience/{session_id}/suggestions` | POST | Submit suggestions |
+| `/api/v1/resilience/{session_id}/time-warp` | POST | Apply time-warp scenario |
+| `/api/v1/resilience/{session_id}/seed-persona` | POST | Seed analysis persona |
+| `/api/v1/resilience/{session_id}/checkpoint` | GET | Get analysis checkpoint |
+| `/api/v1/resilience/{session_id}/checkpoint/restore` | POST | Restore from checkpoint |
+| `/api/v1/resilience/{session_id}/events` | GET | List session events |
+
+## Runtime Telemetry (`/api` — `runtime_api.py`)
+> Note: These endpoints use prefix `/api` (not `/api/v1`) — registered at `backend/app/main.py:96`.
+
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/api/runtime/health` | GET | Runtime API health check |
+| `/api/runtime/status` | GET | High-level pipeline health summary and active `PipelineTracker` states |
+| `/api/runtime/hooks` | GET | Frida hook install status, hit counters, and error rates per hook |
+| `/api/runtime/events` | GET | Ring buffer of recent telemetry events (max 500 events) |
+| `/api/runtime/pipeline` | GET | State machine transitions (`INIT`, `DECOMPILING`, `SANDBOXING`, `CORRELATING`, `SCORING`, `RAG_INDEXING`, `COMPLETED`) |
+| `/api/runtime/metrics` | GET | Rolling event processing rate (events/sec), dropped events, error totals |
+| `/api/runtime/evidence` | GET | Snapshots of `evidence.json` from dynamic analysis runs |
+| `/api/runtime/diagnostics` | GET | Combined diagnostics (memory, queue, frida bridge, IOC cache) |
+
+## Root & Health
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/` | GET | Platform status, version, and engine inventory |
+| `/health` | GET | Basic health check (`{"status": "ok"}`) |
+| `/docs` | GET | Swagger UI interactive API documentation |

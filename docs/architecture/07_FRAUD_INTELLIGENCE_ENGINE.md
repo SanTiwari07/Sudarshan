@@ -62,14 +62,25 @@ If external APIs fail or are unconfigured, `threat_correlator.py` degrades grace
 
 ## 4. Deterministic Malware Family Classification (`classification_engine.py`)
 
-Classifies binaries into target banking trojan families based on rule signatures in [`classification_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/classification_engine.py):
+Classifies binaries into target banking trojan families via a deterministic `if/elif` rule chain in [`classification_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/classification_engine.py):
 
 ```python
-FAMILY_RULES = {
-    "Drinik": ["has_accessibility_abuse", "has_sms_read_write", "targets_indian_banks"],
-    "Xenomorph": ["has_accessibility_abuse", "has_system_alert_window", "has_reflection"],
-    "Cerberus": ["has_sms_read_write", "has_system_alert_window"],
-}
+# Rule order (Drinik before Xenomorph — verified in _ground_truth_2026-08-14.md §6):
+# 1. Drinik:   targets_indian_banks AND DexClassLoader in dangerous_apis_found
+#              → "Banking Target + Dynamic Code Loading = Drinik-pattern"
+# 2. Xenomorph: has_accessibility_abuse AND has_sms_read_write AND targets_indian_banks
+#              → "Accessibility + SMS + banking package match = Xenomorph-pattern"
+# 3. Cerberus: has_system_alert_window AND has_sms_read_write AND targets_indian_banks
+#              → "System Alert Window (Overlay) + SMS + banking package match = Cerberus-pattern"
+# 4. Anubis:   has_accessibility_abuse AND addJavascriptInterface in dangerous_apis_found
+#              → "Accessibility + Webview Injection = Anubis-pattern"
+# 5. Hydra:    has_accessibility_abuse AND has_system_alert_window
+#              → "Accessibility + System Alert Window = Hydra-pattern"
+# 6. SpyNote:  has_accessibility_abuse AND Runtime.exec in dangerous_apis_found
+#              → "Accessibility + Command Execution = SpyNote-pattern"
+# 7. Joker:    has_sms_read_write AND System.loadLibrary in dangerous_apis_found
+#              → "SMS + Native Library Loading = Joker-pattern"
+# 8. Unknown:  No specific family signature matched.
 ```
 
 Returns `family_classification` (e.g., `Drinik`, `Xenomorph`, or `Unknown`) and `matched_rule`.

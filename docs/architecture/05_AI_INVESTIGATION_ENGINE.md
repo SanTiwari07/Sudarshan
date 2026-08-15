@@ -74,8 +74,12 @@ Implemented in [`gemini_rag.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app
 
 ## 4. Prompt Injection Sanitization Guard (`sanitizer.py`)
 
-> [!WARNING]
-> **G2d — CONFIRMED OPEN (verified 2026-08-11):** `sanitizer.py` is imported by the agentic explorer modules only. It is **not** imported by `gemini_client.py` or `gemini_rag.py`. APK-controlled strings (activity class names, MobSF finding text, hardcoded string literals) enter both production LLM prompt paths without sanitization fencing. This is a code gap, not a documentation gap.
+> [!NOTE]
+> **G2d — RESOLVED (verified in `_ground_truth_2026-08-14.md` §5):** `sanitizer.py` is now imported by both production LLM prompt paths:
+> - `backend/app/ai/gemini_client.py:18` — `from sudarshan_core.engines.agentic.sanitizer import sanitize`; all evidence values recursively sanitized before prompt assembly.
+> - `backend/app/ai/gemini_rag.py:31` — `from sudarshan_core.engines.agentic.sanitizer import sanitize, sanitize_block`; chunk text and user questions sanitized.
+>
+> APK-controlled strings now pass through `sanitize()` / `sanitize_block()` before reaching Gemini API calls. The prior code gap is closed.
 
 [`sanitizer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/agentic/sanitizer.py) implements the guard:
 
@@ -87,7 +91,7 @@ def sanitize_input(text: str) -> str:
     return text[:2000]
 ```
 
-Tested against 64 adversarial injection payloads ([`test_prompt_injection.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_prompt_injection.py)). The test suite confirms the sanitizer function works. The function is not yet called on the paths that need it.
+Tested against 64 adversarial injection payloads ([`test_prompt_injection.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_prompt_injection.py)).
 
 ---
 

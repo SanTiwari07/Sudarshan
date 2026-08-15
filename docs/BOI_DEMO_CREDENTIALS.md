@@ -55,7 +55,7 @@ This seeds additional alias accounts (`boi_admin`, `boi_soclead`, `boi_analyst`)
 ## Manual Role Promotion (Admin Only)
 
 ```http
-PATCH /api/v1/auth/users/{user_id}/role
+PATCH /api/v1/users/{user_id}/role
 Authorization: Bearer <admin token>
 Content-Type: application/json
 

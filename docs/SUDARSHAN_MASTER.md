@@ -181,10 +181,9 @@ This section (36. TROUBLESHOOTING) details the sub-component as mapped in the `_
 
 ## 37. TESTING
 
-The current test suite passes with:
-- 180 passing tests
-- 22 skipped tests (due to missing live API keys or sandbox environments)
-- 0 failures
+The current test suite collects:
+- **923 tests collected** (verified 2026-08-15; command: `$env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests`)
+- 3 collection errors in infrastructure-dependent files (`analysis-engine/test_frida_tcp_first.py`, `scripts/test_e2e_pipeline.py`, `test_frida.py`) — these require live sandbox or network and are not part of the standard offline suite.
 
 ## 38. DETERMINISM VERIFICATION
 

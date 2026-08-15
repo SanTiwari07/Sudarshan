@@ -17,7 +17,11 @@ import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
 
-from sudarshan_core.sandbox.config import SandboxConfig
+from sudarshan_core.sandbox.config import (
+    FRIDA_USB_TRANSPORT_PORT,
+    SandboxConfig,
+    frida_server_port,
+)
 from sudarshan_core.sandbox.device import (
     enrich_device_info,
     fetch_device_props,
@@ -526,9 +530,18 @@ class SandboxProvider(ABC):
             ok1, out1 = self.adb(
                 "-s", serial, "forward", f"tcp:{port}", f"tcp:{port}", timeout=10
             )
-            ok2, out2 = self.adb(
-                "-s", serial, "forward", "tcp:27042", f"tcp:{port}", timeout=10
-            )
+            # Second forward is deliberate, not a duplicate: frida's USB/ADB
+            # transport dials FRIDA_USB_TRANSPORT_PORT on the guest and nothing
+            # can move it, so map that fixed port onto wherever our server
+            # actually listens. Skip it when they are already the same port,
+            # otherwise adb is asked to bind a port it just bound.
+            if str(port) != str(FRIDA_USB_TRANSPORT_PORT):
+                ok2, out2 = self.adb(
+                    "-s", serial, "forward",
+                    f"tcp:{FRIDA_USB_TRANSPORT_PORT}", f"tcp:{port}", timeout=10,
+                )
+            else:
+                ok2, out2 = ok1, out1
             return bool(ok1 or ok2), out1 or "", out2 or ""
 
         ok, out1, out2 = _try_forward()
@@ -574,7 +587,10 @@ class SandboxProvider(ABC):
         # Also clear host ports owned by the selected TCP device if rebinding
         if transport == "tcp":
             self.adb("-s", serial, "forward", "--remove", f"tcp:{port}", timeout=5)
-            self.adb("-s", serial, "forward", "--remove", "tcp:27042", timeout=5)
+            self.adb(
+                "-s", serial, "forward", "--remove",
+                f"tcp:{FRIDA_USB_TRANSPORT_PORT}", timeout=5,
+            )
 
         ok, out1, out2 = _try_forward()
 
@@ -715,7 +731,7 @@ class SandboxProvider(ABC):
 
         if not started:
             bin_name = self.config.frida_bin or "frida-server"
-            port = self.config.frida_port or "27055"
+            port = self.config.frida_port or frida_server_port()
             legacy_cmd = build_frida_start_command(
                 f"/data/local/tmp/{bin_name}", port, self.config
             )

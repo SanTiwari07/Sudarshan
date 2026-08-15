@@ -16,8 +16,10 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "shared"))
 
+from sudarshan_core.sandbox.config import frida_server_port  # noqa: E402
+
 ADB_SERIAL = os.getenv("SUDARSHAN_ADB_SERIAL", "")
-FRIDA_PORT = int(os.getenv("SUDARSHAN_FRIDA_PORT", "27042"))
+FRIDA_PORT = int(frida_server_port())
 TARGET_PKG = os.getenv("VIDE_LIVE_TARGET_PKG", "com.android.insecurebankv2")
 PROBE_BUNDLE = REPO / "scripts" / "vide_live_probe.bundle.js"
 APK = REPO / "backend" / "test_sample.apk"

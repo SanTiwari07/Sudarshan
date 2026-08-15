@@ -269,7 +269,12 @@ ADB_HOST = os.getenv("ADB_HOST", "")   # e.g. Genymotion VM IP or host.docker.in
 # The only guest port frida's USB/ADB transport will talk to. Running
 # frida-server anywhere else forces that transport into jailed mode, where
 # attach() cannot work - see the transport selection in start_session().
-FRIDA_USB_TRANSPORT_PORT = 27042
+# Re-exported from sandbox.config so there is exactly one definition; the name
+# stays here for backwards-compatible imports.
+from sudarshan_core.sandbox.config import (  # noqa: E402
+    FRIDA_USB_TRANSPORT_PORT,
+    frida_server_port,
+)
 ADB_PORT = os.getenv("ADB_PORT", "5555")
 DEVICE_SERIAL = os.getenv("ANDROID_DEVICE_SERIAL") or os.getenv("DEVICE_SERIAL", "")
 SANDBOX_PROVIDER_NAME = (
@@ -607,20 +612,38 @@ def _find_aapt_executable(tool: str) -> Optional[str]:
     aapt = shutil.which(tool)
     if aapt:
         return aapt
-    user = os.environ.get("USERNAME", os.environ.get("USER", "user"))
     sdk_root = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT")
     candidates: List[str] = []
+
+    # Every SDK root worth searching: the configured one first, then the
+    # per-platform default install locations. The defaults matter because
+    # Android Studio does not export ANDROID_HOME on a fresh install, so a
+    # machine with a perfectly good SDK looks toolless without them.
+    roots: List[str] = []
     if sdk_root:
-        bt = os.path.join(sdk_root, "build-tools")
-        if os.path.isdir(bt):
-            for ver in sorted(os.listdir(bt), reverse=True):
-                candidates.append(os.path.join(bt, ver, f"{tool}.exe"))
-                candidates.append(os.path.join(bt, ver, tool))
-    candidates.extend([
-        rf"C:\Users\{user}\AppData\Local\Android\Sdk\build-tools\36.1.0\{tool}.exe",
-        rf"C:\Users\{user}\AppData\Local\Android\Sdk\build-tools\36.0.0\{tool}.exe",
-        rf"C:\Users\{user}\AppData\Local\Android\Sdk\build-tools\34.0.0\{tool}.exe",
+        roots.append(sdk_root)
+    home = os.path.expanduser("~")
+    roots.extend([
+        os.path.join(home, "AppData", "Local", "Android", "Sdk"),   # Windows
+        os.path.join(home, "Library", "Android", "sdk"),            # macOS
+        os.path.join(home, "Android", "Sdk"),                       # Linux
     ])
+
+    # Enumerate whatever versions are actually installed, newest first, rather
+    # than naming specific ones. Pinned version numbers rot: the list here used
+    # to be 36.1.0/36.0.0/34.0.0, so a machine with only 35.x installed fell
+    # through to "tool not found" despite having the tool.
+    for root in roots:
+        bt = os.path.join(root, "build-tools")
+        if not os.path.isdir(bt):
+            continue
+        try:
+            versions = sorted(os.listdir(bt), reverse=True)
+        except OSError:
+            continue
+        for ver in versions:
+            candidates.append(os.path.join(bt, ver, f"{tool}.exe"))
+            candidates.append(os.path.join(bt, ver, tool))
     for c in candidates:
         if os.path.isfile(c):
             return c
@@ -2182,13 +2205,13 @@ class FridaSession:
             #
             # So when the configured port is not frida's default, dial the real
             # server over TCP first and treat USB as the fallback.
+            # Configured port first, then frida's fixed USB port as a last
+            # resort. Built from frida_server_port() rather than re-reading the
+            # environment here: this list used to consult only two of the three
+            # accepted variable names, so setting FRIDA_PORT alone started the
+            # server on a port that was never dialled.
             candidate_ports: List[int] = []
-            for p_env in (
-                os.getenv("SUDARSHAN_FRIDA_PORT"),
-                os.getenv("FRIDA_SERVER_PORT"),
-                str(FRIDA_USB_TRANSPORT_PORT),
-                "27055",
-            ):
+            for p_env in (frida_server_port(), str(FRIDA_USB_TRANSPORT_PORT)):
                 if p_env and str(p_env).isdigit() and int(p_env) not in candidate_ports:
                     candidate_ports.append(int(p_env))
 

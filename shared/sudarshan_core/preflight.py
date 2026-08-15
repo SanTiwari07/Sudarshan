@@ -158,12 +158,16 @@ def check_frida_route() -> CheckResult:
     client dialling 127.0.0.1 finds nothing -- `adb devices` looks perfectly
     healthy while instrumentation silently never attaches.
     """
-    from sudarshan_core.sandbox.config import adb_server_host, frida_client_hosts
+    from sudarshan_core.sandbox.config import (
+        adb_server_host,
+        frida_client_hosts,
+        frida_server_port,
+    )
 
     hosts = frida_client_hosts()
-    port = (
-        os.getenv("FRIDA_PORT") or os.getenv("SUDARSHAN_FRIDA_PORT") or "27042"
-    ).strip()
+    # Must resolve exactly as the launcher does, or preflight blesses a port
+    # nothing is listening on.
+    port = frida_server_port()
     remote = adb_server_host()
 
     if running_in_container() and not remote and not (os.getenv("ADB_HOST") or "").strip():

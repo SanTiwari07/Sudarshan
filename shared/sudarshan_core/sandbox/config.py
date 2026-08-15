@@ -27,6 +27,49 @@ def _first_env(*names: str, default: str = "") -> str:
     return default
 
 
+# ─── Frida ports ──────────────────────────────────────────────────────────────
+#
+# Two different numbers that are easy to conflate, so they are named apart:
+#
+# FRIDA_USB_TRANSPORT_PORT is not configuration. Frida's USB/ADB transport only
+# ever talks to 27042 on the guest; that is baked into frida itself and no env
+# var moves it.
+#
+# DEFAULT_FRIDA_SERVER_PORT is the port WE start frida-server on when nothing
+# is configured. It deliberately differs from frida's default so a stray
+# stock frida-server on the guest cannot be mistaken for ours.
+#
+# Every module must resolve the server port through frida_server_port() rather
+# than repeating a literal. Divergent copies of this default are not a style
+# problem: config.py used to answer 27042 while provider.py answered 27055, so
+# the server was started on one port and dialled on another - and the failure
+# surfaced much later as frida's misleading "need Gadget to attach on jailed
+# Android", which sends you looking for a Gadget that was never the problem.
+FRIDA_USB_TRANSPORT_PORT: int = 27042
+DEFAULT_FRIDA_SERVER_PORT: str = "27055"
+
+# Every name accepted for the server port, in precedence order. One list, so a
+# variable honoured by one module cannot be ignored by the next.
+FRIDA_PORT_ENV_VARS: tuple = (
+    "FRIDA_PORT",
+    "SUDARSHAN_FRIDA_PORT",
+    "FRIDA_SERVER_PORT",
+)
+
+
+def frida_server_port() -> str:
+    """
+    The port frida-server listens on, resolved from the environment.
+
+    Single source of truth: starting the server, forwarding to it, dialling it
+    and preflighting it all go through here, so they cannot disagree. Falls
+    back to DEFAULT_FRIDA_SERVER_PORT, and ignores a non-numeric value rather
+    than propagating it into an adb command.
+    """
+    raw = _first_env(*FRIDA_PORT_ENV_VARS, default=DEFAULT_FRIDA_SERVER_PORT)
+    return raw if raw.isdigit() else DEFAULT_FRIDA_SERVER_PORT
+
+
 def adb_server_host() -> str:
     """
     Host running the ADB server this process talks to, or "" when it is local.
@@ -73,7 +116,7 @@ class SandboxConfig:
     adb_host: str = ""
     adb_port: str = "5555"
     device_serial: str = ""
-    frida_port: str = "27042"
+    frida_port: str = DEFAULT_FRIDA_SERVER_PORT
     frida_bin: str = "sudarshan_agent_srv"
     frida_version: str = "17.16.4"
     frida_server_dir: str = ""
@@ -108,12 +151,7 @@ def load_sandbox_config() -> SandboxConfig:
         adb_host=os.getenv("ADB_HOST", "").strip(),
         adb_port=os.getenv("ADB_PORT", "5555").strip() or "5555",
         device_serial=_first_env("ANDROID_DEVICE_SERIAL", "DEVICE_SERIAL"),
-        frida_port=(
-            os.getenv("FRIDA_PORT")
-            or os.getenv("SUDARSHAN_FRIDA_PORT")
-            or os.getenv("FRIDA_SERVER_PORT")
-            or "27042"
-        ).strip(),
+        frida_port=frida_server_port(),
         frida_bin=os.getenv("SUDARSHAN_FRIDA_BIN", "sudarshan_agent_srv").strip()
         or "sudarshan_agent_srv",
         frida_version=_first_env(

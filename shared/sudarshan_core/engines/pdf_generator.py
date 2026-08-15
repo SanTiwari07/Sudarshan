@@ -22,6 +22,7 @@ The PDF generator does NOT calculate FRS, STEI, BFCI, classify families,
 or invent telemetry. It renders strictly authoritative case data.
 """
 
+import hashlib
 import io
 import json
 import logging
@@ -1986,12 +1987,44 @@ class ReportLabPDFGenerator:
         ]))
         elements.append(ev_table)
 
+    def _case_integrity_hash(self) -> str:
+        """
+        SHA-256 over the case's canonical identifying fields.
+
+        This value was previously a hardcoded literal, so every report ever
+        produced carried the SAME "integrity hash" - which is worse than
+        omitting one, because a reviewer comparing two reports would conclude
+        the records matched. Deriving it from the case's own fields makes it
+        actually discriminate between cases.
+
+        The field list is fixed and ordered so the digest is reproducible for a
+        given case; hashing a dict without sort_keys would make it depend on
+        insertion order.
+        """
+        canonical = {
+            "sha256":       str(self.data.sha256.value),
+            "sha1":         str(self.data.sha1.value),
+            "md5":          str(self.data.md5.value),
+            "package_name": str(self.data.package_name.value),
+            "engine":       str(self.data.engine_version.value),
+            "generated_at": str(self.data.report_generated_at.value),
+        }
+        blob = json.dumps(canonical, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
     def _build_page12_iocs_governance_signoff(self, elements: List[Any]):
         """PAGE 12 — PART C · AUDIT & TRACEABILITY — INDICATORS, CHAIN OF CUSTODY & GOVERNANCE."""
         elements.append(Paragraph("PART C · AUDIT & TRACEABILITY — INDICATORS, CHAIN OF CUSTODY & GOVERNANCE", self.part_header))
         elements.append(Paragraph("INDICATORS OF COMPROMISE", self.section_bar))
 
-        c2_url_str = self.data.iocs[0]['indicator'] if self.data.iocs else 'http://194.163.142.89/drinik/gate.php'
+        # No IOC means no IOC. This used to fall back to a literal Drinik C2
+        # address, so any sample that produced no indicators had a real, live
+        # C2 belonging to a DIFFERENT malware family printed against its hashes
+        # and marked CONFIRMED - a false attribution in a signed forensic
+        # report, and one that would send a responder to block an unrelated host.
+        c2_url_str = (
+            self.data.iocs[0]["indicator"] if self.data.iocs else "None observed"
+        )
 
         perms = self._permission_names()
         
@@ -2004,7 +2037,8 @@ class ReportLabPDFGenerator:
                           f"<b>Package:</b> <font name='Courier'>{self.data.package_name.value}</font>", self.table_cell),
                 Paragraph(f"<b>C2 URL:</b> <font name='Courier'>{c2_url_str}</font><br/>"
                           f"<b>Permissions:</b> {len(perms)} dangerous (see page 5)<br/>"
-                          f"<b>Status:</b> CONFIRMED", self.table_cell),
+                          f"<b>Status:</b> {'CONFIRMED' if self.data.iocs else 'NO INDICATORS RECOVERED'}",
+                          self.table_cell),
             ]
         ]
         ioc_table = Table(ioc_data, colWidths=[261.5, 261.5], repeatRows=1)
@@ -2021,8 +2055,12 @@ class ReportLabPDFGenerator:
         chain_data = [
             [Paragraph("Field", self.table_header), Paragraph("Value", self.table_header)],
             [Paragraph("Platform version", self.table_cell_bold), Paragraph(self.data.engine_version.value, self.table_cell)],
-            [Paragraph("Analysis mode", self.table_cell_bold), Paragraph("Confirmed Live Run", self.table_cell)],
-            [Paragraph("Case record integrity hash (SHA-256, canonical fields)", self.table_cell_bold), Paragraph("b0f3e7fab8b97e474bbdb2fd7d674361288faa7f228e167b7dc201c7d535017d", self.table_cell_mono)],
+            # Was the literal "Confirmed Live Run". A run whose app crashed
+            # before Frida ever attached carries dynamic_status
+            # NO_TELEMETRY_CAPTURED, and reporting that as a confirmed live run
+            # overstates what the sandbox actually observed.
+            [Paragraph("Analysis mode", self.table_cell_bold), Paragraph(str(self.data.dynamic_status.value), self.table_cell)],
+            [Paragraph("Case record integrity hash (SHA-256, canonical fields)", self.table_cell_bold), Paragraph(self._case_integrity_hash(), self.table_cell_mono)],
             [Paragraph("Report generated", self.table_cell_bold), Paragraph(self.data.report_generated_at.value, self.table_cell_mono)],
             [Paragraph("Retention / audit trail", self.table_cell_bold), Paragraph("Case JSON persisted to sudarshan.db; evidence ledger IDs map 1:1 to stored EvidenceRecord entries", self.table_cell)],
         ]

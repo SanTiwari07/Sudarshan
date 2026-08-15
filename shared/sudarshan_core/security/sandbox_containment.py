@@ -377,8 +377,12 @@ def _adb_connect_target(args: Sequence[str]) -> Optional[str]:
 
 def build_frida_start_command(remote_binary: str, port: str, config: Optional[SandboxConfig] = None) -> str:
     """Shell command to start frida-server as root on the guest."""
+    # Local import: sandbox.config is only a TYPE_CHECKING dependency at module
+    # level here, to keep config <-> containment from importing each other.
+    from sudarshan_core.sandbox.config import frida_server_port
+
     listen = frida_listen_host(config) or "0.0.0.0"
-    p = port or "27042"
+    p = port or frida_server_port()
     return f"su 0 sh -c 'nohup {remote_binary} -l {listen}:{p} </dev/null >/dev/null 2>&1 &'"
 
 

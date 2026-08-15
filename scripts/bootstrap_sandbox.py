@@ -44,7 +44,12 @@ os.environ.setdefault("SANDBOX_PROVIDER", "auto")
 os.environ.setdefault("ANDROID_SANDBOX_PROVIDER", os.environ.get("SANDBOX_PROVIDER", "auto"))
 os.environ.setdefault("AUTO_CONNECT", "true")
 os.environ.setdefault("ROOT_REQUIRED", "true")
-os.environ.setdefault("FRIDA_PORT", os.environ.get("SUDARSHAN_FRIDA_PORT", "27055"))
+from sudarshan_core.sandbox.config import DEFAULT_FRIDA_SERVER_PORT  # noqa: E402
+
+os.environ.setdefault(
+    "FRIDA_PORT",
+    os.environ.get("SUDARSHAN_FRIDA_PORT", DEFAULT_FRIDA_SERVER_PORT),
+)
 os.environ.setdefault("SUDARSHAN_FRIDA_BIN", "sudarshan_agent_srv")
 os.environ.setdefault("FRIDA_LISTEN_HOST", "127.0.0.1")
 

@@ -8,6 +8,7 @@ import CompletionScreen from './progress/CompletionScreen';
 import { useAnalysisSession } from './useAnalysisSession';
 import type { FraudCardData } from '../../App';
 import { getToken } from '../../pages/Login';
+import { API_BASE } from '../../config';
 import type { StageStatus } from './pipelineStages';
 import { TYPOGRAPHY } from '../../theme/typography';
 
@@ -104,7 +105,7 @@ export default function UploadPage({ onAnalysisComplete }: UploadPageProps) {
               onAnalyzeCandidate={async (candidateId, sessionId, filename) => {
                 try {
                   const token = import.meta.env.VITE_DEV_TOKEN || getToken();
-                  const res = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:8000/api/v1'}/discovery/${sessionId}/analyze`, {
+                  const res = await fetch(`${API_BASE}/discovery/${sessionId}/analyze`, {
                     method: 'POST',
                     headers: {
                       'Content-Type': 'application/json',

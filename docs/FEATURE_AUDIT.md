@@ -4,6 +4,7 @@ This document logs verified discrepancies between the stated architectural inten
 
 ## 1. Test Suite Discrepancy
 *   **Stated Intent**: The system has 730 automated tests (583 integration + 202 unit tests = 785 expected total).
+*   *(Superseded 2026-08-16: measured 920 collected / 525 CI-enforced. This section records the state at the time of the audit and is kept for history.)*
 *   **Actual Code**: An AST analysis of `tests/` and `backend/tests/` yields exactly **725** test cases across 90 test files. Furthermore, active CI/CD configurations reveal that only **202** tests are actually executed during the pipeline.
 *   **Conclusion**: There is configuration drift where ~523 tests are being skipped or disabled during CI/CD.
 

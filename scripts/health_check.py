@@ -32,7 +32,14 @@ import shutil
 import subprocess
 import sys
 import time
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+
+_SHARED = Path(__file__).resolve().parent.parent / "shared"
+if str(_SHARED) not in sys.path:
+    sys.path.insert(0, str(_SHARED))
+
+from sudarshan_core.validation.labelled_corpus import resolve_sample  # noqa: E402
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -53,8 +60,40 @@ MOBSF_API_KEY = os.getenv("MOBSF_API_KEY", "sudarshan_mobsf_api_key_2026")
 BACKEND_HOST  = os.getenv("BACKEND_HOST", "http://localhost:8000")
 FRONTEND_HOST = os.getenv("FRONTEND_HOST", "http://localhost:5173")
 ENGINE_HOST   = os.getenv("ENGINE_HOST", "http://localhost:8001")  # may not be exposed
-ADB_BIN       = shutil.which("adb") or r"C:\Users\sansk\AppData\Local\Android\Sdk\platform-tools\adb.exe"
-TEST_APK      = os.path.join(os.path.dirname(__file__), "..", "test apk", "Vulnerable", "InsecureBankv2.apk")
+def _default_adb() -> str:
+    """
+    adb on PATH, else the SDK's default install location for this platform.
+
+    The fallback used to be a literal `C:\\Users\\sansk\\...` - one specific
+    developer's home directory, which resolves on exactly one machine.
+    """
+    from pathlib import Path as _Path
+
+    found = shutil.which("adb")
+    if found:
+        return found
+    sdk = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT")
+    roots = [_Path(sdk)] if sdk else []
+    home = _Path.home()
+    roots += [
+        home / "AppData" / "Local" / "Android" / "Sdk",   # Windows
+        home / "Library" / "Android" / "sdk",             # macOS
+        home / "Android" / "Sdk",                         # Linux
+    ]
+    for root in roots:
+        for name in ("adb.exe", "adb"):
+            candidate = root / "platform-tools" / name
+            if candidate.is_file():
+                return str(candidate)
+    return "adb"   # let the caller fail with a normal "not found" error
+
+
+ADB_BIN       = _default_adb()
+
+# Resolved rather than hardcoded: the corpus is gitignored and currently sits at
+# `test apk/test apk/`, so the old literal path resolved to nothing.
+_SAMPLE       = resolve_sample("Vulnerable/InsecureBankv2.apk")
+TEST_APK      = str(_SAMPLE) if _SAMPLE else ""
 
 PASS = "✅ PASS"
 FAIL = "❌ FAIL"

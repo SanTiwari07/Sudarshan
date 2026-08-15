@@ -34,7 +34,7 @@ Do not cite **[CLAIMED]** items as fact. Several are recorded here precisely bec
 > AI may **not** decide malware verdicts.
 > Only deterministic evidence contributes to risk scoring.
 
-**[VERIFIED]** This invariant currently holds at the scoring layer. Identical recorded evidence produces a byte-identical verdict, and LLM-authored fields merged into the dynamic payload do not move the score. Verified across **923 tests collected** (`pytest tests/ backend/tests --collect-only`, 2026-08-15).
+**[VERIFIED]** This invariant currently holds at the scoring layer. Identical recorded evidence produces a byte-identical verdict, and LLM-authored fields merged into the dynamic payload do not move the score. Verified across **920 tests collected** (`pytest tests/ backend/tests --collect-only`, 2026-08-16).
 
 ---
 
@@ -173,7 +173,7 @@ static / inconclusive dynamic: dynamic axis excluded; correlation excluded when 
 
 ## 5. Verification & Test Suite
 
-**[VERIFIED]** **923 tests collected** (`pytest tests/ backend/tests --collect-only`, 2026-08-15). 3 collection errors are infrastructure-dependent.
+**[VERIFIED]** **920 tests collected** (`pytest tests/ backend/tests --collect-only`, 2026-08-16); **525** of them are enforced by CI. One collection error: `test_pdf_generator.py` needs `pypdf`, which is not a declared dependency.
 
 Execution command:
 ```powershell

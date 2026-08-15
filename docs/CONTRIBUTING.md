@@ -55,7 +55,7 @@ Target Audience:     Core Contributors, Module Developers, Security Researchers
 
 ## 3. Testing & Determinism Baselines
 
-All PRs must maintain 100% test suite compliance (**923 tests collected** across `tests/` and `backend/tests`). Never break existing test assertions or compromise the **Determinism Invariant**.
+All PRs must maintain 100% test suite compliance (**920 tests collected** across `tests/` and `backend/tests`; CI gates only the 525 in `backend/tests/`, so run both locally). Never break existing test assertions or compromise the **Determinism Invariant**.
 
 ### Running Automated Tests
 ```powershell
@@ -87,5 +87,5 @@ $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytes
 ## 5. Submitting Pull Requests
 
 1. Run formatting and lint checks.
-2. Ensure all automated pytest test cases pass (`pytest tests/ backend/tests` - **923 tests collected**).
+2. Ensure all automated pytest test cases pass (`pytest tests/ backend/tests` - **920 tests collected**).
 3. Push to your branch and submit a Pull Request against `main`. Include a clear summary of changes and reference updated documentation.

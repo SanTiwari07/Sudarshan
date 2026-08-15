@@ -1,0 +1,144 @@
+{
+  "_comment": "Baseline for scripts/validate_corpus.py --check. The APKs are gitignored, so this file is what lets someone without the malware verify that the published results still hold.",
+  "androguard_version": "4.1.4",
+  "generated_at": "2026-08-15T20:58:17+00:00",
+  "results_digest": "1f9cd4c20c23f70ded221dcb2f5505a70c454854c4c66ca7011620d053ea5f6e",
+  "samples": [
+    {
+      "display_name": "Android UnCrackable L4",
+      "sha256": "73799f94d9bce055509a14b1d33297aea81177d6a8ab8278dabfde3c17d8b41a",
+      "label": "benign",
+      "frs": 10.69,
+      "band": "Safe",
+      "confidence": 71.7
+    },
+    {
+      "display_name": "UnCrackable-Level1",
+      "sha256": "1da8bf57d266109f9a07c01bf7111a1975ce01f190b9d914bcd3ae3dbef96f21",
+      "label": "benign",
+      "frs": 9.16,
+      "band": "Safe",
+      "confidence": 71.7
+    },
+    {
+      "display_name": "UnCrackable-Level2",
+      "sha256": "4c7980ef1f6cc29508f38417c2a5b5b7721eeb4a3d7f00a0c1a08f5192fa6ddd",
+      "label": "benign",
+      "frs": 10.69,
+      "band": "Safe",
+      "confidence": 71.7
+    },
+    {
+      "display_name": "UnCrackable-Level3",
+      "sha256": "6827f776b7d2844342711be6f13695ae8d1a5f209fc0072dbaf8b85e2fcff4b7",
+      "label": "benign",
+      "frs": 10.69,
+      "band": "Safe",
+      "confidence": 71.7
+    },
+    {
+      "display_name": "Anubis",
+      "sha256": "d17d2f0ab340d52c83e59d3d7d6636d92e15f23a9a70b4f402c5af54cfc291af",
+      "label": "malware",
+      "frs": 14.0,
+      "band": "Suspicious",
+      "confidence": 45.0
+    },
+    {
+      "display_name": "Cerberus",
+      "sha256": "a52d2105d680d029f9cc5c9c77f639e47ae520e41ce7294bbad77b8f2931796a",
+      "label": "malware",
+      "frs": 38.74,
+      "band": "Suspicious",
+      "confidence": 71.7
+    },
+    {
+      "display_name": "Drinik",
+      "sha256": "a15e50a753028ff9db51885705d6348113dac5b653cd2bd00dcfd8b97da7566a",
+      "label": "malware",
+      "frs": 21.57,
+      "band": "Suspicious",
+      "confidence": 45.0
+    },
+    {
+      "display_name": "FluBot",
+      "sha256": "a778818cc08d213d1f66db5fa8b34aabc862569ecb99fd1aea37ff6ccab48400",
+      "label": "malware",
+      "frs": 60.0,
+      "band": "Suspicious",
+      "confidence": 45.0
+    },
+    {
+      "display_name": "Hook",
+      "sha256": "6ca691c97ab0028ce9acade5d079289668b1d0339ad330181c84fc7e7114c509",
+      "label": "malware",
+      "frs": 15.32,
+      "band": "Suspicious",
+      "confidence": 45.0
+    },
+    {
+      "display_name": "Octo",
+      "sha256": "dc2a780f6abb9f0ec0a6675f20acb91ebe2a8748297682a59daf9164fbea2ee8",
+      "label": "malware",
+      "frs": 57.33,
+      "band": "Suspicious",
+      "confidence": 45.0
+    },
+    {
+      "display_name": "SharkBot",
+      "sha256": "71c78101f7792fe879a082e323fed89c5e4a43132d01d3f79ed02afd8db45497",
+      "label": "malware",
+      "frs": 53.45,
+      "band": "Suspicious",
+      "confidence": 45.0
+    },
+    {
+      "display_name": "Teabot",
+      "sha256": "554e71b4e5d2a172707b51edc8e0e22cba40858b69884e75228c12718c47e1ef",
+      "label": "malware",
+      "frs": 70.26,
+      "band": "High Risk",
+      "confidence": 73.7
+    },
+    {
+      "display_name": "Amaze File Manager",
+      "sha256": "5bd6607109be80c3cf0e50f8b2321a53ac9c04c3a3bdb24788130962f4166921",
+      "label": "benign",
+      "frs": 14.28,
+      "band": "Safe",
+      "confidence": 71.7
+    },
+    {
+      "display_name": "KeePassDX Passkey Vault",
+      "sha256": "23d6917bf11fcde7f4a2b8072faa893df857955d6201244e370357bd7d65c598",
+      "label": "benign",
+      "frs": 13.07,
+      "band": "Safe",
+      "confidence": 71.7
+    },
+    {
+      "display_name": "NewPipe",
+      "sha256": "d9fb2540b3a2a0b059c73a296f0cda1c06738426d013c626dbf088aea66629b3",
+      "label": "benign",
+      "frs": 22.58,
+      "band": "Safe",
+      "confidence": 71.7
+    },
+    {
+      "display_name": "VLC",
+      "sha256": "4a9144fadfd8606cc5c0e9db892fd24846b7b2efeb1630db5377955d1612b119",
+      "label": "benign",
+      "frs": 23.01,
+      "band": "Safe",
+      "confidence": 71.7
+    },
+    {
+      "display_name": "InsecureBankv2",
+      "sha256": "b18af2a0e44d7634bbcdf93664d9c78a2695e050393fcfbb5e8b91f902d194a4",
+      "label": "benign",
+      "frs": 25.95,
+      "band": "Safe",
+      "confidence": 71.7
+    }
+  ]
+}

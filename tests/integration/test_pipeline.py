@@ -59,7 +59,15 @@ MOBSF_API_KEY = os.getenv("MOBSF_API_KEY", "sudarshan_mobsf_api_key_2026")
 BACKEND_HOST = os.getenv("BACKEND_HOST", "http://localhost:8000")
 
 ROOT = Path(__file__).parent.parent.parent
-TEST_APK = str(ROOT / "test apk" / "Vulnerable" / "InsecureBankv2.apk")
+
+# Resolved, not hardcoded. The corpus is gitignored and currently nested at
+# `test apk/test apk/`, so the previous literal path resolved to a file that
+# does not exist - and the resulting skip looked like "no sample available"
+# rather than "the path is wrong".
+from sudarshan_core.validation.labelled_corpus import resolve_sample  # noqa: E402
+
+_SAMPLE = resolve_sample("Vulnerable/InsecureBankv2.apk")
+TEST_APK = str(_SAMPLE) if _SAMPLE else ""
 
 PASS_COUNT = 0
 FAIL_COUNT = 0

@@ -2,7 +2,7 @@
 
 ## 1. What Is Sudarshan?
 
-Sudarshan is an enterprise-grade mobile banking threat intelligence and malware analysis platform designed exclusively for Bank of India (BOI). 
+Sudarshan is a mobile banking threat intelligence and malware analysis platform built for Bank of India's fraud-analysis workflows. 
 
 At its core, Sudarshan is a high-performance orchestration layer, deterministic risk engine, and interactive investigation workspace. It ingests unknown or suspicious Android Application Packages (APKs), dissects them statically and dynamically, correlates behaviors against threat intelligence feeds, detects visual impersonation of banking brands, and translates complex forensic telemetry into plain-English intelligence using AI.
 
@@ -769,8 +769,15 @@ LLMs are highly prone to prompt injection and hallucination. Therefore, Sudarsha
 ## 29. VALIDATION & TESTING
 
 The platform maintains a robust (though currently fragmented) testing footprint:
-*   **AST Code Count**: 725 test cases across 90 test files in `tests/` and `backend/tests/`.
-*   *(Note: Active CI/CD runners report 202 tests, revealing a configuration drift where many tests are bypassed).*
+*   **Collected**: **920 tests** across `tests/` and `backend/tests/` (measured 2026-08-16 with
+    `pytest tests/ backend/tests --collect-only`).
+*   **Enforced by CI**: **525**. `.github/workflows/ci.yml` runs pytest with
+    `working-directory: backend`, so it executes `backend/tests/` only — everything in
+    `tests/unit/` and `tests/integration/` is collected locally but never gated on. That is
+    configuration drift, not coverage, and it is recorded here rather than averaged away.
+*   **Not collected at all**: `backend/tests/test_pdf_generator.py` (15 tests) fails to import
+    because `pypdf` is in neither requirements file, so it has never run in CI. Three of its
+    tests fail when the dependency is installed.
 *   **Validations**:
     *   Auth Flow Route Guards
     *   JWT Session management
@@ -791,38 +798,56 @@ The platform maintains a robust (though currently fragmented) testing footprint:
 
 ## 31. CURRENT IMPLEMENTATION STATUS
 
-| Capability | Status | Notes / Limitations |
-| :--- | :--- | :--- |
-| **STEI / FRS / BFCI Scoring** | VERIFIED | Fully deterministic and operational. |
-| **Agentic Sandbox Explorer** | VERIFIED | Operates over ADB with screen hashing. |
-| **Frida Injection & Network Intercept** | VERIFIED | Uses Loopback binds and mitmproxy sidecars. |
-| **VIDE Execution** | IMPLEMENTED | Core layout/color matching is operational. |
-| **VIDE Baseline Corpus** | LAB / DEMO | Missing production baselines (only 3 banks present). |
-| **Signer Registry** | LAB / DEMO | Certificate entries for protected packages are empty. |
-| **Threat Intel Caching** | PARTIAL | Cache works, but fails to cache 404s (API burn bug). |
-| **YARA Scanner** | NOT IMPLEMENTED | Silent No-Op; zero `.yar` files exist in the repository. |
-| **AI Fallbacks** | VERIFIED | Air-gapped fallback template is fully operational. |
+**What the status words mean.** They were previously undefined, which made
+`VERIFIED` indistinguishable from *"we believe this works"*:
+
+| Status | Definition |
+| :--- | :--- |
+| `VERIFIED` | Directly observed working — by executing it, or by a test that fails when it breaks. The Evidence column names what was observed and when. |
+| `IMPLEMENTED` | Code exists and is wired in, but no standing evidence proves it end-to-end. |
+| `LAB / DEMO` | Works, on placeholder data. Not fit for production input. |
+| `PARTIAL` | Works for the common path; a known case is unhandled. |
+| `NOT IMPLEMENTED` | Absent. Any call is a no-op. |
+
+A row without evidence does not get `VERIFIED`.
+
+| Capability | Status | Evidence | Notes / Limitations |
+| :--- | :--- | :--- | :--- |
+| **STEI / FRS / BFCI Scoring** | VERIFIED | `docs/evaluation/CORPUS_STATIC_VALIDATION.md` — 17 labelled samples, 2026-08-16; determinism replay in `backend/tests/test_determinism_replay.py` | Fully deterministic and operational. |
+| **Agentic Sandbox Explorer** | VERIFIED | Anubis run 2026-08-16: 3 actions, 6 screenshots, `attack_timeline.json` | Operates over ADB with screen hashing. Only 2–3 actions complete inside the 90 s budget — see §29. |
+| **Frida Injection & Network Intercept** | VERIFIED | Anubis run 2026-08-16: `canary_received` 17.6 s, `first_hook_event` 17.9 s | Was **broken until 2026-08-16**: the client dialled frida's fixed USB port while the server ran on the configured one, so attach failed on every run and reported the misleading "need Gadget to attach on jailed Android". Port resolution is now single-source (`sandbox/config.py:frida_server_port`). |
+| **VIDE Execution** | IMPLEMENTED | — | Core layout/color matching is operational; no end-to-end evidence recorded. |
+| **VIDE Baseline Corpus** | LAB / DEMO | — | Missing production baselines (only 3 lab banks present). |
+| **Signer Registry** | LAB / DEMO | `shared/sudarshan_core/data/bank_signer_registry.json` | All 12 package entries have `signers_provisioned: false`. Deliberately fail-closed: an unprovisioned package has its identity claim **rejected**, not trusted. |
+| **Threat Intel Caching** | PARTIAL | `services/threat_correlator.py:165,235,269,304` | Cache works, but 404s are never stored, so unknown-to-VirusTotal samples are re-queried on every analysis. |
+| **YARA Scanner** | NOT IMPLEMENTED | `engines/frida_sandbox.py:3517` logs `YARA scanning DISABLED` | Zero `.yar` files in the repository. It now fails loudly rather than silently returning empty results. |
+| **AI Fallbacks** | IMPLEMENTED | — | Air-gapped fallback template is wired in, but no test exercises the no-key path end-to-end, so it does not meet the bar for VERIFIED above. Downgraded 2026-08-16 on that basis. |
 
 ---
 
 ## 32. COMPLETE FEATURE MATRIX
 
-| ID | Feature | Layer | User Visible | Status | Differentiating |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| 1 | Protected SPA Routing (JWT) | Frontend | Yes | VERIFIED | No |
-| 2 | Executive Dashboard (Dials/Narrative) | Frontend | Yes | VERIFIED | Yes |
-| 3 | AI Chat Investigator (SSE Stream) | Frontend | Yes | VERIFIED | Yes |
-| 4 | Sandbox Resilience Panel | Frontend | Yes | VERIFIED | Yes |
-| 5 | Asynchronous Queue Worker | Backend | No | VERIFIED | No |
-| 6 | Gateway Production Restrictions | Backend | No | VERIFIED | No |
-| 7 | Forensic APK Repair | Analysis | No | VERIFIED | Yes |
-| 8 | Multi-Engine Manifest Parser | Analysis | No | VERIFIED | Yes |
-| 9 | Agentic Observe-Think-Act | Analysis | No | VERIFIED | Yes |
-| 10| mitmproxy + Frida Fusion | Analysis | Yes | VERIFIED | Yes |
-| 11| VIDE Visual Diff Engine | Analysis | Yes | PARTIAL | Yes |
-| 12| 5-Axis STEI Math | Risk | No | VERIFIED | No |
-| 13| 4-Tier Verdict Safety Floors | Risk | No | VERIFIED | Yes |
-| 14| Offline RAG Fallback | AI | No | VERIFIED | Yes |
+Status words are defined in §31. `VERIFIED` requires named evidence; rows that
+have none are `IMPLEMENTED` instead. This table previously marked 13 of 14 rows
+`VERIFIED` with nothing to point at — including one (row 10) that could not
+work at all at the time it was written.
+
+| ID | Feature | Layer | User Visible | Status | Evidence | Differentiating |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| 1 | Protected SPA Routing (JWT) | Frontend | Yes | VERIFIED | `backend/tests/test_boundaries.py` | No |
+| 2 | Executive Dashboard (Dials/Narrative) | Frontend | Yes | IMPLEMENTED | — | Yes |
+| 3 | AI Chat Investigator (SSE Stream) | Frontend | Yes | IMPLEMENTED | — | Yes |
+| 4 | Sandbox Resilience Panel | Frontend | Yes | IMPLEMENTED | — | Yes |
+| 5 | Asynchronous Queue Worker | Backend | No | IMPLEMENTED | — | No |
+| 6 | Gateway Production Restrictions | Backend | No | VERIFIED | `backend/tests/test_hackathon_security_hardening.py` | No |
+| 7 | Forensic APK Repair | Analysis | No | VERIFIED | `backend/tests/test_manifest_repair.py` | Yes |
+| 8 | Multi-Engine Manifest Parser | Analysis | No | VERIFIED | `backend/tests/test_activity_parser.py` | Yes |
+| 9 | Agentic Observe-Think-Act | Analysis | No | VERIFIED | `backend/tests/test_agentic_explorer.py`; Anubis run 2026-08-16 | Yes |
+| 10| mitmproxy + Frida Fusion | Analysis | Yes | VERIFIED | Anubis run 2026-08-16 (`first_hook_event` 17.9 s). **Non-functional before the 2026-08-16 frida port fix** — see §31. | Yes |
+| 11| VIDE Visual Diff Engine | Analysis | Yes | PARTIAL | `tests/unit/test_vide_*.py` (16 modules, **not run by CI** — see §29) | Yes |
+| 12| 5-Axis STEI Math | Risk | No | VERIFIED | `docs/evaluation/CORPUS_STATIC_VALIDATION.md`; `backend/tests/test_risk_engine.py` | No |
+| 13| 4-Tier Verdict Safety Floors | Risk | No | VERIFIED | `backend/tests/test_detection_regressions.py`; visibility floor fires on 3/8 trojans (Anubis, Drinik, Hook) in the 2026-08-16 corpus run | Yes |
+| 14| Offline RAG Fallback | AI | No | IMPLEMENTED | — | Yes |
 
 ---
 
@@ -867,4 +892,4 @@ flowchart TD
 ```
 
 ---
-*Generated by Antigravity AI on behalf of the Bank of India CSOC.*
+*Prepared for the Bank of India / IIT Hyderabad BOI Hackathon 2026. Documentation drafted with AI assistance.*

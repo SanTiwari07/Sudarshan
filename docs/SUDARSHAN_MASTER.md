@@ -183,7 +183,7 @@ This section (36. TROUBLESHOOTING) details the sub-component as mapped in the `_
 ## 37. TESTING
 
 The current test suite collects:
-- **923 tests collected** (verified 2026-08-15; command: `$env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests`)
+- **920 tests collected**, 525 enforced by CI (measured 2026-08-16; command: `$env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests`)
 - 3 collection errors in infrastructure-dependent files (`analysis-engine/test_frida_tcp_first.py`, `scripts/test_e2e_pipeline.py`, `test_frida.py`) — these require live sandbox or network and are not part of the standard offline suite.
 
 ## 38. DETERMINISM VERIFICATION
@@ -196,7 +196,36 @@ This section (39. PERFORMANCE) details the sub-component as mapped in the `_grou
 
 ## 40. SCALABILITY
 
-This section (40. SCALABILITY) details the sub-component as mapped in the `_ground_truth_2026-08-14.md` and the architecture documentation. The codebase remains the ultimate source of truth for runtime behaviors, configuration layouts, and data parsing structures for this domain.
+**Sudarshan runs on a single node, by design, and does not scale horizontally today.**
+
+Persistence is one SQLite file (`sudarshan.db`) in WAL mode. WAL removes the reader/writer
+lock contention that would otherwise stall concurrent background analyses, and it needs no
+container, no migration tooling and no credentials — which is the right trade for a system
+that has to come up reliably on an unfamiliar machine. It is not a trade that survives
+contact with a second node: SQLite gives no network protocol, so concurrent writers cannot
+be spread across hosts.
+
+The queue has the same shape. `backend/app/workers/analysis_queue.py` is an in-process
+asyncio queue, so queued work lives in the memory of one backend process and is lost if that
+process restarts. There is no broker, so there is no way to add a second worker machine.
+
+The dynamic stage has a harder limit still: analysis is bound to one Android emulator, which
+executes one sample at a time. Throughput is therefore capped by emulator wall-clock
+(90 s of instrumentation plus launch and teardown per sample) regardless of how much CPU is
+available. Parallelising it means running multiple emulators and scheduling across them.
+
+Reaching multi-node would require, in order:
+
+1. **Postgres in place of SQLite** — the schema is small and driver-portable, but every
+   `aiosqlite` call site would change.
+2. **A real broker (Celery + Redis)** — blueprint already sketched in
+   `docs/future/12_FUTURE_WORK.md`. This is what makes workers addable.
+3. **An emulator pool with a lease protocol** — so several dynamic analyses can run without
+   two of them installing samples onto the same device.
+
+None of these are built. The single-node ceiling is stated here rather than left implicit
+because a reviewer will find it in ten minutes, and finding it stated is a different
+experience from finding it hidden.
 
 ## 41. REPORT GENERATION
 

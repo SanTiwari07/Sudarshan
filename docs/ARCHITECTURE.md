@@ -6,7 +6,7 @@ Version:             2.1.0
 Last Revision:       2026-08-08
 Repository Scope:    SanTiwari07/Sudarshan (C:/Projects/Sudarshan)
 Target Audience:     Enterprise Security Engineers, SOC Analysts, System Architects
-Verification Status: 923 tests collected (verified 2026-08-15; 3 errors are infrastructure-dependent)
+Verification Status: 920 tests collected, of which 525 are enforced by CI (measured 2026-08-16; see docs/FEATURE.md §29 for the gap)
 ```
 
 ---
@@ -29,7 +29,7 @@ Verification Status: 923 tests collected (verified 2026-08-15; 3 errors are infr
 
 ## 1. Executive Summary
 
-**Sudarshan** is an enterprise-grade mobile threat intelligence platform designed to automate the reverse engineering, runtime behavioral analysis, and threat scoring of Android Package Kit (`.apk`) binaries. Operating at the intersection of static code decompilation, dynamic binary instrumentation, threat intelligence correlation, and evidence-constrained AI reasoning, Sudarshan converts complex binary artifacts into actionable banking fraud operational decisions.
+**Sudarshan** is a mobile threat intelligence platform designed to automate the reverse engineering, runtime behavioral analysis, and threat scoring of Android Package Kit (`.apk`) binaries. Operating at the intersection of static code decompilation, dynamic binary instrumentation, threat intelligence correlation, and evidence-constrained AI reasoning, Sudarshan converts complex binary artifacts into actionable banking fraud operational decisions.
 
 ---
 
@@ -139,7 +139,7 @@ d:\Projects\Sudarshan BOI\
 │   │   ├── routes/                  # Gateway API routers (upload.py, report.py, cases.py, runtime_api.py)
 │   │   └── workers/                 # Async worker pool (analysis_queue.py)
 │   └── tests/                       # Automated unit & regression tests
-├── tests/                           # 923 collected unit & integration tests (verified 2026-08-15)
+├── tests/                           # collected locally; NOT run by CI (see FEATURE.md §29)
 ├── docker-compose.hardened.yml      # Production overlay (read-only rootfs, seccomp, containment)
 ├── deploy/security/                 # seccomp profiles for hardened analysis-engine
 ├── analysis-engine/                 # Containerized Analysis Microservice (Port 8001)

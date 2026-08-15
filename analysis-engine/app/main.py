@@ -463,9 +463,20 @@ async def _execute_analysis_pipeline(
 
         timer.stage_started("RISK")
         family_name, matched_rule = classify_family(flags)
+        # Must match backend/app/routes/upload.py:768 exactly. This call used to
+        # omit ai_confidence entirely, so it defaulted to 1.0 (risk_engine.py:848)
+        # and every sample the classifier DID recognise scored at 1/1.2 of what
+        # the gateway would give the same file - through the path production
+        # actually runs. Identical in kind to the missing `all_permissions=`
+        # regression recorded as Bug 4 in audit/DETECTION_VALIDATION.md, and
+        # invisible for the same reason: it only diverges once a family matches.
+        # backend/tests/test_static_scoring_wiring.py now compares the keyword
+        # sets of every calculate_risk_score call site so this cannot recur.
+        ai_confidence = 1.0 if family_name == "Unknown" else 1.2
         risk_output = await asyncio.to_thread(
             compute_fraud_risk_score,
             flags=flags,
+            ai_confidence=ai_confidence,
             dynamic_result=dynamic_result,
             correlation_result=threat_corr,
             family=family_name,

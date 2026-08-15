@@ -107,7 +107,7 @@ flowchart TD
 | **API & Gateway** | FastAPI Backend | Python 3.10+, Pydantic v2, PyJWT, Uvicorn, Asyncio |
 | **Storage & Queue** | Persistent Case Store | SQLite (`sudarshan.db`), Async Worker Pool, File Artifact Store |
 | **Shared Package** | Sudarshan Core | [`shared/sudarshan_core/`](shared/sudarshan_core/) mounted via `PYTHONPATH=/app:/opt/sudarshan-core` |
-| **Static Analysis** | Decompilation Engines | MobSF Docker (Port 8008), Native `apk_analyzer.py`, APKTool CLI, JADX CLI, YARA Scanner |
+| **Static Analysis** | Decompilation Engines | MobSF Docker (Port 8008), Native `apk_analyzer.py`, APKTool CLI, JADX CLI |
 | **Visual Impersonation** | VIDE pipeline | `shared/sudarshan_core/engines/vide/` - UI profiles, baseline compare, `VIDE-F001`, risk-engine hooks |
 | **Dynamic Sandbox** | Execution Environment | Genymotion Desktop (default) or Android Studio AVD via `SandboxProvider`, ADB TCP (Port 5555), Frida 17.16.4 |
 | **Network Intercept**| Transparent Proxy | mitmproxy Docker Sidecar (Port 8080), HAR Dump Parser |

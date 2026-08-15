@@ -213,7 +213,7 @@ flowchart LR
 ### 6.7 Threat Intelligence & Fraud Workflows
 * VirusTotal, AlienVault OTX, AbuseIPDB Correlation
 * IOC Cache (24h TTL)
-* Malware Family Classification (YARA/Rules)
+* Malware Family Classification (deterministic flag-based rules in `classification_engine.py`: Drinik, Xenomorph, Cerberus, and others)
 * Fraud Workflow Causal Chain Reconstruction
 * MITRE ATT&CK Mapping
 
@@ -242,7 +242,7 @@ flowchart LR
 * ReportLab Enterprise PDFs
 * STIX 2.1 Threat Bundles (UUIDv5)
 * SIEM IOC CSVs
-* Escaped YARA Rules
+
 
 ### 6.12 Analyst Dashboard & Interactivity
 * Time-Warp Sandbox Simulation
@@ -615,7 +615,7 @@ flowchart LR
     Generator --> PDF[ReportLab Enterprise PDF]
     Generator --> STIX[STIX 2.1 JSON\nUUIDv5 Deterministic IDs]
     Generator --> CSV[SIEM IOC CSV]
-    Generator --> YARA[Escaped YARA Rules]
+
 ```
 
 ---

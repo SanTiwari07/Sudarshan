@@ -109,7 +109,7 @@ Sudarshan's operational model is built on three core design principles inspired 
 ### 3. Fraud-First, Not Malware-First
 *Inspired by the UPI Ecosystem & Indian Digital Banking Realities.*
 - **Principle**: Traditional tools ask "What is this malware?" Sudarshan asks "Who is at risk, what is being targeted, and what action should be taken?"
-- **Implementation**: Rather than relying solely on generic antivirus signatures or YARA rules, Sudarshan evaluates functional fraud capabilities:
+- **Implementation**: Rather than relying solely on generic antivirus signatures, Sudarshan evaluates functional fraud capabilities:
   - *Accessibility Service Abuse*: Programmatic screen scraping and tap injection ($CT$ axis weight $0.60$, $BFCI$ $wa = 0.35$).
   - *SMS OTP Interception*: Reading 2FA tokens before user notification ($CT$ axis $+35$, $BFCI$ $ws = 0.25$).
   - *Phishing Overlay Attacks*: Drawing windows over legitimate banking apps ($CT$ axis $+25$, $BFCI$ $wo = 0.20$).

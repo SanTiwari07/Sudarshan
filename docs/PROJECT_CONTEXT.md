@@ -48,10 +48,10 @@ Do not cite **[CLAIMED]** items as fact. Several are recorded here precisely bec
 | Shared Core | `sudarshan_core` python package mounted as `/opt/sudarshan-core` |
 | Persistence | SQLite (`sudarshan.db`), aiosqlite, SQLAlchemy, 24h IOC reputation cache |
 | Auth | JWT Bearer, passlib/bcrypt |
-| Static analysis | Androguard, MobSF (Port 8008), `apk_repair.py` AXML recovery, APKTool 2.10.0, JADX 1.5.1, YARA Scanner |
+| Static analysis | Androguard, MobSF (Port 8008), `apk_repair.py` AXML recovery, APKTool 2.10.0, JADX 1.5.1 |
 | Dynamic analysis | Frida 17.16.4 + frida-tools, Java bridge sub-probes, ADB via **SandboxProvider** (`ADB_HOST` / `DEVICE_SERIAL`; Genymotion default, Android Studio optional) |
 | Network Proxy | mitmproxy sidecar (`127.0.0.1:8080:8080`), HAR ingest |
-| Signatures | YARA Python |
+
 | Threat intel | VirusTotal, AlienVault OTX, AbuseIPDB (24h TTL SQLite cached correlation) |
 | LLM | Google Gemini via `google-genai` (default `gemini-2.5-flash`, overridable via `GEMINI_MODEL`) |
 | Orchestration | Docker Compose (frontend, backend, analysis-engine, mitmproxy, mobsf) |

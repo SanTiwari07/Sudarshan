@@ -14,6 +14,39 @@ from sudarshan_core.engines.event_bus import RuntimeEventBus
 
 logger = logging.getLogger(__name__)
 
+
+def matched_strings(match: Any) -> List[str]:
+    """
+    The distinct byte sequences a rule matched, as text.
+
+    yara-python changed this API in 4.3: ``match.strings`` used to be a list of
+    ``(offset, identifier, data)`` tuples and is now a list of ``StringMatch``
+    objects carrying an ``.instances`` list. The old subscripting (``s[2]``)
+    raises ``TypeError: 'yara.StringMatch' object is not subscriptable`` on any
+    modern install - and because both call sites wrap the loop in
+    ``except Exception``, every match was swallowed and logged as a scan
+    failure. YARA appeared to run and to find nothing.
+
+    Both shapes are accepted so the scanner works on either version, and the
+    result is sorted so a match written to yara_results.json is reproducible
+    rather than ordered by set iteration.
+    """
+    out: set = set()
+    for entry in getattr(match, "strings", []) or []:
+        instances = getattr(entry, "instances", None)
+        if instances is not None:                      # yara-python >= 4.3
+            for instance in instances:
+                data = getattr(instance, "matched_data", b"")
+                if data:
+                    out.add(bytes(data).decode(errors="ignore"))
+            continue
+        try:                                           # yara-python < 4.3
+            out.add(entry[2].decode(errors="ignore"))
+        except (TypeError, IndexError, AttributeError):
+            continue
+    return sorted(out)
+
+
 class YARAScanner:
     def __init__(self, rules_dir: Path, event_bus: Optional[RuntimeEventBus] = None):
         self.rules_dir = Path(rules_dir)
@@ -29,18 +62,37 @@ class YARAScanner:
             logger.warning("[YARAScanner] yara-python not installed. YARA scanning disabled.")
             return
 
-        # Compile all .yar files in rules_dir
+        # Compile every ruleset in rules_dir.
+        #
+        # Both extensions are accepted. frida_sandbox gates on `*.yar*` and its
+        # warning names ".yar/.yara", so globbing only "*.yar" here meant a
+        # directory holding .yara files passed the gate, reported "YARA rules
+        # loaded", and then compiled nothing.
         if self.rules_dir.exists():
             filepaths = {}
-            for f in self.rules_dir.glob("*.yar"):
-                filepaths[f.stem] = str(f)
-            
+            for f in sorted(self.rules_dir.glob("*.yar")) + sorted(self.rules_dir.glob("*.yara")):
+                # Namespace by stem; a .yar and .yara of the same name would
+                # otherwise silently shadow one another.
+                filepaths[f.name] = str(f)
+
             if filepaths:
                 try:
                     self.rules = yara.compile(filepaths=filepaths)
                     logger.info(f"[YARAScanner] Compiled {len(filepaths)} YARA rulesets.")
                 except Exception as e:
-                    logger.error(f"[YARAScanner] Failed to compile YARA rules: {e}")
+                    # A syntax error in one file compiles nothing at all, so say
+                    # which directory was being loaded - "no matches" downstream
+                    # would otherwise look like a clean scan.
+                    logger.error(
+                        "[YARAScanner] Failed to compile YARA rules from %s: %s - "
+                        "YARA scanning is DISABLED for this run.",
+                        self.rules_dir, e,
+                    )
+            else:
+                logger.warning(
+                    "[YARAScanner] No .yar/.yara files in %s - nothing to match.",
+                    self.rules_dir,
+                )
 
     def _publish_match(self, rule_name: str, target: str, strings_matched: List[str]):
         match = {
@@ -65,7 +117,7 @@ class YARAScanner:
         try:
             matches = self.rules.match(str(file_path))
             for match in matches:
-                strings = list(set([s[2].decode(errors="ignore") for s in match.strings]))
+                strings = matched_strings(match)
                 self._publish_match(match.rule, str(file_path.name), strings)
                 logger.info(f"[YARAScanner] YARA Match: {match.rule} in {file_path.name}")
             return True
@@ -83,7 +135,7 @@ class YARAScanner:
             buffer = "\n".join(strings).encode("utf-8")
             matches = self.rules.match(data=buffer)
             for match in matches:
-                matched_strs = list(set([s[2].decode(errors="ignore") for s in match.strings]))
+                matched_strs = matched_strings(match)
                 self._publish_match(match.rule, target_name, matched_strs)
                 logger.info(f"[YARAScanner] YARA Match: {match.rule} in {target_name}")
             return True

@@ -1,0 +1,1115 @@
+% ============================================================================
+%  PROJECT SUDARSHAN - Prototype Progress & Engineering Benchmark Report
+%  Formatted to the supplied IEEE prototype template (spconf.sty + IEEEbib.bst)
+%
+%  Build:  pdflatex Sudarshan_Prototype_Report.tex   (x2 for cross-references)
+%
+%  EVIDENTIARY POLICY FOR THIS DOCUMENT
+%  ------------------------------------
+%  Every quantitative claim below is traceable to a file path and line in the
+%  Sudarshan repository, or to the machine-generated corpus record
+%  docs/evaluation/corpus_static_validation.json (results digest
+%  1f9cd4c2...ea5f6e). Where the project's own design notes disagree with the
+%  implemented code, Section 7 states the discrepancy explicitly and the code
+%  is treated as authoritative.
+% ============================================================================
+\documentclass{article}
+\usepackage{spconf,amsmath,amssymb,graphicx,hyperref,booktabs,array}
+
+\title{PROJECT SUDARSHAN: A DETERMINISTIC, EVIDENCE-GATED ENGINE FOR MOBILE
+BANKING FRAUD ANALYSIS AND VISUAL IMPERSONATION DEFENCE}
+
+\name{Prototype Progress and Engineering Benchmark Report}
+\address{Project Sudarshan --- Autonomous Mobile Banking Fraud Analysis Platform}
+
+\begin{document}
+\ninept
+\maketitle
+
+\begin{abstract}
+Android banking trojans defeat commercial multi-engine scanners in two ways:
+they ship a clean stub and unpack the real payload at runtime, and they stay
+dormant under observation so a sandbox records nothing. Both failure modes are
+scored identically by conventional engines --- as an absence of malice. This
+report documents Sudarshan, a working prototype that treats an empty
+observation as an unresolved question rather than an acquittal. Three
+contributions are measured: a Visual Impersonation Detection Engine that
+identifies bank interface clones by perceptual colour distance and normalised
+view-hierarchy structure rather than by code signatures; a deterministic
+four-axis Fraud Risk Score whose axes are excluded and renormalised when they
+carry no data; and an Execution Assertion Matrix recording which of a sample's
+own trigger preconditions a sandbox run actually reached. On a 17-sample
+labelled corpus the engine attains precision and recall of 1.00 at its
+deployment gate, although the numeric score ranges of the two classes overlap
+and the separation is produced by evidence-gating rules rather than by the
+score. That limitation, and seven others, are stated in full.
+\end{abstract}
+
+\begin{keywords}
+Android banking trojan, visual impersonation, CIEDE2000, dynamic
+instrumentation, evidence gating, MITRE ATT\&CK for Mobile
+\end{keywords}
+
+% ===========================================================================
+\section{Introduction}
+\label{sec:intro}
+
+A mobile banking trojan does not need to be sophisticated to be effective. It
+needs to look like a bank, read one SMS message, and be running when the victim
+opens the real application. The Indian retail banking threat surface --- Drinik,
+SOVA, and the localised Cerberus and Octo derivatives --- is dominated by
+samples whose static footprint is deliberately unremarkable and whose runtime
+behaviour is deliberately conditional.
+
+This defeats the standard analysis pipeline at two specific points.
+
+\textbf{Static analysis fails on droppers.} The manifest describes a stub. In
+the labelled corpus used in Section~\ref{sec:eval}, the Hook sample declares
+\emph{one} permission and zero services, and Anubis declares four. A
+capability-weighted static score computed over those manifests ranks both
+samples below a file manager, because the code that will actually run is not in
+the file being analysed.
+
+\textbf{Dynamic analysis fails on dormancy.} A sandbox that runs a sample for
+ninety seconds and records nothing has produced an ambiguous result: either the
+sample is benign, or its preconditions were never met. Anatsa waits for a
+targeted banking package to enter the foreground. SOVA waits for an
+accessibility grant. An SMS stealer waits for a message to arrive. None of these
+occur in a sterile emulator, and a scoring model that reads the resulting
+silence as a low behavioural score rewards evasion directly: the better the
+sample hides, the safer it is rated.
+
+Sudarshan is an attempt to build a pipeline in which neither failure is silent.
+Its design commitments are:
+
+\begin{enumerate}
+\item \textbf{Detect the interface, not the code.} A phishing overlay that
+reproduces a bank's login screen is recognisable as a clone even when its
+bytecode is entirely novel. Section~\ref{sec:vide} describes the engine that
+does this perceptually and structurally.
+\item \textbf{Make the formula legible.} Every score is a weighted sum of named
+axes with published weights and per-axis evidence strings; there is no learned
+model whose verdict cannot be recomputed by hand (Section~\ref{sec:math}).
+\item \textbf{Never score an absence as a zero.} An axis with no data is
+removed from the formula and the remaining weights are renormalised, rather
+than contributing a benign-looking zero at full weight
+(Section~\ref{ssec:frs}).
+\item \textbf{Record what the sandbox failed to reach.} The Execution Assertion
+Matrix (Section~\ref{ssec:eam}) enumerates six fraud preconditions and reports,
+per run, which were reached --- so a quiet run is labelled
+\texttt{INCOMPLETE\_EXERCISE} rather than \emph{clean}.
+\end{enumerate}
+
+The prototype comprises 120 Python modules under
+\texttt{shared/sudarshan\_core/}, a 2\,309-line Frida instrumentation agent, 122
+React/TypeScript components, and 92 Python test modules. All measurements in
+this report were taken from that tree at commit \texttt{ec7e6ff}.
+
+% ===========================================================================
+\section{Threat Model and System Architecture}
+\label{sec:arch}
+
+\subsection{Adversary model}
+\label{ssec:adversary}
+
+The adversary controls the APK entirely and is assumed to know that automated
+analysis is occurring. Specifically, the adversary may: (i) ship arbitrary
+encrypted payloads as assets and decrypt them into memory at runtime; (ii)
+obfuscate all identifiers and construct all sensitive strings by reflection;
+(iii) fingerprint the analysis environment via \texttt{SystemProperties},
+\texttt{Build} fields, \texttt{/proc} inspection, and debugger checks; (iv)
+gate all malicious behaviour behind preconditions that a sterile sandbox does
+not satisfy; and (v) reproduce a bank's user interface pixel-for-pixel under a
+package name and signing certificate of the adversary's choosing.
+
+The adversary is \emph{not} assumed to be able to defeat in-process
+instrumentation once the payload executes, nor to be able to make a cloned
+banking interface visually distinct from the interface it is cloning --- the
+attack requires the victim to be deceived, which bounds how far the clone can
+diverge. Those two residual constraints are what Sections~\ref{sec:vide}
+and~\ref{sec:dyn} exploit.
+
+\subsection{Pipeline}
+\label{ssec:pipeline}
+
+Analysis proceeds through five stages, each of which emits structured evidence
+records rather than a scalar:
+
+\begin{enumerate}
+\item \textbf{Static intake.} Dual decompilation via a MobSF container client
+(\texttt{services/mobsf\_client.py}) and a native Androguard-based analyser
+(\texttt{analyzers/apk\_analyzer.py}), producing the manifest permission set,
+certificate block, dangerous-API inventory, string-pool entropy, and hardcoded
+network indicators.
+\item \textbf{Visual profiling (VIDE).} Extraction of a UI profile ---
+strings, view sequence, colour palette --- from layout XML, WebView HTML,
+JavaScript bundles, and asset stylesheets
+(\texttt{engines/vide/pipeline.py}), then comparison against institution
+baselines.
+\item \textbf{Dynamic instrumentation.} Frida attachment with ART
+deoptimisation, 67 distinct Java hooks, clock control, and synthetic device
+state (Section~\ref{sec:dyn}).
+\item \textbf{Threat correlation.} Concurrent lookups against VirusTotal
+(file hash, URLs), AlienVault OTX (hash, domains), and AbuseIPDB (IPs), with a
+24-hour indicator cache (\texttt{services/threat\_correlator.py}). The axis is
+marked unavailable, not zero, when no API keys are provisioned.
+\item \textbf{Scoring and synthesis.} The deterministic risk engine
+(Section~\ref{sec:math}) followed by a retrieval-grounded Gemini narrative
+(\texttt{backend/app/ai/gemini\_rag.py}, model \texttt{gemini-2.5-flash}) that
+is constrained to an evidence index built from the case record.
+\end{enumerate}
+
+Runtime state is exposed to the investigator dashboard through eight endpoints
+under \texttt{/runtime/} (\texttt{backend/app/routes/runtime\_api.py}), covering
+health, hook inventory, live events, pipeline stage, metrics, evidence, and
+diagnostics.
+
+% ===========================================================================
+\section{The Visual Impersonation Detection Engine}
+\label{sec:vide}
+
+\subsection{Problem statement}
+\label{ssec:vide-problem}
+
+A credential-harvesting overlay is a user-interface artefact. Its bytecode may
+be freshly written, its strings may be constructed at runtime, and its assets
+may be fetched from a C2 server after installation --- in which case every
+signature, permission-count, and entropy heuristic returns nothing of interest.
+What the attack cannot vary is the appearance, because a login screen that does
+not look like the bank's login screen does not harvest credentials.
+
+VIDE therefore compares the \emph{rendered identity} of a suspect application
+against baselines for protected institutions, on three axes, and then applies an
+entitlement test.
+
+\subsection{Perceptual colour distance}
+\label{ssec:vide-color}
+
+Exact hexadecimal equality is the wrong comparison. A clone redrawn in a design
+tool, or a palette recovered from a screenshot, lands a few units away from the
+official brand value while remaining visually identical to the victim.
+Conversely, raw RGB Euclidean distance is not perceptually uniform: the same
+numeric distance is far more visible in some regions of the colour space than
+others, and bank palettes are dominated by saturated blues and reds --- exactly
+where the older $\Delta E_{76}$ and $\Delta E_{94}$ formulae misbehave.
+
+The implementation (\texttt{engines/vide/color\_match.py}) therefore converts
+sRGB to CIELAB under the D65 white point and computes the full CIEDE2000
+difference. For two CIELAB colours the distance is
+
+\begin{equation}
+\Delta E_{00} = \sqrt{
+\left(\frac{\Delta L'}{k_L S_L}\right)^{2} +
+\left(\frac{\Delta C'}{k_C S_C}\right)^{2} +
+\left(\frac{\Delta H'}{k_H S_H}\right)^{2} +
+R_T \frac{\Delta C'}{k_C S_C}\frac{\Delta H'}{k_H S_H}}
+\label{eq:de2000}
+\end{equation}
+
+with $k_L = k_C = k_H = 1$, and with the chroma-dependent $a^*$ correction,
+the rotation term $R_T$, and the weighting functions $S_L, S_C, S_H$
+implemented per CIE 142-2001.
+
+The match strength is a graded decay rather than a hard cut, so that a
+near-miss is distinguishable from an unrelated colour:
+
+\begin{equation}
+m(\Delta E_{00}) =
+\begin{cases}
+1 & \Delta E_{00} \le \tau_{\mathrm{id}} \\[4pt]
+1 - \dfrac{\Delta E_{00} - \tau_{\mathrm{id}}}{\tau_{\max} - \tau_{\mathrm{id}}}
+  & \tau_{\mathrm{id}} < \Delta E_{00} < \tau_{\max} \\[8pt]
+0 & \Delta E_{00} \ge \tau_{\max}
+\end{cases}
+\label{eq:matchscore}
+\end{equation}
+
+with $\tau_{\mathrm{id}} = 3.5$ and $\tau_{\max} = 18.0$.
+
+These two constants are the only tuned values in the colour axis, and both are
+anchored to published perceptual quantities rather than chosen by inspection.
+$\Delta E_{00} \approx 1.0$ is the just-noticeable difference under reference
+conditions and $\approx 2.3$ is the threshold at which a non-expert observer
+reliably reports two swatches as different; $\tau_{\mathrm{id}} = 3.5$ sits
+just above that, so a palette that survived a screenshot round-trip still
+matches. $\tau_{\max} = 18.0$ stays inside the same colour family, so a bank
+with a merely adjacent palette cannot outrank the institution the suspect
+actually reproduced.
+
+Achromatic colours are excluded before comparison (saturation $< 0.12$, plus
+near-white and near-black rejection): greys carry no brand identity because
+every banking application uses them, and admitting them would let background
+fills dominate the score. Palette similarity is then computed as mean coverage
+of the baseline's brand colours,
+
+\begin{equation}
+S_{\mathrm{colour}} = \frac{1}{|B|}\sum_{c \in B}
+\max_{s \in S} \; m\!\left(\Delta E_{00}(c, s)\right),
+\label{eq:palette}
+\end{equation}
+
+where $B$ is the baseline brand palette and $S$ the suspect's. The formulation
+is deliberately coverage-oriented and asymmetric: the question is whether the
+suspect wears the bank's colours, not whether the two palettes are the same
+size, so a suspect carrying additional unrelated colours is not penalised.
+
+\subsection{View-hierarchy normalisation and structural similarity}
+\label{ssec:vide-ast}
+
+A clone is rarely built with the same toolkit as its target. A Capacitor or
+React Native clone of a native application renders \texttt{<input>} where the
+original declares \texttt{TextInputEditText}. A comparison over raw tag names
+therefore fails on precisely the cases that matter.
+
+\texttt{engines/vide/view\_ast.py} resolves this by translating every view tag
+--- from Android layout XML, UIAutomator dumps, or WebView HTML --- into a
+nine-symbol role vocabulary: \texttt{CONTAINER}, \texttt{TEXT}, \texttt{INPUT},
+\texttt{BUTTON}, \texttt{IMAGE}, \texttt{LIST}, \texttt{WEBVIEW}, \texttt{NAV},
+\texttt{OTHER}. Translation is idempotent, so an already-normalised sequence can
+be re-translated safely.
+
+The tree is retained rather than flattened. A parenthesised skeleton such as
+\texttt{CONTAINER(TEXT,INPUT,INPUT,BUTTON)} encodes nesting, which a flat tag
+list cannot --- without it, a settings page and a login form with equal widget
+counts produce identical signatures. Structural similarity blends a
+nesting-sensitive edit ratio with a role-histogram cosine:
+
+\begin{equation}
+S_{\mathrm{struct}} = 0.45 \cdot \mathrm{ratio}\!\left(\sigma_a, \sigma_b\right)
+ + 0.55 \cdot \cos\!\left(\mathbf{h}_a, \mathbf{h}_b\right),
+\label{eq:tree}
+\end{equation}
+
+where $\sigma$ is the skeleton string and $\mathbf{h}$ is the role histogram
+weighted by discriminative power: $w_{\texttt{INPUT}} = 3.0$,
+$w_{\texttt{BUTTON}} = w_{\texttt{LIST}} = w_{\texttt{NAV}} =
+w_{\texttt{WEBVIEW}} = 2.0$, $w_{\texttt{IMAGE}} = 1.0$,
+$w_{\texttt{TEXT}} = 0.5$, $w_{\texttt{CONTAINER}} = 0.3$,
+$w_{\texttt{OTHER}} = 0.2$.
+
+The weight ordering is the substantive design decision here, and it is a claim
+about \emph{discriminative power, not importance}. Containers and loose text
+appear in every screen ever built; counting them equally with input fields makes
+any two screens look alike. Input fields are weighted six times a text label
+because a two-field credential form is the structure the attack requires.
+
+The engine additionally infers named structural signatures ---
+\texttt{AUTH\_FORM\_VERTICAL\_PRIMARY\_CTA}, \texttt{PINPAD\_NUMERIC\_ENTRY},
+\texttt{DASHBOARD\_CARD\_GRID\_QUICKACTIONS} --- from widget shape first and
+text only as corroboration, so a clone that localises its labels still matches.
+The PIN-pad inference requires either nine or more digit-labelled buttons, or
+six or more together with PIN vocabulary, or an explicit entry prompt on a
+screen that is not already a multi-field credential form; this last guard exists
+because \emph{``Forgot MPIN?''} on a login screen is a hyperlink, not a keypad.
+
+\subsection{Fusion and the entitlement predicate}
+\label{ssec:vide-fusion}
+
+The three axes are fused by \texttt{engines/vide/compare.py} into rule
+\texttt{VIDE-F001}:
+
+\begin{equation}
+C_{\mathrm{VIDE}} = 0.40 \cdot S_{\mathrm{str}}
+ + 0.35 \cdot S_{\mathrm{struct}}
+ + 0.25 \cdot S_{\mathrm{colour}},
+\label{eq:vide}
+\end{equation}
+
+where $S_{\mathrm{str}}$ is fuzzy token-set containment of the baseline's
+labels, so that a reworded clone still scores.
+
+Strings carry the largest weight because they are the most institution-specific
+of the three signals --- ``YONO'' and ``Enter UPI PIN'' identify a bank in a way
+that a blue palette and a two-field form do not. Structure is second because it
+is toolkit-independent after normalisation but shared across the sector. Colour
+is weighted lowest despite being the most perceptually salient signal, because
+it is the easiest for a competent adversary to shift deliberately while
+remaining convincing to a victim.
+
+Detection requires three conditions simultaneously:
+
+\begin{equation}
+D = \big[C_{\mathrm{VIDE}} \ge 0.72\big] \wedge
+    \big[S_{\mathrm{str}} \ge 0.08 \vee S_{\mathrm{struct}} \ge 0.35\big] \wedge
+    \neg O,
+\label{eq:vide-detect}
+\end{equation}
+
+The second conjunct is a guard against confidence accumulated entirely from the
+structural axis, which every banking application shares; a finding must show
+that the app reproduces \emph{this} institution's text or palette, not merely
+that it is shaped like a banking app.
+
+The third conjunct, $O$, is the entitlement predicate, and it is what makes the
+rule sound. Reproducing a bank's interface is exactly what that bank's own
+application does. What makes reproduction into impersonation is doing so without
+being entitled to the identity. \texttt{claims\_official\_identity()} returns
+true only when the suspect carries both a registered package name for the
+institution \emph{and} a signing certificate on file for it. A matching package
+name alone proves nothing --- anyone may build an APK declaring
+\texttt{com.sbi.lotus}; it is the signature that makes the claim true.
+
+\subsection{CH06: signer impersonation}
+\label{ssec:ch06}
+
+Rule \texttt{CH06-SIGNER-IMPERSONATION}
+(\texttt{engines/vide/signer\_registry.py}) enforces the identity claim
+independently of any visual finding. The registry
+(\texttt{data/bank\_signer\_registry.json}) holds 12 protected Indian banking
+packages: \texttt{com.sbi.lotus} and \texttt{com.sbi.lotusintouch} (YONO SBI),
+\texttt{com.snapwork.hdfc} and \texttt{com.hdfc.bank},
+\texttt{com.csam.icici.bank.imobile}, \texttt{com.axis.mobile},
+\texttt{com.mconnect} (bob World), \texttt{com.pnb.pnbone},
+\texttt{com.boi.mobile} (BOI Mobile), \texttt{com.msf.k8} (Kotak811),
+\texttt{com.indusind.indusmobile}, and \texttt{com.infrasofttech.uboi} (Vyom).
+
+The rule fires when a package in the registry is signed by a certificate not on
+its allowlist. Two behaviours are worth stating precisely because they determine
+how the rule behaves in the current deployment:
+
+\emph{An empty allowlist fails closed.} Where no canonical fingerprint has been
+provisioned, the identity claim cannot be verified and is therefore rejected.
+This is a deliberate state documented in the registry file, not missing data.
+The consequence for the present prototype is material and is restated in
+Section~\ref{sec:limits}: \textbf{all 12 registry entries currently hold zero
+provisioned fingerprints}, so CH06 today rejects \emph{any} APK claiming a
+protected package name, and is not yet performing the certificate
+\emph{comparison} the design describes.
+
+\emph{An unextractable fingerprint is not a finding.} If no SHA-256 can be
+recovered from the certificate block, the rule reports
+\texttt{CH06 undetermined} rather than asserting impersonation on absent
+evidence --- unless the certificate is self-evidently a debug or test keystore
+(matched on subject patterns such as \texttt{CN=Android Debug}), which is
+conclusive without a fingerprint, since such an APK never passed through a
+bank's release pipeline.
+
+\subsection{Deterministic escalation: the CH27 triad}
+\label{ssec:ch27}
+
+A high-confidence visual clone, signed by someone other than the bank, that
+also requests the accessibility service, is the complete on-device fraud chain:
+it looks like the bank, it is not the bank, and it can drive the screen.
+\texttt{risk\_engine.py} escalates this combination to a floor of 95.0 and band
+\texttt{Critical}:
+
+\begin{equation}
+\mathrm{CH27} =
+\big[C_{\mathrm{VIDE}} > 0.85\big] \wedge
+\big[\mathrm{CH06}\big] \wedge
+\big[\texttt{BIND\_ACCESSIBILITY\_SERVICE}\big].
+\label{eq:ch27}
+\end{equation}
+
+Each signal alone is defensible --- a skinned theme, a re-signed enterprise
+build, a legitimate screen reader --- which is why \texttt{Critical} is reserved
+for the conjunction. Signer impersonation alone floors at 92.0; a critical
+visual cluster alone floors at 88.0.
+
+% ===========================================================================
+\section{Dynamic Instrumentation and Anti-Evasion}
+\label{sec:dyn}
+
+\subsection{Hook surface}
+\label{ssec:hooks}
+
+The instrumentation agent (\texttt{engines/frida\_hooks/banking\_trojan.js},
+2\,309 lines) installs 67 distinct Java hooks across 72 registration sites,
+grouped into scored and unscored evidence categories. The fraud-relevant
+coverage is:
+
+\begin{table}[htb]
+\centering
+\caption{Instrumentation coverage by attack function (selected).}
+\label{tab:hooks}
+\begin{tabular}{@{}p{2.05cm}p{5.4cm}@{}}
+\toprule
+\textbf{Function} & \textbf{Hooked members} \\
+\midrule
+Accessibility &
+\texttt{AccessibilityService.onAccessibilityEvent}, \texttt{.dispatchGesture},
+\texttt{AccessibilityNodeInfo.getText}, \texttt{.performAction},
+\texttt{.findAccessibilityNodeInfosByText} \\
+\addlinespace
+SMS / OTP &
+\texttt{SmsManager.sendTextMessage}, \texttt{.sendMultipartTextMessage},
+\texttt{SmsMessage.getMessageBody},
+\texttt{ContentResolver.query} (sms/mms/contacts), \texttt{.insert},
+\texttt{.delete} \\
+\addlinespace
+Overlay &
+\texttt{WindowManager.addView}, \texttt{.updateViewLayout},
+\texttt{.removeView}, \texttt{InputMethodManager.showSoftInput} \\
+\addlinespace
+Payload drop &
+\texttt{DexClassLoader.<init>}, \texttt{PathClassLoader.<init>},
+\texttt{InMemoryDexClassLoader.<init>}, \texttt{ClassLoader.loadClass},
+\texttt{System.loadLibrary} \\
+\addlinespace
+Persistence &
+\texttt{AlarmManager.setExact}, \texttt{JobScheduler.schedule},
+\texttt{DevicePolicyManager.isAdminActive}, \texttt{.lockNow} \\
+\addlinespace
+C2 / exfil &
+\texttt{HttpURLConnection.getInputStream}, \texttt{HttpsURLConnection.connect},
+\texttt{OkHttp.RealCall.execute}/\texttt{.enqueue},
+\texttt{Retrofit.OkHttpCall.execute}, \texttt{Socket.connect},
+\texttt{URL.openConnection} \\
+\addlinespace
+Evasion (unscored) &
+\texttt{SystemProperties.get}, \texttt{Debug.isDebuggerConnected},
+\texttt{Build.staticFields}, \texttt{BufferedReader.readLine} (anti-Frida),
+\texttt{ActivityManager.getRunningTasks} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Evasion hooks are deliberately placed in an \emph{unscored} category
+(Section~\ref{ssec:bfci}). A sample fingerprinting the sandbox has told us
+something important about itself, but it has not committed a fraud act, and
+scoring it as one would inflate every verdict against every sample that checks
+its environment --- including legitimate applications with anti-tamper logic.
+
+\subsection{Time-warp clock control}
+\label{ssec:timewarp}
+
+FluBot and SharkBot variants stall behind multi-minute sleeps and
+\texttt{AlarmManager}/\texttt{WorkManager} timers specifically to outlast a
+sandbox window. \texttt{engines/frida\_hooks/time\_warp.js} addresses this by
+applying an in-process offset to every clock the process can read:
+\texttt{System.currentTimeMillis}, \texttt{SystemClock.elapsedRealtime},
+\texttt{.uptimeMillis}, \texttt{.elapsedRealtimeNanos},
+\texttt{java.util.Date.<init>()}, \texttt{Calendar.getInstance()}, and
+\texttt{java.time.Instant.now()}. The offset is controlled at runtime through
+the RPC surface \texttt{setTimeOffset}, \texttt{advanceHours},
+\texttt{getTimeOffset}, \texttt{status}, and \texttt{reset}.
+
+Three design points are worth recording, since they are what distinguish this
+from the obvious alternative of moving the device clock with
+\texttt{adb shell date}:
+
+\begin{itemize}
+\item \texttt{elapsedRealtime()} and \texttt{uptimeMillis()} are monotonic since
+boot and do \emph{not} move when the wall clock moves. A sample that measures a
+delay with them is entirely unaffected by any amount of \texttt{date}
+manipulation. Hooking the accessors moves the monotonic clocks too.
+\item Setting the system clock is a device-wide, externally observable change.
+A sample that samples the clock twice per second sees it lurch --- which is
+itself a sandbox tell. An in-process offset is visible only to the process under
+analysis and leaves the rest of the device self-consistent.
+\item Overloads taking an explicit timestamp are deliberately \emph{not}
+shifted. \texttt{new Date(storedMillis)} is the sample restating a value it
+already holds; offsetting it would corrupt the sample's arithmetic rather than
+advance its timers.
+\end{itemize}
+
+Every hook is installed inside an independent guard, because the overload sets
+of \texttt{Date} and \texttt{Calendar} vary across Android 7 through 15. A
+missing class degrades to ``that one clock is unhooked'', never to ``the script
+failed to load'', and the \texttt{status} RPC reports exactly which clocks are
+under control on the current image. Unit coverage is at
+\texttt{tests/unit/test\_time\_warp.py}.
+
+\subsection{Synthetic persona seeding}
+\label{ssec:persona}
+
+An out-of-the-box emulator has no contacts, no messages, and no call history.
+This is a stronger sandbox tell than any build property, because checking
+whether \texttt{ContactsContract} returns zero rows costs one query and cannot
+be defeated by renaming a fingerprint.
+
+\texttt{engines/persona.py} expands operator-editable JSON templates
+(\texttt{config/personas/*.json}) into concrete provider rows. Two personas ship:
+
+\begin{table}[htb]
+\centering
+\caption{Shipped persona templates.}
+\label{tab:persona}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+\textbf{Persona} & \textbf{Contacts} & \textbf{SMS} & \textbf{Calls} & \textbf{Photos} \\
+\midrule
+\texttt{default\_retail\_user} & 120 & 8 & 24 & 18 \\
+\texttt{minimal\_privacy\_user} & 25 & 2 & 6 & 4 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Names, family names and phone prefixes are drawn from India-localised pools, so
+the seeded state is consistent with the device locale a targeted sample expects.
+Expansion is deterministic --- seeded from the persona identifier rather than
+the clock --- so the same persona yields the same device state on every run.
+This is a forensic requirement, not a convenience: a re-executed run must land
+on identical device state for its result to be comparable, and the module
+performs no device I/O so that this property is unit-testable without an
+emulator. Row counts are bounded (500 contacts, 200 SMS, 300 calls, 100 photos)
+so that an operator typo cannot become a hanging insert loop.
+
+\subsection{Runtime payload interception}
+\label{ssec:dex}
+
+Cerberus- and Octo-lineage droppers ship clean stub code and decrypt the real
+payload into memory at runtime. Sudarshan hooks all three loader paths ---
+\texttt{DexClassLoader.<init>}, \texttt{PathClassLoader.<init>}, and
+\texttt{InMemoryDexClassLoader.<init>} --- capturing the loaded path or byte
+buffer at the moment of construction, together with
+\texttt{ClassLoader.loadClass} for subsequent resolution. The static side of the
+same problem is handled by the concealed-payload detector, which contributes
+$+60$ to the obfuscation axis (Section~\ref{ssec:stei}) and, more importantly,
+arms the visibility floor described in Section~\ref{ssec:floors}.
+
+% ===========================================================================
+\section{Deterministic Risk Formulation}
+\label{sec:math}
+
+\subsection{Static Threat and Environmental Index}
+\label{ssec:stei}
+
+STEI aggregates five static axes, each normalised to $[0,100]$:
+
+\begin{equation}
+\mathrm{STEI} = 0.60\,C + 0.20\,B + 0.10\,P + 0.05\,O + 0.05\,I
+\label{eq:stei}
+\end{equation}
+
+where $C$ is credential theft, $B$ banking targeting, $P$ permission risk, $O$
+obfuscation, and $I$ infrastructure risk.
+
+The 0.60 mass on $C$ is the central modelling assertion: for banking fraud
+specifically, the three credential-harvesting vectors are not merely the most
+common indicators, they are the mechanism by which money actually moves. $C$
+decomposes as \texttt{BIND\_ACCESSIBILITY\_SERVICE} $+40$ (screen scraping and
+tap injection), SMS read/receive $+35$ (OTP interception), and
+\texttt{SYSTEM\_ALERT\_WINDOW} $+25$ (phishing overlay) --- the ordering
+reflects that accessibility subsumes the other two capabilities in practice,
+since a service that can read the screen and inject taps does not strictly need
+either of the others.
+
+$B$ is driven by matched Indian banking package names ($20$ base, $+10$ per
+package) and is additionally satisfied by a VIDE visual finding at
+$\min(35 + 40\,C_{\mathrm{VIDE}},\, 85)$ --- so an application that clones a
+bank's interface scores as targeting that bank even when it references no
+banking package name at all, which is the dropper case.
+
+$O$ is where the model deviates most from a naive capability count, and
+deliberately. A concealed executable payload contributes $+60$, dominating the
+axis, because it defeats static analysis outright: the manifest describes a
+stub, not the code that will run. The code comment records the empirical basis
+--- Anubis, Hook and Drinik declared 4, 1 and 16 permissions respectively and
+scored below a file manager before this term existed.
+
+\subsection{Behavioural Fraud Confidence Index (v2)}
+\label{ssec:bfci}
+
+BFCI scores observed runtime behaviour over six weighted categories
+(\texttt{engines/bfci\_scorer.py}):
+
+\begin{equation}
+\mathrm{BFCI}_{\mathrm{raw}} = 0.35\,A + 0.25\,S + 0.20\,W
+ + 0.10\,B_{\mathrm{dyn}} + 0.05\,N + 0.05\,R
+\label{eq:bfci}
+\end{equation}
+
+with $A$ accessibility, $S$ SMS/OTP, $W$ overlay window, $B_{\mathrm{dyn}}$
+banking-app targeting, $N$ C2 network, and $R$ persistence.
+
+Version 2 replaced a distinct-hook-name count with a three-tier model, because
+v1 scored three unrelated accessibility events identically to a real OTP-theft
+chain. Each component is now volume-aware on a logarithmic scale:
+
+\begin{equation}
+X_{\mathrm{cat}} = 100 \cdot \min\!\left(
+\frac{\ln(n+1)}{\ln(\kappa_{\mathrm{cat}}+1)},\, 1\right),
+\label{eq:component}
+\end{equation}
+
+where $n$ is the event count and $\kappa$ the per-category cap
+($\kappa_A = 3$, $\kappa_S = 2$, $\kappa_W = 2$, $\kappa_B = 3$,
+$\kappa_N = 10$, $\kappa_R = 2$). The logarithm is chosen so a single event
+scores near 50 --- sensitive enough that first activity registers --- while
+repeated activity still separates from it, which a linear scale at these small
+caps cannot do.
+
+A temporal bonus is applied when events from a fraud-relevant set of categories
+co-occur within a 30-second window:
+
+\begin{equation}
+\mathrm{BFCI} = \min\!\left(\mathrm{BFCI}_{\mathrm{raw}} \cdot \mu,\ 100\right),
+\quad \mu = 1.25 \text{ if a chain fires.}
+\label{eq:seq}
+\end{equation}
+
+Four chains are defined: \texttt{OTP\_THEFT\_CHAIN}
+($A \wedge S \wedge N$), \texttt{OVERLAY\_BANKING\_CHAIN}
+($W \wedge B$), \texttt{ACCOUNT\_TAKEOVER\_CHAIN} ($A \wedge W \wedge S$), and
+\texttt{DROPPER\_CHAIN} ($R \wedge N$). Ordering in time is what distinguishes
+a fraud sequence from coincident API use.
+
+Six categories are collected as evidence but never scored:
+\texttt{dangerous\_apis}, \texttt{files\_accessed}, \texttt{anti\_analysis},
+\texttt{device\_fingerprint}, \texttt{app\_telemetry}, \texttt{notification}.
+The rationale is quantitative: given the caps above, a \emph{single} event
+scores 50--63 for its component, so a scored category that also matches
+ordinary application behaviour is not a weak signal --- it is a constant, and it
+inflates every verdict equally. The module asserts at import that the scored and
+unscored sets are disjoint.
+
+\subsection{Fraud Risk Score and axis renormalisation}
+\label{ssec:frs}
+
+The implemented top-level score (\texttt{engines/risk\_engine.py}) is a
+four-axis weighted mean over the axes that carry data:
+
+\begin{equation}
+\mathrm{FRS} = M_{\mathrm{AI}} \cdot
+\frac{\sum_{k \in \mathcal{L}} w_k v_k}{\sum_{k \in \mathcal{L}} w_k},
+\label{eq:frs}
+\end{equation}
+
+with nominal weights $w_{\mathrm{STEI}} = 0.25$, $w_{\mathrm{dyn}} = 0.35$,
+$w_{\mathrm{corr}} = 0.20$, $w_{\mathrm{bank}} = 0.20$, and $\mathcal{L}$ the
+set of \emph{live} axes. $M_{\mathrm{AI}}$ is the classification confidence
+multiplier, clamped to $[0.5, 1.5]$.
+
+Equation~\ref{eq:frs} is the Absence-of-Evidence guard, and the renormalising
+denominator is the whole of it. An axis with no data is removed from
+$\mathcal{L}$ rather than contributing $w_k \cdot 0$. Two axes are gated:
+
+\textbf{Correlation} is live only when a threat-intelligence provider actually
+answered. Previously an unconfigured provider contributed $0.20 \times 0.0$,
+pinning 20--25\% of every score at zero in any deployment without API keys.
+Measured on Teabot, that cost 10.3 FRS points --- 30.8 with correlation forced
+to zero, against 41.1 with the axis correctly excluded.
+
+\textbf{Dynamic} is live only when the run was \emph{conclusive}, defined as
+$\mathrm{BFCI} \ge 20$, or at least one hook-derived behavioural event, or at
+least one non-harness evidence record. Three things deliberately do not qualify:
+screenshot and harness records (which prove the sandbox acted, not that the
+sample did), anti-analysis events alone (evasion is resistance, not behaviour),
+and a run in which the process started but never rendered an Activity or window.
+The measured motivation is recorded in the source: Cerberus scored 38.74
+(Suspicious) static-only; after a 30-second run that captured zero API calls and
+zero network events, the dynamic axis took 0.437 of the renormalised weight at a
+value of 5.0 and pulled the same binary to 23.98 --- \emph{Safe}. The better the
+evasion, the safer the engine rated it.
+
+This is not a rule that dynamic evidence may only raise a score. A run with real
+coverage that observes benign behaviour is legitimate evidence and still lowers
+the verdict. The distinction is solely whether the sandbox observed anything to
+reason about. The exclusion reason is preserved and surfaced
+(\texttt{DYNAMIC\_UNAVAILABLE}, \texttt{NO\_UI\_RENDERED},
+\texttt{EVASION\_ONLY}, \texttt{INSTRUMENTATION\_FAILED},
+\texttt{NO\_BEHAVIOR\_OBSERVED}), because ``nothing bad happened'' and ``we
+never got to look'' are opposite claims that must not render identically.
+
+\subsection{Verdict floors}
+\label{ssec:floors}
+
+Four floors refuse a \texttt{Safe} certification without inventing a score. In
+every case the numeric FRS is left untouched and an explanatory evidence line is
+emitted; only the band changes.
+
+\begin{enumerate}
+\item \textbf{Visibility floor.} Fires when a concealed payload was detected and
+the sandbox did not observe substantive payload behaviour. The threshold is
+deliberately a \emph{substantive} signal rather than any signal: Anubis produced
+one incidental API call --- enough to mark a run conclusive --- while BFCI
+stayed at 0.0 because the second stage never deployed, and a banking trojan
+scored 8.72 \emph{Safe}. Octo scored BFCI 4.8 (its network component maxed at 96
+but network carries weight 0.05) and that 4.8 was enough to lift the floor and
+certify a heavily obfuscated sample with 31 permissions as \emph{Safe} at 29.49.
+The bar is therefore $\mathrm{BFCI} \ge 20$.
+\item \textbf{Static evidence floor.} Fires when $\mathrm{STEI} \ge 50$ and the
+sandbox produced no fraud-relevant signal at all. A 90-second window that does
+not trigger SMS interception is not evidence that the interception is absent;
+the permissions remain declared.
+\item \textbf{Evasion floor.} Fires when anti-analysis events occurred and
+nothing else did. Because evasion carries no BFCI weight, the only observable
+act on such a run contributes exactly 0.0 --- so without this floor, active
+counter-analysis working as designed produces a \emph{Safe} verdict.
+\item \textbf{Incomplete-exercise floor.} Fires per Section~\ref{ssec:eam}.
+\end{enumerate}
+
+\subsection{The Execution Assertion Matrix}
+\label{ssec:eam}
+
+\texttt{engines/execution\_assertions.py} records, per run, which of six fraud
+preconditions were reached: targeted banking app opened, OTP/bank SMS delivered,
+accessibility service granted, overlay window drawn, contacts provider read,
+call log read. Each is derived from observed telemetry by regular expressions
+over Android framework identifiers --- never from a curated bank list. The
+banking-app assertion is evaluated against the packages \emph{this sample}
+references, resolved from its own manifest and DEX constants, because passing a
+curated list would encode an assumption about which institutions matter.
+
+A run is \texttt{INCOMPLETE\_EXERCISE} when the sandbox ran, observed zero
+threat events, and reached zero assertions:
+
+\begin{equation}
+\mathrm{IE} = R_{\mathrm{dyn}} \wedge (E = 0) \wedge
+\Big(\textstyle\bigwedge_{i=1}^{6} \neg a_i\Big).
+\label{eq:ie}
+\end{equation}
+
+The \texttt{dynamic\_ran} conjunct matters: a case with no sandbox run is
+already reported as \emph{dynamic analysis unavailable}, and labelling it an
+incomplete \emph{exercise} would falsely claim we tried and the sample stayed
+quiet. When \texttt{IE} holds, reported confidence is multiplied by 0.50, each
+unreached assertion is emitted with a concrete remediation instruction, and a
+\texttt{Safe} band is floored to \texttt{Suspicious}.
+
+This is the mechanism that converts the industry's most common false negative
+--- a clean-looking report from a run that never happened --- into an actionable
+statement about the harness.
+
+% ===========================================================================
+\section{Evaluation}
+\label{sec:eval}
+
+\subsection{Labelled corpus}
+\label{ssec:corpus}
+
+The primary evaluation is a machine-generated record over a 17-sample labelled
+corpus (\texttt{docs/evaluation/corpus\_static\_validation.json}, git commit
+\texttt{ce30610}, Androguard 4.1.4, results digest
+\texttt{1f9cd4c2\ldots ea5f6e}). The run configuration is deliberately
+adversarial to Sudarshan's own strengths: \textbf{dynamic analysis not run,
+correlation unavailable, VIDE not run}. Only the static and banking-impact axes
+were live, at renormalised weights 0.556 and 0.444.
+
+The decision rule is the product's own deployment gate rather than a threshold
+chosen for the paper: \texttt{Safe} yields \emph{``approved for deployment''}
+and any higher band yields \emph{``quarantine''}, so the band boundary is what a
+consumer acts on. Deliberately-insecure applications (\texttt{InsecureBankv2})
+are counted as benign, since insecure is not malicious.
+
+\begin{table}[htb]
+\centering
+\setlength{\tabcolsep}{4pt}
+\caption{Corpus results. Static-only configuration; dynamic, correlation and
+VIDE axes all excluded.}
+\label{tab:corpus}
+\begin{tabular}{@{}llrrl@{}}
+\toprule
+\textbf{Sample} & \textbf{Class} & \textbf{STEI} & \textbf{FRS} & \textbf{Band} \\
+\midrule
+Teabot            & malware & 76.59 & 70.26 & High Risk \\
+FluBot            & malware & 61.20 & 60.00 & Suspicious \\
+Octo              & malware & 57.20 & 57.33 & Suspicious \\
+SharkBot          & malware & 52.98 & 53.45 & Suspicious \\
+Cerberus          & malware & 53.73 & 38.74 & Suspicious \\
+Drinik            & malware & 22.82 & 21.57 & Suspicious$^{\dagger}$ \\
+Hook              & malware & 11.57 & 15.32 & Suspicious$^{\dagger}$ \\
+Anubis            & malware &  9.20 & 14.00 & Suspicious$^{\dagger}$ \\
+\midrule
+InsecureBankv2    & benign  & 30.71 & 25.95 & Safe \\
+VLC               & benign  & 25.42 & 23.01 & Safe \\
+NewPipe           & benign  & 24.64 & 22.58 & Safe \\
+Amaze File Mgr    & benign  &  9.70 & 14.28 & Safe \\
+KeePassDX         & benign  &  7.53 & 13.07 & Safe \\
+UnCrackable 1--4  & benign  & $\le$3.3 & $\le$10.7 & Safe \\
+\bottomrule
+\end{tabular}
+\\[2pt]
+{\footnotesize $^{\dagger}$ Band produced by the visibility floor
+(Section~\ref{ssec:floors}), not by the numeric score.}
+\end{table}
+
+At the deployment gate the result is $\mathrm{TP}=8$, $\mathrm{FP}=0$,
+$\mathrm{FN}=0$, $\mathrm{TN}=9$: precision 1.00, recall 1.00, $F_1$ 1.00,
+specificity 1.00.
+
+\textbf{This number must be read with its stated caveat, which the record
+itself publishes.} The malware FRS range is $[14.00, 70.26]$ and the benign
+range is $[9.16, 25.95]$. \emph{These ranges overlap.} Anubis (14.00) scores
+below VLC (23.01) and well below InsecureBankv2 (25.95). The corpus record's own
+\texttt{score\_separable} field reads \texttt{false}, with
+\texttt{separation\_source: "risk\_band floors, not numeric FRS"}. Three of the
+eight true positives --- Anubis, Drinik, Hook --- are caught \emph{only} by the
+visibility floor, which fired on exactly those three and on no benign sample.
+Concealment detection was the discriminator: 6 of 8 malware carried a concealed
+payload against 0 of 9 benign samples.
+
+The honest statement of this result is therefore: \emph{the evidence-gating
+rules classify this corpus perfectly; the underlying continuous score does not.}
+Under the stricter secondary rule (band $\ge$ High Risk) recall collapses to
+0.125 --- only Teabot clears it. A production deployment would run at the
+Suspicious gate and accept the resulting triage volume.
+
+Family attribution is the weakest subsystem measured: 4 of 8 malware samples
+returned \texttt{Unknown}, and of the four that resolved, three were labelled
+\emph{Anubis} (FluBot, Octo, Teabot) and one \emph{Hydra} (SharkBot) --- pattern
+matches on shared lineage rather than correct family names.
+
+\subsection{Third-party cross-validation: Teabot}
+\label{ssec:teabot}
+
+The sample \texttt{com.lbugkgtau.iuzdlpqzr}, SHA-256
+\texttt{554e71b4\ldots c47e1ef}, was analysed independently by a
+VirusTotal/Zenbox dynamic sandbox and by Dr.Web vxCube. Binary identity is
+confirmed across all three: the SHA-256 matches exactly between Sudarshan and
+vxCube, and SHA-1/MD5 match between Zenbox and vxCube.
+
+\begin{table}[htb]
+\centering
+\caption{Cross-tool agreement, sample \texttt{554e71b4}.}
+\label{tab:xtool}
+\begin{tabular}{@{}p{2.8cm}p{4.6cm}@{}}
+\toprule
+\textbf{Dimension} & \textbf{Result} \\
+\midrule
+Permission extraction & 14 / 14 of the Zenbox-published set reproduced;
+Sudarshan additionally surfaced \texttt{RECEIVE\_BOOT\_COMPLETED},
+\texttt{REQUEST\_PASSWORD\_COMPLEXITY}, \texttt{REQUEST\_IGNORE\_BATTERY\_-
+OPTIMIZATIONS}. \textbf{100\% overlap.} \\
+\addlinespace
+Obfuscation technique & 3 / 3 of vxCube's obfuscation indicators (method-name
+obfuscation, very long method strings, reflection) corroborated by Sudarshan's
+OB axis at 93.9. \textbf{100\% agreement.} \\
+\addlinespace
+Dynamic behaviour & Zenbox observed accessibility interaction, SMS
+interception, DEX drop (\texttt{mimlwef.dex}) and live C2. Sudarshan's own run
+reached 0/6 assertions and captured 0 hooks. \textbf{Divergent runtime depth.} \\
+\addlinespace
+C2 indicator & Zenbox: \texttt{185.215.113.31:85} with
+\texttt{/api/botupdate}, \texttt{/api/getbotinjects},
+\texttt{/api/getkeyloggers}. Sudarshan: a different, malformed value.
+\textbf{No overlap.} \\
+\addlinespace
+Launcher-icon removal & Confirmed by both Zenbox and vxCube; \textbf{not
+itemised by Sudarshan} --- a coverage gap. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The comparison is instructive precisely because Sudarshan's own dynamic run
+failed. Zenbox reached a materially deeper execution state and observed the
+behaviours Sudarshan only inferred. Sudarshan's Execution Assertion Matrix
+recorded 0/6 preconditions and labelled the run accordingly, rather than
+reporting a low behavioural score --- which is the designed behaviour, and the
+reason the sample was still escalated.
+
+Numeric verdicts across the three tools (Sudarshan FRS 46.3; vxCube ``Zenbox
+Android Verdict'' 52/100 carrying a \emph{Non Malicious} label) are
+\textbf{not comparable}: they are different formulae over different evidence,
+and no accuracy figure is derived from their relationship anywhere in this
+report.
+
+\subsection{Arithmetic verification of the renormalisation}
+\label{ssec:arith}
+
+The two independently produced Teabot scores validate
+Equation~\ref{eq:frs} numerically. In the case-report run, the dynamic axis was
+excluded and correlation was live at 18.67 with banking impact 36.00:
+
+\begin{equation}
+\frac{0.25(76.59) + 0.20(18.67) + 0.20(36.00)}{0.65} = 46.28.
+\label{eq:teabot1}
+\end{equation}
+
+In the corpus run, correlation was \emph{also} excluded:
+
+\begin{equation}
+\frac{0.25(76.59) + 0.20(62.35)}{0.45} = 70.26.
+\label{eq:teabot2}
+\end{equation}
+
+Both reproduce the published values exactly, from the same STEI of 76.59.
+
+This also exposes a genuine reporting defect worth stating plainly: the case
+report renders its working as
+$0.25 \times 76.59 + 0.35 \times 0.00 + 0.20 \times 18.67 + 0.20 \times 36.00
+= 46.28$, which does not evaluate to 46.28 --- it evaluates to 30.08. The
+\emph{engine} performed the renormalisation correctly; the report template
+prints the nominal weights without the denominator. The arithmetic shown to an
+analyst must match the arithmetic performed.
+
+The comparison of Equations~\ref{eq:teabot1} and~\ref{eq:teabot2} is the
+clearest available demonstration of what the guard is worth: the same binary,
+with the same static evidence, moves from 46.28 (\emph{Suspicious}) to 70.26
+(\emph{High Risk}) purely by declining to average an empty axis into the result.
+
+% ===========================================================================
+\section{Adversarial Review: Discrepancies and Limitations}
+\label{sec:limits}
+
+The following were identified by reviewing the project's own design notes
+against the implemented code. In each case the code is authoritative and the
+design note is wrong. They are reported here rather than omitted because a
+prototype report that overstates its own mechanisms is not usable as an
+engineering baseline.
+
+\textbf{1. The published two-axis FRS formula is not what runs.} Design notes
+state $\mathrm{FRS}_{\mathrm{full}} = (0.65\,\mathrm{STEI} +
+0.35\,\mathrm{BFCI}) \cdot M_{\mathrm{AI}}$ with a static fallback of
+$1.0 \times \mathrm{STEI}$. The implementation is the four-axis renormalised
+mean of Equation~\ref{eq:frs}, and the static-only case renormalises STEI to
+0.556 and banking impact to 0.444 --- not to 1.0. This is verifiable in the
+corpus record's \texttt{axes\_used} field on every sample. The implemented form
+is the stronger design; the notes should be corrected to match it.
+
+\textbf{2. Time Warp is a clock offset, not a $100\times$ accelerator.} Design
+notes describe hooking \texttt{Thread.sleep}, \texttt{SystemClock.sleep} and
+\texttt{Handler.postDelayed} with a $100\times$ multiplier. No such hook exists:
+\texttt{time\_warp.js} hooks clock \emph{accessors} and applies an additive
+offset. A sample that calls \texttt{Thread.sleep(300000)} directly still blocks
+for five real minutes. The offset defeats \emph{elapsed-time comparisons}, which
+is the more common dormancy pattern, but the gap is real and sleep interception
+is genuine future work.
+
+\textbf{3. The colour threshold is not $\Delta E < 10$.} The implemented band is
+a graded decay from $\tau_{\mathrm{id}} = 3.5$ to $\tau_{\max} = 18.0$ over
+CIEDE2000, not a hard cut at 10 over an unspecified $\Delta E$ variant
+(Equation~\ref{eq:matchscore}).
+
+\textbf{4. The MITRE identifiers in the design notes are deprecated.} Notes cite
+T1412 (SMS capture), T1444 (masquerade), T1411 (input prompt) --- all retired
+from ATT\&CK for Mobile in v9. The implemented mapper
+(\texttt{engines/mitre\_mapper.py}) uses current identifiers and emits a valid
+Navigator v4.5 layer against ATT\&CK v14: T1417.001 (Input Capture: GUI),
+T1417.002 (Input Injection), T1582 (SMS Control), T1636.004 (Protected User
+Data: SMS), T1407 (Download New Code at Runtime), T1626.001 (Device Admin),
+T1437.001 (Web Protocols), T1634 (Credentials from Password Store), T1497.001
+(Sandbox Evasion: System Checks). Two entries carry acknowledged
+in-code caveats: \texttt{WindowManager.addView} is mapped to T1416, which is a
+defensible but not exact fit for overlay abuse, and \texttt{lockNow} is filed
+under device-admin abuse rather than a ransomware technique.
+
+\textbf{5. CH06 is fail-closed but not yet fingerprint-verifying.} All 12
+registry entries hold zero provisioned canonical signers. The rule therefore
+rejects any APK claiming a protected package name, which is correct fail-closed
+behaviour but is not the certificate comparison the design describes.
+Provisioning the 12 release fingerprints is the single highest-value
+outstanding task, and it is a data task, not an engineering one.
+
+\textbf{6. VIDE baselines are three lab fixtures.} \texttt{data/ui\_baselines/}
+contains \texttt{demo\_sbi\_yono}, \texttt{demo\_hdfc\_mobile} and
+\texttt{demo\_icici\_imobile}, each versioned \texttt{1.0.0-hackathon} with
+roughly ten strings, a seven-node view sequence, and a three-colour palette.
+They are sufficient to exercise the engine end-to-end and to demonstrate the
+mathematics, and they are not a production baseline corpus. Notably BOI is
+present in the \emph{signer} registry but has no \emph{UI} baseline. VIDE was
+not exercised in the corpus run of Section~\ref{ssec:corpus}, so no measured
+VIDE detection rate is claimed anywhere in this report.
+
+\textbf{7. Score separability is unproven.} Restated from
+Section~\ref{ssec:corpus} because it is the most consequential limitation: the
+perfect corpus result rests on evidence-gating floors, not on the continuous
+score, and the class score ranges overlap. Corpus size ($n = 17$) is also small
+enough that the confidence interval around a 1.00 precision estimate is wide.
+
+\textbf{8. Published latency figures are unverified.} \texttt{BENCHMARKS.md}
+carries an explicit warning that its latency, RAM and CPU figures were not
+re-measured in the 2026-08-11 audit. No performance figure from that document is
+cited as verified in this report.
+
+\subsection{What the review confirms}
+\label{ssec:confirms}
+
+Set against those eight items, the following are implemented as described and
+were verified directly in code and in machine-generated output: the five-axis
+STEI and its weights; the six-category BFCI with logarithmic volume scaling and
+temporal chain detection; axis exclusion and renormalisation with preserved
+exclusion reasons; all four verdict floors; the six-assertion Execution
+Assertion Matrix with per-assertion remediation text; CIEDE2000 colour distance;
+role-normalised view-hierarchy similarity; the 67-hook instrumentation surface
+including all three DEX loader paths; deterministic persona expansion; the
+12-entry signer registry with fail-closed semantics; and the three-provider
+threat correlator with cache and unavailability signalling.
+
+% ===========================================================================
+\section{Regulatory Alignment}
+\label{sec:reg}
+
+The engine emits banded actions mapped to Indian regulatory expectations
+(\texttt{\_get\_recommended\_action}). A \texttt{Critical} verdict with a named
+family returns an immediate-block action citing customer advisory obligations
+under RBI CPG-2022; OTP interception combined with confirmed Indian bank
+targeting contributes an explicit RBI MDS-2021 regulatory-risk term to the
+banking-impact axis. Case records carry a chain-of-custody block and an
+integrity hash, which is the property a CERT-In incident submission requires:
+not that the verdict be correct, but that it be reproducible from preserved
+evidence. The determinism of the scoring path is what makes this possible ---
+every score in this report can be recomputed by hand from its published axes.
+
+% ===========================================================================
+\section{Conclusion and Roadmap}
+\label{sec:conclusion}
+
+Sudarshan is a working prototype whose distinguishing contribution is
+methodological rather than merely functional. Commercial multi-engine scanners
+converge with it on static extraction --- 100\% permission overlap with Zenbox
+and 100\% obfuscation-technique agreement with vxCube on the cross-validated
+sample --- and exceed it on runtime depth when their sandbox reaches a deeper
+execution state. Where Sudarshan differs is in what it does with an empty
+result. An axis with no data is excluded and the remaining weights renormalised;
+a sandbox run that reached no trigger is labelled \texttt{INCOMPLETE\_EXERCISE}
+with per-precondition remediation; a concealed payload that never deployed
+floors the verdict rather than certifying it. On the labelled corpus these rules
+are what separate the classes --- the continuous score alone does not.
+
+The prototype is honest about its incompleteness. Eight discrepancies between
+design intent and implementation are enumerated in Section~\ref{sec:limits},
+including two --- unprovisioned signer fingerprints and three lab-fixture UI
+baselines --- that gate the VIDE engine's real-world detection rate, which is
+consequently not claimed.
+
+Ordered by value delivered per unit of remaining work, the roadmap is:
+(i) provision the 12 canonical bank signing fingerprints, converting CH06 from
+fail-closed rejection to true certificate verification; (ii) build production UI
+baselines from official Play Store releases, including BOI, and measure a real
+VIDE detection rate against held-out clones; (iii) add
+\texttt{Thread.sleep}/\texttt{postDelayed} interception to close the dormancy
+gap identified in item 2; (iv) expand the labelled corpus and re-measure with
+dynamic and VIDE axes live, to establish whether the continuous score becomes
+separable once the axes that were excluded are actually populated; and (v) fix
+the report template so the arithmetic shown to an analyst matches the arithmetic
+the engine performs.
+
+% ===========================================================================
+\begin{thebibliography}{9}
+
+\bibitem{cie}
+CIE Technical Committee 1-47,
+``Improvement to Industrial Colour-Difference Evaluation,''
+CIE Publication 142-2001, Vienna, 2001.
+
+\bibitem{sharma}
+G. Sharma, W. Wu, and E. N. Dalal,
+``The CIEDE2000 color-difference formula: Implementation notes, supplementary
+test data, and mathematical observations,''
+\textit{Color Research and Application}, vol. 30, no. 1, pp. 21--30, 2005.
+
+\bibitem{attack}
+MITRE Corporation,
+``ATT\&CK for Mobile, Version 14,''
+\url{https://attack.mitre.org/matrices/mobile/}, 2023.
+
+\bibitem{threatfabric}
+ThreatFabric,
+``Mobile Banking Malware Landscape,'' Amsterdam, 2024.
+
+\bibitem{frida}
+O. A. V. Ravn\aa s, ``Frida: Dynamic instrumentation toolkit,''
+\url{https://frida.re}.
+
+\bibitem{androguard}
+A. Desnos et al., ``Androguard: Reverse engineering and analysis of Android
+applications,'' v4.1.4.
+
+\bibitem{mobsf}
+A. Abraham et al., ``Mobile Security Framework (MobSF),''
+OWASP Mobile Security Testing Guide project.
+
+\bibitem{rbi}
+Reserve Bank of India,
+``Master Direction on Digital Payment Security Controls,'' 2021.
+
+\bibitem{certin}
+Indian Computer Emergency Response Team (CERT-In),
+``Directions under sub-section (6) of section 70B of the Information Technology
+Act, 2000,'' 2022.
+
+\end{thebibliography}
+
+\end{document}

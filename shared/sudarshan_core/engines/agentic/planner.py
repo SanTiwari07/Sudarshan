@@ -321,7 +321,10 @@ class AgentPlanner:
         if cached is not None:
             tool   = cached.get("tool", "")
             target = cached.get("text") or str(cached.get("x", ""))
-            if not memory.is_action_loop(tool, target):
+            if (
+                not memory.is_action_loop(tool, target)
+                and not memory.is_escaping_action(tool, target)
+            ):
                 logger.debug(f"[Planner] Cache hit for {cache_key}")
                 cached["_source"] = "cache"   # already a copy - see _cache_get
                 return cached
@@ -783,6 +786,16 @@ class FallbackPlanner:
                 # Skip previously failed actions on this screen
                 if self.world_model.is_action_failed(shash, cand.target_node_id):
                     continue
+                # Skip controls that already handed the foreground to another
+                # app. Re-picking one costs two actions (the escape and the
+                # recovery) and can never produce evidence about this sample.
+                cand_tool = "type_text" if cand.action_type == "input" else (
+                    "click_text" if cand.target_label else "tap"
+                )
+                if memory.is_escaping_action(
+                    cand_tool, cand.input_text or cand.target_label or ""
+                ):
+                    continue
                 if highest_candidate is None or cand.priority > highest_candidate.priority:
                     highest_candidate = cand
 
@@ -826,6 +839,12 @@ class FallbackPlanner:
                 continue
             for keyword, tool, priority in GOAL_KEYWORD_MAP:
                 if keyword in content:
+                    candidate_target = (
+                        node.text or node.desc or node.resource_id
+                        or f"({node.center_x},{node.center_y})"
+                    )
+                    if memory.is_escaping_action(tool, candidate_target):
+                        continue
                     if priority > best_score:
                         best_score = priority
                         best_node  = (node, tool)

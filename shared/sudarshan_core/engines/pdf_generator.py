@@ -363,6 +363,9 @@ def build_report_data(case_data: Dict[str, Any], apk_dir: Optional[Path] = None)
         if scr_manifest.exists():
             try:
                 scr_data = json.loads(scr_manifest.read_text(encoding="utf-8"))
+                if isinstance(scr_data, dict):
+                    # flush_manifest() writes {"generated_at":..., "screenshots":[...]}
+                    scr_data = scr_data.get("screenshots", [])
                 if isinstance(scr_data, list):
                     screenshots_list = scr_data
             except Exception as e:

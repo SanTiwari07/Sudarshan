@@ -114,7 +114,11 @@ def _paced(seconds: float) -> float:
 NAVIGATIONAL_TOOLS: frozenset = frozenset({
     "tap", "click_text", "swipe", "scroll", "long_press",
     "press_back", "press_home", "press_enter",
-    "am_start", "open_notifications", "grant_permission",
+    # "am_start" used to be listed here, but no tool of that name exists in
+    # TOOL_REGISTRY or on this class - the real one is "start_activity", which
+    # was missing. The effect was that relaunching the app never waited for the
+    # window to settle, so the next observation read a half-started Activity.
+    "start_activity", "open_notifications", "grant_permission",
 })
 
 

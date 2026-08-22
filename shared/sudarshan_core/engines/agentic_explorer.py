@@ -49,7 +49,11 @@ from sudarshan_core.engines.agentic.agent_memory import AgentMemory
 from sudarshan_core.engines.agentic.audit_log import AuditLog
 from sudarshan_core.engines.agentic.benchmark import BenchmarkCollector
 from sudarshan_core.engines.agentic.goal_tracker import GoalStatus, GoalTracker
-from sudarshan_core.engines.agentic.perception import PerceptionPipeline, package_of
+from sudarshan_core.engines.agentic.perception import (
+    PerceptionPipeline,
+    in_investigation_scope,
+    package_of,
+)
 from sudarshan_core.engines.agentic.planner import AgentPlanner
 from sudarshan_core.engines.agentic.tool_executor import (
     NAVIGATIONAL_TOOLS,
@@ -101,6 +105,28 @@ MAX_CONSECUTIVE_CRASHES: int = int(
     os.getenv("SUDARSHAN_MAX_CONSECUTIVE_CRASHES", "3")
 )
 
+# ─── Out-of-scope navigation recovery ─────────────────────────────────────────
+# A tap on "Phone", a share sheet or an ACTION_VIEW intent hands the foreground
+# to another app. Observed on InsecureBankv2: the agent tapped through to the
+# system Contacts app and spent 12 of its 16 actions there pressing back, so the
+# sample's own login screen - the credential-entry surface the run exists to
+# exercise - was never reached, and the screenshots in the report were of AOSP.
+#
+# The first departure is treated as a dialog or chooser that Back will close,
+# which preserves the app's task stack. If the agent is still outside the scope
+# on the next observation, Back is not working and the app is relaunched
+# outright.
+BACK_BEFORE_RELAUNCH: int = int(
+    os.getenv("SUDARSHAN_OUT_OF_SCOPE_BACK_ATTEMPTS", "1")
+)
+# An app that keeps throwing the agent out - a launcher-replacement, or a sample
+# that re-fires its intent on resume - will not be explored by trying harder.
+# Past this many consecutive recovery attempts the guard stops spending budget
+# and lets the loop's own stopping conditions end the run.
+MAX_OUT_OF_SCOPE_RECOVERIES: int = int(
+    os.getenv("SUDARSHAN_MAX_OUT_OF_SCOPE_RECOVERIES", "6")
+)
+
 # Gemini API key
 GEMINI_API_KEY: Optional[str] = os.environ.get("GEMINI_API_KEY")
 
@@ -122,6 +148,7 @@ class AgenticExplorer:
         screenshot_manager: Optional[Any] = None,
         static_findings: Optional[Dict[str, Any]] = None,
         accessibility_service_class: Optional[str] = None,
+        main_activity: Optional[str] = None,
     ) -> None:
         self.device_serial   = device_serial
         self.adb_path        = adb_path
@@ -129,6 +156,17 @@ class AgenticExplorer:
         self.event_bus       = event_bus
         self.screenshot_manager = screenshot_manager
         self.static_findings = static_findings or {}
+        # The launchable component, as "<package>/<activity>", used to put the
+        # app back in the foreground after a crash or after the agent is thrown
+        # into another app.
+        #
+        # This attribute was read in the crash-recovery path but never assigned,
+        # so every relaunch raised AttributeError into the `except Exception`
+        # around it: recovery silently did nothing and the run burned its budget
+        # re-observing a dead app. Defaulting to "" keeps that path honest - the
+        # callers that cannot resolve a launcher fall back to press_home rather
+        # than issuing `am start` with a missing component.
+        self.main_activity: str = main_activity or ""
 
         # Subsystems
         self.goals      = GoalTracker()
@@ -189,6 +227,24 @@ class AgenticExplorer:
 
     # ── EventBus callback ──────────────────────────────────────────────────────
 
+    def _launch_component(self) -> str:
+        """
+        The "<package>/<activity>" component `am start -n` needs, or "".
+
+        Callers pass the main activity in either form - androguard returns a
+        bare class name, while `cmd package resolve-activity` returns a full
+        component - so both are accepted rather than requiring the caller to
+        know which one it holds.
+        """
+        activity = (self.main_activity or "").strip()
+        if not activity:
+            return ""
+        if "/" in activity:
+            return activity
+        if not self.package_name:
+            return ""
+        return f"{self.package_name}/{activity}"
+
     def _on_frida_event(self, event: Dict[str, Any]) -> None:
         """Receive Frida events from the bus and buffer them for the agent loop."""
         with self._events_lock:
@@ -245,6 +301,13 @@ class AgenticExplorer:
         last_action_failed    = False
         last_screen_hash      = ""
         consecutive_crashes   = 0
+        out_of_scope_streak   = 0
+        # The last action the planner chose, kept so a departure discovered on
+        # the next observation can be attributed back to the control that
+        # caused it. Recovery actions issued by the guard itself deliberately
+        # do not overwrite these.
+        last_action_tool      = ""
+        last_action_target    = ""
 
         # ── Mark Stage 1 goal in-progress immediately ─────────────────────────
         self.goals.mark_in_progress("Launch Application")
@@ -282,17 +345,102 @@ class AgenticExplorer:
                 )
                 if obs.ui_xml_raw:
                     self.last_ui_hierarchy_xml = obs.ui_xml_raw[:120_000]
-                self.memory.register_screen(obs.screen_hash, obs.activity)
-                self.benchmark.record_screen(obs.screen_hash)
 
                 # Stage 1 is confirmed by observed foreground state, not by a
                 # Frida hook (hooks cannot fire before the app is running) and
                 # not by the LLM. Without this the whole dependency graph stays
                 # blocked on stage 1 forever.
+                foreground_package = package_of(obs.activity)
                 self.goals.update_from_foreground(
-                    foreground_package=package_of(obs.activity),
+                    foreground_package=foreground_package,
                     target_package=self.package_name,
                 )
+
+                # ── SCOPE GUARD ───────────────────────────────────────────────
+                # Runs before the screen is registered: a Contacts screen is not
+                # a screen of the sample, and counting it inflates both the
+                # screen graph the planner reasons over and the coverage figure
+                # the report presents.
+                if not in_investigation_scope(foreground_package, self.package_name):
+                    out_of_scope_streak += 1
+
+                    # Blame the action that did it, once, on the first
+                    # observation of the departure. memory.current_screen_hash
+                    # still points at the in-app screen the tap was made from,
+                    # because out-of-scope screens are never registered below.
+                    if out_of_scope_streak == 1 and last_action_tool:
+                        self.memory.record_escaping_action(
+                            last_action_tool, last_action_target
+                        )
+                        self.planner.invalidate_cache_for_screen(
+                            self.memory.current_screen_hash
+                        )
+                        logger.info(
+                            "[AgenticExplorer] '%s(%s)' leads out of the app - "
+                            "it will not be chosen again on this screen.",
+                            last_action_tool, last_action_target,
+                        )
+                        self.audit_log.record_system_event(
+                            "escaping_action_recorded",
+                            f"{last_action_tool}({last_action_target}) "
+                            f"-> {foreground_package}",
+                        )
+                        last_action_tool = last_action_target = ""
+                    if out_of_scope_streak > MAX_OUT_OF_SCOPE_RECOVERIES:
+                        logger.warning(
+                            "[AgenticExplorer] Foreground left '%s' for '%s' and "
+                            "%d recovery attempts did not bring it back - "
+                            "abandoning the guard rather than spending more "
+                            "budget on it.",
+                            self.package_name, foreground_package,
+                            out_of_scope_streak - 1,
+                        )
+                        self.audit_log.record_system_event(
+                            "out_of_scope_unrecoverable",
+                            f"foreground={foreground_package} "
+                            f"attempts={out_of_scope_streak - 1}",
+                        )
+                        break
+
+                    component = self._launch_component()
+                    use_back = out_of_scope_streak <= BACK_BEFORE_RELAUNCH
+                    recovery = (
+                        {"tool": "press_back"}
+                        if use_back or not component
+                        else {"tool": "start_activity", "component": component}
+                    )
+                    logger.info(
+                        "[AgenticExplorer] Out of scope: foreground is '%s', "
+                        "target is '%s' - recovering with %s (attempt %d)",
+                        foreground_package, self.package_name,
+                        recovery["tool"], out_of_scope_streak,
+                    )
+                    self.audit_log.record_system_event(
+                        "out_of_scope_recovery",
+                        f"foreground={foreground_package} tool={recovery['tool']} "
+                        f"attempt={out_of_scope_streak}",
+                    )
+                    try:
+                        await self.executor.execute(recovery)
+                    except Exception as exc:
+                        # A failed recovery is not fatal; the next iteration
+                        # re-observes and escalates from press_back to am_start.
+                        logger.warning(
+                            "[AgenticExplorer] Out-of-scope recovery failed: %s", exc
+                        )
+                    await self.executor.wait_for_idle()
+
+                    # Counted as an action: it is a real interaction with the
+                    # device, and hiding it would let a sample that repeatedly
+                    # ejects the agent run past its budget.
+                    actions_taken += 1
+                    last_action_failed = False
+                    continue
+
+                out_of_scope_streak = 0
+
+                self.memory.register_screen(obs.screen_hash, obs.activity)
+                self.benchmark.record_screen(obs.screen_hash)
 
                 # Update coverage metrics (UIExplorer compatibility)
                 self.coverage_metrics["screens"] = len(self.memory.visited_screens)
@@ -346,8 +494,12 @@ class AgenticExplorer:
                     logger.warning(f"[AgenticExplorer] SC5: App crash/ANR screen detected ({obs.activity}) - attempting relaunch and recovery")
                     self.audit_log.record_system_event("crash_detected_relaunching", obs.activity)
                     try:
-                        if self.main_activity:
-                            await self.executor.execute({"tool": "am_start", "activity": self.main_activity})
+                        crash_component = self._launch_component()
+                        if crash_component:
+                            await self.executor.execute({
+                                "tool": "start_activity",
+                                "component": crash_component,
+                            })
                         else:
                             await self.executor.execute({"tool": "press_home"})
                     except Exception as _r_err:
@@ -432,6 +584,12 @@ class AgenticExplorer:
 
 
                 # ── ACT ───────────────────────────────────────────────────────
+                # Remembered before execution so the scope guard can name the
+                # control responsible if the next observation lands outside the
+                # app. Matches the (tool, target) shape the planners score with.
+                last_action_tool   = action.get("tool", "")
+                last_action_target = action.get("text") or str(action.get("x", ""))
+
                 result = await self.executor.execute(action)
                 last_action_failed = not result.success
                 actions_taken += 1

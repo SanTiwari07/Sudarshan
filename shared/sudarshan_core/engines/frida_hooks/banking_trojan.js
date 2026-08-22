@@ -1853,25 +1853,34 @@ function initHooks() {
         registerHook('Activity.onCreate');
       } catch (e) { reportHookError('Activity.onCreate', e.message); }
 
-      try {
-        var ClassLoaderClass = Java.use('java.lang.ClassLoader');
-        ClassLoaderClass.loadClass.overload('java.lang.String').implementation = function (className) {
-          var res = this.loadClass(className);
-          if (className && !isDuplicate('loadClass_' + className)) {
-            if (className.indexOf('android.') !== 0 && className.indexOf('java.') !== 0 && className.indexOf('javax.') !== 0) {
-              emit('smoke', {
-                hook: 'ClassLoader.loadClass',
-                class_name: className,
-                severity: 'INFO',
-                package: runtimeContext.package_name,
-                description: 'Application class loaded: ' + className,
-              });
-            }
-          }
-          return res;
-        };
-        registerHook('ClassLoader.loadClass');
-      } catch (e) { reportHookError('ClassLoader.loadClass', e.message); }
+      // java.lang.ClassLoader.loadClass is deliberately NOT hooked.
+      //
+      // It kills the target process on Android 14+ (reproduced on API 37):
+      //
+      //   JNI DETECTED ERROR IN APPLICATION: jstring is an invalid JNI
+      //   transition frame reference ... in call to GetStringChars
+      //   from java.lang.Class java.lang.ClassLoader.loadClass(java.lang.String)
+      //   native: #95 pc ... /memfd:frida-agent-64.so
+      //   -> Fatal signal 11 (SIGSEGV) in HeapTaskDaemon
+      //
+      // The cause is re-entrancy. frida-java-bridge resolves classes by calling
+      // loadClass itself (class-factory.js caches `loader.loadClass` as its
+      // lookup method), so a replacement that touches the bridge - which
+      // `emit` does - re-enters the very method being dispatched. loadClass
+      // also runs on ART's internal threads, where the className jstring's
+      // transition frame is gone by the time the replacement reads it, and
+      // CheckJNI aborts the process rather than tolerating the stale jobject.
+      //
+      // Observed cost: the sample died ~13s after attach, before the agentic
+      // explorer took a single action, so every run reported
+      // INSTRUMENTATION_FAILED with zero screenshots.
+      //
+      // Nothing is lost by dropping it. The hook only emitted INFO-severity
+      // "Application class loaded: X" noise on the hottest method in the VM.
+      // The behaviour that actually matters - a dropper loading a hidden
+      // second stage - is captured by the DexClassLoader, PathClassLoader and
+      // InMemoryDexClassLoader constructor hooks above, which fire rarely and
+      // are not re-entrant.
 
       try {
         var ContextWrapper = Java.use('android.content.ContextWrapper');

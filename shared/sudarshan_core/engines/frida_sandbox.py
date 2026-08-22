@@ -1591,9 +1591,12 @@ def _collect_observed_activities(session: "FridaSession") -> List[str]:
     return []
 
 
-def _collect_screenshots(session: "FridaSession") -> List[str]:
+def _collect_screenshots(session: "FridaSession") -> List[Dict[str, Any]]:
     """
-    Return the relative paths of every screenshot captured this session.
+    Return the full manifest record of every screenshot captured this session.
+
+    Returns enriched dicts (not bare filenames) so report renderers can read
+    description/capture_trigger/title without re-reading manifest.json.
 
     Never raises and never invents entries: a session with no ScreenshotManager,
     or one where every capture failed, yields [].
@@ -1603,7 +1606,7 @@ def _collect_screenshots(session: "FridaSession") -> List[str]:
         return []
     try:
         return [
-            rec.filename for rec in mgr.get_manifest()
+            dataclasses.asdict(rec) for rec in mgr.get_manifest()
             if getattr(rec, "filename", None)
         ]
     except Exception as exc:
@@ -2905,6 +2908,9 @@ class FridaSession:
                     # so ToolExecutor uses the real obfuscated class name.
                     accessibility_service_class=self.accessibility_service_class,
                     screenshot_manager=self.screenshot_manager,
+                    # Needed to put the app back in the foreground after a crash
+                    # or after a tap hands the foreground to another app.
+                    main_activity=self.main_activity,
                 )
                 self.explorer_used = "agentic"
                 logger.info("[Frida] AgenticExplorer selected.")

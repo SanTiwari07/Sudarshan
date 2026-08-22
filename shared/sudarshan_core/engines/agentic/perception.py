@@ -35,7 +35,7 @@ import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, FrozenSet, List, Optional, Set
 
 from sudarshan_core.engines.agentic.sanitizer import sanitize, sanitize_block
 from sudarshan_core.sandbox import get_sandbox_provider
@@ -65,6 +65,11 @@ WEBVIEW_ACTIVITY_PATTERNS: List[str] = [
     "PhoneGapActivity",
     "ReactNativeActivity",
 ]
+
+# Frida event categories that indicate a fraud-relevant screen is on display.
+# These force Vision (Level 5) even when the UI XML parses cleanly, because the
+# XML tree does not reveal WebView-rendered or overlay-drawn content.
+FRAUD_EVENT_CATEGORIES: Set[str] = {"overlay", "accessibility", "sms"}
 
 # Logcat capture line count
 LOGCAT_LINES: int = 40
@@ -236,6 +241,48 @@ def package_of(activity: str) -> str:
     return activity.split("/", 1)[0]
 
 
+#: Packages that are not the sample but are still part of an investigation.
+#:
+#: The agent has to be able to reach a runtime permission dialog, the
+#: Accessibility settings screen and the package installer - granting
+#: Accessibility is itself one of the fraud goals, and a scope guard that
+#: bounced the agent back into the app the moment it saw com.android.settings
+#: would make that goal permanently unreachable.
+#:
+#: Everything else - Contacts, Dialer, Chrome, Play Store, the launcher - is out
+#: of scope. Exploring those apps produces screenshots of AOSP, not of the
+#: sample, and spends the action budget somewhere no evidence can come from.
+INVESTIGATION_SCOPE_PACKAGES: FrozenSet[str] = frozenset({
+    "com.android.permissioncontroller",
+    "com.google.android.permissioncontroller",
+    "com.android.packageinstaller",
+    "com.google.android.packageinstaller",
+    "com.android.settings",
+    "com.android.systemui",
+})
+
+
+def in_investigation_scope(foreground_package: str, target_package: str) -> bool:
+    """
+    Whether the foreground window is somewhere the agent should keep exploring.
+
+    True for the sample itself and for the system surfaces listed in
+    :data:`INVESTIGATION_SCOPE_PACKAGES`.
+
+    An empty ``foreground_package`` returns True. An unreadable foreground is
+    the absence of a reading, not evidence that the agent has wandered off, and
+    treating it as out-of-scope would fire a recovery action every time
+    ``uiautomator`` returned a malformed dump mid-transition. The same applies
+    to an empty ``target_package``: with no target to compare against, nothing
+    can be judged out of scope.
+    """
+    if not foreground_package or not target_package:
+        return True
+    if foreground_package == target_package:
+        return True
+    return foreground_package in INVESTIGATION_SCOPE_PACKAGES
+
+
 # ─── Perception Pipeline ──────────────────────────────────────────────────────
 
 class PerceptionPipeline:
@@ -302,9 +349,27 @@ class PerceptionPipeline:
         # ── Determine if Level 5 (screenshot/vision) is needed ───────────────
         reason = self._screenshot_needed(obs, last_action_failed)
         if reason:
-            # Only capture if screen state has changed since last vision call
-            if obs.screen_hash != self._last_vision_hash:
-                path = await self._take_screenshot()
+            # Fraud-relevant Frida events bypass the dedupe gate: an overlay
+            # drawn above the app often leaves the XML-derived screen_hash
+            # unchanged, so hash equality is not evidence the screen is the same.
+            forced = reason.startswith("frida_event_fraud_category")
+            # Otherwise only capture if screen state changed since last vision call
+            if forced or obs.screen_hash != self._last_vision_hash:
+                # Map the fraud category onto a ScreenshotReason so the manifest
+                # caption names the real trigger instead of a generic one.
+                cap_reason, cap_category = "SUSPICIOUS_UI", "ui"
+                fraud_cats = self._fraud_event_categories(obs) if forced else set()
+                if fraud_cats:
+                    cat = sorted(fraud_cats)[0]
+                    cap_category = cat
+                    cap_reason = {
+                        "overlay": "OVERLAY",
+                        "accessibility": "ACCESSIBILITY",
+                        "sms": "HOOK_TRIGGER",
+                    }.get(cat, "SUSPICIOUS_UI")
+                path = await self._take_screenshot(
+                    force=forced, reason=cap_reason, category=cap_category
+                )
                 obs.screenshot_path  = path or ""
                 obs.screenshot_taken = bool(path)
                 obs.vision_reason    = reason
@@ -431,6 +496,23 @@ class PerceptionPipeline:
 
     # ── Screenshot trigger decision ───────────────────────────────────────────
 
+    @staticmethod
+    def _fraud_event_categories(obs: Observation) -> Set[str]:
+        """
+        Return the fraud-relevant Frida event categories seen this cycle.
+
+        Tolerates malformed events: anything that is not a dict, or carries no
+        recognised category, is ignored rather than raising.
+        """
+        found: Set[str] = set()
+        for ev in obs.frida_events or []:
+            if not isinstance(ev, dict):
+                continue
+            cat = ev.get("category")
+            if isinstance(cat, str) and cat.lower() in FRAUD_EVENT_CATEGORIES:
+                found.add(cat.lower())
+        return found
+
     def _screenshot_needed(self, obs: Observation, last_action_failed: bool) -> str:
         """
         Apply the 5-trigger decision tree for Level 5 (Vision).
@@ -440,6 +522,10 @@ class PerceptionPipeline:
 
         All triggers map to named constants - this method is fully unit-testable.
         """
+        fraud_cats = self._fraud_event_categories(obs)
+        if fraud_cats:
+            return f"frida_event_fraud_category ({', '.join(sorted(fraud_cats))})"
+
         if obs.ui_xml_raw == "":
             return "ui_xml_empty"
 
@@ -489,16 +575,22 @@ class PerceptionPipeline:
 
     # ── Level 5: Screenshot ───────────────────────────────────────────────────
 
-    async def _take_screenshot(self) -> Optional[str]:
+    async def _take_screenshot(
+        self,
+        *,
+        force: bool = False,
+        reason: str = "SUSPICIOUS_UI",
+        category: str = "ui",
+    ) -> Optional[str]:
         """Capture a screenshot and return the local file path, or None on failure."""
         if self.screenshot_manager is not None:
             ref = self.screenshot_manager.capture(
                 label="perception_vision",
-                category="ui",
+                category=category,
                 source="explorer",
-                reason="SUSPICIOUS_UI",
+                reason=reason,
                 activity="",
-                force=False,
+                force=force,
             )
             if ref:
                 return str(self.screenshot_manager.output_dir / Path(ref).name)

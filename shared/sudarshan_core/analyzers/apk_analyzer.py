@@ -9,7 +9,11 @@ try:
     import loguru
     loguru.logger.disable("androguard")
 except ImportError:
-    AnalyzeAPK = None  # Fallback for host environments without androguard installed
+    # Host environments without androguard installed. The name is kept bound so
+    # the module still imports (callers that only want the constants above, and
+    # every test that monkeypatches AnalyzeAPK, must keep working) - but
+    # analyze_apk() refuses to run rather than letting the None propagate.
+    AnalyzeAPK = None
 
 from sudarshan_core.models.schemas import AndroguardOutput, StaticAnalysisFlags
 
@@ -262,6 +266,20 @@ def _detect_concealed_payload(apk_path: str) -> Tuple[bool, List[str]]:
 def analyze_apk(apk_path: str) -> AndroguardOutput:
     if not os.path.exists(apk_path):
         raise FileNotFoundError(f"APK not found: {apk_path}")
+
+    # Say which dependency is missing. Without this the ImportError fallback
+    # above surfaces as "TypeError: 'NoneType' object is not callable" from
+    # inside the analyser - a stack trace that names neither androguard nor the
+    # fix, and that a caller catching Exception can mistake for a malformed
+    # APK. A missing analysis engine is an environment fault, not a finding
+    # about the sample, and must never be reported as one.
+    if AnalyzeAPK is None:
+        raise RuntimeError(
+            "androguard is not installed, so static analysis cannot run. "
+            "Install it with `pip install androguard` (or `pip install -e shared`) "
+            "and re-run. This is an environment fault - it says nothing about "
+            f"the sample at {apk_path}."
+        )
 
     a, d, dx = AnalyzeAPK(apk_path)
 

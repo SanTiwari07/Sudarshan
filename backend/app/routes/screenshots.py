@@ -112,6 +112,11 @@ def _load_screenshot_manifest_entries(
     for i, rel in enumerate(paths):
         if not rel:
             continue
+        # _collect_screenshots() now yields full manifest dicts; older results
+        # (and DB rehydration) still yield bare path strings. Accept both.
+        if isinstance(rel, dict):
+            entries.append(rel)
+            continue
         entries.append({
             "screenshot_id": f"SCR-{i + 1:03d}",
             "filename": str(rel),

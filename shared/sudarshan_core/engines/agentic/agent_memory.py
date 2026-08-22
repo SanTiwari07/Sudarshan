@@ -198,6 +198,11 @@ class AgentMemory:
         # ── Failed actions ────────────────────────────────────────────────────
         self.failed_actions: List[Dict] = []   # {tool, target, error, iteration}
 
+        # (screen_hash, tool, target) triples that handed the foreground to
+        # another app. Unbounded on purpose: it is one small tuple per distinct
+        # escaping control, and the action budget caps how many can accumulate.
+        self._escaping_actions: Set[Tuple[str, str, str]] = set()
+
         # ── Iteration counter ─────────────────────────────────────────────────
         self.iteration: int = 0
 
@@ -307,6 +312,33 @@ class AgentMemory:
                 "error": error,
             })
             logger.debug(f"[Memory] Failed action recorded: {tool}({target}) - {error}")
+
+    def record_escaping_action(self, tool: str, target: str) -> None:
+        """
+        Remember that this action handed the foreground to a different app.
+
+        Keyed by the screen the action was taken *from*, which is still
+        ``current_screen_hash`` at the moment the explorer notices: out-of-scope
+        screens are deliberately never registered, so the blame lands on the
+        in-app screen that owns the offending control rather than on the
+        Contacts screen the tap led to.
+
+        Without this the scope guard only treats the symptom. It pulls the agent
+        back, the planner re-scores the same screen, picks the same "Phone"
+        button because nothing recorded that it leads out of the app, and the
+        run ping-pongs until the action budget is gone.
+        """
+        if not tool:
+            return
+        self._escaping_actions.add((self.current_screen_hash, tool, target or ""))
+        logger.debug(
+            "[Memory] Escaping action recorded: %s(%s) on screen %s",
+            tool, target, self.current_screen_hash,
+        )
+
+    def is_escaping_action(self, tool: str, target: str) -> bool:
+        """Whether this action already took the agent out of the app from here."""
+        return (self.current_screen_hash, tool, target or "") in self._escaping_actions
 
     def is_action_loop(self, tool: str, target: str) -> bool:
         """

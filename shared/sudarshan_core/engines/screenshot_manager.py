@@ -60,6 +60,66 @@ class ScreenshotReason(str, Enum):
     OTHER = "OTHER"
 
 
+# Deterministic caption templates, one per ScreenshotReason. Placeholders are
+# filled from the capture call; a template whose placeholder is empty falls back
+# to UNCLEAR_CAPTION rather than emitting a half-formed sentence.
+REASON_TO_CAPTION: Dict[str, str] = {
+    ScreenshotReason.APP_LAUNCH.value:        "Application launched - initial screen state",
+    ScreenshotReason.PERMISSION_DIALOG.value: "Runtime permission dialog presented",
+    ScreenshotReason.ACCESSIBILITY.value:     "App requesting Accessibility Service permission",
+    ScreenshotReason.OVERLAY.value:           "Overlay window displayed over target app",
+    ScreenshotReason.LOGIN.value:             "App presenting login or credential entry screen",
+    ScreenshotReason.OTP.value:               "App displaying OTP input field",
+    ScreenshotReason.BANK_SELECTION.value:    "Bank or payment provider selection screen",
+    ScreenshotReason.NETWORK_ALERT.value:     "Network communication event detected",
+    ScreenshotReason.SUSPICIOUS_UI.value:     "Suspicious or unreadable UI state captured for vision analysis",
+    ScreenshotReason.ROOT_DETECTION.value:    "Anti-analysis or root detection behavior observed",
+    ScreenshotReason.APP_CRASH.value:         "Application crash or ANR detected",
+    ScreenshotReason.FINAL_STATE.value:       "Final application state at end of analysis",
+    ScreenshotReason.EXPLORER_ACTION.value:   "Screen state after explorer action - {explorer_action}",
+    ScreenshotReason.HOOK_TRIGGER.value:      "Hook-triggered capture - {category} event",
+    ScreenshotReason.LIFECYCLE.value:         "Lifecycle capture - {label}",
+    ScreenshotReason.AUTO_CRITICAL.value:     "Critical behavioral event detected - {category}",
+    ScreenshotReason.OTHER.value:             "",
+}
+
+# Honest fallback when no template matches or a template placeholder is empty.
+UNCLEAR_CAPTION: str = "Screen state unclear - no matching trigger"
+
+
+def build_caption(
+    reason: str,
+    category: str = "",
+    label: str = "",
+    explorer_action: str = "",
+) -> str:
+    """
+    Render the deterministic caption for a screenshot.
+
+    Never raises and never invents detail: an unknown reason, an empty
+    template, or a template whose placeholder has no value all yield
+    UNCLEAR_CAPTION.
+    """
+    template = REASON_TO_CAPTION.get(reason or "", "")
+    if not template:
+        return UNCLEAR_CAPTION
+    values = {
+        "category": category,
+        "label": label,
+        "explorer_action": explorer_action,
+    }
+    try:
+        needed = [
+            f for f in values
+            if "{" + f + "}" in template
+        ]
+        if any(not values[f] for f in needed):
+            return UNCLEAR_CAPTION
+        return template.format(**values)
+    except (KeyError, IndexError, ValueError):
+        return UNCLEAR_CAPTION
+
+
 @dataclass
 class ScreenshotRecord:
     """One entry in the screenshot manifest."""
@@ -87,6 +147,11 @@ class ScreenshotRecord:
     report_path: str = ""
     storage_status: str = "stored"
     embedding_status: str = "pending"
+    # PDF-facing presentation fields (read by pdf_generator Appendix A).
+    description: str = ""
+    capture_trigger: str = ""
+    title: str = ""
+    quality: str = "A"
     extra: dict = field(default_factory=dict)
 
 
@@ -269,6 +334,7 @@ class ScreenshotManager:
                 if layout_hash:
                     self._last_layout_hashes.add(layout_hash)
 
+            resolved_reason = reason or ScreenshotReason.OTHER.value
             record = ScreenshotRecord(
                 screenshot_id=scr_id,
                 filename=rel_path,
@@ -285,13 +351,21 @@ class ScreenshotManager:
                 screen_hash=phash,
                 layout_hash=layout_hash,
                 stage=stage,
-                reason=reason or ScreenshotReason.OTHER.value,
+                reason=resolved_reason,
                 explorer_action=explorer_action,
                 risk_category=risk_category,
                 confidence=confidence,
                 report_path=rel_path,
                 storage_status="stored",
                 embedding_status="embedded_in_manifest",
+                description=build_caption(
+                    resolved_reason,
+                    category=category,
+                    label=label,
+                    explorer_action=explorer_action,
+                ),
+                capture_trigger=resolved_reason,
+                title=f"{scr_id} - {label}" if label else scr_id,
             )
             with self._lock:
                 self._manifest.append(record)
@@ -417,6 +491,49 @@ class ScreenshotManager:
 
     # -- Manifest persistence -------------------------------------------------
 
+    def enrich_captions_with_vision(self) -> int:
+        """
+        Replace low-signal captions with Gemini Vision descriptions.
+
+        No-op unless SUDARSHAN_VISION_CAPTIONS=1. Runs after exploration ends,
+        so vision latency cannot eat the runtime action budget. Returns the
+        number of captions replaced.
+        """
+        try:
+            from sudarshan_core.engines.agentic.caption_generator import (
+                generate_caption,
+                should_caption,
+                vision_captions_enabled,
+            )
+        except Exception as e:
+            logger.debug("[ScreenshotManager] Caption generator unavailable: %s", e)
+            return 0
+
+        if not vision_captions_enabled():
+            return 0
+
+        replaced = 0
+        with self._lock:
+            snapshot = list(self._manifest)
+        for rec in snapshot:
+            if not should_caption(rec.reason, rec.description):
+                continue
+            local = self.output_dir / Path(rec.filename).name
+            caption = generate_caption(
+                local,
+                hint_context=f"reason={rec.reason} category={rec.category} label={rec.label}",
+            )
+            if caption:
+                rec.description = caption
+                rec.extra["caption_source"] = "gemini_vision"
+                replaced += 1
+        if replaced:
+            logger.info(
+                "[ScreenshotManager] Vision captions applied to %d screenshot(s)",
+                replaced,
+            )
+        return replaced
+
     def flush_manifest(self, output_path: Optional[Path] = None) -> int:
         """
         Write the screenshot manifest to JSON.
@@ -424,6 +541,7 @@ class ScreenshotManager:
         Default path: <artifact_dir>/screenshots/manifest.json (canonical).
         """
         self.wait_pending()
+        self.enrich_captions_with_vision()
 
         with self._lock:
             snapshot = list(self._manifest)

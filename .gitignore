@@ -76,10 +76,26 @@ MANIFEST
 
 # Virtual Environments
 venv/
+.venv/
 env/
 ENV/
 env.bak/
 venv.bak/
+# pyvenv.cfg records the absolute path of the interpreter the venv was built
+# from, so a committed one carries whichever machine created it - this repo had
+# one pinning C:\Users\SHAMBHAVI PATIL\...\Python311, which is meaningless on
+# every other developer's machine.
+pyvenv.cfg
+
+# Editor / assistant state
+# .cursor holds both throwaway logs and shared project rules, so it is ignored
+# selectively: the rules are team policy and MUST stay tracked (the
+# no-cursor-attribution rule keeps AI co-author trailers out of commits), while
+# debug logs are per-session noise.
+.cursor/*
+!.cursor/rules/
+.cursor/**/*.log
+debug-*.log
 
 # Environment Variables
 .env

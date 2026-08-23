@@ -123,9 +123,18 @@ def test_returns_none_when_no_service(tmp_path):
 
 def test_grant_accessibility_uses_real_class():
     """
-    grant_accessibility(service_class='.zWPzgfI') must write
-    'com.cerberus.rat.zWPzgfI' to settings, not the hardcoded guess
-    'com.cerberus.rat/.AccessibilityService'.
+    grant_accessibility(service_class='.zWPzgfI') must write the MANIFEST class,
+    not the hardcoded guess '.AccessibilityService'.
+
+    The expected value was 'com.cerberus.rat.zWPzgfI' - a bare class name. That
+    is not what `enabled_accessibility_services` accepts: the key holds a
+    colon-separated list of FLATTENED ComponentNames ("pkg/cls"), and a bare
+    class is silently ignored. Confirmed on a live emulator, where a grant
+    written in the old format reported "grant did not take effect" once the
+    result was actually verified rather than assumed.
+
+    The test's real intent - use the obfuscated class from the manifest, never
+    the hardcoded suffix - is unchanged and still asserted below.
     """
     calls: List[List[str]] = []
 
@@ -155,11 +164,13 @@ def test_grant_accessibility_uses_real_class():
     #   ["shell", "settings", "put", "secure",
     #    "enabled_accessibility_services", "<component>"]
     written_component = acc_calls[0][-1]
-    expected = f"{PACKAGE}{REAL_SERVICE}"  # com.cerberus.rat.zWPzgfI
+    expected = f"{PACKAGE}/{REAL_SERVICE}"  # com.cerberus.rat/.zWPzgfI
     assert written_component == expected, (
-        f"Expected component '{expected}', got '{written_component}'. "
-        "The hardcoded .AccessibilityService suffix must NOT appear."
+        f"Expected flattened component '{expected}', got '{written_component}'."
     )
+    # The original point of this test: the manifest class, not the guess.
+    assert REAL_SERVICE in written_component
+    assert ".AccessibilityService" not in written_component
 
 
 # ── Test 4: grant_accessibility skips when service_class is None ──────────────

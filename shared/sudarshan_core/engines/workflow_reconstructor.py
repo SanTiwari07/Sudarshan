@@ -51,6 +51,14 @@ class WorkflowStage:
     hook_names:   List[str]      # Hook names that fired
     confidence:   float          # 0.0–1.0 confidence based on evidence strength
 
+    # True when this stage records something the SANDBOX did, not something the
+    # sample did - enabling accessibility, allowing an overlay. Preconditions
+    # belong in the chain because they explain what made later behaviour
+    # possible, but they are excluded from fraud detection and from chain
+    # confidence: a capability we granted is not evidence against the app.
+    # Defaults False so every existing rule and serialised stage is unchanged.
+    is_precondition: bool = False
+
     def to_dict(self) -> Dict:
         return asdict(self)
 
@@ -118,6 +126,7 @@ class _StageRule:
     trigger_hooks:  List[str]   # Any one of these hooks fires the rule
     category:       str         # Primary evidence category
     confidence_base: float      # Base confidence when trigger fires (0–1)
+    is_precondition: bool = False   # Sandbox action, not sample behaviour
 
 
 # Ordered by fraud workflow stage (earlier stages first).
@@ -255,6 +264,57 @@ _STAGE_RULES: List[_StageRule] = [
         category="persistence",
         confidence_base=0.85,
     ),
+
+    # ── Sandbox preconditions ────────────────────────────────────────────────
+    #
+    # Capabilities the HARNESS enabled so the sample could be exercised. They
+    # belong in the chain because the reader otherwise cannot tell how the app
+    # came to hold accessibility or overlay - but `is_precondition` keeps them
+    # out of fraud detection and chain confidence. Without that flag a benign
+    # app we granted accessibility to would report a fraud sequence.
+    #
+    # Only VERIFIED grants reach these rules: the explorer emits them from the
+    # permission investigator after the device confirmed the capability is
+    # actually held, so a grant that silently failed produces no stage.
+    _StageRule(
+        label="Accessibility Enabled by Sandbox",
+        technique_id="T1417",
+        description=(
+            "The analysis sandbox enabled this application's Accessibility "
+            "Service so accessibility-gated behaviour could be observed. This "
+            "records a harness action, not application behaviour."
+        ),
+        trigger_hooks=["sandbox.grant.accessibility"],
+        category="sandbox_precondition",
+        confidence_base=1.0,
+        is_precondition=True,
+    ),
+    _StageRule(
+        label="Overlay Permission Enabled by Sandbox",
+        technique_id="T1411",
+        description=(
+            "The analysis sandbox allowed SYSTEM_ALERT_WINDOW so overlay "
+            "behaviour could be observed. Harness action, not application "
+            "behaviour."
+        ),
+        trigger_hooks=["sandbox.grant.overlay"],
+        category="sandbox_precondition",
+        confidence_base=1.0,
+        is_precondition=True,
+    ),
+    _StageRule(
+        label="Runtime Permissions Granted by Sandbox",
+        technique_id="T1401",
+        description=(
+            "The analysis sandbox granted runtime permissions the application "
+            "declared, so no permission dialog was shown. Harness action, not "
+            "application behaviour."
+        ),
+        trigger_hooks=["sandbox.grant.runtime_permission"],
+        category="sandbox_precondition",
+        confidence_base=1.0,
+        is_precondition=True,
+    ),
 ]
 
 # ─── Sequence labels for the overall workflow ──────────────────────────────────
@@ -368,6 +428,7 @@ class WorkflowReconstructor:
                 evidence_ids=evidence_ids,
                 hook_names=hook_names,
                 confidence=confidence,
+                is_precondition=rule.is_precondition,
             ))
 
         if not stages:
@@ -380,11 +441,17 @@ class WorkflowReconstructor:
             )
 
         # ── Detect composite chain label ───────────────────────────────────────
-        detected_labels = {s.label for s in stages}
-        sequence_label = "BEHAVIORAL_ANOMALY"  # Default when stages exist but no named chain
+        #
+        # Only stages describing the SAMPLE's behaviour count toward detection.
+        # Preconditions the sandbox performed are shown in the chain - they
+        # explain what enabled later behaviour - but a capability we granted
+        # ourselves must never be what makes a run look fraudulent.
+        behavioural = [s for s in stages if not s.is_precondition]
+        detected_labels = {s.label for s in behavioural}
+        sequence_label = "BEHAVIORAL_ANOMALY" if behavioural else "PRECONDITIONS_ONLY"
         chain_confidence = round(
-            sum(s.confidence for s in stages) / len(stages), 2
-        )
+            sum(s.confidence for s in behavioural) / len(behavioural), 2
+        ) if behavioural else 0.0
 
         for chain_name, required_stages in _CHAIN_LABELS:
             if all(lbl in detected_labels for lbl in required_stages):
@@ -403,8 +470,81 @@ class WorkflowReconstructor:
 
         return FraudWorkflow(
             stages=stages,
-            fraud_sequence_detected=True,
+            fraud_sequence_detected=bool(behavioural),
             sequence_label=sequence_label,
             chain_confidence=chain_confidence,
             total_events_analyzed=len(evidence_records),
         )
+
+
+# ─── Investigation-derived records ─────────────────────────────────────────────
+
+def investigation_records(
+    granted_permissions: Optional[List[str]] = None,
+    accessibility_enabled: bool = False,
+    overlay_granted: bool = False,
+    crash_findings: Optional[List[Dict]] = None,
+    base_timestamp_ms: int = 0,
+) -> List[Dict]:
+    """
+    Turn what the investigation itself established into reconstructor records.
+
+    The reconstructor was fed only Frida hook events, so §24's own example chain
+    could not form: its first link, "Accessibility Enabled", is a capability the
+    sandbox grants, not a hook the app calls. A run where we enabled
+    accessibility and the sample then intercepted SMS showed the interception
+    with no account of what made it reachable.
+
+    Records use the SAME shape the reconstructor already consumes - id,
+    category, hook, timestamp_ms - so no schema is introduced (§23) and every
+    existing consumer is unaffected.
+
+    Only VERIFIED grants should be passed in. A grant that reported success
+    without taking effect must not appear in a causal chain, because the
+    behaviour downstream of it never actually had the capability.
+    """
+    records: List[Dict] = []
+    stamp = int(base_timestamp_ms or 0)
+
+    def _add(hook: str, description: str, severity: str = "INFO") -> None:
+        records.append({
+            "id":           f"investigation_{hook}_{len(records)}",
+            "category":     "sandbox_precondition",
+            "hook":         hook,
+            "timestamp_ms": stamp + len(records),
+            "severity":     severity,
+            "description":  description,
+        })
+
+    if accessibility_enabled:
+        _add(
+            "sandbox.grant.accessibility",
+            "Accessibility service enabled by the sandbox and confirmed on device",
+        )
+    if overlay_granted:
+        _add(
+            "sandbox.grant.overlay",
+            "SYSTEM_ALERT_WINDOW allowed by the sandbox and confirmed via appops",
+        )
+    for permission in granted_permissions or []:
+        _add(
+            "sandbox.grant.runtime_permission",
+            f"{permission} granted by the sandbox and confirmed held",
+        )
+
+    # Crashes are carried so the chain can show that the run ended early. They
+    # are not preconditions and match no stage rule; they exist here so a caller
+    # merging record lists does not have to special-case them.
+    for finding in crash_findings or []:
+        if not isinstance(finding, dict):
+            continue
+        records.append({
+            "id":           f"crash_{len(records)}",
+            "category":     "app_telemetry",
+            "hook":         "process_crash",
+            "timestamp_ms": stamp + len(records),
+            "severity":     str(finding.get("severity") or "INFO"),
+            "description":  str(finding.get("summary") or finding.get("crash_type") or ""),
+        })
+
+    return records

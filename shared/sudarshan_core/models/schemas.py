@@ -36,6 +36,19 @@ class AndroguardOutput(BaseModel):
     flags: StaticAnalysisFlags
     suspicious_strings: List[str] = Field(default_factory=list)
 
+    # The name the app shows the user (manifest application android:label).
+    #
+    # This is what the sample CLAIMS to be, and it is attacker-controlled -
+    # measured on the labelled corpus, every trojan ships a disguise:
+    # Cerberus is "Google Update", FluBot is "Voicemail", Octo is
+    # "Google Chrome". That makes it evidence rather than metadata: judging a
+    # sample's permissions against the identity it claims is what turns the
+    # disguise into a finding. Octo asking for READ_SMS while calling itself
+    # Chrome is only surprising once the claim is known.
+    #
+    # Defaults to "" so every existing construction site stays valid.
+    app_label: str = ""
+
 
 # ─── Fraud Card Views ─────────────────────────────────────────────────────────
 

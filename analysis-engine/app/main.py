@@ -414,6 +414,13 @@ async def _execute_analysis_pipeline(
         dynamic_result = await run_frida_analysis(
             apk_path=apk_path,
             package_name=package_name,
+            # Static->dynamic bridge: the explorer needs the declared permission
+            # set to tell expected capability from unexpected at runtime.
+            static_findings={
+                "permissions": permissions,
+                "flags": flags_dict,
+                "app_label": getattr(androguard_output, "app_label", "") or "",
+            },
         )
         timer.stage_completed("AGENTIC_EXPLORER")
 

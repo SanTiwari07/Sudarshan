@@ -49,6 +49,12 @@ from sudarshan_core.engines.agentic.agent_memory import AgentMemory
 from sudarshan_core.engines.agentic.audit_log import AuditLog
 from sudarshan_core.engines.agentic.benchmark import BenchmarkCollector
 from sudarshan_core.engines.agentic.goal_tracker import GoalStatus, GoalTracker
+from sudarshan_core.engines.agentic.action_verifier import (
+    DeviceStateProbe,
+    StateSnapshot,
+    VerificationResult,
+    verify_action,
+)
 from sudarshan_core.engines.agentic.perception import (
     PerceptionPipeline,
     in_investigation_scope,
@@ -59,7 +65,19 @@ from sudarshan_core.engines.agentic.tool_executor import (
     NAVIGATIONAL_TOOLS,
     ToolExecutor,
 )
+from sudarshan_core.engines.agentic.crash_classifier import (
+    CrashContext,
+    classify_crash,
+    crash_event,
+)
+from sudarshan_core.engines.agentic.screen_classifier import classify_screen
 from sudarshan_core.engines.event_bus import RuntimeEventBus
+from sudarshan_core.engines.investigation_controller import (
+    InvestigationController,
+    InvestigationState,
+    score_progress,
+)
+from sudarshan_core.engines.permission_investigator import PermissionInvestigator
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +149,31 @@ MAX_OUT_OF_SCOPE_RECOVERIES: int = int(
 GEMINI_API_KEY: Optional[str] = os.environ.get("GEMINI_API_KEY")
 
 
+#: Android's reply when `am start -n` names a component that no longer resolves.
+#: Matched on the message rather than the exit code because `am` exits 0 while
+#: printing this to stdout.
+_MISSING_COMPONENT_MARKERS = (
+    "does not exist",
+    "activity class",
+    "unable to resolve intent",
+)
+
+
+def _launcher_component_missing(result: Any) -> bool:
+    """
+    Whether a relaunch failed because the target component is gone.
+
+    Distinguishes "the app hid itself" from an ordinary transient failure, so
+    the first conclusive answer ends the retry loop instead of the sixth.
+    """
+    if result is None:
+        return False
+    text = f"{getattr(result, 'output', '') or ''} {getattr(result, 'error', '') or ''}".lower()
+    if not text.strip():
+        return False
+    return any(marker in text for marker in _MISSING_COMPONENT_MARKERS)
+
+
 class AgenticExplorer:
     """
     Goal-driven AI explorer implementing the full Observe→Think→Act→Execute loop.
@@ -149,6 +192,7 @@ class AgenticExplorer:
         static_findings: Optional[Dict[str, Any]] = None,
         accessibility_service_class: Optional[str] = None,
         main_activity: Optional[str] = None,
+        pregranted_permissions: Optional[List[str]] = None,
     ) -> None:
         self.device_serial   = device_serial
         self.adb_path        = adb_path
@@ -168,6 +212,68 @@ class AgenticExplorer:
         # than issuing `am start` with a missing component.
         self.main_activity: str = main_activity or ""
 
+        # Permission investigation.
+        #
+        # Seeded from the manifest permissions that now arrive over the static
+        # bridge. When static_findings is empty - a validation harness, a
+        # recovery re-run - the investigator still works: it simply has no
+        # declared set to compare against, and says so rather than inventing one.
+        self.permissions = PermissionInvestigator(
+            package_name=package_name,
+            app_label=str(self.static_findings.get("app_label") or ""),
+        )
+        # Capability handed to the sample by the harness before it ran. Recorded
+        # as granted-but-never-requested, which classifies as
+        # GRANTED_WITHOUT_REQUEST: a finding about our own setup, not about the
+        # app. Without it the report shows a sample holding SMS access with no
+        # account of how it got there.
+        pregranted = list(pregranted_permissions or [])
+
+        declared = self.static_findings.get("permissions") or []
+        if declared:
+            self.permissions.record_declared(declared)
+            logger.info(
+                "[AgenticExplorer] Static bridge: %d declared permission(s); "
+                "app category inferred as %s (%s)",
+                len(declared),
+                self.permissions.profile.category.value,
+                self.permissions.profile.inference.confidence,
+            )
+        if pregranted:
+            for perm in pregranted:
+                self.permissions.record_granted(perm, True)
+            logger.info(
+                "[AgenticExplorer] %d permission(s) were pre-granted before "
+                "launch - no runtime dialog will appear for them, so what the "
+                "sample would have requested cannot be observed this run.",
+                len(pregranted),
+            )
+        else:
+            logger.info(
+                "[AgenticExplorer] No static findings supplied - permission "
+                "expectations cannot be evaluated for this run."
+            )
+
+        # Investigation lifecycle: which stage, what is allowed here, what next.
+        # Seeded from the static signals that now arrive over the bridge, so a
+        # calculator and a banking trojan get different plans rather than the
+        # same flat loop.
+        self.investigation = InvestigationController(
+            package_name=package_name,
+            category=self.permissions.profile.category,
+            static_flags=self.static_findings.get("flags") or {},
+            special_permissions=[
+                r.permission for r in self.permissions.special_permissions()
+            ],
+            max_actions=ACTION_BUDGET,
+        )
+        logger.info(
+            "[Investigation] Plan for %s (%s): %s",
+            package_name or "?",
+            self.permissions.profile.category.value,
+            " -> ".join(st.value for st in self.investigation.plan),
+        )
+
         # Subsystems
         self.goals      = GoalTracker()
         self.memory     = AgentMemory()
@@ -186,6 +292,20 @@ class AgenticExplorer:
             accessibility_service_class=accessibility_service_class,
             screenshot_manager=screenshot_manager,
         )
+        # Verification reads device state through the executor's ADB channel,
+        # which routes via the policy-enforcing SandboxProvider. The probe must
+        # never open its own transport or it would bypass those controls.
+        self._probe = DeviceStateProbe(self.executor._adb, package_name)
+        # A screen-changing action awaiting judgement by the next observation.
+        self._pending_verification = None
+        # Every crash this run, classified. Reported rather than summed: three
+        # crashes of three different kinds is a different story from three of
+        # the same kind.
+        self.crash_findings: List[Any] = []
+        # Stages whose deterministic procedure has already run, so returning to
+        # a stage does not repeat work that is not idempotent on the device.
+        self._procedures_run: set = set()
+
         self.planner    = AgentPlanner(
             api_key=GEMINI_API_KEY,
             device_serial=device_serial,
@@ -245,6 +365,165 @@ class AgenticExplorer:
             return ""
         return f"{self.package_name}/{activity}"
 
+    #: Actions whose effect lives in device state rather than on screen. Only
+    #: these justify the four ADB queries a full probe costs; everything else is
+    #: judged from perception data the loop already holds.
+    _DEVICE_STATE_ACTIONS = frozenset({
+        "grant_permission", "deny_permission", "start_activity",
+    })
+
+    async def _verification_snapshot(
+        self, action: Dict[str, Any], obs: Any
+    ) -> StateSnapshot:
+        """Device state before an action, probed only when the action needs it."""
+        if action.get("tool", "") in self._DEVICE_STATE_ACTIONS:
+            try:
+                return await self._probe.snapshot(
+                    screen_hash=getattr(obs, "screen_hash", ""),
+                    activity=getattr(obs, "activity", ""),
+                )
+            except Exception as exc:
+                # A probe failure must leave the action UNVERIFIED, never
+                # abort the investigation.
+                logger.debug("[AgenticExplorer] State probe failed: %s", exc)
+                return StateSnapshot()
+        return StateSnapshot(
+            screen_hash=getattr(obs, "screen_hash", ""),
+            activity=getattr(obs, "activity", ""),
+            foreground_package=package_of(getattr(obs, "activity", "")),
+        )
+
+    async def _verify_action(
+        self, action: Dict[str, Any], before: StateSnapshot, obs: Any
+    ) -> VerificationResult:
+        """
+        Decide whether the action did its job.
+
+        Device-state actions are probed immediately, because their effect is
+        already final once the command returns. Screen-changing actions are
+        deferred to :meth:`_resolve_pending_verification`: the next OBSERVE
+        reads the settled screen anyway, so verifying here would mean a second
+        `uiautomator dump` per action for a worse answer.
+        """
+        if action.get("tool", "") not in self._DEVICE_STATE_ACTIONS:
+            self._pending_verification = (dict(action), before)
+            return VerificationResult(
+                action=str(action.get("tool") or "unknown"),
+                outcome="UNVERIFIED",
+                detail="deferred to the next observation",
+            )
+        try:
+            after = await self._probe.snapshot()
+            return verify_action(action, before, after, self.package_name)
+        except Exception as exc:
+            logger.debug("[AgenticExplorer] Verification failed: %s", exc)
+            return VerificationResult(
+                action=str(action.get("tool") or "unknown"),
+                detail=f"verification could not run: {exc}",
+            )
+
+    def _resolve_pending_verification(self, obs: Any) -> Optional[VerificationResult]:
+        """
+        Judge the previous screen-changing action against the screen we just read.
+
+        Returns None when nothing was pending.
+        """
+        pending = self._pending_verification
+        self._pending_verification = None
+        if pending is None:
+            return None
+        action, before = pending
+        after = StateSnapshot(
+            screen_hash=getattr(obs, "screen_hash", ""),
+            activity=getattr(obs, "activity", ""),
+            foreground_package=package_of(getattr(obs, "activity", "")),
+        )
+        result = verify_action(action, before, after, self.package_name)
+        if result.failed and before.screen_hash:
+            # The action did not do what it claimed, so the cached choice for
+            # the screen it was taken on must not be replayed.
+            self.planner.invalidate_cache_for_screen(before.screen_hash)
+        return result
+
+    async def _run_stage_procedure(self) -> None:
+        """
+        Run the deterministic procedure a stage owns, once per stage.
+
+        §10 is explicit that Gemini must not be responsible for blindly
+        navigating Android Settings. Accessibility is the case that matters: the
+        capability is behind a Settings toggle, a banking trojan's payload is
+        usually gated on it, and hoping the planner finds the right row is how
+        Cerberus ran for 90 seconds without its payload ever starting.
+
+        Idempotent - a stage that has already run its procedure does not repeat
+        it, so returning to the stage later costs nothing.
+        """
+        state = self.investigation.state
+        if state in self._procedures_run:
+            return
+        if state is not InvestigationState.ACCESSIBILITY_ANALYSIS:
+            return
+        self._procedures_run.add(state)
+
+        service_class = getattr(self.executor, "accessibility_service_class", None)
+        if not service_class:
+            logger.info(
+                "[Investigation] ACCESSIBILITY_ANALYSIS: no accessibility service "
+                "declared in the manifest - nothing to enable. That absence is "
+                "itself a finding about the sample."
+            )
+            return
+
+        try:
+            from sudarshan_core.engines.permission_orchestrator import (
+                PermissionOrchestrator,
+            )
+
+            orch = PermissionOrchestrator(
+                device_serial=self.device_serial,
+                adb_path=self.adb_path,
+                event_bus=self.event_bus,
+            )
+            label = str(self.static_findings.get("app_label") or self.package_name)
+            logger.info(
+                "[Investigation] ACCESSIBILITY_ANALYSIS: enabling '%s' for %s",
+                service_class, self.package_name,
+            )
+            granted = await asyncio.to_thread(
+                orch.grant_accessibility, self.package_name, label, service_class
+            )
+            # grant_accessibility already re-reads device state; record what it
+            # found rather than what we asked for.
+            self.permissions.record_granted(
+                "android.permission.BIND_ACCESSIBILITY_SERVICE", bool(granted)
+            )
+            self.audit_log.record_system_event(
+                "accessibility_procedure",
+                f"component={service_class} verified_enabled={bool(granted)}",
+            )
+            if granted:
+                logger.info(
+                    "[Investigation] Accessibility VERIFIED enabled - the sample's "
+                    "accessibility-gated behaviour can now be observed."
+                )
+                # Put the sample back in front; the grant leaves Settings up.
+                component = self._launch_component()
+                if component:
+                    await self.executor.execute(
+                        {"tool": "start_activity", "component": component}
+                    )
+                    await self.executor.wait_for_idle()
+            else:
+                logger.warning(
+                    "[Investigation] Accessibility grant did not take effect - "
+                    "accessibility-gated behaviour will NOT be observable, so a "
+                    "quiet run cannot be read as the sample having none."
+                )
+        except Exception as exc:
+            logger.warning(
+                "[Investigation] Accessibility procedure failed: %s", exc
+            )
+
     def _on_frida_event(self, event: Dict[str, Any]) -> None:
         """Receive Frida events from the bus and buffer them for the agent loop."""
         with self._events_lock:
@@ -302,6 +581,9 @@ class AgenticExplorer:
         last_screen_hash      = ""
         consecutive_crashes   = 0
         out_of_scope_streak   = 0
+        # Set once the sample will not come back to the foreground. Navigation
+        # stops; observation does not.
+        navigation_abandoned  = False
         # The last action the planner chose, kept so a departure discovered on
         # the next observation can be attributed back to the control that
         # caused it. Recovery actions issued by the guard itself deliberately
@@ -386,21 +668,61 @@ class AgenticExplorer:
                             f"-> {foreground_package}",
                         )
                         last_action_tool = last_action_target = ""
-                    if out_of_scope_streak > MAX_OUT_OF_SCOPE_RECOVERIES:
-                        logger.warning(
-                            "[AgenticExplorer] Foreground left '%s' for '%s' and "
-                            "%d recovery attempts did not bring it back - "
-                            "abandoning the guard rather than spending more "
-                            "budget on it.",
-                            self.package_name, foreground_package,
-                            out_of_scope_streak - 1,
-                        )
-                        self.audit_log.record_system_event(
-                            "out_of_scope_unrecoverable",
-                            f"foreground={foreground_package} "
-                            f"attempts={out_of_scope_streak - 1}",
-                        )
-                        break
+                    # `navigation_abandoned` is checked here, not only the
+                    # streak cap. Detecting a missing launcher component set the
+                    # flag but left this condition looking at the counter alone,
+                    # so the guard announced "cannot be relaunched" and then
+                    # tried again anyway - once per iteration until the cap.
+                    if (
+                        navigation_abandoned
+                        or out_of_scope_streak > MAX_OUT_OF_SCOPE_RECOVERIES
+                    ):
+                        # Stop NAVIGATING, but keep OBSERVING.
+                        #
+                        # This used to `break`, ending the investigation. That is
+                        # exactly backwards for a sample that hides itself:
+                        # measured on Cerberus, which backgrounds itself and
+                        # disables its launcher activity (every relaunch returned
+                        # "Activity class ... does not exist"). Six failed
+                        # recoveries then terminated the run at 6 actions and 4
+                        # evidence records - while the trojan was still
+                        # instrumented and still firing hooks. A backgrounded
+                        # process is not a finished one, and self-hiding is the
+                        # behaviour we are there to observe, not a reason to
+                        # stop watching.
+                        if not navigation_abandoned:
+                            navigation_abandoned = True
+                            logger.warning(
+                                "[AgenticExplorer] '%s' will not return to the "
+                                "foreground after %d attempts (now showing '%s'). "
+                                "Its launcher component may be disabled - "
+                                "self-hiding is itself a finding. Continuing to "
+                                "observe runtime events without further "
+                                "navigation.",
+                                self.package_name, out_of_scope_streak - 1,
+                                foreground_package,
+                            )
+                            self.audit_log.record_system_event(
+                                "out_of_scope_unrecoverable",
+                                f"foreground={foreground_package} "
+                                f"attempts={out_of_scope_streak - 1} - "
+                                f"observation continues",
+                            )
+                        # No recovery action - but the plan keeps moving. A
+                        # stage procedure like the accessibility grant works
+                        # through Settings and does not need the sample in the
+                        # foreground, so a self-hiding app must not freeze the
+                        # investigation in whatever stage it happened to be in.
+                        self.investigation.record_action()
+                        advance_now, why_now = self.investigation.should_advance()
+                        if advance_now:
+                            self.investigation.advance(why_now)
+                        await self._run_stage_procedure()
+
+                        frida_silence_streak += 1
+                        actions_taken += 1
+                        await self.executor.wait_for_idle()
+                        continue
 
                     component = self._launch_component()
                     use_back = out_of_scope_streak <= BACK_BEFORE_RELAUNCH
@@ -421,7 +743,50 @@ class AgenticExplorer:
                         f"attempt={out_of_scope_streak}",
                     )
                     try:
-                        await self.executor.execute(recovery)
+                        recovery_result = await self.executor.execute(recovery)
+                        # A relaunch that fails because the component is gone is
+                        # CONCLUSIVE on the first attempt - retrying an activity
+                        # Android says does not exist cannot succeed. Measured on
+                        # Cerberus, which disables its own launcher activity:
+                        # every one of six attempts returned "Activity class ...
+                        # does not exist", and those six actions were the run.
+                        if (
+                            recovery["tool"] == "start_activity"
+                            and _launcher_component_missing(recovery_result)
+                        ):
+                            navigation_abandoned = True
+                            logger.warning(
+                                "[AgenticExplorer] '%s' cannot be relaunched - "
+                                "Android reports its launcher component does not "
+                                "exist. The sample has disabled its own launcher, "
+                                "which is self-hiding behaviour and a finding in "
+                                "its own right. Navigation stops here; observation "
+                                "and the investigation plan continue.",
+                                self.package_name,
+                            )
+                            self.audit_log.record_system_event(
+                                "self_hiding_detected",
+                                f"{self.package_name} launcher component missing "
+                                f"after {out_of_scope_streak} attempt(s)",
+                            )
+                            if self.event_bus:
+                                try:
+                                    self.event_bus.publish({
+                                        "type": "event",
+                                        "category": "persistence",
+                                        "severity": "HIGH",
+                                        "data": {
+                                            "hook": "PackageManager.setComponentEnabledSetting",
+                                            "description": (
+                                                "Application's launcher component "
+                                                "no longer resolves - the app "
+                                                "removed itself from the launcher"
+                                            ),
+                                            "package": self.package_name,
+                                        },
+                                    })
+                                except Exception:
+                                    pass
                     except Exception as exc:
                         # A failed recovery is not fatal; the next iteration
                         # re-observes and escalates from press_back to am_start.
@@ -438,6 +803,58 @@ class AgenticExplorer:
                     continue
 
                 out_of_scope_streak = 0
+
+                # Judge the previous screen-changing action now that the settled
+                # screen has been read. Deferring costs nothing and is more
+                # accurate than dumping the UI a second time right after acting.
+                deferred = self._resolve_pending_verification(obs)
+                if deferred is not None and deferred.outcome != "UNVERIFIED":
+                    logger.info("[AgenticExplorer] %s", deferred.log_line())
+
+                # ── INVESTIGATION STATE ───────────────────────────────────────
+                # Deterministic: the screen classifier is rule-based and the
+                # Frida categories are facts, so the model has no say in which
+                # stage the investigation is in.
+                classification = classify_screen(
+                    obs.activity, obs.ui_nodes, obs.ui_xml_raw, self.package_name
+                )
+                self.investigation.observe(
+                    screen_type=classification.screen_type,
+                    frida_categories=[
+                        e.get("category", "") for e in frida_events_this_cycle
+                        if isinstance(e, dict)
+                    ],
+                )
+                # Walk the plan.
+                #
+                # This used to be `if stuck(): abandon()`, so the only way to
+                # leave a stage was to fail in it. A sample that kept producing
+                # events was never stuck and therefore never walked the plan it
+                # was given - measured on Cerberus, which had
+                # ACCESSIBILITY_ANALYSIS planned, visited only BOOTSTRAP and
+                # PERSISTENCE_ANALYSIS, and never reached the stage that would
+                # have unlocked its payload.
+                #
+                # A stuck stage is abandoned (never re-entered); a stage that
+                # merely spent its budget is advanced past but may be returned
+                # to if evidence warrants.
+                advance, why = self.investigation.should_advance()
+                if advance:
+                    if self.investigation.stuck():
+                        self.investigation.abandon(why)
+                    else:
+                        self.investigation.advance(why)
+
+                # Stages with a deterministic procedure run it on entry rather
+                # than hoping the planner clicks the right things in Settings.
+                await self._run_stage_procedure()
+                logger.info(
+                    "[Investigation] Stage: %s  Screen: %s  Goal: %s",
+                    self.investigation.state.value,
+                    classification.screen_type,
+                    (self.goals.next_priority_goal().name
+                     if self.goals.next_priority_goal() else "none"),
+                )
 
                 self.memory.register_screen(obs.screen_hash, obs.activity)
                 self.benchmark.record_screen(obs.screen_hash)
@@ -493,6 +910,39 @@ class AgenticExplorer:
                 if self._is_crash_screen(obs.activity):
                     logger.warning(f"[AgenticExplorer] SC5: App crash/ANR screen detected ({obs.activity}) - attempting relaunch and recovery")
                     self.audit_log.record_system_event("crash_detected_relaunching", obs.activity)
+
+                    # Name the crash before recovering from it. Every death used
+                    # to read the same in the report; the distinction between
+                    # "died because our own agent is on the stack" and "died
+                    # after we granted accessibility" is what an analyst acts on.
+                    finding = classify_crash(CrashContext(
+                        last_action=last_action_tool,
+                        stage=self.investigation.state.value,
+                        actions_before_crash=actions_taken,
+                        crash_index=consecutive_crashes + 1,
+                        instrumented=True,
+                        logcat=obs.logcat or "",
+                        activity=obs.activity,
+                    ))
+                    self.crash_findings.append(finding)
+                    logger.warning(
+                        "[Investigation] Crash classified: %s (%s) - %s",
+                        finding.crash_type, finding.confidence, finding.summary,
+                    )
+                    self.audit_log.record_system_event(
+                        "crash_classified",
+                        f"{finding.crash_type} ({finding.confidence}): "
+                        f"{'; '.join(finding.signals)}",
+                    )
+                    # Published through the existing bus and schema, so
+                    # EvidenceStore records it without any change (§23).
+                    if self.event_bus:
+                        try:
+                            self.event_bus.publish(
+                                crash_event(finding, self.package_name)
+                            )
+                        except Exception as exc:
+                            logger.debug("[AgenticExplorer] Crash event publish failed: %s", exc)
                     try:
                         crash_component = self._launch_component()
                         if crash_component:
@@ -583,6 +1033,31 @@ class AgenticExplorer:
                 # invisible from here.
 
 
+                # ── ENFORCE THE STAGE ALLOWLIST (§34) ─────────────────────────
+                # The planner proposes; the controller disposes. An action the
+                # current stage does not permit never reaches the device, so a
+                # model that hallucinates a tool - or is talked into one by the
+                # analysed app's own UI text - cannot act on it.
+                chosen_tool = action.get("tool", "")
+                if not self.investigation.is_action_allowed(chosen_tool):
+                    logger.warning(
+                        "[Investigation] Rejected '%s' - not permitted in %s "
+                        "(allowed: %s)",
+                        chosen_tool, self.investigation.state.value,
+                        ", ".join(sorted(self.investigation.allowed_actions())) or "none",
+                    )
+                    self.audit_log.record_system_event(
+                        "action_rejected_by_stage",
+                        f"{chosen_tool} not allowed in {self.investigation.state.value}",
+                    )
+                    self.planner.invalidate_cache_for_screen(obs.screen_hash)
+                    # Counted so a planner that keeps proposing the same
+                    # disallowed action trips `stuck()` and moves the stage on,
+                    # rather than spinning until the budget runs out.
+                    self.investigation.record_action(failed=True)
+                    last_action_failed = True
+                    continue
+
                 # ── ACT ───────────────────────────────────────────────────────
                 # Remembered before execution so the scope guard can name the
                 # control responsible if the next observation lands outside the
@@ -590,9 +1065,55 @@ class AgenticExplorer:
                 last_action_tool   = action.get("tool", "")
                 last_action_target = action.get("text") or str(action.get("x", ""))
 
+                # State before the action, for the verifier to compare against.
+                # Only actions whose effect lives in device state pay for a
+                # device probe; screen-changing actions are judged from the
+                # perception data we already hold, which costs nothing.
+                before = await self._verification_snapshot(action, obs)
+
                 result = await self.executor.execute(action)
-                last_action_failed = not result.success
                 actions_taken += 1
+
+                # ── VERIFY ────────────────────────────────────────────────────
+                # ToolResult.success only means the ADB command exited zero. It
+                # is true for a click that matched nothing and for a grant of a
+                # permission the manifest never declared. The device is asked
+                # instead, and only a positive FAILED counts against the action.
+                verification = await self._verify_action(action, before, obs)
+                last_action_failed = not result.success or verification.failed
+                if verification.outcome != "UNVERIFIED":
+                    logger.info("[AgenticExplorer] %s", verification.log_line())
+                    self.audit_log.record_system_event(
+                        "action_verification",
+                        f"{verification.action} expected={verification.expected} "
+                        f"observed={verification.observed} -> {verification.outcome}",
+                    )
+                if verification.failed and verification.detail:
+                    logger.warning(
+                        "[AgenticExplorer] Action reported success but did not "
+                        "take effect: %s", verification.detail,
+                    )
+
+                # ── PROGRESS (§13) ────────────────────────────────────────────
+                # An orchestration signal only. It decides whether to keep
+                # pushing on this stage; it never reaches BFCI or FRS, because
+                # navigation luck must not move a verdict.
+                repeated = obs.screen_hash == last_screen_hash and bool(obs.screen_hash)
+                progress = score_progress(
+                    new_screen=not repeated and bool(obs.screen_hash),
+                    runtime_events=len(frida_events_this_cycle),
+                    failed_action=last_action_failed,
+                    repeated_screen=repeated,
+                )
+                self.investigation.record_action(
+                    failed=last_action_failed, same_screen=repeated
+                )
+                if not progress.productive:
+                    logger.debug(
+                        "[Investigation] Unproductive action (%d): %s",
+                        progress.score, "; ".join(progress.reasons) or "no change",
+                    )
+                last_screen_hash = obs.screen_hash
 
                 # ── SETTLE ────────────────────────────────────────────────────
                 # Nothing used to happen here: the loop went straight back to
@@ -810,6 +1331,10 @@ class AgenticExplorer:
         audit_entries = self.audit_log.get_entries()
         benchmark_report = self.benchmark.build_report()
         goal_summary = self.goals.completion_summary()
+        # Added as new keys rather than reshaping the existing ones: every
+        # current consumer of get_reports() keeps working unchanged (§23).
+        investigation_summary = self.investigation.summary()
+        permission_summary = self.permissions.summary()
 
         exploration_summary = {
             "duration_seconds":    self._duration,
@@ -840,6 +1365,9 @@ class AgenticExplorer:
             "benchmark":           benchmark_report,
             "goal_summary":        goal_summary,
             "agent_memory":        mem_summary,
+            "investigation":       investigation_summary,
+            "crashes":             [f.to_dict() for f in self.crash_findings],
+            "permissions":         permission_summary,
         }
 
     def flush_artifacts(self, output_dir: Path) -> None:

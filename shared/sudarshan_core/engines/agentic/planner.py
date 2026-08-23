@@ -82,7 +82,23 @@ logger = logging.getLogger(__name__)
 
 # SUDARSHAN_AGENT_MODEL is the legacy name, still honoured if GEMINI_MODEL is unset.
 GEMINI_MODEL: str = os.getenv("GEMINI_MODEL") or os.getenv("SUDARSHAN_AGENT_MODEL", "gemini-2.5-flash")
-MAX_OUTPUT_TOKENS: int = 512    # Agent actions are compact JSON - no need for large output
+#: Output budget for one planner call.
+#:
+#: The action itself is ~40 tokens of JSON, so 512 looked generous. It is not,
+#: on a thinking model: the budget covers internal reasoning tokens as well as
+#: the answer. Measured on gemini-3.6-flash with a trivial prompt,
+#: `thoughts_token_count` was 358 of 512 - 70% spent before a character of JSON
+#: was emitted. With the explorer's real prompt (UI tree, memory, goal context)
+#: thinking runs longer still, the JSON is cut mid-string, and the planner sees
+#:     Step1_JSONSyntax: Unterminated string starting at ...
+#: then burns a retry and falls back to the deterministic planner. Every run in
+#: this session did exactly that, which is why the LLM planner appeared to be
+#: unavailable even once the API key was valid.
+#:
+#: thinking cannot simply be switched off - `thinking_budget=0` is rejected by
+#: gemini-3.6-flash with 400 INVALID_ARGUMENT - so the budget is sized to
+#: accommodate it instead.
+MAX_OUTPUT_TOKENS: int = int(os.getenv("SUDARSHAN_AGENT_MAX_OUTPUT_TOKENS", "2048"))
 
 # ─── Cache and budget ─────────────────────────────────────────────────────────
 
@@ -680,7 +696,19 @@ class FallbackPlanner:
         self._scroll_attempts:      int = 0
         # Backtrack attempts spent on the current stuck screen. Bounded so loop
         # recovery cannot preempt the stop condition forever - see decide().
-        self._loop_break_attempts:  int = 0
+        # Backtrack attempts PER SCREEN, not one global counter.
+        #
+        # The counter used to be a single int reset on any screen change - but
+        # the loop-breaker's own press_back changes the screen, so the reset
+        # fired on the very action it was counting. Observed live: "Loop
+        # detected on screen 29d4d7 - triggering backtrack action (1/2)" eight
+        # times in one run, never reaching 2/2, because each attempt reset
+        # itself and the app navigated straight back into the same screen.
+        #
+        # Keyed by screen hash, a stuck screen accumulates its own attempts and
+        # genuinely exhausts them, which is what lets the stop below become
+        # reachable.
+        self._loop_break_attempts:  Dict[str, int] = {}
         self._last_screen_hash:     str = ""
 
     def decide(
@@ -721,16 +749,17 @@ class FallbackPlanner:
         # Check if we are making progress (new screen or new Frida events)
         if obs.screen_hash != self._last_screen_hash:
             self._consecutive_failures = 0
-            self._loop_break_attempts = 0
             self._scroll_attempts      = 0
         else:
             has_new_evidence = len(obs.frida_events) > 0
             if not has_new_evidence:
                 self._consecutive_failures += 1
             else:
-                # New Frida evidence on the same screen is still progress.
+                # New Frida evidence on the same screen is still progress, and
+                # is the one thing that genuinely clears a screen's loop budget:
+                # the screen is producing evidence, so revisiting it is useful.
                 self._consecutive_failures = 0
-                self._loop_break_attempts = 0
+                self._loop_break_attempts.pop(obs.screen_hash, None)
 
         self._last_screen_hash = obs.screen_hash
 
@@ -751,12 +780,14 @@ class FallbackPlanner:
             shash, max_visits=3, window=5
         )
 
-        if looping and self._loop_break_attempts < MAX_LOOP_BREAK_ATTEMPTS:
-            self._loop_break_attempts += 1
+        attempts_here = self._loop_break_attempts.get(shash, 0)
+        if looping and attempts_here < MAX_LOOP_BREAK_ATTEMPTS:
+            attempts_here += 1
+            self._loop_break_attempts[shash] = attempts_here
             logger.warning(
                 f"[FallbackPlanner] Loop detected on screen {shash[:6]} - "
                 f"triggering backtrack action "
-                f"({self._loop_break_attempts}/{MAX_LOOP_BREAK_ATTEMPTS})"
+                f"({attempts_here}/{MAX_LOOP_BREAK_ATTEMPTS})"
             )
             self.coverage_tracker.record_loop_broken()
             return {
@@ -771,8 +802,8 @@ class FallbackPlanner:
         if self._consecutive_failures >= FALLBACK_MAX_CONSECUTIVE_FAILURES:
             logger.warning(
                 f"[FallbackPlanner] {self._consecutive_failures} consecutive failures "
-                f"with no progress ({self._loop_break_attempts} backtrack attempt(s) "
-                f"made) - signalling stop."
+                f"with no progress ({sum(self._loop_break_attempts.values())} "
+                f"backtrack attempt(s) made) - signalling stop."
             )
             return None
 

@@ -443,9 +443,19 @@ def analyze_apk(apk_path: str) -> AndroguardOutput:
 
         flags.dangerous_apis_found = sorted(found)
 
+    # The user-facing name from the manifest. Resolving it goes through the
+    # resource table, which malformed or deliberately corrupted APKs routinely
+    # break, so a failure here yields "" rather than losing the whole analysis.
+    try:
+        app_label = a.get_app_name() or ""
+    except Exception as exc:
+        logger.debug("[apk_analyzer] Could not resolve app label: %s", exc)
+        app_label = ""
+
     return AndroguardOutput(
         package_name=package_name if package_name else "Unknown",
         permissions=permissions if permissions else [],
         flags=flags,
         suspicious_strings=strings_fired[:50],
+        app_label=app_label,
     )

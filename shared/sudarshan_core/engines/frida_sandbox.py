@@ -887,14 +887,30 @@ def _dismiss_permission_review_screen(device: str) -> bool:
     return True
 
 
-def _grant_declared_runtime_permissions(device: str, apk_path: str, package_name: str) -> int:
-    """
-  Pre-grant install-time runtime permissions via ``pm grant`` so cold-start
-  does not block on ReviewPermissionsActivity (which leaves pidof empty).
-    """
-    import shlex as _shlex
-    import shutil
+#: Whether declared runtime permissions are granted before the app is launched.
+#:
+#: Default ON, and deliberately so. It exists because a legacy-targetSdk app
+#: cold-starts into ReviewPermissionsActivity, which leaves `pidof` empty and
+#: breaks the launch ladder - turning it off wholesale trades a permission
+#: dialog for a failed run.
+#:
+#: But it has a cost that was invisible until the permission investigator went
+#: in: granting everything up front means Android never shows a runtime
+#: permission dialog, so the investigation cannot observe *which* permissions
+#: the sample actually asks for, and the dialog that the report is supposed to
+#: screenshot never appears. What the app requests is a behaviour; what the
+#: manifest declares is only an intention.
+#:
+#: Set SUDARSHAN_PREGRANT_PERMISSIONS=0 to observe the real request flow.
+#: Changing it changes what the sandbox sees, and therefore BFCI inputs, so the
+#: default is left alone until both modes have been measured on the corpus.
+PREGRANT_PERMISSIONS: bool = os.getenv(
+    "SUDARSHAN_PREGRANT_PERMISSIONS", "1"
+).strip().lower() not in ("0", "false", "no")
 
+
+def _declared_runtime_permissions(apk_path: str) -> List[str]:
+    """Permission names the manifest declares, read with aapt."""
     perms: List[str] = []
     for tool in ("aapt2", "aapt"):
         aapt = _find_aapt_executable(tool)
@@ -903,11 +919,8 @@ def _grant_declared_runtime_permissions(device: str, apk_path: str, package_name
         try:
             result = subprocess.run(
                 [aapt, "dump", "permissions", apk_path],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=30,
+                capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=30,
             )
             for line in (result.stdout or "").splitlines():
                 line = line.strip()
@@ -919,8 +932,38 @@ def _grant_declared_runtime_permissions(device: str, apk_path: str, package_name
                 break
         except Exception:
             continue
+    return perms
 
-    granted = 0
+
+def _grant_declared_runtime_permissions(
+    device: str, apk_path: str, package_name: str
+) -> List[str]:
+    """
+    Pre-grant declared runtime permissions via ``pm grant`` so cold-start does
+    not block on ReviewPermissionsActivity (which leaves pidof empty).
+
+    Returns the permissions that were actually granted, not a count: the
+    investigation needs to know *which* capabilities the sample holds without
+    ever having asked for them, and a bare integer cannot say that. Callers
+    record these as GRANTED_WITHOUT_REQUEST - a finding about the harness
+    rather than about the sample.
+
+    Honours :data:`PREGRANT_PERMISSIONS`; returns [] when disabled.
+    """
+    import shlex as _shlex
+    import shutil
+
+    if not PREGRANT_PERMISSIONS:
+        logger.info(
+            "[Frida] Pre-granting disabled (SUDARSHAN_PREGRANT_PERMISSIONS=0) - "
+            "the sample must request permissions at runtime, and the launch "
+            "ladder may hit ReviewPermissionsActivity on a legacy-targetSdk app."
+        )
+        return []
+
+    perms = _declared_runtime_permissions(apk_path)
+
+    granted: List[str] = []
     safe_pkg = _shlex.quote(package_name)
     for perm in perms:
         if not perm.startswith("android.permission."):
@@ -929,13 +972,14 @@ def _grant_declared_runtime_permissions(device: str, apk_path: str, package_name
             "-s", device, "shell", f"pm grant {safe_pkg} {perm}", timeout=10,
         )
         if ok or "granted" in (out or "").lower():
-            granted += 1
+            granted.append(perm)
         else:
             logger.debug("[Frida] pm grant skipped for %s: %s", perm, out)
     if granted:
         logger.info(
-            "[Frida] Pre-granted %d declared permission(s) for %s before launch",
-            granted, package_name,
+            "[Frida] Pre-granted %d declared permission(s) for %s before launch "
+            "- no runtime permission dialog will be shown for these",
+            len(granted), package_name,
         )
     return granted
 
@@ -1688,10 +1732,28 @@ class FridaSession:
         main_activity: Optional[str] = None,
         artifact_dir: Optional[Path] = None,
         case_id: str = "",
+        static_findings: Optional[Dict[str, Any]] = None,
     ):
         self.device_serial = device_serial
         self.package_name = package_name
         self.main_activity = main_activity
+        # What static analysis already learned about this sample: declared
+        # permissions, app label, static flags.
+        #
+        # Before this existed the dynamic engine ran blind. AgenticExplorer has
+        # always accepted `static_findings` and PerceptionPipeline has always
+        # forwarded it into every Observation - but nothing upstream ever
+        # supplied it, so it was `{}` on every real run. The engine could not
+        # compare declared permissions against what the app requested at
+        # runtime because it was never told what was declared.
+        #
+        # Optional on purpose: dynamic analysis must still run for callers that
+        # have no static pass (validation harnesses, recovery re-runs). An empty
+        # dict reproduces the previous behaviour exactly.
+        self.static_findings: Dict[str, Any] = dict(static_findings or {})
+        # Permissions granted by the harness before launch, so the explorer can
+        # tell capability the sample asked for from capability we handed it.
+        self.pregranted_permissions: List[str] = []
         # Where per-sample forensic artifacts are written. Defaults to the
         # process CWD only when a caller supplies nothing, which keeps the
         # constructor usable in tests without touching the filesystem.
@@ -2911,6 +2973,16 @@ class FridaSession:
                     # Needed to put the app back in the foreground after a crash
                     # or after a tap hands the foreground to another app.
                     main_activity=self.main_activity,
+                    # The static->dynamic bridge. AgenticExplorer has always
+                    # accepted this and PerceptionPipeline has always forwarded
+                    # it into every Observation, but this call site never
+                    # supplied it - so the explorer ran with `{}` and could not
+                    # know which permissions the manifest declared.
+                    static_findings=self.static_findings,
+                    # Capability the harness handed the sample before it ran, so
+                    # the investigation does not mistake it for something the
+                    # app requested.
+                    pregranted_permissions=self.pregranted_permissions,
                 )
                 self.explorer_used = "agentic"
                 logger.info("[Frida] AgenticExplorer selected.")
@@ -3059,7 +3131,12 @@ class FridaSession:
 
 # ─── Main Analysis Entry Point ─────────────────────────────────────────────────
 
-async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) -> Dict[str, Any]:
+async def run_frida_analysis(
+    apk_path: str,
+    package_name: Optional[str] = None,
+    *,
+    static_findings: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """
     Full Frida dynamic analysis pipeline:
       1. Find connected emulator
@@ -3072,6 +3149,14 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
 
     Returns a dict matching the dynamic_result schema expected by calculate_risk_score().
     Falls back gracefully with available=False if anything fails.
+
+    static_findings
+        What the static pass already established - at minimum
+        ``{"permissions": [...], "app_label": str, "flags": {...}}``. Keyword-only
+        and optional: every existing caller keeps working unchanged, and a run
+        without it behaves exactly as before. Supplying it is what lets the
+        dynamic side compare declared permissions against what the app actually
+        requests at runtime.
     """
     base_result: Dict[str, Any] = {
         "available": False,
@@ -3162,7 +3247,61 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
             package_name=package_name,
             device_serial=device_serial,
             base_result=base_result,
+            static_findings=static_findings,
         )
+
+
+def _build_investigation_records(session: "FridaSession") -> List[Dict[str, Any]]:
+    """
+    Reconstructor records for what the investigation itself established.
+
+    Only VERIFIED capabilities are included. An unverified grant must not seed a
+    causal chain: the behaviour downstream of it never actually had the
+    capability, and a chain built on one would be fiction.
+
+    Never raises - a failure here degrades to an empty list rather than losing
+    the workflow that the Frida events alone can still support.
+    """
+    try:
+        from sudarshan_core.engines.workflow_reconstructor import investigation_records
+    except Exception:
+        return []
+
+    # `session.reports` is what the explorer returned from get_reports(); it
+    # carries the "permissions" and "crashes" keys added this cycle.
+    reports = getattr(session, "reports", None) or {}
+    if not isinstance(reports, dict):
+        return []
+    permissions = reports.get("permissions") or {}
+    records = permissions.get("records") or []
+
+    granted = [
+        r.get("permission", "")
+        for r in records
+        if isinstance(r, dict) and r.get("granted") and r.get("permission")
+    ]
+    accessibility = any(
+        isinstance(r, dict)
+        and r.get("granted")
+        and "BIND_ACCESSIBILITY_SERVICE" in str(r.get("permission", ""))
+        for r in records
+    )
+    overlay = any(
+        isinstance(r, dict)
+        and r.get("granted")
+        and "SYSTEM_ALERT_WINDOW" in str(r.get("permission", ""))
+        for r in records
+    )
+    try:
+        return investigation_records(
+            granted_permissions=granted,
+            accessibility_enabled=accessibility,
+            overlay_granted=overlay,
+            crash_findings=reports.get("crashes") or [],
+        )
+    except Exception as exc:
+        logger.debug("[Frida] Could not build investigation records: %s", exc)
+        return []
 
 
 def _build_root_cause_analysis(
@@ -3238,6 +3377,7 @@ async def _run_device_session(
     package_name: Optional[str],
     device_serial: str,
     base_result: Dict[str, Any],
+    static_findings: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Install, instrument and close one sample. Caller holds the device lock."""
     loop = asyncio.get_event_loop()
@@ -3321,6 +3461,7 @@ async def _run_device_session(
         main_activity=main_activity,
         artifact_dir=apk_dir,
         case_id=content_sha256,
+        static_findings=static_findings,
     )
 
     # ── Step 3: Install APK ────────────────────────────────────────────────────
@@ -3413,7 +3554,11 @@ async def _run_device_session(
             " (repaired derivative)" if provenance.get("is_repaired_derivative") else "",
         )
 
-    await loop.run_in_executor(
+    # Remembered on the session so the explorer can record these as
+    # GRANTED_WITHOUT_REQUEST. Without that the report shows a sample holding
+    # SMS access with no explanation of how it got it, and the answer - that we
+    # granted it ourselves before launch - is invisible.
+    session.pregranted_permissions = await loop.run_in_executor(
         None,
         _grant_declared_runtime_permissions,
         device_serial,
@@ -3713,6 +3858,12 @@ async def _run_device_session(
     if session.reports:
         result["attack_timeline"] = session.reports.get("attack_timeline", [])
         result["coverage_metrics"] = session.reports.get("coverage", {})
+        # Investigation state, permission findings and classified crashes, so
+        # the report can show what was investigated and why - not just which
+        # hooks fired. Added as new keys; nothing existing is reshaped.
+        result["investigation"] = session.reports.get("investigation", {})
+        result["permission_findings"] = session.reports.get("permissions", {})
+        result["crashes"] = session.reports.get("crashes", [])
         result["clicked_nodes"] = list(session.reports.get("exploration_summary", {}).get("clicked_nodes", []))
 
     
@@ -3769,7 +3920,15 @@ async def _run_device_session(
     # ── Fraud Workflow Reconstruction ─────────────────────────────────────────
     # Build causal chain evidence from raw collected_events. This runs after
     # the evidence store flush so workflow records are available for the report.
-    if WorkflowReconstructor is not None and session.total_hook_events_received > 0:
+    # The gate used to be `total_hook_events_received > 0`, so a run where the
+    # sandbox enabled accessibility and the sample then did nothing hookable
+    # produced no workflow at all - not even a record of what had been enabled.
+    # Investigation-derived records now count toward having something to
+    # reconstruct.
+    _investigation_records = _build_investigation_records(session)
+    if WorkflowReconstructor is not None and (
+        session.total_hook_events_received > 0 or _investigation_records
+    ):
         try:
             session.dae.transition(DAEStage.BUILD_WORKFLOW, "workflow reconstruction")
             # Flatten all hooked events into a record list the reconstructor understands
@@ -3785,6 +3944,11 @@ async def _run_device_session(
                         "severity":     ev.get("severity", data.get("severity", "MED")),
                         "description":  data.get("description", ""),
                     })
+
+            # Preconditions the sandbox established, so the chain can show
+            # what made later behaviour reachable. Flagged is_precondition by
+            # their rules, so they cannot make a benign run look fraudulent.
+            workflow_records.extend(_investigation_records)
 
             reconstructor = WorkflowReconstructor()
             workflow = reconstructor.reconstruct(workflow_records)

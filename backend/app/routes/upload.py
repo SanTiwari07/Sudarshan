@@ -749,7 +749,22 @@ async def _run_analysis_pipeline(
                 dynamic_result = await engine.run_all_stages()
             else:
                 from sudarshan_core.engines.frida_sandbox import run_frida_analysis
-                dynamic_result = await run_frida_analysis(temp_path, package_name=package_name)
+                # Hand the static pass's findings to the dynamic engine. Without
+                # this the explorer cannot tell a permission the manifest
+                # declared from one it never asked for, so expected-vs-observed
+                # permission analysis is impossible.
+                dynamic_result = await run_frida_analysis(
+                    temp_path,
+                    package_name=package_name,
+                    static_findings={
+                        "permissions": all_permissions,
+                        "flags": flags_dict,
+                        # The identity the sample claims. Attacker-controlled,
+                        # which is exactly why it is useful: permissions are
+                        # judged against what the app says it is.
+                        "app_label": getattr(androguard_output, "app_label", "") or "",
+                    },
+                )
             if dynamic_result.get("available"):
                 logger.info(f"Frida BFCI={dynamic_result.get('bfci', 0):.1f}")
             else:

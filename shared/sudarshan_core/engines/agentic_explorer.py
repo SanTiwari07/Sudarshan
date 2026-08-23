@@ -84,7 +84,15 @@ logger = logging.getLogger(__name__)
 # ─── Configuration (env overrides) ────────────────────────────────────────────
 
 # Maximum actions the agent may take before stopping.
-ACTION_BUDGET: int = int(os.getenv("SUDARSHAN_AGENT_ACTION_BUDGET", "25"))
+#
+# Raised with the analysis window and the per-stage budget, because it binds
+# first: at 25 actions and 4 per stage the walk stops after ~6 stages no matter
+# how long the window is, so raising the window alone changed nothing.
+#
+# Sized for the WORST case rather than the sample that prompted it: the fullest
+# trojan plan is 14 stages, which needs 56 actions at 4 each. 60 leaves margin
+# and costs ~252s at the measured 4.2s per action, inside the 300s window.
+ACTION_BUDGET: int = int(os.getenv("SUDARSHAN_AGENT_ACTION_BUDGET", "60"))
 
 # Capture one screenshot per executed action so the report shows what every
 # click did. Perception's own screenshots are conditional and hash-deduped, so

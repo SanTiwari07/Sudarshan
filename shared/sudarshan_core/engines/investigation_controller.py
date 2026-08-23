@@ -51,9 +51,19 @@ def _int_env(name: str, default: int) -> int:
 
 
 #: Total actions across the whole investigation.
-INVESTIGATION_MAX_ACTIONS: int = _int_env("INVESTIGATION_MAX_ACTIONS", 25)
-#: Actions spent on one goal before it is abandoned as inconclusive.
-INVESTIGATION_MAX_ACTIONS_PER_GOAL: int = _int_env("INVESTIGATION_MAX_ACTIONS_PER_GOAL", 8)
+#:
+#: Kept in step with AgenticExplorer.ACTION_BUDGET, which is what the explorer
+#: actually passes in. This default only applies to a controller constructed
+#: directly, so a stale value here is quietly misleading rather than wrong.
+INVESTIGATION_MAX_ACTIONS: int = _int_env("INVESTIGATION_MAX_ACTIONS", 60)
+#: Actions one stage may spend before the investigation moves on.
+#:
+#: Lowered from 8 so the plan can actually be completed. A banking-trojan plan
+#: runs to 11 stages; at 8 actions each that is 88 actions, far beyond any
+#: sensible budget, so early stages consumed the run and the fraud-relevant
+#: ones were never reached. Four is enough to open a screen, act on it and
+#: judge the result, which is what a stage needs to be conclusive.
+INVESTIGATION_MAX_ACTIONS_PER_GOAL: int = _int_env("INVESTIGATION_MAX_ACTIONS_PER_GOAL", 4)
 #: Consecutive observations of the same screen before the state is forced on.
 INVESTIGATION_MAX_SAME_SCREEN: int = _int_env("INVESTIGATION_MAX_SAME_SCREEN", 2)
 #: Consecutive verified failures before the current stage is abandoned.

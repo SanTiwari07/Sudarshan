@@ -716,3 +716,49 @@ def test_a_completed_investigation_does_not_keep_advancing():
     controller.transition_to(InvestigationState.COMPLETE, "done")
     assert controller.should_advance()[0] is False
     assert controller.advance() is None
+
+
+# ── the budgets must be mutually consistent ──────────────────────────────────
+
+def test_the_action_budget_can_cover_a_full_trojan_plan():
+    """
+    The three limits are only useful together. At 25 total actions and 8 per
+    stage the walk stopped after ~3 of 11 stages, so the fraud-relevant ones
+    were never reached no matter how long the analysis window was.
+    """
+    from sudarshan_core.engines.agentic_explorer import ACTION_BUDGET
+    from sudarshan_core.engines.investigation_controller import (
+        INVESTIGATION_MAX_ACTIONS_PER_GOAL,
+    )
+
+    stages = len(_trojan().plan) - 1          # COMPLETE consumes no actions
+    reachable = ACTION_BUDGET // INVESTIGATION_MAX_ACTIONS_PER_GOAL
+    assert reachable >= stages, (
+        f"budget reaches {reachable} stages but the plan has {stages}"
+    )
+
+
+def test_the_analysis_window_can_hold_the_action_budget():
+    """Measured at ~4.2s per action with the LLM planner."""
+    from sudarshan_core.engines.agentic_explorer import ACTION_BUDGET
+    from sudarshan_core.engines.frida_sandbox import ANALYSIS_DURATION_SECONDS
+
+    assert ACTION_BUDGET * 4.2 <= ANALYSIS_DURATION_SECONDS
+
+
+def test_a_stage_budget_still_bounds_a_single_screen():
+    """Lowering it must not remove the bound that stops one screen hogging."""
+    from sudarshan_core.engines.investigation_controller import (
+        INVESTIGATION_MAX_ACTIONS_PER_GOAL,
+    )
+
+    assert 1 < INVESTIGATION_MAX_ACTIONS_PER_GOAL <= 8
+
+
+def test_the_controller_default_matches_the_explorer_budget():
+    from sudarshan_core.engines.agentic_explorer import ACTION_BUDGET
+    from sudarshan_core.engines.investigation_controller import (
+        INVESTIGATION_MAX_ACTIONS,
+    )
+
+    assert INVESTIGATION_MAX_ACTIONS == ACTION_BUDGET

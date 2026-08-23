@@ -211,7 +211,16 @@ except ImportError:
 # 30 s was too tight for droppers: the second stage lands after the first-run
 # delay, so the capture window closed before any weighted behaviour occurred and
 # BFCI read 0.0 for samples that are demonstrably active. Overridable per run.
-ANALYSIS_DURATION_SECONDS = int(os.getenv("FRIDA_ANALYSIS_DURATION", "90"))
+# How long the sample is exercised, in seconds.
+#
+# Raised from 90s once the investigation plan began driving the run. Measured on
+# Cerberus: 22 actions in 92s, so ~4.2s per action with the LLM planner. An
+# fullest trojan plan is 14 stages, which at 4 actions per stage needs 56
+# actions, i.e. ~235s - a 90s window truncated the walk at stage 3 and the
+# sample's accessibility stage was never reached.
+#
+# The cost is real: every dynamic run is now ~5 minutes rather than ~90s.
+ANALYSIS_DURATION_SECONDS = int(os.getenv("FRIDA_ANALYSIS_DURATION", "300"))
 
 # ── Session lifecycle pacing ──────────────────────────────────────────────────
 # The session is OPEN -> ANALYSE -> CLOSE. Nothing may touch the UI until the

@@ -163,7 +163,7 @@ class DynamicAnalysisResult(BaseModel):
     network_logs: List[Any] = Field(default_factory=list)
     api_calls: List[Any] = Field(default_factory=list)
     files_accessed: List[str] = Field(default_factory=list)
-    screenshots: List[str] = Field(default_factory=list)
+    screenshots: List[Any] = Field(default_factory=list)
     logcat: str = ""
     multi_stage_summary: Dict[str, Any] = Field(default_factory=dict)
     coverage_metrics: Dict[str, int] = Field(default_factory=dict)

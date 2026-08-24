@@ -15,6 +15,12 @@ import os
 from typing import Any, Dict, List, Optional
 
 from app.rag.knowledge_base import build_rag_context, get_cert_in_recommendations
+from sudarshan_core.ai.gemini_errors import (
+    GeminiAllProvidersFailed,
+    GeminiNonRetryableError,
+    GeminiNotConfiguredError,
+)
+from sudarshan_core.ai.gemini_provider import gemini_is_configured, get_gemini_manager
 from sudarshan_core.engines.agentic.sanitizer import sanitize
 
 logger = logging.getLogger(__name__)
@@ -252,27 +258,11 @@ async def analyze_with_llm(
     if risk_result is None:
         risk_result = {}
 
-    gemini_key = os.getenv("GEMINI_API_KEY")
-    if not gemini_key:
-        try:
-            from pathlib import Path
-            from dotenv import load_dotenv
-            curr = Path(__file__).resolve().parent
-            for _ in range(5):
-                env_file = curr / ".env"
-                if env_file.exists():
-                    load_dotenv(dotenv_path=env_file, override=True)
-                    gemini_key = os.getenv("GEMINI_API_KEY")
-                    break
-                curr = curr.parent
-        except Exception:
-            pass
-
     cert_recs = get_cert_in_recommendations(family, flags)
 
-    if not gemini_key:
-        logger.warning("[Gemini] GEMINI_API_KEY is not set. Returning deterministic template.")
-        return _get_fallback_template(cert_recs, "GEMINI_API_KEY not configured")
+    if not gemini_is_configured():
+        logger.warning("[Gemini] No Gemini API key configured. Returning deterministic template.")
+        return _get_fallback_template(cert_recs, "Gemini API key not configured")
 
     # ── Build verified evidence & RAG context ─────────────────────────────────
     evidence = _build_evidence_dict(
@@ -302,18 +292,14 @@ async def analyze_with_llm(
     # The engine already does this correctly for every blocking step it has;
     # see analysis-engine/app/main.py and its comment about /health going quiet
     # mid-analysis. Same hazard, same fix.
-    model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     last_error: Optional[str] = None
+    manager = get_gemini_manager()
 
     for attempt in range(max_retries):
         try:
-            from google import genai
             from google.genai import types
 
-            client = genai.Client(api_key=gemini_key)
-            response = await asyncio.to_thread(
-                client.models.generate_content,
-                model=model_name,
+            result = await manager.generate_content_async(
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
@@ -321,30 +307,41 @@ async def analyze_with_llm(
                 ),
             )
 
-            if response and response.text:
-                parsed = json.loads(response.text)
+            if result.text:
+                parsed = json.loads(result.text)
                 validated = _validate_report_json(parsed, cert_recs)
-                logger.info(f"[Gemini] RAG threat report generated successfully via {model_name} (Attempt {attempt+1})")
+                logger.info(
+                    "[Gemini] RAG threat report generated successfully via %s "
+                    "(provider=%s fallback_used=%s attempt=%s)",
+                    result.model,
+                    result.provider,
+                    result.fallback_used,
+                    attempt + 1,
+                )
                 return validated
 
             last_error = "empty response"
-            logger.warning(f"[Gemini] Attempt {attempt+1}/{max_retries} returned no text.")
+            logger.warning("[Gemini] Attempt %s/%s returned no text.", attempt + 1, max_retries)
 
+        except GeminiNotConfiguredError as e:
+            return _get_fallback_template(cert_recs, str(e))
+        except GeminiNonRetryableError as e:
+            logger.error("[Gemini] Non-retryable failure (%s); using fallback template.", e)
+            return _get_fallback_template(cert_recs, str(e))
+        except GeminiAllProvidersFailed as e:
+            logger.error("[Gemini] All providers failed (%s); using fallback template.", e)
+            return _get_fallback_template(cert_recs, str(e))
         except Exception as e:
             last_error = f"{type(e).__name__}: {e}"
-
-            # Retrying a 401/403 is 3.5 s of latency for a call that cannot
-            # succeed. Only transient classes are worth another attempt.
             if not _is_retryable(e):
-                logger.error(f"[Gemini] Non-retryable failure ({last_error}); using fallback template.")
+                logger.error("[Gemini] Non-retryable failure (%s); using fallback template.", last_error)
                 return _get_fallback_template(cert_recs, last_error)
-
-            logger.warning(f"[Gemini] Attempt {attempt+1}/{max_retries} failed ({last_error}).")
+            logger.warning("[Gemini] Attempt %s/%s failed (%s).", attempt + 1, max_retries, last_error)
 
         if attempt < max_retries - 1:
             backoff = (2 ** attempt) * 0.5
-            logger.info(f"[Gemini] Retrying in {backoff:.1f}s...")
+            logger.info("[Gemini] Retrying JSON parse/validation in %.1fs...", backoff)
             await asyncio.sleep(backoff)
 
-    logger.error("[Gemini] All Gemini Flash API retries exhausted. Returning fallback template.")
+    logger.error("[Gemini] All Gemini report attempts exhausted. Returning fallback template.")
     return _get_fallback_template(cert_recs, f"Gemini retries exhausted ({last_error})")

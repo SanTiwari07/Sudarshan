@@ -214,3 +214,142 @@ def test_a_missing_target_is_normalised_rather_than_dropped():
 
 def test_a_fresh_memory_blames_nothing():
     assert _memory_on_screen()._escaping_actions == set()
+
+
+# ── self-hiding malware must not end the investigation ───────────────────────
+
+def test_unrecoverable_navigation_does_not_break_the_loop():
+    """
+    Measured on Cerberus: it backgrounds itself and disables its launcher
+    activity, so every relaunch returned "Activity class ... does not exist".
+    Six failed recoveries then TERMINATED the run at 6 actions and 4 evidence
+    records - while the trojan was still instrumented and still firing hooks.
+
+    A backgrounded process is not a finished one, and self-hiding is the
+    behaviour we are there to observe. The loop must stop navigating and keep
+    observing.
+    """
+    import inspect
+
+    from sudarshan_core.engines.agentic_explorer import AgenticExplorer
+
+    source = inspect.getsource(AgenticExplorer.start)
+    start = source.index("out_of_scope_streak > MAX_OUT_OF_SCOPE_RECOVERIES")
+    branch = source[start:start + 3200]
+    # The branch must continue the loop, not break out of it.
+    assert "continue" in branch
+    assert "navigation_abandoned" in branch
+
+
+def test_the_abandonment_is_announced_as_a_finding():
+    """Self-hiding is evidence, so the run must say so rather than go quiet."""
+    import inspect
+
+    from sudarshan_core.engines.agentic_explorer import AgenticExplorer
+
+    source = inspect.getsource(AgenticExplorer.start)
+    assert "self-hiding is itself a finding" in source
+    assert "out_of_scope_unrecoverable" in source
+
+
+# ── early self-hiding detection ──────────────────────────────────────────────
+
+class _Result:
+    def __init__(self, output="", error=None, success=True):
+        self.output = output
+        self.error = error
+        self.success = success
+
+
+def test_a_missing_launcher_component_is_recognised():
+    """
+    Cerberus disables its own launcher activity. `am` exits 0 and prints the
+    failure to stdout, so the exit code cannot be trusted here.
+    """
+    from sudarshan_core.engines.agentic_explorer import _launcher_component_missing
+
+    real = ("Error: Activity class {com.x/com.x.OzGUhRlf} does not exist.")
+    assert _launcher_component_missing(_Result(output=real)) is True
+
+
+@pytest.mark.parametrize("text", [
+    "Error: Activity class {a/b} does not exist.",
+    "Error type 3\nError: Unable to resolve Intent",
+])
+def test_every_missing_component_phrasing_is_matched(text):
+    from sudarshan_core.engines.agentic_explorer import _launcher_component_missing
+
+    assert _launcher_component_missing(_Result(output=text)) is True
+
+
+def test_a_successful_relaunch_is_not_self_hiding():
+    from sudarshan_core.engines.agentic_explorer import _launcher_component_missing
+
+    assert _launcher_component_missing(
+        _Result(output="Starting: Intent { cmp=com.x/.Main }")
+    ) is False
+
+
+def test_an_empty_or_absent_result_is_not_conclusive():
+    """Silence is not evidence that the component is gone."""
+    from sudarshan_core.engines.agentic_explorer import _launcher_component_missing
+
+    assert _launcher_component_missing(None) is False
+    assert _launcher_component_missing(_Result()) is False
+    assert _launcher_component_missing(_Result(output="   ")) is False
+
+
+def test_the_error_field_is_checked_as_well_as_output():
+    from sudarshan_core.engines.agentic_explorer import _launcher_component_missing
+
+    assert _launcher_component_missing(
+        _Result(error="Activity class does not exist")
+    ) is True
+
+
+def test_detection_happens_on_the_first_conclusive_failure():
+    """
+    Six attempts at an activity Android says does not exist WERE the run:
+    measured on Cerberus at 6 actions, 0 screens, 4 evidence records.
+    """
+    import inspect
+
+    from sudarshan_core.engines.agentic_explorer import AgenticExplorer
+
+    source = inspect.getsource(AgenticExplorer.start)
+    assert "_launcher_component_missing(recovery_result)" in source
+    assert "self_hiding_detected" in source
+
+
+def test_the_plan_keeps_walking_once_navigation_is_abandoned():
+    """
+    A stage procedure such as the accessibility grant works through Settings and
+    does not need the sample in the foreground, so a self-hiding app must not
+    freeze the investigation in whatever stage it happened to reach.
+    """
+    import inspect
+
+    from sudarshan_core.engines.agentic_explorer import AgenticExplorer
+
+    source = inspect.getsource(AgenticExplorer.start)
+    start = source.index("No recovery action - but the plan keeps moving")
+    branch = source[start:start + 900]
+    assert "should_advance()" in branch
+    assert "_run_stage_procedure()" in branch
+
+
+def test_abandoning_navigation_actually_stops_the_retries():
+    """
+    Detecting the missing component set `navigation_abandoned` but the guard
+    still keyed off the streak counter alone, so it announced "cannot be
+    relaunched" and then tried again anyway - once per iteration until the cap.
+    """
+    import inspect
+
+    from sudarshan_core.engines.agentic_explorer import AgenticExplorer
+
+    source = inspect.getsource(AgenticExplorer.start)
+    start = source.index("if (\n                        navigation_abandoned")
+    condition = source[start:start + 200]
+    assert "navigation_abandoned" in condition
+    assert "MAX_OUT_OF_SCOPE_RECOVERIES" in condition

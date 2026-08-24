@@ -339,6 +339,119 @@ class _FindingIndex:
 # Section builders
 # ---------------------------------------------------------------------------
 
+def _render_investigation(r: Any, idx: Any) -> str:
+    """
+    What was investigated, what the sandbox did, and how the run ended.
+
+    The dynamic section already answers "which hooks fired". It could not answer
+    "what did we look for, what did we grant, and did any of it work" - so a
+    reader could not tell a sample that requested nothing from one whose
+    permission grants silently failed.
+
+    Renders nothing when there is nothing to say, so a static-only report is
+    unchanged.
+    """
+    investigation = _get(r, "investigation") or {}
+    permissions = _get(r, "permission_findings") or {}
+    crashes = _get(r, "crashes") or []
+
+    transitions = _get(investigation, "transitions") or []
+    perm_records = _get(permissions, "records") or []
+    profile = _get(permissions, "profile") or {}
+
+    # Only INFO-severity permissions is not worth a section: every ordinary
+    # permission would become a finding and the section would be noise.
+    notable = [
+        rec for rec in perm_records
+        if str(_get(rec, "severity", default="INFO")).upper() != "INFO"
+    ]
+    category = _get(profile, "category", default="")
+    known_category = bool(category) and category != "UNKNOWN"
+
+    if not (transitions or notable or crashes or known_category):
+        return ""
+
+    html = '<h3 class="mt12">Investigation</h3>'
+
+    # ── What we took the app to be ──
+    if known_category:
+        signals = _get(profile, "signals") or []
+        signal_str = _esc("; ".join(str(x) for x in signals[:2]))
+        html += (
+            f'<div class="tl-desc" style="margin-bottom:8px">'
+            f'Assessed as <strong>{_esc(str(category))}</strong> '
+            f'(confidence {_esc(str(_get(profile, "confidence", default="")))})'
+            f'{f" &mdash; {signal_str}" if signal_str else ""}. '
+            f'Permission expectations below are judged against that reading; '
+            f'an unexpected permission is a question for review, not a verdict.'
+            f'</div>'
+        )
+
+    # ── Stage transitions ──
+    if transitions:
+        html += '<h4 class="mt8">Stages</h4><div class="timeline">'
+        for t in transitions[:20]:
+            elapsed = _get(t, "elapsed_seconds", default=0)
+            try:
+                stamp = f"{int(float(elapsed)) // 60:02d}:{int(float(elapsed)) % 60:02d}"
+            except Exception:
+                stamp = "--:--"
+            html += (
+                f'<div class="tl-event">'
+                f'<div class="tl-ts">{stamp}</div>'
+                f'<div class="tl-api">{_esc(str(_get(t, "from", default="")))} '
+                f'&rarr; {_esc(str(_get(t, "to", default="")))}</div>'
+                f'<div class="tl-desc">{_esc(str(_get(t, "reason", default="")))}</div>'
+                f'</div>'
+            )
+        html += '</div>'
+
+    # ── Permission findings ──
+    if notable:
+        html += '<h4 class="mt12">Permission Findings</h4>'
+        for rec in notable[:15]:
+            name = _esc(str(_get(rec, "permission", default="")).replace("android.permission.", ""))
+            sev = str(_get(rec, "severity", default="INFO"))
+            classification = _esc(str(_get(rec, "classification", default="")))
+            fid = idx.next("EVID", f"Permission: {name}")
+            # The four facts, so a reader can see WHY it is a finding.
+            facts = ", ".join(filter(None, [
+                "declared" if _get(rec, "declared") else "",
+                "requested at runtime" if _get(rec, "requested_at_runtime") else "",
+                "granted" if _get(rec, "granted") else "not granted",
+            ]))
+            html += (
+                f'<div class="finding">'
+                f'<div class="finding-id">[{fid}]</div>'
+                f'<div class="finding-body">'
+                f'<div class="finding-title">{name}'
+                f'<span class="sev {_sev_class(sev)}">{_esc(sev)}</span></div>'
+                f'<div class="finding-desc">{classification} &mdash; {_esc(facts)}</div>'
+                f'</div></div>'
+            )
+
+    # ── Crashes ──
+    if crashes:
+        html += '<h4 class="mt12">Process Crashes</h4>'
+        for crash in crashes[:8]:
+            ctype = _esc(str(_get(crash, "crash_type", default="UNKNOWN_CRASH")))
+            summary = _esc(str(_get(crash, "summary", default="")))
+            confidence = _esc(str(_get(crash, "confidence", default="")))
+            fid = idx.next("EVID", f"Crash: {ctype}")
+            html += (
+                f'<div class="finding">'
+                f'<div class="finding-id">[{fid}]</div>'
+                f'<div class="finding-body">'
+                f'<div class="finding-title">{ctype}'
+                f'<span class="sev {_sev_class(str(_get(crash, "severity", default="INFO")))}">'
+                f'{_esc(str(_get(crash, "severity", default="INFO")))}</span></div>'
+                f'<div class="finding-desc">{summary} (confidence: {confidence})</div>'
+                f'</div></div>'
+            )
+
+    return html
+
+
 def _section_header(icon: str, icon_bg: str, title: str, subtitle: str = "") -> str:
     sub = (f'<span style="font-size:.78rem;color:var(--text3);margin-left:6px">'
            f'{_esc(subtitle)}</span>') if subtitle else ""
@@ -828,9 +941,39 @@ def _build_dynamic(r: Dict, evidence_json: Optional[Dict], idx: _FindingIndex) -
             html += '</div>'
 
         # ── Fraud workflow ──
-        if wf_stages:
+        #
+        # Preconditions are rendered in their own block. A stage recording that
+        # the SANDBOX enabled accessibility, shown under "Reconstructed Fraud
+        # Workflow" at 100% confidence, reads to an analyst as something the app
+        # did - which is the opposite of what it means.
+        behaviour_stages = [s for s in wf_stages if not _get(s, "is_precondition")]
+        precondition_stages = [s for s in wf_stages if _get(s, "is_precondition")]
+
+        if precondition_stages:
+            html += (
+                '<h3 class="mt12">Sandbox Preconditions</h3>'
+                '<div class="tl-desc" style="margin-bottom:8px">'
+                'Capabilities the analysis sandbox enabled so the sample could be '
+                'exercised. These are harness actions, not application behaviour, '
+                'and do not contribute to the fraud verdict.'
+                '</div><div class="timeline">'
+            )
+            for stage in precondition_stages:
+                label = _esc(_get(stage, "label", default=""))
+                desc = _esc(_get(stage, "description", default=""))
+                desc_html = f'<div class="tl-desc">{desc}</div>' if desc else ""
+                html += (
+                    f'<div class="tl-event">'
+                    f'<div class="tl-ts">SANDBOX ACTION</div>'
+                    f'<div class="tl-api">{label}</div>'
+                    f'{desc_html}'
+                    f'</div>'
+                )
+            html += '</div>'
+
+        if behaviour_stages:
             html += '<h3 class="mt12">Reconstructed Fraud Workflow</h3><div class="timeline">'
-            for stage in wf_stages:
+            for stage in behaviour_stages:
                 label = _esc(_get(stage, "label", default=""))
                 tid = _esc(_get(stage, "technique_id", default=""))
                 desc = _esc(_get(stage, "description", default=""))
@@ -849,6 +992,9 @@ def _build_dynamic(r: Dict, evidence_json: Optional[Dict], idx: _FindingIndex) -
                     f'</div>'
                 )
             html += '</div>'
+
+    # ── Investigation stages, permissions and crashes ──
+    html += _render_investigation(r, idx)
 
     # Anti-analysis detections (shown regardless of telemetry state)
     if anti_analysis:

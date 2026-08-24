@@ -21,6 +21,11 @@ from sudarshan_core.visual_evidence.constants import (
     CLAIM_OVERLAY_OBSERVED,
     CLAIM_PAYMENT_UI,
     CLAIM_VISUAL_IMPERSONATION,
+    CLAIM_VPN_REQUEST,
+    CLAIM_UPDATE_REQUEST,
+    CLAIM_PERMISSION_REQUEST,
+    CLAIM_EXTERNAL_APK_REQUEST,
+    CLAIM_DOWNLOAD_PROMPT,
     FORBIDDEN_CLAIM_SUBSTRINGS,
 )
 
@@ -39,6 +44,11 @@ _REQUIRED_PARAMS: Dict[str, frozenset] = {
     CLAIM_LAUNCH_CONTEXT: frozenset(),
     CLAIM_FINAL_STATE: frozenset(),
     CLAIM_INCONCLUSIVE_VISUAL: frozenset(),
+    CLAIM_VPN_REQUEST: frozenset(),
+    CLAIM_UPDATE_REQUEST: frozenset(),
+    CLAIM_PERMISSION_REQUEST: frozenset(),
+    CLAIM_EXTERNAL_APK_REQUEST: frozenset(),
+    CLAIM_DOWNLOAD_PROMPT: frozenset(),
 }
 
 _TEMPLATES: Dict[str, str] = {
@@ -86,6 +96,21 @@ _TEMPLATES: Dict[str, str] = {
     CLAIM_INCONCLUSIVE_VISUAL: (
         "Visual capture completed but insufficient corroborating runtime evidence was available "
         "to assign a specific investigative claim."
+    ),
+    CLAIM_VPN_REQUEST: (
+        "Application displayed a VPN connection request dialog."
+    ),
+    CLAIM_UPDATE_REQUEST: (
+        "Application presented an update or install request dialog."
+    ),
+    CLAIM_PERMISSION_REQUEST: (
+        "Application displayed a runtime permission request dialog."
+    ),
+    CLAIM_EXTERNAL_APK_REQUEST: (
+        "Application displayed an external application installation request."
+    ),
+    CLAIM_DOWNLOAD_PROMPT: (
+        "Application displayed a download or payload retrieval prompt."
     ),
 }
 

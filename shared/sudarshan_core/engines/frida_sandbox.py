@@ -49,6 +49,12 @@ from sudarshan_core.engines.event_bus import EventType, RuntimeEvent, RuntimeEve
 from sudarshan_core.engines.bfci_scorer import calculate_bfci_v2, BFCI_WEIGHTS
 from sudarshan_core.engines.dae_pipeline import DAEPipelineTracker, DAEStage
 from sudarshan_core.engines.apk_repair import compute_sha256
+from sudarshan_core.engines.runtime_lifecycle import (
+    RuntimeLifecycleTracker,
+    get_active_tracker,
+    record_lifecycle_event,
+    set_active_tracker,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -211,7 +217,16 @@ except ImportError:
 # 30 s was too tight for droppers: the second stage lands after the first-run
 # delay, so the capture window closed before any weighted behaviour occurred and
 # BFCI read 0.0 for samples that are demonstrably active. Overridable per run.
-ANALYSIS_DURATION_SECONDS = int(os.getenv("FRIDA_ANALYSIS_DURATION", "90"))
+# How long the sample is exercised, in seconds.
+#
+# Raised from 90s once the investigation plan began driving the run. Measured on
+# Cerberus: 22 actions in 92s, so ~4.2s per action with the LLM planner. An
+# fullest trojan plan is 14 stages, which at 4 actions per stage needs 56
+# actions, i.e. ~235s - a 90s window truncated the walk at stage 3 and the
+# sample's accessibility stage was never reached.
+#
+# The cost is real: every dynamic run is now ~5 minutes rather than ~90s.
+ANALYSIS_DURATION_SECONDS = int(os.getenv("FRIDA_ANALYSIS_DURATION", "300"))
 
 # ── Session lifecycle pacing ──────────────────────────────────────────────────
 # The session is OPEN -> ANALYSE -> CLOSE. Nothing may touch the UI until the
@@ -887,14 +902,30 @@ def _dismiss_permission_review_screen(device: str) -> bool:
     return True
 
 
-def _grant_declared_runtime_permissions(device: str, apk_path: str, package_name: str) -> int:
-    """
-  Pre-grant install-time runtime permissions via ``pm grant`` so cold-start
-  does not block on ReviewPermissionsActivity (which leaves pidof empty).
-    """
-    import shlex as _shlex
-    import shutil
+#: Whether declared runtime permissions are granted before the app is launched.
+#:
+#: Default ON, and deliberately so. It exists because a legacy-targetSdk app
+#: cold-starts into ReviewPermissionsActivity, which leaves `pidof` empty and
+#: breaks the launch ladder - turning it off wholesale trades a permission
+#: dialog for a failed run.
+#:
+#: But it has a cost that was invisible until the permission investigator went
+#: in: granting everything up front means Android never shows a runtime
+#: permission dialog, so the investigation cannot observe *which* permissions
+#: the sample actually asks for, and the dialog that the report is supposed to
+#: screenshot never appears. What the app requests is a behaviour; what the
+#: manifest declares is only an intention.
+#:
+#: Set SUDARSHAN_PREGRANT_PERMISSIONS=0 to observe the real request flow.
+#: Changing it changes what the sandbox sees, and therefore BFCI inputs, so the
+#: default is left alone until both modes have been measured on the corpus.
+PREGRANT_PERMISSIONS: bool = os.getenv(
+    "SUDARSHAN_PREGRANT_PERMISSIONS", "1"
+).strip().lower() not in ("0", "false", "no")
 
+
+def _declared_runtime_permissions(apk_path: str) -> List[str]:
+    """Permission names the manifest declares, read with aapt."""
     perms: List[str] = []
     for tool in ("aapt2", "aapt"):
         aapt = _find_aapt_executable(tool)
@@ -903,11 +934,8 @@ def _grant_declared_runtime_permissions(device: str, apk_path: str, package_name
         try:
             result = subprocess.run(
                 [aapt, "dump", "permissions", apk_path],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=30,
+                capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=30,
             )
             for line in (result.stdout or "").splitlines():
                 line = line.strip()
@@ -919,8 +947,38 @@ def _grant_declared_runtime_permissions(device: str, apk_path: str, package_name
                 break
         except Exception:
             continue
+    return perms
 
-    granted = 0
+
+def _grant_declared_runtime_permissions(
+    device: str, apk_path: str, package_name: str
+) -> List[str]:
+    """
+    Pre-grant declared runtime permissions via ``pm grant`` so cold-start does
+    not block on ReviewPermissionsActivity (which leaves pidof empty).
+
+    Returns the permissions that were actually granted, not a count: the
+    investigation needs to know *which* capabilities the sample holds without
+    ever having asked for them, and a bare integer cannot say that. Callers
+    record these as GRANTED_WITHOUT_REQUEST - a finding about the harness
+    rather than about the sample.
+
+    Honours :data:`PREGRANT_PERMISSIONS`; returns [] when disabled.
+    """
+    import shlex as _shlex
+    import shutil
+
+    if not PREGRANT_PERMISSIONS:
+        logger.info(
+            "[Frida] Pre-granting disabled (SUDARSHAN_PREGRANT_PERMISSIONS=0) - "
+            "the sample must request permissions at runtime, and the launch "
+            "ladder may hit ReviewPermissionsActivity on a legacy-targetSdk app."
+        )
+        return []
+
+    perms = _declared_runtime_permissions(apk_path)
+
+    granted: List[str] = []
     safe_pkg = _shlex.quote(package_name)
     for perm in perms:
         if not perm.startswith("android.permission."):
@@ -929,13 +987,14 @@ def _grant_declared_runtime_permissions(device: str, apk_path: str, package_name
             "-s", device, "shell", f"pm grant {safe_pkg} {perm}", timeout=10,
         )
         if ok or "granted" in (out or "").lower():
-            granted += 1
+            granted.append(perm)
         else:
             logger.debug("[Frida] pm grant skipped for %s: %s", perm, out)
     if granted:
         logger.info(
-            "[Frida] Pre-granted %d declared permission(s) for %s before launch",
-            granted, package_name,
+            "[Frida] Pre-granted %d declared permission(s) for %s before launch "
+            "- no runtime permission dialog will be shown for these",
+            len(granted), package_name,
         )
     return granted
 
@@ -1688,10 +1747,28 @@ class FridaSession:
         main_activity: Optional[str] = None,
         artifact_dir: Optional[Path] = None,
         case_id: str = "",
+        static_findings: Optional[Dict[str, Any]] = None,
     ):
         self.device_serial = device_serial
         self.package_name = package_name
         self.main_activity = main_activity
+        # What static analysis already learned about this sample: declared
+        # permissions, app label, static flags.
+        #
+        # Before this existed the dynamic engine ran blind. AgenticExplorer has
+        # always accepted `static_findings` and PerceptionPipeline has always
+        # forwarded it into every Observation - but nothing upstream ever
+        # supplied it, so it was `{}` on every real run. The engine could not
+        # compare declared permissions against what the app requested at
+        # runtime because it was never told what was declared.
+        #
+        # Optional on purpose: dynamic analysis must still run for callers that
+        # have no static pass (validation harnesses, recovery re-runs). An empty
+        # dict reproduces the previous behaviour exactly.
+        self.static_findings: Dict[str, Any] = dict(static_findings or {})
+        # Permissions granted by the harness before launch, so the explorer can
+        # tell capability the sample asked for from capability we handed it.
+        self.pregranted_permissions: List[str] = []
         # Where per-sample forensic artifacts are written. Defaults to the
         # process CWD only when a caller supplies nothing, which keeps the
         # constructor usable in tests without touching the filesystem.
@@ -2911,6 +2988,16 @@ class FridaSession:
                     # Needed to put the app back in the foreground after a crash
                     # or after a tap hands the foreground to another app.
                     main_activity=self.main_activity,
+                    # The static->dynamic bridge. AgenticExplorer has always
+                    # accepted this and PerceptionPipeline has always forwarded
+                    # it into every Observation, but this call site never
+                    # supplied it - so the explorer ran with `{}` and could not
+                    # know which permissions the manifest declared.
+                    static_findings=self.static_findings,
+                    # Capability the harness handed the sample before it ran, so
+                    # the investigation does not mistake it for something the
+                    # app requested.
+                    pregranted_permissions=self.pregranted_permissions,
                 )
                 self.explorer_used = "agentic"
                 logger.info("[Frida] AgenticExplorer selected.")
@@ -3059,7 +3146,12 @@ class FridaSession:
 
 # ─── Main Analysis Entry Point ─────────────────────────────────────────────────
 
-async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) -> Dict[str, Any]:
+async def run_frida_analysis(
+    apk_path: str,
+    package_name: Optional[str] = None,
+    *,
+    static_findings: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """
     Full Frida dynamic analysis pipeline:
       1. Find connected emulator
@@ -3072,12 +3164,33 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
 
     Returns a dict matching the dynamic_result schema expected by calculate_risk_score().
     Falls back gracefully with available=False if anything fails.
+
+    static_findings
+        What the static pass already established - at minimum
+        ``{"permissions": [...], "app_label": str, "flags": {...}}``. Keyword-only
+        and optional: every existing caller keeps working unchanged, and a run
+        without it behaves exactly as before. Supplying it is what lets the
+        dynamic side compare declared permissions against what the app actually
+        requests at runtime.
     """
+    content_sha256 = compute_sha256(apk_path) if os.path.isfile(apk_path) else ""
+    lifecycle = RuntimeLifecycleTracker(case_id=content_sha256)
+    lifecycle.mark_requested()
+    set_active_tracker(lifecycle)
+    record_lifecycle_event(
+        "runtime_controller_started",
+        "STARTING",
+        "frida_sandbox",
+        "run_frida_analysis invoked",
+    )
+
     base_result: Dict[str, Any] = {
         "available": False,
+        "runtime_requested": True,
+        "runtime_attempted": False,
         "engine": "frida",
-        "dynamic_status": "INSTRUMENTATION_FAILED",
-        "sha256": compute_sha256(apk_path) if os.path.isfile(apk_path) else "",
+        "dynamic_status": "NOT_STARTED",
+        "sha256": content_sha256,
         "bfci": 0.0,
         "bfci_components": {},
         "bfci_weights": BFCI_WEIGHTS,
@@ -3126,8 +3239,23 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
         logger.warning("[Frida] %s: %s", err_code, err_msg)
         base_result["error"] = err_msg
         base_result["error_code"] = err_code
+        base_result["dynamic_status"] = "EMULATOR_UNAVAILABLE"
         if connection:
             base_result["sandbox_connection"] = connection.to_dict()
+        lifecycle.emulator_status = "FAILED"
+        lifecycle.dynamic_status = "EMULATOR_UNAVAILABLE"
+        lifecycle.dashboard_inclusion_status = "FAILED"
+        lifecycle.record(
+            "emulator_selected",
+            "FAILED",
+            "sandbox_provider",
+            err_msg,
+            error=err_code,
+        )
+        lifecycle.attach_to_result(base_result)
+        apk_dir = artifact_dir_for(apk_path)
+        lifecycle.write_json(apk_dir)
+        set_active_tracker(None)
         return base_result
 
     logger.info(
@@ -3145,6 +3273,14 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
     base_result["sandbox_provider"] = provider.name
     log_pipeline_lifecycle(1, "emulator ready", f"serial={device_serial}")
     log_pipeline_lifecycle(4, "Frida device connected", provider.name)
+    lifecycle.emulator_status = "READY"
+    lifecycle.record(
+        "emulator_ready",
+        "READY",
+        "sandbox_provider",
+        f"serial={device_serial}",
+    )
+    base_result["runtime_attempted"] = True
 
     # ── Serialise access to the device ────────────────────────────────────────
     # There is exactly ONE emulator and it was taken with no lock, while the
@@ -3162,7 +3298,61 @@ async def run_frida_analysis(apk_path: str, package_name: Optional[str] = None) 
             package_name=package_name,
             device_serial=device_serial,
             base_result=base_result,
+            static_findings=static_findings,
         )
+
+
+def _build_investigation_records(session: "FridaSession") -> List[Dict[str, Any]]:
+    """
+    Reconstructor records for what the investigation itself established.
+
+    Only VERIFIED capabilities are included. An unverified grant must not seed a
+    causal chain: the behaviour downstream of it never actually had the
+    capability, and a chain built on one would be fiction.
+
+    Never raises - a failure here degrades to an empty list rather than losing
+    the workflow that the Frida events alone can still support.
+    """
+    try:
+        from sudarshan_core.engines.workflow_reconstructor import investigation_records
+    except Exception:
+        return []
+
+    # `session.reports` is what the explorer returned from get_reports(); it
+    # carries the "permissions" and "crashes" keys added this cycle.
+    reports = getattr(session, "reports", None) or {}
+    if not isinstance(reports, dict):
+        return []
+    permissions = reports.get("permissions") or {}
+    records = permissions.get("records") or []
+
+    granted = [
+        r.get("permission", "")
+        for r in records
+        if isinstance(r, dict) and r.get("granted") and r.get("permission")
+    ]
+    accessibility = any(
+        isinstance(r, dict)
+        and r.get("granted")
+        and "BIND_ACCESSIBILITY_SERVICE" in str(r.get("permission", ""))
+        for r in records
+    )
+    overlay = any(
+        isinstance(r, dict)
+        and r.get("granted")
+        and "SYSTEM_ALERT_WINDOW" in str(r.get("permission", ""))
+        for r in records
+    )
+    try:
+        return investigation_records(
+            granted_permissions=granted,
+            accessibility_enabled=accessibility,
+            overlay_granted=overlay,
+            crash_findings=reports.get("crashes") or [],
+        )
+    except Exception as exc:
+        logger.debug("[Frida] Could not build investigation records: %s", exc)
+        return []
 
 
 def _build_root_cause_analysis(
@@ -3238,6 +3428,7 @@ async def _run_device_session(
     package_name: Optional[str],
     device_serial: str,
     base_result: Dict[str, Any],
+    static_findings: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Install, instrument and close one sample. Caller holds the device lock."""
     loop = asyncio.get_event_loop()
@@ -3321,6 +3512,7 @@ async def _run_device_session(
         main_activity=main_activity,
         artifact_dir=apk_dir,
         case_id=content_sha256,
+        static_findings=static_findings,
     )
 
     # ── Step 3: Install APK ────────────────────────────────────────────────────
@@ -3333,10 +3525,35 @@ async def _run_device_session(
         logger.error(f"[Frida] APK install failed: {output}")
         session.dae.fail(f"APK install failed: {output}")
         base_result["error"] = f"APK install failed: {output}"
+        base_result["dynamic_status"] = "INSTALL_FAILED"
         base_result["dae_pipeline"] = session.dae.to_dict()
+        tracker = get_active_tracker()
+        if tracker:
+            tracker.apk_install_status = "FAILED"
+            tracker.dynamic_status = "INSTALL_FAILED"
+            tracker.dashboard_inclusion_status = "FAILED"
+            tracker.record(
+                "apk_install_completed",
+                "FAILED",
+                "adb",
+                output[:500],
+                error="INSTALL_FAILED",
+            )
+            tracker.attach_to_result(base_result)
+            tracker.write_json(apk_dir)
+        set_active_tracker(None)
         return base_result
     log_pipeline_lifecycle(2, "APK installed", package_name)
     session.dae.transition(DAEStage.VERIFY_INSTALL, "pm path verification")
+    tracker = get_active_tracker()
+    if tracker:
+        tracker.apk_install_status = "SUCCESS"
+        tracker.record(
+            "apk_install_completed",
+            "SUCCESS",
+            "adb",
+            package_name,
+        )
     if not await loop.run_in_executor(
         None, _verify_package_installed, device_serial, package_name
     ):
@@ -3413,7 +3630,11 @@ async def _run_device_session(
             " (repaired derivative)" if provenance.get("is_repaired_derivative") else "",
         )
 
-    await loop.run_in_executor(
+    # Remembered on the session so the explorer can record these as
+    # GRANTED_WITHOUT_REQUEST. Without that the report shows a sample holding
+    # SMS access with no explanation of how it got it, and the answer - that we
+    # granted it ourselves before launch - is invisible.
+    session.pregranted_permissions = await loop.run_in_executor(
         None,
         _grant_declared_runtime_permissions,
         device_serial,
@@ -3541,13 +3762,32 @@ async def _run_device_session(
             or "Frida instrumentation failed (no further detail reported)."
         )
         base_result["error"] = err_msg
-        # Attach crash report and timeline to the failure result so the API
-        # consumer gets diagnostics even when the session never ran.
+        base_result["available"] = True
+        base_result["runtime_attempted"] = True
+        fail_status = DynamicAnalysisStatus.INSTRUMENTATION_FAILED.value
+        if "attach" in err_msg.lower() or "frida" in err_msg.lower():
+            fail_status = DynamicAnalysisStatus.FRIDA_ATTACH_FAILED.value
+        base_result["dynamic_status"] = fail_status
         if session.crash_report is not None:
             base_result["crash_report"] = session.crash_report.to_dict()
         base_result["launch_timeline"] = _timeline_to_seconds(session.launch_timeline)
         base_result["launch_method_used"] = session.launch_method_used
-        # Write launch_timeline.json even on failure
+        tracker = get_active_tracker()
+        if tracker:
+            tracker.frida_status = "FAILED"
+            tracker.explorer_status = session.explorer_used or "none"
+            tracker.dynamic_status = fail_status
+            tracker.dashboard_inclusion_status = "FAILED"
+            tracker.record(
+                "dynamic_analysis_completed",
+                "FAILED",
+                "FridaSession",
+                err_msg,
+                error=fail_status,
+            )
+            if session.reports:
+                tracker.merge_explorer_reports(session.reports)
+            tracker.attach_to_result(base_result)
         try:
             tl_path = apk_dir / "launch_timeline.json"
             tl_path.write_text(
@@ -3557,6 +3797,9 @@ async def _run_device_session(
             logger.info("[Frida] launch_timeline.json written (failure path): %s", tl_path)
         except OSError:
             pass
+        if tracker:
+            tracker.write_json(apk_dir)
+        set_active_tracker(None)
         return base_result
 
 
@@ -3713,6 +3956,12 @@ async def _run_device_session(
     if session.reports:
         result["attack_timeline"] = session.reports.get("attack_timeline", [])
         result["coverage_metrics"] = session.reports.get("coverage", {})
+        # Investigation state, permission findings and classified crashes, so
+        # the report can show what was investigated and why - not just which
+        # hooks fired. Added as new keys; nothing existing is reshaped.
+        result["investigation"] = session.reports.get("investigation", {})
+        result["permission_findings"] = session.reports.get("permissions", {})
+        result["crashes"] = session.reports.get("crashes", [])
         result["clicked_nodes"] = list(session.reports.get("exploration_summary", {}).get("clicked_nodes", []))
 
     
@@ -3769,7 +4018,15 @@ async def _run_device_session(
     # ── Fraud Workflow Reconstruction ─────────────────────────────────────────
     # Build causal chain evidence from raw collected_events. This runs after
     # the evidence store flush so workflow records are available for the report.
-    if WorkflowReconstructor is not None and session.total_hook_events_received > 0:
+    # The gate used to be `total_hook_events_received > 0`, so a run where the
+    # sandbox enabled accessibility and the sample then did nothing hookable
+    # produced no workflow at all - not even a record of what had been enabled.
+    # Investigation-derived records now count toward having something to
+    # reconstruct.
+    _investigation_records = _build_investigation_records(session)
+    if WorkflowReconstructor is not None and (
+        session.total_hook_events_received > 0 or _investigation_records
+    ):
         try:
             session.dae.transition(DAEStage.BUILD_WORKFLOW, "workflow reconstruction")
             # Flatten all hooked events into a record list the reconstructor understands
@@ -3785,6 +4042,11 @@ async def _run_device_session(
                         "severity":     ev.get("severity", data.get("severity", "MED")),
                         "description":  data.get("description", ""),
                     })
+
+            # Preconditions the sandbox established, so the chain can show
+            # what made later behaviour reachable. Flagged is_precondition by
+            # their rules, so they cannot make a benign run look fraudulent.
+            workflow_records.extend(_investigation_records)
 
             reconstructor = WorkflowReconstructor()
             workflow = reconstructor.reconstruct(workflow_records)
@@ -3911,6 +4173,36 @@ async def _run_device_session(
             logger.error(f"[Frida] Failed to generate HTML report: {e}")
 
     session.dae.transition(DAEStage.COMPLETE, "dynamic session finished")
+
+    tracker = get_active_tracker()
+    if tracker:
+        tracker.frida_status = "ATTACHED" if session.canary_received else "DEGRADED"
+        tracker.explorer_status = session.explorer_used or "none"
+        tracker.runtime_event_count = int(session.total_hook_events_received)
+        tracker.evidence_count = int(result.get("evidence_record_count") or 0)
+        tracker.dynamic_status = str(result.get("dynamic_status") or "COMPLETED")
+        if session.reports:
+            tracker.merge_explorer_reports(session.reports)
+        from sudarshan_core.engines.risk_engine import _dynamic_run_was_conclusive
+
+        conclusive = _dynamic_run_was_conclusive(result)
+        tracker.dashboard_inclusion_status = "INCLUDED" if conclusive else "EXCLUDED"
+        tracker.persistence_status = "SUCCESS"
+        tracker.record(
+            "dynamic_analysis_completed",
+            "COMPLETED",
+            "FridaSession",
+            f"status={result.get('dynamic_status')} events={session.total_hook_events_received}",
+        )
+        tracker.record(
+            "dynamic_result_persisted",
+            "SUCCESS",
+            "artifact_store",
+            str(apk_dir),
+        )
+        tracker.attach_to_result(result)
+        tracker.write_json(apk_dir)
+    set_active_tracker(None)
 
     return result
 

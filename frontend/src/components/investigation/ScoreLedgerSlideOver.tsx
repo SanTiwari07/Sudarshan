@@ -205,7 +205,7 @@ export default function ScoreLedgerSlideOver({
   const chatQuery = `Explain why this APK received a Fraud Risk Score of ${score}.`;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
+    <div className="fixed inset-0 z-[60] flex justify-end">
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]" onClick={closeLedger} aria-hidden />
       <div
         className="relative w-full max-w-xl sm:max-w-2xl bg-white h-full shadow-2xl border-l border-slate-200 flex flex-col"

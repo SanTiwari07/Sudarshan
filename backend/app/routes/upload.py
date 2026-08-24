@@ -749,7 +749,22 @@ async def _run_analysis_pipeline(
                 dynamic_result = await engine.run_all_stages()
             else:
                 from sudarshan_core.engines.frida_sandbox import run_frida_analysis
-                dynamic_result = await run_frida_analysis(temp_path, package_name=package_name)
+                # Hand the static pass's findings to the dynamic engine. Without
+                # this the explorer cannot tell a permission the manifest
+                # declared from one it never asked for, so expected-vs-observed
+                # permission analysis is impossible.
+                dynamic_result = await run_frida_analysis(
+                    temp_path,
+                    package_name=package_name,
+                    static_findings={
+                        "permissions": all_permissions,
+                        "flags": flags_dict,
+                        # The identity the sample claims. Attacker-controlled,
+                        # which is exactly why it is useful: permissions are
+                        # judged against what the app says it is.
+                        "app_label": getattr(androguard_output, "app_label", "") or "",
+                    },
+                )
             if dynamic_result.get("available"):
                 logger.info(f"Frida BFCI={dynamic_result.get('bfci', 0):.1f}")
             else:
@@ -761,6 +776,14 @@ async def _run_analysis_pipeline(
             dynamic_result = None
     else:
         logger.info(f"Frida sandbox not ready ({frida_status['message']})")
+        dynamic_result = {
+            "available": False,
+            "runtime_requested": True,
+            "runtime_attempted": False,
+            "engine": "frida",
+            "dynamic_status": "EMULATOR_UNAVAILABLE",
+            "error": frida_status.get("message", "Sandbox not ready"),
+        }
 
     # ── STEP 2: Classification ────────────────────────────────────────────────
     flags_model = StaticAnalysisFlags(**flags_dict)
@@ -899,7 +922,13 @@ async def _run_analysis_pipeline(
         "obfuscation_score": flags_dict.get("obfuscation_score", 0.0),
         "has_reflection": flags_dict.get("has_reflection", False),
         "threat_correlation": correlation_raw,
-        "dynamic_available": bool(dynamic_result and dynamic_result.get("available")),
+        "dynamic_available": bool(
+            dynamic_result
+            and (
+                dynamic_result.get("available")
+                or dynamic_result.get("runtime_attempted")
+            )
+        ),
         "dynamic_result": dynamic_result,
         "fraud_workflow": dynamic_result.get("fraud_workflow") if dynamic_result else None,
         "manifest_findings": manifest_findings,

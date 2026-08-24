@@ -26,6 +26,7 @@ All notable changes to this project are documented in this file.
   - `frontend/src/components/batch/BatchJobRow.tsx`: Results row linking completed jobs directly to existing `InvestigationShell` (`/history/:sha256`)
   - `frontend/src/components/batch/useBatchProgress.ts`: Auto-polling hook with cached case scoring
 - **Automated Test Suite**: Added `backend/tests/test_batch.py` with 8 comprehensive unit and integration tests covering batch creation, validation, FIFO ordering, pause/resume/cancel, retry, role-scoping, and duplicate APK handling.
+- **Gemini failover**: Documented primary Gemini 3.x Flash + fallback Gemini 2.5 Flash, cooldown, and environment variables in `05_AI_INVESTIGATION_ENGINE.md` and `HOW_TO_RUN.md`.
 
 ## 2026-08-14
 

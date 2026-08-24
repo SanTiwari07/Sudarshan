@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from typing import Dict
 
 SCHEMA_VERSION = 1
 
@@ -30,6 +31,11 @@ CLAIM_BENIGN_NEGATIVE_PROOF = "benign_negative_proof"
 CLAIM_LAUNCH_CONTEXT = "launch_context"
 CLAIM_FINAL_STATE = "final_state"
 CLAIM_INCONCLUSIVE_VISUAL = "inconclusive_visual"
+CLAIM_VPN_REQUEST = "vpn_request"
+CLAIM_UPDATE_REQUEST = "update_request"
+CLAIM_PERMISSION_REQUEST = "permission_request"
+CLAIM_EXTERNAL_APK_REQUEST = "external_apk_request"
+CLAIM_DOWNLOAD_PROMPT = "download_prompt"
 
 ALL_CLAIM_TYPES = frozenset({
     CLAIM_VISUAL_IMPERSONATION,
@@ -46,7 +52,39 @@ ALL_CLAIM_TYPES = frozenset({
     CLAIM_LAUNCH_CONTEXT,
     CLAIM_FINAL_STATE,
     CLAIM_INCONCLUSIVE_VISUAL,
+    CLAIM_VPN_REQUEST,
+    CLAIM_UPDATE_REQUEST,
+    CLAIM_PERMISSION_REQUEST,
+    CLAIM_EXTERNAL_APK_REQUEST,
+    CLAIM_DOWNLOAD_PROMPT,
 })
+EVIDENCE_MOMENT_CAPTURE_REASONS = frozenset({
+    "VPN_REQUEST",
+    "UPDATE_PROMPT",
+    "EXTERNAL_APK",
+    "PERMISSION_DIALOG",
+    "ACCESSIBILITY",
+    "DOWNLOAD_PROMPT",
+    "EVIDENCE_MOMENT",
+})
+
+CAPTURE_REASON_TO_CLAIM: Dict[str, str] = {
+    "VPN_REQUEST": CLAIM_VPN_REQUEST,
+    "UPDATE_PROMPT": CLAIM_UPDATE_REQUEST,
+    "EXTERNAL_APK": CLAIM_EXTERNAL_APK_REQUEST,
+    "PERMISSION_DIALOG": CLAIM_PERMISSION_REQUEST,
+    "ACCESSIBILITY": CLAIM_ACCESSIBILITY_GUIDANCE,
+    "DOWNLOAD_PROMPT": CLAIM_DOWNLOAD_PROMPT,
+}
+
+CAPTURE_REASON_TO_WORKFLOW: Dict[str, str] = {
+    "VPN_REQUEST": "VPN Connection Request",
+    "UPDATE_PROMPT": "Application Update Request",
+    "EXTERNAL_APK": "External APK Installation",
+    "PERMISSION_DIALOG": "Runtime Permission Request",
+    "ACCESSIBILITY": "Accessibility Service Activation",
+    "DOWNLOAD_PROMPT": "Download Prompt",
+}
 
 QUALITY_A = "A"
 QUALITY_B = "B"

@@ -2,6 +2,29 @@
 
 All notable changes to this project are documented in this file.
 
+## 2026-08-24
+
+### Added
+- **Screenshot hardening (second-phase)**: Central `ScreenshotPolicy` (`shared/sudarshan_core/engines/agentic/screenshot_policy.py`) with state/event-aware deduplication — separate from event and evidence deduplication. Decisions: CAPTURE, DEDUPLICATED, SUPPRESSED, BLOCKED, REUSE with auditable reasons.
+- **Screen ownership classification**: `HOME_LAUNCHER`, `EXTERNAL_APP`, `CRASH_STATE`, `SYSTEM_INSTALLER`, etc. via package/activity context (`classify_screen_with_ownership`). Home launcher is not explored as target-app UI; Gemini planner skipped for non-explorable states.
+- **External application graph**: External/system screens stored in `ExplorationGraph.external_states`, linked from target states via transition edges.
+- **Crash handling**: One crash-context screenshot per crash transition; `APP_CRASH` events in exploration graph; recovery without home screenshot spam.
+- **20 regression tests** (`tests/unit/test_screenshot_hardening.py`): Home spam, external dedup, permission dedup, same-screen reuse, crash handling, long-run bounded captures.
+
+### Changed
+- **ScreenshotManager** routes all captures through `ScreenshotPolicy` before adb screencap. Manifest includes `policy_statistics`, `suppressed_count`, semantic filenames, and ownership metadata.
+- **AgenticExplorer** per-action screenshots no longer use `force=True`; policy evaluates each capture. Home/crash states handled by dedicated async handlers without normal exploration.
+- **PerceptionPipeline** skips Level-5 vision for `HOME_LAUNCHER` foreground.
+- **Deep Dynamic Exploration Engine** (`shared/sudarshan_core/engines/agentic/exploration_engine.py`): Per-analysis state/action graph with `ApplicationProfile`, `EvidenceMoment`, victim journey reconstruction, deterministic action prioritization, scroll/menu/backtrack support, and exploration coverage metrics. Integrated into `AgenticExplorer` with post-action re-observe, causal screenshot linking, and explicit stop reasons.
+- **27 new unit tests** (`tests/unit/test_deep_exploration.py`): State graph, deduplication, evidence moments, mock RTO multi-branch exploration, permission investigation, secondary APK boundary, prompt injection defense.
+- **Gemini primary/fallback manager**: `shared/sudarshan_core/ai/gemini_provider.py` routes every Gemini call through Gemini 3.x Flash first, then Gemini 2.5 Flash on quota, rate-limit, 5xx, timeout, or primary-key auth failure, with a configurable primary cooldown. Legacy `GEMINI_API_KEY` / `GEMINI_MODEL` remain primary aliases.
+
+### Changed
+- **AgenticExplorer** no longer stops when all 15 fraud goals complete; goals are threat-intelligence prioritization only. Exploration stops on graph exhaustion, budget, or safety boundary.
+- Default action budget raised to 120 (`SUDARSHAN_AGENT_ACTION_BUDGET`). Frida silence threshold raised to 8 and requires no unexplored graph branches.
+- **Screen classifier** extended with `UPDATE_PROMPT`, `VPN_REQUEST`, `EXTERNAL_APK`, `DOWNLOAD_PROMPT`, `WEBVIEW`, `DIALOG`, `HOME_LAUNCHER`, `EXTERNAL_APP`, `CRASH_STATE` types and ownership resolution.
+- **ScreenshotManager** gains causal linking fields (`state_id`, `action_id`, `evidence_id`, `evidence_moment_id`, `ownership`, `deduplication_status`) and suppression statistics.
+
 ## 2026-08-12
 
 ### Added / Upgraded

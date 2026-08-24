@@ -6,7 +6,7 @@ Answers one question before a run starts: will dynamic analysis actually
 produce runtime evidence on THIS machine?
 
 Everything it checks degrades silently today. A missing .env means no
-GEMINI_API_KEY, which downgrades the agentic explorer to the deterministic
+Gemini API key, which downgrades the agentic explorer to the deterministic
 fallback planner. An ADB server the container cannot reach means zero devices
 and an empty screenshot gallery. A missing frida-server means no
 instrumentation. All three finish the pipeline "successfully" with a hollow

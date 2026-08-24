@@ -67,18 +67,22 @@ export default function RuntimeBehaviourDetail({
                   <span className="font-mono text-slate-600">{g.count}</span>
                 </div>
                 <ul className="mt-2 space-y-1">
-                  {(g.events || []).slice(0, 5).map((ev: any, idx: number) => (
-                    <li key={ev.id || idx}>
-                      <button
-                        type="button"
-                        onClick={() => ev.id && openEvidence(ev.id)}
-                        className="text-left text-xs text-blue-800 hover:underline w-full"
-                      >
-                        <span className="font-semibold">{ev.title || ev.label}</span>
-                        {ev.severity && <span className="text-slate-500"> - {ev.severity}</span>}
-                      </button>
-                    </li>
-                  ))}
+                  {(g.events || []).slice(0, 5).map((ev: any, idx: number) => {
+                    const label = ev.title || ev.label || 'Runtime evidence';
+                    return (
+                      <li key={ev.id || idx}>
+                        <button
+                          type="button"
+                          onClick={() => openEvidence(ev.id)}
+                          aria-label={`View runtime evidence: ${label}`}
+                          className="text-left text-xs text-blue-800 hover:underline w-full rounded px-1 py-0.5 cursor-pointer hover:bg-blue-50/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-1"
+                        >
+                          <span className="font-semibold">{label}</span>
+                          {ev.severity && <span className="text-slate-500"> - {ev.severity}</span>}
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             ))}

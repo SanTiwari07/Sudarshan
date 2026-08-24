@@ -7,7 +7,6 @@ import logging
 import asyncio
 from datetime import datetime
 import xml.etree.ElementTree as ET
-from google import genai
 from google.genai import types
 from typing import Optional, Dict, List, Any, Set, Tuple
 
@@ -17,10 +16,10 @@ import io
 
 from sudarshan_core.engines.event_bus import RuntimeEventBus
 from sudarshan_core.sandbox import get_sandbox_provider
+from sudarshan_core.ai.gemini_provider import gemini_is_configured, get_gemini_manager
 
 logger = logging.getLogger(__name__)
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
 # Safe deterministic data for form filling
@@ -73,11 +72,9 @@ class UIExplorer:
         self._recent_frida_events: List[Dict[str, Any]] = []
         self._events_lock = threading.Lock()
 
-        if GEMINI_API_KEY:
-            self.client = genai.Client(api_key=GEMINI_API_KEY)
-        else:
-            self.client = None
-            logger.warning("[UIExplorer] No GEMINI_API_KEY found. AI exploration layer is disabled.")
+        self._gemini_enabled = gemini_is_configured()
+        if not self._gemini_enabled:
+            logger.warning("[UIExplorer] No Gemini API key found. AI exploration layer is disabled.")
 
         self.deterministic_keywords = {
             "allow": "dialogs_dismissed",
@@ -209,7 +206,7 @@ class UIExplorer:
         return count >= 3
 
     async def _find_ai_action(self, screen_hash: str, nodes: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-        if not self.client or not nodes:   # self.model was never assigned
+        if not self._gemini_enabled or not nodes:
             return None
             
         # Check Cache
@@ -254,15 +251,13 @@ Return valid JSON matching this schema:
 }}
 """
         try:
-            response = await asyncio.to_thread(
-                self.client.models.generate_content,
-                model=GEMINI_MODEL,
+            result = await get_gemini_manager().generate_content_async(
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json"
-                )
+                ),
             )
-            decision = json.loads(response.text)
+            decision = json.loads(result.text)
             
             action_type = decision.get("action")
             target_id = decision.get("target_id")
@@ -330,24 +325,21 @@ Return valid JSON matching this schema:
                 logger.debug(f"[UIExplorer] Pytesseract failed/not available: {e}")
                 
             # 3. Fallback to Gemini Vision if OCR didn't find anything and model is available
-            if not action and self.client:
+            if not action and self._gemini_enabled:
                 logger.info(f"[UIExplorer] Using Gemini Vision fallback for {screen_hash}")
                 prompt = "Analyze this Android screen. Respond with JSON {\"action\":\"tap\", \"x\":123, \"y\":456, \"reasoning\":\"clicking next\"}. If no obvious action, return {\"action\":\"ignore\"}."
                 
                 with open(local_path, "rb") as img_file:
                     image_data = img_file.read()
                 
-                response = await asyncio.to_thread(
-                    self.client.models.generate_content,
-                    model=GEMINI_MODEL,
+                result = await get_gemini_manager().generate_content_async(
                     contents=[
-                        types.Part.from_bytes(data=image_data, mime_type='image/png'),
-                        prompt
+                        types.Part.from_bytes(data=image_data, mime_type="image/png"),
+                        prompt,
                     ],
-                    config=types.GenerateContentConfig(response_mime_type="application/json")
+                    config=types.GenerateContentConfig(response_mime_type="application/json"),
                 )
-                
-                decision = json.loads(response.text)
+                decision = json.loads(result.text)
                 if decision.get("action") == "tap":
                     action = {
                         "action": "tap",

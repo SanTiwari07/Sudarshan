@@ -41,25 +41,49 @@ function buildRows(data: FraudCardData): InfluenceRow[] {
       : data.dynamic_analysis && typeof data.dynamic_analysis === 'object' && !Array.isArray(data.dynamic_analysis)
         ? data.dynamic_analysis
         : undefined
-  ) as { dynamic_status?: string; error?: string } | undefined;
+  ) as {
+    dynamic_status?: string;
+    error?: string;
+    runtime_requested?: boolean;
+    runtime_attempted?: boolean;
+  } | undefined;
   const dynamicStatus = dynResult?.dynamic_status?.toUpperCase();
+  const runtimeRequested = Boolean(dynResult?.runtime_requested);
+  const runtimeAttempted = Boolean(
+    dynResult?.runtime_attempted || frs.dynamic_ran || data.dynamic_available,
+  );
   const instrumentationFailed =
     Boolean(frs.dynamic_ran) &&
     !dynamicIncluded &&
-    (dynamicStatus === 'INSTRUMENTATION_FAILED' || Boolean(dynResult?.error));
-  const runtimeNotRun = !frs.dynamic_ran && !data.dynamic_available;
+    (dynamicStatus === 'INSTRUMENTATION_FAILED' ||
+      dynamicStatus === 'FRIDA_ATTACH_FAILED' ||
+      Boolean(dynResult?.error));
+  const runtimeNotRun = !runtimeAttempted && !runtimeRequested;
+  const runtimeFailed =
+    runtimeAttempted &&
+    !dynamicIncluded &&
+    (dynamicStatus === 'FAILED' ||
+      dynamicStatus === 'EMULATOR_UNAVAILABLE' ||
+      dynamicStatus === 'INSTALL_FAILED' ||
+      dynamicStatus === 'FRIDA_ATTACH_FAILED' ||
+      dynamicStatus === 'INSTRUMENTATION_FAILED' ||
+      instrumentationFailed);
   const exclusionReason = frs.dynamic_exclusion_reason?.toUpperCase();
   const dynamicSummary = dynamicIncluded
     ? 'Observed sandbox behaviour contributed to the fraud risk score.'
     : runtimeNotRun
-      ? 'Runtime analysis did not run for this case, so this axis was excluded from the final score.'
-      : exclusionReason === 'NO_UI_RENDERED'
-        ? 'The app never rendered a screen in the sandbox, so no runtime behaviour could be observed. Excluded from the score - this is not evidence the app is safe.'
-        : exclusionReason === 'EVASION_ONLY'
-          ? 'The app ran anti-analysis checks and then did nothing observable. Excluded from the score - evasion is not evidence of safety.'
-          : instrumentationFailed
-            ? 'Runtime instrumentation failed, so sandbox evidence was excluded from the final score.'
-            : 'Runtime execution was inconclusive, so this axis was excluded from the final score.';
+      ? 'Runtime analysis was not requested for this case, so this axis was excluded from the final score.'
+      : dynamicStatus === 'EMULATOR_UNAVAILABLE'
+        ? 'No sandbox emulator was available when dynamic analysis was requested.'
+        : runtimeFailed
+          ? `Runtime analysis failed (${dynamicStatus || 'FAILED'}). The sandbox did not produce scorable evidence.`
+        : exclusionReason === 'NO_UI_RENDERED'
+          ? 'The app never rendered a screen in the sandbox, so no runtime behaviour could be observed. Excluded from the score - this is not evidence the app is safe.'
+          : exclusionReason === 'EVASION_ONLY'
+            ? 'The app ran anti-analysis checks and then did nothing observable. Excluded from the score - evasion is not evidence of safety.'
+            : instrumentationFailed
+              ? 'Runtime instrumentation failed, so sandbox evidence was excluded from the final score.'
+              : 'Runtime execution was inconclusive, so this axis was excluded from the final score.';
   const dynamicContribution = dynamicIncluded
     ? computeWeightedContribution('dynamic', dynamicScore, axesUsed)
     : 0;
@@ -88,7 +112,7 @@ function buildRows(data: FraudCardData): InfluenceRow[] {
       label: 'Runtime behaviour',
       term: 'BFCI',
       score: dynamicScore,
-      influence: dynamicIncluded ? influenceLabel(dynamicScore, true) : 'Not included',
+      influence: dynamicIncluded ? influenceLabel(dynamicScore, true) : runtimeFailed ? 'Failed' : runtimeNotRun ? 'Not requested' : 'Not included',
       summary: dynamicSummary,
       included: Boolean(dynamicIncluded),
       value: dynamicIncluded ? dynamicContribution.toFixed(1) : 'Not included',

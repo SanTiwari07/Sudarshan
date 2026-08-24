@@ -14,7 +14,7 @@ Test Suite:          backend/tests/test_prompt_injection.py
 ## Table of Contents
 - [1. Executive Overview](#1-executive-overview)
 - [2. RAG Architecture & Context Vector Graph](#2-rag-architecture--context-vector-graph)
-- [3. Gemini 2.5 Flash Standardization](#3-gemini-25-flash-standardization)
+- [3. Gemini Primary / Fallback Providers](#3-gemini-primary--fallback-providers)
 - [4. Prompt Injection Sanitization Guard](#4-prompt-injection-sanitization-guard)
 - [5. Anti-Hallucination Evidence Clamps](#5-anti-hallucination-evidence-clamps)
 - [6. Threat Attribution & Banking Intelligence Graph](#6-threat-attribution--banking-intelligence-graph)
@@ -48,7 +48,7 @@ graph TD
     QUERY[Analyst Chat Query] --> SEARCH[Cosine Similarity Search]
     RAG --> SEARCH
     SEARCH --> PROMPT[Grounding Prompt Assembly]
-    PROMPT --> LLM[Gemini 2.5 Flash API]
+    PROMPT --> LLM[Gemini primary 3.x / fallback 2.5]
     LLM --> RESP[Grounded Investigation Response]
 ```
 
@@ -58,11 +58,17 @@ Implemented in [`gemini_rag.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app
 
 ---
 
-## 3. Gemini 2.5 Flash Standardization
+## 3. Gemini Primary / Fallback Providers
 
-- **Primary Cloud Model**: **Gemini 2.5 Flash** (`gemini-2.5-flash`) via official Google GenAI SDK.
-- **Direct Investigation Client**: Structured JSON prompts with exponential backoff retries in [`gemini_client.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/ai/gemini_client.py).
-- **Output Contracts**: Standardized Pydantic `IntelligenceReport` model:
+Sudarshan talks to Gemini through a single manager (`shared/sudarshan_core/ai/gemini_provider.py`). Callers (RAG, report synthesis, agentic planner, UI explorer, optional captions, VIDE semantic matcher) never construct `google.genai.Client` themselves.
+
+- **Primary**: Gemini 3.x Flash (`GEMINI_PRIMARY_MODEL`, defaulting through `GEMINI_MODEL`) on `GEMINI_PRIMARY_API_KEY` (or legacy `GEMINI_API_KEY`).
+- **Fallback**: Gemini 2.5 Flash (`GEMINI_FALLBACK_MODEL`, typically `gemini-2.5-flash`) on `GEMINI_FALLBACK_API_KEY`.
+- **Routing**: every request tries primary first. Quota (429), rate limits, 5xx, timeouts, and primary-key auth failures fail over to fallback after the existing retry/backoff. Invalid requests (400 / schema) do **not** fail over.
+- **Cooldown**: after a failover-worthy primary failure, primary is skipped for `GEMINI_PRIMARY_COOLDOWN_SECONDS` (default 60), then probed again. Primary is never permanently disabled.
+- **Compatibility**: thinking_budget=0 is stripped for Gemini 3.x; 3.x-only thinking config is stripped on 2.5 Flash. JSON MIME type, system instructions, and temperature are preserved.
+- **Investigation client**: structured JSON prompts remain in [`gemini_client.py`](file:///c:/Projects/Sudarshan/backend/app/ai/gemini_client.py); transport retries live in the manager.
+- **Output contracts**: Standardized Pydantic `IntelligenceReport` model:
   - `plain_english_narrative`
   - `fraud_objective`
   - `affected_banking_apps`

@@ -82,7 +82,23 @@ logger = logging.getLogger(__name__)
 
 # SUDARSHAN_AGENT_MODEL is the legacy name, still honoured if GEMINI_MODEL is unset.
 GEMINI_MODEL: str = os.getenv("GEMINI_MODEL") or os.getenv("SUDARSHAN_AGENT_MODEL", "gemini-2.5-flash")
-MAX_OUTPUT_TOKENS: int = 512    # Agent actions are compact JSON - no need for large output
+#: Output budget for one planner call.
+#:
+#: The action itself is ~40 tokens of JSON, so 512 looked generous. It is not,
+#: on a thinking model: the budget covers internal reasoning tokens as well as
+#: the answer. Measured on gemini-3.6-flash with a trivial prompt,
+#: `thoughts_token_count` was 358 of 512 - 70% spent before a character of JSON
+#: was emitted. With the explorer's real prompt (UI tree, memory, goal context)
+#: thinking runs longer still, the JSON is cut mid-string, and the planner sees
+#:     Step1_JSONSyntax: Unterminated string starting at ...
+#: then burns a retry and falls back to the deterministic planner. Every run in
+#: this session did exactly that, which is why the LLM planner appeared to be
+#: unavailable even once the API key was valid.
+#:
+#: thinking cannot simply be switched off - `thinking_budget=0` is rejected by
+#: gemini-3.6-flash with 400 INVALID_ARGUMENT - so the budget is sized to
+#: accommodate it instead.
+MAX_OUTPUT_TOKENS: int = int(os.getenv("SUDARSHAN_AGENT_MAX_OUTPUT_TOKENS", "2048"))
 
 # ─── Cache and budget ─────────────────────────────────────────────────────────
 
@@ -123,7 +139,11 @@ GOAL_KEYWORD_MAP: List[Tuple[str, str, int]] = [
     ("next",            "click_text",     65),
     ("proceed",         "click_text",     65),
     ("submit",          "click_text",     65),
-    ("confirm",         "click_text",     60),
+    ("install",         "click_text",     88),
+    ("download",        "click_text",     86),
+    ("update",          "click_text",     84),
+    ("open",            "click_text",     62),
+    ("finish",          "click_text",     60),
 
     # Permissions
     ("ok",              "click_text",     55),
@@ -206,16 +226,11 @@ class AgentPlanner:
         self._action_cache: "OrderedDict[Tuple[str, str, str, str], Dict[str, Any]]" = OrderedDict()
         self._cache_lock = threading.Lock()
 
-        self._client = None
-        if api_key:
-            try:
-                from google import genai
-                self._client = genai.Client(api_key=api_key)
-                logger.info(f"[Planner] Gemini client initialized (model: {GEMINI_MODEL})")
-            except Exception as e:
-                logger.warning(f"[Planner] Gemini init failed: {e} - FallbackPlanner active")
+        self._use_gemini = bool(api_key)
+        if self._use_gemini:
+            logger.info("[Planner] Gemini transport enabled via provider manager")
         else:
-            logger.warning("[Planner] No GEMINI_API_KEY - FallbackPlanner active")
+            logger.warning("[Planner] Gemini disabled for this planner - FallbackPlanner active")
 
     # ── Post-run forensic remediation ──────────────────────────────────────────
 
@@ -330,7 +345,7 @@ class AgentPlanner:
                 return cached
 
         # ── 2. LLM call ────────────────────────────────────────────────────────
-        if self._client:
+        if self._use_gemini:
             try:
                 action, validation_error = await self._call_llm(obs, memory, goals, next_goal)
                 if action:
@@ -374,7 +389,7 @@ class AgentPlanner:
         action_dict is None if validation failed.
         """
         from google.genai import types
-        import asyncio
+        from sudarshan_core.ai.gemini_provider import get_gemini_manager
 
         system_prompt = self._build_system_prompt()
         user_context  = self._build_user_context(obs, memory, goals, next_goal, previous_error)
@@ -394,21 +409,19 @@ class AgentPlanner:
                 logger.warning(f"[Planner] Could not load screenshot bytes ({e}) - proceeding text-only")
 
         try:
-            response = await asyncio.to_thread(
-                self._client.models.generate_content,
-                model=GEMINI_MODEL,
+            result = await get_gemini_manager().generate_content_async(
                 contents=contents,
                 config=types.GenerateContentConfig(
                     system_instruction=system_prompt,
                     response_mime_type="application/json",
                     max_output_tokens=MAX_OUTPUT_TOKENS,
-                    temperature=0.2,   # Low temperature for deterministic tool selection
+                    temperature=0.2,
                 ),
             )
-            raw_text = response.text.strip() if response.text else ""
-            self._record_usage(response)
+            raw_text = result.text.strip() if result.text else ""
+            self._record_usage(result.response, model=result.model)
         except Exception as e:
-            return None, f"LLM API error: {type(e).__name__}: {e}"
+            return None, f"LLM API error: {type(e).__name__}"
 
         return self._validate_action(raw_text, obs)
 
@@ -419,7 +432,7 @@ class AgentPlanner:
         """
         return get_screen_size(adb_path=self.adb_path, device_serial=self.device_serial)
 
-    def _record_usage(self, response: Any) -> None:
+    def _record_usage(self, response: Any, model: Optional[str] = None) -> None:
         """
         Record one LLM request and its token usage against the benchmark.
 
@@ -437,7 +450,7 @@ class AgentPlanner:
                 prompt_tokens=getattr(usage, "prompt_token_count", 0) or 0,
                 output_tokens=getattr(usage, "candidates_token_count", 0) or 0,
                 total_tokens=getattr(usage, "total_token_count", 0) or 0,
-                model=GEMINI_MODEL,
+                model=model or GEMINI_MODEL,
             )
         except Exception as exc:
             logger.warning(
@@ -680,7 +693,19 @@ class FallbackPlanner:
         self._scroll_attempts:      int = 0
         # Backtrack attempts spent on the current stuck screen. Bounded so loop
         # recovery cannot preempt the stop condition forever - see decide().
-        self._loop_break_attempts:  int = 0
+        # Backtrack attempts PER SCREEN, not one global counter.
+        #
+        # The counter used to be a single int reset on any screen change - but
+        # the loop-breaker's own press_back changes the screen, so the reset
+        # fired on the very action it was counting. Observed live: "Loop
+        # detected on screen 29d4d7 - triggering backtrack action (1/2)" eight
+        # times in one run, never reaching 2/2, because each attempt reset
+        # itself and the app navigated straight back into the same screen.
+        #
+        # Keyed by screen hash, a stuck screen accumulates its own attempts and
+        # genuinely exhausts them, which is what lets the stop below become
+        # reachable.
+        self._loop_break_attempts:  Dict[str, int] = {}
         self._last_screen_hash:     str = ""
 
     def decide(
@@ -721,16 +746,17 @@ class FallbackPlanner:
         # Check if we are making progress (new screen or new Frida events)
         if obs.screen_hash != self._last_screen_hash:
             self._consecutive_failures = 0
-            self._loop_break_attempts = 0
             self._scroll_attempts      = 0
         else:
             has_new_evidence = len(obs.frida_events) > 0
             if not has_new_evidence:
                 self._consecutive_failures += 1
             else:
-                # New Frida evidence on the same screen is still progress.
+                # New Frida evidence on the same screen is still progress, and
+                # is the one thing that genuinely clears a screen's loop budget:
+                # the screen is producing evidence, so revisiting it is useful.
                 self._consecutive_failures = 0
-                self._loop_break_attempts = 0
+                self._loop_break_attempts.pop(obs.screen_hash, None)
 
         self._last_screen_hash = obs.screen_hash
 
@@ -751,12 +777,14 @@ class FallbackPlanner:
             shash, max_visits=3, window=5
         )
 
-        if looping and self._loop_break_attempts < MAX_LOOP_BREAK_ATTEMPTS:
-            self._loop_break_attempts += 1
+        attempts_here = self._loop_break_attempts.get(shash, 0)
+        if looping and attempts_here < MAX_LOOP_BREAK_ATTEMPTS:
+            attempts_here += 1
+            self._loop_break_attempts[shash] = attempts_here
             logger.warning(
                 f"[FallbackPlanner] Loop detected on screen {shash[:6]} - "
                 f"triggering backtrack action "
-                f"({self._loop_break_attempts}/{MAX_LOOP_BREAK_ATTEMPTS})"
+                f"({attempts_here}/{MAX_LOOP_BREAK_ATTEMPTS})"
             )
             self.coverage_tracker.record_loop_broken()
             return {
@@ -771,8 +799,8 @@ class FallbackPlanner:
         if self._consecutive_failures >= FALLBACK_MAX_CONSECUTIVE_FAILURES:
             logger.warning(
                 f"[FallbackPlanner] {self._consecutive_failures} consecutive failures "
-                f"with no progress ({self._loop_break_attempts} backtrack attempt(s) "
-                f"made) - signalling stop."
+                f"with no progress ({sum(self._loop_break_attempts.values())} "
+                f"backtrack attempt(s) made) - signalling stop."
             )
             return None
 
@@ -824,8 +852,6 @@ class FallbackPlanner:
                 "confidence": round(highest_candidate.priority / 100.0, 2),
                 "_source":    "goal_planner",
             }
-
-            self.coverage_tracker.record_action_executed(highest_candidate.target_node_id, success=True)
             return action_dict
 
         # ── Score UI nodes against keyword map (legacy fallback) ─────────────

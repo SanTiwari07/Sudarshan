@@ -610,7 +610,10 @@ def reconcile_frs_breakdown(
     if not dynamic_result or not isinstance(dynamic_result, dict):
         return frs_breakdown
 
-    dynamic_available = bool(dynamic_result.get("available", False))
+    dynamic_available = bool(
+        dynamic_result.get("available", False)
+        or dynamic_result.get("runtime_attempted", False)
+    )
     dynamic_conclusive = dynamic_available and _dynamic_run_was_conclusive(dynamic_result)
     correlation_available = "correlation" not in (frs_breakdown.get("axes_excluded") or [])
 
@@ -647,6 +650,9 @@ _INCONCLUSIVE_STATUSES = frozenset({
     "NO_BEHAVIOR_OBSERVED",
     "NO_UI_RENDERED",
     "INSTRUMENTATION_FAILED",
+    "FRIDA_ATTACH_FAILED",
+    "EMULATOR_UNAVAILABLE",
+    "INSTALL_FAILED",
     "TIMEOUT",
     "FAILED",
 })
@@ -661,6 +667,13 @@ def dynamic_exclusion_reason(dynamic: Optional[Dict]) -> Optional[str]:
     blocked us" are opposite claims and must not render identically.
     """
     if not dynamic or not dynamic.get("available", False):
+        if dynamic and dynamic.get("runtime_attempted"):
+            status = str(dynamic.get("dynamic_status") or "").upper()
+            if status in _INCONCLUSIVE_STATUSES or status in (
+                "EMULATOR_UNAVAILABLE", "INSTALL_FAILED", "FRIDA_ATTACH_FAILED",
+            ):
+                return status or "FAILED"
+            return "DYNAMIC_UNAVAILABLE"
         return "DYNAMIC_UNAVAILABLE"
 
     status = str(dynamic.get("dynamic_status") or "").upper()
@@ -915,7 +928,10 @@ def calculate_risk_score(
     scenario_table = build_threat_scenario_table(flags_dict)
 
     # ── FRS Formula ───────────────────────────────────────────────────────────
-    dynamic_available = dynamic_result is not None and dynamic_result.get("available", False)
+    dynamic_available = dynamic_result is not None and (
+        dynamic_result.get("available", False)
+        or dynamic_result.get("runtime_attempted", False)
+    )
 
     # An axis with no data must be EXCLUDED, not scored as 0.
     #

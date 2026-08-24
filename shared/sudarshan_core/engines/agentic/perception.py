@@ -35,7 +35,7 @@ import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, FrozenSet, List, Optional, Set
+from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple
 
 from sudarshan_core.engines.agentic.sanitizer import sanitize, sanitize_block
 from sudarshan_core.sandbox import get_sandbox_provider
@@ -91,6 +91,12 @@ class UINode:
     is_clickable: bool
     is_scrollable: bool
     bounds:      str
+    is_checkable: bool = False
+    enabled:     bool = True
+    checked:     Optional[bool] = None
+    semantic_role: str = "UNKNOWN"
+    detection_source: str = "uiautomator"
+    confidence:  float = 0.99
 
 
 @dataclass
@@ -126,6 +132,7 @@ class Observation:
     is_empty_ui:      bool             = False
     vision_reason:    str              = ""
     static_findings:  Dict[str, Any]   = field(default_factory=dict)
+    grounding_sources: List[str]       = field(default_factory=list)
 
     def ui_summary(self, max_nodes: int = 15) -> str:
         """
@@ -307,6 +314,7 @@ class PerceptionPipeline:
 
         # Cache: last screen hash for which a screenshot was taken
         self._last_vision_hash: str = ""
+        self._screen_size: Optional[Tuple[int, int]] = None
 
     # ── Main observe() entry point ─────────────────────────────────────────────
 
@@ -332,9 +340,14 @@ class PerceptionPipeline:
             static_findings=static_findings or {},
         )
 
+        from sudarshan_core.engines.agentic.exploration_engine import (
+            compute_composite_state_signature,
+        )
+
         # ── Level 2: Current Activity (always captured) ──────────────────────
         obs.activity = await self._get_current_activity()
         obs.is_webview = self._is_webview_activity(obs.activity)
+        foreground_pkg = package_of(obs.activity)
 
         # ── Level 1: UI XML dump ─────────────────────────────────────────────
         xml_raw = await self._dump_ui_xml()
@@ -343,11 +356,31 @@ class PerceptionPipeline:
         if xml_raw:
             obs.ui_nodes   = self._parse_ui_nodes(xml_raw)
             obs.ui_node_count = len(obs.ui_nodes)
-            obs.screen_hash   = self._compute_screen_hash(obs.ui_nodes, obs.activity)
             obs.is_empty_ui   = obs.ui_node_count < MIN_ACTIONABLE_NODES
 
+        # Unified state hash (matches ExplorationGraph)
+        sh, _ = compute_composite_state_signature(
+            obs.activity,
+            foreground_pkg or self.package_name,
+            obs.ui_nodes,
+        )
+        obs.screen_hash = sh
+
         # ── Determine if Level 5 (screenshot/vision) is needed ───────────────
-        reason = self._screenshot_needed(obs, last_action_failed)
+        # Skip vision for home launcher - policy handles home screenshots
+        from sudarshan_core.engines.agentic.screenshot_policy import (
+            resolve_screen_ownership,
+            ScreenOwnership,
+        )
+        ownership = resolve_screen_ownership(
+            foreground_pkg, self.package_name, obs.activity, "",
+        )
+        if ownership == ScreenOwnership.HOME_LAUNCHER:
+            logger.debug("[Perception] Skipping vision for HOME_LAUNCHER")
+            reason = ""
+        else:
+            reason = self._screenshot_needed(obs, last_action_failed)
+
         if reason:
             # Fraud-relevant Frida events bypass the dedupe gate: an overlay
             # drawn above the app often leaves the XML-derived screen_hash
@@ -368,7 +401,11 @@ class PerceptionPipeline:
                         "sms": "HOOK_TRIGGER",
                     }.get(cat, "SUSPICIOUS_UI")
                 path = await self._take_screenshot(
-                    force=forced, reason=cap_reason, category=cap_category
+                    force=forced,
+                    reason=cap_reason,
+                    category=cap_category,
+                    foreground_package=foreground_pkg,
+                    screen_hash=obs.screen_hash,
                 )
                 obs.screenshot_path  = path or ""
                 obs.screenshot_taken = bool(path)
@@ -382,7 +419,58 @@ class PerceptionPipeline:
         if obs.is_empty_ui or obs.is_webview:
             obs.logcat = await self._capture_logcat()
 
+        # Structural recovery always: a clickable unlabeled parent must not
+        # prevent recovering the labeled CTA child.
+        grounded, sources = self._apply_grounding_fallback(obs, foreground_pkg)
+        if sources or len(grounded) != len(obs.ui_nodes):
+            obs.ui_nodes = grounded
+            obs.grounding_sources = sources
+            obs.ui_node_count = len(obs.ui_nodes)
+            obs.is_empty_ui = obs.ui_node_count < MIN_ACTIONABLE_NODES
+            sh, _ = compute_composite_state_signature(
+                obs.activity,
+                foreground_pkg or self.package_name,
+                obs.ui_nodes,
+            )
+            obs.screen_hash = sh
+
         return obs
+
+    def _screen_dimensions(self) -> Tuple[int, int]:
+        if self._screen_size:
+            return self._screen_size
+        from sudarshan_core.engines.agentic.device_properties import get_screen_size
+        w, h = get_screen_size(self.adb_path, self.device_serial)
+        self._screen_size = (w, h)
+        return w, h
+
+    def _apply_grounding_fallback(
+        self,
+        obs: Observation,
+        foreground_pkg: str,
+    ) -> Tuple[List[UINode], List[str]]:
+        from sudarshan_core.engines.agentic.visual_grounding import augment_observation_nodes
+
+        sw, sh = self._screen_dimensions()
+        context = " ".join(
+            (n.text or n.desc or "") for n in obs.ui_nodes[:20]
+        )
+        merged, sources = augment_observation_nodes(
+            obs.ui_xml_raw,
+            obs.ui_nodes,
+            screenshot_path=obs.screenshot_path,
+            screen_width=sw,
+            screen_height=sh,
+            context_text=context,
+            min_nodes=MIN_ACTIONABLE_NODES,
+        )
+        if sources:
+            logger.info(
+                "[Perception] Grounding recovered %d nodes via %s",
+                len(merged) - len(obs.ui_nodes),
+                ", ".join(sources),
+            )
+        return merged, sources
 
     async def _adb(self, *args: str) -> tuple[bool, str]:
         """Policy-enforced ADB via SandboxProvider (same choke point as ToolExecutor)."""
@@ -413,9 +501,13 @@ class PerceptionPipeline:
         """
         Parse the XML hierarchy into a flat list of actionable UINode objects.
 
-        A node is actionable if it is: clickable, checkable, scrollable, or EditText.
-        Nodes without bounds are skipped.
+        Direct UIAutomator flags (clickable/checkable/scrollable/input) are the
+        primary source. Labeled non-clickable children of a clickable ancestor
+        are recovered as the same control: tap the ancestor, keep the child's
+        semantic label.
         """
+        from sudarshan_core.engines.agentic.semantic_action import classify_semantic_role
+
         nodes: List[UINode] = []
         try:
             root = ET.fromstring(xml_content)
@@ -423,44 +515,120 @@ class PerceptionPipeline:
             logger.warning(f"[Perception] XML parse error: {e}")
             return nodes
 
-        for elem in root.iter():
-            is_clickable  = elem.attrib.get("clickable")  == "true"
-            is_checkable  = elem.attrib.get("checkable")  == "true"
+        parent_map = {child: parent for parent in root.iter() for child in list(parent)}
+
+        def _clickable_ancestor(elem: ET.Element) -> Optional[ET.Element]:
+            cur = parent_map.get(elem)
+            while cur is not None:
+                if cur.attrib.get("clickable") == "true":
+                    return cur
+                cur = parent_map.get(cur)
+            return None
+
+        def _emit(
+            elem: ET.Element,
+            *,
+            bounds_elem: ET.Element,
+            is_clickable: bool,
+            source: str,
+        ) -> None:
+            bounds_str = bounds_elem.attrib.get("bounds", "")
+            m = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", bounds_str)
+            if not m:
+                return
+            x1, y1, x2, y2 = map(int, m.groups())
+            text = elem.attrib.get("text", "").strip()
+            desc = elem.attrib.get("content-desc", "").strip()
+            res_id = elem.attrib.get("resource-id", "")
+            res_id = res_id.split("/")[-1] if "/" in res_id else res_id
+            cls_full = elem.attrib.get("class", "")
+            cls_name = cls_full.split(".")[-1]
+            enabled = elem.attrib.get("enabled", "true") != "false"
+            is_checkable = elem.attrib.get("checkable") == "true"
             is_scrollable = elem.attrib.get("scrollable") == "true"
-            is_input      = elem.attrib.get("class", "") == "android.widget.EditText"
+            is_input = elem.attrib.get("class", "") == "android.widget.EditText"
+            checked_attr = elem.attrib.get("checked", "")
+            checked: Optional[bool] = None
+            if checked_attr == "true":
+                checked = True
+            elif checked_attr == "false":
+                checked = False
+            area = max(0, (x2 - x1) * (y2 - y1))
+            label = text or desc or res_id
+            classification = classify_semantic_role(
+                label=label,
+                class_name=cls_name,
+                is_checkable=is_checkable,
+                is_clickable=is_clickable or source == "clickable_parent_recovery",
+                is_input=is_input,
+                is_scrollable=is_scrollable,
+                checked=checked,
+                bounds_area=area,
+            )
+            nodes.append(UINode(
+                node_id=f"n{len(nodes)}",
+                class_name=cls_name,
+                text=text,
+                desc=desc,
+                resource_id=res_id,
+                center_x=(x1 + x2) // 2,
+                center_y=(y1 + y2) // 2,
+                is_input=is_input,
+                is_clickable=is_clickable or source == "clickable_parent_recovery",
+                is_scrollable=is_scrollable,
+                bounds=bounds_str,
+                is_checkable=is_checkable,
+                enabled=enabled,
+                checked=checked,
+                semantic_role=classification.role.value,
+                detection_source=source,
+                confidence=classification.confidence,
+            ))
 
-            if not (is_clickable or is_checkable or is_scrollable or is_input):
-                continue
-
+        seen_labels: Set[str] = set()
+        for elem in root.iter():
+            is_clickable = elem.attrib.get("clickable") == "true"
+            is_checkable = elem.attrib.get("checkable") == "true"
+            is_scrollable = elem.attrib.get("scrollable") == "true"
+            is_input = elem.attrib.get("class", "") == "android.widget.EditText"
             bounds_str = elem.attrib.get("bounds", "")
             if not bounds_str:
                 continue
 
-            m = re.match(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', bounds_str)
-            if not m:
+            if is_clickable or is_checkable or is_scrollable or is_input:
+                _emit(
+                    elem,
+                    bounds_elem=elem,
+                    is_clickable=is_clickable,
+                    source="uiautomator",
+                )
+                label = (
+                    elem.attrib.get("text", "").strip()
+                    or elem.attrib.get("content-desc", "").strip()
+                )
+                if label:
+                    seen_labels.add(label.lower())
                 continue
 
-            x1, y1, x2, y2 = map(int, m.groups())
-            text     = elem.attrib.get("text", "").strip()
-            desc     = elem.attrib.get("content-desc", "").strip()
-            res_id   = elem.attrib.get("resource-id", "")
-            res_id   = res_id.split("/")[-1] if "/" in res_id else res_id
-            cls_full = elem.attrib.get("class", "")
-            cls_name = cls_full.split(".")[-1]
-
-            nodes.append(UINode(
-                node_id      = f"n{len(nodes)}",
-                class_name   = cls_name,
-                text         = text,
-                desc         = desc,
-                resource_id  = res_id,
-                center_x     = (x1 + x2) // 2,
-                center_y     = (y1 + y2) // 2,
-                is_input     = is_input,
-                is_clickable = is_clickable,
-                is_scrollable= is_scrollable,
-                bounds       = bounds_str,
-            ))
+            # Layered recovery: labeled non-clickable → clickable ancestor
+            label = (
+                elem.attrib.get("text", "").strip()
+                or elem.attrib.get("content-desc", "").strip()
+            )
+            if not label or label.lower() in seen_labels:
+                continue
+            if elem.attrib.get("enabled", "true") == "false":
+                continue
+            ancestor = _clickable_ancestor(elem)
+            if ancestor is None:
+                continue
+            _emit(
+                elem,
+                bounds_elem=ancestor,
+                is_clickable=True,
+                source="clickable_parent_recovery",
+            )
+            seen_labels.add(label.lower())
 
         return nodes
 
@@ -581,6 +749,8 @@ class PerceptionPipeline:
         force: bool = False,
         reason: str = "SUSPICIOUS_UI",
         category: str = "ui",
+        foreground_package: str = "",
+        screen_hash: str = "",
     ) -> Optional[str]:
         """Capture a screenshot and return the local file path, or None on failure."""
         if self.screenshot_manager is not None:
@@ -591,6 +761,8 @@ class PerceptionPipeline:
                 reason=reason,
                 activity="",
                 force=force,
+                foreground_package=foreground_package,
+                layout_hash=screen_hash,
             )
             if ref:
                 return str(self.screenshot_manager.output_dir / Path(ref).name)

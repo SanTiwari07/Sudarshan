@@ -8,7 +8,7 @@ Why this exists
 ---------------
 Every prerequisite checked here has a silent-failure path:
 
-  * No GEMINI_API_KEY    -> the agentic planner disables itself and the
+  * No Gemini API key    -> the agentic planner disables itself and the
                             deterministic FallbackPlanner takes over, so the
                             explorer performs far fewer and much shallower taps.
   * No reachable ADB     -> zero devices, the sandbox never connects, and the
@@ -107,17 +107,25 @@ def check_jwt_secret() -> CheckResult:
 
 
 def check_gemini_key() -> CheckResult:
-    if (os.getenv("GEMINI_API_KEY") or "").strip():
-        model = (os.getenv("GEMINI_MODEL") or "gemini-2.5-flash").strip()
+    from sudarshan_core.ai.gemini_settings import load_gemini_settings
+
+    settings = load_gemini_settings()
+    if settings.configured:
+        primary = settings.primary.model if settings.primary else "none"
+        fallback = settings.fallback.model if settings.fallback else "none"
         return CheckResult(
-            "GEMINI_API_KEY", OK, f"set (model: {model})", data={"model": model}
+            "GEMINI",
+            OK,
+            f"configured (mode={settings.mode}, primary={primary}, fallback={fallback})",
+            data={"mode": settings.mode, "primary_model": primary, "fallback_model": fallback},
         )
     return CheckResult(
-        "GEMINI_API_KEY",
+        "GEMINI",
         WARN,
         "unset -- the AI exploration layer disables itself and the deterministic "
         "FallbackPlanner takes over, so the explorer performs far fewer UI actions",
-        "Add GEMINI_API_KEY to .env (https://aistudio.google.com/app/apikey). "
+        "Add GEMINI_PRIMARY_API_KEY (and optionally GEMINI_FALLBACK_API_KEY) or "
+        "legacy GEMINI_API_KEY to .env (https://aistudio.google.com/app/apikey). "
         ".env is gitignored, so a fresh clone never has it.",
     )
 

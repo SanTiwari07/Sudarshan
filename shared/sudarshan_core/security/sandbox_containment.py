@@ -283,6 +283,31 @@ def _is_loopback_only_host(host: str) -> bool:
         return False
 
 
+def _adb_own_options(args: Sequence[str]) -> List[str]:
+    """
+    The options adb itself consumes, i.e. everything before the subcommand.
+
+    adb's global flags must precede the subcommand to reach adb at all, so
+    tokens after it belong to `shell`, `install`, `am`, and so on. Separating
+    them is what lets a flag be forbidden for adb without forbidding the same
+    spelling for a guest-side command.
+    """
+    own: List[str] = []
+    i = 0
+    while i < len(args):
+        token = args[i]
+        if token in ("-s", "-d", "-e", "-H", "-P", "-L"):
+            own.append(token)
+            i += 2
+            continue
+        if token.startswith("-"):
+            own.append(token)
+            i += 1
+            continue
+        break          # first non-flag token is the subcommand
+    return own
+
+
 def _adb_global_subcommand(args: Sequence[str]) -> Optional[str]:
     """
     Return the adb *global* subcommand, skipping -s SERIAL and other flags.
@@ -337,11 +362,24 @@ def validate_adb_invocation(args: Sequence[str]) -> None:
         return
 
     # Global listen flag - exposes host ADB to the LAN.
-    if "-a" in args:
-        raise ContainmentViolation(
-            "adb -a (listen on all interfaces) is forbidden in analysis containers.",
-            code="ADB_LISTEN_ALL",
-        )
+    #
+    # Scoped to adb's OWN options, which by definition precede the subcommand.
+    # A bare `"-a" in args` also matched `-a` belonging to the subcommand, and
+    # the most common such use is the one this engine depends on:
+    #
+    #     adb -s <serial> shell am start -a android.settings.ACCESSIBILITY_SETTINGS
+    #
+    # That was rejected outright, so every action-based `am start` failed -
+    # including ToolExecutor's `start_activity` with an `action`, and the
+    # accessibility Settings flow, which could therefore never have worked.
+    # The real exposure (`adb -a nodaemon server start`) is still blocked
+    # because the flag has to come before the subcommand to reach adb at all.
+    for token in _adb_own_options(args):
+        if token == "-a":
+            raise ContainmentViolation(
+                "adb -a (listen on all interfaces) is forbidden in analysis containers.",
+                code="ADB_LISTEN_ALL",
+            )
 
     # Subcommand is the first global adb verb (not device serial after -s).
     subcmd = _adb_global_subcommand(args)

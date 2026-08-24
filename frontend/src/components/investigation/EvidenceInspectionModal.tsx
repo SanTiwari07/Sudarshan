@@ -173,14 +173,25 @@ export default function EvidenceInspectionModal({
   const quality = ve?.quality || entry.quality || null;
   const correlationStatus = ve?.correlation_status || entry.correlation_status || null;
   const workflow = ve?.workflow_stage_label || entry.workflow_stage_label || entry.stage || null;
-  const observation = ve?.investigative_claim || entry.investigative_claim || entry.reason || entry.label || screenshotDescription(entry);
+  const captureReason = entry.reason || entry.capture_trigger || ve?.capture_trigger || null;
+  const observation = ve?.investigative_claim || entry.investigative_claim || entry.visual_observation || screenshotDescription(entry);
+  const visualObservation = entry.visual_observation || (captureReason && ve?.investigative_claim ? ve.investigative_claim : observation);
+  const runtimeObservation = entry.runtime_observation || (
+    ve?.linked_evidence_ids && ve.linked_evidence_ids.length > 0
+      ? `Linked runtime evidence: ${ve.linked_evidence_ids.join(', ')}`
+      : null
+  );
   const findingKeys = ve?.linked_finding_keys && ve.linked_finding_keys.length > 0
     ? ve.linked_finding_keys
     : entry.linked_finding_keys && entry.linked_finding_keys.length > 0
     ? entry.linked_finding_keys
     : null;
 
-  const trigger = ve?.capture_trigger || entry.capture_trigger || entry.activity || entry.reason || null;
+  const trigger = runtimeObservation || (
+    correlationStatus === 'causal' && evidenceIds
+      ? evidenceIds.join(', ')
+      : null
+  );
   const corroboration = (entry as any).corroboration_summary || null;
   const analystNote = (entry as any).analyst_note || null;
   const mitreTech = (entry as any).mitre_technique || (entry as any).mitre || null;
@@ -472,6 +483,50 @@ export default function EvidenceInspectionModal({
                   </div>
                 )}
 
+                {captureReason && (
+                  <div>
+                    <span className="text-slate-500 block text-[11px] font-medium">Capture Reason</span>
+                    <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-slate-200/80 text-slate-800 inline-block mt-0.5">
+                      {captureReason}
+                    </span>
+                  </div>
+                )}
+
+                {entry.state_id && (
+                  <div>
+                    <span className="text-slate-500 block text-[11px] font-medium">State ID</span>
+                    <span className="font-mono text-[11px] text-slate-800 mt-0.5">{entry.state_id}</span>
+                  </div>
+                )}
+
+                {entry.action_id && (
+                  <div>
+                    <span className="text-slate-500 block text-[11px] font-medium">Action ID</span>
+                    <span className="font-mono text-[11px] text-slate-800 mt-0.5">{entry.action_id}</span>
+                  </div>
+                )}
+
+                {entry.evidence_moment_id && (
+                  <div>
+                    <span className="text-slate-500 block text-[11px] font-medium">Evidence Moment</span>
+                    <span className="font-mono text-[11px] text-slate-800 mt-0.5">{entry.evidence_moment_id}</span>
+                  </div>
+                )}
+
+                {entry.foreground_package && (
+                  <div>
+                    <span className="text-slate-500 block text-[11px] font-medium">Foreground Package</span>
+                    <span className="font-mono text-[11px] text-slate-800 mt-0.5 break-all">{entry.foreground_package}</span>
+                  </div>
+                )}
+
+                {entry.activity && (
+                  <div>
+                    <span className="text-slate-500 block text-[11px] font-medium">Activity</span>
+                    <span className="font-mono text-[11px] text-slate-800 mt-0.5 break-all">{entry.activity}</span>
+                  </div>
+                )}
+
                 {workflow && (
                   <div>
                     <span className="text-slate-500 block text-[11px] font-medium">Workflow</span>
@@ -501,9 +556,25 @@ export default function EvidenceInspectionModal({
 
               <div className="space-y-2.5 text-xs">
                 <div>
+                  <span className="text-blue-900/70 font-semibold block text-[11px]">Visual observation</span>
+                  <p className="text-slate-800 leading-relaxed mt-0.5">
+                    {visualObservation}
+                  </p>
+                </div>
+
+                {runtimeObservation && (
+                  <div>
+                    <span className="text-blue-900/70 font-semibold block text-[11px]">Runtime observation</span>
+                    <p className="text-slate-800 leading-relaxed mt-0.5 font-mono text-[11px]">
+                      {runtimeObservation}
+                    </p>
+                  </div>
+                )}
+
+                <div>
                   <span className="text-blue-900/70 font-semibold block text-[11px]">Why it matters</span>
                   <p className="text-slate-800 leading-relaxed mt-0.5">
-                    {corroboration || observation}
+                    {corroboration || visualObservation}
                   </p>
                 </div>
 

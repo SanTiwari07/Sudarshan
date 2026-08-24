@@ -4,12 +4,14 @@ interface SocCardProps {
   children: React.ReactNode;
   className?: string;
   id?: string;
+  onClick?: () => void;
 }
 
-export function SocCard({ children, className = '', id }: SocCardProps) {
+export function SocCard({ children, className = '', id, onClick }: SocCardProps) {
   return (
     <div
       id={id}
+      onClick={onClick}
       className={`bg-white border border-slate-200/80 rounded-md shadow-[0_1px_2px_rgba(0,0,0,0.02)] overflow-hidden ${className}`}
     >
       {children}

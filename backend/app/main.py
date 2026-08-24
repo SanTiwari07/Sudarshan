@@ -18,13 +18,14 @@ from slowapi.errors import RateLimitExceeded
 from app.rate_limit import limiter
 
 from app.routes import (
-    upload, report, intelligence, screenshots, discovery, baselines, resilience,
+    upload, report, intelligence, screenshots, discovery, baselines, resilience, batch,
 )
 from app.routes.runtime_api import router as runtime_router
 from app.routes.cases import router as cases_router
 from app.auth.auth import router as auth_router
 from app.db.database import init_db
 from app.workers.analysis_queue import start_workers, stop_workers
+from app.workers.batch_worker import start_batch_worker, stop_batch_worker
 from app.workers.baseline_refresh import start_baseline_refresh, stop_baseline_refresh
 from app.auth.auth import hash_password, username_exists, create_user
 
@@ -86,6 +87,7 @@ app.add_middleware(
 
 app.include_router(auth_router,          prefix="/api/v1",         tags=["Authentication"])
 app.include_router(upload.router,        prefix="/api/v1",         tags=["Analysis"])
+app.include_router(batch.router,         prefix="/api/v1",         tags=["Enterprise Batch Scan"])
 app.include_router(discovery.router,     prefix="/api/v1",         tags=["APK Discovery"])
 app.include_router(report.router,        prefix="/api/v1",         tags=["Reports & Export"])
 app.include_router(cases_router,         prefix="/api/v1",         tags=["Case History"])
@@ -179,9 +181,14 @@ async def startup():
     await start_workers()
     logger.info("[Startup] Analysis worker pool started")
 
+    # 7. Start enterprise batch scan worker
+    await start_batch_worker()
+    logger.info("[Startup] Enterprise batch scan worker started")
+
 
 @app.on_event("shutdown")
 async def shutdown():
+    await stop_batch_worker()
     await stop_baseline_refresh()
     await stop_workers()
     logger.info("[Shutdown] Analysis workers stopped")

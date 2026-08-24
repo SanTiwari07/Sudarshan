@@ -39,6 +39,8 @@ The **Analyst Dashboard** is a Single Page Application (SPA) built with React 18
 The dashboard features a persistent header navigation bar with JWT auth status and role-based guards (`RequireAuth`) in [`App.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/App.tsx):
 
 - `/`: Upload & Analysis Launcher ([`Upload.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/pages/Upload.tsx))
+- `/batch`: Enterprise Batch Scan ([`BatchScan.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/pages/BatchScan.tsx))
+- `/batch/:batch_id`: Enterprise Batch Details & Live Queue ([`BatchDetail.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/pages/BatchDetail.tsx))
 - `/fraud-card`: Executive View & Fraud Card ([`FraudCard.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/pages/FraudCard.tsx))
 - `/technical`: Technical SOC View & Workflow Diagram ([`TechnicalView.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/pages/TechnicalView.tsx))
 - `/threat-intel`: Threat Intelligence Correlation View ([`ThreatIntelView.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/pages/ThreatIntelView.tsx))

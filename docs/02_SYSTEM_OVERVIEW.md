@@ -78,7 +78,8 @@ graph TB
         GW[FastAPI Gateway / backend/app/main.py]
         AUTH[JWT Bearer Middleware]
         Q[Async Job Queue Pool<br/>backend/app/workers/analysis_queue.py]
-        DB[(SQLite Case Store<br/>sudarshan.db)]
+        BQ[Enterprise Batch Scan Worker<br/>backend/app/workers/batch_worker.py]
+        DB[(SQLite Case & Batch Store<br/>sudarshan.db)]
         VOL[("Shared Volume /app/uploads")]
     end
 
@@ -237,3 +238,4 @@ System overview documents the main deterministic risk formula executed by [`risk
 | **Deterministic Risk Engine** | **Implemented** | 5-Axis STEI, BFCI, FRS, and VIDE deterministic escalations (`risk_engine.py` + `engines/vide/`). |
 | **VIDE (Visual Impersonation)** | **Implemented (static + code path)** | UI baseline compare, VIDE-F001, signer registry; live WebView on device requires verification per `scripts/verify_vide_webview_device.md`. |
 | **AI RAG Investigation Assistant**| **Implemented** | Gemini 2.5 Flash RAG graph active with streaming SSE response support. |
+| **Enterprise Batch Scan** | **Implemented** | Bulk APK orchestration (2–50 files), FIFO sequential execution (`batch_worker.py`), persistent batch models (`analysis_batches`, `analysis_batch_jobs`), pause/resume/cancel/retry controls, live progress tracking, and direct Case linkage without engine duplication. |

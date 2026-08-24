@@ -6,6 +6,7 @@ import {
   Globe,
   Database,
   UploadCloud,
+  Layers,
 } from 'lucide-react';
 
 export type NavItem = {
@@ -22,6 +23,7 @@ export type NavItem = {
 /** Legacy drawer list - kept for any deep links; primary nav is AppHeader bar. */
 export const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Upload & analyze', shortLabel: 'Upload', icon: UploadCloud, matchPrefix: '/' },
+  { to: '/batch', label: 'Enterprise batch scan', shortLabel: 'Batch Scan', icon: Layers, matchPrefix: '/batch' },
   { to: '/fraud-card', label: 'Fraud analyst intelligence', shortLabel: 'Fraud card', icon: LayoutDashboard },
   { to: '/technical', label: 'SOC / technical view', shortLabel: 'Technical', icon: Terminal },
   { to: '/chat', label: 'AI investigation assistant', shortLabel: 'AI assistant', icon: MessageSquare },
@@ -36,9 +38,10 @@ export const ENTERPRISE_NAV_MAIN: NavItem[] = [
   { to: '/chat', label: 'AI Assistant', shortLabel: 'AI Assistant', icon: MessageSquare },
 ];
 
-/** Right cluster: Cases, then Upload APK (adjacent to notifications). */
+/** Right cluster: Cases, Batch Scan, then Upload APK (adjacent to notifications). */
 export const ENTERPRISE_NAV_END: NavItem[] = [
   { to: '/history', label: 'Cases', shortLabel: 'Cases', icon: Database, matchPrefix: '/history' },
+  { to: '/batch', label: 'Batch Scan', shortLabel: 'Batch Scan', icon: Layers, matchPrefix: '/batch' },
   { to: '/', label: 'Upload APK', shortLabel: 'Upload', icon: UploadCloud, matchPrefix: '/' },
 ];
 

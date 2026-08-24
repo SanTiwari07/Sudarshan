@@ -37,6 +37,8 @@ const TechnicalView = lazyWithRetry(() => import('./pages/TechnicalView'));
 const ThreatIntelView = lazyWithRetry(() => import('./pages/ThreatIntelView'));
 const History = lazyWithRetry(() => import('./pages/History'));
 const InvestigationChat = lazyWithRetry(() => import('./pages/InvestigationChat'));
+const BatchScan = lazyWithRetry(() => import('./pages/BatchScan'));
+const BatchDetail = lazyWithRetry(() => import('./pages/BatchDetail'));
 
 // ─── Type Definitions ─────────────────────────────────────────────────────────
 
@@ -589,6 +591,26 @@ function AppContent() {
               <InvestigationShell>
                 <CaseDetailRoute />
               </InvestigationShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/batch"
+          element={
+            <RequireAuth label="Batch Scan">
+              <div className="analyst-page">
+                <BatchScan />
+              </div>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/batch/:batch_id"
+          element={
+            <RequireAuth label="Batch Detail">
+              <div className="analyst-page">
+                <BatchDetail />
+              </div>
             </RequireAuth>
           }
         />

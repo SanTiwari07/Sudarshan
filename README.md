@@ -112,6 +112,8 @@ Every stage has a fallback. A malformed APK is rebuilt and resigned; Androguard 
 
 **VIDE (Visual Impersonation Detection)** — Deterministic comparison of UI fingerprints against banking baselines, plus a signer registry that is *fail-closed*: a package with no provisioned certificate has its identity claim rejected rather than trusted.
 
+**Enterprise Batch Scan** — Bulk analysis capability for organizations (e.g. banks receiving multiple suspicious APKs daily). Upload 2–50 APKs in a single batch, executed in a strict FIFO sequential queue (preventing sandbox collisions), with real-time multi-segment progress tracking, queue controls (pause/resume/cancel/retry), and direct deep-linking to full individual case investigations without duplicate analysis engines.
+
 **Deterministic scoring** — 5-axis STEI, volume-aware logarithmic BFCI v2, and a 4-axis FRS, with verdict floors that refuse to certify unobserved code as safe.
 
 **Causal reconstruction** — Temporal chains (Overlay Phishing → SMS Theft → Account Takeover) mapped to MITRE ATT&CK for Mobile and rendered as an interactive timeline.
@@ -124,9 +126,10 @@ Every stage has a fallback. A malformed APK is rebuilt and resigned; Androguard 
 
 | Layer | Component | Technologies |
 | :--- | :--- | :--- |
-| **Frontend** | React 18 SPA | TypeScript, Vite, Tailwind CSS, React Router v6 |
+| **Frontend** | React 18 SPA | TypeScript, Vite, Tailwind CSS, React Router v6, Lucide |
 | **API Gateway** | FastAPI | Python 3.11, Pydantic v2, PyJWT, Uvicorn, asyncio |
-| **Storage** | Case store | SQLite WAL (`sudarshan.db`), async worker pool, file artifact store |
+| **Storage** | Case & Batch store | SQLite WAL (`sudarshan.db`), async worker pool, file artifact store |
+| **Batch Engine**| Batch Orchestrator | Dedicated FIFO `batch_worker.py` background orchestrator |
 | **Shared core** | Domain engines | [`shared/sudarshan_core/`](shared/sudarshan_core/) mounted at `/opt/sudarshan-core` |
 | **Static analysis** | Decompilers | MobSF (8008), Androguard, APKTool, JADX |
 | **Visual detection** | VIDE pipeline | [`engines/vide/`](shared/sudarshan_core/engines/vide/) — UI profiles, baseline compare, VIDE-F001 |
@@ -146,9 +149,9 @@ Sudarshan/
 │   ├── app/
 │   │   ├── ai/                   # Gemini RAG indexer & client
 │   │   ├── auth/                 # JWT authentication & RBAC
-│   │   ├── db/                   # SQLite persistence
-│   │   ├── routes/               # upload, cases, report, intelligence, runtime
-│   │   └── workers/              # Async analysis queue
+│   │   ├── db/                   # SQLite persistence (cases, jobs, batches)
+│   │   ├── routes/               # upload, batch, cases, report, intelligence, runtime
+│   │   └── workers/              # Async analysis queue & FIFO batch worker
 │   └── tests/                    # Gateway pytest suite (CI-enforced)
 ├── shared/sudarshan_core/
 │   ├── analyzers/                # Native APK analyzer
@@ -157,7 +160,7 @@ Sudarshan/
 │   ├── validation/               # Labelled-corpus resolver & static scoring harness
 │   ├── models/                   # Pydantic schemas
 │   └── services/                 # MobSF client, threat correlator
-├── frontend/src/                 # React SPA (pages, investigation panels)
+├── frontend/src/                 # React SPA (pages, batch scan, investigation panels)
 ├── tests/                        # Root pytest suite (unit + integration)
 ├── scripts/                      # validate_corpus.py, health checks, bootstrap
 ├── docs/                         # Documentation portal

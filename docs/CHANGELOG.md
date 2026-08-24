@@ -2,6 +2,31 @@
 
 All notable changes to this project are documented in this file.
 
+## 2026-08-24
+
+### Added
+- **Enterprise Batch Scan Architecture**: Built bulk APK analysis orchestration engine allowing SOC analysts to upload 2–50 suspicious APKs in a single batch.
+- **Persistent Database Models**: Added `analysis_batches` and `analysis_batch_jobs` SQLite tables in `backend/app/db/database.py` with indexes and migrations.
+- **Dedicated FIFO Batch Worker**: Created `backend/app/workers/batch_worker.py` managing sequential FIFO job dispatch to the existing analysis pipeline (`_run_analysis_pipeline`) with automatic recovery for interrupted jobs.
+- **Enterprise Batch REST APIs**: Added `backend/app/routes/batch.py` exposing:
+  - `POST /api/v1/batches`: Multi-file upload, validation, and batch initiation
+  - `GET /api/v1/batches`: Paginated, role-scoped batch history
+  - `GET /api/v1/batches/{batch_id}`: Full batch metadata and live job summaries
+  - `GET /api/v1/batches/{batch_id}/jobs`: Lightweight job list for real-time polling
+  - `POST /api/v1/batches/{batch_id}/pause`: Safe queue pausing
+  - `POST /api/v1/batches/{batch_id}/resume`: Queue resumption
+  - `POST /api/v1/batches/{batch_id}/cancel`: Safe cancellation of queued jobs
+  - `POST /api/v1/batch-jobs/{job_id}/retry`: Retry capability for failed analysis jobs
+- **Enterprise Batch Dashboard UI**: Created complete React 18 / TypeScript frontend suite:
+  - `frontend/src/pages/BatchScan.tsx` & `BatchDetail.tsx` routes (`/batch` and `/batch/:batch_id`)
+  - `frontend/src/components/batch/BatchScanPage.tsx`: Multi-file drag & drop, selected file list with size/status indicators, live active batch queue
+  - `frontend/src/components/batch/BatchDetailPage.tsx`: Dedicated batch view with metadata, progress bar, and results table
+  - `frontend/src/components/batch/BatchHistory.tsx`: Historical batch runs and risk distributions
+  - `frontend/src/components/batch/BatchProgressBar.tsx`: Deterministic multi-segment progress bar with discrete counters
+  - `frontend/src/components/batch/BatchJobRow.tsx`: Results row linking completed jobs directly to existing `InvestigationShell` (`/history/:sha256`)
+  - `frontend/src/components/batch/useBatchProgress.ts`: Auto-polling hook with cached case scoring
+- **Automated Test Suite**: Added `backend/tests/test_batch.py` with 8 comprehensive unit and integration tests covering batch creation, validation, FIFO ordering, pause/resume/cancel, retry, role-scoping, and duplicate APK handling.
+
 ## 2026-08-14
 
 ### Added

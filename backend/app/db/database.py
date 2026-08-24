@@ -95,6 +95,10 @@ _CREATE_INDEXES = (
     "CREATE INDEX IF NOT EXISTS idx_cases_analyst    ON cases(analyst_id);",
     "CREATE INDEX IF NOT EXISTS idx_ioc_expires      ON ioc_cache(expires_at);",
     "CREATE INDEX IF NOT EXISTS idx_jobs_status      ON analysis_jobs(status);",
+    # Enterprise Batch Scan indexes
+    "CREATE INDEX IF NOT EXISTS idx_batches_created_by ON analysis_batches(created_by, created_at DESC);",
+    "CREATE INDEX IF NOT EXISTS idx_batch_jobs_batch   ON analysis_batch_jobs(batch_id, queue_position ASC);",
+    "CREATE INDEX IF NOT EXISTS idx_batch_jobs_status  ON analysis_batch_jobs(status);",
 )
 
 
@@ -157,6 +161,47 @@ CREATE TABLE IF NOT EXISTS discovery_candidates (
 """
 
 
+# ─── Enterprise Batch Scan Tables ────────────────────────────────────────────
+
+_CREATE_ANALYSIS_BATCHES = """
+CREATE TABLE IF NOT EXISTS analysis_batches (
+    batch_id        TEXT    PRIMARY KEY,
+    created_by      INTEGER NOT NULL,
+    created_at      TEXT    NOT NULL,
+    started_at      TEXT,
+    completed_at    TEXT,
+    total_jobs      INTEGER NOT NULL DEFAULT 0,
+    completed_jobs  INTEGER NOT NULL DEFAULT 0,
+    failed_jobs     INTEGER NOT NULL DEFAULT 0,
+    cancelled_jobs  INTEGER NOT NULL DEFAULT 0,
+    status          TEXT    NOT NULL DEFAULT 'QUEUED',
+    current_job_id  TEXT,
+    FOREIGN KEY (created_by) REFERENCES users(id)
+);
+"""
+
+_CREATE_ANALYSIS_BATCH_JOBS = """
+CREATE TABLE IF NOT EXISTS analysis_batch_jobs (
+    job_id               TEXT    PRIMARY KEY,
+    batch_id             TEXT    NOT NULL,
+    filename             TEXT    NOT NULL,
+    sha256               TEXT,
+    queue_position       INTEGER NOT NULL,
+    status               TEXT    NOT NULL DEFAULT 'QUEUED',
+    progress_pct         INTEGER DEFAULT 0,
+    current_stage        TEXT,
+    created_at           TEXT    NOT NULL,
+    started_at           TEXT,
+    completed_at         TEXT,
+    error                TEXT,
+    case_sha256          TEXT,
+    temp_path            TEXT,
+    analyst_queue_job_id TEXT,
+    FOREIGN KEY (batch_id) REFERENCES analysis_batches(batch_id)
+);
+"""
+
+
 @asynccontextmanager
 async def _connect() -> AsyncIterator[aiosqlite.Connection]:
     """
@@ -210,6 +255,8 @@ async def init_db() -> None:
         await db.execute(_CREATE_ANALYSIS_JOBS)
         await db.execute(_CREATE_DISCOVERY_SESSIONS)
         await db.execute(_CREATE_DISCOVERY_CANDIDATES)
+        await db.execute(_CREATE_ANALYSIS_BATCHES)
+        await db.execute(_CREATE_ANALYSIS_BATCH_JOBS)
         for stmt in _CREATE_INDEXES:
             await db.execute(stmt)
         await _apply_migrations(db)
@@ -579,3 +626,203 @@ async def get_discovery_candidates(session_id: str) -> List[Dict[str, Any]]:
             rows = await cur.fetchall()
     return [dict(r) for r in rows]
 
+
+# ─── Enterprise Batch Scan CRUD ───────────────────────────────────────────────
+
+async def create_batch(batch_id: str, created_by: int, total_jobs: int) -> None:
+    """Persist a new batch record."""
+    now = datetime.now(timezone.utc).isoformat()
+    async with _connect() as db:
+        await db.execute(
+            """
+            INSERT INTO analysis_batches
+              (batch_id, created_by, created_at, total_jobs, status)
+            VALUES (?, ?, ?, ?, 'QUEUED')
+            """,
+            (batch_id, created_by, now, total_jobs),
+        )
+        await db.commit()
+    logger.info(f"[DB] Batch created: {batch_id} ({total_jobs} jobs)")
+
+
+async def get_batch(batch_id: str) -> Optional[Dict[str, Any]]:
+    """Return a single batch record or None."""
+    async with _connect() as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM analysis_batches WHERE batch_id = ?", (batch_id,)
+        ) as cur:
+            row = await cur.fetchone()
+    return dict(row) if row else None
+
+
+async def list_batches(
+    limit: int = 20,
+    offset: int = 0,
+    created_by: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """Return paginated batch records, newest first."""
+    async with _connect() as db:
+        db.row_factory = aiosqlite.Row
+        if created_by is not None:
+            sql = (
+                "SELECT * FROM analysis_batches WHERE created_by = ? "
+                "ORDER BY created_at DESC LIMIT ? OFFSET ?"
+            )
+            params = (created_by, limit, offset)
+        else:
+            sql = "SELECT * FROM analysis_batches ORDER BY created_at DESC LIMIT ? OFFSET ?"
+            params = (limit, offset)
+        async with db.execute(sql, params) as cur:
+            rows = await cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+async def count_batches(created_by: Optional[int] = None) -> int:
+    """Count total batches, optionally scoped to an analyst."""
+    async with _connect() as db:
+        if created_by is not None:
+            async with db.execute(
+                "SELECT COUNT(*) FROM analysis_batches WHERE created_by = ?", (created_by,)
+            ) as cur:
+                row = await cur.fetchone()
+        else:
+            async with db.execute("SELECT COUNT(*) FROM analysis_batches") as cur:
+                row = await cur.fetchone()
+    return row[0] if row else 0
+
+
+async def update_batch(batch_id: str, updates: Dict[str, Any]) -> None:
+    """
+    Partial update on analysis_batches.
+    `updates` is a dict of column→value pairs. Only whitelisted columns
+    are applied to prevent injection via caller-controlled keys.
+    """
+    allowed = {
+        "status", "started_at", "completed_at",
+        "completed_jobs", "failed_jobs", "cancelled_jobs",
+        "current_job_id", "total_jobs",
+    }
+    safe = {k: v for k, v in updates.items() if k in allowed}
+    if not safe:
+        return
+    set_clause = ", ".join(f"{k} = ?" for k in safe)
+    values = list(safe.values()) + [batch_id]
+    async with _connect() as db:
+        await db.execute(
+            f"UPDATE analysis_batches SET {set_clause} WHERE batch_id = ?", values
+        )
+        await db.commit()
+
+
+async def create_batch_job(job: Dict[str, Any]) -> None:
+    """Persist a new batch job record."""
+    async with _connect() as db:
+        await db.execute(
+            """
+            INSERT INTO analysis_batch_jobs
+              (job_id, batch_id, filename, sha256, queue_position,
+               status, created_at, temp_path)
+            VALUES (?, ?, ?, ?, ?, 'QUEUED', ?, ?)
+            """,
+            (
+                job["job_id"],
+                job["batch_id"],
+                job["filename"],
+                job.get("sha256"),
+                job["queue_position"],
+                job["created_at"],
+                job.get("temp_path"),
+            ),
+        )
+        await db.commit()
+
+
+async def get_batch_job(job_id: str) -> Optional[Dict[str, Any]]:
+    """Return a single batch job record."""
+    async with _connect() as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM analysis_batch_jobs WHERE job_id = ?", (job_id,)
+        ) as cur:
+            row = await cur.fetchone()
+    return dict(row) if row else None
+
+
+async def get_batch_jobs(batch_id: str) -> List[Dict[str, Any]]:
+    """Return all jobs for a batch, ordered by queue_position."""
+    async with _connect() as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM analysis_batch_jobs WHERE batch_id = ? ORDER BY queue_position ASC",
+            (batch_id,),
+        ) as cur:
+            rows = await cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+async def get_next_queued_batch_job(batch_id: str) -> Optional[Dict[str, Any]]:
+    """Return the lowest-queue_position QUEUED job for a batch (FIFO)."""
+    async with _connect() as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """
+            SELECT * FROM analysis_batch_jobs
+            WHERE batch_id = ? AND status = 'QUEUED'
+            ORDER BY queue_position ASC
+            LIMIT 1
+            """,
+            (batch_id,),
+        ) as cur:
+            row = await cur.fetchone()
+    return dict(row) if row else None
+
+
+async def update_batch_job(job_id: str, updates: Dict[str, Any]) -> None:
+    """
+    Partial update on analysis_batch_jobs.
+    Only whitelisted columns are applied.
+    """
+    allowed = {
+        "status", "started_at", "completed_at", "error",
+        "case_sha256", "progress_pct", "current_stage",
+        "analyst_queue_job_id", "sha256", "temp_path",
+    }
+    safe = {k: v for k, v in updates.items() if k in allowed}
+    if not safe:
+        return
+    set_clause = ", ".join(f"{k} = ?" for k in safe)
+    values = list(safe.values()) + [job_id]
+    async with _connect() as db:
+        await db.execute(
+            f"UPDATE analysis_batch_jobs SET {set_clause} WHERE job_id = ?", values
+        )
+        await db.commit()
+
+
+async def cancel_queued_batch_jobs(batch_id: str) -> int:
+    """Set all QUEUED jobs in a batch to CANCELLED. Returns the count cancelled."""
+    now = datetime.now(timezone.utc).isoformat()
+    async with _connect() as db:
+        cur = await db.execute(
+            """
+            UPDATE analysis_batch_jobs
+            SET status = 'CANCELLED', completed_at = ?
+            WHERE batch_id = ? AND status = 'QUEUED'
+            """,
+            (now, batch_id),
+        )
+        count = cur.rowcount
+        await db.commit()
+    return count
+
+
+async def get_active_batches() -> List[Dict[str, Any]]:
+    """Return all batches in QUEUED or RUNNING state (for worker recovery on startup)."""
+    async with _connect() as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM analysis_batches WHERE status IN ('QUEUED', 'RUNNING', 'PAUSED') ORDER BY created_at ASC"
+        ) as cur:
+            rows = await cur.fetchall()
+    return [dict(r) for r in rows]

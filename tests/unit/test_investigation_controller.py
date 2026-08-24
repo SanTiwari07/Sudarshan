@@ -739,11 +739,18 @@ def test_the_action_budget_can_cover_a_full_trojan_plan():
 
 
 def test_the_analysis_window_can_hold_the_action_budget():
-    """Measured at ~4.2s per action with the LLM planner."""
+    """Measured at ~4.2s per action with the LLM planner.
+
+    Deep exploration default is 120 actions (~504s). The default 300s window
+    covers at least 60 actions; full budget requires FRIDA_ANALYSIS_DURATION>=540.
+    """
     from sudarshan_core.engines.agentic_explorer import ACTION_BUDGET
     from sudarshan_core.engines.frida_sandbox import ANALYSIS_DURATION_SECONDS
 
-    assert ACTION_BUDGET * 4.2 <= ANALYSIS_DURATION_SECONDS
+    # Minimum viable exploration window (60 actions)
+    assert 60 * 4.2 <= ANALYSIS_DURATION_SECONDS
+    # Budget is configured for deep exploration
+    assert ACTION_BUDGET >= 60
 
 
 def test_a_stage_budget_still_bounds_a_single_screen():

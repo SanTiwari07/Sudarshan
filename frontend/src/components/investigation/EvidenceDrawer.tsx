@@ -107,7 +107,8 @@ export default function EvidenceDrawer({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true">
+      {/* z-[60]: must sit above ScoreInfluenceDetailDrawer (z-[55]) when opened from axis detail */}
+      <div className="fixed inset-0 z-[60] flex justify-end" role="dialog" aria-modal="true">
         <div className="absolute inset-0 bg-slate-900/40" onClick={closeEvidence} aria-hidden />
         <div className="relative w-full max-w-md sm:max-w-lg bg-white h-full shadow-2xl border-l border-slate-200 flex flex-col min-w-0">
           <div className="px-5 py-4 border-b border-slate-200 shrink-0">

@@ -139,7 +139,11 @@ GOAL_KEYWORD_MAP: List[Tuple[str, str, int]] = [
     ("next",            "click_text",     65),
     ("proceed",         "click_text",     65),
     ("submit",          "click_text",     65),
-    ("confirm",         "click_text",     60),
+    ("install",         "click_text",     88),
+    ("download",        "click_text",     86),
+    ("update",          "click_text",     84),
+    ("open",            "click_text",     62),
+    ("finish",          "click_text",     60),
 
     # Permissions
     ("ok",              "click_text",     55),
@@ -222,16 +226,11 @@ class AgentPlanner:
         self._action_cache: "OrderedDict[Tuple[str, str, str, str], Dict[str, Any]]" = OrderedDict()
         self._cache_lock = threading.Lock()
 
-        self._client = None
-        if api_key:
-            try:
-                from google import genai
-                self._client = genai.Client(api_key=api_key)
-                logger.info(f"[Planner] Gemini client initialized (model: {GEMINI_MODEL})")
-            except Exception as e:
-                logger.warning(f"[Planner] Gemini init failed: {e} - FallbackPlanner active")
+        self._use_gemini = bool(api_key)
+        if self._use_gemini:
+            logger.info("[Planner] Gemini transport enabled via provider manager")
         else:
-            logger.warning("[Planner] No GEMINI_API_KEY - FallbackPlanner active")
+            logger.warning("[Planner] Gemini disabled for this planner - FallbackPlanner active")
 
     # ── Post-run forensic remediation ──────────────────────────────────────────
 
@@ -346,7 +345,7 @@ class AgentPlanner:
                 return cached
 
         # ── 2. LLM call ────────────────────────────────────────────────────────
-        if self._client:
+        if self._use_gemini:
             try:
                 action, validation_error = await self._call_llm(obs, memory, goals, next_goal)
                 if action:
@@ -390,7 +389,7 @@ class AgentPlanner:
         action_dict is None if validation failed.
         """
         from google.genai import types
-        import asyncio
+        from sudarshan_core.ai.gemini_provider import get_gemini_manager
 
         system_prompt = self._build_system_prompt()
         user_context  = self._build_user_context(obs, memory, goals, next_goal, previous_error)
@@ -410,21 +409,19 @@ class AgentPlanner:
                 logger.warning(f"[Planner] Could not load screenshot bytes ({e}) - proceeding text-only")
 
         try:
-            response = await asyncio.to_thread(
-                self._client.models.generate_content,
-                model=GEMINI_MODEL,
+            result = await get_gemini_manager().generate_content_async(
                 contents=contents,
                 config=types.GenerateContentConfig(
                     system_instruction=system_prompt,
                     response_mime_type="application/json",
                     max_output_tokens=MAX_OUTPUT_TOKENS,
-                    temperature=0.2,   # Low temperature for deterministic tool selection
+                    temperature=0.2,
                 ),
             )
-            raw_text = response.text.strip() if response.text else ""
-            self._record_usage(response)
+            raw_text = result.text.strip() if result.text else ""
+            self._record_usage(result.response, model=result.model)
         except Exception as e:
-            return None, f"LLM API error: {type(e).__name__}: {e}"
+            return None, f"LLM API error: {type(e).__name__}"
 
         return self._validate_action(raw_text, obs)
 
@@ -435,7 +432,7 @@ class AgentPlanner:
         """
         return get_screen_size(adb_path=self.adb_path, device_serial=self.device_serial)
 
-    def _record_usage(self, response: Any) -> None:
+    def _record_usage(self, response: Any, model: Optional[str] = None) -> None:
         """
         Record one LLM request and its token usage against the benchmark.
 
@@ -453,7 +450,7 @@ class AgentPlanner:
                 prompt_tokens=getattr(usage, "prompt_token_count", 0) or 0,
                 output_tokens=getattr(usage, "candidates_token_count", 0) or 0,
                 total_tokens=getattr(usage, "total_token_count", 0) or 0,
-                model=GEMINI_MODEL,
+                model=model or GEMINI_MODEL,
             )
         except Exception as exc:
             logger.warning(
@@ -855,8 +852,6 @@ class FallbackPlanner:
                 "confidence": round(highest_candidate.priority / 100.0, 2),
                 "_source":    "goal_planner",
             }
-
-            self.coverage_tracker.record_action_executed(highest_candidate.target_node_id, success=True)
             return action_dict
 
         # ── Score UI nodes against keyword map (legacy fallback) ─────────────

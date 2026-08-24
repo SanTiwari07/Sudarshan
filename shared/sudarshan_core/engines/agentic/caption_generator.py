@@ -99,22 +99,28 @@ def generate_caption(
 
     try:
         if client is None:
-            api_key = os.getenv("GEMINI_API_KEY")
-            if not api_key:
-                logger.debug("[Caption] SUDARSHAN_VISION_CAPTIONS set but no GEMINI_API_KEY")
+            from sudarshan_core.ai.gemini_provider import gemini_is_configured, get_gemini_manager
+            if not gemini_is_configured():
+                logger.debug("[Caption] SUDARSHAN_VISION_CAPTIONS set but no Gemini API key")
                 return ""
-            from google import genai
-            client = genai.Client(api_key=api_key)
-
-        img_bytes = path.read_bytes()
-        resp = client.models.generate_content(
-            model=VISION_CAPTION_MODEL,
-            contents=[
-                _PROMPT.format(unclear=UNCLEAR_CAPTION, hint=hint_context or "(none)"),
-                _image_part(img_bytes),
-            ],
-        )
-        text = (getattr(resp, "text", "") or "").strip()
+            img_bytes = path.read_bytes()
+            result = get_gemini_manager().generate_content(
+                contents=[
+                    _PROMPT.format(unclear=UNCLEAR_CAPTION, hint=hint_context or "(none)"),
+                    _image_part(img_bytes),
+                ],
+            )
+            text = (result.text or "").strip()
+        else:
+            img_bytes = path.read_bytes()
+            resp = client.models.generate_content(
+                model=VISION_CAPTION_MODEL,
+                contents=[
+                    _PROMPT.format(unclear=UNCLEAR_CAPTION, hint=hint_context or "(none)"),
+                    _image_part(img_bytes),
+                ],
+            )
+            text = (getattr(resp, "text", "") or "").strip()
         if not text:
             return ""
         # Collapse to a single line and bound the length; a model that ignores

@@ -200,6 +200,55 @@ graph TD
 - **Loop Detection**: Maintains screen view hashes to break out of redundant navigation loops.
 - **Input Sanitization**: Prevents prompt injection attacks via [`sanitizer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/agentic/sanitizer.py).
 
+### 6.1 Deep Exploration State Graph (v2.2)
+
+The 15-stage fraud DAG is **threat-intelligence prioritization only** — it is NOT the exploration boundary.
+
+`ExplorationGraph` ([`exploration_engine.py`](../../shared/sudarshan_core/engines/agentic/exploration_engine.py)) maintains:
+
+| Component | Purpose |
+| :--- | :--- |
+| `ExplorationState` nodes | Composite identity (activity + UI tree + visible text + webview sig) |
+| `ExplorationEdge` edges | Action transitions with causal screenshot/evidence links |
+| `ApplicationProfile` | Evolving understanding of unknown APK purpose |
+| `EvidenceMoment` | Security-relevant points (permissions, VPN, external APK, updates) |
+| `VictimJourneyBuilder` | Evidence-backed narrative chain |
+| `ActionPrioritizer` | Deterministic unexplored-branch coverage with AI reordering |
+
+**Architecture**: `DETERMINISTIC EXPLORATION ENGINE + AI PRIORITIZER + STATE/GRAPH MEMORY + RUNTIME TELEMETRY + EVIDENCE COLLECTION`
+
+**Stop conditions** (explicit `StopReason` enum):
+- `EXPLORATION_COMPLETE` — all reachable branches explored
+- `EXPLORATION_BUDGET_EXHAUSTED` — action budget (default 120)
+- `TIME_BUDGET_EXHAUSTED` — duration window
+- `NO_UNEXPLORED_ACTIONS` — Frida silent AND graph exhausted
+- `APPLICATION_CRASH_LOOP` — repeated crashes
+- `SAFETY_BOUNDARY_REACHED` — sandbox policy block
+
+**Artifacts** flushed to `deep_exploration.json`, `state_graph.mmd`, `victim_journey.json`.
+
+### 6.2 Screenshot Policy & Evidence Quality (v2.3)
+
+All screenshot requests flow through `ScreenshotPolicy.should_capture()` before adb screencap runs.
+
+| Decision | Meaning |
+| :--- | :--- |
+| `CAPTURE` | New state or high-priority trigger — take screenshot |
+| `DEDUPLICATED` | Perceptual/layout hash match — skip |
+| `SUPPRESSED` | Repeated home/external/permission observation — skip |
+| `REUSE` | Same visible screen — reference existing screenshot ID |
+| `BLOCKED` | Sandbox policy — skip |
+
+**Screen ownership** (`resolve_screen_ownership`) uses foreground package vs target package:
+- `HOME_LAUNCHER` — launcher foreground, target not foreground → not explored, max 1 transition screenshot
+- `EXTERNAL_APP` / `SYSTEM_INSTALLER` — separate `external_states` graph, one boundary screenshot
+- `CRASH_STATE` — one crash-context screenshot per crash transition
+- `SYSTEM_PERMISSION` — one screenshot per unique permission dialog
+
+**Invariant:** Screenshot deduplication ≠ event deduplication. Runtime events and evidence moments are always recorded even when screenshots are suppressed.
+
+Manifest includes `policy_statistics` (total requests, captured, suppressed, reused, most_suppressed_state).
+
 ---
 
 ## 7. Scripted vs Agentic Analysis Comparison

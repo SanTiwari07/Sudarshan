@@ -224,8 +224,9 @@ async def compare_semantics(
     if os.getenv("VIDE_SEMANTIC_MATCHING", "true").strip().lower() in ("0", "false", "no"):
         return SemanticMatchResult(status=STATUS_DISABLED, institution_id=baseline.institution_id)
 
-    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-    if not api_key:
+    from sudarshan_core.ai.gemini_provider import gemini_is_configured, get_gemini_manager
+
+    if not gemini_is_configured():
         return SemanticMatchResult(status=STATUS_NO_KEY, institution_id=baseline.institution_id)
 
     suspect_block = build_suspect_block(suspect, signatures, ast_skeleton)
@@ -234,14 +235,10 @@ async def compare_semantics(
     model = _model_name()
 
     try:
-        from google import genai
         from google.genai import types
 
-        client = genai.Client(api_key=api_key)
-        response = await asyncio.wait_for(
-            asyncio.to_thread(
-                client.models.generate_content,
-                model=model,
+        result = await asyncio.wait_for(
+            get_gemini_manager().generate_content_async(
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
@@ -250,23 +247,21 @@ async def compare_semantics(
             ),
             timeout=timeout_seconds,
         )
-        if not response or not response.text:
+        if not result.text:
             return SemanticMatchResult(
                 status=STATUS_ERROR,
                 institution_id=baseline.institution_id,
-                model=model,
+                model=result.model or model,
                 error="empty response",
             )
-        result = _parse_response(response.text, baseline.institution_id, model)
-        # Static detection of injection markers is authoritative over the
-        # model's own self-report, which the injected text could suppress.
-        result.injection_suspected = result.injection_suspected or injection_flag
-        if result.injection_suspected:
+        parsed = _parse_response(result.text, baseline.institution_id, result.model or model)
+        parsed.injection_suspected = parsed.injection_suspected or injection_flag
+        if parsed.injection_suspected:
             logger.warning(
                 "[VIDE] prompt-injection markers in suspect UI strings for %s",
                 baseline.institution_id,
             )
-        return result
+        return parsed
 
     except asyncio.TimeoutError:
         return SemanticMatchResult(

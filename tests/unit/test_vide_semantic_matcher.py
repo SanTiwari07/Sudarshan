@@ -122,6 +122,8 @@ def test_missing_api_key_degrades_quietly(monkeypatch):
     monkeypatch.setenv("VIDE_SEMANTIC_MATCHING", "true")
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_PRIMARY_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_FALLBACK_API_KEY", raising=False)
     result = asyncio.run(compare_semantics(UIProfile(source="t"), _hdfc()))
     assert result.status == STATUS_NO_KEY
     assert result.semantic_match is False

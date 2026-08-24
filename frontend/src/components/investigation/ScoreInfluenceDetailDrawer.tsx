@@ -117,7 +117,8 @@ export default function ScoreInfluenceDetailDrawer({
           <button
             type="button"
             onClick={() => openLedger(meta.ledgerScope)}
-            className="text-xs font-semibold text-blue-700 hover:underline"
+            aria-label={`Open score ledger for ${meta.title}`}
+            className="text-xs font-semibold text-blue-700 hover:underline rounded px-1 py-0.5 cursor-pointer hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:outline-offset-1"
           >
             Open score ledger (this axis)
           </button>

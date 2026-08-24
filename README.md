@@ -57,6 +57,7 @@ Two caveats stated up front, because they matter more than the headline:
 - [Deterministic risk scoring](#deterministic-risk-scoring)
 - [API overview](#api-overview)
 - [Installation](#installation)
+- [Windows 10 / 11 quick start](#windows-10--11-quick-start)
 - [Documentation](#documentation)
 - [Current limitations](#current-limitations)
 - [License](#license)
@@ -93,7 +94,7 @@ flowchart TD
     WORKFLOW --> RISK
 
     RISK --> RAG[RAG Context Construction]
-    RAG --> AI["Gemini 2.5 Flash<br/>(offline template fallback)"]
+    RAG --> AI["Gemini 3.x Flash (2.5 Flash failover)<br/>(offline template fallback)"]
     AI --> REPORT[HTML / PDF / STIX Export]
     AI --> DASHBOARD[Live Pipeline &amp; Technical UI]
     REPORT --> DECISION([Block / Isolate Decision])
@@ -133,7 +134,7 @@ Every stage has a fallback. A malformed APK is rebuilt and resigned; Androguard 
 | **Dynamic sandbox** | Instrumentation | Android emulator via `SandboxProvider`, ADB, Frida 17.16.4 |
 | **Network** | Transparent proxy | mitmproxy sidecar (8080), HAR parser |
 | **Risk** | Scoring engine | 5-axis STEI, BFCI v2, 4-axis FRS |
-| **AI** | RAG + LLM | Gemini 2.5 Flash, in-memory knowledge base, offline fallback |
+| **AI** | RAG + LLM | Gemini 3.x Flash with Gemini 2.5 Flash failover, in-memory knowledge base, offline fallback |
 
 ---
 
@@ -219,31 +220,113 @@ Interactive docs at `http://localhost:8000/docs` once running.
 
 ### Prerequisites
 
-- **Docker Desktop** with Compose
-- **A rooted Android emulator** — Android Studio AVD or Genymotion, x86_64, with `frida-server` running
-- **ADB** on your host PATH (the containers talk to the host's ADB server)
-- *Optional:* Python 3.11+ and Node 18+ for local development
+| Tool | Purpose |
+| :--- | :--- |
+| **Docker Desktop** (WSL 2 backend on Windows) | Runs the frontend, backend, analysis-engine, MobSF, and mitmproxy containers |
+| **Rooted Android emulator** on the host | Genymotion Desktop *(default)* or Android Studio AVD — Android 10/11, x86_64 |
+| **ADB** on `PATH` | Host bridge to the emulator; containers reach it via `host.docker.internal:5037` |
+| **Python 3.10+** *(recommended on Windows)* | Powers `start.ps1` sandbox bootstrap and local test scripts |
+| **Node 18+** *(dev only)* | Local frontend development without Docker |
 
 > [!NOTE]
-> APKTool, JADX, Java 17, Androguard and Frida are all containerised inside `sudarshan-analysis-engine`. The only host tool required is **ADB**, which must be present because the emulator runs on the host while analysis runs in a container.
+> APKTool, JADX, Java 17, Androguard, and Frida are containerised inside `sudarshan-analysis-engine`. On Windows you only need **ADB** (plus Python for the one-command bootstrapper) because the emulator runs on the host while analysis runs in Docker.
 
-### Quick start
+---
+
+### Windows 10 / 11 quick start
+
+Open **PowerShell** in the repo root and run through these steps once.
+
+**1. Install host tools**
+
+- [Docker Desktop for Windows](https://docs.docker.com/desktop/setup/install/windows-install/) — enable the WSL 2 backend and wait until the whale icon shows *Running*.
+- [Genymotion Desktop](https://www.genymotion.com/download/) *(recommended)* or Android Studio with a rooted x86_64 AVD.
+- [Python 3.11+](https://www.python.org/downloads/windows/) — tick *Add python.exe to PATH* during setup. Avoid the Microsoft Store stub; `start.ps1` skips it automatically.
+- ADB — ships with Android Studio (`platform-tools`) or Genymotion (`Genymotion\tools\adb.exe`). Add the folder to `PATH`, or set `GENYMOTION_ADB` in `.env`.
+
+**2. Configure environment**
+
+```powershell
+Copy-Item .env.example .env
+notepad .env   # or your editor of choice
+```
+
+Set at minimum:
+
+- `JWT_SECRET_KEY` — generate with `py -3 -c "import secrets; print(secrets.token_urlsafe(48))"`
+- `GEMINI_PRIMARY_API_KEY` — from [Google AI Studio](https://aistudio.google.com/app/apikey); without it the agentic explorer falls back to a shallow deterministic planner
+- `ADMIN_PASSWORD` — e.g. `BOI@Admin2026!` for the hackathon demo login
+
+Leave `ADB_HOST` **empty** on Docker Desktop for Windows — the default route proxies the host ADB server correctly. Only set it if you run Linux Docker or a Genymotion VM on a host-only network (see `.env.example` comments).
+
+**3. Start the emulator**
+
+Launch a rooted virtual device in Genymotion or Android Studio, then confirm ADB sees it:
+
+```powershell
+adb devices
+# Genymotion:  192.168.56.101:5555    device
+# AVD:         emulator-5554          device
+```
+
+Pin the serial in `.env` when more than one device is attached:
+
+```powershell
+# DEVICE_SERIAL=192.168.56.101:5555
+```
+
+**4. Launch the platform**
+
+```powershell
+# First run only — if Windows blocks scripts:
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+
+# Full stack: sandbox bootstrap + Docker Compose
+.\start.ps1 -Detach
+```
+
+`start.ps1` creates `.env` if missing, generates a `JWT_SECRET_KEY`, auto-detects Genymotion/AVD, pushes `frida-server`, and starts all containers. Useful variants:
+
+| Command | When to use |
+| :--- | :--- |
+| `.\start.ps1` | Foreground mode — logs stream in the terminal |
+| `.\start.ps1 -Detach` | Background mode — recommended for daily use |
+| `.\start.ps1 -SkipSandbox` | Static analysis only — no emulator or Frida required |
+
+**5. Verify**
+
+| Check | Command / URL |
+| :--- | :--- |
+| Containers running | `docker compose ps` |
+| API health | `http://localhost:8000/health` |
+| Analyst dashboard | `http://localhost:5173` — login with `ADMIN_USERNAME` / `ADMIN_PASSWORD` |
+| Sandbox preflight | `py -3 scripts/preflight.py --container` |
+| Runtime telemetry | `http://localhost:8000/api/runtime/status` |
+
+Stop the stack with `docker compose down`. Full operations guide: [**docs/HOW_TO_RUN.md**](docs/HOW_TO_RUN.md).
+
+---
+
+### Linux / macOS quick start
 
 ```bash
+cp .env.example .env   # set JWT_SECRET_KEY and GEMINI_PRIMARY_API_KEY
 docker compose up -d --build
 ```
 
-Or use the bootstrapper, which additionally provisions the emulator and pushes `frida-server`:
-
-```powershell
-.\start.ps1
-```
-
-Compose requires a root `.env` — copy `.env.example` and set `JWT_SECRET_KEY` at minimum. `GEMINI_API_KEY` is optional; without it the platform falls back to a static report template.
+On Linux with a Genymotion VM, set `ADB_HOST` to the VM IP (see `.env.example` route B).
 
 ### Running the tests
 
+```powershell
+# Windows (from repo root — use py -3; bare `python` may hit the Store stub)
+$env:PYTHONPATH="backend;shared"
+$env:JWT_SECRET_KEY="test_secret_key_for_pytest"
+py -3 -m pytest backend/tests tests/unit -q
+```
+
 ```bash
+# Linux / macOS / inside Docker
 docker compose exec backend python -m pytest backend/tests tests/unit -q
 ```
 

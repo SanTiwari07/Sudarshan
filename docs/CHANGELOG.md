@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## 2026-08-24
+
+### Added
+- **Gemini failover**: Documented primary Gemini 3.x Flash + fallback Gemini 2.5 Flash, cooldown, and environment variables in `05_AI_INVESTIGATION_ENGINE.md` and `HOW_TO_RUN.md`.
+
 ## 2026-08-14
 
 ### Added

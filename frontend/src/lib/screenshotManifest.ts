@@ -31,6 +31,15 @@ export type ScreenshotManifestEntry = {
   report_tier?: string;
   timeline_eligible?: boolean;
   visual_evidence?: import('./visualEvidence').VisualEvidencePayload | null;
+  state_id?: string;
+  action_id?: string;
+  evidence_moment_id?: string;
+  foreground_package?: string;
+  screen_hash?: string;
+  layout_hash?: string;
+  deduplication_status?: string;
+  visual_observation?: string;
+  runtime_observation?: string;
 };
 
 export type VisualEvidenceIndex = {

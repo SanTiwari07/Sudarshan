@@ -20,7 +20,7 @@
 ### Core Operational Capabilities
 1. **Frida Runtime Instrumentation**: Active & verified via [`frida_sandbox.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/frida_sandbox.py) and [`banking_trojan.js`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/frida_hooks/banking_trojan.js). `Java.deoptimizeEverything()` runs unconditionally at script startup, preventing ART JIT inlining from suppressing hooks.
 2. **Runtime Telemetry & Telemetry API**: Exposes live state via `/api/runtime/*` endpoints ([`runtime_api.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/routes/runtime_api.py)), tracking hook installations, invocation counts, error metrics, and ring-buffered event streams (max 500 events).
-3. **Agentic UI Exploration**: [`agentic_explorer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/agentic_explorer.py) and [`planner.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/agentic/planner.py) drive Gemini-powered UI navigation with launch ladder fallbacks and goal progression tracking.
+3. **Agentic UI Exploration**: [`agentic_explorer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/agentic_explorer.py) and [`planner.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/agentic/planner.py) drive Gemini-powered UI navigation with launch ladder fallbacks and goal progression tracking. **Deep exploration engine** ([`exploration_engine.py`](../shared/sudarshan_core/engines/agentic/exploration_engine.py)) maintains a per-analysis state graph, evidence moments, victim journey, and deterministic branch coverage independent of the 15-stage fraud DAG.
 4. **APK Manifest Repair Engine**: [`apk_repair.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/apk_repair.py) repairs corrupted AXML headers, zip alignment, and package signature structures prior to dynamic analysis.
 5. **BFCI Scoring Engine v2**: [`bfci_scorer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/bfci_scorer.py) uses logarithmic volume-aware scoring and temporal sequence analysis.
 6. **Behavioral Workflow Reconstruction**: [`workflow_reconstructor.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/workflow_reconstructor.py) converts raw Frida hook events into causal MITRE ATT&CK stage chains.
@@ -76,6 +76,23 @@ AI controls UI exploration; deterministic engines control scoring. The `RiskEngi
 | UI Workflow Visualization | Built interactive MITRE ATT&CK React timeline | [WorkflowDiagram.tsx](file:///d:/Projects/Sudarshan%20BOI/frontend/src/components/WorkflowDiagram.tsx) | ✅ **RESOLVED** |
 | Gateway runs malware locally when engine down | HTTP 503 unless `SUDARSHAN_ALLOW_GATEWAY_DYNAMIC` | [`upload.py`](../backend/app/routes/upload.py), `gateway_dynamic_allowed()` | ✅ **RESOLVED** (default off) |
 | Parallel ADB bypass of containment policy | Route all ADB via `adb_gateway.run_adb` | [`adb_gateway.py`](../shared/sudarshan_core/security/adb_gateway.py) | ✅ **RESOLVED** |
+
+---
+
+## Part 2b - Screenshot Hardening (2026-08-24)
+
+Second-phase hardening eliminates screenshot spam from home launcher loops, crash recovery, and external-app polling.
+
+| Capability | Implementation | Location |
+|---|---|---|
+| Central screenshot policy | `should_capture()` evaluates trigger priority, ownership, state hash, transition events before adb screencap | [`screenshot_policy.py`](../shared/sudarshan_core/engines/agentic/screenshot_policy.py) |
+| Screen ownership | `HOME_LAUNCHER`, `EXTERNAL_APP`, `CRASH_STATE`, `SYSTEM_INSTALLER` resolved from foreground package vs target | [`screen_classifier.py`](../shared/sudarshan_core/engines/agentic/screen_classifier.py) |
+| Home launcher handling | Not explored as target UI; planner skipped; max 1 transition screenshot | [`agentic_explorer.py`](../shared/sudarshan_core/engines/agentic_explorer.py) |
+| External app graph | Separate `external_states` in exploration graph | [`exploration_engine.py`](../shared/sudarshan_core/engines/agentic/exploration_engine.py) |
+| Suppression statistics | `policy_statistics` in screenshot manifest | [`screenshot_manager.py`](../shared/sudarshan_core/engines/screenshot_manager.py) |
+| Regression tests | Home spam, external dedup, permission dedup, crash, long-run bounded | [`test_screenshot_hardening.py`](../tests/unit/test_screenshot_hardening.py) |
+
+**Design invariant:** `runtime events >= evidence events >= meaningful screenshots`. Screenshot deduplication is separate from event deduplication — runtime events are never lost when screenshots are suppressed or reused.
 
 ---
 

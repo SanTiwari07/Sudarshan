@@ -117,6 +117,25 @@ Each run writes `preflight.txt`, per-APK JSON under `tests/apks/validation_runs/
 
 ---
 
+## Screenshot Hardening Regression (2026-08-24)
+
+`tests/unit/test_screenshot_hardening.py` validates second-phase screenshot policy:
+
+| Test case | Assertion |
+| :--- | :--- |
+| Home screen spam | 100 home observations → ≤ 1 screenshot |
+| External app dedup | 50 installer polls → 1 screenshot |
+| Permission dedup | 20 same-dialog observations → 1 screenshot |
+| Same screen + new event | Events recorded; screenshot may REUSE |
+| Crash handling | 10 crash polls → 1 screenshot |
+| Long run bounded | 500 cycles → captures ≤ 10 |
+
+Run: `py -m pytest tests/unit/test_screenshot_hardening.py -v`
+
+Screenshot manifest `policy_statistics` reports suppression counts for dashboard/report audit.
+
+---
+
 ## Current Implementation Status
 
 Validation protocols are **Implemented** and enforced across automated tests in [`tests/`](file:///d:/Projects/Sudarshan%20BOI/tests/) and [`backend/tests/`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/).

@@ -57,6 +57,12 @@ class ScreenshotReason(str, Enum):
     HOOK_TRIGGER = "HOOK_TRIGGER"
     LIFECYCLE = "LIFECYCLE"
     AUTO_CRITICAL = "AUTO_CRITICAL"
+    UPDATE_PROMPT = "UPDATE_PROMPT"
+    DOWNLOAD_PROMPT = "DOWNLOAD_PROMPT"
+    EXTERNAL_APK = "EXTERNAL_APK"
+    VPN_REQUEST = "VPN_REQUEST"
+    PACKAGE_INSTALLER = "PACKAGE_INSTALLER"
+    EVIDENCE_MOMENT = "EVIDENCE_MOMENT"
     OTHER = "OTHER"
 
 
@@ -80,6 +86,12 @@ REASON_TO_CAPTION: Dict[str, str] = {
     ScreenshotReason.HOOK_TRIGGER.value:      "Hook-triggered capture - {category} event",
     ScreenshotReason.LIFECYCLE.value:         "Lifecycle capture - {label}",
     ScreenshotReason.AUTO_CRITICAL.value:     "Critical behavioral event detected - {category}",
+    ScreenshotReason.UPDATE_PROMPT.value:     "Application update prompt displayed",
+    ScreenshotReason.DOWNLOAD_PROMPT.value:   "Download prompt displayed",
+    ScreenshotReason.EXTERNAL_APK.value:      "External APK install request observed",
+    ScreenshotReason.VPN_REQUEST.value:       "VPN enable/install request observed",
+    ScreenshotReason.PACKAGE_INSTALLER.value: "Package installer screen displayed",
+    ScreenshotReason.EVIDENCE_MOMENT.value:   "Security-relevant evidence moment - {label}",
     ScreenshotReason.OTHER.value:             "",
 }
 
@@ -152,6 +164,17 @@ class ScreenshotRecord:
     capture_trigger: str = ""
     title: str = ""
     quality: str = "A"
+    # Causal linking to exploration graph / evidence
+    state_id: str = ""
+    action_id: str = ""
+    evidence_id: str = ""
+    evidence_moment_id: str = ""
+    deduplication_status: str = ""
+    trigger_reason: str = ""
+    foreground_package: str = ""
+    target_package: str = ""
+    ownership: str = ""
+    reused_screenshot_id: str = ""
     extra: dict = field(default_factory=dict)
 
 
@@ -179,6 +202,12 @@ class ScreenshotManager:
         self._last_phashes: List[str] = []
         self._last_layout_hashes: Set[str] = set()
         self.skipped_duplicates: int = 0
+        self.suppressed_count: int = 0
+        self.reused_count: int = 0
+
+        # Central screenshot policy (state/event-aware deduplication)
+        from sudarshan_core.engines.agentic.screenshot_policy import ScreenshotPolicy
+        self._policy = ScreenshotPolicy(target_package=package_name)
 
         self.event_bus = event_bus
         if event_bus:
@@ -259,13 +288,78 @@ class ScreenshotManager:
         force: bool = False,
         risk_category: str = "",
         confidence: float = 0.0,
+        state_id: str = "",
+        action_id: str = "",
+        evidence_id: str = "",
+        evidence_moment_id: str = "",
+        foreground_package: str = "",
+        transition_event: str = "",
+        semantic_type: str = "",
     ) -> Optional[str]:
         """
         Take a screenshot on the device, pull it locally, and record it in
-        the manifest.         Returns the relative path or None on failure.
+        the manifest. Returns the relative path or None on failure/suppression.
+
+        All capture requests pass through the central ScreenshotPolicy before
+        adb screencap runs.  Suppressed captures return None but are audited.
         """
         if os.getenv("SUDARSHAN_DISABLE_SCREENSHOTS", "").lower() in ("1", "true", "yes"):
             logger.debug("[ScreenshotManager] Capture disabled via SUDARSHAN_DISABLE_SCREENSHOTS")
+            return None
+
+        from sudarshan_core.engines.agentic.screenshot_policy import (
+            ScreenshotRequest,
+            ScreenshotDecision,
+            resolve_screen_ownership,
+        )
+
+        fg_pkg = foreground_package or self.package_name
+        ownership = resolve_screen_ownership(
+            fg_pkg, self.package_name, activity, semantic_type,
+        )
+
+        policy_req = ScreenshotRequest(
+            trigger_type=reason or category,
+            reason=reason or category,
+            foreground_package=fg_pkg,
+            target_package=self.package_name,
+            activity=activity,
+            state_id=state_id,
+            action_id=action_id,
+            evidence_moment_id=evidence_moment_id,
+            screen_hash=layout_hash or "",
+            layout_hash=layout_hash,
+            semantic_type=semantic_type,
+            ownership=ownership,
+            force=force,
+            label=label,
+            transition_event=transition_event,
+        )
+
+        decision, decision_reason, reuse_id = self._policy.should_capture(policy_req)
+
+        if decision in (ScreenshotDecision.SUPPRESSED, ScreenshotDecision.BLOCKED):
+            self.suppressed_count += 1
+            logger.debug(
+                "[ScreenshotManager] Screenshot %s: %s (%s)",
+                decision.value, label, decision_reason,
+            )
+            return None
+
+        if decision == ScreenshotDecision.REUSE and reuse_id:
+            self.reused_count += 1
+            logger.debug(
+                "[ScreenshotManager] Screenshot REUSE %s -> %s (%s)",
+                label, reuse_id, decision_reason,
+            )
+            return reuse_id
+
+        if decision == ScreenshotDecision.DEDUPLICATED:
+            self.skipped_duplicates += 1
+            logger.debug(
+                "[ScreenshotManager] Screenshot DEDUPLICATED: %s (%s)",
+                label, decision_reason,
+            )
             return None
 
         with self._lock:
@@ -274,8 +368,16 @@ class ScreenshotManager:
             scr_uuid = str(uuid.uuid4())
 
         timestamp_ms = int(time.time() * 1000)
-        safe_label = label.replace("/", "_").replace(" ", "_")[:40]
-        filename = f"{idx_str}_{timestamp_ms}_{safe_label}.png"
+
+        # Semantic filename via policy
+        semantic_stem = self._policy.build_semantic_filename(
+            self._counter,
+            reason or category,
+            ownership,
+            label,
+        )
+        safe_label = semantic_stem.replace("/", "_").replace(" ", "_")[:60]
+        filename = f"{safe_label}.png"
         remote_path = f"{REMOTE_CAPTURE_DIR}/sudarshan_screen_{timestamp_ms}.png"
         local_path = self.output_dir / filename
         rel_path = f"screenshots/{filename}"
@@ -345,7 +447,7 @@ class ScreenshotManager:
                 source=source,
                 gated=gated,
                 uuid=scr_uuid,
-                package=self.package_name,
+                package=fg_pkg,
                 activity=activity,
                 fragment=fragment,
                 screen_hash=phash,
@@ -366,9 +468,32 @@ class ScreenshotManager:
                 ),
                 capture_trigger=resolved_reason,
                 title=f"{scr_id} - {label}" if label else scr_id,
+                state_id=state_id,
+                action_id=action_id,
+                evidence_id=evidence_id,
+                evidence_moment_id=evidence_moment_id,
+                deduplication_status=decision.value,
+                trigger_reason=decision_reason,
+                foreground_package=fg_pkg,
+                target_package=self.package_name,
+                ownership=ownership.value,
+                reused_screenshot_id=reuse_id or "",
             )
             with self._lock:
                 self._manifest.append(record)
+
+            if trigger_evid and self.evidence_store is not None:
+                try:
+                    self.evidence_store.attach_screenshot(trigger_evid, rel_path)
+                except Exception as exc:
+                    logger.debug(
+                        "[ScreenshotManager] attach_screenshot failed: %s", exc
+                    )
+
+            # Register with policy for future dedup/reuse
+            self._policy.register_capture(
+                scr_id, ownership, layout_hash or phash, layout_hash,
+            )
             logger.debug(
                 "[ScreenshotManager] [%s] Captured %s (EVID: %s)",
                 scr_id, filename, trigger_evid or "none",
@@ -461,7 +586,7 @@ class ScreenshotManager:
         elif category == "anti_analysis":
             trigger = True
             label = "anti_analysis_detected"
-            reason = ScreenshotReason.ROOT_DETECTION
+            reason = ScreenshotReason.HOOK_TRIGGER
 
         if not trigger:
             return
@@ -553,6 +678,9 @@ class ScreenshotManager:
             "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "total_screenshots": len(snapshot),
             "skipped_duplicates": self.skipped_duplicates,
+            "suppressed_count": self.suppressed_count,
+            "reused_count": self.reused_count,
+            "policy_statistics": self._policy.get_statistics(),
             "screenshots": [asdict(r) for r in snapshot],
         }
         try:
@@ -576,8 +704,14 @@ class ScreenshotManager:
             return {
                 "screenshots_captured": len(self._manifest),
                 "skipped_duplicates": self.skipped_duplicates,
+                "suppressed_count": self.suppressed_count,
+                "reused_count": self.reused_count,
                 "pending_threads": sum(1 for t in self._pending_threads if t.is_alive()),
+                "policy_statistics": self._policy.get_statistics(),
             }
+
+    def get_policy_statistics(self) -> Dict[str, Any]:
+        return self._policy.get_statistics()
 
     def get_manifest_with_base64(self) -> List[Dict[str, Any]]:
         import base64

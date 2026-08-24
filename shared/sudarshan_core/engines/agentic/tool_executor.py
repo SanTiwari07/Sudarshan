@@ -144,6 +144,8 @@ class ToolResult:
     error:    Optional[str]              = None
     duration: float                      = 0.0
     retries:  int                        = 0
+    adb_command: str = ""
+    adb_return_code: Optional[int] = None
 
     def to_log_line(self) -> str:
         status = "✓" if self.success else "✗"
@@ -277,10 +279,55 @@ class ToolExecutor:
         """Run an ADB command asynchronously via SandboxProvider (policy-enforced)."""
         provider = get_sandbox_provider()
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(
+        cmd = "adb " + " ".join(str(a) for a in ("-s", self.device_serial, *args))
+        logger.info("[ToolExecutor] ADB_CMD %s", cmd)
+        ok, out = await loop.run_in_executor(
             None,
             lambda: provider.adb("-s", self.device_serial, *args, timeout=30),
         )
+        logger.info(
+            "[ToolExecutor] ADB_RESULT ok=%s rc=%s out=%s",
+            ok, 0 if ok else 1, (out or "")[:200],
+        )
+        return ok, out
+
+    async def _input_tap(self, x: int, y: int) -> ToolResult:
+        from sudarshan_core.engines.agentic.semantic_action import (
+            validate_coordinates_for_screen,
+        )
+        sw, sh = self.screen_size
+        ok_coord, reason = validate_coordinates_for_screen(
+            x, y, screen_width=sw, screen_height=sh,
+        )
+        if not ok_coord:
+            return ToolResult(
+                success=False, tool="tap",
+                error=f"coordinate_validation:{reason}",
+                data={"coordinate_validation": "FAIL", "reason": reason, "x": x, "y": y},
+            )
+        logger.info("[ToolExecutor] ADB_TAP x=%s y=%s", x, y)
+        ok, out = await self._adb("shell", "input", "tap", str(x), str(y))
+        await asyncio.sleep(_paced(0.8))
+        return ToolResult(
+            success=ok, tool="tap", output=out,
+            error=out if not ok else None,
+            adb_command=f"input tap {x} {y}",
+            adb_return_code=0 if ok else 1,
+            data={
+                "x": x, "y": y,
+                "coordinate_validation": "PASS",
+                "adb_command_generated": True,
+                "adb_command_executed": True,
+                "adb_return_code": 0 if ok else 1,
+                "adb_stdout": out or "",
+            },
+        )
+
+    async def _tool_tap(self, action: Dict) -> ToolResult:
+        x, y = int(action["x"]), int(action["y"])
+        result = await self._input_tap(x, y)
+        result.tool = "tap"
+        return result
 
     # ── Device settling ────────────────────────────────────────────────────────
 
@@ -353,13 +400,6 @@ class ToolExecutor:
 
     # ── Tool Implementations ───────────────────────────────────────────────────
 
-    async def _tool_tap(self, action: Dict) -> ToolResult:
-        x, y = int(action["x"]), int(action["y"])
-        ok, out = await self._adb("shell", "input", "tap", str(x), str(y))
-        await asyncio.sleep(_paced(0.8))
-        return ToolResult(success=ok, tool="tap", output=out,
-                          error=out if not ok else None)
-
     async def _get_ui_xml(self) -> str:
         """Helper to reliably fetch UI dump XML from device via tmp file."""
         await self._adb("shell", "uiautomator", "dump", "/data/local/tmp/ui_dump.xml")
@@ -394,24 +434,26 @@ class ToolExecutor:
                 if m:
                     x = (int(m.group(1)) + int(m.group(3))) // 2
                     y = (int(m.group(2)) + int(m.group(4))) // 2
-                    ok, out = await self._adb("shell", "input", "tap", str(x), str(y))
-                    await asyncio.sleep(_paced(0.8))
-                    return ToolResult(success=ok, tool="click_text", output=out,
-                                      data={"matched_text": text, "x": x, "y": y},
-                                      error=out if not ok else None)
+                    result = await self._input_tap(x, y)
+                    result.tool = "click_text"
+                    result.data = {
+                        **(result.data or {}),
+                        "matched_text": text, "x": x, "y": y,
+                    }
+                    return result
 
-        # Fallback to (x, y) if coordinates were provided in action (e.g. by FallbackPlanner or LLM)
+        # Fallback to (x, y) if coordinates were provided (geometry / parent recovery)
         if x_param is not None and y_param is not None:
             try:
                 x, y = int(x_param), int(y_param)
-                if 0 <= x <= self.screen_size[0] and 0 <= y <= self.screen_size[1]:
-                    ok, out = await self._adb("shell", "input", "tap", str(x), str(y))
-                    await asyncio.sleep(_paced(0.8))
-                    return ToolResult(
-                        success=ok, tool="click_text", output=out,
-                        data={"fallback_coord_used": True, "x": x, "y": y, "target_text": text},
-                        error=out if not ok else None
-                    )
+                result = await self._input_tap(x, y)
+                result.tool = "click_text"
+                result.data = {
+                    **(result.data or {}),
+                    "fallback_coord_used": True,
+                    "x": x, "y": y, "target_text": text,
+                }
+                return result
             except (ValueError, TypeError):
                 pass
 

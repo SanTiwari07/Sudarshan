@@ -55,7 +55,7 @@ def _int_env(name: str, default: int) -> int:
 #: Kept in step with AgenticExplorer.ACTION_BUDGET, which is what the explorer
 #: actually passes in. This default only applies to a controller constructed
 #: directly, so a stale value here is quietly misleading rather than wrong.
-INVESTIGATION_MAX_ACTIONS: int = _int_env("INVESTIGATION_MAX_ACTIONS", 60)
+INVESTIGATION_MAX_ACTIONS: int = _int_env("INVESTIGATION_MAX_ACTIONS", 120)
 #: Actions one stage may spend before the investigation moves on.
 #:
 #: Lowered from 8 so the plan can actually be completed. A banking-trojan plan
@@ -135,10 +135,10 @@ ALLOWED_ACTIONS: Dict[InvestigationState, FrozenSet[str]] = {
     InvestigationState.PERMISSION_ANALYSIS: _READ_ONLY | _PERMISSION_TOOLS | {"click_text"},
     InvestigationState.PERMISSION_HANDLING: _READ_ONLY | _PERMISSION_TOOLS | {"click_text"},
     InvestigationState.SPECIAL_PERMISSION_ANALYSIS: _READ_ONLY | _PERMISSION_TOOLS | {
-        "start_activity", "click_text", "scroll", "press_back",
+        "start_activity", "click_text", "tap", "scroll", "press_back",
     },
     InvestigationState.ACCESSIBILITY_ANALYSIS: _READ_ONLY | _PERMISSION_TOOLS | {
-        "start_activity", "click_text", "scroll", "press_back",
+        "start_activity", "click_text", "tap", "scroll", "press_back",
     },
     InvestigationState.POST_PERMISSION_EXPLORATION: _BASE_NAVIGATION | _PERMISSION_TOOLS | {"type_text"},
     InvestigationState.AUTHENTICATION_ANALYSIS: _BASE_NAVIGATION | _PERMISSION_TOOLS | {"type_text"},
@@ -152,7 +152,10 @@ ALLOWED_ACTIONS: Dict[InvestigationState, FrozenSet[str]] = {
         "broadcast_intent", "fast_forward_time", "capture_logcat",
     },
     InvestigationState.DYNAMIC_CODE_ANALYSIS: _BASE_NAVIGATION | {"capture_logcat"},
-    InvestigationState.FINAL_OBSERVATION: _READ_ONLY,
+    # Safe guest UI must remain legal after the investigation plan walks past
+    # the last named fraud stage; otherwise Install/OK on a still-live dialog
+    # is rejected while the graph still has work.
+    InvestigationState.FINAL_OBSERVATION: _BASE_NAVIGATION | _PERMISSION_TOOLS,
     InvestigationState.COMPLETE: frozenset(),
 }
 

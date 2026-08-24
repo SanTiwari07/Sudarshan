@@ -32,7 +32,7 @@ Ensure the following tools are installed on your host system:
 | **ADB** | 1.0.41+ | `adb version` | Android Debug Bridge for TCP emulator connection (`adb tcpip 5555`). |
 | **Python** *(Dev Optional)* | 3.10+ | `python --version` | Local development and unit testing (`pytest backend/tests`). |
 | **Node.js** *(Dev Optional)* | 18.x+ | `node --version` | Local frontend UI development. |
-| **Google Gemini API** | `google-genai` | API Key | Primary AI Threat Intelligence Provider (`gemini-2.5-flash`). |
+| **Google Gemini API** | `google-genai` | API Key | Primary Gemini 3.x Flash with automatic 2.5 Flash failover. |
 
 > [!NOTE]
 > **Host Dependency Elimination**: APKTool, JADX CLI, Java 17, Frida 17, Androguard, AAPT, and ADB worker processes are **100% containerized** inside the `sudarshan-analysis-engine` microservice container. Zero binary installations are required on your host machine.
@@ -45,8 +45,16 @@ Create a `.env` file in the project root based on `.env.example`:
 
 ```bash
 # ── AI Model Configuration ──
-GEMINI_API_KEY="your_api_key_here"
-GEMINI_MODEL="gemini-2.5-flash"
+# Primary (Gemini 3.x Flash). Legacy GEMINI_API_KEY still maps to primary.
+GEMINI_PRIMARY_API_KEY="your_primary_api_key"
+GEMINI_PRIMARY_MODEL="gemini-3.6-flash"
+# Fallback (Gemini 2.5 Flash) — used only when primary is exhausted/unavailable.
+GEMINI_FALLBACK_API_KEY="your_fallback_api_key"
+GEMINI_FALLBACK_MODEL="gemini-2.5-flash"
+GEMINI_PRIMARY_COOLDOWN_SECONDS=60
+# Legacy aliases (optional if PRIMARY_* is set):
+GEMINI_API_KEY="your_primary_api_key"
+GEMINI_MODEL="gemini-3.6-flash"
 
 # ── Dynamic Sandbox & ADB ──
 SANDBOX_PROVIDER="genymotion"

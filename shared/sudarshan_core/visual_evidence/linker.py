@@ -15,6 +15,8 @@ from sudarshan_core.visual_evidence.constants import (
     ACCESSIBILITY_SCRAPE_MARKERS,
     ACCESSIBILITY_SETTINGS_MARKERS,
     BANKING_DETECTION_MARKERS,
+    CAPTURE_REASON_TO_CLAIM,
+    CAPTURE_REASON_TO_WORKFLOW,
     CLAIM_ACCESSIBILITY_GUIDANCE,
     CLAIM_ANTI_ANALYSIS_UI,
     CLAIM_BANKING_TARGET_UI,
@@ -34,6 +36,7 @@ from sudarshan_core.visual_evidence.constants import (
     CORRELATION_TEMPORAL,
     CORRELATION_UNRESOLVED,
     DEX_INSTALL_MARKERS,
+    EVIDENCE_MOMENT_CAPTURE_REASONS,
     LIFECYCLE_REASON,
     OVERLAY_API_MARKERS,
     SCHEMA_VERSION,
@@ -75,6 +78,28 @@ _CLAIM_FINDING_KEYS: Dict[str, List[str]] = {
     CLAIM_BANKING_TARGET_UI: ["banking_targeting"],
     CLAIM_ANTI_ANALYSIS_UI: ["obfuscation"],
     CLAIM_DROPPER_UI: ["runtime_code_loading"],
+}
+
+# Visual claim from capture reason must not inherit incompatible hook claims.
+_INCOMPATIBLE_HOOK_CLAIMS: Dict[str, frozenset] = {
+    CAPTURE_REASON_TO_CLAIM["VPN_REQUEST"]: frozenset({
+        CLAIM_ACCESSIBILITY_GUIDANCE,
+        CLAIM_CREDENTIAL_COLLECTION_UI,
+        CLAIM_ANTI_ANALYSIS_UI,
+        CLAIM_BANKING_TARGET_UI,
+    }),
+    CAPTURE_REASON_TO_CLAIM["UPDATE_PROMPT"]: frozenset({
+        CLAIM_ANTI_ANALYSIS_UI,
+        CLAIM_ACCESSIBILITY_GUIDANCE,
+    }),
+    CAPTURE_REASON_TO_CLAIM["EXTERNAL_APK"]: frozenset({
+        CLAIM_ACCESSIBILITY_GUIDANCE,
+        CLAIM_ANTI_ANALYSIS_UI,
+    }),
+    CAPTURE_REASON_TO_CLAIM["DOWNLOAD_PROMPT"]: frozenset({
+        CLAIM_ACCESSIBILITY_GUIDANCE,
+        CLAIM_ANTI_ANALYSIS_UI,
+    }),
 }
 
 _CLAIM_WORKFLOW_STAGE: Dict[str, str] = {
@@ -296,6 +321,34 @@ class _ShotLinks:
         return None
 
 
+def _is_evidence_moment_shot(shot: Dict[str, Any]) -> bool:
+    """True when screenshot was captured for a UI evidence moment (not a hook)."""
+    if str(shot.get("evidence_moment_id") or "").strip():
+        return True
+    reason = str(shot.get("reason") or "")
+    if reason in EVIDENCE_MOMENT_CAPTURE_REASONS:
+        return True
+    if str(shot.get("category") or "") == "evidence_moment":
+        return True
+    return False
+
+
+def _reason_claim_type(shot: Dict[str, Any]) -> Optional[str]:
+    reason = str(shot.get("reason") or shot.get("capture_trigger") or "")
+    return CAPTURE_REASON_TO_CLAIM.get(reason)
+
+
+def _claims_compatible(visual_claim: Optional[str], hook_claim: Optional[str]) -> bool:
+    if not visual_claim or not hook_claim:
+        return True
+    if visual_claim == hook_claim:
+        return True
+    for base_claim, blocked in _INCOMPATIBLE_HOOK_CLAIMS.items():
+        if visual_claim == base_claim and hook_claim in blocked:
+            return False
+    return True
+
+
 def _build_shot_links(
     shot: Dict[str, Any],
     evidence: List[Dict[str, Any]],
@@ -305,13 +358,15 @@ def _build_shot_links(
     trigger_uuid = str(shot.get("trigger_event") or "").strip()
     sh_hash = str(shot.get("screen_hash") or "")
     shot_ts = int(shot.get("timestamp_ms") or 0)
+    visual_claim = _reason_claim_type(shot)
+    moment_shot = _is_evidence_moment_shot(shot)
 
     if trigger_uuid and trigger_uuid in evidence_by_uuid:
         ev = evidence_by_uuid[trigger_uuid]
         if _hook_evidence_record(ev):
             fid = str(ev.get("finding_id") or "")
             hint = _event_claim_type(ev)
-            if fid and hint is not None:
+            if fid and hint is not None and _claims_compatible(visual_claim, hint):
                 out.add(fid, CORRELATION_CAUSAL, hint)
 
     for ev in evidence:
@@ -323,9 +378,16 @@ def _build_shot_links(
         hint = _event_claim_type(ev)
         if hint is None:
             continue
+        if not _claims_compatible(visual_claim, hint):
+            continue
         ev_hash = str((ev.get("extra") or {}).get("screen_hash") or "")
         if ev_hash and sh_hash and ev_hash == sh_hash:
             out.add(fid, CORRELATION_LINKED, hint)
+
+    # Evidence-moment captures are visually self-describing; never attach
+    # unrelated runtime hooks by timestamp proximity alone.
+    if moment_shot:
+        return out
 
     for ev in sorted(evidence, key=lambda e: int(e.get("timestamp_ms") or 0)):
         fid = str(ev.get("finding_id") or "")
@@ -335,6 +397,8 @@ def _build_shot_links(
             continue
         hint = _event_claim_type(ev)
         if hint is None:
+            continue
+        if not _claims_compatible(visual_claim, hint):
             continue
         event_ms = int(ev.get("timestamp_ms") or 0)
         if shot_ts <= 0 or event_ms <= 0:
@@ -383,7 +447,7 @@ class VisualEvidenceLinker:
 
     def link(self) -> List[VisualEvidenceRecord]:
         shots = _load_manifest_shots(self.artifact_dir)
-        shots.sort(key=lambda s: str(s.get("screenshot_id") or ""))
+        shots.sort(key=lambda s: int(s.get("timestamp_ms") or 0))
         evidence = _load_evidence_records(self.artifact_dir)
         if not self.static_flags:
             self.static_flags = merge_static_flags(self.artifact_dir, None)
@@ -439,6 +503,8 @@ class VisualEvidenceLinker:
             linked = shot_links.finding_ids[:VISUAL_LINK_MAX_EVID_PER_SCR]
             correlation = CORRELATION_UNRESOLVED
             claim_type: Optional[str] = None
+            reason_claim = _reason_claim_type(shot)
+            moment_shot = _is_evidence_moment_shot(shot)
 
             if _is_lifecycle_launch(shot):
                 claim_type = CLAIM_LAUNCH_CONTEXT
@@ -446,11 +512,28 @@ class VisualEvidenceLinker:
             elif _is_lifecycle_final(shot):
                 claim_type = CLAIM_FINAL_STATE
                 correlation = CORRELATION_NOT_APPLICABLE
+            elif reason_claim and moment_shot:
+                claim_type = reason_claim
+                causal_links = [
+                    fid for fid in linked
+                    if shot_links.tiers.get(fid) == CORRELATION_CAUSAL
+                ]
+                if causal_links:
+                    correlation = CORRELATION_CAUSAL
+                    linked = causal_links
+                elif linked:
+                    correlation = shot_links.correlation_status()
+                else:
+                    correlation = CORRELATION_CAUSAL
+                    linked = []
             elif linked:
                 claim_type = shot_links.primary_claim_hint() or CLAIM_INCONCLUSIVE_VISUAL
                 correlation = shot_links.correlation_status()
                 if claim_type == CLAIM_OVERLAY_OBSERVED and _suspicious_ui_shot(shot):
                     claim_type = CLAIM_FAKE_LOGIN_UI
+            elif reason_claim:
+                claim_type = reason_claim
+                correlation = CORRELATION_CAUSAL
             else:
                 claim_type = CLAIM_INCONCLUSIVE_VISUAL
                 correlation = CORRELATION_UNRESOLVED
@@ -480,10 +563,20 @@ class VisualEvidenceLinker:
                 finding_keys = list(dict.fromkeys(finding_keys + ["sms_otp_interception"]))
 
             workflow_label = _resolve_workflow_stage(linked, evidence_by_finding, workflow)
+            if not workflow_label and reason_claim:
+                reason_key = str(shot.get("reason") or shot.get("capture_trigger") or "")
+                workflow_label = CAPTURE_REASON_TO_WORKFLOW.get(reason_key, "")
 
             corroboration = ""
-            if linked:
+            if linked and correlation in (CORRELATION_CAUSAL, CORRELATION_LINKED):
                 corroboration = f"Linked runtime evidence: {', '.join(linked)} ({correlation})"
+            elif linked and correlation == CORRELATION_TEMPORAL:
+                corroboration = (
+                    f"Runtime hooks observed near capture: {', '.join(linked)} "
+                    f"(temporal; visual claim from capture reason)"
+                )
+            elif moment_shot and reason_claim:
+                corroboration = "Visual evidence captured from observed UI state."
             elif correlation == CORRELATION_NOT_APPLICABLE:
                 corroboration = "Lifecycle capture without hook correlation."
 
@@ -561,7 +654,7 @@ class VisualEvidenceLinker:
                         best.quality, best.correlation_status, best.claim_type
                     )
 
-        records.sort(key=lambda r: r.screenshot_id)
+        records.sort(key=lambda r: r.timestamp_ms)
         apply_executive_key_cap(records)
         return records
 

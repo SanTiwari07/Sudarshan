@@ -3,12 +3,18 @@ import type { RuntimeScreenshotMeta } from './screenshotManifest';
 
 export type RuntimeDynamicStatus =
   | 'NOT_STARTED'
+  | 'NOT_REQUESTED'
   | 'QUEUED'
   | 'RUNNING'
   | 'COMPLETED'
   | 'INCONCLUSIVE'
   | 'FAILED'
-  | 'UNAVAILABLE';
+  | 'UNAVAILABLE'
+  | 'EMULATOR_UNAVAILABLE'
+  | 'INSTALL_FAILED'
+  | 'FRIDA_ATTACH_FAILED'
+  | 'PERSISTENCE_FAILED'
+  | 'ARTIFACT_MISSING';
 
 export type ScreenshotUxState =
   | 'LOADING'
@@ -19,29 +25,65 @@ export type ScreenshotUxState =
   | 'ARTIFACT_MISSING'
   | 'API_ERROR';
 
-export function resolveRuntimeDynamicStatus(data: FraudCardData): RuntimeDynamicStatus {
-  const frs = data.frs_breakdown;
-  const dyn =
+type DynPayload = {
+  dynamic_status?: string;
+  dae_pipeline?: { current_stage?: string };
+  error?: string;
+  available?: boolean;
+  runtime_requested?: boolean;
+  runtime_attempted?: boolean;
+};
+
+function dynPayload(data: FraudCardData): DynPayload {
+  const raw =
     (data.dynamic_result && typeof data.dynamic_result === 'object' && !Array.isArray(data.dynamic_result)
       ? data.dynamic_result
       : data.dynamic_analysis) || {};
+  return raw as DynPayload;
+}
+
+export function resolveRuntimeDynamicStatus(data: FraudCardData): RuntimeDynamicStatus {
+  const frs = data.frs_breakdown;
+  const dyn = dynPayload(data);
 
   const raw = String(
-    (dyn as { dynamic_status?: string }).dynamic_status ||
-      (dyn as { dae_pipeline?: { current_stage?: string } }).dae_pipeline?.current_stage ||
-      '',
+    dyn.dynamic_status || dyn.dae_pipeline?.current_stage || '',
   ).toUpperCase();
 
-  if (!frs?.dynamic_ran && !dyn.available && raw !== 'RUNNING' && raw !== 'QUEUED') {
-    return 'NOT_STARTED';
+  const runtimeRequested = Boolean(dyn.runtime_requested);
+  const runtimeAttempted = Boolean(
+    dyn.runtime_attempted || frs?.dynamic_ran || data.dynamic_available,
+  );
+
+  if (!runtimeRequested && !runtimeAttempted && !dyn.available && raw !== 'RUNNING' && raw !== 'QUEUED') {
+    return 'NOT_REQUESTED';
   }
+
+  if (raw === 'EMULATOR_UNAVAILABLE') return 'EMULATOR_UNAVAILABLE';
+  if (raw === 'INSTALL_FAILED') return 'INSTALL_FAILED';
+  if (raw === 'FRIDA_ATTACH_FAILED' || raw === 'INSTRUMENTATION_FAILED') return 'FRIDA_ATTACH_FAILED';
+  if (raw === 'PERSISTENCE_FAILED') return 'PERSISTENCE_FAILED';
+  if (raw === 'ARTIFACT_MISSING') return 'ARTIFACT_MISSING';
+
+  if (runtimeRequested && !runtimeAttempted && !dyn.available) {
+    return 'EMULATOR_UNAVAILABLE';
+  }
+
   if (raw === 'QUEUED' || raw === 'PENDING') return 'QUEUED';
-  if (raw === 'RUNNING' || raw === 'INSTALLING' || raw === 'EXPLORING' || raw === 'INITIALIZING') {
+  if (
+    raw === 'RUNNING' ||
+    raw === 'INSTALLING' ||
+    raw === 'EXPLORING' ||
+    raw === 'INITIALIZING' ||
+    raw === 'STARTING'
+  ) {
     return 'RUNNING';
   }
+
   if (frs?.dynamic_ran && frs.dynamic_conclusive) return 'COMPLETED';
   if (frs?.dynamic_ran && !frs.dynamic_conclusive) return 'INCONCLUSIVE';
-  if (raw === 'FAILED' || (dyn as { error?: string }).error) return 'FAILED';
+  if (raw === 'FAILED' || dyn.error) return 'FAILED';
+  if (dyn.available === false && runtimeAttempted) return 'FAILED';
   if (dyn.available === false) return 'UNAVAILABLE';
   if (frs?.dynamic_ran) return 'INCONCLUSIVE';
   return 'UNAVAILABLE';
@@ -51,6 +93,8 @@ export function runtimeStatusHeadline(status: RuntimeDynamicStatus): string {
   switch (status) {
     case 'NOT_STARTED':
       return 'Not started';
+    case 'NOT_REQUESTED':
+      return 'Not requested';
     case 'QUEUED':
       return 'Queued';
     case 'RUNNING':
@@ -61,6 +105,16 @@ export function runtimeStatusHeadline(status: RuntimeDynamicStatus): string {
       return 'Inconclusive';
     case 'FAILED':
       return 'Failed';
+    case 'EMULATOR_UNAVAILABLE':
+      return 'Emulator unavailable';
+    case 'INSTALL_FAILED':
+      return 'Install failed';
+    case 'FRIDA_ATTACH_FAILED':
+      return 'Frida attach failed';
+    case 'PERSISTENCE_FAILED':
+      return 'Persistence failed';
+    case 'ARTIFACT_MISSING':
+      return 'Artifact missing';
     default:
       return 'Unavailable';
   }
@@ -69,7 +123,9 @@ export function runtimeStatusHeadline(status: RuntimeDynamicStatus): string {
 export function runtimeStatusExplanation(status: RuntimeDynamicStatus): string {
   switch (status) {
     case 'NOT_STARTED':
-      return 'Dynamic sandbox execution was not run for this investigation.';
+      return 'Dynamic sandbox execution has not started for this investigation.';
+    case 'NOT_REQUESTED':
+      return 'Dynamic sandbox execution was not requested for this investigation.';
     case 'QUEUED':
       return 'The sample is queued for sandbox execution.';
     case 'RUNNING':
@@ -80,6 +136,16 @@ export function runtimeStatusExplanation(status: RuntimeDynamicStatus): string {
       return 'The sandbox executed, but insufficient reliable runtime behaviour was captured for scoring.';
     case 'FAILED':
       return 'Sandbox execution failed before reliable evidence could be collected.';
+    case 'EMULATOR_UNAVAILABLE':
+      return 'No sandbox emulator was available when dynamic analysis was requested.';
+    case 'INSTALL_FAILED':
+      return 'The APK could not be installed on the sandbox emulator.';
+    case 'FRIDA_ATTACH_FAILED':
+      return 'Runtime instrumentation could not attach to the application process.';
+    case 'PERSISTENCE_FAILED':
+      return 'Runtime analysis ran but results could not be persisted to the case record.';
+    case 'ARTIFACT_MISSING':
+      return 'Runtime artifacts referenced by this case could not be loaded.';
     default:
       return 'Runtime analysis is not available for this case.';
   }
@@ -135,7 +201,7 @@ export function classifyScreenshotUxState(args: {
     return 'NO_UI_REACHED';
   }
 
-  if (dynStatus === 'NOT_STARTED') return 'RUNTIME_INCONCLUSIVE';
+  if (dynStatus === 'NOT_STARTED' || dynStatus === 'NOT_REQUESTED') return 'RUNTIME_INCONCLUSIVE';
 
   return 'NO_UI_REACHED';
 }

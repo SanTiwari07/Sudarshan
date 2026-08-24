@@ -49,6 +49,12 @@ from sudarshan_core.engines.event_bus import EventType, RuntimeEvent, RuntimeEve
 from sudarshan_core.engines.bfci_scorer import calculate_bfci_v2, BFCI_WEIGHTS
 from sudarshan_core.engines.dae_pipeline import DAEPipelineTracker, DAEStage
 from sudarshan_core.engines.apk_repair import compute_sha256
+from sudarshan_core.engines.runtime_lifecycle import (
+    RuntimeLifecycleTracker,
+    get_active_tracker,
+    record_lifecycle_event,
+    set_active_tracker,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -3167,11 +3173,24 @@ async def run_frida_analysis(
         dynamic side compare declared permissions against what the app actually
         requests at runtime.
     """
+    content_sha256 = compute_sha256(apk_path) if os.path.isfile(apk_path) else ""
+    lifecycle = RuntimeLifecycleTracker(case_id=content_sha256)
+    lifecycle.mark_requested()
+    set_active_tracker(lifecycle)
+    record_lifecycle_event(
+        "runtime_controller_started",
+        "STARTING",
+        "frida_sandbox",
+        "run_frida_analysis invoked",
+    )
+
     base_result: Dict[str, Any] = {
         "available": False,
+        "runtime_requested": True,
+        "runtime_attempted": False,
         "engine": "frida",
-        "dynamic_status": "INSTRUMENTATION_FAILED",
-        "sha256": compute_sha256(apk_path) if os.path.isfile(apk_path) else "",
+        "dynamic_status": "NOT_STARTED",
+        "sha256": content_sha256,
         "bfci": 0.0,
         "bfci_components": {},
         "bfci_weights": BFCI_WEIGHTS,
@@ -3220,8 +3239,23 @@ async def run_frida_analysis(
         logger.warning("[Frida] %s: %s", err_code, err_msg)
         base_result["error"] = err_msg
         base_result["error_code"] = err_code
+        base_result["dynamic_status"] = "EMULATOR_UNAVAILABLE"
         if connection:
             base_result["sandbox_connection"] = connection.to_dict()
+        lifecycle.emulator_status = "FAILED"
+        lifecycle.dynamic_status = "EMULATOR_UNAVAILABLE"
+        lifecycle.dashboard_inclusion_status = "FAILED"
+        lifecycle.record(
+            "emulator_selected",
+            "FAILED",
+            "sandbox_provider",
+            err_msg,
+            error=err_code,
+        )
+        lifecycle.attach_to_result(base_result)
+        apk_dir = artifact_dir_for(apk_path)
+        lifecycle.write_json(apk_dir)
+        set_active_tracker(None)
         return base_result
 
     logger.info(
@@ -3239,6 +3273,14 @@ async def run_frida_analysis(
     base_result["sandbox_provider"] = provider.name
     log_pipeline_lifecycle(1, "emulator ready", f"serial={device_serial}")
     log_pipeline_lifecycle(4, "Frida device connected", provider.name)
+    lifecycle.emulator_status = "READY"
+    lifecycle.record(
+        "emulator_ready",
+        "READY",
+        "sandbox_provider",
+        f"serial={device_serial}",
+    )
+    base_result["runtime_attempted"] = True
 
     # ── Serialise access to the device ────────────────────────────────────────
     # There is exactly ONE emulator and it was taken with no lock, while the
@@ -3483,10 +3525,35 @@ async def _run_device_session(
         logger.error(f"[Frida] APK install failed: {output}")
         session.dae.fail(f"APK install failed: {output}")
         base_result["error"] = f"APK install failed: {output}"
+        base_result["dynamic_status"] = "INSTALL_FAILED"
         base_result["dae_pipeline"] = session.dae.to_dict()
+        tracker = get_active_tracker()
+        if tracker:
+            tracker.apk_install_status = "FAILED"
+            tracker.dynamic_status = "INSTALL_FAILED"
+            tracker.dashboard_inclusion_status = "FAILED"
+            tracker.record(
+                "apk_install_completed",
+                "FAILED",
+                "adb",
+                output[:500],
+                error="INSTALL_FAILED",
+            )
+            tracker.attach_to_result(base_result)
+            tracker.write_json(apk_dir)
+        set_active_tracker(None)
         return base_result
     log_pipeline_lifecycle(2, "APK installed", package_name)
     session.dae.transition(DAEStage.VERIFY_INSTALL, "pm path verification")
+    tracker = get_active_tracker()
+    if tracker:
+        tracker.apk_install_status = "SUCCESS"
+        tracker.record(
+            "apk_install_completed",
+            "SUCCESS",
+            "adb",
+            package_name,
+        )
     if not await loop.run_in_executor(
         None, _verify_package_installed, device_serial, package_name
     ):
@@ -3695,13 +3762,32 @@ async def _run_device_session(
             or "Frida instrumentation failed (no further detail reported)."
         )
         base_result["error"] = err_msg
-        # Attach crash report and timeline to the failure result so the API
-        # consumer gets diagnostics even when the session never ran.
+        base_result["available"] = True
+        base_result["runtime_attempted"] = True
+        fail_status = DynamicAnalysisStatus.INSTRUMENTATION_FAILED.value
+        if "attach" in err_msg.lower() or "frida" in err_msg.lower():
+            fail_status = DynamicAnalysisStatus.FRIDA_ATTACH_FAILED.value
+        base_result["dynamic_status"] = fail_status
         if session.crash_report is not None:
             base_result["crash_report"] = session.crash_report.to_dict()
         base_result["launch_timeline"] = _timeline_to_seconds(session.launch_timeline)
         base_result["launch_method_used"] = session.launch_method_used
-        # Write launch_timeline.json even on failure
+        tracker = get_active_tracker()
+        if tracker:
+            tracker.frida_status = "FAILED"
+            tracker.explorer_status = session.explorer_used or "none"
+            tracker.dynamic_status = fail_status
+            tracker.dashboard_inclusion_status = "FAILED"
+            tracker.record(
+                "dynamic_analysis_completed",
+                "FAILED",
+                "FridaSession",
+                err_msg,
+                error=fail_status,
+            )
+            if session.reports:
+                tracker.merge_explorer_reports(session.reports)
+            tracker.attach_to_result(base_result)
         try:
             tl_path = apk_dir / "launch_timeline.json"
             tl_path.write_text(
@@ -3711,6 +3797,9 @@ async def _run_device_session(
             logger.info("[Frida] launch_timeline.json written (failure path): %s", tl_path)
         except OSError:
             pass
+        if tracker:
+            tracker.write_json(apk_dir)
+        set_active_tracker(None)
         return base_result
 
 
@@ -4084,6 +4173,36 @@ async def _run_device_session(
             logger.error(f"[Frida] Failed to generate HTML report: {e}")
 
     session.dae.transition(DAEStage.COMPLETE, "dynamic session finished")
+
+    tracker = get_active_tracker()
+    if tracker:
+        tracker.frida_status = "ATTACHED" if session.canary_received else "DEGRADED"
+        tracker.explorer_status = session.explorer_used or "none"
+        tracker.runtime_event_count = int(session.total_hook_events_received)
+        tracker.evidence_count = int(result.get("evidence_record_count") or 0)
+        tracker.dynamic_status = str(result.get("dynamic_status") or "COMPLETED")
+        if session.reports:
+            tracker.merge_explorer_reports(session.reports)
+        from sudarshan_core.engines.risk_engine import _dynamic_run_was_conclusive
+
+        conclusive = _dynamic_run_was_conclusive(result)
+        tracker.dashboard_inclusion_status = "INCLUDED" if conclusive else "EXCLUDED"
+        tracker.persistence_status = "SUCCESS"
+        tracker.record(
+            "dynamic_analysis_completed",
+            "COMPLETED",
+            "FridaSession",
+            f"status={result.get('dynamic_status')} events={session.total_hook_events_received}",
+        )
+        tracker.record(
+            "dynamic_result_persisted",
+            "SUCCESS",
+            "artifact_store",
+            str(apk_dir),
+        )
+        tracker.attach_to_result(result)
+        tracker.write_json(apk_dir)
+    set_active_tracker(None)
 
     return result
 

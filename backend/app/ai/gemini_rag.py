@@ -28,6 +28,12 @@ import asyncio
 from collections import OrderedDict
 from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 
+from sudarshan_core.ai.gemini_errors import (
+    GeminiAllProvidersFailed,
+    GeminiNonRetryableError,
+    GeminiNotConfiguredError,
+)
+from sudarshan_core.ai.gemini_provider import gemini_is_configured, get_gemini_manager
 from sudarshan_core.engines.agentic.sanitizer import sanitize, sanitize_block
 
 logger = logging.getLogger(__name__)
@@ -42,25 +48,8 @@ def _sanitize_chunk_text(text: str) -> str:
     """Sanitize a completed evidence chunk (multi-line safe)."""
     return sanitize_block(text)
 
-def _get_gemini_api_key() -> str:
-    key = os.getenv("GEMINI_API_KEY", "")
-    if not key:
-        try:
-            from pathlib import Path
-            from dotenv import load_dotenv
-            curr = Path(__file__).resolve().parent
-            for _ in range(5):
-                env_file = curr / ".env"
-                if env_file.exists():
-                    load_dotenv(dotenv_path=env_file, override=True)
-                    key = os.getenv("GEMINI_API_KEY", "")
-                    break
-                curr = curr.parent
-        except Exception:
-            pass
-    return key
-
-MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+def _gemini_ready() -> bool:
+    return gemini_is_configured()
 
 # ─── Investigation Graph (in-memory per SHA256) ───────────────────────────────
 # Structure: { sha256: { section_name: [chunk_str, ...] } }
@@ -871,9 +860,12 @@ async def stream_investigation_response(
     if conversation_history is None:
         conversation_history = []
 
-    api_key = _get_gemini_api_key()
-    if not api_key:
-        yield _sse("error", "Gemini API key not configured. Set GEMINI_API_KEY in .env")
+    if not _gemini_ready():
+        yield _sse(
+            "error",
+            "Gemini API key not configured. Set GEMINI_PRIMARY_API_KEY / "
+            "GEMINI_FALLBACK_API_KEY or legacy GEMINI_API_KEY in .env",
+        )
         return
 
     # Ensure investigation is indexed
@@ -896,38 +888,33 @@ async def stream_investigation_response(
     # Build prompt
     prompt = build_gemini_prompt(question, context)
 
-    # Stream from Gemini
     try:
-        import google.genai as genai
+        from google.genai import types
 
-        client = genai.Client(api_key=api_key)
-
-        response = client.models.generate_content_stream(
-            model=MODEL_NAME,
+        manager = get_gemini_manager()
+        yield _sse("sections", sections_used)
+        async for chunk in manager.generate_content_stream_async(
             contents=prompt,
-            config=genai.types.GenerateContentConfig(
+            config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_INSTRUCTION,
                 temperature=0.2,
                 max_output_tokens=3000,
             ),
-        )
-
-        # Emit sections_used metadata first
-        yield _sse("sections", sections_used)
-
-        # Stream tokens
-        for chunk in response:
-            if chunk.text:
+        ):
+            if getattr(chunk, "text", None):
                 yield _sse("token", chunk.text)
-            await asyncio.sleep(0)
-
         yield _sse("done", "")
 
     except ImportError:
         yield _sse("error", "google-genai package not installed. Run: pip install google-genai")
+    except GeminiNotConfiguredError as e:
+        yield _sse("error", str(e))
+    except (GeminiNonRetryableError, GeminiAllProvidersFailed) as e:
+        logger.error("[RAG] Gemini stream error: %s", e)
+        yield _sse("error", "AI service error: provider unavailable")
     except Exception as e:
-        logger.error(f"[RAG] Gemini stream error: {e}")
-        yield _sse("error", f"AI service error: {str(e)[:200]}")
+        logger.error("[RAG] Gemini stream error: %s", type(e).__name__)
+        yield _sse("error", f"AI service error: {type(e).__name__}")
 
 
 def _sse(event: str, data: Any) -> str:
@@ -950,10 +937,12 @@ async def get_investigation_answer(
     if conversation_history is None:
         conversation_history = []
 
-    api_key = _get_gemini_api_key()
-    if not api_key:
+    if not _gemini_ready():
         return {
-            "answer": "Gemini API key not configured. Set GEMINI_API_KEY in .env",
+            "answer": (
+                "Gemini API key not configured. Set GEMINI_PRIMARY_API_KEY / "
+                "GEMINI_FALLBACK_API_KEY or legacy GEMINI_API_KEY in .env"
+            ),
             "sections_used": [],
             "source": "error",
         }
@@ -976,28 +965,33 @@ async def get_investigation_answer(
     prompt = build_gemini_prompt(question, context)
 
     try:
-        import google.genai as genai
+        from google.genai import types
 
-        client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model=MODEL_NAME,
+        result = await get_gemini_manager().generate_content_async(
             contents=prompt,
-            config=genai.types.GenerateContentConfig(
+            config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_INSTRUCTION,
                 temperature=0.2,
                 max_output_tokens=3000,
             ),
         )
-        answer = response.text or "No response generated."
+        answer = result.text or "No response generated."
         return {
             "answer": answer,
             "sections_used": sections_used,
             "source": "gemini_rag",
         }
-    except Exception as e:
-        logger.error(f"[RAG] Gemini error: {e}")
+    except (GeminiNotConfiguredError, GeminiNonRetryableError, GeminiAllProvidersFailed) as e:
+        logger.error("[RAG] Gemini error: %s", e)
         return {
-            "answer": f"AI service temporarily unavailable. Error: {str(e)[:100]}",
+            "answer": "AI service temporarily unavailable.",
+            "sections_used": sections_used,
+            "source": "error",
+        }
+    except Exception as e:
+        logger.error("[RAG] Gemini error: %s", type(e).__name__)
+        return {
+            "answer": f"AI service temporarily unavailable. Error: {type(e).__name__}",
             "sections_used": sections_used,
             "source": "error",
         }

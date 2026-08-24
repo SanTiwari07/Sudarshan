@@ -162,6 +162,11 @@ export type DynamicAnalysis = {
   clicked_nodes: string[];
   anti_analysis_events: any[];
   yara_matches: any[];
+  resilience_actions?: {
+    type: string;
+    title: string;
+    result_summary: string;
+  }[];
   bfci?: number;
   bfci_components?: Record<string, number>;
   bfci_evidence?: string[];

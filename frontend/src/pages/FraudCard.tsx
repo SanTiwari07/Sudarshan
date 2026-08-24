@@ -132,8 +132,15 @@ function ThreatIntelTeaser({ data }: { data: FraudCardData }) {
 }
 
 function ResilienceOverviewBanner({ data }: { data: FraudCardData }) {
-  // Display when dynamic analysis is available and run
-  if (!data.dynamic_available) return null;
+  const actions = data.dynamic_analysis?.resilience_actions;
+  
+  if (!data.dynamic_available || !actions || actions.length === 0) return null;
+
+  const ICONS: Record<string, React.ElementType> = {
+    'time_warp': Clock,
+    'persona_seeding': UserPlus,
+    'permission_grants': Unlock,
+  };
 
   return (
     <SocCard className="border-indigo-200/80 bg-indigo-50/50">
@@ -144,31 +151,22 @@ function ResilienceOverviewBanner({ data }: { data: FraudCardData }) {
             Advanced Sandbox Resilience Applied
           </p>
           <p className="text-xs text-indigo-900/90 mt-1">
-            Successfully handled common evasion edge cases during analysis to expose hidden malicious behavior.
+            Successfully handled {actions.length} evasion edge {actions.length === 1 ? 'case' : 'cases'} during analysis to expose hidden malicious behavior.
           </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="bg-white rounded-md border border-indigo-100/50 p-3 shadow-xs">
-            <div className="flex items-center gap-2 mb-1.5">
-              <Clock className="h-4 w-4 text-indigo-500" />
-              <p className="text-sm font-semibold text-slate-800">Time-Warping</p>
-            </div>
-            <p className="text-xs text-slate-600">Advanced the device clock (+24h) and forced pending jobs to trigger dormant time-delayed payloads.</p>
-          </div>
-          <div className="bg-white rounded-md border border-indigo-100/50 p-3 shadow-xs">
-            <div className="flex items-center gap-2 mb-1.5">
-              <UserPlus className="h-4 w-4 text-indigo-500" />
-              <p className="text-sm font-semibold text-slate-800">Persona Seeding</p>
-            </div>
-            <p className="text-xs text-slate-600">Populated the sterile device with synthetic contacts, SMS, and call logs to bypass environment fingerprinting.</p>
-          </div>
-          <div className="bg-white rounded-md border border-indigo-100/50 p-3 shadow-xs">
-            <div className="flex items-center gap-2 mb-1.5">
-              <Unlock className="h-4 w-4 text-indigo-500" />
-              <p className="text-sm font-semibold text-slate-800">Permission Grants</p>
-            </div>
-            <p className="text-xs text-slate-600">Automatically granted Accessibility Services and System Alert Window to allow overlays to render.</p>
-          </div>
+          {actions.map((action, i) => {
+            const Icon = ICONS[action.type] || ShieldAlert;
+            return (
+              <div key={i} className="bg-white rounded-md border border-indigo-100/50 p-3 shadow-xs flex flex-col">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <Icon className="h-4 w-4 text-indigo-500 shrink-0" />
+                  <p className="text-sm font-semibold text-slate-800 line-clamp-1">{action.title}</p>
+                </div>
+                <p className="text-xs text-slate-600 grow">{action.result_summary}</p>
+              </div>
+            );
+          })}
         </div>
       </div>
     </SocCard>

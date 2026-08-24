@@ -170,6 +170,7 @@ class DynamicAnalysisResult(BaseModel):
     attack_timeline: List[Dict[str, Any]] = Field(default_factory=list)
     clicked_nodes: List[str] = Field(default_factory=list)
     anti_analysis_events: List[Dict[str, Any]] = Field(default_factory=list)
+    resilience_actions: List[Dict[str, Any]] = Field(default_factory=list)
     yara_matches: List[str] = Field(default_factory=list)
     bfci: float = 0.0
     bfci_components: Dict[str, float] = Field(default_factory=dict)

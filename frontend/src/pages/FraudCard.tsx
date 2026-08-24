@@ -12,7 +12,7 @@ import ExecutiveVisualEvidenceSection from '../components/investigation/Executiv
 import VisualImpersonationExecutiveCard from '../components/investigation/VisualImpersonationExecutiveCard';
 import InvestigationConclusionCard from '../components/investigation/InvestigationConclusionCard';
 import { useRuntimeScreenshots } from '../hooks/useRuntimeScreenshots';
-import { Activity, AlertTriangle, Shield } from 'lucide-react';
+import { Activity, AlertTriangle, Shield, ShieldAlert, Clock, UserPlus, Unlock } from 'lucide-react';
 
 /**
  * INCOMPLETE EXERCISE badge.
@@ -131,6 +131,50 @@ function ThreatIntelTeaser({ data }: { data: FraudCardData }) {
   );
 }
 
+function ResilienceOverviewBanner({ data }: { data: FraudCardData }) {
+  // Display when dynamic analysis is available and run
+  if (!data.dynamic_available) return null;
+
+  return (
+    <SocCard className="border-indigo-200/80 bg-indigo-50/50">
+      <div className="px-4 py-4">
+        <div className="mb-4">
+          <p className="text-sm font-semibold text-indigo-950 flex items-center gap-1.5">
+            <ShieldAlert className="h-4 w-4 text-indigo-600" />
+            Advanced Sandbox Resilience Applied
+          </p>
+          <p className="text-xs text-indigo-900/90 mt-1">
+            Successfully handled common evasion edge cases during analysis to expose hidden malicious behavior.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="bg-white rounded-md border border-indigo-100/50 p-3 shadow-xs">
+            <div className="flex items-center gap-2 mb-1.5">
+              <Clock className="h-4 w-4 text-indigo-500" />
+              <p className="text-sm font-semibold text-slate-800">Time-Warping</p>
+            </div>
+            <p className="text-xs text-slate-600">Advanced the device clock (+24h) and forced pending jobs to trigger dormant time-delayed payloads.</p>
+          </div>
+          <div className="bg-white rounded-md border border-indigo-100/50 p-3 shadow-xs">
+            <div className="flex items-center gap-2 mb-1.5">
+              <UserPlus className="h-4 w-4 text-indigo-500" />
+              <p className="text-sm font-semibold text-slate-800">Persona Seeding</p>
+            </div>
+            <p className="text-xs text-slate-600">Populated the sterile device with synthetic contacts, SMS, and call logs to bypass environment fingerprinting.</p>
+          </div>
+          <div className="bg-white rounded-md border border-indigo-100/50 p-3 shadow-xs">
+            <div className="flex items-center gap-2 mb-1.5">
+              <Unlock className="h-4 w-4 text-indigo-500" />
+              <p className="text-sm font-semibold text-slate-800">Permission Grants</p>
+            </div>
+            <p className="text-xs text-slate-600">Automatically granted Accessibility Services and System Alert Window to allow overlays to render.</p>
+          </div>
+        </div>
+      </div>
+    </SocCard>
+  );
+}
+
 export default function FraudCard({ data }: { data: FraudCardData | null }) {
   const { investigationBundle } = useAnalysis();
   const { entries: screenshotEntries } = useRuntimeScreenshots(data?.sha256);
@@ -149,6 +193,8 @@ export default function FraudCard({ data }: { data: FraudCardData | null }) {
 
       {/* 1. EXECUTIVE RISK ASSESSMENT & SCORE INFLUENCERS */}
       <FraudRiskHero data={data} />
+
+      <ResilienceOverviewBanner data={data} />
 
       {/* 2. EVIDENCE & RISK SIGNALS (Independent section below top area) */}
       {stripCounts && (

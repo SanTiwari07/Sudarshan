@@ -30,10 +30,11 @@ export default function BatchScanPage() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
-  // Active batch ID stored in localStorage so page refresh reconstructs state
+  // Active batch ID stored in localStorage so live in-progress page refresh reconstructs state
   const [activeBatchId, setActiveBatchId] = useState<string | null>(() => {
     return localStorage.getItem(STORAGE_ACTIVE_BATCH_KEY) || null;
   });
+  const [sessionBatchId, setSessionBatchId] = useState<string | null>(null);
 
   const {
     batch,
@@ -44,14 +45,39 @@ export default function BatchScanPage() {
     retryJob,
   } = useBatchProgress(activeBatchId);
 
-  // Sync activeBatchId to localStorage
+  const isTerminal =
+    batch?.status === 'COMPLETED' ||
+    batch?.status === 'PARTIAL' ||
+    batch?.status === 'FAILED' ||
+    batch?.status === 'CANCELLED';
+
+  const isLiveScanning = batch && !isTerminal;
+  const showBatchProgress = Boolean(
+    activeBatchId && batch && (isLiveScanning || activeBatchId === sessionBatchId)
+  );
+
+  // When batch reaches terminal status or if not scanning, remove from active storage so new visits open new scan
   useEffect(() => {
-    if (activeBatchId) {
-      localStorage.setItem(STORAGE_ACTIVE_BATCH_KEY, activeBatchId);
-    } else {
+    if (isTerminal) {
       localStorage.removeItem(STORAGE_ACTIVE_BATCH_KEY);
     }
-  }, [activeBatchId]);
+  }, [isTerminal]);
+
+  // Sync activeBatchId to localStorage only if live scanning or created in session
+  useEffect(() => {
+    if (activeBatchId && !isTerminal) {
+      localStorage.setItem(STORAGE_ACTIVE_BATCH_KEY, activeBatchId);
+    } else if (isTerminal) {
+      localStorage.removeItem(STORAGE_ACTIVE_BATCH_KEY);
+    }
+  }, [activeBatchId, isTerminal]);
+
+  const resetNewBatch = () => {
+    setActiveBatchId(null);
+    setSessionBatchId(null);
+    setSelectedFiles([]);
+    localStorage.removeItem(STORAGE_ACTIVE_BATCH_KEY);
+  };
 
   const handleFileSelect = (files: FileList | null) => {
     if (!files) return;
@@ -140,6 +166,7 @@ export default function BatchScanPage() {
       const data: BatchCreateResponse = await res.json();
       setUploadProgress(100);
       setActiveBatchId(data.batch_id);
+      setSessionBatchId(data.batch_id);
       setSelectedFiles([]);
     } catch (err: any) {
       setUploadError(err.message || 'Batch creation failed.');
@@ -151,13 +178,17 @@ export default function BatchScanPage() {
   const currentScanningJob = batch?.jobs?.find((j) => j.status === 'SCANNING');
 
   return (
-    <div className="upload-fade-in flex justify-center px-4 py-8 sm:py-12">
-      <div className="w-full max-w-[72rem] space-y-6">
-        {/* Navigation Tabs */}
+    <div className="w-full min-w-0 space-y-4">
+      {/* Navigation Tabs */}
         <div className="flex border-b border-slate-200 justify-between items-center">
           <div className="flex space-x-2">
             <button
-              onClick={() => setActiveTab('scan')}
+              onClick={() => {
+                setActiveTab('scan');
+                if (isTerminal) {
+                  resetNewBatch();
+                }
+              }}
               className={`px-5 py-3 ${TYPOGRAPHY.button} border-b-2 transition-colors flex items-center gap-2 cursor-pointer ${
                 activeTab === 'scan'
                   ? 'border-blue-600 text-blue-700 bg-blue-50/50'
@@ -180,13 +211,10 @@ export default function BatchScanPage() {
             </button>
           </div>
 
-          {activeBatchId && activeTab === 'scan' && (
+          {showBatchProgress && activeTab === 'scan' && (
             <button
               type="button"
-              onClick={() => {
-                setActiveBatchId(null);
-                setSelectedFiles([]);
-              }}
+              onClick={resetNewBatch}
               className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors cursor-pointer"
             >
               <PlusCircle className="w-3.5 h-3.5" />
@@ -199,7 +227,7 @@ export default function BatchScanPage() {
           <SocCard className="p-6 sm:p-8 border-slate-200/80 shadow-sm">
             <BatchHistory />
           </SocCard>
-        ) : activeBatchId && batch ? (
+        ) : showBatchProgress && batch ? (
           /* ACTIVE BATCH VIEW */
           <div className="space-y-6">
             {/* Live Progress Card */}
@@ -477,6 +505,5 @@ export default function BatchScanPage() {
           </SocCard>
         )}
       </div>
-    </div>
   );
 }

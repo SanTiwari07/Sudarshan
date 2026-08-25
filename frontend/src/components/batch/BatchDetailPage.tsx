@@ -71,9 +71,8 @@ export default function BatchDetailPage() {
     batch.status === 'CANCELLED';
 
   return (
-    <div className="upload-fade-in flex justify-center px-4 py-8 sm:py-12">
-      <div className="w-full max-w-[72rem] space-y-6">
-        {/* Navigation & Header */}
+    <div className="w-full min-w-0 space-y-4">
+      {/* Navigation & Header */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <button
@@ -271,6 +270,5 @@ export default function BatchDetailPage() {
           </div>
         </SocCard>
       </div>
-    </div>
   );
 }

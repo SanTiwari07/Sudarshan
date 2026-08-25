@@ -48,31 +48,31 @@ export default function StageCard({ title, description, icon, status, compact, o
   if (overview) {
     return (
       <div
-        className={`group flex h-full flex-col gap-4 rounded-xl border bg-white p-5 shadow-sm transition-all duration-300 hover:shadow-md ${
+        className={`group flex h-full flex-col justify-between gap-3 rounded-2xl border bg-white p-5 sm:p-5.5 shadow-2xs transition-all duration-200 hover:shadow-md hover:border-blue-300 min-h-[170px] sm:min-h-[185px] ${
           status === 'active'
-            ? 'border-blue-300 ring-2 ring-blue-100 upload-stage-pulse'
+            ? 'border-blue-500 ring-2 ring-blue-100 bg-blue-50/30 upload-stage-pulse'
             : status === 'complete'
-              ? 'border-emerald-200'
-              : 'border-slate-200/90 hover:border-slate-300'
+              ? 'border-emerald-400 bg-emerald-50/20'
+              : 'border-slate-200/90 hover:bg-slate-50/50'
         }`}
       >
-        <div className="flex justify-between items-start">
+        <div className="flex justify-between items-center">
           <div
-            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-colors ${
+            className={`flex h-11 w-11 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-xl transition-colors ${
               status === 'active'
                 ? 'bg-blue-100 text-blue-700'
                 : status === 'complete'
                   ? 'bg-emerald-100 text-emerald-700'
-                  : 'bg-slate-100 text-slate-600 group-hover:bg-blue-50 group-hover:text-blue-700'
+                  : 'bg-slate-100 text-slate-700 group-hover:bg-blue-100 group-hover:text-blue-700'
             }`}
           >
-            <Icon className="h-5 w-5" aria-hidden />
+            <Icon className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden />
           </div>
-          {statusIcon && <div className="mt-1">{statusIcon}</div>}
+          {statusIcon && <div className="shrink-0">{statusIcon}</div>}
         </div>
-        <div className="min-w-0 flex-1 flex flex-col">
-          <h4 className="text-[15px] font-semibold text-slate-900 leading-snug">{title}</h4>
-          <p className="text-sm text-slate-500 mt-2 leading-relaxed flex-1">{description}</p>
+        <div className="min-w-0 flex-1 flex flex-col justify-end mt-2.5">
+          <h4 className="text-sm font-bold text-slate-900 leading-tight tracking-tight">{title}</h4>
+          <p className="text-xs text-slate-500 mt-1 leading-relaxed line-clamp-3">{description}</p>
         </div>
       </div>
     );

@@ -1343,6 +1343,22 @@ async def job_status(job_id: str, user: dict = Depends(require_analyst)):
     return response
 
 
+@router.post("/analyze/cancel/{job_id}")
+async def cancel_analysis_job(job_id: str, user: dict = Depends(require_analyst)):
+    """Cancel an async analysis job in-flight or queued."""
+    from app.workers.analysis_queue import cancel_job
+    job = await get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found.")
+
+    await cancel_job(job_id)
+    return {
+        "job_id": job_id,
+        "status": "cancelled",
+        "message": "Analysis cancelled.",
+    }
+
+
 # ─── Sandbox Status & Debug Endpoints ──────────────────────────────────────────
 
 @router.get("/sandbox/status")

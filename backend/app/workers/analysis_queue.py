@@ -159,6 +159,39 @@ async def _set_failed(job_id: str, error: str) -> None:
         await persist_job(job_id)
 
 
+async def _set_cancelled(job_id: str) -> None:
+    if job_id in _jobs:
+        _jobs[job_id]["status"] = "cancelled"
+        _jobs[job_id]["completed_at"] = datetime.now(timezone.utc).isoformat()
+        _jobs[job_id]["_finished_at"] = time.monotonic()
+        _jobs[job_id]["pipeline_stage"] = "CANCELLED"
+        _jobs[job_id]["pipeline_message"] = "Analysis cancelled by user"
+        await persist_job(job_id)
+
+
+# ─── Active Task Registry & Cancellation ─────────────────────────────────────
+_active_tasks: Dict[str, asyncio.Task] = {}
+
+
+async def cancel_job(job_id: str) -> bool:
+    """
+    Cancel an in-flight or queued analysis job immediately.
+    Aborts any running pipeline task, sets status to 'cancelled', and persists to DB.
+    """
+    logger.info(f"[Queue] Request to cancel job {job_id}")
+    task = _active_tasks.pop(job_id, None)
+    if task and not task.done():
+        logger.info(f"[Queue] Cancelling active asyncio.Task for job {job_id}")
+        task.cancel()
+        try:
+            await asyncio.wait_for(asyncio.shield(task), timeout=1.0)
+        except (asyncio.CancelledError, asyncio.TimeoutError, Exception):
+            pass
+
+    await _set_cancelled(job_id)
+    return True
+
+
 # ─── Queue Interface ──────────────────────────────────────────────────────────
 
 async def enqueue(job_id: str, temp_path: str, filename: str, sha256_hash: str, analyst_id: Optional[int] = None) -> None:
@@ -180,15 +213,10 @@ async def _worker(worker_id: int) -> None:
     Pull jobs from the queue and run the full analysis pipeline.
     Mirrors the logic in upload.py but driven by the queue.
     """
-    # Lazy imports to avoid circular dependency at module load
     import hashlib
     import tempfile
     import os as _os
 
-    # The pipeline lives in routes/upload.py and is imported lazily below, at
-    # the call site. Every analysis import that used to be here was dead - the
-    # worker delegates entirely - and MobSFClient() was constructed once per
-    # worker and never referenced.
     logger.info(f"[Queue] Worker {worker_id} started")
 
     while True:
@@ -200,30 +228,46 @@ async def _worker(worker_id: int) -> None:
             sha256_hash = item["sha256_hash"]
             analyst_id = item.get("analyst_id")
 
+            # If already cancelled before being picked up, skip processing
+            current_job = _jobs.get(job_id)
+            if current_job and current_job.get("status") == "cancelled":
+                logger.info(f"[Queue] Worker {worker_id} skipping pre-cancelled job {job_id}")
+                try:
+                    _os.remove(temp_path)
+                except OSError:
+                    pass
+                _queue.task_done()
+                continue
+
             await _set_processing(job_id)
             logger.info(f"[Queue] Worker {worker_id} processing job {job_id}")
 
+            from app.routes.upload import _run_analysis_pipeline, _build_response
+            pipeline_coro = _run_analysis_pipeline(
+                temp_path=temp_path,
+                sha256_hash=sha256_hash,
+                analyst_id=analyst_id,
+                job_id=job_id,
+            )
+            pipeline_task = asyncio.create_task(pipeline_coro, name=f"pipeline-{job_id[:8]}")
+            _active_tasks[job_id] = pipeline_task
+
             try:
-                # ── Delegate to Shared Pipeline ───────────────────────────────
-                from app.routes.upload import _run_analysis_pipeline, _build_response
-                raw_result = await _run_analysis_pipeline(
-                    temp_path=temp_path,
-                    sha256_hash=sha256_hash,
-                    analyst_id=analyst_id,
-                    job_id=job_id,
-                )
-                
-                # Build the complete Pydantic response and convert to dict for the queue
+                raw_result = await pipeline_task
                 full_response = _build_response(raw_result, job_id=job_id)
                 result = full_response.model_dump() if hasattr(full_response, "model_dump") else full_response.dict()
 
                 await _set_done(job_id, result)
                 logger.info(f"[Queue] Worker {worker_id} completed job {job_id} score={result.get('final_risk_score')}")
 
+            except asyncio.CancelledError:
+                logger.info(f"[Queue] Worker {worker_id} pipeline task cancelled for job {job_id}")
+                await _set_cancelled(job_id)
             except Exception as e:
                 logger.exception(f"[Queue] Worker {worker_id} failed job {job_id}: {e}")
                 await _set_failed(job_id, str(e))
             finally:
+                _active_tasks.pop(job_id, None)
                 try:
                     _os.remove(temp_path)
                 except OSError as rm_err:

@@ -19,6 +19,13 @@ export default function AppSidebar({ onLogout }: AppSidebarProps) {
   const { user: username, role } = useAuth();
   const hoverTimeoutRef = useRef<any>(null);
 
+  const isInvestigationRoute =
+    pathname.startsWith('/fraud-card') ||
+    pathname.startsWith('/technical') ||
+    pathname.startsWith('/threat-intel') ||
+    pathname.startsWith('/chat') ||
+    (pathname.startsWith('/history/') && pathname !== '/history');
+
   // Clean up timer on unmount
   useEffect(() => {
     return () => {
@@ -129,10 +136,10 @@ export default function AppSidebar({ onLogout }: AppSidebarProps) {
 
         {/* Primary Navigation Items */}
         <nav className="flex-1 py-3 space-y-1 overflow-y-auto scrollbar-hidden">
-          {pathname !== '/' && ENTERPRISE_NAV_MAIN.map(renderNavItem)}
+          {isInvestigationRoute && ENTERPRISE_NAV_MAIN.map(renderNavItem)}
 
           {/* Subtle Divider */}
-          {pathname !== '/' && <div className="my-3 border-t border-slate-800/80 mx-2" />}
+          {isInvestigationRoute && <div className="my-3 border-t border-slate-800/80 mx-2" />}
 
           {/* Secondary Navigation Items */}
           {ENTERPRISE_NAV_END.map(renderNavItem)}

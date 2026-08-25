@@ -13,13 +13,16 @@ export default function AppShell({ children }: AppShellProps) {
 
   const isAuthed = status === 'AUTHENTICATED';
   const isLoginPage = location.pathname === '/login';
-  const showNavigation = isAuthed && !isLoginPage;
+
+  if (!isAuthed || isLoginPage) {
+    return <>{children}</>;
+  }
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-100 min-w-0 relative">
-      {showNavigation && <AppSidebar onLogout={logout} />}
-      {showNavigation && <AppHeader isAuthed={isAuthed} onLogout={logout} />}
-      <main className={`flex-1 w-full min-w-0 flex flex-col analyst-main ${showNavigation ? 'pl-14' : ''}`}>
+    <div className="h-screen min-h-screen flex flex-col bg-slate-100 min-w-0 relative overflow-hidden">
+      <AppSidebar onLogout={logout} />
+      <AppHeader isAuthed={isAuthed} onLogout={logout} />
+      <main className="flex-1 w-full min-w-0 flex flex-col analyst-main pl-14 overflow-y-auto">
         {children}
       </main>
     </div>

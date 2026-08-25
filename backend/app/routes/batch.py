@@ -40,9 +40,11 @@ from app.db.database import (
     update_batch,
     update_batch_job,
     cancel_queued_batch_jobs,
+    cancel_all_batch_jobs,
 )
 from app.routes.upload import _receive_apk
 from app.workers.batch_worker import enqueue_batch
+from app.workers.analysis_queue import cancel_job
 
 logger = logging.getLogger(__name__)
 
@@ -378,11 +380,11 @@ async def cancel_batch(
     user: dict = Depends(require_analyst),
 ):
     """
-    Cancel remaining queued jobs in a batch.
+    Cancel all queued and active scanning jobs in a batch immediately.
 
     Already-completed cases are preserved.
-    The currently-SCANNING job (if any) will finish naturally — it is NOT killed.
-    All QUEUED jobs are marked CANCELLED immediately.
+    In-flight analysis tasks for scanning jobs are aborted.
+    All queued and scanning jobs are marked CANCELLED immediately.
     """
     batch = await get_batch(batch_id)
     if not batch:
@@ -396,22 +398,38 @@ async def cancel_batch(
             detail=f"Batch is already {batch['status']} and cannot be cancelled.",
         )
 
-    cancelled_count = await cancel_queued_batch_jobs(batch_id)
+    # 1. Cancel all queued and scanning jobs in DB and get scanning jobs list
+    cancelled_count, scanning_jobs = await cancel_all_batch_jobs(batch_id)
+
+    # 2. Abort any active analysis tasks immediately
+    for sj in scanning_jobs:
+        aq_job_id = sj.get("analyst_queue_job_id")
+        if aq_job_id:
+            logger.info(f"[BatchAPI] Aborting active analysis job {aq_job_id} for batch job {sj.get('job_id')}")
+            try:
+                await cancel_job(aq_job_id)
+            except Exception as e:
+                logger.warning(f"[BatchAPI] Failed to cancel analysis job {aq_job_id}: {e}")
+
+    # 3. Update batch status to CANCELLED
+    now_iso = datetime.now(timezone.utc).isoformat()
     batch_after = await get_batch(batch_id)
     new_cancelled = (batch_after.get("cancelled_jobs") or 0) + cancelled_count
     await update_batch(batch_id, {
         "status": "CANCELLED",
         "cancelled_jobs": new_cancelled,
+        "current_job_id": None,
+        "completed_at": now_iso,
     })
 
     logger.info(
-        "[BatchAPI] Batch %s cancelled by analyst %d (%d jobs cancelled)",
-        batch_id[:8], user["id"], cancelled_count,
+        "[BatchAPI] Batch %s cancelled by analyst %d (%d jobs cancelled, %d active tasks aborted)",
+        batch_id[:8], user["id"], cancelled_count, len(scanning_jobs),
     )
     return BatchControlResponse(
         batch_id=batch_id,
         status="CANCELLED",
-        message=f"Batch cancelled. {cancelled_count} queued job(s) cancelled. Completed cases preserved.",
+        message=f"Batch cancelled. {cancelled_count} job(s) cancelled and background tasks aborted. Completed cases preserved.",
     )
 
 

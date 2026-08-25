@@ -59,7 +59,7 @@ export default function UploadDropZone({
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3.5">
       <div
         role="button"
         tabIndex={disabled ? -1 : 0}
@@ -78,12 +78,12 @@ export default function UploadDropZone({
         }}
         onDragLeave={() => setDragOver(false)}
         onDrop={onDrop}
-        className={`rounded-2xl border-2 border-dashed text-center transition-all duration-300 px-6 py-14 sm:py-16 ${
+        className={`rounded-2xl border-2 border-dashed text-center transition-all duration-300 px-6 py-10 sm:py-14 lg:py-16 min-h-[260px] sm:min-h-[300px] flex flex-col justify-center items-center ${
           disabled
             ? 'opacity-60 cursor-not-allowed border-slate-200 bg-slate-50/80'
             : dragOver
-              ? 'border-blue-400 bg-blue-50/50 shadow-sm'
-              : 'border-blue-200/90 bg-blue-50/30 hover:border-blue-300 hover:bg-blue-50/50'
+              ? 'border-blue-500 bg-blue-50/60 shadow-md scale-[0.995]'
+              : 'border-blue-200 bg-blue-50/20 hover:border-blue-400 hover:bg-blue-50/40 hover:shadow-sm'
         }`}
       >
         <input
@@ -95,52 +95,54 @@ export default function UploadDropZone({
           disabled={disabled}
           onChange={(e) => acceptFile(e.target.files?.[0] || null)}
         />
-        <UploadCloud
-          className="h-[4.5rem] w-[4.5rem] sm:h-20 sm:w-20 text-blue-600 mx-auto mb-6 stroke-[1.25]"
-          aria-hidden
-        />
-        <p className="text-xl sm:text-2xl font-semibold text-slate-900 tracking-tight">
+        <div className="p-3 sm:p-4 rounded-2xl bg-blue-50 text-blue-600 mb-3 sm:mb-4 border border-blue-100/80 shadow-2xs">
+          <UploadCloud
+            className="h-10 w-10 sm:h-12 sm:w-12 stroke-[1.75]"
+            aria-hidden
+          />
+        </div>
+        <p className="text-lg sm:text-2xl font-extrabold text-slate-900 tracking-tight">
           Drag &amp; drop your APK
         </p>
-        <p className="text-sm sm:text-base text-slate-500 mt-2 max-w-md mx-auto">
+        <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-md mx-auto">
           or browse to select a file from your workstation
         </p>
         <button
           type="button"
           disabled={disabled}
           onClick={() => inputRef.current?.click()}
-          className="mt-8 inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-blue-700 text-white text-sm font-medium hover:bg-blue-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:bg-slate-400 transition-colors"
+          className="mt-4 sm:mt-5 inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-blue-700 text-white text-xs sm:text-sm font-semibold shadow-sm hover:bg-blue-800 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:bg-slate-400 transition-all cursor-pointer"
         >
           <FileArchive className="h-4 w-4" aria-hidden />
           Browse APK
         </button>
         {file && (
-          <p className="mt-6 text-sm font-medium text-blue-900 bg-white/80 border border-blue-100 inline-block px-4 py-2 rounded-xl shadow-sm">
+          <p className="mt-3 text-xs sm:text-sm font-semibold text-blue-900 bg-white border border-blue-200 inline-block px-4 py-2 rounded-xl shadow-xs">
             <span className="font-mono">{file.name}</span>
-            <span className="text-blue-600/80"> · {(file.size / (1024 * 1024)).toFixed(2)} MB</span>
+            <span className="text-blue-600 font-normal"> · {(file.size / (1024 * 1024)).toFixed(2)} MB</span>
           </p>
         )}
       </div>
 
-      <div className="flex flex-wrap justify-center gap-x-8 gap-y-2 text-sm text-slate-500">
+      <div className="flex flex-wrap justify-center gap-x-6 gap-y-1 text-xs text-slate-500 font-mono">
         <span>
-          <span className="text-slate-700 font-medium">Supported formats</span>
-          <span className="text-slate-500"> · Android APK</span>
+          <span className="text-slate-700 font-semibold">Supported formats:</span>
+          <span className="text-slate-500"> Android APK (.apk)</span>
         </span>
         <span>
-          <span className="text-slate-700 font-medium">Maximum size</span>
-          <span className="text-slate-500"> · 200 MB</span>
+          <span className="text-slate-700 font-semibold">Maximum size:</span>
+          <span className="text-slate-500"> 200 MB</span>
         </span>
       </div>
 
       {disabled && disabledMessage && (
-        <p className="text-center text-sm text-amber-900/90 bg-amber-50 border border-amber-200/80 rounded-xl py-3 px-4">
+        <p className="text-center text-xs text-amber-900/90 bg-amber-50 border border-amber-200/80 rounded-lg py-2 px-3">
           {disabledMessage}
         </p>
       )}
 
       {localError && (
-        <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl p-4">
+        <div className="flex items-start gap-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
           <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden />
           {localError}
         </div>

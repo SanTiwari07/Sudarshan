@@ -4,7 +4,6 @@ import { Layers, ArrowRight, Clock, CheckCircle2, AlertTriangle, XCircle, Loader
 import { API_BASE, authHeaders } from '../../config';
 import type { BatchSummary, BatchListResponse } from '../../types/batch';
 import { fmtDate } from '../../utils/derive';
-import { SocCard } from '../ui/Card';
 
 export default function BatchHistory() {
   const navigate = useNavigate();
@@ -121,68 +120,72 @@ export default function BatchHistory() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-          {batches.map((batch) => (
-            <SocCard
-              key={batch.batch_id}
-              className="p-4 hover:border-blue-300 hover:shadow-md transition-all cursor-pointer group"
-              onClick={() => navigate(`/batch/${batch.batch_id}`)}
-            >
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold font-mono text-slate-900 truncate">
-                      Batch #{batch.batch_id.slice(0, 8)}
-                    </span>
-                    {getStatusPill(batch.status)}
-                  </div>
-                  <span className="text-[11px] font-mono text-slate-400 block mt-0.5">
-                    {fmtDate(batch.created_at)}
-                  </span>
-                </div>
-                <div className="text-right shrink-0">
-                  <span className="text-xs font-bold font-mono text-slate-800 block">
-                    {batch.total_jobs} APK{batch.total_jobs === 1 ? '' : 's'}
-                  </span>
-                  <span className="text-[11px] font-mono text-slate-500">
-                    {batch.completed_jobs} / {batch.total_jobs} done
-                  </span>
-                </div>
-              </div>
-
-              {/* Progress Line */}
-              <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden mb-3 border border-slate-100">
-                <div
-                  className={`h-full transition-all duration-300 ${
-                    batch.status === 'COMPLETED'
-                      ? 'bg-emerald-600'
-                      : batch.status === 'FAILED'
-                      ? 'bg-red-500'
-                      : 'bg-blue-600'
-                  }`}
-                  style={{ width: `${batch.progress_pct}%` }}
-                />
-              </div>
-
-              {/* Footer row */}
-              <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
-                <div className="flex items-center gap-2 font-mono text-[11px] text-slate-500">
-                  {batch.failed_jobs > 0 && (
-                    <span className="text-red-600 font-semibold">{batch.failed_jobs} failed</span>
-                  )}
-                  {batch.cancelled_jobs > 0 && (
-                    <span className="text-slate-400">{batch.cancelled_jobs} cancelled</span>
-                  )}
-                  {batch.failed_jobs === 0 && batch.cancelled_jobs === 0 && (
-                    <span className="text-slate-400">{batch.progress_pct}% progress</span>
-                  )}
-                </div>
-                <span className="inline-flex items-center gap-1 font-semibold text-blue-700 group-hover:text-blue-900 group-hover:translate-x-0.5 transition-all text-xs">
-                  View Batch <ArrowRight className="w-3.5 h-3.5" />
-                </span>
-              </div>
-            </SocCard>
-          ))}
+        <div className="bg-white border border-slate-200/80 rounded-xl shadow-xs overflow-hidden w-full">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider font-mono bg-slate-50/80">
+                  <th className="py-3 px-4">Batch ID</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4">Date & Time</th>
+                  <th className="py-3 px-4">APKs & Execution</th>
+                  <th className="py-3 px-4 min-w-[180px]">Overall Progress</th>
+                  <th className="py-3 px-4 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-mono text-xs">
+                {batches.map((batch) => (
+                  <tr
+                    key={batch.batch_id}
+                    onClick={() => navigate(`/batch/${batch.batch_id}`)}
+                    className="hover:bg-blue-50/40 transition-colors cursor-pointer group"
+                  >
+                    <td className="py-3.5 px-4 font-bold text-slate-900 whitespace-nowrap">
+                      #{batch.batch_id.slice(0, 8)}
+                    </td>
+                    <td className="py-3.5 px-4 whitespace-nowrap">
+                      {getStatusPill(batch.status)}
+                    </td>
+                    <td className="py-3.5 px-4 text-slate-500 text-[11px] whitespace-nowrap">
+                      {fmtDate(batch.created_at)}
+                    </td>
+                    <td className="py-3.5 px-4 whitespace-nowrap">
+                      <span className="font-semibold text-slate-800">
+                        {batch.total_jobs} APK{batch.total_jobs === 1 ? '' : 's'}
+                      </span>
+                      <span className="text-slate-400 text-[11px] ml-1.5">
+                        ({batch.completed_jobs} done{batch.failed_jobs > 0 ? `, ${batch.failed_jobs} failed` : ''})
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-2 flex-1 bg-slate-100 rounded-full overflow-hidden border border-slate-200/60">
+                          <div
+                            className={`h-full transition-all duration-300 ${
+                              batch.status === 'COMPLETED'
+                                ? 'bg-emerald-600'
+                                : batch.status === 'FAILED'
+                                ? 'bg-red-500'
+                                : 'bg-blue-600'
+                            }`}
+                            style={{ width: `${batch.progress_pct}%` }}
+                          />
+                        </div>
+                        <span className="text-[11px] text-slate-600 font-semibold w-10 text-right">
+                          {batch.progress_pct}%
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1 font-semibold text-blue-700 group-hover:text-blue-900 text-xs">
+                        View Batch <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

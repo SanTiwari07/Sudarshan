@@ -14,7 +14,7 @@ import logging
 import os
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
 import aiosqlite
 
@@ -807,7 +807,7 @@ async def cancel_queued_batch_jobs(batch_id: str) -> int:
         cur = await db.execute(
             """
             UPDATE analysis_batch_jobs
-            SET status = 'CANCELLED', completed_at = ?
+            SET status = 'CANCELLED', completed_at = ?, current_stage = 'CANCELLED'
             WHERE batch_id = ? AND status = 'QUEUED'
             """,
             (now, batch_id),
@@ -815,6 +815,36 @@ async def cancel_queued_batch_jobs(batch_id: str) -> int:
         count = cur.rowcount
         await db.commit()
     return count
+
+
+async def cancel_all_batch_jobs(batch_id: str) -> Tuple[int, List[Dict[str, Any]]]:
+    """
+    Cancel both QUEUED and SCANNING jobs in a batch.
+    Returns (total_count_cancelled, list_of_scanning_jobs_cancelled).
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    async with _connect() as db:
+        db.row_factory = aiosqlite.Row
+        # Fetch scanning jobs before cancelling so caller can abort running tasks
+        async with db.execute(
+            "SELECT * FROM analysis_batch_jobs WHERE batch_id = ? AND status = 'SCANNING'",
+            (batch_id,),
+        ) as cur:
+            scanning_rows = await cur.fetchall()
+            scanning_jobs = [dict(r) for r in scanning_rows]
+
+        cur = await db.execute(
+            """
+            UPDATE analysis_batch_jobs
+            SET status = 'CANCELLED', completed_at = ?, current_stage = 'CANCELLED'
+            WHERE batch_id = ? AND status IN ('QUEUED', 'SCANNING')
+            """,
+            (now, batch_id),
+        )
+        total_count = cur.rowcount
+        await db.commit()
+
+    return total_count, scanning_jobs
 
 
 async def get_active_batches() -> List[Dict[str, Any]]:

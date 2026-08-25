@@ -138,6 +138,19 @@ async def _dispatch_and_await_job(batch_id: str, batch_job: dict) -> None:
         await asyncio.sleep(_JOB_POLL_INTERVAL)
         elapsed += _JOB_POLL_INTERVAL
 
+        # Check if the batch itself was cancelled
+        current_batch = await get_batch(batch_id)
+        if not current_batch or current_batch.get("status") == "CANCELLED":
+            logger.info("[BatchWorker] Batch %s was CANCELLED; aborting job %s", batch_id[:8], job_id[:8])
+            from app.workers.analysis_queue import cancel_job
+            await cancel_job(analysis_job_id)
+            await update_batch_job(job_id, {
+                "status": "CANCELLED",
+                "completed_at": _now_iso(),
+                "current_stage": "CANCELLED",
+            })
+            return
+
         analysis_job = await get_job(analysis_job_id)
         if not analysis_job:
             continue
@@ -155,6 +168,14 @@ async def _dispatch_and_await_job(batch_id: str, batch_job: dict) -> None:
             case_sha256 = result.get("sha256") or sha256
             final_status = "COMPLETED"
             break
+        elif aq_status == "cancelled":
+            logger.info("[BatchWorker] Analysis job %s was CANCELLED", analysis_job_id[:8])
+            await update_batch_job(job_id, {
+                "status": "CANCELLED",
+                "completed_at": _now_iso(),
+                "current_stage": "CANCELLED",
+            })
+            return
         elif aq_status == "failed":
             error_msg = analysis_job.get("error", "Analysis failed")
             final_status = "FAILED"
@@ -199,6 +220,15 @@ async def _finalize_batch(batch_id: str) -> None:
     from app.db.database import get_batch, update_batch
     batch = await get_batch(batch_id)
     if not batch:
+        return
+
+    # If already CANCELLED, preserve the CANCELLED status
+    if batch.get("status") == "CANCELLED":
+        await update_batch(batch_id, {
+            "completed_at": batch.get("completed_at") or _now_iso(),
+            "current_job_id": None,
+        })
+        logger.info("[BatchWorker] Batch %s finalized -> CANCELLED", batch_id[:8])
         return
 
     total = batch.get("total_jobs", 0)

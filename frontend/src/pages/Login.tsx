@@ -38,7 +38,6 @@ export default function Login() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'analyst' | 'soc_lead'>('analyst');
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +67,7 @@ export default function Login() {
         const res = await fetch(`${API_BASE}/auth/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password, role }),
+          body: JSON.stringify({ username, password }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Registration failed');
@@ -83,24 +82,24 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-950 via-blue-900 to-slate-900 flex items-center justify-center p-4">
+    <div className="relative h-screen w-full bg-gradient-to-br from-blue-950 via-blue-900 to-slate-900 flex items-center justify-center p-4 overflow-hidden select-none">
       {/* Background pattern */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl" />
         <div className="absolute bottom-1/4 right-1/4 w-72 h-72 bg-indigo-500/10 rounded-full blur-3xl" />
       </div>
 
-      <div className="relative w-full max-w-md">
+      <div className="relative w-full max-w-sm sm:max-w-md">
         {/* Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-600/20 border border-blue-500/30 mb-4">
-            <Shield className="h-8 w-8 text-blue-400" />
+        <div className="text-center mb-5">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-600/20 border border-blue-500/30 mb-2.5">
+            <Shield className="h-6 w-6 text-blue-400" />
           </div>
           <h1 className={`${TYPOGRAPHY.h1} text-white font-extrabold tracking-wider`}>SUDARSHAN</h1>
-          <p className={`${TYPOGRAPHY.label} text-blue-300 mt-1`}>
+          <p className={`${TYPOGRAPHY.label} text-blue-300 mt-0.5`}>
             Banking Threat Intelligence Platform
           </p>
-          <p className={`${TYPOGRAPHY.caption} text-blue-400/70 mt-2`}>Bank of India - Cyber Security Operations</p>
+          <p className={`${TYPOGRAPHY.caption} text-blue-400/70 mt-1`}>Bank of India - Cyber Security Operations</p>
         </div>
 
         {/* Card */}
@@ -109,7 +108,7 @@ export default function Login() {
           <div className="flex border-b border-white/10">
             <button
               onClick={() => { setMode('login'); setError(null); setSuccess(null); }}
-              className={`flex-1 py-3 ${TYPOGRAPHY.button} transition-colors ${
+              className={`flex-1 py-2.5 ${TYPOGRAPHY.button} transition-colors ${
                 mode === 'login'
                   ? 'bg-blue-600/20 text-blue-300 border-b-2 border-blue-400'
                   : 'text-white/50 hover:text-white/80'
@@ -120,7 +119,7 @@ export default function Login() {
             </button>
             <button
               onClick={() => { setMode('register'); setError(null); setSuccess(null); }}
-              className={`flex-1 py-3 ${TYPOGRAPHY.button} transition-colors ${
+              className={`flex-1 py-2.5 ${TYPOGRAPHY.button} transition-colors ${
                 mode === 'register'
                   ? 'bg-blue-600/20 text-blue-300 border-b-2 border-blue-400'
                   : 'text-white/50 hover:text-white/80'
@@ -131,7 +130,7 @@ export default function Login() {
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-3.5">
             {/* Error / Success banners */}
             {error && (
               <div className={`flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/20 border border-red-500/30 text-red-300 ${TYPOGRAPHY.bodySmall}`}>
@@ -147,7 +146,7 @@ export default function Login() {
 
             {/* Username */}
             <div>
-              <label className={`block ${TYPOGRAPHY.label} text-blue-300 mb-1.5`}>
+              <label className={`block ${TYPOGRAPHY.label} text-blue-300 mb-1`}>
                 Username
               </label>
               <input
@@ -157,14 +156,14 @@ export default function Login() {
                 required
                 autoComplete="username"
                 placeholder="analyst_name"
-                className={`w-full px-3 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30
+                className={`w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30
                            focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 ${TYPOGRAPHY.bodySmall} transition-colors`}
               />
             </div>
 
             {/* Password */}
             <div>
-              <label className={`block ${TYPOGRAPHY.label} text-blue-300 mb-1.5`}>
+              <label className={`block ${TYPOGRAPHY.label} text-blue-300 mb-1`}>
                 Password
               </label>
               <div className="relative">
@@ -175,7 +174,7 @@ export default function Login() {
                   required
                   autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                   placeholder="••••••••"
-                  className={`w-full px-3 py-2.5 pr-10 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30
+                  className={`w-full px-3 py-2 pr-10 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30
                              focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 ${TYPOGRAPHY.bodySmall} transition-colors`}
                 />
                 <button
@@ -188,34 +187,13 @@ export default function Login() {
               </div>
             </div>
 
-            {/* Role selector (register only) */}
-            {mode === 'register' && (
-              <div>
-                <label className={`block ${TYPOGRAPHY.label} text-blue-300 mb-1.5`}>
-                  Role
-                </label>
-                <select
-                  value={role}
-                  onChange={e => setRole(e.target.value as 'analyst' | 'soc_lead')}
-                  className={`w-full px-3 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white
-                             focus:outline-none focus:ring-2 focus:ring-blue-500/50 ${TYPOGRAPHY.bodySmall} transition-colors`}
-                >
-                  <option value="analyst" className="bg-slate-800">Analyst</option>
-                  <option value="soc_lead" className="bg-slate-800">SOC Lead</option>
-                </select>
-                <p className={`mt-1 ${TYPOGRAPHY.caption} text-white/40`}>
-                  Admin accounts can only be created by a current admin.
-                </p>
-              </div>
-            )}
-
             {/* Submit */}
             <button
               type="submit"
               disabled={loading}
               className={`w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 active:bg-blue-700
                          text-white ${TYPOGRAPHY.button} transition-colors disabled:opacity-60
-                         disabled:cursor-not-allowed flex items-center justify-center gap-2`}
+                         disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-1`}
             >
               {loading ? (
                 <>
@@ -232,7 +210,7 @@ export default function Login() {
           </form>
         </div>
 
-        <p className={`text-center ${TYPOGRAPHY.caption} text-blue-400/40 mt-6`}>
+        <p className={`text-center ${TYPOGRAPHY.caption} text-blue-400/40 mt-3.5`}>
           Protected by JWT - all sessions expire after 12 hours
         </p>
       </div>

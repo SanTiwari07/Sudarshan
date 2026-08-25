@@ -15,6 +15,7 @@ from app.db.database import (
     create_user,
     get_user_by_username,
     get_batch,
+    get_batch_job,
     get_batch_jobs,
     get_next_queued_batch_job,
     update_batch_job,
@@ -321,3 +322,62 @@ def test_batch_progress_calculation():
     assert _batch_progress({"total_jobs": 10, "completed_jobs": 2}) == 20
     assert _batch_progress({"total_jobs": 12, "completed_jobs": 6}) == 50
     assert _batch_progress({"total_jobs": 12, "completed_jobs": 12}) == 100
+
+
+@pytest.mark.anyio
+async def test_batch_cancellation_aborts_active_scanning_and_queued_jobs():
+    """
+    Test that cancelling a batch cancels both QUEUED and active SCANNING jobs,
+    aborts the underlying analysis_queue job, and preserves CANCELLED status.
+    """
+    from app.workers.analysis_queue import create_job as create_aq_job, get_job as get_aq_job
+    from app.workers.batch_worker import _finalize_batch
+
+    analyst_auth_header = await _get_auth_headers("test_analyst_cancel_active", "analyst")
+    apk1 = _make_dummy_apk_bytes("cancel_1.xml")
+    apk2 = _make_dummy_apk_bytes("cancel_2.xml")
+    files = [
+        ("files", ("cancel_1.apk", apk1, "application/octet-stream")),
+        ("files", ("cancel_2.apk", apk2, "application/octet-stream")),
+    ]
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        res = await client.post("/api/v1/batches", files=files, headers=analyst_auth_header)
+        assert res.status_code == 202
+        batch_id = res.json()["batch_id"]
+        job0_id = res.json()["jobs"][0]["job_id"]
+        job1_id = res.json()["jobs"][1]["job_id"]
+
+        # Simulate job0 is currently SCANNING with an active analysis_queue job
+        aq_job_id = create_aq_job(sha256_hash="fake_hash", analyst_id=1)
+        await update_batch_job(job0_id, {
+            "status": "SCANNING",
+            "analyst_queue_job_id": aq_job_id,
+            "current_stage": "SCANNING",
+        })
+
+        # Cancel the batch
+        c_res = await client.post(f"/api/v1/batches/{batch_id}/cancel", headers=analyst_auth_header)
+        assert c_res.status_code == 200
+        assert c_res.json()["status"] == "CANCELLED"
+
+        # Check that both jobs are CANCELLED
+        j0 = await get_batch_job(job0_id)
+        j1 = await get_batch_job(job1_id)
+        assert j0["status"] == "CANCELLED"
+        assert j1["status"] == "CANCELLED"
+
+        # Check analysis_queue job was cancelled
+        aq_job = await get_aq_job(aq_job_id)
+        assert aq_job["status"] == "cancelled"
+
+        # Check batch counters
+        b = await get_batch(batch_id)
+        assert b["status"] == "CANCELLED"
+        assert b["cancelled_jobs"] == 2
+
+        # Verify _finalize_batch preserves CANCELLED status instead of overwriting with PARTIAL/FAILED
+        await _finalize_batch(batch_id)
+        b_after = await get_batch(batch_id)
+        assert b_after["status"] == "CANCELLED"

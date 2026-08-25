@@ -230,10 +230,17 @@ class AuditLog:
         ever embeds an actual form value directly.
         """
         from sudarshan_core.engines.agentic.tool_executor import FORM_VALUES
+        from sudarshan_core.engines.agentic.credentials import all_secret_values
+
         safe = dict(action)
         if "text" in safe:
-            # If the text value is an actual credential value (not a key name), redact it
-            credential_values = set(FORM_VALUES.values())
+            # Both sources, because the static table is no longer the only one:
+            # values are now generated per run and regenerated on each login
+            # attempt, so redacting FORM_VALUES alone would leave every actually
+            # used credential in the audit log. all_secret_values() is a
+            # superset over the process, so a password issued before a
+            # regeneration is still redacted afterwards.
+            credential_values = set(FORM_VALUES.values()) | all_secret_values()
             if safe["text"] in credential_values:
                 safe["text"] = "[REDACTED_CREDENTIAL_VALUE]"
         return safe

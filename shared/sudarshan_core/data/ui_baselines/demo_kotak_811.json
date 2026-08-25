@@ -1,24 +1,22 @@
 {
-  "institution_id": "demo_sbi_yono",
-  "baseline_id": "BASE-01-SBI",
-  "display_name": "State Bank of India (YONO SBI)",
+  "institution_id": "demo_kotak_811",
+  "baseline_id": "BASE-08-KOTAK",
+  "display_name": "Kotak Mahindra Bank (Kotak811)",
   "package_names": [
-    "com.sbi.lotusintouch",
-    "com.sbi.lotus"
+    "com.msf.kbank.mobile",
+    "com.msf.k8"
   ],
   "allowed_signers_sha256": [],
   "version": "2.0.0",
   "profile": {
     "source": "baseline",
     "strings": [
-      "CIF Number",
+      "CRN",
+      "Customer Relationship Number",
       "6-digit MPIN",
-      "Profile Password",
-      "YONO SBI",
-      "Login",
-      "Username",
+      "Kotak811",
+      "Kotak Mahindra Bank",
       "Net Banking",
-      "Account Balance",
       "OTP"
     ],
     "view_sequence": [
@@ -33,12 +31,10 @@
       "BottomNavigationView"
     ],
     "colors": [
-      "#1B4AA0",
-      "#D0342C",
-      "#16213A",
-      "#280071",
-      "#002D62",
-      "#577CB7",
+      "#ED1C24",
+      "#E4002B",
+      "#003366",
+      "#1F2937",
       "#FFFFFF"
     ],
     "asset_hashes": []

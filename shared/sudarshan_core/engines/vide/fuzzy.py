@@ -23,6 +23,7 @@ it.
 
 from __future__ import annotations
 
+import math
 import re
 from difflib import SequenceMatcher
 from typing import Dict, List, Optional, Sequence, Tuple
@@ -121,10 +122,94 @@ def best_match(
     return best, best_score
 
 
+#: Length at or below which an alphabetic token is treated as a credential name
+#: rather than a word, and compared strictly.
+#:
+#: Token-set ratio is the right tool for rewording and the wrong one for short
+#: credential names. ``"Forgot IPIN"`` and ``"Forgot MPIN?"`` score 90.9 - well
+#: over the threshold - because the shared word dominates and the two four-letter
+#: tokens differ by one character. But an IPIN is HDFC's netbanking password and
+#: an MPIN is a generic app PIN; they are different credentials belonging to
+#: different banks, not one label reworded. During calibration that single false
+#: match was worth an eighth of HDFC's string score against every app in the
+#: set, and it decided one attribution outright.
+SHORT_TOKEN_CHARS = 5
+
+
+def _confusable(a: str, b: str) -> bool:
+    """Same length, differing in at most one character."""
+    if len(a) != len(b) or a == b:
+        return False
+    return sum(1 for x, y in zip(a, b) if x != y) <= 1
+
+
+def same_label(baseline: str, suspect: str) -> bool:
+    """
+    Do these two strings name the same thing, once short tokens are respected?
+
+    The distinction that matters is **substitution versus omission**.
+
+    A suspect that carries a *different* short token where the baseline has one
+    -- ``MPIN`` where the baseline says ``IPIN`` -- is naming a different
+    credential, and the shared surrounding word must not carry it over the
+    threshold. A suspect that simply *lacks* one of the baseline's short tokens
+    -- ``MPIN`` against ``6-digit MPIN``, ``YONO`` against ``YONO SBI`` -- is
+    the same label with a qualifier dropped, which is exactly the rewording
+    fuzzy matching exists to absorb.
+
+    So an absent short token is forgiven unless the suspect offers a confusable
+    stand-in for it. Assumes the pair already cleared :data:`MATCH_THRESHOLD`;
+    this is the second half of the test, not a replacement for it.
+    """
+    wanted = _TOKEN_RE.findall((baseline or "").lower())
+    present = _TOKEN_RE.findall((suspect or "").lower())
+    present_set = set(present)
+    short_present = [
+        t for t in present_set if len(t) <= SHORT_TOKEN_CHARS and t.isalpha()
+    ]
+    for token in wanted:
+        if len(token) > SHORT_TOKEN_CHARS or not token.isalpha():
+            continue
+        if token in present_set:
+            continue
+        if any(_confusable(token, other) for other in short_present):
+            return False
+    return True
+
+
+def label_weights(baseline_label_sets: Sequence[Sequence[str]]) -> Dict[str, float]:
+    """
+    How much each label is worth as *attribution* evidence, by rarity.
+
+    A label every bank ships - "Login", "OTP", "Customer ID" - proves the app is
+    a banking UI and says nothing about which bank it imitates. A label only one
+    bank ships - "PNB ONE", "iMobile Pay" - is close to proof on its own.
+    Counting them equally lets a bank win on generic vocabulary, which is the
+    same reasoning :mod:`corpus_compare` already applies when it excludes
+    structure from attribution.
+
+    Standard inverse document frequency over the baseline set, so the weights
+    move with the corpus instead of being a hand-kept list of "generic" words
+    that would drift the moment a baseline is added.
+    """
+    frequency: Dict[str, int] = {}
+    for labels in baseline_label_sets:
+        for label in {normalize(s) for s in labels if s and s.strip()}:
+            if label:
+                frequency[label] = frequency.get(label, 0) + 1
+    total = len(baseline_label_sets)
+    if not total:
+        return {}
+    return {
+        label: math.log(1.0 + total / count) for label, count in frequency.items()
+    }
+
+
 def fuzzy_containment(
     targets: Sequence[str],
     candidates: Sequence[str],
     threshold: float = MATCH_THRESHOLD,
+    weights: Optional[Dict[str, float]] = None,
 ) -> Tuple[float, List[str], List[Dict[str, object]]]:
     """
     How much of ``targets`` the ``candidates`` reproduce, allowing rewording.
@@ -133,6 +218,9 @@ def fuzzy_containment(
     "how much of this bank's UI text does the suspect carry", and a suspect
     with a large string table must not be rewarded for diluting the
     denominator.
+
+    ``weights`` scores the targets by attribution value (see
+    :func:`label_weights`); without it every label counts the same.
 
     Returns ``(score, matched_targets, match_details)``.
     """
@@ -143,20 +231,34 @@ def fuzzy_containment(
     if not pool:
         return 0.0, [], []
 
+    def _weight(label: str) -> float:
+        if not weights:
+            return 1.0
+        return weights.get(normalize(label), 1.0)
+
     # One `extractOne` per target rather than `process.cdist`: cdist is faster
     # still, but it imports numpy, which this project does not otherwise
     # depend on. extractOne stays entirely inside RapidFuzz's C extension.
     matched: List[str] = []
     details: List[Dict[str, object]] = []
+    earned = 0.0
+    available = 0.0
     for target in wanted:
+        weight = _weight(target)
+        available += weight
         found, score = best_match(target, pool, threshold)
-        if found is not None:
+        # `best_match` returns only the single closest candidate, so a target
+        # whose closest match fails the short-token test scores zero rather than
+        # falling through to a lesser one. That costs a match in the rare case
+        # where both are present; it never invents one.
+        if found is not None and same_label(target, found):
             matched.append(target)
+            earned += weight
             details.append(
                 {"baseline": target, "suspect": found, "ratio": round(score, 1)}
             )
 
-    return len(matched) / len(wanted), matched, details
+    return (earned / available if available else 0.0), matched, details
 
 
 def shares_any(
@@ -168,4 +270,11 @@ def shares_any(
     pool = [s for s in b if s and s.strip()]
     if not pool:
         return 0
-    return sum(1 for s in a if s and s.strip() and best_match(s, pool, threshold)[0])
+    hits = 0
+    for label in a:
+        if not label or not label.strip():
+            continue
+        found, _ = best_match(label, pool, threshold)
+        if found is not None and same_label(label, found):
+            hits += 1
+    return hits

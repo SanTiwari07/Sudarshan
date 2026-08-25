@@ -39,6 +39,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import threading
 import time
 from datetime import datetime, timezone
@@ -88,6 +89,7 @@ from sudarshan_core.engines.agentic.secondary_payload import (
     SecondaryPayloadTracker,
 )
 from sudarshan_core.engines.event_bus import RuntimeEventBus
+from sudarshan_core.engines.screenshot_manager import ScreenshotReason
 from sudarshan_core.engines.investigation_controller import (
     InvestigationController,
     InvestigationState,
@@ -99,6 +101,7 @@ from sudarshan_core.engines.agentic.exploration_engine import (
     ExplorationBudget,
     StopReason,
     EvidenceMomentType,
+    _is_submit_label,
 )
 
 logger = logging.getLogger(__name__)
@@ -130,6 +133,18 @@ FRIDA_SILENCE_THRESHOLD: int = ExplorationBudget.FRIDA_SILENCE_THRESHOLD
 # (e.g. Stage 5 Login Flow when the app has no conventional login screen).
 # This activates mark_failed → retry branch in next_priority_goal().
 MAX_ATTEMPTS_PER_GOAL: int = int(os.getenv("SUDARSHAN_MAX_ATTEMPTS_PER_GOAL", "8"))
+
+# Attempts after which a demonstrably inert control stops being retried.
+# Applies ONLY when ADB reported success, the window settled, and the screen is
+# unchanged - see the no-op short circuit in _execute_with_bounded_retries().
+# The full MAX_EXECUTION_ATTEMPTS ladder still runs for anything ambiguous.
+NOOP_RETRY_ATTEMPTS: int = int(os.getenv("SUDARSHAN_NOOP_RETRY_ATTEMPTS", "2"))
+
+# In-app view hierarchies retained for VIDE, one per distinct screen. Each is
+# capped at 120 KB, so 40 bounds the report contribution at ~5 MB worst case.
+MAX_STATE_HIERARCHIES: int = int(
+    os.getenv("SUDARSHAN_MAX_STATE_HIERARCHIES", "40")
+)
 
 
 # ─── Crash recovery pacing ────────────────────────────────────────────────────
@@ -372,6 +387,20 @@ class AgenticExplorer:
         self._stop_reason: Optional[StopReason] = None
         self._pre_action_state_id: str = ""
         self._pre_action_screen_hash: str = ""
+        # Whether the retry ladder already waited for the window to settle for
+        # the action currently in flight, so the loop's SETTLE step can skip a
+        # duplicate wait_for_idle.
+        self._settled_during_execute: bool = False
+        # Set when the action just dispatched submits a credential form, so the
+        # post-action observation is judged as a login outcome.
+        self._submitted_credentials: bool = False
+        # State ids that already contributed an in-app evidence frame.
+        self._state_frames_captured: set = set()
+        # One view hierarchy per distinct in-app screen, keyed by state id.
+        # VIDE compares view structure to decide whether a sample is a clone,
+        # and a single hierarchy of the login form - the one screen a clone and
+        # its target look alike on - is the weakest evidence available.
+        self.state_ui_hierarchies: Dict[str, str] = {}
 
         # ── State ─────────────────────────────────────────────────────────────
         self._is_running:    bool              = False
@@ -432,6 +461,130 @@ class AgenticExplorer:
     _DEVICE_STATE_ACTIONS = frozenset({
         "grant_permission", "deny_permission", "start_activity",
     })
+
+    @staticmethod
+    def _screen_text(obs: Any) -> str:
+        """All visible text on a screen, for outcome detection."""
+        parts: List[str] = []
+        for n in getattr(obs, "ui_nodes", []) or []:
+            for attr in ("text", "desc"):
+                v = getattr(n, attr, "") or ""
+                if v:
+                    parts.append(v)
+        # The hierarchy XML carries text the node filter drops - an inline error
+        # label under a field is rarely clickable, and "Invalid credentials" is
+        # exactly that kind of node.
+        raw = getattr(obs, "ui_xml_raw", "") or ""
+        if raw:
+            parts.extend(re.findall(r'text="([^"]+)"', raw))
+            parts.extend(re.findall(r'content-desc="([^"]+)"', raw))
+        return " ".join(parts)
+
+    def _capture_state_frame(
+        self,
+        obs: Any,
+        state: Any,
+        classification: Any,
+        reason: str = "",
+        label: str = "",
+    ) -> None:
+        """
+        One evidence frame per distinct in-app screen.
+
+        The report used to show the launch screen and whatever the per-action
+        capture happened to catch, which for a login-gated app is a picture of
+        the login form and nothing else. VIDE compares a sample's screens
+        against a known-good baseline to judge whether it is a clone, so the
+        screens BEHIND the login are the ones that carry the signal.
+
+        Deduplicated by state id, so a screen visited twenty times contributes
+        one frame, and skipped entirely for anything that is not the sample.
+        """
+        if self.screenshot_manager is None:
+            return
+        state_id = getattr(state, "state_id", "") or ""
+        ownership = str(getattr(classification, "ownership", "") or "")
+        if not state_id or state_id.startswith("PLACEHOLDER-"):
+            return
+        if "TARGET_APP" not in ownership and ownership:
+            return
+        if state_id in self._state_frames_captured:
+            return
+        self._state_frames_captured.add(state_id)
+        # Keep this screen's hierarchy alongside its frame. Bounded so a walk
+        # through a large app cannot grow the report without limit.
+        raw_xml = getattr(obs, "ui_xml_raw", "") or ""
+        if raw_xml and len(self.state_ui_hierarchies) < MAX_STATE_HIERARCHIES:
+            self.state_ui_hierarchies[state_id] = raw_xml[:120_000]
+        semantic = str(getattr(classification, "screen_type", "") or "")
+        try:
+            self.screenshot_manager.capture_async(
+                label=label or f"state_{state_id}_{semantic}".lower(),
+                category="explorer_state",
+                source="explorer",
+                reason=reason or ScreenshotReason.SUSPICIOUS_UI.value,
+                force=True,
+                activity=getattr(obs, "activity", ""),
+                state_id=state_id,
+                foreground_package=package_of(getattr(obs, "activity", "")),
+                layout_hash=getattr(obs, "screen_hash", ""),
+                semantic_type=semantic,
+                explorer_action=f"state:{state_id}",
+            )
+            logger.info(
+                "[AgenticExplorer] IN_APP_FRAME state=%s semantic=%s activity=%s",
+                state_id, semantic, getattr(obs, "activity", ""),
+            )
+        except Exception as exc:
+            logger.debug("[AgenticExplorer] state frame capture failed: %s", exc)
+
+    async def _reusable_observation(self, carried: Any) -> Optional[Any]:
+        """
+        The carried post-action observation, if it still describes the screen.
+
+        The loop used to read the device twice per iteration: once after an
+        action settled, and again at the top of the next iteration, with nothing
+        touching the device in between. Measured, that second read cost ~2.36s
+        of `uiautomator dump` plus a ~1.61s `wait_for_idle` - together 43% and
+        26% of a 310s run - to re-derive an answer already in hand.
+
+        Reuse is not unconditional. A screen can change on its own: a delayed
+        dialog, a network reply, an overlay a sample raises on a timer. So the
+        cheap focus probe (one `dumpsys window` line, ~0.3s) is re-read and the
+        carried observation is trusted only if the foreground window is exactly
+        where it was. Anything else - a probe failure, a changed window, a
+        missing signature - falls through to a full observation.
+        """
+        if not carried:
+            return None
+        obs, captured_sig = carried
+        if obs is None or not captured_sig:
+            return None
+        try:
+            current_sig = await self.executor._focus_signature()
+        except Exception as exc:
+            logger.debug("[AgenticExplorer] Focus probe failed, re-observing: %s", exc)
+            return None
+        if current_sig is None or current_sig != captured_sig:
+            logger.debug(
+                "[AgenticExplorer] Screen moved since post-action observe "
+                "(%s -> %s) - re-observing",
+                captured_sig, current_sig,
+            )
+            return None
+        return obs
+
+    async def _carry_observation(self, obs: Any) -> Optional[Tuple[Any, str]]:
+        """Pair an observation with the focus signature it was taken under."""
+        if obs is None:
+            return None
+        try:
+            sig = await self.executor._focus_signature()
+        except Exception:
+            return None
+        if not sig:
+            return None
+        return (obs, sig)
 
     async def _verification_snapshot(
         self, action: Dict[str, Any], obs: Any
@@ -555,6 +708,9 @@ class AgenticExplorer:
                     "coordinate_validation_failed", reason,
                 )
 
+        # Fresh per action; never inherit the previous action's settle result.
+        self._settled_during_execute = False
+
         trace = self.dispatcher.begin_trace(action)
         trace.coordinate_validation = coord_ok
         trace.foreground_package_before = fg
@@ -625,7 +781,28 @@ class AgenticExplorer:
                 )
 
             if current.get("tool", "") in NAVIGATIONAL_TOOLS:
-                await self.executor.wait_for_idle(timeout=2.0)
+                # Recorded so the SETTLE step in the main loop does not repeat
+                # this wait. Both fired for every click_text, costing a measured
+                # ~1.6s per iteration for a signal already read here.
+                self._settled_during_execute = await self.executor.wait_for_idle(
+                    timeout=2.0
+                )
+
+            # Text entry is done when ADB accepted it. The screen deliberately
+            # does not change - a field's value is not part of screen identity -
+            # so the verifier can only ever report "unchanged", and escalating
+            # turns each filled field into three attempts: type, tap, tap. A
+            # measured run spent them on every field and never reached the
+            # submit button with a filled form.
+            if result.success and current.get("tool", "") == "type_text":
+                pipeline_log(
+                    "ACTION_TEXT_ENTERED",
+                    action_id=trace.action_id,
+                    field_hint=current.get("field_hint", ""),
+                )
+                trace.action_verification = "PASS"
+                trace.mark("ACTION_VERIFIED")
+                return result, verification, attempts
 
             verification = await self._verify_action(current, before, obs)
             if result.success and verification.outcome != "FAILED":
@@ -636,6 +813,41 @@ class AgenticExplorer:
                     return result, verification, attempts
                 if verification.outcome == "UNVERIFIED":
                     return result, verification, attempts
+
+            # ── No-op short circuit ───────────────────────────────────────────
+            # A retry earns its cost when the UI might still be transitioning.
+            # It earns nothing when ADB reported success, the window has been
+            # observed to settle, and the screen is demonstrably where it was:
+            # that combination says the control did nothing, and doing it a
+            # third time will not change the answer. Measured, each extra
+            # attempt costs ~7s, and 7 of 21 iterations in a 310s run spent the
+            # full ladder on controls that were genuinely inert (an ActionBar
+            # title, a Login button with empty credentials).
+            #
+            # Deliberately narrow: if wait_for_idle could NOT confirm the window
+            # settled, the screen may still be moving and the ladder runs in
+            # full, preserving the timing-race protection that already exists.
+            screen_unchanged = "unchanged" in str(
+                getattr(verification, "observed", "") or ""
+            ).lower()
+            if (
+                result.success
+                and self._settled_during_execute
+                and screen_unchanged
+                and attempts >= NOOP_RETRY_ATTEMPTS
+            ):
+                pipeline_log(
+                    "ACTION_NOOP_SHORT_CIRCUIT",
+                    action_id=trace.action_id,
+                    attempts=attempts,
+                    observed=str(getattr(verification, "observed", "")),
+                )
+                logger.debug(
+                    "[AgenticExplorer] '%s' is inert (adb ok, window settled, "
+                    "screen unchanged) after %d attempts - not escalating",
+                    action.get("text") or action.get("tool"), attempts,
+                )
+                break
 
         if result is None:
             result = await self.executor.execute(action)
@@ -1023,6 +1235,11 @@ class AgenticExplorer:
         last_action_tool      = ""
         last_action_target    = ""
         self._first_screen_logged = False
+        # The post-action observation from the previous iteration, handed
+        # forward so the loop does not dump the same unchanged screen twice.
+        # Consumed (and cleared) by the OBSERVE step below. See
+        # _reusable_observation() for the conditions under which it is trusted.
+        carried_obs: Optional[Any] = None
 
         # ── Mark Stage 1 goal in-progress immediately ─────────────────────────
         self.goals.mark_in_progress("Launch Application")
@@ -1076,11 +1293,26 @@ class AgenticExplorer:
 
                 # ── OBSERVE ───────────────────────────────────────────────────
                 frida_events_this_cycle = self._drain_frida_events()
-                obs = await self.perception.observe(
-                    frida_events=frida_events_this_cycle,
-                    last_action_failed=last_action_failed,
-                    static_findings=self.static_findings,
-                )
+                reused_obs = await self._reusable_observation(carried_obs)
+                carried_obs = None
+                if reused_obs is not None:
+                    # The previous iteration already read this screen AFTER its
+                    # action settled, and nothing has touched the device since.
+                    # Re-dumping costs a measured ~2.36s plus a ~1.61s
+                    # wait_for_idle for an answer we are holding.
+                    obs = reused_obs
+                    obs.frida_events = frida_events_this_cycle
+                    pipeline_log(
+                        "OBSERVATION_REUSED",
+                        activity=obs.activity,
+                        nodes=len(obs.ui_nodes or []),
+                    )
+                else:
+                    obs = await self.perception.observe(
+                        frida_events=frida_events_this_cycle,
+                        last_action_failed=last_action_failed,
+                        static_findings=self.static_findings,
+                    )
                 if obs.ui_xml_raw:
                     self.last_ui_hierarchy_xml = obs.ui_xml_raw[:120_000]
 
@@ -1099,6 +1331,14 @@ class AgenticExplorer:
                 # not by the LLM. Without this the whole dependency graph stays
                 # blocked on stage 1 forever.
                 foreground_package = package_of(obs.activity)
+                # Classified here rather than after the scope guard: the guard
+                # needs the screen type to distinguish a consent prompt hosted
+                # by Settings from an ordinary Settings screen. Reused verbatim
+                # by the INVESTIGATION STATE step below - not recomputed.
+                classification = classify_screen_with_ownership(
+                    obs.activity, obs.ui_nodes, obs.ui_xml_raw,
+                    self.package_name, foreground_package,
+                )
                 self.goals.update_from_foreground(
                     foreground_package=foreground_package,
                     target_package=self.package_name,
@@ -1112,6 +1352,7 @@ class AgenticExplorer:
                 if not in_investigation_scope(
                     foreground_package, self.package_name,
                     activity=obs.activity,
+                    screen_type=classification.screen_type,
                 ):
                     out_of_scope_streak += 1
 
@@ -1217,11 +1458,25 @@ class AgenticExplorer:
 
                     component = self._launch_component()
                     use_back = out_of_scope_streak <= BACK_BEFORE_RELAUNCH
-                    recovery = (
-                        {"tool": "press_back"}
-                        if use_back or not component
-                        else {"tool": "start_activity", "component": component}
-                    )
+                    if use_back:
+                        recovery = {"tool": "press_back"}
+                    elif component:
+                        recovery = {"tool": "start_activity", "component": component}
+                    else:
+                        # No resolvable component is NOT a reason to keep
+                        # pressing back. It used to be: the ladder fell through
+                        # to press_back on every attempt, and once the agent was
+                        # on the launcher, back did nothing. A measured run spent
+                        # six recoveries pressing back at the launcher, set
+                        # navigation_abandoned, and then idled for 190s of a 300s
+                        # window with 8 unexplored actions still in the graph.
+                        #
+                        # Launching by package resolves the entry Activity on the
+                        # device instead of guessing it here.
+                        recovery = {
+                            "tool": "start_activity",
+                            "package": self.package_name,
+                        }
                     logger.info(
                         "[AgenticExplorer] Out of scope: foreground is '%s', "
                         "target is '%s' - recovering with %s (attempt %d)",
@@ -1313,10 +1568,9 @@ class AgenticExplorer:
                     logger.info("[AgenticExplorer] %s", deferred.log_line())
 
                 # ── INVESTIGATION STATE ───────────────────────────────────────
-                classification = classify_screen_with_ownership(
-                    obs.activity, obs.ui_nodes, obs.ui_xml_raw,
-                    self.package_name, foreground_package,
-                )
+                # `classification` was computed before the scope guard above,
+                # which needs the screen type to tell a consent prompt hosted by
+                # Settings from the rest of the Settings app.
                 self.investigation.observe(
                     screen_type=classification.screen_type,
                     frida_categories=[
@@ -1681,6 +1935,23 @@ class AgenticExplorer:
                 last_action_tool   = action.get("tool", "")
                 last_action_target = action.get("text") or str(action.get("x", ""))
 
+                # Is this the submit of a credential form? Only counts when the
+                # screen actually holds a password box - a "Continue" on an
+                # onboarding carousel is not a login attempt, and treating it as
+                # one would spend the credential-retry budget on the wrong
+                # screen.
+                self._submitted_credentials = bool(
+                    last_action_tool in ("click_text", "tap")
+                    and _is_submit_label(last_action_target)
+                    and any(
+                        getattr(n, "is_password", False)
+                        or getattr(n, "is_input", False)
+                        for n in (getattr(obs, "ui_nodes", []) or [])
+                    )
+                )
+                if self._submitted_credentials:
+                    self.exploration.note_login_attempt(graph_state.state_id)
+
                 # Capture pre-action state for graph edge recording
                 self._pre_action_state_id = graph_state.state_id
                 self._pre_action_screen_hash = obs.screen_hash
@@ -1725,12 +1996,20 @@ class AgenticExplorer:
                 # wait_for_idle) and only applied to actions that can actually
                 # change the screen.
                 if action.get("tool", "") in NAVIGATIONAL_TOOLS:
-                    settled = await self.executor.wait_for_idle()
-                    if not settled:
+                    if self._settled_during_execute:
+                        # Already waited, inside the retry ladder, for this same
+                        # action. Waiting again reads the same settled window.
                         logger.debug(
-                            "[AgenticExplorer] UI did not settle after '%s' - "
-                            "observing anyway", action.get("tool", "")
+                            "[AgenticExplorer] UI already settled during execute "
+                            "- skipping duplicate wait_for_idle"
                         )
+                    else:
+                        settled = await self.executor.wait_for_idle()
+                        if not settled:
+                            logger.debug(
+                                "[AgenticExplorer] UI did not settle after '%s' - "
+                                "observing anyway", action.get("tool", "")
+                            )
 
                 # ── IN-CONTENT SETTLE ─────────────────────────────────────────
                 # wait_for_idle tracks the foreground Activity only.  In-app
@@ -1775,8 +2054,14 @@ class AgenticExplorer:
                     or package_of(post_obs.activity) != package_of(obs.activity)
                     or post_obs.activity != getattr(obs, "activity", "")
                 )
-                # If ADB "succeeded" but the UI did not change, climb the retry ladder.
+                # If ADB "succeeded" but the UI did not change, climb the retry
+                # ladder - EXCEPT for text entry, which is not supposed to change
+                # the screen. Typing into a field leaves the hash where it was by
+                # design, so this ladder re-tapped every filled field twice more
+                # and cost three actions per field on every login form.
                 remaining = max(0, MAX_EXECUTION_ATTEMPTS - retry_attempts)
+                if last_action_tool == "type_text" and result.success:
+                    remaining = 0
                 if (
                     not ui_changed
                     and remaining
@@ -1842,7 +2127,39 @@ class AgenticExplorer:
                 # explored even when the last retry caught the hash mid-transition.
                 ever_ui_changed: bool = ui_changed  # initialised from first post-obs
 
+                # ── Credential form outcome ───────────────────────────────────
+                # A submit pressed on a screen that had a password box is a
+                # login attempt, and the app's answer decides what happens next.
+                # Silence is not an answer: the vault issues a new identity and
+                # the form is offered again, up to MAX_LOGIN_ATTEMPTS. An
+                # explicit "invalid credentials" closes the branch immediately.
+                if self._submitted_credentials:
+                    self._submitted_credentials = False
+                    outcome = self.exploration.note_login_outcome(
+                        screen_text=self._screen_text(post_obs),
+                        current_state_id=post_state.state_id,
+                        activity_changed=(
+                            post_obs.activity != getattr(obs, "activity", "")
+                        ),
+                    )
+                    self.audit_log.record_system_event(
+                        "login_outcome",
+                        f"{outcome} attempt={self.exploration.login_attempts}",
+                    )
+                    if outcome == "accepted":
+                        self._capture_state_frame(
+                            post_obs, post_state, post_classification,
+                            reason=ScreenshotReason.LOGIN.value,
+                            label="authenticated_session",
+                        )
+
                 pipeline_log("POST_ACTION_OBSERVE", state_id=post_state.state_id)
+                # Every distinct in-app screen gets a frame of its own, so the
+                # report and VIDE see what the sample actually looks like from
+                # the inside rather than only its launch screen.
+                self._capture_state_frame(
+                    post_obs, post_state, post_classification,
+                )
                 if ui_changed:
                     ever_ui_changed = True
                     pipeline_log(
@@ -2062,6 +2379,13 @@ class AgenticExplorer:
                 )
 
                 last_screen_hash = obs.screen_hash
+
+                # Hand this iteration's settled post-action read forward. The
+                # next iteration re-checks the focus signature before trusting
+                # it, so a screen that moves on its own still gets a fresh
+                # observation. See _reusable_observation().
+                carried_obs = await self._carry_observation(post_obs)
+
                 logger.debug(f"[AgenticExplorer] Iteration {self.memory.iteration}: {result.to_log_line()}")
 
         except asyncio.CancelledError:
@@ -2206,6 +2530,15 @@ class AgenticExplorer:
         action_traces = [t.to_dict() for t in self.dispatcher.traces]
 
         return {
+            # One view hierarchy per distinct in-app screen, for VIDE. Consumed
+            # by vide.pipeline._dynamic_ui_hierarchies(); the single
+            # `ui_hierarchy_xml` remains the fallback for older runs.
+            "ui_hierarchies": [
+                {"state_id": sid, "xml": xml}
+                for sid, xml in self.state_ui_hierarchies.items()
+            ],
+            "login_attempts": self.exploration.login_attempts,
+            "login_outcome":  self.exploration.login_outcome,
             # ── UIExplorer-compatible keys (required by frida_sandbox.py) ──────
             "exploration_graph":   self.exploration_graph,
             "coverage":            self.coverage_metrics,
@@ -2330,6 +2663,24 @@ class AgenticExplorer:
                     )
             with open(output_dir / "exploration_graph.json", "w", encoding="utf-8") as f:
                 json.dump(deep, f, indent=2, default=str)
+            # In-app view hierarchies, one per screen, for VIDE and for anyone
+            # re-running clone comparison against a stored run.
+            if self.state_ui_hierarchies:
+                with open(
+                    output_dir / "ui_hierarchies.json", "w", encoding="utf-8"
+                ) as f:
+                    json.dump(
+                        {
+                            "package": self.package_name,
+                            "login_attempts": self.exploration.login_attempts,
+                            "login_outcome": self.exploration.login_outcome,
+                            "hierarchies": [
+                                {"state_id": sid, "xml": xml}
+                                for sid, xml in self.state_ui_hierarchies.items()
+                            ],
+                        },
+                        f, indent=2, default=str,
+                    )
             if self.screenshot_manager is not None:
                 from dataclasses import asdict
                 manifest = [asdict(r) for r in self.screenshot_manager.get_manifest()]

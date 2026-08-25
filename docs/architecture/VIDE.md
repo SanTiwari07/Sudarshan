@@ -71,7 +71,16 @@ $$\text{Confidence} = 0.40 \times S_{\text{strings}} + 0.35 \times S_{\text{tree
 * **String & Keyword Jaccard ($S_{\text{strings}}$, 40%)**: Compares UI labels, buttons, and brand keywords against the official baseline vocabulary using fuzzy matching.
 * **View-Tree Structural AST ($S_{\text{tree}}$, 35%)**: Compares the hierarchical arrangement of inputs, buttons, and containers (`ast_builders.py`).
 * **Delta-E CIE76 Brand Color Overlap ($S_{\text{color}}$, 25%)**: Computes Euclidean color distance in CIE $L^*a^*b^*$ space between extracted hex colors and official brand palettes (`color_match.py`).
-* **Detection Threshold**: A clone is flagged (`VIDE-F001`) when $\text{Confidence} \ge 0.72$ and ($S_{\text{strings}} \ge 0.08$ or $S_{\text{tree}} \ge 0.35$).
+* **Detection Threshold**: A clone is flagged (`VIDE-F001`) when $\text{Confidence} \ge 0.20$ **and** at least one *discriminating* axis carries evidence ($S_{\text{strings}} \ge 0.02$ or $S_{\text{colour}} \ge 0.10$).
+* **Structure is never sufficient.** $S_{\text{tree}}$ is worth 0.35 of the confidence score, so at a 0.20 threshold any app with a login-shaped layout would clear the bar on structure alone - a device settings screen scored 0.21 against the SBI baseline during calibration. Every banking app shares that skeleton, so it establishes *shape* and cannot establish *identity*. $S_{\text{tree}} \ge 0.10$ is reported as corroboration only.
+* **String axis strictness**: short alphabetic tokens are credential names, not
+  words. A suspect offering a *confusable substitute* for one (`MPIN` where the
+  baseline says `IPIN`) is not a match; one that merely *omits* a qualifier
+  (`MPIN` for `6-digit MPIN`) still is.
+* **String axis weighting**: each baseline label is weighted by inverse document
+  frequency across the baseline set, so a bank's own name outweighs banking
+  vocabulary every bank ships. Attribution is decided by what discriminates.
+* **Confidence tiers**: because detection spans 0.20-1.00, a verdict carries a band - high ($\ge 0.60$), moderate ($0.35$-$0.59$), low/suspicious ($0.20$-$0.34$) - so the UI and the PDF do not render a weak match and a pixel-faithful clone identically.
 
 ---
 

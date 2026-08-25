@@ -62,6 +62,10 @@ class VIDECompareResult:
     color_match: float = 0.0
     matched_strings: List[str] = field(default_factory=list)
     evidence_lines: List[str] = field(default_factory=list)
+    #: Machine-readable version of the evidence lines: the same three axes
+    #: broken out so the UI can render swatches and badges, and the PDF can
+    #: draw the meter, without either of them parsing prose back apart.
+    forensics: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -78,4 +82,5 @@ class VIDECompareResult:
             },
             "matched_strings": self.matched_strings[:20],
             "evidence_lines": self.evidence_lines,
+            "forensics": self.forensics,
         }

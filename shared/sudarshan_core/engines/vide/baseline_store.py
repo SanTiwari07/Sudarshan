@@ -18,6 +18,7 @@ import logging
 import threading
 import time
 from dataclasses import dataclass, field
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -29,6 +30,7 @@ from sudarshan_core.engines.vide.corpus_loader import (
     parse_fingerprints,
     read_corpus_json,
 )
+from sudarshan_core.engines.vide.color_match import is_brand_color, palette_similarity
 from sudarshan_core.engines.vide.fuzzy import fuzzy_containment
 from sudarshan_core.engines.vide.official_packages import (
     display_name_for,
@@ -36,6 +38,7 @@ from sudarshan_core.engines.vide.official_packages import (
 )
 from sudarshan_core.engines.vide.signer_registry import load_signer_registry
 from sudarshan_core.engines.vide.ui_profile import UIProfile
+from sudarshan_core.engines.vide.view_ast import normalize_view_sequence
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +49,19 @@ _DEFAULT_BASELINES_DIR = (
 SOURCE_CORPUS = "corpus"
 SOURCE_LAB = "lab"
 
+# Non-string qualification floors for :func:`shortlist_baselines`. Both are
+# deliberately generous: this is a pre-filter whose only job is to avoid a full
+# compare against every baseline, and the comparer applies the real thresholds.
+# A candidate wrongly admitted here costs microseconds; one wrongly dropped is a
+# missed detection that nothing downstream can recover.
+_SHORTLIST_MIN_COLOR = 0.15
+_SHORTLIST_MIN_STRUCTURE = 0.30
+# Roles both sides must expose before structure is allowed to qualify a
+# candidate at all. A two-node sequence scores an arbitrarily high ratio against
+# anything - ``["ScrollView"]`` matches a bank login skeleton at 0.5 - so short
+# sequences carry no structural information and must not admit a baseline.
+_SHORTLIST_MIN_ROLES = 6
+
 
 @dataclass
 class InstitutionBaseline:
@@ -55,6 +71,12 @@ class InstitutionBaseline:
     allowed_signers_sha256: List[str]
     profile: UIProfile
     version: str = "1.0.0"
+    #: Corpus baseline id (``BASE-01-SBI``) this profile stands for, when it
+    #: stands for one. A lab profile and the corpus entry for the same bank use
+    #: different institution ids, so without this there is no way to ask "did
+    #: BASE-01-SBI.apk attribute to the right institution" against a lab
+    #: baseline set. Empty for a profile that mirrors no corpus entry.
+    baseline_id: str = ""
     # Corpus-only enrichment. Empty for legacy lab baselines.
     source: str = SOURCE_LAB
     bank: str = ""
@@ -74,6 +96,7 @@ class InstitutionBaseline:
             allowed_signers_sha256=list(data.get("allowed_signers_sha256") or []),
             profile=prof,
             version=str(data.get("version", "1.0.0")),
+            baseline_id=str(data.get("baseline_id") or data.get("baselineId") or "").strip(),
             source=SOURCE_LAB,
         )
 
@@ -81,6 +104,7 @@ class InstitutionBaseline:
         """Lightweight description for the /baselines API."""
         return {
             "institution_id": self.institution_id,
+            "baseline_id": self.baseline_id,
             "display_name": self.display_name,
             "bank": self.bank,
             "app_name": self.app_name,
@@ -174,6 +198,7 @@ def convert_corpus_fingerprint_to_baseline(
 
     return InstitutionBaseline(
         institution_id=baseline_id,
+        baseline_id=baseline_id,
         display_name=display,
         package_names=package_names,
         allowed_signers_sha256=[],
@@ -391,32 +416,70 @@ def shortlist_baselines(
     """
     Cheap pre-filter before the deterministic full compare.
 
-    A baseline is a candidate only if it shares at least
-    ``min_string_overlap`` labels with the suspect. If none qualify the result
-    is ``[]`` - VIDE never falls back to comparing against arbitrary banks,
-    because a confidence score against a bank the app has nothing to do with is
-    not evidence of anything.
+    A baseline qualifies on **any** of the three axes VIDE scores on: shared
+    labels, a reproduced brand palette, or a matching structural skeleton. A
+    baseline that qualifies on none of them is dropped - VIDE never falls back
+    to comparing against arbitrary banks, because a confidence score against a
+    bank the app has nothing to do with is not evidence of anything.
 
     Sharing is judged fuzzily. Under exact matching this filter was the single
     biggest source of false negatives: a clone that retyped ``"User ID"`` as
     ``"Enter User ID"`` matched nothing, was shortlisted against nothing, and
     was reported clean without ever reaching the comparer.
+
+    Requiring a *string* hit specifically was the same bug one level up. A
+    Capacitor clone keeps its labels in a minified JS bundle, so static
+    extraction can surface the brand palette and the login form skeleton while
+    recovering barely any text - and the app was then dropped here, before the
+    comparer that would have matched it on colour ever ran. Colour is the axis
+    that carries attribution, so filtering on text alone discarded exactly the
+    evidence the comparison is built around.
     """
     if not baselines:
         return []
     suspect_strings = [s.strip() for s in suspect.strings if s.strip()]
-    if not suspect_strings and not suspect.view_sequence:
+    suspect_colors = [c for c in suspect.color_palette if is_brand_color(c)]
+    if not suspect_strings and not suspect.view_sequence and not suspect_colors:
         return []
+
+    suspect_roles = normalize_view_sequence(suspect.view_sequence)[:80]
 
     scored: List[tuple[float, int, InstitutionBaseline]] = []
     for bl in baselines:
         base_strings = [s.strip() for s in bl.profile.strings if s.strip()]
-        if not base_strings:
+        string_score, matched, _ = (
+            fuzzy_containment(base_strings, suspect_strings)
+            if base_strings and suspect_strings
+            else (0.0, [], [])
+        )
+
+        color_score = 0.0
+        if suspect_colors and bl.profile.color_palette:
+            color_score = float(
+                palette_similarity(suspect_colors, bl.profile.color_palette)["score"]
+            )
+
+        structure_score = 0.0
+        if len(suspect_roles) >= _SHORTLIST_MIN_ROLES and bl.profile.view_sequence:
+            base_roles = normalize_view_sequence(bl.profile.view_sequence)[:80]
+            if len(base_roles) >= _SHORTLIST_MIN_ROLES:
+                structure_score = SequenceMatcher(
+                    None, " ".join(suspect_roles), " ".join(base_roles)
+                ).ratio()
+
+        qualifies = (
+            len(matched) >= min_string_overlap
+            or color_score >= _SHORTLIST_MIN_COLOR
+            or structure_score >= _SHORTLIST_MIN_STRUCTURE
+        )
+        if not qualifies:
             continue
-        score, matched, _ = fuzzy_containment(base_strings, suspect_strings)
-        if len(matched) < min_string_overlap:
-            continue
-        scored.append((score, len(matched), bl))
+
+        # Rank on the same weighting the comparer uses, so the shortlist is a
+        # prefix of what a full compare would have ranked rather than a
+        # differently-ordered list that can truncate the real winner away.
+        rank = 0.40 * string_score + 0.35 * structure_score + 0.25 * color_score
+        scored.append((rank, len(matched), bl))
 
     scored.sort(key=lambda x: (-x[0], -x[1], x[2].institution_id))
     return [b for _, _, b in scored[:top_k]]

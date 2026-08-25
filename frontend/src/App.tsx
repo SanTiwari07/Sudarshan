@@ -327,6 +327,7 @@ export type VideCompareResult = {
   scores?: VideCompareScores;
   matched_strings?: string[];
   evidence_lines?: string[];
+  forensics?: VideForensicBreakdown;
 };
 
 export type VideSignerResult = {
@@ -350,6 +351,58 @@ export type VideColorMatch = {
   suspect: string;
   score: number;
   distance: number;
+  /** Alias for `distance` under the name the CIE formula is known by. */
+  delta_e?: number;
+  /** Plain-language reading of the ΔE, e.g. "high visual match". */
+  verdict?: string;
+};
+
+/** One suspect-vs-baseline swatch pair, ready to render. */
+export type VideForensicSwatch = {
+  baseline_hex: string;
+  suspect_hex: string;
+  delta_e: number;
+  score: number;
+  verdict: string;
+  exact: boolean;
+};
+
+export type VideConfidenceTier = 'high' | 'moderate' | 'low' | 'none';
+
+/**
+ * Why VIDE called this a clone, broken out on the three axes it scores.
+ *
+ * Built engine-side (see `engines/vide/forensics.py`) so the card and the PDF
+ * render the same facts rather than each re-deriving them from evidence prose.
+ */
+export type VideForensicBreakdown = {
+  threshold?: number;
+  confidence?: number;
+  tier?: VideConfidenceTier;
+  tier_label?: string;
+  over_threshold?: boolean;
+  detected?: boolean;
+  institution_id?: string;
+  institution_display?: string;
+  color_scheme?: {
+    score?: number;
+    matched_count?: number;
+    target_count?: number;
+    exact_matches?: number;
+    matches?: VideForensicSwatch[];
+  };
+  ui_text?: {
+    score?: number;
+    matched_count?: number;
+    target_count?: number;
+    matched_strings?: string[];
+    reworded?: { baseline: string; suspect: string; ratio: number }[];
+  };
+  view_hierarchy?: {
+    score?: number;
+    matched_signatures?: string[];
+    suspect_signatures?: string[];
+  };
 };
 
 export type VideCorpusRanked = {
@@ -390,6 +443,7 @@ export type VideCorpusCompare = {
   color_matches?: VideColorMatch[];
   ranked?: VideCorpusRanked[];
   evidence_lines?: string[];
+  forensics?: VideForensicBreakdown;
 };
 
 /** Advisory LLM assessment. Never the verdict - see semantic_matcher.py. */
@@ -438,6 +492,10 @@ export type VideResult = {
   visual_impersonation_detected?: boolean;
   visual_impersonation_institution?: string;
   visual_impersonation_confidence?: number;
+  visual_impersonation_tier?: VideConfidenceTier;
+  visual_impersonation_tier_label?: string;
+  detection_threshold?: number;
+  forensic_breakdown?: VideForensicBreakdown;
   ui_hierarchy_integrated?: boolean;
 };
 

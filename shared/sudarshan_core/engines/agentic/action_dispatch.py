@@ -311,7 +311,12 @@ def select_canonical_action(
 
     if graph_action:
         gtool = graph_action.get("tool", "")
-        if gtool in ("click_text", "tap", "type_text", "check"):
+        # `tap_sequence` belongs here: it is the graph entering a whole PIN on a
+        # numeric keypad, which the planner cannot express. Without it the
+        # planner's single "tap 1" won the selection, the pad never filled, and
+        # the screen behind it was never reached - the AI silently reducing
+        # coverage, which is the one thing selection must not allow.
+        if gtool in ("click_text", "tap", "tap_sequence", "type_text", "check"):
             chosen = dict(graph_action)
             chosen["_selected_by"] = "exploration_graph"
             return chosen, "exploration_graph"
@@ -388,6 +393,24 @@ class ActionDispatcher:
         retry = dict(action)
         retry["_retry_attempt"] = attempt + 1
         source = str(action.get("_detection_source") or "")
+        # Attempt 1 may have tapped the graph's coordinates without consulting
+        # the hierarchy. If it did not land, those coordinates are exactly what
+        # is in doubt, so every escalation re-resolves the element by text.
+        geometry_was_trusted = bool(action.pop("_geometry_trusted", False))
+        retry.pop("_geometry_trusted", None)
+
+        if geometry_was_trusted and text:
+            retry["tool"] = "click_text"
+            retry["reasoning"] = (
+                f"Retry {attempt + 1}: geometry tap did not land - "
+                f"re-resolving '{text}' from the hierarchy"
+            )
+            retry["_pipeline_debug"] = {
+                **(action.get("_pipeline_debug") or {}),
+                "retry_strategy": "text_after_geometry",
+                "retry_attempt": attempt + 1,
+            }
+            return retry
 
         if x is not None and y is not None:
             # Coordinate-based retry ladder (original behaviour).

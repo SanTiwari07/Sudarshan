@@ -108,6 +108,29 @@ TOOL_REGISTRY: Dict[str, ToolDef] = {
 
     # ── Touch / Gesture ────────────────────────────────────────────────────────
 
+    "tap_sequence": ToolDef(
+        name="tap_sequence",
+        description=(
+            "Tap one coordinate several times in a row, as a single action. "
+            "For numeric PIN/MPIN pads, where the digits are one credential "
+            "rather than several independent explorations."
+        ),
+        params=[
+            ToolParam("x", "int", required=True, description="X coordinate in pixels",
+                      min_val=0, max_val=DEFAULT_SCREEN_WIDTH),
+            ToolParam("y", "int", required=True, description="Y coordinate in pixels",
+                      min_val=0, max_val=DEFAULT_SCREEN_HEIGHT),
+            ToolParam("repeat", "int", required=False,
+                      description="How many taps (bounded by MAX_TAP_SEQUENCE)",
+                      min_val=1, max_val=12),
+        ],
+        # Longer than `tap`: this is up to twelve taps with a settle between
+        # each, plus a pause for the pad to submit on the final digit.
+        timeout_seconds=25,
+        retry_count=1,
+        failure_strategy="log_and_continue",
+        min_android_api=21,
+    ),
     "tap": ToolDef(
         name="tap",
         description="Tap a specific pixel coordinate on the screen.",

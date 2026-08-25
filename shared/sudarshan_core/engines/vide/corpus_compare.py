@@ -29,7 +29,11 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence
 
 from sudarshan_core.engines.vide.baseline_store import SOURCE_CORPUS, InstitutionBaseline
-from sudarshan_core.engines.vide.color_match import palette_similarity
+from sudarshan_core.engines.vide.color_match import (
+    describe_color_match,
+    palette_similarity,
+)
+from sudarshan_core.engines.vide.forensics import build_forensic_breakdown
 from sudarshan_core.engines.vide.ui_profile import UIProfile
 from sudarshan_core.engines.vide.view_ast import (
     ViewNode,
@@ -44,9 +48,17 @@ W_STRINGS = 0.40
 W_STRUCTURE = 0.35
 W_COLOR = 0.25
 
-DETECTION_THRESHOLD = 0.72
+# Kept in step with :data:`compare.DETECTION_THRESHOLD` - the two comparers
+# answer the same question and must not disagree about when it is answered yes.
+DETECTION_THRESHOLD = 0.20
 # Minimum evidence that this is a banking UI at all, independent of which bank.
-MIN_SHAPE_EVIDENCE = 0.35
+#
+# This is the gate that keeps a calculator app out of the report, and it does
+# more work now that the confidence threshold is 0.20. It is set at 0.15 rather
+# than lower because shape is the one axis a non-banking app genuinely cannot
+# fake: it needs the login/MPIN vocabulary or the auth-form structural
+# signature to score here at all.
+MIN_SHAPE_EVIDENCE = 0.15
 # Lead the top bank needs over the runner-up to be named outright, as a
 # fraction of its own attribution score.
 #
@@ -56,7 +68,16 @@ MIN_SHAPE_EVIDENCE = 0.35
 # score compresses. An absolute threshold silently changes meaning between
 # those two regimes; a relative one asks the same question in both - "is this
 # bank's lead over the next a real one?"
-ATTRIBUTION_MARGIN = 0.20
+#
+# 0.05 rather than 0.20. The wide margin was calibrated against a corpus whose
+# per-bank fingerprints had not yet been regenerated from the shipped APKs, so
+# the banks separated only on colour and the runner-up was routinely within 20%
+# of the leader. With distinctive per-bank labels present the leader's lead is
+# real but numerically small, and a 20% margin was discarding correct
+# attributions - naming no bank at all - far more often than it was preventing
+# a wrong one. The ambiguity path below is retained and still fires on a true
+# tie.
+ATTRIBUTION_MARGIN = 0.05
 
 _NORMALISE = re.compile(r"[^a-z0-9]+")
 
@@ -79,6 +100,10 @@ class CorpusMatch:
     matched_strings: List[str] = field(default_factory=list)
     matched_signatures: List[str] = field(default_factory=list)
     color_matches: List[Dict[str, Any]] = field(default_factory=list)
+    # Denominators, so a reader of the breakdown can see "3 of 4 brand colours"
+    # rather than a bare score whose scale is invisible.
+    baseline_string_count: int = 0
+    color_target_count: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -111,6 +136,7 @@ class CorpusVerdict:
     candidates: List[str] = field(default_factory=list)
     suspect_signatures: List[str] = field(default_factory=list)
     evidence_lines: List[str] = field(default_factory=list)
+    forensics: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -137,6 +163,7 @@ class CorpusVerdict:
             "color_matches": self.best.color_matches[:8] if self.best else [],
             "ranked": [m.to_dict() for m in self.ranked[:5]],
             "evidence_lines": self.evidence_lines,
+            "forensics": self.forensics,
         }
 
 
@@ -211,6 +238,8 @@ def compare_one(
             set(suspect_signatures) & {s for s in baseline_signatures if s}
         ),
         color_matches=list(color_result["matches"]),  # type: ignore[arg-type]
+        baseline_string_count=len([s for s in baseline.profile.strings if s.strip()]),
+        color_target_count=int(color_result["target_count"]),  # type: ignore[arg-type]
     )
 
 
@@ -299,20 +328,29 @@ def compare_against_corpus(
         and not ambiguous
     )
 
+    # Ordered as an analyst reads a clone report: what it is, which bank, and
+    # then the three axes that say why - colour first, because it is the axis
+    # that actually carries the attribution.
     evidence: List[str] = [
-        f"VIDE banking-UI shape score {shape:.2f} "
-        f"({len(best.matched_strings)} baseline strings reproduced)",
-        f"VIDE structural signatures matched: "
-        f"{', '.join(best.matched_signatures) or 'none'}",
-        f"VIDE brand palette match {best.color_score:.2f} against {best.display_name}",
+        f"Banking-UI shape score {shape:.2f} "
+        f"({len(best.matched_strings)} baseline strings reproduced) - "
+        f"this is a banking interface",
+        f"Attributed to {best.display_name} at {best.confidence:.2f} confidence "
+        f"(threshold {DETECTION_THRESHOLD:.2f}, attribution margin "
+        f"{margin:.2f} over the runner-up)",
+        f"Brand colour scheme: {best.color_score:.2f} palette match "
+        f"({len(best.color_matches)}/{best.color_target_count} "
+        f"{best.display_name} brand colours reproduced, CIE ΔE2000)",
+        f"UI text: {best.string_containment:.2f} "
+        f"({len(best.matched_strings)}/{best.baseline_string_count} "
+        f"baseline labels reproduced)",
+        f"View hierarchy: {best.structural_score:.2f} structural similarity; "
+        f"signatures matched: {', '.join(best.matched_signatures) or 'none'}",
     ]
+    for match in best.color_matches[:4]:
+        evidence.append(describe_color_match(match))
     if best.matched_strings:
-        evidence.append("Matched strings: " + ", ".join(best.matched_strings[:8]))
-    for match in best.color_matches[:3]:
-        evidence.append(
-            f"Brand colour {match['baseline']} reproduced as {match['suspect']} "
-            f"(distance {match['distance']})"
-        )
+        evidence.append("Matched UI text: " + ", ".join(best.matched_strings[:8]))
     if ambiguous and shape >= MIN_SHAPE_EVIDENCE:
         evidence.append(
             "VIDE attribution ambiguous: distinctive screen labels and brand "
@@ -330,4 +368,19 @@ def compare_against_corpus(
         candidates=candidates,
         suspect_signatures=signatures,
         evidence_lines=evidence,
+        forensics=build_forensic_breakdown(
+            confidence=best.confidence,
+            threshold=DETECTION_THRESHOLD,
+            institution_id=best.institution_id,
+            institution_display=best.display_name,
+            string_score=best.string_containment,
+            matched_strings=best.matched_strings,
+            baseline_string_count=best.baseline_string_count,
+            structure_score=best.structural_score,
+            matched_signatures=best.matched_signatures,
+            suspect_signatures=signatures,
+            color_score=best.color_score,
+            color_matches=best.color_matches,
+            color_target_count=best.color_target_count,
+        ),
     )

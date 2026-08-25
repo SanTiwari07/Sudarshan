@@ -38,7 +38,7 @@ Pass criteria:
 
 - `HOOK WebView.loadData` with `html_len` > 0
 - `collect_webview_html_from_frida_events()` returns snippets
-- `run_vide_analysis()` runs (VIDE-F001 only if confidence ≥ 0.72)
+- `run_vide_analysis()` runs (VIDE-F001 only if confidence ≥ 0.20 and a discriminating axis - text or palette - carries evidence)
 
 ## Production Sudarshan bundle
 

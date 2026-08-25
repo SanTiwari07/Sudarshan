@@ -241,6 +241,9 @@ def test_full_clone_is_detected():
     )
     assert verdict.detected is True
     assert verdict.best.institution_id == "BASE-02-HDFC"
+    # Well above the 0.20 detection threshold: this suspect reproduces the
+    # baseline nearly exactly, so a bare "over threshold" assertion would pass
+    # on far weaker evidence than the case is testing.
     assert verdict.best.confidence >= 0.72
 
 

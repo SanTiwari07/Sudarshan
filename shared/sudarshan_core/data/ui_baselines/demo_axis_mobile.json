@@ -1,24 +1,22 @@
 {
-  "institution_id": "demo_sbi_yono",
-  "baseline_id": "BASE-01-SBI",
-  "display_name": "State Bank of India (YONO SBI)",
+  "institution_id": "demo_axis_mobile",
+  "baseline_id": "BASE-04-AXIS",
+  "display_name": "Axis Bank (Axis Mobile)",
   "package_names": [
-    "com.sbi.lotusintouch",
-    "com.sbi.lotus"
+    "com.axis.mobile"
   ],
   "allowed_signers_sha256": [],
   "version": "2.0.0",
   "profile": {
     "source": "baseline",
     "strings": [
-      "CIF Number",
+      "Cust ID",
+      "Customer ID",
       "6-digit MPIN",
-      "Profile Password",
-      "YONO SBI",
+      "Axis Mobile",
+      "open by Axis",
       "Login",
-      "Username",
-      "Net Banking",
-      "Account Balance",
+      "Debit Card",
       "OTP"
     ],
     "view_sequence": [
@@ -33,12 +31,9 @@
       "BottomNavigationView"
     ],
     "colors": [
-      "#1B4AA0",
-      "#D0342C",
-      "#16213A",
-      "#280071",
-      "#002D62",
-      "#577CB7",
+      "#97144D",
+      "#861F41",
+      "#EE3124",
       "#FFFFFF"
     ],
     "asset_hashes": []

@@ -1,24 +1,22 @@
 {
-  "institution_id": "demo_sbi_yono",
-  "baseline_id": "BASE-01-SBI",
-  "display_name": "State Bank of India (YONO SBI)",
+  "institution_id": "demo_indus_mobile",
+  "baseline_id": "BASE-09-INDUS",
+  "display_name": "IndusInd Bank (IndusMobile)",
   "package_names": [
-    "com.sbi.lotusintouch",
-    "com.sbi.lotus"
+    "com.indusind.indusmobile"
   ],
   "allowed_signers_sha256": [],
   "version": "2.0.0",
   "profile": {
     "source": "baseline",
     "strings": [
-      "CIF Number",
+      "IndusMobile",
+      "User ID",
+      "Customer ID",
       "6-digit MPIN",
-      "Profile Password",
-      "YONO SBI",
+      "Swipe Pattern",
+      "IndusInd Bank",
       "Login",
-      "Username",
-      "Net Banking",
-      "Account Balance",
       "OTP"
     ],
     "view_sequence": [
@@ -33,12 +31,10 @@
       "BottomNavigationView"
     ],
     "colors": [
-      "#1B4AA0",
-      "#D0342C",
-      "#16213A",
-      "#280071",
-      "#002D62",
-      "#577CB7",
+      "#8A1538",
+      "#981D23",
+      "#D4AF37",
+      "#C5A059",
       "#FFFFFF"
     ],
     "asset_hashes": []

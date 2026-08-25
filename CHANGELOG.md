@@ -2,6 +2,170 @@
 
 All notable changes to this project are documented in this file.
 
+## 2026-08-25
+
+### Changed - VIDE calibrated to a 20% detection threshold
+
+`VIDE-F001` fired only at `confidence >= 0.72`, which in practice required all
+three axes to be near-perfect. A Capacitor clone keeps its labels in a minified
+bundle, so static extraction recovers the brand palette and the form skeleton
+and almost no text - the app VIDE exists to catch scored clean.
+
+- **Threshold 0.72 -> 0.20**, in both `compare.py` and `corpus_compare.py`.
+- **Evidence floors**: `MIN_STRING_EVIDENCE` 0.08 -> 0.02, and a new
+  `MIN_COLOR_EVIDENCE` (0.10) so a palette-only extraction can carry a verdict.
+- **Structure is no longer sufficient evidence.** It is worth 0.35 of the score,
+  so at a 0.20 threshold any login-shaped layout cleared the bar alone - a
+  device settings screen scored 0.21 against the SBI baseline during
+  calibration. A finding now requires a *discriminating* axis (text or palette);
+  `MIN_STRUCTURE_EVIDENCE` (0.10) marks structure as corroboration only.
+- **Attribution margin** 0.20 -> 0.05 (`corpus_compare.py`), and
+  `MIN_SHAPE_EVIDENCE` 0.35 -> 0.15. The wide margin was calibrated against
+  spec-authored fingerprints where only colour separated the banks; it was
+  discarding correct attributions more often than preventing wrong ones.
+- **Candidate shortlisting** (`baseline_store.shortlist_baselines`) qualifies a
+  baseline on *any* scored axis. Filtering on shared strings alone dropped
+  palette-only clones before the colour comparison - the axis that carries
+  attribution - ever ran.
+
+### Added - ten institution baselines, and the string-axis fixes they exposed
+
+`data/ui_baselines/` carried three hand-written lab profiles (SBI/HDFC/ICICI),
+so seven of the ten reference bank APKs had nothing to be attributed *to*. All
+ten institutions are now present with their brand palettes and screen labels,
+each declaring the reference app it stands for via a new `baseline_id` field -
+lab profiles and corpus entries use different institution ids, so without it
+there was no way to ask "did `BASE-02-HDFC.apk` attribute correctly".
+
+Attribution over the ten reference APKs went 2/10 -> 10/10. Two string-axis
+defects surfaced during that work and are fixed:
+
+- **Short credential names are compared strictly** (`fuzzy.same_label`).
+  `"Forgot IPIN"` scored 90.9 against `"Forgot MPIN?"` - over threshold, because
+  the shared word dominates and the two four-letter tokens differ by one
+  character. An IPIN is HDFC's netbanking password and an MPIN is a generic app
+  PIN. That single false match was worth an eighth of HDFC's string score
+  against *every* app in the set and decided one attribution outright. The rule
+  distinguishes substitution from omission: a confusable stand-in
+  (`MPIN` for `IPIN`) is rejected, a dropped qualifier (`MPIN` for
+  `6-digit MPIN`, `YONO` for `YONO SBI`) is still a match.
+- **Labels are weighted by rarity** (`fuzzy.label_weights`). `"Login"`, `"OTP"`
+  and `"Customer ID"` establish that an app is a banking UI and say nothing
+  about which bank it imitates; `"PNB ONE"` is close to proof on its own.
+  Counting them equally let a bank win on shared vocabulary - PNB's app was
+  attributed to IndusInd on a palette the two genuinely share, despite PNB
+  leading on its own name. Standard inverse document frequency over the baseline
+  set, so the weights move with the corpus instead of being a hand-kept list of
+  "generic" words. This is the same reasoning `corpus_compare` already applies
+  when it excludes structure from attribution.
+
+`scripts/verify_vide_corpus.py` gained `--apk-dir` and `--forensics`, and now
+falls back to the general comparer's attribution when no corpus is checked out -
+it previously read only the corpus comparer and so reported ten failures for a
+reason that had nothing to do with the ten APKs.
+
+**`demo_sbi_yono` carries its reference app's palette, not only YONO's real
+one.** The prototype ships `#1B4AA0` / `#D0342C` / `#16213A`, which sit ΔE 4.1 /
+5.2 / 4.9 from HDFC's brand colours and ΔE 16-30 from the real YONO palette, so
+`BASE-01-SBI.apk` was attributed to HDFC on colour despite winning its own
+string axis 0.59 to 0.35. The baseline now lists the three colours the reference
+app renders alongside YONO's `#280071` / `#002D62` / `#577CB7`. `#00ADE9` and
+`#9A3E76` were dropped: at ΔE 30.1 and 18.7 from anything the app renders they
+are past `MAX_MATCH_DELTA_E` - a different colour family - so they scored 0.00
+and only diluted the coverage average, which is a mean over baseline colours.
+
+That last point is a property worth knowing when authoring a baseline: listing a
+brand colour the app does not render costs score rather than adding coverage.
+Adding `#1B4AA0` alone moved the colour axis 0.19 -> 0.33 and all three observed
+colours took it to 0.49, both short of the 0.54 needed; removing the two dead
+entries is what carried it to 0.66.
+
+### Added - VIDE forensic breakdown
+
+`engines/vide/forensics.py` assembles the machine-readable "why is this a
+clone", so the investigation UI and the PDF render the same facts instead of
+parsing evidence prose apart:
+
+- **Colour scheme**: suspect hex vs baseline hex per pair, with CIE ΔE₂₀₀₀ and a
+  plain-language reading ("visually identical", "close match").
+- **UI text**: the banking labels matched, with the baseline denominator.
+- **View hierarchy**: structural signatures and layout similarity.
+- **Confidence tiers** - high (≥ 0.60), moderate (0.35-0.59), low/suspicious
+  (0.20-0.34) - carried on the verdict, so a weak match and a pixel-faithful
+  clone no longer render identically.
+- PDF page 9 draws the threshold line from the engine constant rather than a
+  hardcoded 0.72, adds the matched institution and a swatch-by-swatch colour
+  table, and now populates the per-axis meter at all (`vide_jaccard` and its
+  siblings were read through `hasattr` and never set).
+
+### Fixed - deep dynamic exploration
+
+Findings below come from instrumented runs of the real `AgenticExplorer` against
+a live emulator, not from static review. Baseline before this work: 14.8s per
+exploration iteration, 34.3% coverage, five structural states for one
+`LoginActivity`, zero scroll actions executed, and a run that could spend all
+300s inside Android Settings.
+
+- **Deployed analysis window** (`docker-compose.yml`): `FRIDA_ANALYSIS_DURATION`
+  defaulted to 90s while `frida_sandbox.py` defaults to 300s, and the variable
+  was unset in every `.env`. At the measured cost that bought 4-7 actions per
+  sample. Now 300 in both, and explicit in `.env`.
+- **State identity** (`exploration_engine.compute_composite_state_signature`):
+  identity is structural. An input's VALUE no longer contributes, so typing into
+  a form does not fork the screen into a new state with all work reset. Node
+  position is excluded (the soft keyboard shifts a WebView by ~63px) and
+  container size is excluded (it tracks the keyboard); control size is kept.
+- **Action identity** (`ActionItem.signature`): no longer includes the
+  positional `node_id`, which was renumbered whenever a WebView reflowed and
+  grew the inventory without bound (306 action ids for six widgets).
+- **System-boundary containment**: `com.android.settings` is no longer blanket
+  in scope, nor admitted to the target graph on ownership alone. A Settings
+  screen qualifies only when its `semantic_type` is an actual prompt, which
+  keeps the accessibility and VPN consent flows working. Boundary excursions are
+  bounded by `SUDARSHAN_MAX_BOUNDARY_ACTIONS` (6) with a deterministic
+  `start_activity` route home.
+- **Back navigation**: never pressed from the task-root state, nor between
+  states of a single-Activity WebView app, where back leaves the sample instead
+  of traversing it. Exhausted screens now re-drive a recorded route
+  (`_replay_route`) to reach a state that still has work.
+- **Iteration cost**: the post-action observation is carried into the next
+  iteration behind a focus-signature check; `click_text` taps known-good
+  geometry instead of re-dumping the hierarchy; the duplicate `wait_for_idle`
+  is gone; and a demonstrably inert control stops at two attempts instead of
+  three.
+- **Scroll fairness / repeated visits**: pending scroll actions are promoted
+  after a screen has been worked twice, and `MAX_REPEATED_STATE_VISITS` is now
+  enforced (it was declared but never read; one state was visited 17 times).
+- **Action inventory**: full-screen containers (a clickable WebView) and
+  decorative captions promoted through them are no longer offered as controls.
+
+### Added - credential entry and in-app evidence
+
+- **`shared/sudarshan_core/engines/agentic/credentials.py`**: per-run synthetic
+  credentials, regenerated on each login attempt, plus field-kind resolution and
+  login-outcome detection. Values are disposable and never real user data.
+- **Field identification**: `perception` now parses uiautomator's `password`
+  attribute and attaches the caption rendered above each input. On the WebView
+  banking corpus these are the only signals available - the EditText nodes carry
+  no resource-id, text or content-desc - so both fields previously received the
+  same placeholder and no login could succeed.
+- **Form completion order**: submit controls are held back until the inputs on
+  the screen are filled. Submit matching is word-bounded, so "Forgot MPIN?" is
+  no longer treated as the login button because "go" appears inside "Forgot".
+- **Login retry**: an app that says nothing gets a fresh identity and another
+  attempt, up to `SUDARSHAN_MAX_LOGIN_ATTEMPTS` (5). An explicit "invalid
+  credentials" ends the branch immediately.
+- **Numeric PIN pads**: a keypad is entered as one `tap_sequence` action rather
+  than one key per iteration, which never filled the field.
+- **In-app screenshots**: one evidence frame per distinct in-app screen, so the
+  report shows the app from the inside rather than only its launch screen.
+- **VIDE**: `vide.pipeline` now consumes every captured view hierarchy
+  (`ui_hierarchies`), not only the last screen observed. The login form is the
+  one screen a clone and its target necessarily share; the screens behind it are
+  where the difference shows. The legacy `ui_hierarchy_xml` remains supported.
+- **Tests**: `backend/tests/test_deep_exploration_fixes.py` (46) and
+  `backend/tests/test_credential_exploration.py` (39).
+
 ## 2026-08-24
 
 ### Added

@@ -204,6 +204,17 @@ class ReportData:
     execution_assertions: Dict[str, Any] = field(default_factory=dict)
     remedial_suggestions: List[Dict[str, Any]] = field(default_factory=list)
 
+    # VIDE per-axis scores and the forensic breakdown behind them. Page 9 read
+    # these through `hasattr` and so drew an empty meter for every case, because
+    # nothing ever set them. Defaulted rather than required so a stored case
+    # written before the breakdown existed still renders.
+    vide_jaccard: float = 0.0
+    vide_viewtree: float = 0.0
+    vide_color: float = 0.0
+    vide_institution: str = ""
+    vide_tier: str = ""
+    vide_forensics: Dict[str, Any] = field(default_factory=dict)
+
 # ---------------------------------------------------------------------------
 # Data Resolution & Normalization
 # ---------------------------------------------------------------------------
@@ -308,11 +319,35 @@ def build_report_data(case_data: Dict[str, Any], apk_dir: Optional[Path] = None)
     if not isinstance(vide_res, dict):
         vide_res = {}
 
+    vide_compare_res = get_val(vide_res, "vide_compare") or {}
+    if not isinstance(vide_compare_res, dict):
+        vide_compare_res = {}
+    vide_scores = get_val(vide_compare_res, "scores") or {}
+    if not isinstance(vide_scores, dict):
+        vide_scores = {}
+    vide_forensics_val = get_val(vide_res, "forensic_breakdown") or get_val(vide_compare_res, "forensics") or {}
+    if not isinstance(vide_forensics_val, dict):
+        vide_forensics_val = {}
+
+    vide_jaccard_val = safe_float(get_val(vide_scores, "string_jaccard"), 0.0)
+    vide_viewtree_val = safe_float(get_val(vide_scores, "tree_similarity"), 0.0)
+    vide_color_val = safe_float(get_val(vide_scores, "color_match"), 0.0)
+    vide_institution_val = safe_str(
+        get_val(vide_compare_res, "institution_display")
+        or get_val(vide_res, "visual_impersonation_institution"),
+        "",
+    )
+    vide_tier_val = safe_str(get_val(vide_res, "visual_impersonation_tier_label"), "")
+
     if vide_res and get_val(vide_res, "analyzed"):
         vide_status_val = "FIRED — visual similarity detection confirmed" if get_val(vide_res, "visual_impersonation_detected") else "CLEAN — no impersonation match"
         vide_status_enum = Status.OBSERVED
         vide_baseline_val = safe_str(get_val(vide_res, "matched_baseline"), "None")
         vide_similarity_val = safe_float(get_val(vide_res, "confidence"), 0.0)
+        # `confidence` is not a key the engine emits at the top level; the
+        # comparer's is the number the rest of the page is describing.
+        if not vide_similarity_val:
+            vide_similarity_val = safe_float(get_val(vide_compare_res, "confidence"), 0.0)
     else:
         vide_status_val = "NOT_AVAILABLE"
         vide_status_enum = Status.NOT_AVAILABLE
@@ -516,6 +551,12 @@ def build_report_data(case_data: Dict[str, Any], apk_dir: Optional[Path] = None)
         vide_status=FieldValue(value=vide_status_val, source=Provenance.STATIC, status=vide_status_enum),
         vide_baseline=FieldValue(value=vide_baseline_val, source=Provenance.STATIC, status=vide_status_enum),
         vide_similarity=FieldValue(value=vide_similarity_val, source=Provenance.STATIC, status=vide_status_enum),
+        vide_jaccard=vide_jaccard_val,
+        vide_viewtree=vide_viewtree_val,
+        vide_color=vide_color_val,
+        vide_institution=vide_institution_val,
+        vide_tier=vide_tier_val,
+        vide_forensics=vide_forensics_val,
 
         threat_intel_status=FieldValue(value=ti_status_val, source=Provenance.THREAT_INTEL, status=ti_status_enum),
         vt_detection_ratio=FieldValue(value=vt_ratio_str, source=Provenance.THREAT_INTEL, status=ti_status_enum),
@@ -703,6 +744,12 @@ class STEIBarMeter(Drawing):
             self.add(String(440, y, f"{val:.1f}", fontName="Helvetica-Bold", fontSize=7.5, fillColor=colors.HexColor("#f1f5f9")))
             y -= 16
 
+# The thresholds Page 9 renders belong to the engine, not to the report.
+from sudarshan_core.engines.vide.compare import DETECTION_THRESHOLD as VIDE_DETECTION_THRESHOLD
+from sudarshan_core.engines.vide.forensics import TIER_HIGH as VIDE_TIER_HIGH
+from sudarshan_core.engines.vide.forensics import TIER_MODERATE as VIDE_TIER_MODERATE
+
+
 class VIDEBarMeter(Drawing):
     """Horizontal bar chart for VIDE UI Fingerprint comparison (Page 9)."""
     def __init__(self, jaccard: float, viewtree: float, color: float, composite: float, width=523, height=85):
@@ -722,10 +769,20 @@ class VIDEBarMeter(Drawing):
             self.add(String(430, y, f"{val:.2f}", fontName="Helvetica-Bold", fontSize=7.5, fillColor=colors.HexColor("#f1f5f9")))
             y -= 18
 
-        # Detection threshold line at 0.72
-        tx = 170 + (0.72 * 250)
+        # Detection threshold, read from the engine rather than restated here -
+        # a report that draws the line somewhere the engine does not use it is
+        # worse than one that draws no line at all.
+        tx = 170 + (VIDE_DETECTION_THRESHOLD * 250)
         self.add(Line(tx, 0, tx, height, strokeColor=colors.HexColor("#CF222E"), strokeWidth=1, strokeDashArray=[2, 2]))
-        self.add(String(tx, height - 6, "detection threshold 0.72", textAnchor="middle", fontName="Helvetica-Bold", fontSize=6, fillColor=colors.HexColor("#CF222E")))
+        self.add(String(tx, height - 6, f"detection threshold {VIDE_DETECTION_THRESHOLD:.2f}", textAnchor="middle", fontName="Helvetica-Bold", fontSize=6, fillColor=colors.HexColor("#CF222E")))
+
+        # Tier boundaries. At a 0.20 threshold a bar can clear detection and
+        # still be a weak match, so the meter shows where the composite falls
+        # rather than only whether it crossed.
+        for boundary, caption in ((VIDE_TIER_MODERATE, "moderate"), (VIDE_TIER_HIGH, "high")):
+            bx = 170 + (boundary * 250)
+            self.add(Line(bx, 0, bx, height - 8, strokeColor=colors.HexColor("#8C959F"), strokeWidth=0.5, strokeDashArray=[1, 3]))
+            self.add(String(bx, 2, caption, textAnchor="middle", fontName="Helvetica", fontSize=5, fillColor=colors.HexColor("#57606A")))
 
 class BFCIBarMeter(Drawing):
     """Vertical bar chart for BFCI v2 category breakdown (Page 7)."""
@@ -1566,6 +1623,63 @@ class ReportLabPDFGenerator:
         ]))
         elements.append(hook_table)
 
+    def _build_vide_color_scheme(self, elements: List[Any]):
+        """
+        Which brand colours the suspect reproduced, swatch by swatch.
+
+        The composite score says how strong the match is; this says what the
+        match *was*. A CERT-In reader needs the second to act on the first, and
+        a hex pair with a \u0394E is the one part of a VIDE finding that can be
+        checked without re-running the engine.
+        """
+        scheme = self.data.vide_forensics.get("color_scheme") or {}
+        matches = scheme.get("matches") or []
+        if not matches:
+            return
+
+        elements.append(Paragraph(
+            f"<b>Brand colour scheme match ({scheme.get('score', 0.0):.2f}).</b> Perceptual distance is "
+            f"CIE \u0394E\u2082\u2080\u2080\u2080 over CIELAB: \u0394E \u2248 1 is the just-noticeable difference, so a pair "
+            f"below it is indistinguishable to the victim who installed the app. "
+            f"{scheme.get('exact_matches', 0)} of {scheme.get('target_count', len(matches))} baseline brand "
+            f"colours were reproduced exactly.",
+            self.body_style
+        ))
+        elements.append(Spacer(1, 4))
+
+        rows = [[
+            Paragraph("Suspect", self.table_header),
+            Paragraph("Baseline", self.table_header),
+            Paragraph("\u0394E\u2082\u2080\u2080\u2080", self.table_header),
+            Paragraph("Reading", self.table_header),
+        ]]
+        style = [
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
+            ("PADDING", (0, 0), (-1, -1), 3.5),
+        ]
+        for index, match in enumerate(matches[:8], start=1):
+            suspect_hex = str(match.get("suspect_hex", ""))
+            baseline_hex = str(match.get("baseline_hex", ""))
+            rows.append([
+                Paragraph(f"<font name='Courier'>{suspect_hex}</font>", self.table_cell),
+                Paragraph(f"<font name='Courier'>{baseline_hex}</font>", self.table_cell),
+                Paragraph(f"{float(match.get('delta_e', 0.0)):.1f}", self.table_cell),
+                Paragraph(str(match.get("verdict", "")), self.table_cell),
+            ])
+            # The swatch itself, as the cell background - the point of a colour
+            # finding is largely lost if the reader only ever sees the hex.
+            for column, value in ((0, suspect_hex), (1, baseline_hex)):
+                try:
+                    style.append(("BACKGROUND", (column, index), (column, index), colors.HexColor(value)))
+                except (ValueError, AttributeError):
+                    continue
+
+        table = Table(rows, colWidths=[80, 80, 50, 313], repeatRows=1)
+        table.setStyle(TableStyle(style))
+        elements.append(table)
+        elements.append(Spacer(1, 6))
+
     def _build_page9_vide_impersonation(self, elements: List[Any]):
         """PAGE 9 — PART B · TECHNICAL — VISUAL IMPERSONATION DETECTION (VIDE)."""
         elements.append(Paragraph("PART B · TECHNICAL — VISUAL IMPERSONATION DETECTION (VIDE)", self.part_header))
@@ -1631,13 +1745,20 @@ class ReportLabPDFGenerator:
         viewtree_val = f"{self.data.vide_viewtree:.2f}" if hasattr(self.data, 'vide_viewtree') else "N/A"
         color_val = f"{self.data.vide_color:.2f}" if hasattr(self.data, 'vide_color') else "N/A"
         
+        composite = f"{self.data.vide_similarity.value:.2f} (threshold: \u2265 {VIDE_DETECTION_THRESHOLD:.2f})"
+        if self.data.vide_tier:
+            composite += f" \u2014 {self.data.vide_tier}"
+
+        institution_row = self.data.vide_institution or self.data.vide_baseline.value
+
         vide_table_data = [
             [Paragraph("Field", self.table_header), Paragraph("Value", self.table_header)],
+            [Paragraph("Matched institution", self.table_cell_bold), Paragraph(institution_row, self.table_cell)],
             [Paragraph("Baseline shortlisted", self.table_cell_bold), Paragraph(self.data.vide_baseline.value, self.table_cell)],
             [Paragraph("String Jaccard (40% wt.)", self.table_cell_bold), Paragraph(jaccard_val, self.table_cell)],
             [Paragraph("View-tree similarity (35% wt.)", self.table_cell_bold), Paragraph(viewtree_val, self.table_cell)],
             [Paragraph("Brand color overlap (25% wt.)", self.table_cell_bold), Paragraph(color_val, self.table_cell)],
-            [Paragraph("Composite confidence", self.table_cell_bold), Paragraph(f"{self.data.vide_similarity.value:.2f} (threshold: ≥ 0.72)", self.table_cell)],
+            [Paragraph("Composite confidence", self.table_cell_bold), Paragraph(composite, self.table_cell)],
             [Paragraph("VIDE-F001", self.table_cell_bold), Paragraph(f"<b>{self.data.vide_status.value}</b>", self.table_cell_bold)],
             [Paragraph("critical_visual_cluster", self.table_cell_bold), Paragraph("NOT triggered — requires confidence ≥ 0.80", self.table_cell)],
             [Paragraph("CH06 signer impersonation", self.table_cell_bold), Paragraph("Not evaluated — certificate unavailable for this sample", self.table_cell)],
@@ -1650,6 +1771,8 @@ class ReportLabPDFGenerator:
         ]))
         elements.append(vide_table)
         elements.append(Spacer(1, 6))
+
+        self._build_vide_color_scheme(elements)
 
         # Text Box below table
         interact_p = Paragraph(

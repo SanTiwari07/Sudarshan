@@ -140,7 +140,11 @@ services:
       - VIRUSTOTAL_API_KEY=${VIRUSTOTAL_API_KEY}
       - OTX_API_KEY=${OTX_API_KEY}
       - ABUSEIPDB_API_KEY=${ABUSEIPDB_API_KEY}
-      - FRIDA_ANALYSIS_DURATION=${FRIDA_ANALYSIS_DURATION:-90}
+      # 300s, matching frida_sandbox.py's ANALYSIS_DURATION_SECONDS default.
+      # A measured exploration iteration costs ~14.8s (see .env), so the old 90s
+      # default bought only 4-7 actions per sample and every run ended in
+      # TIME_BUDGET_EXHAUSTED with unexplored work still in hand.
+      - FRIDA_ANALYSIS_DURATION=${FRIDA_ANALYSIS_DURATION:-300}
       # Raise on a slow sandbox: scales every UI action delay.
       - SUDARSHAN_ACTION_DELAY_SCALE=${SUDARSHAN_ACTION_DELAY_SCALE:-1.0}
       - SUDARSHAN_APP_OPEN_SETTLE=${SUDARSHAN_APP_OPEN_SETTLE:-8.0}

@@ -1,24 +1,23 @@
 {
-  "institution_id": "demo_sbi_yono",
-  "baseline_id": "BASE-01-SBI",
-  "display_name": "State Bank of India (YONO SBI)",
+  "institution_id": "demo_bob_world",
+  "baseline_id": "BASE-05-BOB",
+  "display_name": "Bank of Baroda (bob World)",
   "package_names": [
-    "com.sbi.lotusintouch",
-    "com.sbi.lotus"
+    "com.bankofbaroda.mconnect",
+    "com.mconnect"
   ],
   "allowed_signers_sha256": [],
   "version": "2.0.0",
   "profile": {
     "source": "baseline",
     "strings": [
-      "CIF Number",
-      "6-digit MPIN",
-      "Profile Password",
-      "YONO SBI",
-      "Login",
-      "Username",
-      "Net Banking",
-      "Account Balance",
+      "bob World",
+      "Customer ID",
+      "CIF ID",
+      "Login PIN",
+      "TPIN",
+      "Bank of Baroda",
+      "Transaction PIN",
       "OTP"
     ],
     "view_sequence": [
@@ -33,12 +32,10 @@
       "BottomNavigationView"
     ],
     "colors": [
-      "#1B4AA0",
-      "#D0342C",
-      "#16213A",
-      "#280071",
+      "#F26522",
+      "#EB6E1F",
+      "#FF6600",
       "#002D62",
-      "#577CB7",
       "#FFFFFF"
     ],
     "asset_hashes": []

@@ -22,6 +22,7 @@ from sudarshan_core.engines.vide.baseline_store import (
     get_baselines,
 )
 from sudarshan_core.engines.vide.compare import (
+    DETECTION_THRESHOLD,
     RULE_ID,
     claims_official_identity,
     compare_against_baselines,
@@ -34,6 +35,7 @@ from sudarshan_core.engines.vide.corpus_compare import (
     CorpusVerdict,
     compare_against_corpus,
 )
+from sudarshan_core.engines.vide.forensics import confidence_tier, tier_label
 from sudarshan_core.engines.vide.html_profile import profile_from_html
 from sudarshan_core.engines.vide.js_bundle import build_bundle_ast, profile_from_js_bundle
 from sudarshan_core.engines.vide.layout_extractor import extract_from_decode_dir
@@ -153,10 +155,44 @@ def profile_from_dynamic_result(dynamic_result: Optional[Dict[str, Any]]) -> UIP
     for event in dynamic_result.get("network_logs") or []:
         if isinstance(event, str) and "<html" in event.lower():
             merged = _merge_profiles(merged, profile_from_html(event, "network_html"))
-    ui_xml = dynamic_result.get("ui_hierarchy_xml")
-    if isinstance(ui_xml, str) and ui_xml:
+    for ui_xml in _dynamic_ui_hierarchies(dynamic_result):
         merged = _merge_profiles(merged, _profile_from_uiautomator_xml(ui_xml))
     return merged
+
+
+def _dynamic_ui_hierarchies(dynamic_result: Dict[str, Any]) -> List[str]:
+    """
+    Every view hierarchy the dynamic run captured, deepest evidence first.
+
+    VIDE used to see exactly one: whichever screen the explorer happened to be
+    looking at when the run ended. For a login-gated app that is the login form
+    - the screen a clone shares with the app it imitates, and the least
+    informative one available. The explorer now records a hierarchy per distinct
+    in-app screen, so the surfaces BEHIND the login contribute too.
+
+    `ui_hierarchy_xml` is still read, so a run from an older engine (or a
+    UIExplorer fallback, which does not collect per-state hierarchies) keeps
+    working unchanged.
+    """
+    seen: set = set()
+    out: List[str] = []
+
+    def _add(value: Any) -> None:
+        if not isinstance(value, str) or not value.strip():
+            return
+        key = hash(value)
+        if key in seen:
+            return
+        seen.add(key)
+        out.append(value)
+
+    for entry in dynamic_result.get("ui_hierarchies") or []:
+        if isinstance(entry, dict):
+            _add(entry.get("xml"))
+        else:
+            _add(entry)
+    _add(dynamic_result.get("ui_hierarchy_xml"))
+    return out
 
 
 def _profile_from_uiautomator_xml(xml: str) -> UIProfile:
@@ -298,6 +334,7 @@ def build_findings(
                     "tree_similarity": round(vide_compare.tree_similarity, 4),
                     "color_match": round(vide_compare.color_match, 4),
                 },
+                "forensics": dict(vide_compare.forensics),
                 "evidence_lines": list(vide_compare.evidence_lines),
             }
         )
@@ -324,6 +361,7 @@ def build_findings(
                 "institution_id": "",
                 "institution_display": "",
                 "candidates": list(corpus_verdict.candidates),
+                "forensics": dict(corpus_verdict.forensics),
                 "evidence_lines": list(corpus_verdict.evidence_lines),
             }
         )
@@ -351,6 +389,7 @@ def _empty_vide_payload(
             "scores": {"string_jaccard": 0.0, "tree_similarity": 0.0, "color_match": 0.0},
             "matched_strings": [],
             "evidence_lines": [],
+            "forensics": {},
         },
         "signer_impersonation": {
             "detected": False,
@@ -393,6 +432,9 @@ def _empty_vide_payload(
         "visual_impersonation_detected": False,
         "visual_impersonation_institution": "",
         "visual_impersonation_confidence": 0.0,
+        "visual_impersonation_tier": "none",
+        "detection_threshold": DETECTION_THRESHOLD,
+        "forensic_breakdown": {},
         "ui_hierarchy_integrated": False,
     }
 
@@ -493,8 +535,9 @@ def build_suspect_ast(
             trees.append(build_bundle_ast(bundle))
 
     if dynamic_result:
-        ui_xml = dynamic_result.get("ui_hierarchy_xml")
-        if isinstance(ui_xml, str) and ui_xml:
+        # Every in-app screen, not only the last one observed - see
+        # _dynamic_ui_hierarchies().
+        for ui_xml in _dynamic_ui_hierarchies(dynamic_result):
             trees.append(build_from_uiautomator(ui_xml))
         for html in collect_webview_html_from_frida_events(dynamic_result):
             trees.append(build_from_html(html))
@@ -577,6 +620,7 @@ def run_vide_analysis(
                 "separate one bank from the others "
                 f"(candidates: {', '.join(corpus_verdict.candidates) or 'none'})"
             ],
+            forensics=vide_compare.forensics,
         )
 
     if corpus_verdict.detected and corpus_verdict.best:
@@ -592,6 +636,7 @@ def run_vide_analysis(
             color_match=best.color_score,
             matched_strings=best.matched_strings,
             evidence_lines=corpus_verdict.evidence_lines,
+            forensics=corpus_verdict.forensics,
         )
     signer_check: SignerImpersonationResult = check_signer_impersonation(
         package_name, certificate or {}
@@ -612,6 +657,7 @@ def run_vide_analysis(
                         f"VIDE suppressed: package {package_name} is signed with a "
                         f"certificate on record for {bl_entry.display_name}"
                     ],
+                    forensics=vide_compare.forensics,
                 )
             break
 
@@ -625,6 +671,20 @@ def run_vide_analysis(
     )
 
     findings = build_findings(vide_compare, corpus_verdict, signer_check)
+
+    # The breakdown the UI and the PDF render from. It follows whichever verdict
+    # survived above; when nothing fired it falls back to the corpus comparer's,
+    # so a near miss is still explained on the same three axes rather than
+    # collapsing to an empty panel.
+    forensic_breakdown: Dict[str, Any] = dict(
+        vide_compare.forensics or corpus_verdict.forensics or {}
+    )
+    tier = confidence_tier(vide_compare.confidence) if vide_compare.detected else "none"
+    if forensic_breakdown:
+        forensic_breakdown["detected"] = vide_compare.detected
+        if vide_compare.detected:
+            forensic_breakdown["institution_id"] = vide_compare.institution_id
+            forensic_breakdown["institution_display"] = vide_compare.institution_display
 
     # The best-scoring institution, whether or not the finding fired. A score
     # below threshold is still the analyst's starting point, so it is reported
@@ -677,4 +737,12 @@ def run_vide_analysis(
         "visual_impersonation_detected": vide_compare.detected,
         "visual_impersonation_institution": vide_compare.institution_display,
         "visual_impersonation_confidence": vide_compare.confidence,
+        # A 0.20 threshold spans everything from a bare palette match to a
+        # pixel-faithful clone, so the strength band travels with the verdict.
+        # Without it every detection renders identically and the UI overstates
+        # the weak ones.
+        "visual_impersonation_tier": tier,
+        "visual_impersonation_tier_label": tier_label(tier),
+        "detection_threshold": DETECTION_THRESHOLD,
+        "forensic_breakdown": forensic_breakdown,
     }

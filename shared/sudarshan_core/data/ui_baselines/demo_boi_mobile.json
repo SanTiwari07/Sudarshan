@@ -1,24 +1,24 @@
 {
-  "institution_id": "demo_sbi_yono",
-  "baseline_id": "BASE-01-SBI",
-  "display_name": "State Bank of India (YONO SBI)",
+  "institution_id": "demo_boi_mobile",
+  "baseline_id": "BASE-07-BOI",
+  "display_name": "Bank of India (BOI Mobile)",
   "package_names": [
-    "com.sbi.lotusintouch",
-    "com.sbi.lotus"
+    "com.boi.ua.android",
+    "com.boi.mobile"
   ],
   "allowed_signers_sha256": [],
   "version": "2.0.0",
   "profile": {
     "source": "baseline",
     "strings": [
-      "CIF Number",
+      "BOI Mobile",
+      "Omni Neo",
+      "Customer ID",
+      "Cust ID",
       "6-digit MPIN",
-      "Profile Password",
-      "YONO SBI",
+      "TPIN",
+      "Bank of India",
       "Login",
-      "Username",
-      "Net Banking",
-      "Account Balance",
       "OTP"
     ],
     "view_sequence": [
@@ -33,12 +33,10 @@
       "BottomNavigationView"
     ],
     "colors": [
-      "#1B4AA0",
-      "#D0342C",
-      "#16213A",
-      "#280071",
-      "#002D62",
-      "#577CB7",
+      "#003366",
+      "#0054A6",
+      "#F37023",
+      "#FF7F00",
       "#FFFFFF"
     ],
     "asset_hashes": []

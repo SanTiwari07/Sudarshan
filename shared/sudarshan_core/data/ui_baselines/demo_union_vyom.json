@@ -1,24 +1,23 @@
 {
-  "institution_id": "demo_sbi_yono",
-  "baseline_id": "BASE-01-SBI",
-  "display_name": "State Bank of India (YONO SBI)",
+  "institution_id": "demo_union_vyom",
+  "baseline_id": "BASE-10-UNION",
+  "display_name": "Union Bank of India (Vyom)",
   "package_names": [
-    "com.sbi.lotusintouch",
-    "com.sbi.lotus"
+    "com.infrasoft.uboi",
+    "com.infrasofttech.uboi"
   ],
   "allowed_signers_sha256": [],
   "version": "2.0.0",
   "profile": {
     "source": "baseline",
     "strings": [
+      "Union ease",
+      "Vyom",
       "CIF Number",
-      "6-digit MPIN",
-      "Profile Password",
-      "YONO SBI",
-      "Login",
-      "Username",
-      "Net Banking",
-      "Account Balance",
+      "User ID",
+      "Login PIN",
+      "TPIN",
+      "Union Bank of India",
       "OTP"
     ],
     "view_sequence": [
@@ -33,12 +32,10 @@
       "BottomNavigationView"
     ],
     "colors": [
-      "#1B4AA0",
-      "#D0342C",
-      "#16213A",
-      "#280071",
-      "#002D62",
-      "#577CB7",
+      "#D9142A",
+      "#D8232A",
+      "#003366",
+      "#005A9C",
       "#FFFFFF"
     ],
     "asset_hashes": []

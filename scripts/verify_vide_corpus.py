@@ -51,12 +51,19 @@ _WANTED_PREFIXES = ("assets/", "res/layout")
 _IMPERSONATED_PACKAGE = "com.sbi.lotus"
 
 
+# The same ten APKs are vendored in-repo for the calibration checks, so the
+# engine contract can be exercised without a corpus checkout. Attribution still
+# needs one - there is nothing to attribute *to* without the baselines.
+_IN_REPO_APKS = REPO_ROOT / "tests" / "apks" / "VIDE_testapks"
+
+
 def corpus_apk_dir() -> Path | None:
     root = find_corpus_root()
-    if root is None:
-        return None
-    apk_dir = root / "built_apks"
-    return apk_dir if apk_dir.is_dir() else None
+    if root is not None:
+        apk_dir = root / "built_apks"
+        if apk_dir.is_dir():
+            return apk_dir
+    return _IN_REPO_APKS if _IN_REPO_APKS.is_dir() else None
 
 
 def extract_apk(apk_path: Path, dest: Path) -> None:
@@ -109,8 +116,29 @@ def contract_failures(result: Dict[str, Any]) -> List[str]:
     return problems
 
 
-def verify_one(apk_path: Path, baselines: List[Any]) -> Dict[str, Any]:
-    expected = apk_path.stem  # e.g. BASE-02-HDFC
+def baseline_id_index(baselines: List[Any]) -> Dict[str, str]:
+    """
+    ``BASE-02-HDFC`` -> the institution id that stands for it.
+
+    A corpus baseline is keyed by the corpus id itself; a lab profile declares
+    which corpus entry it mirrors via ``baseline_id``. Both are resolved the
+    same way here so an APK can be checked against whichever set is loaded.
+    """
+    index: Dict[str, str] = {}
+    for baseline in baselines:
+        key = (getattr(baseline, "baseline_id", "") or "").strip().upper()
+        if key:
+            index.setdefault(key, baseline.institution_id)
+    return index
+
+
+def verify_one(
+    apk_path: Path,
+    baselines: List[Any],
+    expected_index: Dict[str, str],
+) -> Dict[str, Any]:
+    stem = apk_path.stem  # e.g. BASE-02-HDFC
+    expected = expected_index.get(stem.upper(), stem)
     result = _run(apk_path, baselines, package_name="", certificate={})
 
     corpus = result.get("corpus_compare") or {}
@@ -120,14 +148,27 @@ def verify_one(apk_path: Path, baselines: List[Any]) -> Dict[str, Any]:
     profile = result.get("extracted_profile") or {}
     matched = result.get("matched_baseline") or {}
 
+    # The corpus comparer is authoritative when a corpus is loaded. Without one
+    # its ranking is empty, and the attribution the engine actually reached
+    # lives on the general comparer - reading only the corpus there reported
+    # ten failures for a reason that had nothing to do with the ten APKs.
+    compare = result.get("vide_compare") or {}
+    attributed = top.get("institution_id") or compare.get("institution_id", "")
+    confidence = top.get("confidence") or compare.get("confidence", 0.0)
+    scores = top.get("scores") or {
+        "string_containment": (compare.get("scores") or {}).get("string_jaccard", 0.0),
+        "structural": (compare.get("scores") or {}).get("tree_similarity", 0.0),
+        "color": (compare.get("scores") or {}).get("color_match", 0.0),
+    }
+
     return {
         "apk": apk_path.name,
         "expected": expected,
-        "attributed": top.get("institution_id", ""),
-        "correct": top.get("institution_id") == expected,
-        "detected": bool(corpus.get("detected")),
-        "confidence": top.get("confidence", 0.0),
-        "scores": top.get("scores", {}),
+        "attributed": attributed,
+        "correct": bool(attributed) and attributed == expected,
+        "detected": bool(corpus.get("detected") or compare.get("detected")),
+        "confidence": confidence,
+        "scores": scores,
         "ambiguous": bool((corpus.get("attribution") or {}).get("ambiguous")),
         "signatures": corpus.get("suspect_signatures") or [],
         "strings": summary.get("string_count", 0),
@@ -137,8 +178,46 @@ def verify_one(apk_path: Path, baselines: List[Any]) -> Dict[str, Any]:
         "finding_rules": [f.get("rule_id") for f in (result.get("findings") or [])],
         "profile_strings": len(profile.get("strings") or []),
         "profile_colors": len(profile.get("colors") or []),
+        "tier": result.get("visual_impersonation_tier", ""),
+        "forensics": result.get("forensic_breakdown") or {},
         "contract_problems": contract_failures(result),
     }
+
+
+def forensic_lines(forensics: Dict[str, Any]) -> List[str]:
+    """The three-axis breakdown as an analyst would read it."""
+    if not forensics:
+        return ["(no forensic breakdown)"]
+
+    out: List[str] = []
+    colours = forensics.get("color_scheme") or {}
+    matches = colours.get("matches") or []
+    out.append(
+        f"colour   {colours.get('score', 0.0):.2f} "
+        f"({colours.get('matched_count', 0)}/{colours.get('target_count', 0)} brand colours, "
+        f"{colours.get('exact_matches', 0)} exact)"
+    )
+    for match in matches[:4]:
+        out.append(
+            f"           {match['suspect_hex']} vs {match['baseline_hex']}  "
+            f"dE={match['delta_e']:.1f}  {match['verdict']}"
+        )
+
+    text = forensics.get("ui_text") or {}
+    out.append(
+        f"text     {text.get('score', 0.0):.2f} "
+        f"({text.get('matched_count', 0)}/{text.get('target_count', 0)} labels)"
+    )
+    matched = text.get("matched_strings") or []
+    if matched:
+        out.append(f"           {', '.join(matched[:8])}")
+
+    hierarchy = forensics.get("view_hierarchy") or {}
+    out.append(
+        f"layout   {hierarchy.get('score', 0.0):.2f} "
+        f"(signatures: {', '.join(hierarchy.get('matched_signatures') or []) or 'none'})"
+    )
+    return out
 
 
 def verify_signer_impersonation(apk_path: Path, baselines: List[Any]) -> Dict[str, Any]:
@@ -176,13 +255,24 @@ def verify_signer_impersonation(apk_path: Path, baselines: List[Any]) -> Dict[st
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--json", action="store_true", help="emit JSON instead of a table")
+    parser.add_argument(
+        "--apk-dir",
+        type=Path,
+        default=None,
+        help="APKs to verify (default: the corpus built_apks, else tests/apks/VIDE_testapks)",
+    )
+    parser.add_argument(
+        "--forensics",
+        action="store_true",
+        help="print the colour / text / structure breakdown behind each verdict",
+    )
     args = parser.parse_args()
 
-    apk_dir = corpus_apk_dir()
-    if apk_dir is None:
+    apk_dir = args.apk_dir or corpus_apk_dir()
+    if apk_dir is None or not apk_dir.is_dir():
         print(
-            "Baseline corpus not found. Set BANKING_BASELINE_CORPUS_DIR, or place "
-            "the corpus at <repo>/banking-baseline-corpus.",
+            "No APKs to verify. Set BANKING_BASELINE_CORPUS_DIR, place the corpus "
+            "at <repo>/banking-baseline-corpus, or pass --apk-dir.",
             file=sys.stderr,
         )
         return 2
@@ -193,20 +283,33 @@ def main() -> int:
         return 2
 
     baselines = get_baselines()
-    results = [verify_one(apk, baselines) for apk in apks]
+    expected_index = baseline_id_index(baselines)
+    unmapped = [a.stem for a in apks if a.stem.upper() not in expected_index]
+    if unmapped:
+        # Said up front rather than left to be inferred from a row of FAILs:
+        # an APK with no baseline declaring its id cannot be attributed to
+        # anything, and that is a gap in the baseline set, not in the engine.
+        print(
+            "WARNING: no baseline declares a baseline_id for: "
+            f"{', '.join(unmapped)}.\n"
+            "         Those rows cannot pass. Add the profile, or check out the\n"
+            "         corpus and set BANKING_BASELINE_CORPUS_DIR.\n",
+            file=sys.stderr,
+        )
+    results = [verify_one(apk, baselines, expected_index) for apk in apks]
     signer_case = verify_signer_impersonation(apks[0], baselines)
 
     if args.json:
         print(json.dumps({"attribution": results, "signer": signer_case}, indent=2))
     else:
-        print(f"{'APK':22} {'attributed':15} {'ok':4} {'conf':6} "
+        print(f"{'APK':22} {'expected':22} {'attributed':22} {'ok':4} {'conf':6} "
               f"{'str':5} {'struct':7} {'color':6} {'strings':8} {'colors':7} "
               f"{'rules':14} {'contract'}")
-        print("-" * 128)
+        print("-" * 150)
         for r in results:
             s = r["scores"] or {}
             print(
-                f"{r['apk']:22} {r['attributed'] or '-':15} "
+                f"{r['apk']:22} {r['expected'] or '-':22} {r['attributed'] or '-':22} "
                 f"{'PASS' if r['correct'] else 'FAIL':4} "
                 f"{r['confidence']:.3f}  "
                 f"{s.get('string_containment', 0):.2f}  "
@@ -216,6 +319,12 @@ def main() -> int:
                 f"{','.join(r['finding_rules']) or '-':14} "
                 f"{'OK' if not r['contract_problems'] else '; '.join(r['contract_problems'])}"
             )
+
+        if args.forensics:
+            for r in results:
+                print(f"\n  {r['apk']} -> {r['attributed'] or 'unattributed'} ({r['tier'] or 'none'})")
+                for line in forensic_lines(r["forensics"]):
+                    print(f"      {line}")
 
         print(
             f"\nCH06 impersonation case: {signer_case['apk']} declared as "

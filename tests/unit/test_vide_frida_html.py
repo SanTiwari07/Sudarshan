@@ -68,5 +68,8 @@ def test_frida_html_feeds_vide_compare():
     assert result["suspect_profile_summary"]["string_count"] > empty["suspect_profile_summary"]["string_count"]
     scores = result["vide_compare"]["scores"]
     assert scores["string_jaccard"] > 0.3
-    matched = result["vide_compare"].get("matched_strings") or []
-    assert "enter upi pin" in [s.lower() for s in matched]
+    matched = [s.lower() for s in (result["vide_compare"].get("matched_strings") or [])]
+    # A label the SBI baseline actually ships, so this tracks the WebView->VIDE
+    # path rather than the contents of a baseline file it does not own.
+    assert "account balance" in matched
+    assert "net banking" in matched

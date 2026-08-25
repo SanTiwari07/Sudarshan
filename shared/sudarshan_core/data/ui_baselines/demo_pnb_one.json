@@ -1,24 +1,23 @@
 {
-  "institution_id": "demo_sbi_yono",
-  "baseline_id": "BASE-01-SBI",
-  "display_name": "State Bank of India (YONO SBI)",
+  "institution_id": "demo_pnb_one",
+  "baseline_id": "BASE-06-PNB",
+  "display_name": "Punjab National Bank (PNB ONE)",
   "package_names": [
-    "com.sbi.lotusintouch",
-    "com.sbi.lotus"
+    "com.infrasofttech.pnb",
+    "com.pnb.pnbone"
   ],
   "allowed_signers_sha256": [],
   "version": "2.0.0",
   "profile": {
     "source": "baseline",
     "strings": [
-      "CIF Number",
-      "6-digit MPIN",
-      "Profile Password",
-      "YONO SBI",
-      "Login",
-      "Username",
-      "Net Banking",
-      "Account Balance",
+      "PNB ONE",
+      "User ID",
+      "Customer ID",
+      "4-digit MPIN",
+      "TPIN",
+      "Punjab National Bank",
+      "Sign In",
       "OTP"
     ],
     "view_sequence": [
@@ -33,12 +32,10 @@
       "BottomNavigationView"
     ],
     "colors": [
-      "#1B4AA0",
-      "#D0342C",
-      "#16213A",
-      "#280071",
-      "#002D62",
-      "#577CB7",
+      "#A20E37",
+      "#941834",
+      "#003366",
+      "#FFD200",
       "#FFFFFF"
     ],
     "asset_hashes": []

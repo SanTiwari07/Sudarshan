@@ -221,6 +221,37 @@ def match_score(distance: float) -> float:
     return 1.0 - ((distance - IDENTICAL_DELTA_E) / span)
 
 
+def describe_delta_e(distance: float) -> str:
+    """
+    Plain-language reading of a ΔE₂₀₀₀ distance, for forensic evidence lines.
+
+    The bands are the ones the constants above are already calibrated to, said
+    out loud: an analyst reading "ΔE=1.8" in a CERT-In report should not have to
+    know the CIE literature to learn that the two swatches are indistinguishable
+    to the victim who installed the app.
+    """
+    if distance == float("inf"):
+        return "no comparable colour"
+    if distance <= 1.0:
+        return "visually identical"
+    if distance <= IDENTICAL_DELTA_E:
+        return "high visual match"
+    if distance <= (IDENTICAL_DELTA_E + MAX_MATCH_DELTA_E) / 2.0:
+        return "close match"
+    if distance < MAX_MATCH_DELTA_E:
+        return "weak match"
+    return "different colour family"
+
+
+def describe_color_match(match: Dict[str, object]) -> str:
+    """One palette match rendered as an evidence line."""
+    return (
+        f"Brand colour {str(match['suspect']).upper()} matched baseline "
+        f"{str(match['baseline']).upper()} "
+        f"(ΔE={float(match['distance']):.1f}, {match['verdict']})"
+    )
+
+
 def best_match(color: str, palette: Sequence[str]) -> Tuple[Optional[str], float]:
     """Closest palette entry to ``color`` and its match score."""
     best: Optional[str] = None
@@ -265,12 +296,18 @@ def palette_similarity(
         found, score = best_match(target, suspect_brand)
         total += score
         if score > 0:
+            distance = round(color_distance(target, found or ""), 2)
             matches.append(
                 {
                     "baseline": target,
                     "suspect": found,
                     "score": round(score, 4),
-                    "distance": round(color_distance(target, found or ""), 2),
+                    "distance": distance,
+                    # Alias under the name the CIE formula is known by, and the
+                    # band it falls in, so consumers rendering a forensic badge
+                    # do not each re-derive the wording.
+                    "delta_e": distance,
+                    "verdict": describe_delta_e(distance),
                 }
             )
 

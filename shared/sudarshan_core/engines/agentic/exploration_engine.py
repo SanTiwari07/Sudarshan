@@ -46,6 +46,22 @@ class ExplorationBudget:
         os.getenv("SUDARSHAN_MAX_CONSECUTIVE_CRASHES", "3")
     )
     MAX_BACKTRACKS: int = int(os.getenv("SUDARSHAN_MAX_BACKTRACKS", "20"))
+    #: Actions the agent may spend inside one system boundary (installer,
+    #: permission controller, a consent screen hosted by Settings) before it is
+    #: sent back to the sample. Answering a prompt takes 1-2 actions; 6 leaves
+    #: room for a scroll and a confirm step without letting a system app absorb
+    #: the run, which a measured 300s trace showed it otherwise does entirely.
+    MAX_BOUNDARY_ACTIONS: int = int(
+        os.getenv("SUDARSHAN_MAX_BOUNDARY_ACTIONS", "6")
+    )
+    #: Credential sets offered to one login form before the walk moves on.
+    #: The run does NOT give up after a single silent attempt - a submit can
+    #: race the keyboard, and a form can clear itself - so a fresh identity is
+    #: tried up to this many times. An explicit "invalid credentials" from the
+    #: app ends it immediately, whatever the count (see note_login_outcome).
+    MAX_LOGIN_ATTEMPTS: int = int(
+        os.getenv("SUDARSHAN_MAX_LOGIN_ATTEMPTS", "5")
+    )
     MAX_RETRIES_PER_ACTION: int = int(
         os.getenv("SUDARSHAN_MAX_ACTION_RETRIES", "3")
     )
@@ -180,6 +196,10 @@ class ActionItem:
     is_scrollable: bool = False
     is_clickable: bool = True
     is_checkable: bool = False
+    #: What this input wants ("username", "password", "otp", ...). Resolved once
+    #: at discovery from the field's password flag and its caption, and carried
+    #: to the executor as `field_hint`, so the value typed matches the field.
+    field_kind: str = ""
     priority: int = 50
     explored: bool = False
     failed: bool = False
@@ -199,7 +219,27 @@ class ActionItem:
     execution_attempts: int = 0
 
     def signature(self) -> str:
-        return f"{self.action_type}:{self.node_id}:{self.label}:{self.scroll_direction}"
+        """
+        Stable identity for de-duplicating an action across observations.
+
+        `node_id` is deliberately absent. Perception numbers nodes positionally
+        (`n0`, `n1`, ...), so raising the soft keyboard - which reorders and
+        reflows a WebView hierarchy - renumbered every node and made each
+        control look new. The merge path in observe() then appended a second
+        unexplored copy of the same button on every visit, and the inventory
+        grew without bound while the screen stood still.
+
+        What a control IS - its role, its caption, its id, its class and its
+        size - does not change when the layout moves.
+        """
+        return ":".join((
+            self.action_type,
+            self.label,
+            self.resource_id,
+            self.class_name,
+            _bounds_bucket(self.bounds),
+            self.scroll_direction,
+        ))
 
     @property
     def resolved(self) -> bool:
@@ -229,6 +269,10 @@ class ExplorationState:
     explored: bool = False
     parent_state_id: str = ""
     entry_action: str = ""
+    #: The screen is rendered inside a WebView. Recorded because it changes what
+    #: the back key means: a WebView app runs its whole journey in one Activity,
+    #: so back leaves the app rather than traversing it.
+    is_webview: bool = False
     runtime_event_ids: List[str] = field(default_factory=list)
     evidence_ids: List[str] = field(default_factory=list)
     scroll_positions_explored: Dict[str, Set[str]] = field(default_factory=dict)
@@ -278,6 +322,88 @@ class ExplorationEdge:
 
 # ─── State identity ─────────────────────────────────────────────────────────────
 
+#: Geometry bucket, in pixels, applied to a control's SIZE.
+#:
+#: Position is deliberately not part of the signature. On the WebView banking
+#: apps in the corpus, focusing an input raises the soft keyboard and shifts
+#: every control below it - measured at 63px on the SBI baseline, which is
+#: enough to change any position bucket fine enough to be worth having. Scroll
+#: does the same thing to a whole screen. Both would make one screen read as
+#: several, which is exactly the fragmentation this signature exists to stop.
+#:
+#: Size does not move: a 955x118 text box is that size wherever the keyboard
+#: pushes it, and a full-width banner is still distinguishable from a small
+#: icon button, which is what geometry is here to contribute.
+_BOUNDS_BUCKET_PX: int = 16
+
+_BOUNDS_RE = re.compile(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]")
+
+
+def _bounds_bucket(bounds: str) -> str:
+    """Fold a control's width and height onto a coarse grid, ignoring position."""
+    if not bounds:
+        return ""
+    m = _BOUNDS_RE.match(bounds.strip())
+    if not m:
+        return ""
+    x1, y1, x2, y2 = (int(v) for v in m.groups())
+    b = _BOUNDS_BUCKET_PX
+    return f"{max(0, x2 - x1) // b}x{max(0, y2 - y1) // b}"
+
+
+#: Resource ids that name chrome, not controls. A node carrying one of these is
+#: decoration even when an ancestor happens to be clickable.
+_DECORATIVE_RESOURCE_IDS = frozenset({
+    "action_bar_title",
+    "action_bar_subtitle",
+    "toolbar_title",
+    "alertTitle",
+    "title_template",
+    "topPanel",
+    "contentPanel",
+})
+
+
+def _is_decorative_label(
+    label: str, resource_id: str, detection_source: str,
+) -> bool:
+    """
+    Whether a text node is chrome that only *looks* actionable.
+
+    Only nodes admitted by `clickable_parent_recovery` are judged. That recovery
+    exists so a label inside a clickable list row is still reachable, and it is
+    worth keeping - but it also promotes an ActionBar title, whose ancestor
+    toolbar is clickable and does nothing when tapped. A measured run spent 22s
+    each on `InsecureBankv2` and `FilePref`, both `action_bar_title`, and on the
+    form labels `Server IP:` / `Server Port:`, before the retry ladder gave up.
+
+    Nodes that declare `clickable="true"` in the hierarchy are never judged
+    here: an app is entitled to make a TextView a button, and a genuine
+    text-labelled control must survive this filter.
+    """
+    if detection_source != "clickable_parent_recovery":
+        return False
+    if resource_id in _DECORATIVE_RESOURCE_IDS:
+        return True
+    # "Server IP:" labels a field; "Preferences" is a menu item. The trailing
+    # colon is the convention that separates them.
+    return label.strip().endswith(":")
+
+
+def _is_input_node(node: Any) -> bool:
+    """
+    Whether a node holds user-entered text.
+
+    Checked structurally as well as by flag: `is_input` is set by the perception
+    parser, but a node arriving from visual grounding or a test fixture may only
+    carry its class name.
+    """
+    if bool(getattr(node, "is_input", False)):
+        return True
+    cls = (getattr(node, "class_name", "") or "").lower()
+    return "edittext" in cls or "autocomplete" in cls or "searchview" in cls
+
+
 def compute_composite_state_signature(
     activity: str,
     package: str,
@@ -287,28 +413,69 @@ def compute_composite_state_signature(
     scroll_position: int = 0,
 ) -> Tuple[str, str]:
     """
-  Build composite state identity from multiple evidence sources.
+    Build composite state identity from multiple evidence sources.
 
-  Returns (screen_hash, ui_tree_hash).
+    Returns (screen_hash, ui_tree_hash).
+
+    Identity is STRUCTURAL. What a screen *is* - its activity, its controls,
+    their ids, classes, roles, interactivity and geometry - decides the state.
+    What a control currently *contains* does not, for input fields.
+
+    This distinction is the difference between exploring a form and looping on
+    it. Volatile typed text used to be hashed directly, so `Password=""` and
+    `Password="a"` were two different states: filling one field re-forked the
+    screen, every action on it reset to unexplored, and the previously explored
+    branches were offered again. A live run on InsecureBankv2 turned a single
+    LoginActivity into five states and issued 306 action ids for six widgets,
+    and the form was never completed because typing field 1 invalidated the plan
+    for field 2.
+
+    Input fields therefore contribute a *filled/empty* bucket rather than their
+    contents. Non-input text still contributes in full: a label changing from
+    "Sign in" to "Welcome back" is a real transition and must remain one.
     """
     tree_parts: List[str] = [activity, package]
-    text_parts: List[str] = []
 
     for n in ui_nodes:
         cls = getattr(n, "class_name", "") or ""
         text = getattr(n, "text", "") or ""
         desc = getattr(n, "desc", "") or ""
         res_id = getattr(n, "resource_id", "") or ""
-        clickable = getattr(n, "is_clickable", False)
-        scrollable = getattr(n, "is_scrollable", False)
-        tree_parts.append(
-            f"{cls}|{text[:30]}|{desc[:30]}|{res_id}|{clickable}|{scrollable}"
+        clickable = bool(getattr(n, "is_clickable", False))
+        scrollable = bool(getattr(n, "is_scrollable", False))
+        checkable = bool(getattr(n, "is_checkable", False))
+        enabled = bool(getattr(n, "enabled", True))
+        is_input = _is_input_node(n)
+        # A container's size tracks the soft keyboard, not the screen. The
+        # WebView hosting a login form measures 1080x2209 with the keyboard down
+        # and 1080x2272 with it up, which is enough to fork one screen into
+        # three states. Controls keep their size bucket; the page does not.
+        geom = (
+            ""
+            if any(c in cls.lower() for c in _CONTAINER_CLASSES)
+            else _bounds_bucket(getattr(n, "bounds", "") or "")
         )
-        if text or desc:
-            text_parts.append(f"{text[:40]}|{desc[:40]}")
 
-    if visible_text:
-        text_parts.append(visible_text[:200])
+        if is_input:
+            # A field's VALUE is not part of what the screen is. Bucketing on
+            # "filled vs empty" is not enough either: the first character still
+            # forks the state, and a two-field form still splits four ways. The
+            # field's identity, role, geometry and enabled-ness all still count
+            # below - only what the user typed into it is excluded.
+            #
+            # Whether the form has been filled is tracked where it belongs, on
+            # the input ActionItem's `explored` flag, which now survives because
+            # the state no longer forks underneath it.
+            content = "<input>"
+        else:
+            content = text[:30]
+
+        tree_parts.append(
+            f"{cls}|{content}|{desc[:30]}|{res_id}|"
+            f"c{int(clickable)}e{int(enabled)}s{int(scrollable)}"
+            f"k{int(checkable)}i{int(is_input)}|{geom}"
+        )
+
     if webview_sig:
         tree_parts.append(f"webview:{webview_sig}")
     if scroll_position:
@@ -354,6 +521,81 @@ _MENU_KEYWORDS = (
 _SMS_KEYWORDS = ("sms", "read messages", "send sms", "text message")
 _AUTH_KEYWORDS = ("login", "sign in", "password", "otp", "pin", "captcha")
 
+#: Controls that SUBMIT a form. Pressing one before the fields are filled asks
+#: the app to validate an empty form: it refuses, the UI does not move, and the
+#: action is written off as failed - which is what a measured run did to the
+#: only Login button on the screen, three attempts and ~22s before ever typing
+#: a character. These are held back until the inputs above them are filled.
+#: Matched on WORD boundaries, never as substrings. Plain substring matching
+#: made "Forgot MPIN?" a submit control, because "go" is inside "Forgot" - so
+#: the agent treated a password-reset link as the login button and spent its
+#: credential-retry budget on it.
+#:
+#: "register" / "sign up" are deliberately absent: they open a different flow
+#: rather than submitting the credentials on screen.
+_SUBMIT_KEYWORDS = (
+    "login", "log in", "signin", "sign in", "submit", "continue", "proceed",
+    "next", "confirm", "verify", "done", "go", "ok", "pay", "send",
+    "unlock", "authenticate",
+)
+
+_SUBMIT_RE = re.compile(
+    r"\b(" + "|".join(re.escape(k) for k in _SUBMIT_KEYWORDS) + r")\b",
+    re.IGNORECASE,
+)
+
+
+def _is_submit_label(label: str) -> bool:
+    """Whether this caption reads like a form-submit control."""
+    text = (label or "").strip()
+    if not text:
+        return False
+    # A question is a prompt, not a submit: "Forgot Password?",
+    # "New user? Register", "Don't have an account?".
+    if "?" in text:
+        return False
+    return bool(_SUBMIT_RE.search(text))
+
+
+#: Minimum distinct digit keys before a screen counts as a numeric keypad.
+#: A 0-9 pad has ten; requiring eight tolerates one hidden or mis-parsed key
+#: without matching a screen that merely happens to show a couple of numbers.
+_KEYPAD_MIN_DIGITS: int = 8
+
+#: Digits entered when a keypad is detected. Six is the common MPIN length in
+#: the corpus; a pad that wants four accepts the first four and ignores the
+#: rest, and a pad that wants more simply stays on screen for another pass.
+PIN_ENTRY_LENGTH: int = int(os.getenv("SUDARSHAN_PIN_ENTRY_LENGTH", "6"))
+
+
+def _digit_keys(items: List["ActionItem"]) -> Dict[str, "ActionItem"]:
+    """Single-digit keys on this screen, by digit."""
+    keys: Dict[str, ActionItem] = {}
+    for item in items:
+        label = (item.label or "").strip()
+        if len(label) == 1 and label.isdigit() and item.action_type in ("click", "check"):
+            keys.setdefault(label, item)
+    return keys
+
+
+def _is_keypad_state(state: "ExplorationState") -> bool:
+    """
+    Whether this screen is a numeric PIN pad.
+
+    The banking corpus gates its dashboard behind an MPIN pad after the password
+    login. Explored one key per iteration it is not a screen but a wall: at
+    ~11s an action, entering six digits costs a minute and the pad clears itself
+    whenever the walk wanders off to try another key.
+    """
+    return len(_digit_keys(state.actionable_elements)) >= _KEYPAD_MIN_DIGITS
+
+
+def _is_submit_action(item: "ActionItem") -> bool:
+    """Whether this control submits the form it sits on."""
+    if item.action_type not in ("click", "check"):
+        return False
+    return _is_submit_label(item.label)
+
 #: Tie-breaking nudge for the affirmative option in a two-way decision dialog.
 #: Deliberately small: score_action() has already ranked on the security
 #: signal, and this only settles otherwise-close pairs (Yes/No, OK/Cancel).
@@ -384,11 +626,40 @@ def _bounds_area(bounds: str) -> int:
     return max(0, (x2 - x1) * (y2 - y1))
 
 
+#: Classes that hold other views rather than being controls themselves. A
+#: clickable one is a page background, not a button.
+_CONTAINER_CLASSES = (
+    "webview", "scrollview", "viewgroup", "framelayout", "linearlayout",
+    "relativelayout", "recyclerview", "listview", "gridview", "constraintlayout",
+    "coordinatorlayout", "nestedscrollview", "viewpager",
+)
+
+#: A control this large is the page, not a control on it.
+_FULLSCREEN_AREA_PX = 900_000
+
+
+def _is_container_action(item: "ActionItem") -> bool:
+    """
+    Whether this 'control' is really the page background.
+
+    The WebView hosting a banking app's login form is itself clickable and
+    carries the document title as its text ("app"), so it entered the inventory
+    as a full-screen labelled button. Tapping it does nothing, and it is offered
+    on every screen of every WebView app in the corpus.
+    """
+    cls = (item.class_name or "").lower()
+    if not any(c in cls for c in _CONTAINER_CLASSES):
+        return False
+    return _bounds_area(item.bounds) >= _FULLSCREEN_AREA_PX
+
+
 def _prune_container_actions(items: List["ActionItem"]) -> List["ActionItem"]:
-    """Drop unlabeled full-screen parents when labeled CTAs exist."""
+    """Drop full-screen parents when real CTAs exist."""
     labeled = [
         i for i in items
-        if not _is_unlabeled_action(i) and i.action_type != "scroll"
+        if not _is_unlabeled_action(i)
+        and not _is_container_action(i)
+        and i.action_type != "scroll"
     ]
     if not labeled:
         return items
@@ -401,10 +672,22 @@ def _prune_container_actions(items: List["ActionItem"]) -> List["ActionItem"]:
             continue
         if _is_unlabeled_action(item):
             continue
+        # A labelled full-screen container is still the page, not a control.
+        # Only dropped when genuine CTAs exist, so a screen whose ONLY
+        # interactive element really is a full-bleed surface keeps it.
+        if _is_container_action(item):
+            continue
         kept.append(item)
     return kept or items
 
 
+#: Screen types that ARE a required boundary action - a prompt the sample put
+#: in front of the user, which the run exists to answer. These are admitted to
+#: the target graph wherever they appear, including inside Settings, because the
+#: accessibility and VPN consent flows are hosted by com.android.settings.
+#:
+#: "SETTINGS" is deliberately NOT here. A generic Settings screen is not a
+#: prompt the sample raised; it is somewhere the agent wandered.
 _INTERACTIVE_BOUNDARY_TYPES = frozenset({
     "SYSTEM_PERMISSION",
     "ACCESSIBILITY_DIALOG",
@@ -413,12 +696,35 @@ _INTERACTIVE_BOUNDARY_TYPES = frozenset({
     "EXTERNAL_APK",
     "UPDATE_PROMPT",
     "DOWNLOAD_PROMPT",
-    "SETTINGS",
 })
+
+#: Packages whose ENTIRE purpose is to host boundary dialogs, so ownership alone
+#: is sufficient evidence that the screen is a prompt.
+#:
+#: SYSTEM_SETTINGS was removed. com.android.settings is a full application with
+#: effectively unbounded UI; admitting it on ownership turned every Settings
+#: screen into first-class target work. A measured 300s run answered 55 of 55
+#: observations from com.android.settings, made 0 out-of-scope recoveries and 0
+#: observations of the sample. A Settings screen now qualifies only when its
+#: semantic_type is one of _INTERACTIVE_BOUNDARY_TYPES above.
 _INTERACTIVE_BOUNDARY_OWNERSHIP = frozenset({
     "SYSTEM_INSTALLER",
-    "SYSTEM_SETTINGS",
     "SYSTEM_PERMISSION",
+})
+
+#: Visits after which a state's pending scroll actions are promoted ahead of its
+#: clicks. Low enough that below-the-fold content is reached early, high enough
+#: that a screen is not scrolled before its visible controls are tried.
+_SCROLL_FAIRNESS_VISITS: int = int(
+    os.getenv("SUDARSHAN_SCROLL_FAIRNESS_VISITS", "2")
+)
+
+#: Ownership values that denote a system surface rather than the sample.
+_SYSTEM_OWNERSHIP = frozenset({
+    "SYSTEM_INSTALLER",
+    "SYSTEM_PERMISSION",
+    "SYSTEM_SETTINGS",
+    "EXTERNAL_APP",
 })
 
 
@@ -713,6 +1019,28 @@ class ExplorationGraph:
         self.stop_reason: Optional[StopReason] = None
         self.action_results: List[Dict[str, Any]] = []
         self._backtrack_count: int = 0
+        # Bounded system-boundary excursion (§P1). Actions spent per boundary
+        # package, the boundary currently occupied, and whether the graph owes
+        # the caller a deterministic return to the sample.
+        self._boundary_actions: Dict[str, int] = {}
+        self._boundary_package: str = ""
+        # The sample's task-root state - the screen the launcher opened. Back
+        # exits the app from here rather than traversing the graph.
+        self._root_state_id: str = ""
+        # Credential-form progress: how many identities have been offered, what
+        # the app said about them, and which state hosts the form.
+        self.login_attempts: int = 0
+        self.login_outcome: str = "not_attempted"
+        self._login_state_id: str = ""
+        # States whose numeric keypad has already been filled once, so a PIN
+        # that is not accepted does not become an infinite re-entry loop.
+        self._keypad_entered: Dict[str, bool] = {}
+        self._boundary_return_required: bool = False
+        self.boundary_transitions: int = 0
+        self.boundary_returns: int = 0
+        # Visits to a state that produced no newly-resolved action, keyed by
+        # state id. Drives MAX_REPEATED_STATE_VISITS enforcement.
+        self._unproductive_visits: Dict[str, int] = {}
         # External-app states kept separate from target-app graph
         self.external_states: Dict[str, ExplorationState] = {}
         self._home_observation_count: int = 0
@@ -742,6 +1070,70 @@ class ExplorationGraph:
         self._action_counter += 1
         return f"ACT-{self._action_counter:03d}"
 
+    # ── Bounded system-boundary excursion ────────────────────────────────────
+
+    def _boundary_budget_exhausted(self, package: str) -> bool:
+        """Whether this boundary package has spent its action allowance."""
+        return (
+            self._boundary_actions.get(package, 0)
+            >= ExplorationBudget.MAX_BOUNDARY_ACTIONS
+        )
+
+    def _note_boundary_action(self, state_id: str) -> None:
+        """Charge one action against the boundary a state belongs to."""
+        state = self._lookup_state(state_id)
+        if state is None:
+            return
+        # Read defensively: the graph legitimately holds states built by
+        # fixtures and by other subsystems, which need not carry every field.
+        # Book-keeping must never be able to abort a run.
+        ownership = getattr(state, "ownership", "") or ""
+        if ownership not in _SYSTEM_OWNERSHIP:
+            return
+        pkg = getattr(state, "foreground_package", "") or ownership
+        if not pkg or pkg == self.package_name:
+            return
+        spent = self._boundary_actions.get(pkg, 0) + 1
+        self._boundary_actions[pkg] = spent
+        logger.info(
+            "[ExplorationGraph] BOUNDARY_ACTION package=%s %d/%d state=%s",
+            pkg, spent, ExplorationBudget.MAX_BOUNDARY_ACTIONS, state_id,
+        )
+        if spent >= ExplorationBudget.MAX_BOUNDARY_ACTIONS:
+            self._boundary_return_required = True
+
+    def _return_to_target_action(self) -> Dict[str, Any]:
+        """
+        Deterministic route home from a system boundary.
+
+        `press_back` is not used: a boundary reached via an intent may have no
+        back edge to the sample, and pressing back repeatedly is how a run ends
+        up on the launcher. Re-launching the sample's component is unambiguous
+        and puts the agent exactly where the analysis needs it.
+        """
+        self.boundary_returns += 1
+        pkg = self._boundary_package or "system"
+        logger.info(
+            "[ExplorationGraph] BOUNDARY_RETURN_TO_TARGET from=%s to=%s "
+            "(actions_spent=%d/%d)",
+            pkg, self.package_name, self._boundary_actions.get(pkg, 0),
+            ExplorationBudget.MAX_BOUNDARY_ACTIONS,
+        )
+        return {
+            "tool": "start_activity",
+            "package": self.package_name,
+            "goal": "RETURN_TO_TARGET",
+            "reasoning": (
+                f"Boundary '{pkg}' exhausted its "
+                f"{ExplorationBudget.MAX_BOUNDARY_ACTIONS}-action allowance; "
+                f"returning to {self.package_name}"
+            ),
+            "confidence": 0.95,
+            "_source": "exploration_engine",
+            "_selected_by": "boundary_return",
+            "_state_id": self._current_state_id or "",
+        }
+
     def _build_action_inventory(self, ui_nodes: List[Any]) -> List[ActionItem]:
         """Enumerate all actionable elements from UI nodes."""
         from sudarshan_core.engines.agentic.device_properties import (
@@ -755,13 +1147,50 @@ class ExplorationGraph:
         context_text = _visible_text_summary(ui_nodes)
         default_x = FALLBACK_SCREEN_WIDTH // 2
         default_y = int(FALLBACK_SCREEN_HEIGHT * 0.5)
+        # Position of each input among the inputs on this screen. The first
+        # unlabelled field on a login form is the identifier; see
+        # credentials.resolve_field_kind.
+        input_index = 0
 
         for idx, n in enumerate(ui_nodes):
             node_id = getattr(n, "node_id", f"n{idx}")
             text = getattr(n, "text", "") or ""
             desc = getattr(n, "desc", "") or ""
-            label = text or desc or getattr(n, "resource_id", "") or node_id
-            is_input = getattr(n, "is_input", False)
+            is_input = _is_input_node(n)
+            field_kind = ""
+            if is_input:
+                from sudarshan_core.engines.agentic.credentials import (
+                    resolve_field_kind,
+                )
+                field_kind = resolve_field_kind(
+                    field_label=getattr(n, "field_label", "") or "",
+                    resource_id=getattr(n, "resource_id", "") or "",
+                    content_desc=desc,
+                    class_name=getattr(n, "class_name", "") or "",
+                    text=text,
+                    is_password=bool(getattr(n, "is_password", False)),
+                    index=input_index,
+                )
+                input_index += 1
+                # An input's label must name the FIELD, never its contents.
+                # Deriving it from `text` meant the label changed the moment the
+                # agent typed, which changed ActionItem.signature(), which made
+                # the merge path in observe() append a fresh unexplored copy of
+                # the same field on every revisit - 306 action ids for six
+                # widgets on one live LoginActivity run. Contents are still
+                # available on the node for evidence; they are not identity.
+                # Caption first: on the WebView banking apps the field has no
+                # id and no desc, and "Username" / "Login Password" is the only
+                # human-readable name it has.
+                label = (
+                    getattr(n, "field_label", "")
+                    or desc
+                    or getattr(n, "resource_id", "")
+                    or (f"{field_kind} field" if field_kind else "")
+                    or node_id
+                )
+            else:
+                label = text or desc or getattr(n, "resource_id", "") or node_id
             is_scrollable = getattr(n, "is_scrollable", False)
             is_clickable = getattr(n, "is_clickable", True)
             is_checkable = getattr(n, "is_checkable", False)
@@ -820,6 +1249,7 @@ class ExplorationGraph:
                     center_x=cx,
                     center_y=cy,
                     is_input=True,
+                    field_kind=field_kind,
                     semantic_role=SemanticRole.INPUT.value,
                     detection_source=detection_source,
                     confidence=confidence,
@@ -842,7 +1272,9 @@ class ExplorationGraph:
                     confidence=confidence,
                     bounds=bounds,
                 ))
-            elif is_clickable or is_checkable:
+            elif (is_clickable or is_checkable) and not _is_decorative_label(
+                label, getattr(n, "resource_id", "") or "", detection_source,
+            ):
                 action_type = "click"
                 label_lower = label.lower()
                 if _text_matches(label_lower, _MENU_KEYWORDS):
@@ -940,9 +1372,7 @@ class ExplorationGraph:
         # EXTERNAL_APP / SYSTEM boundary: keep installer/VPN/permission
         # dialogs in the explorable graph (they have OK/Install/Allow).
         # Unrelated third-party apps stay in the external graph.
-        if ownership in (
-            "EXTERNAL_APP", "SYSTEM_INSTALLER", "SYSTEM_SETTINGS",
-        ) and fg != self.package_name:
+        if ownership in _SYSTEM_OWNERSHIP and fg != self.package_name:
             interactive = (
                 ownership in _INTERACTIVE_BOUNDARY_OWNERSHIP
                 or semantic_type in _INTERACTIVE_BOUNDARY_TYPES
@@ -950,11 +1380,34 @@ class ExplorationGraph:
             # Safety-net: screen_classifier may not have had enough UI text to
             # produce an interactive semantic_type (e.g. spinner still loading).
             # Use the confidence-based boundary role detector as a last resort.
-            if not interactive:
+            #
+            # NOT applied to SYSTEM_SETTINGS. is_safe_interactive_boundary()
+            # answers True for com.android.settings on package name alone, so
+            # running it here would re-admit the whole Settings application
+            # through the back door and undo the frozenset change above. A
+            # Settings screen must earn admission via semantic_type, which is
+            # how the accessibility and VPN consent flows still get in.
+            if not interactive and ownership != "SYSTEM_SETTINGS":
                 from sudarshan_core.engines.agentic.screenshot_policy import (
                     is_safe_interactive_boundary,
                 )
                 interactive = is_safe_interactive_boundary(fg, activity)
+
+            # A boundary the agent is allowed into is still a boundary: it gets
+            # a bounded allowance, not the run. Past it the screen is demoted to
+            # the external graph and a return to the target is demanded.
+            if interactive and self._boundary_budget_exhausted(fg):
+                logger.info(
+                    "[ExplorationGraph] BOUNDARY_LIMIT_REACHED package=%s "
+                    "actions=%d/%d - demoting to external and returning to %s",
+                    fg, self._boundary_actions.get(fg, 0),
+                    ExplorationBudget.MAX_BOUNDARY_ACTIONS, self.package_name,
+                )
+                self._record_transition_event(
+                    "BOUNDARY_LIMIT_REACHED", fg, activity, elapsed_ts, ownership,
+                )
+                self._boundary_return_required = True
+                interactive = False
 
             logger.info(
                 "[ExplorationGraph] BOUNDARY_TRANSITION "
@@ -967,6 +1420,25 @@ class ExplorationGraph:
                     obs, semantic_type, fg, activity, visible, ui_nodes,
                     ownership, parent_state_id, entry_action, elapsed_ts,
                 )
+
+            if self._boundary_package != fg:
+                self._boundary_package = fg
+                logger.info(
+                    "[ExplorationGraph] BOUNDARY_ENTER package=%s ownership=%s "
+                    "semantic_type=%s budget=%d",
+                    fg, ownership, semantic_type,
+                    ExplorationBudget.MAX_BOUNDARY_ACTIONS,
+                )
+        elif fg == self.package_name and self._boundary_package:
+            # Back on the sample: the excursion is over.
+            logger.info(
+                "[ExplorationGraph] BOUNDARY_RETURN_TO_TARGET package=%s "
+                "after %d action(s)",
+                self._boundary_package,
+                self._boundary_actions.get(self._boundary_package, 0),
+            )
+            self._boundary_package = ""
+            self._boundary_return_required = False
 
         screen_hash, ui_tree_hash = compute_composite_state_signature(
             activity, fg, ui_nodes, visible,
@@ -1030,8 +1502,12 @@ class ExplorationGraph:
             timestamp=elapsed_ts,
             parent_state_id=parent_state_id,
             entry_action=entry_action,
+            is_webview=bool(getattr(obs, "is_webview", False)),
         )
         self.states[state_id] = state
+        # First target-app screen recorded is the task root (see _at_target_root).
+        if not self._root_state_id and (state.ownership or "TARGET_APP") == "TARGET_APP":
+            self._root_state_id = state_id
         self._current_state_id = state_id
         self._visit_history.append(state_id)
         if parent_state_id:
@@ -1144,6 +1620,13 @@ class ExplorationGraph:
         """
         if verified is None:
             verified = bool(success)
+        if success and action_type in ("input", "type_text"):
+            # Same reasoning as the input branch below, applied to the EDGE:
+            # text entry does not move the screen hash by design, so a verifier
+            # that looks for a screen change can only ever report "unchanged".
+            # Without this every accepted keystroke is drawn as a failed edge in
+            # the exploration graph the analyst reads.
+            verified = True
         # If the caller tracked UI change across all attempts, prefer that over
         # the single-attempt snapshot.  An action that moved the UI on attempt 1
         # must not be marked failed because attempt 3 caught the same hash again.
@@ -1199,8 +1682,35 @@ class ExplorationGraph:
             "retry_count": attempts,
         })
 
-        if source_state_id in self.states:
-            state = self.states[source_state_id]
+        # Resolve against the state that actually OWNS the action.
+        #
+        # Two ways this used to strand an action permanently unresolved:
+        #   - `source_state_id in self.states` skipped external/boundary states
+        #     entirely, so nothing taken on an installer or permission screen
+        #     was ever marked, and the same button was re-selected forever.
+        #   - when the caller's `source_state_id` did not hold `action_id` (the
+        #     screen was re-identified between selection and recording), the
+        #     loop matched nothing and returned silently.
+        #
+        # The owning state is located by action_id when one is supplied. Only
+        # that state's inventory is touched, so a transition's DESTINATION state
+        # keeps its own actions unexplored and stays independently explorable.
+        state = self._lookup_state(source_state_id)
+        if action_id and (
+            state is None
+            or not any(a.action_id == action_id for a in state.actionable_elements)
+        ):
+            owner = self._state_owning_action(action_id)
+            if owner is not None:
+                if state is not None:
+                    logger.debug(
+                        "[ExplorationGraph] Action '%s' recorded against %s but "
+                        "owned by %s - resolving on the owner",
+                        action_id, source_state_id, owner.state_id,
+                    )
+                state = owner
+
+        if state is not None:
             for a in state.actionable_elements:
                 matched = False
                 if action_id and a.action_id == action_id:
@@ -1240,6 +1750,22 @@ class ExplorationGraph:
                             "(ever_ui_changed=True, adb_success=True)",
                             target_description,
                         )
+                    elif success and action_type in ("input", "type_text"):
+                        # Text entry is deliberately NOT a state change: a
+                        # field's value is no longer part of screen identity, so
+                        # an accepted keystroke leaves the hash where it was.
+                        # Judging it by ui_changed would report every successful
+                        # type_text as failed, which is both wrong in the report
+                        # and wrong for the walk - the field would be retried
+                        # instead of the form being completed.
+                        a.explored = True
+                        a.executed = True
+                        a.verified = True
+                        logger.debug(
+                            "[ExplorationGraph] Input '%s' EXPLORED "
+                            "(text entry does not change screen identity)",
+                            target_description,
+                        )
                     else:
                         # ADB may or may not have succeeded; the UI never changed
                         # across any of the attempts.
@@ -1257,15 +1783,17 @@ class ExplorationGraph:
                                 target_description, a.execution_attempts,
                             )
                     break
+            # Keyed on the OWNING state, so scroll depth and the fully-explored
+            # flag describe the screen the action actually belongs to.
+            owner_id = state.state_id
             if action_type == "scroll":
-                self._scroll_depth[source_state_id] = (
-                    self._scroll_depth.get(source_state_id, 0) + 1
+                self._scroll_depth[owner_id] = (
+                    self._scroll_depth.get(owner_id, 0) + 1
                 )
             if not state.unexplored_actions():
                 state.explored = True
                 logger.debug(
-                    "[ExplorationGraph] State '%s' fully explored",
-                    source_state_id,
+                    "[ExplorationGraph] State '%s' fully explored", owner_id,
                 )
 
         if action_type == "scroll":
@@ -1275,6 +1803,9 @@ class ExplorationGraph:
         elif action_type == "tab":
             self.tabs_explored += 1
 
+        # Charge system-boundary excursions against their allowance.
+        self._note_boundary_action(source_state_id)
+
         return edge
 
     def _lookup_state(self, state_id: str) -> Optional[ExplorationState]:
@@ -1282,6 +1813,17 @@ class ExplorationGraph:
             return self.states[state_id]
         if state_id in self.external_states:
             return self.external_states[state_id]
+        return None
+
+    def _state_owning_action(self, action_id: str) -> Optional[ExplorationState]:
+        """The state whose inventory contains `action_id`, if any."""
+        if not action_id:
+            return None
+        for pool in (self.states, self.external_states):
+            for state in pool.values():
+                for a in state.actionable_elements:
+                    if a.action_id == action_id:
+                        return state
         return None
 
     def _pending_state_id(self) -> Optional[str]:
@@ -1304,6 +1846,12 @@ class ExplorationGraph:
         Deterministic action selection: highest-priority unexplored action.
         Returns action dict compatible with ToolExecutor.
         """
+        # A boundary that has spent its allowance outranks everything: any other
+        # action would be taken inside a system app the run has no business in.
+        if self._boundary_return_required:
+            self._boundary_return_required = False
+            return self._return_to_target_action()
+
         sid = state_id or self._current_state_id
         state = self._lookup_state(sid) if sid else None
         if state is None:
@@ -1341,6 +1889,115 @@ class ExplorationGraph:
             unexplored, self.profile, state.semantic_type,
             context_text=state.visible_text_summary,
         )
+
+        # ── Numeric keypad: enter the whole PIN in one action ─────────────────
+        # A PIN pad is a single credential entry that happens to be spelled with
+        # ten buttons. Taken one key per iteration the pad never fills: at ~11s
+        # an action six digits cost a minute, and any detour resets the field.
+        # The digits are pressed in one dispatch, then the screen is re-read.
+        if _is_keypad_state(state) and not self._keypad_entered.get(sid):
+            keys = _digit_keys(state.actionable_elements)
+            digit = next((d for d in ("1", "2", "3") if d in keys), None)
+            if digit is not None:
+                self._keypad_entered[sid] = True
+                key = keys[digit]
+                logger.info(
+                    "[Explorer] KEYPAD_ENTRY state=%s digits=%d key='%s' "
+                    "(%d keys on screen)",
+                    sid, PIN_ENTRY_LENGTH, digit, len(keys),
+                )
+                return {
+                    "tool": "tap_sequence",
+                    "text": digit * PIN_ENTRY_LENGTH,
+                    "x": key.center_x,
+                    "y": key.center_y,
+                    "repeat": PIN_ENTRY_LENGTH,
+                    "goal": "DEEP_EXPLORATION",
+                    "reasoning": (
+                        f"Numeric keypad on {sid}: entering a "
+                        f"{PIN_ENTRY_LENGTH}-digit PIN in one action rather "
+                        f"than one key per iteration"
+                    ),
+                    "confidence": 0.9,
+                    "_source": "exploration_engine",
+                    "_selected_by": "keypad_entry",
+                    "_action_id": key.action_id,
+                    "_state_id": sid,
+                    "_bounds": key.bounds,
+                }
+
+        # ── Form completion: fill the fields, THEN submit ─────────────────────
+        # A login screen only opens if the credentials arrive before the button
+        # is pressed. Ranked purely on priority, "Login" outranks the two text
+        # boxes above it, so the agent submitted an empty form, watched nothing
+        # happen, burned the retry ladder and marked the only way into the app
+        # as failed. While any input on this screen is still unfilled, submit
+        # controls are held back.
+        pending_inputs = [a for a in ranked if a.action_type == "input"]
+        if pending_inputs:
+            held = [a for a in ranked if _is_submit_action(a)]
+            if held:
+                logger.info(
+                    "[Explorer] FORM_FILL_FIRST state=%s - holding %d submit "
+                    "control(s) until %d input(s) are filled: %s",
+                    sid, len(held), len(pending_inputs),
+                    [a.label for a in pending_inputs],
+                )
+                rest = [
+                    a for a in ranked
+                    if a.action_type != "input" and not _is_submit_action(a)
+                ]
+                ranked = pending_inputs + rest + held
+
+        # ── Fair scheduling: clicks must not starve scroll ────────────────────
+        # rank_actions puts clicks above scroll and the loop below returns the
+        # first candidate, so on a screen that keeps yielding clickable nodes
+        # the scroll entry is never reached. A measured run discovered 13 scroll
+        # actions and executed none, leaving everything below the fold unseen.
+        #
+        # After a state has been worked several times, a pending scroll is
+        # promoted to the front ONCE per scroll action. Clicks still lead on
+        # first contact, which keeps the natural
+        # click -> click -> scroll -> new content -> click order.
+        visits = state.visit_count
+        if visits > _SCROLL_FAIRNESS_VISITS and not pending_inputs:
+            pending_scrolls = [
+                a for a in ranked
+                if a.action_type == "scroll"
+                and self._scroll_depth.get(sid, 0) < ExplorationBudget.MAX_SCROLL_DEPTH
+            ]
+            if pending_scrolls:
+                logger.info(
+                    "[Explorer] SCROLL_FAIRNESS state=%s visits=%d - promoting "
+                    "%d pending scroll action(s) ahead of clicks",
+                    sid, visits, len(pending_scrolls),
+                )
+                rest = [a for a in ranked if a not in pending_scrolls]
+                ranked = pending_scrolls + rest
+
+        # ── Repeated-visit enforcement ────────────────────────────────────────
+        # MAX_REPEATED_STATE_VISITS was declared but never read; a live run
+        # visited STATE-001 seventeen times. Past the limit this screen stops
+        # being offered its own actions and the walk is pushed elsewhere, so a
+        # sticky screen cannot absorb the budget. The remaining actions are left
+        # unresolved on purpose - they stay available if the walk returns with a
+        # different approach, and the run does NOT terminate (invariant 1).
+        if visits > ExplorationBudget.MAX_REPEATED_STATE_VISITS:
+            logger.info(
+                "[Explorer] MAX_REPEATED_STATE_VISITS state=%s visits=%d/%d - "
+                "diverting (%d action(s) left pending)",
+                sid, visits, ExplorationBudget.MAX_REPEATED_STATE_VISITS,
+                len(unexplored),
+            )
+            # Only a real parent counts as a diversion. _navigate_toward() is
+            # deliberately NOT used here: it presses back, and this state still
+            # has its own pending actions, so backing out of it risks leaving
+            # the app to reach work that is already under the cursor.
+            diverted = self._backtrack_action(memory)
+            if diverted:
+                return diverted
+            # Nowhere else to go: fall through and keep working this screen
+            # rather than stopping with reachable work outstanding.
 
         for action in ranked:
             tool = "click_text"
@@ -1385,6 +2042,16 @@ class ExplorationGraph:
                 "text": target,
                 "x": action.center_x,
                 "y": action.center_y,
+                # Resolved at discovery from the field's password flag and its
+                # caption. Without it the executor fell back to the element
+                # label, which on a WebView login screen is not a FORM_VALUES
+                # key, so every field received the same placeholder and no
+                # login could succeed.
+                **(
+                    {"field_hint": action.field_kind}
+                    if action.action_type == "input" and action.field_kind
+                    else {}
+                ),
                 "goal": "DEEP_EXPLORATION",
                 "reasoning": (
                     f"Explore {action.action_type} '{target}' "
@@ -1399,6 +2066,12 @@ class ExplorationGraph:
                 "_semantic_role": action.semantic_role,
                 "_detection_source": action.detection_source,
                 "_bounds": action.bounds,
+                # These coordinates came from the observation of the screen the
+                # device is on, so click_text may tap them without re-dumping
+                # the hierarchy. Cleared by retry_payload on escalation.
+                "_geometry_trusted": bool(
+                    action.center_x and action.center_y and action.bounds
+                ),
                 "_executable_type": (
                     "TYPE_TEXT" if action.action_type == "input" else "TAP"
                 ),
@@ -1439,6 +2112,20 @@ class ExplorationGraph:
                 target_state_id,
             )
             return None
+        # Prefer walking the edges we actually recorded. Back is a guess about
+        # the task stack; a successful edge is a route we have already driven.
+        forward = self._replay_route(current_state_id, target_state_id)
+        if forward is not None:
+            return forward
+
+        if self._at_target_root(current_state_id):
+            # Same reason as _backtrack_action: back exits the app from here,
+            # so it cannot navigate toward another of its states.
+            logger.info(
+                "[Explorer] At target root %s - cannot press back toward %s",
+                current_state_id, target_state_id,
+            )
+            return None
         self._backtrack_count += 1
         # Re-identified from the next observation rather than assumed.
         self._current_state_id = None
@@ -1460,8 +2147,239 @@ class ExplorationGraph:
             "_state_id": target_state_id,
         }
 
+    def _replay_route(
+        self, from_state_id: str, to_state_id: str,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Re-drive the first hop of a known-good route to `to_state_id`.
+
+        The graph records every successful transition as an edge, so when a
+        screen's own actions are exhausted but another screen still has pending
+        work, there is usually a route already proven by this run: on
+        InsecureBankv2, STATE-001 -'More options'-> STATE-002 -'Preferences'->
+        STATE-003. Backtracking cannot use it - `press_back` from the launch
+        Activity leaves the app - and without it a measured run sat on a fully
+        explored root and burned 37 fallback scrolls while FilePrefActivity
+        still held six unexplored actions.
+
+        Returns the first hop as a dispatchable action, or None when no
+        recorded route exists.
+        """
+        if not from_state_id or not to_state_id or from_state_id == to_state_id:
+            return None
+
+        adjacency: Dict[str, List[ExplorationEdge]] = {}
+        for e in self.edges:
+            if e.status != "success":
+                continue
+            if not e.source_state_id or not e.target_state_id:
+                continue
+            if e.source_state_id == e.target_state_id:
+                continue
+            adjacency.setdefault(e.source_state_id, []).append(e)
+
+        # Breadth-first: the shortest proven route costs the fewest actions.
+        queue: Deque[Tuple[str, Optional[ExplorationEdge]]] = deque(
+            [(from_state_id, None)]
+        )
+        seen = {from_state_id}
+        while queue:
+            node, first_edge = queue.popleft()
+            for edge in adjacency.get(node, []):
+                nxt = edge.target_state_id
+                if nxt in seen:
+                    continue
+                hop = first_edge or edge
+                if nxt == to_state_id:
+                    return self._action_for_edge(hop, to_state_id)
+                seen.add(nxt)
+                queue.append((nxt, hop))
+        return None
+
+    def _action_for_edge(
+        self, edge: ExplorationEdge, destination_state_id: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Rebuild a dispatchable action from a recorded edge."""
+        source = self._lookup_state(edge.source_state_id)
+        if source is None:
+            return None
+        item = None
+        for a in source.actionable_elements:
+            if edge.action_id and a.action_id == edge.action_id:
+                item = a
+                break
+            if not edge.action_id and a.label == edge.target_description:
+                item = a
+                break
+        if item is None:
+            return None
+
+        self._backtrack_count += 1
+        logger.info(
+            "[Explorer] NAVIGATE_ROUTE %s -> %s via '%s' (toward %s)",
+            edge.source_state_id, edge.target_state_id, item.label,
+            destination_state_id,
+        )
+        return {
+            "tool": "type_text" if item.action_type == "input" else "click_text",
+            "text": item.label,
+            "x": item.center_x,
+            "y": item.center_y,
+            "goal": "BACKTRACK",
+            "reasoning": (
+                f"Replay known route {edge.source_state_id}->"
+                f"{edge.target_state_id} via '{item.label}' to reach "
+                f"{destination_state_id}, which still has unexplored actions"
+            ),
+            "confidence": item.confidence,
+            "_source": "exploration_engine",
+            "_selected_by": "route_replay",
+            # Deliberately no _action_id: this is navigation over an already
+            # explored edge, not a fresh attempt at that action, and it must not
+            # be recorded as one.
+            "_state_id": edge.source_state_id,
+            "_bounds": item.bounds,
+            "_geometry_trusted": bool(
+                item.center_x and item.center_y and item.bounds
+            ),
+        }
+
+    # ── Credential retry ─────────────────────────────────────────────────────
+
+    def note_login_attempt(self, state_id: str) -> None:
+        """Record that a submit control was pressed on a credential screen."""
+        self.login_attempts += 1
+        self._login_state_id = state_id
+        logger.info(
+            "[ExplorationGraph] LOGIN_ATTEMPT %d on %s",
+            self.login_attempts, state_id,
+        )
+
+    def note_login_outcome(
+        self, screen_text: str, current_state_id: str, activity_changed: bool,
+    ) -> str:
+        """
+        Judge a submitted credential form, and re-arm it if nothing was said.
+
+        The rule the run follows: an app that SAYS the credentials are wrong has
+        answered, and the branch is closed. An app that says nothing and stays
+        where it was has not - the submit may have raced the keyboard, the field
+        may have been cleared, the value may simply not have been accepted yet -
+        so a fresh identity is generated and the form is offered again.
+
+        Returns "rejected", "accepted", "retry" or "unknown".
+        """
+        from sudarshan_core.engines.agentic.credentials import (
+            get_vault, login_rejected, login_succeeded_hint,
+        )
+
+        if login_rejected(screen_text):
+            self.login_outcome = "rejected"
+            logger.info(
+                "[ExplorationGraph] LOGIN_REJECTED after %d attempt(s) - the "
+                "app stated the credentials are invalid; not retrying",
+                self.login_attempts,
+            )
+            self.profile.add_workflow("credential_rejection")
+            return "rejected"
+
+        if activity_changed or login_succeeded_hint(screen_text):
+            self.login_outcome = "accepted"
+            logger.info(
+                "[ExplorationGraph] LOGIN_ACCEPTED after %d attempt(s) - "
+                "authenticated surface reached",
+                self.login_attempts,
+            )
+            self.profile.add_workflow("authenticated_session")
+            return "accepted"
+
+        if self.login_attempts >= ExplorationBudget.MAX_LOGIN_ATTEMPTS:
+            self.login_outcome = "exhausted"
+            logger.info(
+                "[ExplorationGraph] LOGIN_ATTEMPTS_EXHAUSTED (%d/%d) - the app "
+                "neither accepted nor rejected the credentials; moving on",
+                self.login_attempts, ExplorationBudget.MAX_LOGIN_ATTEMPTS,
+            )
+            return "unknown"
+
+        # Nothing was said. Re-arm the form with a new identity.
+        state = self._lookup_state(self._login_state_id or current_state_id)
+        if state is None:
+            return "unknown"
+        self.login_outcome = "retrying"
+        get_vault(self.package_name).regenerate()
+        rearmed = 0
+        for a in state.actionable_elements:
+            if a.action_type == "input" or _is_submit_action(a):
+                a.explored = a.verified = a.failed = a.blocked = False
+                a.execution_attempts = 0
+                rearmed += 1
+        if rearmed:
+            state.explored = False
+        logger.info(
+            "[ExplorationGraph] LOGIN_RETRY attempt %d/%d - app said nothing; "
+            "re-armed %d form action(s) on %s with new credentials",
+            self.login_attempts + 1, ExplorationBudget.MAX_LOGIN_ATTEMPTS,
+            rearmed, state.state_id,
+        )
+        return "retry"
+
+    def _at_target_root(self, state_id: str = "") -> bool:
+        """
+        Whether `state_id` is the sample's task-root screen.
+
+        Back is a graph edge everywhere else; here it is the exit. Android pops
+        the task, so a `press_back` issued from the launch Activity does not
+        travel to another state of the sample - it leaves the sample. A measured
+        run did this 24 times, and each departure cost a launcher observation
+        plus a relaunch (~10s) and explored nothing.
+
+        Root is the FIRST target-app state this graph recorded, which is the
+        screen the launcher opened. Deliberately not "has no parent_state_id":
+        callers are not required to supply a parent, so that test would make
+        every state a root and disable backtracking altogether.
+        """
+        sid = state_id or self._current_state_id or ""
+        if not sid or not self._root_state_id:
+            return False
+        if sid == self._root_state_id:
+            return True
+
+        # Single-Activity WebView apps: back pops the ACTIVITY, not the page.
+        #
+        # Every app in the banking corpus renders its whole journey inside one
+        # WebView in one Activity, so the login screen and the account screen
+        # behind it share an activity name and there is no back entry for the
+        # transition between them - pressing back from the signed-in screen
+        # closes the app. A measured run did exactly that: it reached the
+        # post-login keypad, pressed back, landed outside the sample and had to
+        # relaunch, losing the session it had just obtained.
+        #
+        # Narrowed to WebView states on purpose. In a native Activity a dialog
+        # is a separate window sharing the Activity name, and back genuinely
+        # dismisses it - that is an edge worth walking.
+        root = self._lookup_state(self._root_state_id)
+        state = self._lookup_state(sid)
+        if root is None or state is None:
+            return False
+        if (state.ownership or "TARGET_APP") != "TARGET_APP":
+            return False
+        if not (state.is_webview and root.is_webview):
+            return False
+        return bool(
+            state.activity_name
+            and state.activity_name == root.activity_name
+        )
+
     def _backtrack_action(self, memory: Any = None) -> Optional[Dict[str, Any]]:
         """Press back to explore remaining branches."""
+        if self._at_target_root():
+            logger.info(
+                "[Explorer] At target root %s - not backtracking (back would "
+                "leave the app, not traverse it)",
+                self._current_state_id,
+            )
+            return None
         if self._backtrack_count >= ExplorationBudget.MAX_BACKTRACKS:
             logger.info(
                 "[Explorer] Backtracking exhausted (%d/%d)",
@@ -1470,6 +2388,18 @@ class ExplorationGraph:
             return None
         while self._backtrack_stack:
             parent_id = self._backtrack_stack.pop()
+            if parent_id == self._current_state_id:
+                # Already here. Pressing back would not travel to this state, it
+                # would leave it - and from a root Activity that means leaving
+                # the app entirely. A measured run did exactly this: backtracked
+                # "to" the LoginActivity it was already on, landed outside the
+                # sample, and never got back. Its own actions are still pending,
+                # so let the caller select one instead.
+                logger.debug(
+                    "[Explorer] Backtrack target %s is the current state - "
+                    "not pressing back", parent_id,
+                )
+                continue
             if parent_id in self.states:
                 parent = self.states[parent_id]
                 if parent.unexplored_actions():

@@ -97,6 +97,17 @@ class UINode:
     semantic_role: str = "UNKNOWN"
     detection_source: str = "uiautomator"
     confidence:  float = 0.99
+    #: uiautomator's `password` attribute. On the WebView-based banking apps in
+    #: the corpus this is the ONLY reliable way to tell the password box from
+    #: the username box: neither carries a resource-id, a text value or a
+    #: content-desc, so without it both fields look identical and get filled
+    #: with the same string, which can never authenticate.
+    is_password: bool = False
+    #: Nearest preceding label for an input ("Username", "CRN / Customer ID",
+    #: "Login Password"). These apps render the caption as a separate sibling
+    #: node above the field rather than as a hint on it, so the field's meaning
+    #: only exists in document order.
+    field_label: str = ""
 
 
 @dataclass
@@ -259,13 +270,43 @@ def package_of(activity: str) -> str:
 #: Everything else - Contacts, Dialer, Chrome, Play Store, the launcher - is out
 #: of scope. Exploring those apps produces screenshots of AOSP, not of the
 #: sample, and spends the action budget somewhere no evidence can come from.
+#: An ancestor at least this large is the page, not a control on it. A caption
+#: whose only clickable ancestor is that large is decoration, and promoting it
+#: to an action produces a tap on the background.
+_FULLSCREEN_ANCESTOR_AREA: int = 900_000
+
+#: Packages that exist only to host boundary prompts. Everything they can show
+#: is a prompt the sample raised, so being there is always in scope.
 INVESTIGATION_SCOPE_PACKAGES: FrozenSet[str] = frozenset({
     "com.android.permissioncontroller",
     "com.google.android.permissioncontroller",
     "com.android.packageinstaller",
     "com.google.android.packageinstaller",
-    "com.android.settings",
     "com.android.systemui",
+})
+
+#: Full system applications that HOST boundary prompts among ordinary screens.
+#:
+#: com.android.settings used to sit in INVESTIGATION_SCOPE_PACKAGES, which made
+#: every Settings screen unconditionally in scope and so left the out-of-scope
+#: recovery path unreachable: a measured 300s run answered 55 of 55 observations
+#: from Settings and never once tried to recover. Being *in* one of these
+#: packages is now in scope only while a boundary prompt is actually on screen,
+#: which is what keeps the accessibility and VPN consent flows working while
+#: denying the rest of the Settings app.
+BOUNDARY_HOST_PACKAGES: FrozenSet[str] = frozenset({
+    "com.android.settings",
+})
+
+#: Screen types that make a boundary-host package in scope.
+_BOUNDARY_PROMPT_TYPES: FrozenSet[str] = frozenset({
+    "SYSTEM_PERMISSION",
+    "ACCESSIBILITY_DIALOG",
+    "VPN_REQUEST",
+    "PACKAGE_INSTALLER",
+    "EXTERNAL_APK",
+    "UPDATE_PROMPT",
+    "DOWNLOAD_PROMPT",
 })
 
 
@@ -274,14 +315,23 @@ def in_investigation_scope(
     target_package: str,
     activity: str = "",
     ui_text: str = "",
+    screen_type: str = "",
 ) -> bool:
     """
     Whether the foreground window is somewhere the agent should keep exploring.
 
-    True for the sample itself, for the system surfaces listed in
-    :data:`INVESTIGATION_SCOPE_PACKAGES`, and for any screen that is
-    confidently identified as a safe interactive boundary role (e.g. an OEM
-    package installer or permission controller not in the static frozenset).
+    True for the sample itself, for the prompt-only system surfaces listed in
+    :data:`INVESTIGATION_SCOPE_PACKAGES`, and for any screen confidently
+    identified as a safe interactive boundary role (e.g. an OEM package
+    installer not in the static frozenset).
+
+    For a :data:`BOUNDARY_HOST_PACKAGES` member - a full system app such as
+    Settings, which hosts consent screens among hundreds of ordinary ones - the
+    answer depends on `screen_type`. A permission, accessibility or VPN prompt
+    is in scope; Wi-Fi settings are not. Callers that cannot classify the screen
+    pass nothing and get False, which arms recovery: leaving a system app the
+    agent has no business in is the safe default, and the sample is one
+    relaunch away.
 
     An empty ``foreground_package`` returns True. An unreadable foreground is
     the absence of a reading, not evidence that the agent has wandered off, and
@@ -298,6 +348,8 @@ def in_investigation_scope(
         return True
     if foreground_package in INVESTIGATION_SCOPE_PACKAGES:
         return True
+    if foreground_package in BOUNDARY_HOST_PACKAGES:
+        return str(screen_type or "") in _BOUNDARY_PROMPT_TYPES
     # Confidence-based role detection: recognises OEM installers, OEM settings,
     # and OEM permission controllers that are not in the static frozenset.
     if is_safe_interactive_boundary(foreground_package, activity, ui_text):
@@ -532,13 +584,41 @@ class PerceptionPipeline:
 
         parent_map = {child: parent for parent in root.iter() for child in list(parent)}
 
+        def _elem_area(elem: ET.Element) -> int:
+            m = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]",
+                         elem.attrib.get("bounds", "") or "")
+            if not m:
+                return 0
+            x1, y1, x2, y2 = map(int, m.groups())
+            return max(0, (x2 - x1) * (y2 - y1))
+
         def _clickable_ancestor(elem: ET.Element) -> Optional[ET.Element]:
+            """
+            The nearest clickable ancestor that is a CONTROL, not the page.
+
+            This recovery exists so a caption inside a clickable list row is
+            still tappable. It is not meant to promote every piece of static
+            text on a page whose root container happens to be clickable - which
+            is exactly what a WebView is. On the banking corpus the WebView
+            hosting the login form is clickable, so a heading like "YONO SBI"
+            and a static "New user? Register" both resolved to a full-screen
+            ancestor; tapping either hit the page background and did nothing,
+            and a measured run spent five actions and ~25s on them.
+            """
             cur = parent_map.get(elem)
             while cur is not None:
                 if cur.attrib.get("clickable") == "true":
+                    if _elem_area(cur) >= _FULLSCREEN_ANCESTOR_AREA:
+                        # The page itself. Recovering through it is meaningless.
+                        return None
                     return cur
                 cur = parent_map.get(cur)
             return None
+
+        # The caption of an input is a separate node rendered just above it, so
+        # the last text we walked past in document order is that caption. Held
+        # here and consumed by _emit() for input nodes only.
+        pending_label = {"text": ""}
 
         def _emit(
             elem: ET.Element,
@@ -562,6 +642,8 @@ class PerceptionPipeline:
             is_checkable = elem.attrib.get("checkable") == "true"
             is_scrollable = elem.attrib.get("scrollable") == "true"
             is_input = elem.attrib.get("class", "") == "android.widget.EditText"
+            is_password = elem.attrib.get("password") == "true"
+            field_label = pending_label["text"] if is_input else ""
             checked_attr = elem.attrib.get("checked", "")
             checked: Optional[bool] = None
             if checked_attr == "true":
@@ -598,6 +680,8 @@ class PerceptionPipeline:
                 semantic_role=classification.role.value,
                 detection_source=source,
                 confidence=classification.confidence,
+                is_password=is_password,
+                field_label=field_label,
             ))
 
         seen_labels: Set[str] = set()
@@ -610,6 +694,21 @@ class PerceptionPipeline:
             if not bounds_str:
                 continue
 
+            # Remember the caption we just walked past, so the next input can
+            # claim it. Captions are non-interactive text nodes; an input never
+            # captions another input, and a button's own text is not a caption.
+            own_text = (
+                elem.attrib.get("text", "").strip()
+                or elem.attrib.get("content-desc", "").strip()
+            )
+            if (
+                own_text
+                and not is_input
+                and not is_clickable
+                and not is_checkable
+            ):
+                pending_label["text"] = own_text
+
             if is_clickable or is_checkable or is_scrollable or is_input:
                 _emit(
                     elem,
@@ -617,6 +716,9 @@ class PerceptionPipeline:
                     is_clickable=is_clickable,
                     source="uiautomator",
                 )
+                if is_input:
+                    # Consumed: the next field must not inherit this caption.
+                    pending_label["text"] = ""
                 label = (
                     elem.attrib.get("text", "").strip()
                     or elem.attrib.get("content-desc", "").strip()

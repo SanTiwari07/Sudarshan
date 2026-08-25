@@ -1813,6 +1813,8 @@ class FridaSession:
         # why it failed if it did. Surfaced in the result so a reviewer can tell
         # AI exploration from a rollback without reading the logs.
         self.last_ui_hierarchy_xml: str = ""
+        #: Per-screen view hierarchies from the explorer, for VIDE.
+        self.state_ui_hierarchies: list = []
         self.explorer_used: str = "none"
         self.explorer_error: Optional[str] = None
         # Which of the 5-step launch ladder succeeded for this sample.
@@ -3119,6 +3121,13 @@ class FridaSession:
                     ui_xml = getattr(explorer, "last_ui_hierarchy_xml", "") or ""
                     if ui_xml:
                         self.last_ui_hierarchy_xml = ui_xml
+                    # One hierarchy per distinct in-app screen. VIDE judges a
+                    # clone on view structure, and the login form is the one
+                    # screen a clone and its target necessarily share - the
+                    # screens behind it are where the difference shows.
+                    self.state_ui_hierarchies = list(
+                        (self.reports or {}).get("ui_hierarchies") or []
+                    )
                     # Flush agentic-only artifacts (audit_log.json, benchmark.json)
                     # UIExplorer does not have flush_artifacts() - guarded by hasattr.
                     if hasattr(explorer, 'flush_artifacts'):
@@ -3915,6 +3924,9 @@ async def _run_device_session(
             for cat, events in session.collected_events.items()
         },
         "ui_hierarchy_xml": session.last_ui_hierarchy_xml or None,
+        "ui_hierarchies": getattr(session, "state_ui_hierarchies", []) or [],
+        "login_attempts": (session.reports or {}).get("login_attempts", 0),
+        "login_outcome": (session.reports or {}).get("login_outcome", "not_attempted"),
         # Package still alive after force-stop at session end.
         "survived_force_stop": session.survived_force_stop,
         # Real activities observed during the session, derived from the

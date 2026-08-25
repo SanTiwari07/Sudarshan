@@ -1,29 +1,42 @@
 {
   "institution_id": "demo_icici_imobile",
-  "display_name": "ICICI iMobile (lab baseline)",
-  "package_names": ["com.csam.icici.bank.imobile"],
+  "baseline_id": "BASE-03-ICICI",
+  "display_name": "ICICI Bank (iMobile Pay)",
+  "package_names": [
+    "com.csam.icici.bank.imobile"
+  ],
   "allowed_signers_sha256": [],
-  "version": "1.0.0-hackathon",
+  "version": "2.0.0",
   "profile": {
     "source": "baseline",
     "strings": [
       "User ID",
-      "Grid Card",
-      "iMobile",
+      "4-digit Login PIN",
+      "iMobile Pay",
       "ICICI Bank",
+      "Debit Card Grid",
       "Login",
-      "MPIN",
       "OTP",
-      "Fingerprint Login"
+      "Net Banking"
     ],
     "view_sequence": [
-      "RelativeLayout",
+      "LinearLayout",
+      "ImageView",
       "TextView",
-      "EditText",
-      "Button",
-      "ImageView"
+      "TextView",
+      "TextInputEditText",
+      "TextInputEditText",
+      "MaterialButton",
+      "TextView",
+      "BottomNavigationView"
     ],
-    "colors": ["#f58220", "#ffffff", "#333333"],
+    "colors": [
+      "#780116",
+      "#862633",
+      "#F47920",
+      "#5E2404",
+      "#FFFFFF"
+    ],
     "asset_hashes": []
   }
 }

@@ -65,6 +65,10 @@ SCREEN_WIDTH:  int = int(os.getenv("SUDARSHAN_SCREEN_WIDTH",  "1080"))
 SCREEN_HEIGHT: int = int(os.getenv("SUDARSHAN_SCREEN_HEIGHT", "1920"))
 
 # ─── Default scroll amounts ───────────────────────────────────────────────────
+#: Upper bound on tap_sequence repeats, so a bad `repeat` cannot become an
+#: unbounded input storm. Longest realistic PIN/MPIN is 8 digits.
+MAX_TAP_SEQUENCE: int = 12
+
 DEFAULT_SCROLL_AMOUNT: int = 600
 DEFAULT_SWIPE_DURATION_MS: int = 300
 
@@ -112,7 +116,7 @@ def _paced(seconds: float) -> float:
 # Tools that can change what is on screen. Only these need an idle wait; making
 # a screenshot or a logcat read pay for one would waste most of the time budget.
 NAVIGATIONAL_TOOLS: frozenset = frozenset({
-    "tap", "click_text", "swipe", "scroll", "long_press",
+    "tap", "tap_sequence", "click_text", "swipe", "scroll", "long_press",
     "press_back", "press_home", "press_enter",
     # "am_start" used to be listed here, but no tool of that name exists in
     # TOOL_REGISTRY or on this class - the real one is "start_activity", which
@@ -329,6 +333,34 @@ class ToolExecutor:
         result.tool = "tap"
         return result
 
+    async def _tool_tap_sequence(self, action: Dict) -> ToolResult:
+        """
+        Tap one coordinate several times in a row, as one action.
+
+        Exists for numeric PIN pads. A six-digit MPIN is one credential, not six
+        explorations: entered a key per iteration it costs ~66s at the measured
+        per-iteration cost, and any detour in between clears the field so the
+        pad is never filled at all.
+
+        Bounded by MAX_TAP_SEQUENCE so a malformed `repeat` cannot turn into an
+        unbounded input storm against the device.
+        """
+        x, y = int(action["x"]), int(action["y"])
+        repeat = max(1, min(int(action.get("repeat", 1)), MAX_TAP_SEQUENCE))
+        ok = True
+        for _ in range(repeat):
+            res = await self._input_tap(x, y)
+            ok = ok and res.success
+            await asyncio.sleep(_paced(0.25))
+        # The pad usually auto-submits on the last digit; give it a moment.
+        await asyncio.sleep(_paced(0.8))
+        return ToolResult(
+            success=ok,
+            tool="tap_sequence",
+            data={"x": x, "y": y, "repeat": repeat},
+            error=None if ok else "one or more taps failed",
+        )
+
     # ── Device settling ────────────────────────────────────────────────────────
 
     async def _focus_signature(self) -> Optional[str]:
@@ -442,6 +474,35 @@ class ToolExecutor:
         x_param = action.get("x")
         y_param = action.get("y")
 
+        # ── Geometry-first ────────────────────────────────────────────────────
+        # When the caller vouches for the coordinates - the exploration graph
+        # read them from the observation of the screen we are looking at right
+        # now - there is nothing for an XML lookup to discover. Dumping the
+        # hierarchy again cost a measured ~2.2s of a ~3.12s click_text, on every
+        # click, to rediscover a button whose bounds were already in the action.
+        #
+        # The retry ladder clears `_geometry_trusted` on escalation, so an
+        # element that moved between selection and dispatch still gets resolved
+        # by text on the next attempt.
+        if (
+            action.get("_geometry_trusted")
+            and x_param is not None
+            and y_param is not None
+        ):
+            try:
+                x, y = int(x_param), int(y_param)
+            except (ValueError, TypeError):
+                x = y = None
+            if x is not None:
+                result = await self._input_tap(x, y)
+                result.tool = "click_text"
+                result.data = {
+                    **(result.data or {}),
+                    "geometry_first": True,
+                    "x": x, "y": y, "target_text": text,
+                }
+                return result
+
         xml = await self._get_ui_xml()
         if xml and text:
             escaped = re.escape(text)
@@ -537,8 +598,19 @@ class ToolExecutor:
         y = int(action.get("y", sh // 2))
         field_hint = action.get("field_hint", "search")
 
-        # Resolve actual value (not stored in result)
-        actual_value = FORM_VALUES.get(field_hint, "test")
+        # Resolve actual value (not stored in result).
+        #
+        # The per-run vault leads: its values are regenerated for every run and
+        # every fresh login attempt, so a sample never sees the same identity
+        # twice and a retry presents genuinely new credentials. FORM_VALUES
+        # remains the fallback for callers that pass a legacy hint, and the
+        # final "test" catches an unrecognised one.
+        from sudarshan_core.engines.agentic.credentials import get_vault
+
+        vault = get_vault(self.package_name)
+        actual_value = vault.values.get(field_hint) or FORM_VALUES.get(
+            field_hint, "test"
+        )
         safe_text    = actual_value.replace(" ", "%s")
 
         # Tap the field first to focus it
@@ -719,10 +791,33 @@ class ToolExecutor:
         action_str    = action.get("action", "")
         component     = action.get("component", "")
         data_uri      = action.get("data_uri", "")
+        package       = action.get("package", "")
 
         if not (action_str or component or data_uri):
+            # Launch by package alone. `am start` cannot do this - it needs a
+            # component - so the launcher intent is fired through monkey, which
+            # resolves the entry Activity itself.
+            #
+            # This is the route home from a system boundary: the exploration
+            # graph knows which package it wants back in the foreground but not
+            # which Activity, and pressing back out of an installer or a
+            # Settings sub-screen is not guaranteed to reach the sample at all.
+            if package:
+                ok, out = await self._adb(
+                    "shell", "monkey", "-p", shlex.quote(package),
+                    "-c", "android.intent.category.LAUNCHER", "1",
+                )
+                await asyncio.sleep(_paced(1.5))
+                # monkey exits 0 and prints its error, so the text decides.
+                launched = ok and "No activities found" not in (out or "")
+                return ToolResult(
+                    success=launched, tool="start_activity", output=out,
+                    error=None if launched else (out or "monkey launch failed"),
+                    data={"launched_package": package, "via": "monkey"},
+                )
             return ToolResult(success=False, tool="start_activity",
-                              error="At least one of action, component, or data_uri required")
+                              error="At least one of action, component, data_uri, "
+                                    "or package required")
 
         if action_str:
             cmd_parts += ["-a", shlex.quote(action_str)]

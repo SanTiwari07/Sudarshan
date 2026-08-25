@@ -30,6 +30,8 @@ def test_compare_detects_high_overlap():
     result = compare_profiles(suspect, _sbi_baseline())
     assert result.detected is True
     assert result.institution_id == "demo_sbi"
+    # Not the detection threshold, which is 0.20 - this is a near-total match
+    # and must score far above the bar, not merely clear it.
     assert result.confidence >= 0.72
     # Matched labels are reported in the baseline's own casing, so an analyst
     # reads the bank's actual string rather than a normalised form.

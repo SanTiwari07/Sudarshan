@@ -86,6 +86,14 @@ SCREEN_HEIGHT: int = int(os.getenv("SUDARSHAN_SCREEN_HEIGHT", "1920"))
 #: unbounded input storm. Longest realistic PIN/MPIN is 8 digits.
 MAX_TAP_SEQUENCE: int = 12
 
+#: Backspaces sent to empty a field whose current length is unknown. Batched
+#: into one `input keyevent`, so the cost is the length of one argv rather than
+#: one round trip per character. 64 covers every field in the corpus (the
+#: longest realistic entry is a 34-character email) with room to spare.
+CLEAR_FIELD_MAX_DELETES: int = int(
+    os.getenv("SUDARSHAN_CLEAR_FIELD_MAX_DELETES", "64")
+)
+
 DEFAULT_SCROLL_AMOUNT: int = 600
 DEFAULT_SWIPE_DURATION_MS: int = 300
 
@@ -665,9 +673,55 @@ class ToolExecutor:
         # Tap the field first to focus it
         await self._adb("shell", "input", "tap", str(x), str(y))
         await asyncio.sleep(_paced(0.4))
-        # Clear existing content
-        await self._adb("shell", "input", "keyevent", "KEYCODE_CTRL_A")
+
+        # ── Clear existing content ───────────────────────────────────────────
+        #
+        # This used to send `input keyevent KEYCODE_CTRL_A`. That is not an
+        # Android keycode - KeyEvent defines KEYCODE_CTRL_LEFT and
+        # KEYCODE_CTRL_RIGHT and no per-letter chord - so the device answered
+        # "Unknown keycode" and cleared nothing. The result was discarded, so
+        # the failure was silent and every re-entry APPENDED:
+        # `user4f2a` -> `user4f2auser9c1b` -> ..., which no email or phone
+        # validator accepts. A login box filled once never showed it; a
+        # registration form revisited after a validation error always did.
+        #
+        # `input keycombination` would express Ctrl+A but only exists on API 30+.
+        # Caret-to-end plus backspaces works on every level the corpus runs on,
+        # and `input keyevent` accepts a whole list of keycodes, so the entire
+        # clear is ONE round trip rather than one per character.
+        existing_length = action.get("existing_length")
+        try:
+            existing_length = int(existing_length) if existing_length else 0
+        except (TypeError, ValueError):
+            existing_length = 0
+
+        if existing_length > 0:
+            # A margin over the observed length: the reading came from the
+            # previous observation and the field may have gained a character
+            # since (an IME autocorrect, a formatting mask inserting spaces).
+            deletes = min(existing_length + 4, CLEAR_FIELD_MAX_DELETES)
+        else:
+            # Length unknown. Clear to the cap - the extra backspaces are free
+            # in an already-empty field and cost nothing extra on the wire.
+            deletes = CLEAR_FIELD_MAX_DELETES
+
+        clear_ok, clear_out = await self._adb(
+            "shell", "input", "keyevent",
+            "KEYCODE_MOVE_END", *(["KEYCODE_DEL"] * deletes),
+        )
+        if not clear_ok:
+            # Surfaced rather than swallowed: an uncleared field means the value
+            # below is appended to whatever was there. Typing still proceeds -
+            # a field with the wrong value is more recoverable than one never
+            # filled - and `field_cleared` lets the field-population verifier
+            # read the resulting length mismatch as a retry rather than as the
+            # app rejecting our value.
+            logger.warning(
+                "[ToolExecutor] Could not clear field before typing "
+                "(field_hint=%s): %s", field_hint, (clear_out or "")[:120],
+            )
         await asyncio.sleep(_paced(0.2))
+
         ok, out = await self._adb("shell", "input", "text", shlex.quote(safe_text))
         await asyncio.sleep(_paced(0.6))
 
@@ -686,6 +740,11 @@ class ToolExecutor:
                 "field_hint": field_hint,
                 "field_type": field_type or "",
                 "typed_length": len(actual_value),
+                # Whether the field was empty when the value went in. A False
+                # here means the observed length may legitimately exceed
+                # typed_length, and the verifier must read that as our failure
+                # to clear rather than as the field truncating our value.
+                "field_cleared": bool(clear_ok),
                 "resource_id": action.get("resource_id", ""),
                 "node_id": action.get("node_id", ""),
                 "x": x,

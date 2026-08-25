@@ -117,13 +117,47 @@ axis cannot be blinded), and that the three discount sets stay disjoint.
 
 ## Validation
 
-Live re-run of the corpus with the current agent, scored twice on identical
-inputs — once with the rule active, once patched back to the old behaviour.
+All 13 samples re-run live with the current agent, then scored twice on
+identical inputs - once with the rule active, once patched back.
 
-**Anubis, live:** `19.38 Suspicious` → **`34.44 Suspicious`**, axis excluded,
-`observed_sample_behavior` 2 → 0.
+| | before | after |
+| --- | ---: | ---: |
+| FluBot | 28.91 | **51.39** |
+| SharkBot | 25.70 | **45.68** |
+| Hook | 23.09 | **41.04** |
+| Anubis | 19.38 | **34.44** |
+| VLC *(benign)* | 12.95 | 23.02 *(still Safe)* |
 
-Corpus results are recorded in the commit message for the change.
+Four malware samples rose 15-22 points. One benign sample rose and stayed
+Safe. Nothing else moved. Malware overlapping the benign range fell from
+`[Anubis, Drinik]` to `[Drinik]`.
+
+### What the corpus also exposed
+
+**Three benign apps never instrumented at all.** Amaze, KeePassDX and NewPipe
+returned `INSTRUMENTATION_FAILED` / `NO_UI_RENDERED`; Amaze died with
+`SIGABRT: Bad file descriptor` and, decisively, `frida_attach: None` - it
+crashed *before* instrumentation, so this is an app/emulator incompatibility on
+API 37, not something the harness causes. All eight malware samples instrument
+fine.
+
+Those three are floored to Suspicious by `incomplete_exercise`. That is the
+honesty mechanism working correctly - the sandbox never exercised them, so it
+refuses to certify them Safe - but it means any "malware vs benign separation"
+figure computed across all 13 is measuring instrumentation coverage as much as
+detection. VLC, the one benign app that did instrument, scores 23.02 Safe.
+
+**Drinik is now the weakest malware result, at 18.29.** Its shell execution IS
+detected (BFCI 0.0 -> 10.0, see the code_execution axis), but 10.0 is the
+maximum a single 0.10-weighted axis can produce, and including a dynamic axis
+at 10.0 against a STEI of 28.52 pulls the total *down* - from 24.73 with the
+axis excluded to 18.29 with it included.
+
+This is a pre-existing structural property of BFCI, not new: any single-category
+detection maxes out at its own weight. It is now visible because
+`code_execution` detects something real for the first time. Raising that weight
+would fix Drinik, but exactly one sample in the corpus exercises the axis, which
+is not enough evidence to re-tune a weight against.
 
 Regression suites that specifically guard this area all pass:
 `test_detection_regressions.py`, `test_risk_engine.py`,

@@ -352,17 +352,198 @@ def _verify_screen_change(
     return result
 
 
+@dataclass(frozen=True)
+class FieldSnapshot:
+    """
+    What could be read back from an input node after typing into it.
+
+    Every attribute is "as far as we could read it". `text_read` distinguishes
+    "the field is empty" from "we could not read the field", which is the whole
+    difference between a failed type and an unreadable one - and a masked
+    password field is legitimately unreadable by design.
+    """
+
+    found: bool = False
+    text: str = ""
+    text_read: bool = False
+    text_length: Optional[int] = None
+    is_password: bool = False
+    focused: Optional[bool] = None
+    enabled: bool = True
+    resource_id: str = ""
+    node_id: str = ""
+    content_desc: str = ""
+
+    @property
+    def populated(self) -> bool:
+        """
+        Whether this field now holds something.
+
+        A masked field reports its length (or a run of bullets) without
+        revealing content; either is proof of population.
+        """
+        if self.text_length is not None:
+            return self.text_length > 0
+        return bool(self.text.strip())
+
+
+def verify_field_population(
+    action: Dict[str, Any],
+    field_after: Optional[FieldSnapshot],
+    *,
+    expected_length: Optional[int] = None,
+    before: Optional[FieldSnapshot] = None,
+) -> VerificationResult:
+    """
+    Verify that typed text actually reached the field it was aimed at.
+
+    The existing screen-change rule cannot do this. Typing rarely changes the
+    screen hash, so ``_verify_screen_change`` returns INCONCLUSIVE for every
+    type_text, and a tap that missed the field by twenty pixels - or landed on
+    a field that silently rejected the input - was indistinguishable from a
+    successful one. The walk then pressed Login on an empty form and read the
+    resulting error as "credentials refused".
+
+    The value is NEVER compared and never logged. For a masked field there is
+    nothing to compare anyway, so the same safe signals are used for every
+    field and the password case needs no separate, weaker path:
+
+      · the node exists and is the one we aimed at (resource-id / node-id)
+      · it reports content - a length, or non-empty text
+      · that length is consistent with what we typed, when both are known
+      · it is enabled, and focused where focus is reported
+
+    A field that cannot be read is INCONCLUSIVE, never FAILED: an unreadable
+    device must not look like a misbehaving one.
+    """
+    target = str(action.get("field_hint") or action.get("target") or "")
+    result = VerificationResult(
+        action="type_text", target=target, expected="field_populated",
+    )
+
+    if field_after is None or not field_after.found:
+        result.outcome = VerificationOutcome.INCONCLUSIVE.value
+        result.observed = "field_not_found"
+        result.detail = (
+            "the target input node could not be re-read after typing; the "
+            "field may have scrolled away or the screen may have moved on"
+        )
+        return result
+
+    # Identity: verify we are looking at the field we aimed at, not a
+    # same-shaped one next to it.
+    intended_id = str(action.get("resource_id") or "")
+    intended_node = str(action.get("node_id") or "")
+    if intended_id and field_after.resource_id and intended_id != field_after.resource_id:
+        result.outcome = VerificationOutcome.FAILED.value
+        result.observed = "wrong_field"
+        result.detail = (
+            f"typed into resource_id={field_after.resource_id!r} but the action "
+            f"targeted {intended_id!r}"
+        )
+        return result
+    if intended_node and field_after.node_id and intended_node != field_after.node_id:
+        result.outcome = VerificationOutcome.FAILED.value
+        result.observed = "wrong_field"
+        result.detail = (
+            f"typed into node {field_after.node_id} but the action targeted "
+            f"{intended_node}"
+        )
+        return result
+
+    if not field_after.enabled:
+        result.outcome = VerificationOutcome.FAILED.value
+        result.observed = "field_disabled"
+        result.detail = "the target field is disabled and cannot accept input"
+        return result
+
+    if not field_after.populated:
+        # A masked field reporting no content is genuinely ambiguous. Most
+        # Android builds render a filled password box as a run of bullets, but
+        # some expose nothing at all - so "empty" and "hidden" look identical.
+        # Calling that FAILED would make every password field on such a device
+        # look like a missed tap and send the walk into a retry it cannot win,
+        # which is the failure mode this verification exists to prevent.
+        #
+        # Focus is the one safe signal that still separates them: `input text`
+        # goes to the focused node, so a field we typed into that is NOT
+        # focused did not receive it, whatever its content reads as.
+        if field_after.is_password:
+            if field_after.focused is False:
+                result.outcome = VerificationOutcome.FAILED.value
+                result.observed = "field_empty_and_unfocused"
+                result.detail = (
+                    "password field holds no content and does not have focus; "
+                    "the typed value did not reach it"
+                )
+                return result
+            result.outcome = VerificationOutcome.INCONCLUSIVE.value
+            result.observed = "masked_field_unreadable"
+            result.detail = (
+                "password field exposes neither text nor length; population "
+                "could not be confirmed from accessibility state"
+            )
+            return result
+        result.outcome = VerificationOutcome.FAILED.value
+        result.observed = "field_empty"
+        result.detail = "the field is still empty after typing"
+        return result
+
+    # Populated. Where both lengths are known, they should agree - a field with
+    # a maxlength shorter than the value silently truncates, and a walk that
+    # does not notice submits a half-entered secret.
+    observed_len = (
+        field_after.text_length
+        if field_after.text_length is not None
+        else len(field_after.text)
+    )
+    result.observed = f"field_populated(len={observed_len})"
+
+    if expected_length is not None and observed_len != expected_length:
+        # `before` non-empty means we appended to existing content rather than
+        # replacing it, which explains a longer field without it being a fault.
+        pre_len = 0
+        if before is not None and before.populated:
+            pre_len = (
+                before.text_length
+                if before.text_length is not None
+                else len(before.text)
+            )
+        if observed_len != expected_length + pre_len:
+            result.outcome = VerificationOutcome.FAILED.value
+            result.detail = (
+                f"field holds {observed_len} characters but {expected_length} "
+                f"were typed; the field likely truncated or rejected the value"
+            )
+            return result
+
+    if field_after.focused is False:
+        # Populated but focus moved on - an IME auto-advance, or a form that
+        # submitted itself. The text landed, which is what was being verified.
+        result.detail = "field populated; focus has since moved elsewhere"
+
+    result.outcome = VerificationOutcome.SUCCESS.value
+    return result
+
+
 def verify_action(
     action: Dict[str, Any],
     before: StateSnapshot,
     after: StateSnapshot,
     package_name: str = "",
+    field_after: Optional[FieldSnapshot] = None,
+    expected_length: Optional[int] = None,
 ) -> VerificationResult:
     """
     Compare device state before and after an action against what it claimed.
 
     Pure: no device access, no clock, no randomness. Everything it knows comes
     from the two snapshots.
+
+    `field_after` is the re-read of the input node for a type_text, supplied by
+    the caller because reading it requires a device. When it is absent,
+    type_text falls back to the previous screen-change behaviour, so an
+    existing caller that does not pass it is unaffected.
     """
     tool = str(action.get("tool") or "")
 
@@ -372,6 +553,10 @@ def verify_action(
         return _verify_permission_denial(action, before, after)
     if tool == "start_activity":
         return _verify_launch(action, before, after, package_name)
+    if tool == "type_text" and field_after is not None:
+        return verify_field_population(
+            action, field_after, expected_length=expected_length,
+        )
     if tool in _SCREEN_CHANGING:
         return _verify_screen_change(action, before, after)
 
@@ -462,3 +647,141 @@ class DeviceStateProbe:
             ),
             appops=appops,
         )
+
+    async def field_snapshot(
+        self,
+        *,
+        resource_id: str = "",
+        node_id: str = "",
+        center_x: Optional[int] = None,
+        center_y: Optional[int] = None,
+        ui_xml: str = "",
+    ) -> FieldSnapshot:
+        """
+        Re-read one input node so a type_text can be verified.
+
+        `ui_xml` is accepted so a caller that has just dumped the hierarchy for
+        its own post-action observation can hand it over rather than making the
+        device dump twice - a second `uiautomator dump` costs ~700ms per typed
+        field and would roughly double the cost of filling a login form.
+
+        Identification is by resource-id first, then by which input node
+        contains the tapped point. Matching on coordinates is what makes this
+        work on the WebView forms in the corpus, where no field has an id.
+
+        Returns ``FieldSnapshot(found=False)`` when the node cannot be located.
+        That is INCONCLUSIVE upstream, not a failure.
+        """
+        xml = ui_xml
+        if not xml:
+            ok, out = await self._run("shell", "uiautomator", "dump", "/dev/tty")
+            xml = out if ok else ""
+        if not xml:
+            return FieldSnapshot(found=False)
+
+        return parse_field_snapshot(
+            xml,
+            resource_id=resource_id,
+            node_id=node_id,
+            center_x=center_x,
+            center_y=center_y,
+        )
+
+
+def parse_field_snapshot(
+    ui_xml: str,
+    *,
+    resource_id: str = "",
+    node_id: str = "",
+    center_x: Optional[int] = None,
+    center_y: Optional[int] = None,
+) -> FieldSnapshot:
+    """
+    Pull one input node's post-typing state out of a uiautomator dump.
+
+    Pure, so the matching rules are testable without a device.
+
+    ``text`` is captured for length and emptiness only. The caller compares
+    lengths; it never logs the value, and for a masked field the platform
+    reports bullets rather than content in any case.
+    """
+    import xml.etree.ElementTree as ET
+
+    try:
+        root = ET.fromstring(ui_xml)
+    except ET.ParseError:
+        return FieldSnapshot(found=False)
+
+    def _bounds(elem: Any) -> Optional[Tuple[int, int, int, int]]:
+        m = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", elem.attrib.get("bounds", ""))
+        if not m:
+            return None
+        x1, y1, x2, y2 = map(int, m.groups())
+        return x1, y1, x2, y2
+
+    def _short_id(raw: str) -> str:
+        return raw.split("/")[-1] if "/" in raw else raw
+
+    inputs = [
+        e for e in root.iter()
+        if e.attrib.get("class", "") == "android.widget.EditText"
+    ]
+
+    match: Optional[Any] = None
+
+    if resource_id:
+        wanted = _short_id(resource_id)
+        for e in inputs:
+            if _short_id(e.attrib.get("resource-id", "")) == wanted:
+                match = e
+                break
+
+    if match is None and center_x is not None and center_y is not None:
+        for e in inputs:
+            b = _bounds(e)
+            if b and b[0] <= center_x <= b[2] and b[1] <= center_y <= b[3]:
+                match = e
+                break
+
+    if match is None and node_id:
+        # node_id is assigned positionally by the perception parser ("n7"), so
+        # it only resolves against a hierarchy parsed the same way. Fall back
+        # to index within the input list, which is stable for a screen that has
+        # not re-laid-out.
+        m = re.match(r"n(\d+)$", node_id)
+        if m:
+            idx = int(m.group(1))
+            if 0 <= idx < len(inputs):
+                match = inputs[idx]
+
+    if match is None:
+        return FieldSnapshot(found=False)
+
+    text = match.attrib.get("text", "") or ""
+    is_password = match.attrib.get("password") == "true"
+    focused_attr = match.attrib.get("focused", "")
+    focused: Optional[bool] = None
+    if focused_attr == "true":
+        focused = True
+    elif focused_attr == "false":
+        focused = False
+
+    # Some builds expose a masked field's length as a run of bullets rather
+    # than as its content. Either way the length is what we verify against.
+    stripped = text.strip()
+    length: Optional[int] = len(stripped) if stripped else None
+    if is_password and stripped and set(stripped) <= {"•", "*", "·"}:
+        length = len(stripped)
+
+    return FieldSnapshot(
+        found=True,
+        text=text,
+        text_read=True,
+        text_length=length if length is not None else (0 if not stripped else None),
+        is_password=is_password,
+        focused=focused,
+        enabled=match.attrib.get("enabled", "true") != "false",
+        resource_id=_short_id(match.attrib.get("resource-id", "")),
+        node_id=node_id,
+        content_desc=match.attrib.get("content-desc", ""),
+    )

@@ -19,7 +19,7 @@ export default function AppShell({ children }: AppShellProps) {
   }
 
   return (
-    <div className="h-screen min-h-screen flex flex-col bg-slate-100 min-w-0 relative overflow-hidden">
+    <div className="h-screen min-h-screen flex flex-col bg-surface-page min-w-0 relative overflow-hidden">
       <AppSidebar onLogout={logout} />
       <AppHeader isAuthed={isAuthed} onLogout={logout} />
       <main className="flex-1 w-full min-w-0 flex flex-col analyst-main pl-14 overflow-y-auto">

@@ -22,19 +22,23 @@ logger = logging.getLogger(__name__)
 
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
-# Safe deterministic data for form filling
-FORM_VALUES = {
-    "username": "demo",
-    "email": "demo@gmail.com",
-    "password": "Password@123",
-    "phone": "9876543210",
-    "otp": "123456",
-    "amount": "100",
-    "account": "123456789",
-    "name": "Test User",
-    "address": "123 Test St",
-    "search": "test"
-}
+# ─── Synthetic form values (single authoritative source) ─────────────────────
+#
+# This module used to define its own credential table. That was a second store
+# with different values ("Password@123", "demo@gmail.com"), and because
+# AuditLog._sanitize_action redacts credentials.all_secret_values() plus the
+# AGENTIC executor's table, nothing this explorer typed was ever redacted.
+# UIExplorer is not dead code - frida_sandbox keeps it as the rollback explorer
+# - so that was a live unredacted credential path.
+#
+# The values now come from the same place the agentic path uses, and are
+# registered for redaction. This module no longer owns any credential.
+from sudarshan_core.engines.agentic.tool_executor import FORM_VALUES as FORM_VALUES
+from sudarshan_core.engines.agentic.credentials import (
+    register_static_values as _register_static_values,
+)
+
+_register_static_values(FORM_VALUES)
 
 class UIExplorer:
     def __init__(self, device_serial: str, adb_path: str = "adb", event_bus: Optional[RuntimeEventBus] = None):
@@ -378,9 +382,23 @@ Return valid JSON matching this schema:
             await self._adb("shell", "input", "tap", str(x), str(y))
             await asyncio.sleep(0.5)
             import shlex
-            # Lookup actual value from dictionary
-            dict_key = action.get("text", "")
-            actual_text = FORM_VALUES.get(dict_key, dict_key) # fallback to literal if AI messed up
+            # Resolve the value from the vault, keyed by the dictionary key the
+            # model chose. The model picks WHICH field this is; it never
+            # supplies the value.
+            #
+            # This used to be `FORM_VALUES.get(dict_key, dict_key)` - an
+            # unrecognised key fell through to typing the model's own string
+            # verbatim. That let attacker-influenced screen content reach
+            # `adb shell input text` unredacted and unbounded. An unknown key
+            # is now a miss, and a miss types the generic text value.
+            dict_key = str(action.get("text", "")).strip().lower()
+            from sudarshan_core.engines.agentic.credentials import get_vault
+            vault = get_vault(getattr(self, "package_name", "") or "")
+            actual_text = (
+                vault.values.get(dict_key)
+                or FORM_VALUES.get(dict_key)
+                or FORM_VALUES.get("search", "test")
+            )
             safe_text = shlex.quote(actual_text.replace(' ', '%s'))
             await self._adb("shell", "input", "text", safe_text)
             

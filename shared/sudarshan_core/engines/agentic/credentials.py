@@ -29,7 +29,11 @@ import random
 import re
 import string
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Dict, List, Optional, Set
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from sudarshan_core.engines.agentic.field_classifier import FieldClassification
+    from sudarshan_core.engines.agentic.field_constraints import FieldConstraints
 
 __all__ = [
     "FIELD_KINDS",
@@ -38,13 +42,18 @@ __all__ = [
     "get_vault",
     "login_rejected",
     "login_succeeded_hint",
+    "register_static_values",
     "resolve_field_kind",
+    "resolve_field_classification",
 ]
 
 
-#: Ordered kind matchers. First hit wins, so the more specific patterns lead.
-#: Matched against the field caption, resource-id, content-desc and class name
-#: joined together and lower-cased.
+#: The legacy kind vocabulary, retained because :data:`FIELD_KINDS` is part of
+#: the public surface and ``field_hint`` still travels as one of these strings.
+#: The MATCHING itself moved to
+#: :mod:`~sudarshan_core.engines.agentic.field_classifier`, which resolves the
+#: full semantic taxonomy; this table is no longer consulted at run time and is
+#: kept only so the set of legal legacy kinds has one definition.
 _KIND_PATTERNS: List[tuple] = [
     ("otp",      r"\b(otp|one[\s\-_]?time|verification\s*code|auth\s*code|mpin|passcode)\b"),
     ("password", r"(password|passwd|\bpwd\b|pin\b|secret)"),
@@ -70,6 +79,42 @@ _KIND_PATTERNS: List[tuple] = [
 FIELD_KINDS: Set[str] = {kind for kind, _ in _KIND_PATTERNS}
 
 
+def resolve_field_classification(
+    *,
+    field_label: str = "",
+    resource_id: str = "",
+    content_desc: str = "",
+    class_name: str = "",
+    text: str = "",
+    hint: str = "",
+    input_type: str = "",
+    is_password: bool = False,
+    index: int = 0,
+    screen_type: str = "",
+) -> "FieldClassification":
+    """
+    The full classification of an input: type, confidence, evidence, source.
+
+    This is the richer answer. :func:`resolve_field_kind` is the same
+    computation collapsed to the legacy string, so the two can never disagree
+    about what a field is.
+    """
+    from sudarshan_core.engines.agentic.field_classifier import classify_field
+
+    return classify_field(
+        field_label=field_label,
+        resource_id=resource_id,
+        content_desc=content_desc,
+        class_name=class_name,
+        text=text,
+        hint=hint,
+        input_type=input_type,
+        is_password=is_password,
+        index=index,
+        screen_type=screen_type,
+    )
+
+
 def resolve_field_kind(
     *,
     field_label: str = "",
@@ -77,34 +122,37 @@ def resolve_field_kind(
     content_desc: str = "",
     class_name: str = "",
     text: str = "",
+    hint: str = "",
+    input_type: str = "",
     is_password: bool = False,
     index: int = 0,
 ) -> str:
     """
-    The kind of value this input wants.
+    The kind of value this input wants, as a legacy ``field_hint`` string.
 
-    `is_password` is authoritative: uiautomator sets it from the field's own
-    input type, which is a stronger statement than any caption. Everything else
-    is inferred from the words around the field.
+    Unchanged contract: the return value is one of the thirteen strings in
+    :data:`FIELD_KINDS` plus ``"text"``, which is what ``ToolExecutor``, the
+    planner prompt and the audit log have always consumed.
 
-    When nothing matches, `index` decides: the first unlabelled field on a
-    screen is treated as the identifier and the rest as free text. That is the
-    right guess for a login form, which is the case that matters, and a wrong
-    guess costs one action rather than the run.
+    The computation now lives in
+    :mod:`~sudarshan_core.engines.agentic.field_classifier`, which resolves the
+    full semantic type (``MPIN``, ``CIF``, ``CARD_CVV``, ...) and then degrades
+    it to the legacy vocabulary. Callers that want the specific type - to size
+    a value correctly, or to decide whether it is a secret - should use
+    :func:`resolve_field_classification` instead of re-deriving it from this
+    string, which cannot distinguish an MPIN from a login password.
     """
-    if is_password:
-        return "password"
-
-    haystack = " ".join(
-        p for p in (field_label, resource_id, content_desc, text, class_name) if p
-    ).lower()
-    haystack = re.sub(r"[_\-./]+", " ", haystack)
-
-    for kind, pattern in _KIND_PATTERNS:
-        if re.search(pattern, haystack):
-            return kind
-
-    return "username" if index == 0 else "text"
+    return resolve_field_classification(
+        field_label=field_label,
+        resource_id=resource_id,
+        content_desc=content_desc,
+        class_name=class_name,
+        text=text,
+        hint=hint,
+        input_type=input_type,
+        is_password=is_password,
+        index=index,
+    ).legacy_kind
 
 
 # ─── Per-run synthetic values ────────────────────────────────────────────────
@@ -126,6 +174,15 @@ class CredentialVault:
 
     values: Dict[str, str] = field(default_factory=dict)
     attempt: int = 0
+    #: The per-run token every generated value is derived from, so an identity
+    #: stays internally consistent across the several actions it takes to fill
+    #: one form. Rotated by :meth:`regenerate`.
+    seed_token: str = ""
+    #: Values issued for the expanded taxonomy, keyed by FieldType name and by
+    #: the constraint shape they were built for. Separate from `values` so the
+    #: legacy dict keeps exactly its old thirteen keys and old readers of it
+    #: are unaffected.
+    typed_values: Dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.values:
@@ -136,6 +193,11 @@ class CredentialVault:
         self.attempt += 1
         suffix = _rand(6)
         digits = "".join(random.choice(string.digits) for _ in range(6))
+        self.seed_token = suffix
+        # Values for the expanded taxonomy are issued lazily by
+        # :meth:`value_for_field`, because their shape depends on the field
+        # they are going into and that is not known until one is seen.
+        self.typed_values = {}
         self.values = {
             "username": f"user{suffix}",
             # Mixed classes so a password policy cannot reject it out of hand,
@@ -158,9 +220,40 @@ class CredentialVault:
     def value_for(self, kind: str) -> str:
         return self.values.get(kind, self.values.get("text", "test"))
 
+    def value_for_field(self, constraints: "FieldConstraints") -> str:
+        """
+        The value for a specific field, shaped to fit it.
+
+        The legacy :meth:`value_for` issues one value per kind, which is why a
+        four-digit MPIN box used to receive six digits: `otp` and `mpin` both
+        degrade to the same legacy kind and the same stored string. Here the
+        constraints are part of the identity of the value, so two numeric
+        secrets of different lengths on the same screen each get one that fits,
+        and a retry of the SAME field gets the SAME value back.
+
+        Cached per (type, length) so a form re-entered after a failed submit is
+        re-entered identically - a password box and its confirm box have to
+        agree.
+        """
+        from sudarshan_core.engines.agentic.field_constraints import generate_value
+
+        key = (
+            f"{constraints.field_type.value}"
+            f":{constraints.min_length}:{constraints.max_length}"
+            f":{int(constraints.numeric_only)}"
+        )
+        cached = self.typed_values.get(key)
+        if cached is not None:
+            return cached
+
+        value = generate_value(constraints, seed_token=self.seed_token)
+        self.typed_values[key] = value
+        _ISSUED.add(value)
+        return value
+
     def secrets(self) -> Set[str]:
         """Every value this vault has ever issued, for log redaction."""
-        return set(self.values.values())
+        return set(self.values.values()) | set(self.typed_values.values())
 
 
 _VAULTS: Dict[str, CredentialVault] = {}
@@ -178,12 +271,32 @@ def get_vault(package_name: str = "") -> CredentialVault:
     return vault
 
 
+def register_static_values(values: "Set[str] | Dict[str, str] | List[str]") -> None:
+    """
+    Enrol values from a static table into the redaction set.
+
+    The agentic executor and the legacy UIExplorer each ship a fixed
+    ``FORM_VALUES`` fallback for callers that pass a legacy hint before a vault
+    exists. Those strings can reach ``adb shell input text``, so they are
+    credentials in every sense that matters for logging - and a value that can
+    be typed has to be a value that can be redacted. Registering them here puts
+    them behind the same :func:`all_secret_values` choke point the audit log
+    already uses, instead of requiring every log site to know about a second
+    table.
+    """
+    if isinstance(values, dict):
+        _ISSUED.update(str(v) for v in values.values() if v)
+    else:
+        _ISSUED.update(str(v) for v in values if v)
+
+
 def all_secret_values() -> Set[str]:
     """
     Every synthetic value issued this process, for redaction.
 
     Superset of any single vault: a regenerated vault must not leave its old
-    password un-redacted in a log line written before the regeneration.
+    password un-redacted in a log line written before the regeneration. Also
+    covers the static fallback tables enrolled via :func:`register_static_values`.
     """
     for vault in _VAULTS.values():
         _ISSUED.update(vault.secrets())

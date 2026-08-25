@@ -242,7 +242,18 @@ def test_tool_executor_uses_stored_class():
     assert acc_calls, "No settings put call was made"
     # The component value is the last arg
     component_arg = acc_calls[0][-1]
-    expected = f"{PACKAGE}{REAL_SERVICE}"
+    # A FLATTENED ComponentName, "pkg/.Class".
+    #
+    # This previously expected f"{PACKAGE}{REAL_SERVICE}" - ".zWPzgfI" becoming
+    # "com.cerberus.rat.zWPzgfI", a bare class name with no "pkg/" half.
+    # `enabled_accessibility_services` is a colon-separated list of flattened
+    # components and silently ignores anything else, so that write enabled
+    # nothing; test_permission_orchestrator_verification.py already documents
+    # it as a defect and PermissionOrchestrator was fixed for its own path.
+    # ToolExecutor kept a private copy of the broken construction, so the bug
+    # survived on this path and this assertion pinned it in place. Both paths
+    # now share permission_orchestrator._flatten_component.
+    expected = f"{PACKAGE}/{REAL_SERVICE}"
     assert component_arg == expected, (
         f"Expected component '{expected}', got '{component_arg}'"
     )

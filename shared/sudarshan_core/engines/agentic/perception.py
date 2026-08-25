@@ -108,6 +108,18 @@ class UINode:
     #: node above the field rather than as a hint on it, so the field's meaning
     #: only exists in document order.
     field_label: str = ""
+    #: The field's own placeholder, where the platform exposes one. Standard
+    #: uiautomator XML has no `hint` attribute; some vendor builds and newer
+    #: API levels emit it, so it is read when present and empty otherwise.
+    #: Worth having because a hint states the length ("Enter 6 digit OTP")
+    #: more often than the caption does.
+    hint: str = ""
+    #: Declared maximum length, when the dump provides one. `None` means "not
+    #: stated", which is the usual case and is NOT the same as unlimited.
+    max_length: Optional[int] = None
+    #: The field's declared input type, when exposed. Authoritative about
+    #: numeric-ness in a way a caption never is.
+    input_type: str = ""
 
 
 @dataclass
@@ -661,6 +673,26 @@ class PerceptionPipeline:
             is_input = elem.attrib.get("class", "") == "android.widget.EditText"
             is_password = elem.attrib.get("password") == "true"
             field_label = pending_label["text"] if is_input else ""
+            # Optional attributes: absent from a standard uiautomator dump,
+            # present on some vendor builds. Read defensively - a missing
+            # attribute is "not stated", not a default value.
+            hint = elem.attrib.get("hint", "").strip()
+            input_type = elem.attrib.get("inputType", "") or elem.attrib.get(
+                "input-type", ""
+            )
+            max_length: Optional[int] = None
+            raw_max = elem.attrib.get("max-length", "") or elem.attrib.get(
+                "maxLength", ""
+            )
+            if raw_max:
+                try:
+                    parsed_max = int(raw_max)
+                    # -1 is Android's "no limit" sentinel and must not become a
+                    # constraint that truncates every value to nothing.
+                    if parsed_max > 0:
+                        max_length = parsed_max
+                except (TypeError, ValueError):
+                    pass
             checked_attr = elem.attrib.get("checked", "")
             checked: Optional[bool] = None
             if checked_attr == "true":
@@ -699,6 +731,9 @@ class PerceptionPipeline:
                 confidence=classification.confidence,
                 is_password=is_password,
                 field_label=field_label,
+                hint=hint,
+                max_length=max_length,
+                input_type=input_type,
             ))
 
         seen_labels: Set[str] = set()

@@ -369,33 +369,70 @@ class ActionDispatcher:
     def retry_payload(self, action: Dict[str, Any], attempt: int) -> Optional[Dict[str, Any]]:
         """
         Bounded retry ladder:
-          1. structured click (already attempted)
-          2. geometry / clickable-parent tap
-          3. visual-grounded coordinate tap
+          1. structured click_text (already attempted)
+          2. geometry / clickable-parent tap  (if x, y present)
+             OR text-only semantic retry      (if only text present)
+          3. visual-grounded coordinate tap   (if x, y present)
+
+        Previously returned None immediately when x/y were missing, silently
+        abandoning any action that had text but no computed coordinates.  Now
+        a text-only semantic retry is attempted as step 2 so that discoverd
+        UI elements that were not assigned coordinates during inventory building
+        still get a second attempt via the XML text matcher.
         """
         if attempt >= MAX_EXECUTION_ATTEMPTS:
             return None
         x, y = action.get("x"), action.get("y")
-        if x is None or y is None:
-            return None
+        text = (action.get("text") or "").strip()
+
         retry = dict(action)
-        retry["tool"] = "tap"
         retry["_retry_attempt"] = attempt + 1
         source = str(action.get("_detection_source") or "")
-        if attempt == 1:
-            retry["reasoning"] = f"Retry 2: resolved geometry tap @({x},{y})"
+
+        if x is not None and y is not None:
+            # Coordinate-based retry ladder (original behaviour).
+            retry["tool"] = "tap"
+            if attempt == 1:
+                retry["reasoning"] = f"Retry 2: resolved geometry tap @({x},{y})"
+                retry["_pipeline_debug"] = {
+                    **(action.get("_pipeline_debug") or {}),
+                    "retry_strategy": "clickable_parent_or_geometry",
+                    "retry_attempt": 2,
+                }
+            else:
+                retry["reasoning"] = f"Retry 3: visual/current-screen tap @({x},{y})"
+                retry["_pipeline_debug"] = {
+                    **(action.get("_pipeline_debug") or {}),
+                    "retry_strategy": "visual_grounding_tap",
+                    "retry_attempt": 3,
+                }
+                if source:
+                    retry["_detection_source"] = source
+            return retry
+
+        if text:
+            # No coordinates available — fall back to a semantic text retry.
+            # click_text uses XML text/content-desc matching, so it does not
+            # require pre-computed coordinates and may succeed where a raw tap
+            # could not.
+            retry["tool"] = "click_text"
+            retry["reasoning"] = f"Retry {attempt + 1}: semantic text retry for '{text}' (no coords)"
             retry["_pipeline_debug"] = {
                 **(action.get("_pipeline_debug") or {}),
-                "retry_strategy": "clickable_parent_or_geometry",
-                "retry_attempt": 2,
+                "retry_strategy": "text_semantic_retry",
+                "retry_attempt": attempt + 1,
             }
-        else:
-            retry["reasoning"] = f"Retry 3: visual/current-screen tap @({x},{y})"
-            retry["_pipeline_debug"] = {
-                **(action.get("_pipeline_debug") or {}),
-                "retry_strategy": "visual_grounding_tap",
-                "retry_attempt": 3,
-            }
-            if source:
-                retry["_detection_source"] = source
-        return retry
+            logger.debug(
+                "[ActionDispatcher] retry_payload: no coordinates, "
+                "semantic text retry for '%s' (attempt %d)",
+                text, attempt + 1,
+            )
+            return retry
+
+        # Neither coordinates nor text — truly no retry possible.
+        logger.debug(
+            "[ActionDispatcher] RETRY_UNAVAILABLE: "
+            "no x/y and no text for action_id=%s",
+            action.get("_action_id"),
+        )
+        return None

@@ -96,6 +96,188 @@ CRASH_ACTIVITY_MARKERS: tuple[str, ...] = (
     "erroractivity",
 )
 
+
+# ─── Safe Interactive Boundary Role Detection ──────────────────────────────────
+#
+# Android investigations often require following the target APK into system-owned
+# surfaces: the Package Installer, Permission Controller, Settings/Accessibility,
+# VPN config, etc. These are "safe interactive boundaries" — the sandbox permits
+# controlled exploration there because they are system-provided, sandboxed, and
+# the APK's own behavior often depends on the user's response on those screens.
+#
+# This detection is CONFIDENCE-BASED, not a whitelist.  A single signal (e.g. a
+# package whose name happens to contain "install") is NEVER sufficient.  At
+# least TWO independent corroborating signals are required at HIGH confidence.
+#
+# This explicitly prevents a rogue APK from constructing an Activity whose name
+# looks like an installer to trick the explorer into treating it as in-scope.
+
+class SafeInteractiveBoundaryRole(str, Enum):
+    """The safe system-boundary role detected for a foreground screen."""
+    NONE                = "NONE"                # Not a safe boundary
+    SYSTEM_INSTALLER    = "SYSTEM_INSTALLER"    # Package installer / APK install UI
+    SYSTEM_PERMISSION   = "SYSTEM_PERMISSION"   # Runtime permission dialog
+    SYSTEM_SETTINGS     = "SYSTEM_SETTINGS"     # Android Settings app
+    ACCESSIBILITY       = "ACCESSIBILITY"       # Accessibility service settings
+    VPN_SETTINGS        = "VPN_SETTINGS"        # VPN configuration
+    SUPPORTED_WEBVIEW   = "SUPPORTED_WEBVIEW"   # App-owned WebView (same package)
+
+
+# Package-level signals — HIGH confidence on their own when combined with ANY
+# other corroborating signal.
+_INSTALLER_PKG_FRAGMENTS: tuple[str, ...] = (
+    "packageinstaller",
+    "packagemanager",       # some OEM package managers
+    "permissioncontroller",
+    "permissionmanager",
+)
+
+# Activity-level signals — can confirm a role but are NEVER sufficient alone.
+_INSTALLER_ACTIVITY_FRAGMENTS: tuple[str, ...] = (
+    "packageinstaller",
+    "installpackage",
+    "installerui",
+    "installconfirm",
+    "installsuccess",
+    "installstaging",
+)
+
+# UI text signals — can add to confidence but must ALWAYS be paired with at
+# least one package or activity signal.
+_INSTALLER_UI_MARKERS: tuple[str, ...] = (
+    "install",
+    "unknown sources",
+    "install application",
+    "package installer",
+    "install this app",
+    "install anyway",
+)
+
+# Settings / accessibility / VPN package fragments.
+_SETTINGS_PKG_FRAGMENTS: tuple[str, ...] = ("settings",)
+_SETTINGS_ACTIVITY_FRAGMENTS: tuple[str, ...] = (
+    "settings",
+    "accessibility",
+    "accessibilitysettings",
+    "vpnsettings",
+    "installedservices",
+)
+_VPN_ACTIVITY_FRAGMENTS: tuple[str, ...] = (
+    "vpnsettings",
+    "vpnconfig",
+    "vpn",
+)
+_PERMISSION_ACTIVITY_FRAGMENTS: tuple[str, ...] = (
+    "grantpermissions",
+    "permissiongrant",
+    "permissiondialog",
+    "permissionsactivity",
+)
+
+
+def classify_safe_boundary(
+    foreground_package: str,
+    activity: str = "",
+    ui_text: str = "",
+) -> SafeInteractiveBoundaryRole:
+    """
+    Confidence-based safe interactive boundary classifier.
+
+    Returns the :class:`SafeInteractiveBoundaryRole` of the foreground screen,
+    or ``SafeInteractiveBoundaryRole.NONE`` when no safe role can be confirmed.
+
+    Confidence rules (all must hold for non-NONE result):
+
+      HIGH confidence (2+ independent signals required):
+        - Package is in the known frozensets             → HIGH pkg signal
+        - Package *name* contains a role fragment        → MED pkg signal
+        - Activity *name* contains a role fragment       → MED act signal
+        - UI text contains a role marker                 → LOW ui signal
+
+      At least TWO independent signals are required:
+        PKG HIGH alone                                   → NONE  (1 signal)
+        PKG MED + ACT MED                                → role confirmed
+        PKG MED + UI LOW                                 → role confirmed
+        PKG HIGH (frozenset) alone                       → role confirmed
+        ACT MED + UI LOW (no pkg signal)                 → NONE  (no pkg anchor)
+
+    UI text alone is NEVER sufficient.
+    Activity name alone is NEVER sufficient.
+    """
+    fg  = (foreground_package or "").strip().lower()
+    act = (activity or "").lower()
+    txt = (ui_text or "").lower()
+
+    # ── 1. SYSTEM_PERMISSION ──────────────────────────────────────────────────
+    # Known AOSP permission controller packages (HIGH pkg alone is sufficient).
+    if foreground_package in (
+        "com.android.permissioncontroller",
+        "com.google.android.permissioncontroller",
+    ):
+        return SafeInteractiveBoundaryRole.SYSTEM_PERMISSION
+    # OEM permission managers: require pkg fragment + activity fragment.
+    pkg_is_perm = "permissioncontroller" in fg or "permissionmanager" in fg
+    act_is_perm = any(f in act for f in _PERMISSION_ACTIVITY_FRAGMENTS)
+    if pkg_is_perm and act_is_perm:
+        return SafeInteractiveBoundaryRole.SYSTEM_PERMISSION
+
+    # ── 2. SYSTEM_INSTALLER ───────────────────────────────────────────────────
+    # Known AOSP installer packages (HIGH pkg alone is sufficient).
+    if foreground_package in (
+        "com.android.packageinstaller",
+        "com.google.android.packageinstaller",
+    ):
+        return SafeInteractiveBoundaryRole.SYSTEM_INSTALLER
+    # OEM installers: require TWO signals from {pkg-fragment, activity-fragment,
+    # ui-text-marker}.  UI text alone is never enough.
+    pkg_has_installer_fragment = any(f in fg for f in _INSTALLER_PKG_FRAGMENTS)
+    act_has_installer_fragment = any(f in act for f in _INSTALLER_ACTIVITY_FRAGMENTS)
+    ui_has_installer_marker    = any(m in txt for m in _INSTALLER_UI_MARKERS)
+
+    if pkg_has_installer_fragment and act_has_installer_fragment:
+        # pkg fragment + activity fragment → two independent signals
+        return SafeInteractiveBoundaryRole.SYSTEM_INSTALLER
+    if pkg_has_installer_fragment and ui_has_installer_marker:
+        # pkg fragment + UI marker → two independent signals
+        return SafeInteractiveBoundaryRole.SYSTEM_INSTALLER
+    # Activity fragment alone (without pkg signal) is NOT sufficient — an
+    # arbitrary app could have an Activity named "InstallActivity".
+
+    # ── 3. SYSTEM_SETTINGS ───────────────────────────────────────────────────
+    if foreground_package in ("com.android.settings",):
+        # Known settings package: check activity to distinguish sub-roles.
+        if any(f in act for f in _VPN_ACTIVITY_FRAGMENTS):
+            return SafeInteractiveBoundaryRole.VPN_SETTINGS
+        if "accessibility" in act:
+            return SafeInteractiveBoundaryRole.ACCESSIBILITY
+        return SafeInteractiveBoundaryRole.SYSTEM_SETTINGS
+    # OEM settings: require pkg + activity fragment.
+    pkg_looks_like_settings = any(f in fg for f in _SETTINGS_PKG_FRAGMENTS)
+    act_looks_like_settings = any(f in act for f in _SETTINGS_ACTIVITY_FRAGMENTS)
+    if pkg_looks_like_settings and act_looks_like_settings:
+        if any(f in act for f in _VPN_ACTIVITY_FRAGMENTS):
+            return SafeInteractiveBoundaryRole.VPN_SETTINGS
+        if "accessibility" in act:
+            return SafeInteractiveBoundaryRole.ACCESSIBILITY
+        return SafeInteractiveBoundaryRole.SYSTEM_SETTINGS
+
+    return SafeInteractiveBoundaryRole.NONE
+
+
+def is_safe_interactive_boundary(
+    foreground_package: str,
+    activity: str = "",
+    ui_text: str = "",
+) -> bool:
+    """
+    Return True when the foreground screen is a safe, sandbox-permitted
+    interactive boundary surface (installer, permission, settings, etc.).
+
+    This is the fast path used by the scope guard and exploration graph.
+    See :func:`classify_safe_boundary` for full confidence rules.
+    """
+    return classify_safe_boundary(foreground_package, activity, ui_text) != SafeInteractiveBoundaryRole.NONE
+
 # Trigger → priority mapping
 _TRIGGER_PRIORITY: Dict[str, ScreenshotTriggerPriority] = {
     "PERMISSION_DIALOG": ScreenshotTriggerPriority.HIGH,
@@ -172,8 +354,24 @@ def resolve_screen_ownership(
             return ScreenOwnership.SYSTEM_PERMISSION
         return ScreenOwnership.EXTERNAL_APP
 
-    # Any other foreground package is external relative to target
+    # Any other foreground package — check whether it is a safe system boundary
+    # role (e.g. OEM package installer / settings / permission controller) before
+    # classifying it as a generic EXTERNAL_APP.  Two independent signals are
+    # required; see classify_safe_boundary() for the full confidence hierarchy.
     if target and fg != target:
+        role = classify_safe_boundary(foreground_package, activity, semantic_type)
+        if role == SafeInteractiveBoundaryRole.SYSTEM_INSTALLER:
+            return ScreenOwnership.SYSTEM_INSTALLER
+        if role in (
+            SafeInteractiveBoundaryRole.SYSTEM_PERMISSION,
+            SafeInteractiveBoundaryRole.ACCESSIBILITY,
+        ):
+            return ScreenOwnership.SYSTEM_PERMISSION
+        if role in (
+            SafeInteractiveBoundaryRole.SYSTEM_SETTINGS,
+            SafeInteractiveBoundaryRole.VPN_SETTINGS,
+        ):
+            return ScreenOwnership.SYSTEM_SETTINGS
         return ScreenOwnership.EXTERNAL_APP
 
     return ScreenOwnership.UNKNOWN

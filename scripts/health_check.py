@@ -60,6 +60,7 @@ MOBSF_API_KEY = os.getenv("MOBSF_API_KEY", "sudarshan_mobsf_api_key_2026")
 BACKEND_HOST  = os.getenv("BACKEND_HOST", "http://localhost:8000")
 FRONTEND_HOST = os.getenv("FRONTEND_HOST", "http://localhost:5173")
 ENGINE_HOST   = os.getenv("ENGINE_HOST", "http://localhost:8001")  # may not be exposed
+MITMPROXY_PORT = os.getenv("MITMPROXY_PORT", "8085")
 def _default_adb() -> str:
     """
     adb on PATH, else the SDK's default install location for this platform.
@@ -415,12 +416,12 @@ def check_jadx():
 
 def check_mitmproxy():
     print("\n[mitmproxy]")
-    r = _http_get("http://localhost:8080/", timeout=3)
+    r = _http_get(f"http://localhost:{MITMPROXY_PORT}/", timeout=3)
     # mitmproxy returns 502 to non-proxied connections - that means it's running
     if r is not None:
-        _check("mitmproxy proxy port", PASS, f"HTTP {r.status_code} (proxy responding)")
+        _check("mitmproxy proxy port", PASS, f"HTTP {r.status_code} (proxy responding on :{MITMPROXY_PORT})")
     else:
-        _check("mitmproxy proxy port", WARN, "Not reachable on :8080")
+        _check("mitmproxy proxy port", WARN, f"Not reachable on :{MITMPROXY_PORT}")
 
 
 def check_frida_hooks():

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import {
   Terminal, Cpu, Search, Lock, Code, Package,
   ChevronDown, ChevronUp, Shield, Globe, AlertTriangle, Database, Tag, Key
@@ -21,25 +21,27 @@ import {
   runtimeStatusHeadline,
 } from '../lib/investigationRuntime';
 import { useAnalysis } from '../context/AnalysisContext';
+import AnalysisTabs, { type AnalysisTab } from '../components/investigation/AnalysisTabs';
+import ActivitySummary from '../components/investigation/ActivitySummary';
+import BehaviorTags from '../components/investigation/BehaviorTags';
+import RelationsGraph from '../components/investigation/RelationsGraph';
+import SecondaryApkPanel from '../components/investigation/SecondaryApkPanel';
+import MitreMatrix from '../components/investigation/MitreMatrix';
+import AskAiPopover from '../components/investigation/AskAiPopover';
 
-function EvidenceSection({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description?: string;
-  children: ReactNode;
-}) {
-  return (
-    <section className="evidence-section">
-      <header className="evidence-section__header">
-        <h2 className="evidence-section__title">{title}</h2>
-        {description && <p className="evidence-section__desc">{description}</p>}
-      </header>
-      <div className="space-y-4">{children}</div>
-    </section>
-  );
+/**
+ * Row count past which a table starts collapsed.
+ *
+ * Every panel opened expanded, so arriving at the technical view meant
+ * hundreds of rows at once and no way to see the shape of the page. Blanket
+ * collapsing is the opposite mistake: a two-row table costs nothing to show,
+ * and hiding it behind a click makes small findings easy to miss entirely.
+ */
+const COLLAPSE_ABOVE_ROWS = 5;
+
+/** Start open only when the table is small enough to read at a glance. */
+function useRowAccordion(rowCount: number) {
+  return useState(rowCount <= COLLAPSE_ABOVE_ROWS);
 }
 
 // ─── Explainability Engine ────────────────────────────────────────────────────────
@@ -199,7 +201,12 @@ function DangerousAPITable({ data }: { data: FraudCardData }) {
             <tbody className="font-mono">
               {apis.map((api, i) => (
                 <tr key={i} className="!bg-red-50/20">
-                  <td className="break-all text-red-700 font-semibold">{api}</td>
+                  <td className="break-all text-red-700 font-semibold">
+                    <span className="inline-flex items-start gap-1">
+                      {api}
+                      <AskAiPopover value={api} kind="api" />
+                    </span>
+                  </td>
                   <td className="text-right">
                     <span className="inline-flex px-1.5 py-0.5 text-[9px] font-bold bg-red-100 text-red-800 rounded border border-red-200/50 whitespace-nowrap">
                       DANGEROUS HOOK
@@ -435,7 +442,7 @@ function DynamicAnalysisPanel({ data }: { data: FraudCardData }) {
 // ─── Manifest Findings Panel ─────────────────────────────────────────────────────
 
 function ManifestFindingsPanel({ data }: { data: FraudCardData }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useRowAccordion((data.manifest_findings || []).length);
   const [filter, setFilter] = useState('');
   const [sev, setSev] = useState<string>('all');
   const findings = (data.manifest_findings || []).filter(
@@ -524,7 +531,7 @@ const CODE_CATEGORIES = [
 ];
 
 function CodeFindingsPanel({ data }: { data: FraudCardData }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useRowAccordion((data.code_findings || []).length);
   const [filter, setFilter] = useState('');
   const [cat, setCat] = useState('all');
   const [sev, setSev] = useState<string>('all');
@@ -618,7 +625,7 @@ function CodeFindingsPanel({ data }: { data: FraudCardData }) {
 // ─── Exported Components Panel ──────────────────────────────────────────────────────
 
 function ExportedComponentsPanel({ data }: { data: FraudCardData }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useRowAccordion(((data.exported_activities||[]).length + (data.exported_services||[]).length + (data.exported_receivers||[]).length));
   const [filter, setFilter] = useState('');
   const acts = data.exported_activities || [];
   const svcs = data.exported_services || [];
@@ -691,7 +698,7 @@ function ExportedComponentsPanel({ data }: { data: FraudCardData }) {
 // ─── Native Binary Analysis Panel ──────────────────────────────────────────────────
 
 function BinaryAnalysisPanel({ data }: { data: FraudCardData }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useRowAccordion((data.binary_analysis || []).length);
   const bins = data.binary_analysis || [];
 
   if (bins.length === 0) return null;
@@ -750,7 +757,7 @@ function BinaryAnalysisPanel({ data }: { data: FraudCardData }) {
 // ─── Network Security Config Panel ──────────────────────────────────────────────────
 
 function NetworkSecurityPanel({ data }: { data: FraudCardData }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useRowAccordion(Object.keys(data.network_security || {}).length);
   const nsc = data.network_security;
 
   if (!nsc || Object.keys(nsc).length === 0) return null;
@@ -796,7 +803,7 @@ function NetworkSecurityPanel({ data }: { data: FraudCardData }) {
 // ─── Trackers & Third-Party SDKs Panel ─────────────────────────────────────────────
 
 function TrackersPanel({ data }: { data: FraudCardData }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useRowAccordion(((data as any).trackers || []).length);
   const trackers = data.trackers || [];
 
   if (trackers.length === 0) return null;
@@ -842,7 +849,7 @@ function TrackersPanel({ data }: { data: FraudCardData }) {
 // ─── Secrets Inspector Panel ─────────────────────────────────────────────────────────
 
 function SecretsPanel({ data }: { data: FraudCardData }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useRowAccordion((data.hardcoded_secrets || []).length);
   const [filter, setFilter] = useState('');
   const [showAll, setShowAll] = useState(false);
   const secrets = data.hardcoded_secrets || [];
@@ -886,7 +893,14 @@ function SecretsPanel({ data }: { data: FraudCardData }) {
                     <td>
                       <span className="px-1 py-0.5 text-[9px] font-bold bg-red-100 text-red-800 border border-red-200/50 rounded uppercase whitespace-nowrap">SECRET</span>
                     </td>
-                    <td className="break-all text-xs text-slate-700">{s}</td>
+                    <td className="break-all text-xs text-slate-700">
+                      <span className="inline-flex items-start gap-1">
+                        {s}
+                        {/* Obfuscated secrets are decoded locally first; the
+                            model is only asked for semantic intent. */}
+                        <AskAiPopover value={s} kind="string" />
+                      </span>
+                    </td>
                     <td className="text-right">
                       <CopyButton value={s} />
                     </td>
@@ -915,60 +929,113 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
   const { investigationBundle, loading } = useAnalysis();
   if (!data) return null;
 
+  // Four questions, four tabs. The previous single scroll rendered every panel
+  // expanded at once, so the page had no hierarchy: a certificate table and a
+  // critical runtime finding occupied identical boxes, one after the other.
+  const tabs: AnalysisTab[] = [
+    {
+      id: 'summary',
+      label: 'Summary',
+      hint: 'what should I do?',
+      content: (
+        <>
+          <ActivitySummary data={data} />
+          <EvidenceRegistrySection
+            data={data}
+            bundle={investigationBundle}
+            loading={loading}
+          />
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-stretch">
+            <div className="xl:col-span-4 min-w-0">
+              <ExplainabilityEngine data={data} />
+            </div>
+            <div className="xl:col-span-8 min-w-0">
+              <APKMetadata data={data} />
+            </div>
+          </div>
+          <VisualImpersonationPanel data={data} />
+          {data.vide && <VisualDiffViewer vide={data.vide} />}
+          <ResiliencePanel
+            sessionId={data.sha256}
+            packageName={data.package_name}
+          />
+        </>
+      ),
+    },
+    {
+      id: 'static',
+      label: 'Static details',
+      hint: 'what is it?',
+      count: (data.manifest_findings ?? []).length,
+      content: (
+        <>
+          <div className="analyst-grid-2">
+            <PermissionTable data={data} />
+            <CertificatePanel certificate={data.certificate} />
+          </div>
+          <ManifestFindingsPanel data={data} />
+          <ExportedComponentsPanel data={data} />
+          <DecompilationPanel data={data} />
+        </>
+      ),
+    },
+    {
+      id: 'behavior',
+      label: 'Behaviour & code',
+      hint: 'what does it do?',
+      count: (data.code_findings ?? []).length,
+      content: (
+        <>
+          <div id="dynamic-analysis">
+            <DynamicAnalysisSummary data={data} />
+          </div>
+          <div id="screenshots">
+            <ScreenshotGallery data={data} bundle={investigationBundle} />
+          </div>
+          {data.vide && <OverlayEvidenceViewer vide={data.vide} />}
+          <MitreMatrix data={data} />
+          <DangerousAPITable data={data} />
+          <CodeFindingsPanel data={data} />
+          <BinaryAnalysisPanel data={data} />
+          <SecretsPanel data={data} />
+          <div id="logcat">
+            <LogcatInspectorPanel logcat={data.dynamic_analysis?.logcat} />
+          </div>
+          <DynamicAnalysisPanel data={data} />
+        </>
+      ),
+    },
+    {
+      id: 'network',
+      label: 'Network & relations',
+      hint: 'what does it touch?',
+      count: (data.hardcoded_urls_ips ?? []).length,
+      content: (
+        <>
+          <RelationsGraph data={data} />
+          <div id="network-capture">
+            <NetworkCapturePanel
+              networkLogs={data.dynamic_analysis?.network_logs}
+            />
+          </div>
+          <div id="secondary-apks">
+            <SecondaryApkPanel data={data} />
+          </div>
+          <div className="analyst-grid-2">
+            <NetworkSecurityPanel data={data} />
+            <TrackersPanel data={data} />
+          </div>
+        </>
+      ),
+    },
+  ];
+
   return (
     <div className="technical-view">
-      <EvidenceRegistrySection data={data} bundle={investigationBundle} loading={loading} />
-
-      <EvidenceSection
-        title="Investigation resilience"
-        description="Which fraud triggers this run reached, and the controls to reach the ones it missed."
-      >
-        <ResiliencePanel sessionId={data.sha256} packageName={data.package_name} />
-      </EvidenceSection>
-
-      <EvidenceSection title="Overview" description="Classification summary and APK identifiers.">
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-stretch">
-          <div className="xl:col-span-4 min-w-0">
-            <ExplainabilityEngine data={data} />
-          </div>
-          <div className="xl:col-span-8 min-w-0">
-            <APKMetadata data={data} />
-          </div>
-        </div>
-      </EvidenceSection>
-
-      <EvidenceSection title="Static analysis" description="Permissions, bytecode signals, manifest, and attack surface.">
-        <VisualImpersonationPanel data={data} />
-        {data.vide && <VisualDiffViewer vide={data.vide} />}
-        {data.vide && <OverlayEvidenceViewer vide={data.vide} />}
-        <div className="analyst-grid-2">
-          <PermissionTable data={data} />
-          <DangerousAPITable data={data} />
-        </div>
-        <ManifestFindingsPanel data={data} />
-        <CodeFindingsPanel data={data} />
-        <ExportedComponentsPanel data={data} />
-        <div className="analyst-grid-2">
-          <CertificatePanel certificate={data.certificate} />
-          <DecompilationPanel data={data} />
-        </div>
-        <BinaryAnalysisPanel data={data} />
-        <div className="analyst-grid-2">
-          <NetworkSecurityPanel data={data} />
-          <TrackersPanel data={data} />
-        </div>
-        <SecretsPanel data={data} />
-      </EvidenceSection>
-
-      <EvidenceSection title="Runtime analysis" description="Network capture, sandbox telemetry, and visual evidence.">
-        <DynamicAnalysisSummary data={data} />
-        <ScreenshotGallery data={data} bundle={investigationBundle} />
-        <div className="analyst-grid-2">
-          <NetworkCapturePanel networkLogs={data.dynamic_analysis?.network_logs} />
-          <LogcatInspectorPanel logcat={data.dynamic_analysis?.logcat} />
-        </div>
-        <DynamicAnalysisPanel data={data} />
-      </EvidenceSection>
+      <div className="mb-4">
+        <BehaviorTags data={data} />
+      </div>
+      <AnalysisTabs tabs={tabs} />
     </div>
   );
 }

@@ -12,7 +12,7 @@ import ExecutiveVisualEvidenceSection from '../components/investigation/Executiv
 import VisualImpersonationExecutiveCard from '../components/investigation/VisualImpersonationExecutiveCard';
 import InvestigationConclusionCard from '../components/investigation/InvestigationConclusionCard';
 import { useRuntimeScreenshots } from '../hooks/useRuntimeScreenshots';
-import { Activity, AlertTriangle, Shield } from 'lucide-react';
+import { Activity, AlertTriangle, Shield, ShieldAlert, Clock, UserPlus, Unlock } from 'lucide-react';
 
 /**
  * INCOMPLETE EXERCISE badge.
@@ -131,6 +131,48 @@ function ThreatIntelTeaser({ data }: { data: FraudCardData }) {
   );
 }
 
+function ResilienceOverviewBanner({ data }: { data: FraudCardData }) {
+  const actions = data.dynamic_analysis?.resilience_actions;
+  
+  if (!data.dynamic_available || !actions || actions.length === 0) return null;
+
+  const ICONS: Record<string, React.ElementType> = {
+    'time_warp': Clock,
+    'persona_seeding': UserPlus,
+    'permission_grants': Unlock,
+  };
+
+  return (
+    <SocCard className="border-indigo-200/80 bg-indigo-50/50">
+      <div className="px-4 py-4">
+        <div className="mb-4">
+          <p className="text-sm font-semibold text-indigo-950 flex items-center gap-1.5">
+            <ShieldAlert className="h-4 w-4 text-indigo-600" />
+            Advanced Sandbox Resilience Applied
+          </p>
+          <p className="text-xs text-indigo-900/90 mt-1">
+            Successfully handled {actions.length} evasion edge {actions.length === 1 ? 'case' : 'cases'} during analysis to expose hidden malicious behavior.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {actions.map((action, i) => {
+            const Icon = ICONS[action.type] || ShieldAlert;
+            return (
+              <div key={i} className="bg-white rounded-md border border-indigo-100/50 p-3 shadow-xs flex flex-col">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <Icon className="h-4 w-4 text-indigo-500 shrink-0" />
+                  <p className="text-sm font-semibold text-slate-800 line-clamp-1">{action.title}</p>
+                </div>
+                <p className="text-xs text-slate-600 grow">{action.result_summary}</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </SocCard>
+  );
+}
+
 export default function FraudCard({ data }: { data: FraudCardData | null }) {
   const { investigationBundle } = useAnalysis();
   const { entries: screenshotEntries } = useRuntimeScreenshots(data?.sha256);
@@ -149,6 +191,8 @@ export default function FraudCard({ data }: { data: FraudCardData | null }) {
 
       {/* 1. EXECUTIVE RISK ASSESSMENT & SCORE INFLUENCERS */}
       <FraudRiskHero data={data} />
+
+      <ResilienceOverviewBanner data={data} />
 
       {/* 2. EVIDENCE & RISK SIGNALS (Independent section below top area) */}
       {stripCounts && (

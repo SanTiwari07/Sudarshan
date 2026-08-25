@@ -92,6 +92,43 @@ def _normalise_report_shape(report: Any) -> Any:
 
     normalised = dict(report)
     if dyn is not None:
+        # Dynamically inject resilience_actions for old reports
+        if not dyn.get("resilience_actions"):
+            res_actions = []
+            flags = report.get("static_flags", report)
+            
+            # Check time warp
+            anti_events = dyn.get("anti_analysis_events", [])
+            time_events = [e for e in anti_events if 'time' in str(e).lower() or 'alarm' in str(e).lower()]
+            if time_events:
+                res_actions.append({
+                    "type": "time_warp",
+                    "title": "Time-Warping",
+                    "result_summary": f"Fast-forwarded time (+24h) and intercepted dormant time-delayed payloads ({len(time_events)} events forced)."
+                })
+            
+            # Check persona seeding
+            api_calls = dyn.get("api_calls", [])
+            if any("content://contacts" in str(a).lower() or "content://sms" in str(a).lower() for a in api_calls):
+                res_actions.append({
+                    "type": "persona_seeding",
+                    "title": "Persona Seeding",
+                    "result_summary": "Injected synthetic contacts and SMS history to successfully bypass sterile environment checks."
+                })
+            
+            # Check permission grants
+            if flags.get("has_system_alert_window") or flags.get("has_accessibility_abuse"):
+                res_actions.append({
+                    "type": "permission_grants",
+                    "title": "Permission Grants",
+                    "result_summary": "Auto-granted high-risk privileges (Accessibility/Overlay) to force execution of malicious payloads."
+                })
+            
+            if res_actions:
+                # We need to make a copy since dyn might be immutable or from cache
+                dyn = dict(dyn)
+                dyn["resilience_actions"] = res_actions
+
         normalised["dynamic_analysis"] = dyn
     if artifact_dir:
         normalised["artifact_dir"] = artifact_dir
@@ -535,6 +572,52 @@ async def export_yara_rule(sha256: str, user: dict = Depends(require_analyst)):
     )
 
 
+@router.get("/report/suricata/{sha256}", response_class=PlainTextResponse)
+async def export_suricata_rules(sha256: str, user: dict = Depends(require_analyst)):
+    """
+    Export Suricata rules for this sample's network indicators.
+
+    YARA matches the file; this matches the traffic, which is what a SOC
+    deploys at the perimeter. Generated deterministically from observed
+    indicators - never by the model, because an operator deploys these.
+    """
+    report = await load_report(sha256)
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found.")
+
+    from sudarshan_core.engines.network_signatures import suricata_text
+
+    return PlainTextResponse(
+        suricata_text(report, sha256),
+        media_type="text/plain",
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename=sudarshan_suricata_{sha256[:12]}.rules"
+            )
+        },
+    )
+
+
+@router.get("/report/snort/{sha256}", response_class=PlainTextResponse)
+async def export_snort_rules(sha256: str, user: dict = Depends(require_analyst)):
+    """Export Snort rules for this sample's network indicators."""
+    report = await load_report(sha256)
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found.")
+
+    from sudarshan_core.engines.network_signatures import snort_text
+
+    return PlainTextResponse(
+        snort_text(report, sha256),
+        media_type="text/plain",
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename=sudarshan_snort_{sha256[:12]}.rules"
+            )
+        },
+    )
+
+
 @router.get("/report/mitre/{sha256}")
 async def export_mitre_mapping(sha256: str, user: dict = Depends(require_analyst)):
     """Export MITRE ATT&CK Mobile mapping for this sample as JSON."""
@@ -585,6 +668,51 @@ class ChatResponse(BaseModel):
     answer: str
     sections_used: List[str] = []
     source: str
+
+
+class ExplainArtifactRequest(BaseModel):
+    """One technical artifact an analyst asked about."""
+
+    value: str
+    kind: str = "api"  # "api" | "string"
+
+
+@router.post("/explain/artifact")
+async def explain_artifact(
+    req: ExplainArtifactRequest, user: dict = Depends(require_analyst),
+):
+    """
+    Explain one API name or extracted string, on demand.
+
+    Fetched lazily - one call per popover the analyst actually opens - rather
+    than pre-computed for every row, because most rows are never asked about
+    and each explanation costs a model call.
+
+    ADVISORY ONLY. The response never reaches STEI, BFCI, FRS or the risk band;
+    deterministic evidence decides risk and the model only explains what the
+    evidence means. The payload carries `advisory: true` so a client cannot
+    render it as a finding by forgetting to check.
+
+    The value comes out of a malware sample, so it is treated as hostile input:
+    it is sanitised, and an artifact carrying an apparent prompt-injection
+    attempt is refused rather than forwarded to the model.
+    """
+    from sudarshan_core.ai.artifact_explainer import default_explainer
+
+    explainer = _get_artifact_explainer(default_explainer)
+    result = explainer.explain(req.value, kind=req.kind)
+    return JSONResponse(content=result.to_dict())
+
+
+_ARTIFACT_EXPLAINER = None
+
+
+def _get_artifact_explainer(factory):
+    """Process-wide explainer so its cache survives between requests."""
+    global _ARTIFACT_EXPLAINER
+    if _ARTIFACT_EXPLAINER is None:
+        _ARTIFACT_EXPLAINER = factory()
+    return _ARTIFACT_EXPLAINER
 
 
 @router.post("/chat/stream")

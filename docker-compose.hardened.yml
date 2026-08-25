@@ -43,7 +43,7 @@ services:
 
   mitmproxy:
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:${MITMPROXY_PORT:-8085}:8080"
   mobsf:
     ports:
       - "127.0.0.1:8008:8000"

@@ -187,7 +187,7 @@ services:
     # Publish only if an external sandbox must reach the proxy. Prefer binding to
     # loopback so it is not exposed on the LAN.
     ports:
-      - "127.0.0.1:8080:8080"    # Proxy port - point Genymotion/AVD to this
+      - "127.0.0.1:${MITMPROXY_PORT:-8085}:8080"    # Proxy port - point Genymotion/AVD to this
     command: >
       mitmdump
       --listen-host 0.0.0.0

@@ -60,6 +60,7 @@ from sudarshan_core.engines.agentic.perception import (
     in_investigation_scope,
     package_of,
 )
+from sudarshan_core.engines.agentic.screenshot_policy import is_safe_interactive_boundary
 from sudarshan_core.engines.agentic.planner import AgentPlanner
 from sudarshan_core.engines.agentic.action_dispatch import (
     ActionDispatcher,
@@ -82,6 +83,9 @@ from sudarshan_core.engines.agentic.screen_classifier import (
     is_explorable_screen_type,
     should_invoke_planner,
     ScreenType,
+)
+from sudarshan_core.engines.agentic.secondary_payload import (
+    SecondaryPayloadTracker,
 )
 from sudarshan_core.engines.event_bus import RuntimeEventBus
 from sudarshan_core.engines.investigation_controller import (
@@ -254,6 +258,10 @@ class AgenticExplorer:
         # callers that cannot resolve a launcher fall back to press_home rather
         # than issuing `am start` with a missing component.
         self.main_activity: str = main_activity or ""
+
+        # Secondary payloads (§19/§20): the second APK a dropper fetches.
+        # Fed from _on_frida_event so it sees the whole runtime stream.
+        self._payloads = SecondaryPayloadTracker(parent_package=package_name)
 
         # Permission investigation.
         #
@@ -924,6 +932,14 @@ class AgenticExplorer:
         """Receive Frida events from the bus and buffer them for the agent loop."""
         with self._events_lock:
             self._pending_frida_events.append(event)
+        # A dropper's second APK is only visible in the runtime stream, so the
+        # tracker has to see every event rather than the ones the agent loop
+        # happens to drain. Never allowed to break event delivery.
+        try:
+            self._payloads.observe_event(event)
+        except Exception:  # noqa: BLE001
+            logger.debug("[AgenticExplorer] payload tracker declined an event",
+                         exc_info=True)
         # Also append to timeline (same as UIExplorer)
         self.attack_timeline.append({
             "timestamp": self._elapsed_ts(),
@@ -1093,7 +1109,10 @@ class AgenticExplorer:
                 # a screen of the sample, and counting it inflates both the
                 # screen graph the planner reasons over and the coverage figure
                 # the report presents.
-                if not in_investigation_scope(foreground_package, self.package_name):
+                if not in_investigation_scope(
+                    foreground_package, self.package_name,
+                    activity=obs.activity,
+                ):
                     out_of_scope_streak += 1
 
                     # Blame the action that did it, once, on the first
@@ -1101,22 +1120,44 @@ class AgenticExplorer:
                     # still points at the in-app screen the tap was made from,
                     # because out-of-scope screens are never registered below.
                     if out_of_scope_streak == 1 and last_action_tool:
-                        self.memory.record_escaping_action(
-                            last_action_tool, last_action_target
+                        # SAFE BOUNDARY: do NOT record as escaping when the
+                        # destination is a recognised safe system boundary role
+                        # (e.g. OEM package installer, permission controller).
+                        # Recording it would permanently block the same button
+                        # text (e.g. "INSTALL") from being selected again on
+                        # the source screen after recovery.
+                        fg_is_safe_boundary = is_safe_interactive_boundary(
+                            foreground_package, obs.activity,
                         )
-                        self.planner.invalidate_cache_for_screen(
-                            self.memory.current_screen_hash
-                        )
-                        logger.info(
-                            "[AgenticExplorer] '%s(%s)' leads out of the app - "
-                            "it will not be chosen again on this screen.",
-                            last_action_tool, last_action_target,
-                        )
-                        self.audit_log.record_system_event(
-                            "escaping_action_recorded",
-                            f"{last_action_tool}({last_action_target}) "
-                            f"-> {foreground_package}",
-                        )
+                        if not fg_is_safe_boundary:
+                            self.memory.record_escaping_action(
+                                last_action_tool, last_action_target
+                            )
+                            self.planner.invalidate_cache_for_screen(
+                                self.memory.current_screen_hash
+                            )
+                            logger.info(
+                                "[AgenticExplorer] '%s(%s)' leads out of the app - "
+                                "it will not be chosen again on this screen.",
+                                last_action_tool, last_action_target,
+                            )
+                            self.audit_log.record_system_event(
+                                "escaping_action_recorded",
+                                f"{last_action_tool}({last_action_target}) "
+                                f"-> {foreground_package}",
+                            )
+                        else:
+                            logger.info(
+                                "[AgenticExplorer] BOUNDARY_TRANSITION "
+                                "from_package=%s to_package=%s "
+                                "ownership=safe_boundary — skipping escaping_action record",
+                                self.package_name, foreground_package,
+                            )
+                            self.audit_log.record_system_event(
+                                "boundary_transition_safe",
+                                f"{last_action_tool}({last_action_target}) "
+                                f"-> {foreground_package} (safe boundary)",
+                            )
                         last_action_tool = last_action_target = ""
                     # `navigation_abandoned` is checked here, not only the
                     # streak cap. Detecting a missing launcher component set the
@@ -1226,11 +1267,21 @@ class AgenticExplorer:
                                         "category": "persistence",
                                         "severity": "HIGH",
                                         "data": {
-                                            "hook": "PackageManager.setComponentEnabledSetting",
+                                            # Named for what we OBSERVED, not
+                                            # for the API we suppose caused it.
+                                            # The agent does not hook
+                                            # setComponentEnabledSetting; this is
+                                            # inferred from Android refusing to
+                                            # relaunch the component, and calling
+                                            # it a hooked call would overstate
+                                            # the evidence.
+                                            "hook": "launcher.component_unresolvable",
                                             "description": (
                                                 "Application's launcher component "
-                                                "no longer resolves - the app "
-                                                "removed itself from the launcher"
+                                                "no longer resolves - the app has "
+                                                "removed itself from the launcher "
+                                                "(inferred from a refused relaunch, "
+                                                "not from a hooked API call)"
                                             ),
                                             "package": self.package_name,
                                         },
@@ -1533,6 +1584,13 @@ class AgenticExplorer:
                 action, selected_by = select_canonical_action(graph_action, planner_action)
                 if action is not None:
                     action["_selected_by"] = selected_by
+                    pipeline_log(
+                        "ACTION_SELECTED",
+                        state=graph_state.state_id,
+                        action=action.get("text") or action.get("tool", ""),
+                        tool=action.get("tool", ""),
+                        source=selected_by,
+                    )
 
                 if action is None and not self.exploration.has_unexplored_work():
                     _exp_cov = self.exploration.coverage_metrics()
@@ -1791,6 +1849,10 @@ class AgenticExplorer:
                         "STATE_CHANGED",
                         old_state=self._pre_action_state_id,
                         new_state=post_state.state_id,
+                        foreground_package=package_of(post_obs.activity),
+                        ownership=post_classification.ownership,
+                        semantic_type=post_classification.screen_type,
+                        actions=len(post_state.actionable_elements),
                     )
                     pipeline_log("ACTION_VERIFIED", action_id=action.get("_action_id"))
                     self._log_consequences(obs, post_obs, post_classification)
@@ -1801,10 +1863,15 @@ class AgenticExplorer:
                     # not from the already-exhausted STATE-001.
                     if post_state.state_id != self._pre_action_state_id:
                         self.exploration._current_state_id = post_state.state_id
-                        logger.debug(
-                            "[AgenticExplorer] Exploration cursor advanced: "
-                            "%s → %s",
+                        logger.info(
+                            "[AgenticExplorer] STATE_CHANGED old_state=%s "
+                            "new_state=%s foreground_package=%s "
+                            "ownership=%s semantic_type=%s actions=%d",
                             self._pre_action_state_id, post_state.state_id,
+                            package_of(post_obs.activity),
+                            post_classification.ownership,
+                            post_classification.screen_type,
+                            len(post_state.actionable_elements),
                         )
                 elif retry_attempts >= MAX_EXECUTION_ATTEMPTS or not result.success:
                     pipeline_log(
@@ -2162,15 +2229,85 @@ class AgenticExplorer:
                 "edges": deep_exploration.get("edges", []),
                 "mermaid": self.exploration.to_mermaid(),
             },
-            "secondary_apks":      deep_exploration.get("secondary_apks", []),
+            # The graph's own list stays first for compatibility, but the
+            # tracker is what actually observes payloads at runtime - the
+            # graph list had no producer in the production path.
+            "secondary_apks":      (
+                list(deep_exploration.get("secondary_apks", []))
+                + self._payloads.to_records()
+            ),
+            "secondary_apk_summary": self._payloads.summary(),
             "action_traces":       action_traces,
         }
+
+    def preserve_secondary_payloads(self, output_dir: Path) -> List[Dict[str, Any]]:
+        """
+        Pull and hash every secondary APK the run detected.
+
+        Deferred to the end of the run rather than done at detection time: the
+        app is usually still writing the file when the hook fires, so hashing
+        it immediately would record the digest of a partial download.
+
+        Uses the sandbox provider's own adb - never a private path to the
+        device - and only ever reads. Failures are recorded on the payload and
+        never abort artifact flushing.
+        """
+        payloads = self._payloads.payloads
+        if not payloads:
+            return []
+        try:
+            from sudarshan_core.sandbox import get_sandbox_provider
+
+            adb = get_sandbox_provider().adb
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "[AgenticExplorer] no sandbox provider; %d secondary payload(s) "
+                "detected but not preserved: %s", len(payloads), exc,
+            )
+            return self._payloads.to_records()
+
+        target = output_dir / "secondary_apks"
+        for payload in payloads:
+            try:
+                self._payloads.preserve(
+                    payload, target, adb, device_serial=self.device_serial,
+                )
+            except Exception:  # noqa: BLE001
+                logger.warning(
+                    "[AgenticExplorer] could not preserve %s",
+                    payload.device_path, exc_info=True,
+                )
+        logger.info(
+            "[AgenticExplorer] SECONDARY_PAYLOADS %s",
+            self._payloads.summary(),
+        )
+        return self._payloads.to_records()
 
     def flush_artifacts(self, output_dir: Path) -> None:
         """
         Write agentic artifacts to disk in the same directory as APK reports.
         Called by frida_sandbox.py after get_reports().
         """
+        try:
+            records = self.preserve_secondary_payloads(output_dir)
+            if records:
+                import json as _json
+
+                with open(
+                    output_dir / "secondary_apks.json", "w", encoding="utf-8"
+                ) as f:
+                    _json.dump(
+                        {
+                            "parent_package": self.package_name,
+                            "summary": self._payloads.summary(),
+                            "payloads": records,
+                        },
+                        f, indent=2, default=str,
+                    )
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "[AgenticExplorer] secondary payload flush failed", exc_info=True
+            )
         try:
             self.audit_log.flush(output_dir / "audit_log.json")
             self.benchmark.flush(output_dir / "benchmark.json")

@@ -35,6 +35,22 @@ class ScreenType:
     UNKNOWN              = "UNKNOWN"
 
 
+# Screen types that, when detected by the UI classifier on an EXTERNAL_APP
+# ownership screen, indicate a safe interactive boundary.  The semantic type
+# is PRESERVED (not overridden by EXTERNAL_APP) so that ExplorationGraph
+# routes the screen to its interactive branch and builds an action inventory.
+_SAFE_INTERACTIVE_TYPES: frozenset = frozenset({
+    ScreenType.SYSTEM_PERMISSION,
+    ScreenType.ACCESSIBILITY_DIALOG,
+    ScreenType.VPN_REQUEST,
+    ScreenType.PACKAGE_INSTALLER,
+    ScreenType.EXTERNAL_APK,
+    ScreenType.UPDATE_PROMPT,
+    ScreenType.DOWNLOAD_PROMPT,
+    ScreenType.SETTINGS,
+})
+
+
 @dataclass
 class ScreenClassification:
     screen_type: str
@@ -219,6 +235,18 @@ def classify_screen_with_ownership(
 
     if ownership == ScreenOwnership.EXTERNAL_APP:
         base = classify_screen(activity_name, ui_nodes, raw_xml, package_name)
+        # SAFE INTERACTIVE BOUNDARY: when the UI classifier finds a safe
+        # interactive type on an EXTERNAL_APP ownership screen, preserve that
+        # semantic type.  If we return EXTERNAL_APP here, the ExplorationGraph
+        # receives semantic_type=EXTERNAL_APP, which is NOT in
+        # _INTERACTIVE_BOUNDARY_TYPES, so it routes to _observe_external() with
+        # actionable_elements=[] and exploration stops.
+        if base.screen_type in _SAFE_INTERACTIVE_TYPES:
+            return ScreenClassification(
+                base.screen_type, base.confidence,
+                ["external_interactive_boundary", f"fg={fg}"] + base.matched_rules,
+                ownership=ownership.value,
+            )
         return ScreenClassification(
             ScreenType.EXTERNAL_APP, "HIGH",
             ["foreground_external_app", f"fg={fg}"] + base.matched_rules,

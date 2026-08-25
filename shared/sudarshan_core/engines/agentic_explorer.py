@@ -60,6 +60,7 @@ from sudarshan_core.engines.agentic.perception import (
     in_investigation_scope,
     package_of,
 )
+from sudarshan_core.engines.agentic.screenshot_policy import is_safe_interactive_boundary
 from sudarshan_core.engines.agentic.planner import AgentPlanner
 from sudarshan_core.engines.agentic.action_dispatch import (
     ActionDispatcher,
@@ -1093,7 +1094,10 @@ class AgenticExplorer:
                 # a screen of the sample, and counting it inflates both the
                 # screen graph the planner reasons over and the coverage figure
                 # the report presents.
-                if not in_investigation_scope(foreground_package, self.package_name):
+                if not in_investigation_scope(
+                    foreground_package, self.package_name,
+                    activity=obs.activity,
+                ):
                     out_of_scope_streak += 1
 
                     # Blame the action that did it, once, on the first
@@ -1101,22 +1105,44 @@ class AgenticExplorer:
                     # still points at the in-app screen the tap was made from,
                     # because out-of-scope screens are never registered below.
                     if out_of_scope_streak == 1 and last_action_tool:
-                        self.memory.record_escaping_action(
-                            last_action_tool, last_action_target
+                        # SAFE BOUNDARY: do NOT record as escaping when the
+                        # destination is a recognised safe system boundary role
+                        # (e.g. OEM package installer, permission controller).
+                        # Recording it would permanently block the same button
+                        # text (e.g. "INSTALL") from being selected again on
+                        # the source screen after recovery.
+                        fg_is_safe_boundary = is_safe_interactive_boundary(
+                            foreground_package, obs.activity,
                         )
-                        self.planner.invalidate_cache_for_screen(
-                            self.memory.current_screen_hash
-                        )
-                        logger.info(
-                            "[AgenticExplorer] '%s(%s)' leads out of the app - "
-                            "it will not be chosen again on this screen.",
-                            last_action_tool, last_action_target,
-                        )
-                        self.audit_log.record_system_event(
-                            "escaping_action_recorded",
-                            f"{last_action_tool}({last_action_target}) "
-                            f"-> {foreground_package}",
-                        )
+                        if not fg_is_safe_boundary:
+                            self.memory.record_escaping_action(
+                                last_action_tool, last_action_target
+                            )
+                            self.planner.invalidate_cache_for_screen(
+                                self.memory.current_screen_hash
+                            )
+                            logger.info(
+                                "[AgenticExplorer] '%s(%s)' leads out of the app - "
+                                "it will not be chosen again on this screen.",
+                                last_action_tool, last_action_target,
+                            )
+                            self.audit_log.record_system_event(
+                                "escaping_action_recorded",
+                                f"{last_action_tool}({last_action_target}) "
+                                f"-> {foreground_package}",
+                            )
+                        else:
+                            logger.info(
+                                "[AgenticExplorer] BOUNDARY_TRANSITION "
+                                "from_package=%s to_package=%s "
+                                "ownership=safe_boundary — skipping escaping_action record",
+                                self.package_name, foreground_package,
+                            )
+                            self.audit_log.record_system_event(
+                                "boundary_transition_safe",
+                                f"{last_action_tool}({last_action_target}) "
+                                f"-> {foreground_package} (safe boundary)",
+                            )
                         last_action_tool = last_action_target = ""
                     # `navigation_abandoned` is checked here, not only the
                     # streak cap. Detecting a missing launcher component set the
@@ -1533,6 +1559,13 @@ class AgenticExplorer:
                 action, selected_by = select_canonical_action(graph_action, planner_action)
                 if action is not None:
                     action["_selected_by"] = selected_by
+                    pipeline_log(
+                        "ACTION_SELECTED",
+                        state=graph_state.state_id,
+                        action=action.get("text") or action.get("tool", ""),
+                        tool=action.get("tool", ""),
+                        source=selected_by,
+                    )
 
                 if action is None and not self.exploration.has_unexplored_work():
                     _exp_cov = self.exploration.coverage_metrics()
@@ -1791,6 +1824,10 @@ class AgenticExplorer:
                         "STATE_CHANGED",
                         old_state=self._pre_action_state_id,
                         new_state=post_state.state_id,
+                        foreground_package=package_of(post_obs.activity),
+                        ownership=post_classification.ownership,
+                        semantic_type=post_classification.screen_type,
+                        actions=len(post_state.actionable_elements),
                     )
                     pipeline_log("ACTION_VERIFIED", action_id=action.get("_action_id"))
                     self._log_consequences(obs, post_obs, post_classification)
@@ -1801,10 +1838,15 @@ class AgenticExplorer:
                     # not from the already-exhausted STATE-001.
                     if post_state.state_id != self._pre_action_state_id:
                         self.exploration._current_state_id = post_state.state_id
-                        logger.debug(
-                            "[AgenticExplorer] Exploration cursor advanced: "
-                            "%s → %s",
+                        logger.info(
+                            "[AgenticExplorer] STATE_CHANGED old_state=%s "
+                            "new_state=%s foreground_package=%s "
+                            "ownership=%s semantic_type=%s actions=%d",
                             self._pre_action_state_id, post_state.state_id,
+                            package_of(post_obs.activity),
+                            post_classification.ownership,
+                            post_classification.screen_type,
+                            len(post_state.actionable_elements),
                         )
                 elif retry_attempts >= MAX_EXECUTION_ATTEMPTS or not result.success:
                     pipeline_log(

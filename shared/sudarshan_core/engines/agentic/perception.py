@@ -269,12 +269,19 @@ INVESTIGATION_SCOPE_PACKAGES: FrozenSet[str] = frozenset({
 })
 
 
-def in_investigation_scope(foreground_package: str, target_package: str) -> bool:
+def in_investigation_scope(
+    foreground_package: str,
+    target_package: str,
+    activity: str = "",
+    ui_text: str = "",
+) -> bool:
     """
     Whether the foreground window is somewhere the agent should keep exploring.
 
-    True for the sample itself and for the system surfaces listed in
-    :data:`INVESTIGATION_SCOPE_PACKAGES`.
+    True for the sample itself, for the system surfaces listed in
+    :data:`INVESTIGATION_SCOPE_PACKAGES`, and for any screen that is
+    confidently identified as a safe interactive boundary role (e.g. an OEM
+    package installer or permission controller not in the static frozenset).
 
     An empty ``foreground_package`` returns True. An unreadable foreground is
     the absence of a reading, not evidence that the agent has wandered off, and
@@ -283,11 +290,19 @@ def in_investigation_scope(foreground_package: str, target_package: str) -> bool
     to an empty ``target_package``: with no target to compare against, nothing
     can be judged out of scope.
     """
+    from sudarshan_core.engines.agentic.screenshot_policy import is_safe_interactive_boundary
+
     if not foreground_package or not target_package:
         return True
     if foreground_package == target_package:
         return True
-    return foreground_package in INVESTIGATION_SCOPE_PACKAGES
+    if foreground_package in INVESTIGATION_SCOPE_PACKAGES:
+        return True
+    # Confidence-based role detection: recognises OEM installers, OEM settings,
+    # and OEM permission controllers that are not in the static frozenset.
+    if is_safe_interactive_boundary(foreground_package, activity, ui_text):
+        return True
+    return False
 
 
 # ─── Perception Pipeline ──────────────────────────────────────────────────────

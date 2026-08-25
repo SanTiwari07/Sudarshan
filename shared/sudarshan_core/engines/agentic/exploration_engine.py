@@ -932,6 +932,21 @@ class ExplorationGraph:
                 ownership in _INTERACTIVE_BOUNDARY_OWNERSHIP
                 or semantic_type in _INTERACTIVE_BOUNDARY_TYPES
             )
+            # Safety-net: screen_classifier may not have had enough UI text to
+            # produce an interactive semantic_type (e.g. spinner still loading).
+            # Use the confidence-based boundary role detector as a last resort.
+            if not interactive:
+                from sudarshan_core.engines.agentic.screenshot_policy import (
+                    is_safe_interactive_boundary,
+                )
+                interactive = is_safe_interactive_boundary(fg, activity)
+
+            logger.info(
+                "[ExplorationGraph] BOUNDARY_TRANSITION "
+                "from_package=%s to_package=%s ownership=%s "
+                "semantic_type=%s interactive=%s",
+                self.package_name, fg, ownership, semantic_type, interactive,
+            )
             if not interactive:
                 return self._observe_external(
                     obs, semantic_type, fg, activity, visible, ui_nodes,
@@ -1012,6 +1027,7 @@ class ExplorationGraph:
             state_id=state_id,
             semantic_type=semantic_type,
             ownership=ownership or "TARGET_APP",
+            foreground_package=fg,
             actions=len(actions),
         )
         for item in actions:

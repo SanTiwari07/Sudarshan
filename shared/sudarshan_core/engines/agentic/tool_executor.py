@@ -356,13 +356,19 @@ class ToolExecutor:
         Block until the window stops changing, or `timeout` elapses.
 
         Returns True if the UI was observed to settle, False on timeout or if
-        the device could not be probed. NEVER raises and never waits forever - a settling wait that can hang would be worse than the crash it prevents.
+        the device could not be probed after MAX_PROBE_FAILURES retries.
+        NEVER raises and never waits forever - a settling wait that can hang
+        would be worse than the crash it prevents.
 
-        This replaces the guesswork of a fixed post-action sleep. A fixed sleep
-        is simultaneously too long for a no-op tap and far too short for a cold
-        Activity start, which is exactly how the agent ended up driving input
-        into an app that was still starting.
+        Probe-failure behaviour (changed from old: immediate False return):
+          A single None from _focus_signature() is a transient ADB hiccup,
+          NOT evidence that the UI has settled.  The old code returned False
+          immediately, causing the next OBSERVE to run before the activity
+          transition had finished.  Now we retry within the remaining budget
+          and only give up after MAX_PROBE_FAILURES consecutive failures.
         """
+        _MAX_PROBE_FAILURES = 3
+
         # Input dispatch is async - `input tap` returns when the event is queued.
         # Poll only after giving the app a chance to begin reacting, otherwise
         # the first two samples match trivially and we declare victory early.
@@ -373,14 +379,30 @@ class ToolExecutor:
         )
         last_sig: Optional[str] = None
         stable = 0
+        probe_failures = 0
 
         while time.monotonic() < deadline:
             sig = await self._focus_signature()
             if sig is None:
-                # Probe failed (device busy, dumpsys slow). Fall back to a plain
-                # delay rather than spinning on a broken signal.
-                await asyncio.sleep(_paced(0.5))
-                return False
+                # Transient probe failure — increment counter and retry.
+                # Do NOT declare idle: a failed probe is not a stable signal.
+                probe_failures += 1
+                if probe_failures >= _MAX_PROBE_FAILURES:
+                    logger.debug(
+                        "[ToolExecutor] wait_for_idle: %d consecutive probe "
+                        "failures — giving up (probe_failed)",
+                        probe_failures,
+                    )
+                    return False
+                logger.debug(
+                    "[ToolExecutor] wait_for_idle: probe failure %d/%d — retrying",
+                    probe_failures, _MAX_PROBE_FAILURES,
+                )
+                await asyncio.sleep(_paced(IDLE_POLL_INTERVAL_SECONDS))
+                continue
+
+            # Successful probe — reset failure counter.
+            probe_failures = 0
 
             if sig == last_sig:
                 stable += 1

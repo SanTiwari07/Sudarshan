@@ -54,7 +54,7 @@ export class ErrorBoundary extends Component<Props, State> {
             This view could not be displayed. The rest of the application is unaffected - other views and the case history remain available.
           </p>
 
-          <pre className="text-xs bg-gray-50 border border-gray-200 rounded-lg p-3 overflow-x-auto text-gray-700">
+          <pre className="text-xs bg-surface-secondary border border-gray-200 rounded-lg p-3 overflow-x-auto text-gray-700">
             {error.message || String(error)}
           </pre>
 

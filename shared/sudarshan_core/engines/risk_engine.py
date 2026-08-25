@@ -229,11 +229,65 @@ def _calculate_stei(
     axes = {"ct": round(ct, 2), "bt": round(bt, 2), "pr": round(pr, 2),
             "ob": round(ob, 2), "ir": round(ir, 2)}
 
-    stei = (0.60 * ct) + (0.20 * bt) + (0.10 * pr) + (0.05 * ob) + (0.05 * ir)
-    stei = round(min(stei, 100.0), 2)
-
     all_evidence = ct_ev + bt_ev + pr_ev + ob_ev + ir_ev
     by_axis = {"ct": ct_ev, "bt": bt_ev, "pr": pr_ev, "ob": ob_ev, "ir": ir_ev}
+
+    weights = {"ct": 0.60, "bt": 0.20, "pr": 0.10, "ob": 0.05, "ir": 0.05}
+
+    # ── Blind axes are UNKNOWN, not zero ──────────────────────────────────────
+    #
+    # CT and BT are read entirely from the manifest and the string pool. When a
+    # concealed payload is present, the manifest describes a stub and the real
+    # code is a nested archive nobody has parsed - so a 0 on those axes means
+    # "we could not see", not "there is nothing".
+    #
+    # Scoring it as 0 anyway inverts the metric for exactly the samples it
+    # exists to catch. Measured on this emulator, with the real analyzer:
+    #
+    #   Anubis  (banking trojan, payload concealed) STEI  9.20  CT  0  IR  50
+    #   NewPipe (video player, nothing concealed)   STEI 24.64  CT 25  IR 100
+    #
+    # The benign app scored higher, because it honestly declares
+    # SYSTEM_ALERT_WINDOW for picture-in-picture and ships real endpoints,
+    # while the trojan declares four permissions and hides the rest. An app
+    # was being rewarded for disclosure and a trojan rewarded for concealment.
+    #
+    # This is the treatment the FRS axes already get one level up
+    # ("an excluded axis is one with no data - it is not scored as benign"):
+    # drop the blind axes and renormalise over the axes that still carry
+    # evidence. It invents nothing - PR, OB and IR are still measured - it only
+    # stops counting an unknown as an acquittal.
+    #
+    # Deliberately narrow: only axes that are BOTH visibility-dependent AND
+    # actually zero are dropped. A concealed sample that still declares
+    # accessibility has told us something real, and that evidence is kept.
+    excluded: List[str] = []
+    if flags.get("has_concealed_payload"):
+        for name, value in (("ct", ct), ("bt", bt)):
+            if value <= 0.0:
+                excluded.append(name)
+
+    scored = {k: v for k, v in weights.items() if k not in excluded}
+    total_weight = sum(scored.values())
+    if not scored or total_weight <= 0:
+        # Every axis blind. Refuse to emit a number rather than emit 0.0, which
+        # would read as "measured, and clean".
+        excluded = []
+        scored = weights
+        total_weight = sum(weights.values())
+
+    values = {"ct": ct, "bt": bt, "pr": pr, "ob": ob, "ir": ir}
+    stei = sum(values[k] * (w / total_weight) for k, w in scored.items())
+    stei = round(min(stei, 100.0), 2)
+
+    if excluded:
+        all_evidence.append(
+            "STEI axes " + "/".join(a.upper() for a in excluded) +
+            " could not be measured: the payload is concealed, so the manifest "
+            "and string pool describe a stub rather than the code that runs. "
+            "They are excluded rather than scored as zero."
+        )
+    axes["excluded"] = excluded
     return stei, axes, all_evidence, by_axis
 
 
@@ -499,8 +553,53 @@ _OBSERVED_BEHAVIOR_FIELDS = (
 _HARNESS_EVIDENCE_CATEGORIES = frozenset({
     "SCREENSHOT",
     "HARNESS",
+    "HARNESS_ACTION",
     "DIAGNOSTIC",
 })
+
+# Hooks that describe something the HARNESS did, not something the sample did.
+#
+# The agent now files these under the `harness_action` category, but ten stored
+# runs predate that split and still carry them under `anti_analysis`. Matching
+# on the hook name as well keeps those runs scoring correctly instead of
+# requiring a re-analysis of every case.
+#
+# `Build.<static fields>` is the whole reason this exists: the harness spoofs
+# emulator-identifying Build fields at attach time on every emulator run, and
+# emitted an evasion event about its own action. Every stored run carries
+# exactly one - the same hook, for benign apps and trojans alike - and that one
+# event excluded the dynamic axis on five banking trojans.
+_HARNESS_ATTRIBUTED_HOOKS = frozenset({
+    "Build.<static fields>",
+    "sandbox.build_fields_spoofed",
+})
+
+
+def _is_harness_attributed(event: Any) -> bool:
+    """True when an event describes the harness's own action, not the sample's."""
+    if not isinstance(event, dict):
+        return False
+    data = event.get("data") if isinstance(event.get("data"), dict) else {}
+    if str(event.get("actor") or data.get("actor") or "").lower() == "harness":
+        return True
+    if str(event.get("category") or data.get("category") or "").upper() == "HARNESS_ACTION":
+        return True
+    hook = event.get("hook") or data.get("hook") or ""
+    return hook in _HARNESS_ATTRIBUTED_HOOKS
+
+
+def sample_attributable_evasion(events: Any) -> List[Dict]:
+    """
+    The subset of evasion events the SAMPLE is responsible for.
+
+    Evasion is a claim about the sample resisting observation. Anything the
+    harness did to conceal itself is not evidence for that claim, and counting
+    it as such inverts the meaning of the whole dynamic axis.
+    """
+    try:
+        return [e for e in (events or []) if not _is_harness_attributed(e)]
+    except TypeError:
+        return []
 
 # Evasion is the sample resisting observation, not the sample behaving. It is
 # counted separately so an evasion-only run reads as "we were blocked", never as
@@ -518,12 +617,19 @@ def _count_observed_sample_behavior(dynamic: Dict) -> int:
         except TypeError:
             continue
 
-    # frida_events is a dict of per-category buckets. Every bucket except the
-    # evasion one is sample behaviour.
+    # frida_events is a dict of per-category buckets. Sample behaviour is every
+    # bucket except the sample's evasion and the harness's own actions.
+    #
+    # harness_action has to be skipped explicitly: it is a new bucket, and
+    # without this the sandbox's Build-field spoofing would count as observed
+    # sample behaviour - enough on its own to make an empty run read as
+    # conclusive, which is the same misattribution this split exists to end,
+    # only pointing the other way.
     buckets = dynamic.get("frida_events")
     if isinstance(buckets, dict):
         for name, events in buckets.items():
-            if str(name).upper() in _EVASION_EVIDENCE_CATEGORIES:
+            upper = str(name).upper()
+            if upper in _EVASION_EVIDENCE_CATEGORIES or upper in _HARNESS_EVIDENCE_CATEGORIES:
                 continue
             try:
                 observed += len(events or [])
@@ -687,12 +793,12 @@ def dynamic_exclusion_reason(dynamic: Optional[Dict]) -> Optional[str]:
     if _ui_never_rendered(dynamic):
         return "NO_UI_RENDERED"
 
-    evasion_events = dynamic.get("anti_analysis_events")
-    try:
-        evasion_seen = len(evasion_events or []) > 0
-    except TypeError:
-        evasion_seen = False
-    if evasion_seen:
+    # Only the sample's own evasion counts. Reading this bucket raw meant the
+    # harness's Build-field spoofing - one event, present on every emulator run
+    # regardless of the sample - was enough to return EVASION_ONLY and exclude
+    # the dynamic axis. Five banking trojans scored Safe that way.
+    evasion_events = sample_attributable_evasion(dynamic.get("anti_analysis_events"))
+    if evasion_events:
         return "EVASION_ONLY"
 
     if status in _INCONCLUSIVE_STATUSES or outcome == "FAILED":
@@ -1263,6 +1369,12 @@ def calculate_risk_score(
                 "ob": stei_axes.get("ob", 0.0),
                 "ir": stei_axes.get("ir", 0.0),
             },
+            # Which STEI axes carried no evidence because the payload is
+            # concealed. Without this the reader sees CT 0.0 next to a STEI of
+            # 46 and cannot reconstruct the arithmetic - the axis was dropped
+            # and the rest renormalised, not scored as a zero. An unexplained
+            # number is the same defect as a wrong one.
+            "stei_axes_excluded": list(stei_axes.get("excluded") or []),
         },
 
         # Threat scenario correlation table

@@ -198,6 +198,8 @@ export type FraudCardData = {
   sha256: string;
   package_name: string;
   app_name?: string;
+  version_name?: string;
+  apk_size?: string;
   created_at?: string;
   analysis_mode: string;
   job_id?: string;

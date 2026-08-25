@@ -15,10 +15,18 @@
     --color-soc-bg: #0b0f19; /* Immersive dark slate background for analytics sections */
     --color-surface-dark: #111827;
     --color-border-dark: #1f2937;
+
+    /* Global Surface System */
+    --surface-page: #f8fafc;       /* Clean neutral slate-50 background */
+    --surface-card: #ffffff;       /* Primary card surface */
+    --surface-secondary: #f1f5f9;  /* slate-100 for secondary inner areas */
+    --surface-active: #e2e8f0;     /* slate-200 for active states */
+    --surface-hover: #f8fafc;      /* Subtle hover */
+    --surface-input: #ffffff;      /* Inputs */
   }
 
   body {
-    @apply antialiased text-slate-900 bg-slate-50 min-w-0 font-sans;
+    @apply antialiased text-slate-900 bg-[var(--surface-page)] min-w-0 font-sans;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 }
@@ -69,7 +77,7 @@
 @layer components {
   /* Unified Portal Grid and Layout Constraints (Full desktop usage) */
   .analyst-main {
-    @apply p-3 sm:p-4 min-h-0 bg-slate-50;
+    @apply p-3 sm:p-4 min-h-0 bg-surface-page;
   }
 
   .analyst-page {
@@ -82,7 +90,7 @@
 
   /* Bloomberg-level dense, highly structured tables */
   .soc-table-wrap {
-    @apply overflow-x-auto overflow-y-auto border border-slate-200/80 rounded-md bg-white shadow-sm;
+    @apply overflow-x-auto overflow-y-auto border border-slate-200/80 rounded-md bg-surface-card shadow-sm;
   }
 
   .soc-table {
@@ -90,19 +98,19 @@
   }
 
   .soc-table thead {
-    @apply sticky top-0 z-10 bg-slate-100 border-b border-slate-200;
+    @apply sticky top-0 z-10 bg-surface-secondary border-b border-slate-200;
   }
 
   .soc-table thead th {
-    @apply px-2.5 py-2 text-left text-[11px] font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap bg-slate-100;
+    @apply px-2.5 py-2 text-left text-[11px] font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap bg-surface-secondary;
   }
 
   .soc-table tbody tr {
-    @apply border-b border-slate-100 hover:bg-slate-50/80 transition-colors duration-100;
+    @apply border-b border-slate-100 hover:bg-surface-hover transition-colors duration-100;
   }
 
   .soc-table tbody tr:nth-child(even) {
-    @apply bg-slate-50/30;
+    @apply bg-surface-page;
   }
 
   .soc-table tbody td {
@@ -120,11 +128,11 @@
 
   /* Ultra-sharp minimal Card Container (Apple Simplicity) */
   .soc-card {
-    @apply bg-white border border-slate-200 rounded-md shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-all duration-150;
+    @apply bg-surface-card border border-slate-200 rounded-md shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-all duration-150;
   }
 
   .soc-card-header {
-    @apply px-3 py-2.5 border-b border-slate-200/80 flex items-center justify-between bg-white;
+    @apply px-3 py-2.5 border-b border-slate-200/80 flex items-center justify-between bg-surface-card;
   }
 
   .soc-card-title {

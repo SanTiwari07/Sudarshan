@@ -327,7 +327,7 @@ export default function BatchScanPage() {
 
             {/* Live Results Table */}
             <SocCard className="overflow-hidden border-slate-200/80 shadow-sm">
-              <div className="py-4 px-6 border-b border-slate-200/80 bg-slate-50/50 flex items-center justify-between">
+              <div className="py-4 px-6 border-b border-slate-200/80 bg-surface-secondary flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-bold text-slate-900 font-mono uppercase tracking-wider flex items-center gap-2">
                     <Layers className="w-4 h-4 text-blue-600" />
@@ -342,7 +342,7 @@ export default function BatchScanPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider font-mono bg-slate-50/80">
+                    <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider font-mono bg-surface-secondary">
                       <th className="py-3 px-4">APK File</th>
                       <th className="py-3 px-4">Status</th>
                       <th className="py-3 px-4">Risk</th>
@@ -390,7 +390,7 @@ export default function BatchScanPage() {
               }}
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-slate-300 hover:border-blue-500 hover:bg-blue-50/30 transition-all rounded-2xl p-8 sm:p-12 text-center cursor-pointer group"
+              className="border-2 border-dashed border-slate-300 bg-surface-secondary hover:border-blue-500 hover:bg-blue-50/30 transition-all rounded-2xl p-8 sm:p-12 text-center cursor-pointer group"
             >
               <input
                 ref={fileInputRef}
@@ -435,7 +435,7 @@ export default function BatchScanPage() {
                   </button>
                 </div>
 
-                <div className="max-h-64 overflow-y-auto rounded-xl border border-slate-200 divide-y divide-slate-100 bg-slate-50/40">
+                <div className="max-h-64 overflow-y-auto rounded-xl border border-slate-200 divide-y divide-slate-100 bg-surface-secondary">
                   {selectedFiles.map((file, idx) => (
                     <div
                       key={`${file.name}-${idx}`}

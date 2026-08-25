@@ -1816,7 +1816,15 @@ class FridaSession:
             "banking": [], "network": [], "persistence": [],
             # ── Unscored: evidence only ───────────────────────────────────────
             "dangerous_apis": [], "files_accessed": [],
-            "anti_analysis": [],        # sandbox evasion / anti-instrumentation
+            "anti_analysis": [],        # evasion attempted BY THE SAMPLE
+            # Actions the HARNESS performed on the device (Build-field spoofing,
+            # and anything else we do to conceal the sandbox). Held apart from
+            # anti_analysis because scoring treats an evasion event as evidence
+            # about the sample: filing our own countermeasure there excluded the
+            # dynamic axis on five trojans and scored them Safe. Unregistered
+            # categories fall through to dangerous_apis, so this bucket has to
+            # exist for the split to hold.
+            "harness_action": [],
             "smoke": [],                # baseline runtime smoke-test events
             "device_fingerprint": [],   # IMEI/IMSI/ICCID/MSISDN, app + account enumeration
             "app_telemetry": [],        # activity lifecycle, keyboard, generic crypto/prefs
@@ -2717,7 +2725,23 @@ class FridaSession:
                         _crash_on_step = f"step5_deep_link:{uri_scheme}"
 
             # Step 6 - force-stop then retry resolved launcher (cold start)
-            if not launched and _crash_on_step is None:
+            #
+            # Skipped when an earlier step already produced a running process
+            # that simply never showed a window. This step force-stops the
+            # package first, so running it against a live headless process
+            # destroys the only observation target we have.
+            #
+            # Measured on Anubis: steps 1-6 each reported the SAME stable PID
+            # (12966) with no foreground window - the app runs headless, which
+            # is the behaviour, not a launch failure. force_stop_retry then
+            # killed it, the restart crashed at 10.8s, _crash_on_step was set,
+            # and the ui-less fallback below is gated on _crash_on_step being
+            # None - so a viable process was discarded and the run reported
+            # INSTRUMENTATION_FAILED with zero hooks fired.
+            #
+            # The ladder exists to OBTAIN an attachable process. Once we have
+            # one, escalating can only lose it.
+            if not launched and _crash_on_step is None and _ui_less_pid is None:
                 logger.info(
                     "[Frida] Launch step 6: force-stop + resolved launcher for %s",
                     self.package_name,
@@ -2765,17 +2789,38 @@ class FridaSession:
             # run, attach to the stable PID we did get and record that no UI ever
             # rendered, so the risk engine can mark the dynamic axis inconclusive
             # (NO_UI_RENDERED) instead of scoring the silence as benign.
-            if not launched and _crash_on_step is None and _ui_less_pid is not None:
-                self._stable_pid = _ui_less_pid
-                self.launch_method_used = _ui_less_step or "ui_less_pid"
-                self.ui_render_failed = True
-                launched = True
-                logger.warning(
-                    "[Frida] No launch strategy rendered UI for %s - proceeding with "
-                    "PID %d from '%s'. Behavioural coverage will be limited and the "
-                    "dynamic axis will be reported inconclusive.",
-                    self.package_name, _ui_less_pid, self.launch_method_used,
-                )
+            # A crash on a LATER, more aggressive step does not invalidate a
+            # process an EARLIER step already established - provided that
+            # process is still alive. Requiring _crash_on_step to be None threw
+            # away a live headless process because a subsequent escalation
+            # broke a different one. Liveness is re-checked here rather than
+            # assumed: if the escalation really did kill it, the crash is the
+            # honest answer and we fall through to the gate below.
+            if not launched and _ui_less_pid is not None:
+                _still_alive = self._resolve_pid() == _ui_less_pid
+                if _still_alive:
+                    self._stable_pid = _ui_less_pid
+                    self.launch_method_used = _ui_less_step or "ui_less_pid"
+                    self.ui_render_failed = True
+                    launched = True
+                    if _crash_on_step:
+                        logger.warning(
+                            "[Frida] '%s' crashed, but PID %d from '%s' is still "
+                            "running - attaching to it rather than abandoning the "
+                            "run.", _crash_on_step, _ui_less_pid,
+                            _ui_less_step or "ui_less_pid",
+                        )
+                    logger.warning(
+                        "[Frida] No launch strategy rendered UI for %s - proceeding with "
+                        "PID %d from '%s'. Behavioural coverage will be limited and the "
+                        "dynamic axis will be reported inconclusive.",
+                        self.package_name, _ui_less_pid, self.launch_method_used,
+                    )
+                else:
+                    logger.warning(
+                        "[Frida] PID %d from '%s' is no longer running; cannot use it "
+                        "as a fallback.", _ui_less_pid, _ui_less_step or "ui_less_pid",
+                    )
 
             # ── Gate: did any step succeed? ───────────────────────────────────
             if not launched:
@@ -4068,6 +4113,9 @@ async def _run_device_session(
             n = session.evidence_store.flush(apk_dir / "evidence.json")
             result["evidence_record_count"] = n
             result["anti_analysis_events"] = session.collected_events.get("anti_analysis", [])
+            # Surfaced separately so a report can state what the harness changed
+            # on the device without that ever counting as sample behaviour.
+            result["harness_actions"] = session.collected_events.get("harness_action", [])
             logger.info(f"[Frida] Evidence store flushed: {n} records written to evidence.json")
         except Exception as e:
             logger.error(f"[Frida] Failed to write evidence.json: {e}")

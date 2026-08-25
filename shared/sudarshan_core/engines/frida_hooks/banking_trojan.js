@@ -610,11 +610,34 @@ function initHooks() {
       try {
         var AccessibilityManager = Java.use('android.view.accessibility.AccessibilityManager');
         AccessibilityManager.sendAccessibilityEvent.implementation = function (event) {
-          emit('accessibility', {
+          // UNSCORED ON PURPOSE.
+          //
+          // Android dispatches this whenever a view announces a UI change, so
+          // every app with a user interface fires it. It is not a property of
+          // the sample.
+          //
+          // It used to emit under 'accessibility', which carries the heaviest
+          // BFCI weight (0.35) and a cap of 2-3 events, so ONE dispatch scored
+          // 50/100 for the component. Measured on this emulator: Anubis and
+          // NewPipe - a banking trojan and a video player - each fired it
+          // exactly once and BOTH scored BFCI 17.5 with accessibility 50.0.
+          // The heaviest-weighted axis could not tell them apart.
+          //
+          // bfci_scorer's own note states the rule this restores: "A scored
+          // category that also catches ordinary application behaviour is not a
+          // weak signal - it is a constant, and it inflates every verdict
+          // equally."
+          //
+          // Real accessibility ABUSE is still scored, by the hooks that
+          // require the app to own a service or drive the screen:
+          // onAccessibilityEvent, getText, performAction,
+          // findAccessibilityNodeInfosByText, dispatchGesture.
+          emit('app_telemetry', {
             hook: 'AccessibilityManager.sendAccessibilityEvent',
             class_name: 'android.view.accessibility.AccessibilityManager',
-            severity: 'HIGH',
-            description: 'AccessibilityManager event dispatched (possible ATS relay)',
+            severity: 'INFO',
+            description: 'UI accessibility event dispatched (ordinary for any ' +
+                         'app with a user interface; recorded, not scored)',
           });
           return this.sendAccessibilityEvent(event);
         };
@@ -1693,12 +1716,34 @@ function initHooks() {
           } catch (fieldErr) { /* field absent on this API level */ }
         }
         if (spoofedFields.length > 0) {
-          emit('anti_analysis', {
-            hook: 'Build.<static fields>',
+          // THE SANDBOX DID THIS, NOT THE SAMPLE.
+          //
+          // This block runs unconditionally at hook-install time: we overwrite
+          // emulator-identifying Build fields to hide the sandbox, whether or
+          // not the app ever reads them. It therefore fires exactly once on
+          // every emulator run and says nothing about the sample.
+          //
+          // It used to emit under 'anti_analysis'. Measured consequence: all
+          // ten stored runs carried exactly one anti_analysis event - this one
+          // - and dynamic_exclusion_reason() reads any anti_analysis event as
+          // proof the SAMPLE evaded, which excluded the dynamic axis (weight
+          // 0.35, the largest) on five banking trojans and let them score Safe.
+          // The sandbox's own countermeasure was being recorded as the
+          // sample's evasion, and the evidence was discarded because of it.
+          //
+          // Kept as evidence - what we changed on the device is provenance an
+          // analyst needs - but in a category that cannot be mistaken for
+          // sample behaviour. `actor` is explicit for the same reason.
+          emit('harness_action', {
+            hook: 'sandbox.build_fields_spoofed',
             class_name: 'android.os.Build',
-            severity: 'HIGH',
+            actor: 'harness',
+            severity: 'INFO',
             spoofed_fields: spoofedFields,
-            description: 'Emulator-identifying Build fields replaced: ' + spoofedFields.join(', '),
+            description: 'SANDBOX ACTION: emulator-identifying Build fields ' +
+                         'replaced to conceal the analysis environment: ' +
+                         spoofedFields.join(', ') +
+                         ' (performed by the harness, not by the application)',
           });
         }
         registerHook('Build.staticFields');

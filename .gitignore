@@ -161,3 +161,29 @@ banking-baseline-corpus/
 apk_details/
 
 .claude/
+
+# ─── Local agent / editor tooling ─────────────────────────────────────────────
+# Personal assistant configuration. Useful on one machine, noise in the repo
+# listing for everyone else.
+.agents/
+.serena/
+
+# .cursor is now ignored in full, including rules/.
+#
+# NOTE ON WHAT THIS COSTS: .cursor/rules/no-cursor-attribution.mdc was the
+# shared rule that keeps AI co-author trailers out of commit messages. It is no
+# longer distributed with the repo. The .githooks/ scripts still strip those
+# trailers, but only for a clone that has run:
+#     git config core.hooksPath .githooks
+# To share the rule again, delete the line below and restore `!.cursor/rules/`.
+.cursor/
+
+# ─── Run artifacts (generated, not source) ───────────────────────────────────
+# Screenshots and page captures produced by analysis runs. These are outputs of
+# a scan, regenerated on every run, and they are what makes the repo heavy.
+#
+# Scoped deliberately rather than ignoring "*.png": frontend/logo/ holds the
+# three real Sudarshan brand assets and must stay tracked.
+artifacts_qa/
+tests/apks/validation_runs/
+**/sudarshan_artifacts/

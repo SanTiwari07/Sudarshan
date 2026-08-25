@@ -51,13 +51,13 @@ export default function FraudRiskHero({ data }: { data: FraudCardData }) {
   const appName = data.app_name || 'SecurePay – Mobile Banking';
   const packageName = data.package_name || 'com.securepay.mobile';
   const appVersion =
-    meta.version && meta.version !== '—' && meta.version !== 'Unknown'
+    meta.version && meta.version !== '—' && meta.version !== 'Unknown' && meta.version !== '-'
       ? meta.version
-      : (data as any).app_version || (data as any).version || 'v1.0.4 (402)';
+      : (data as any).version_name || (data as any).app_version || (data as any).version || '-';
   const appSize =
-    meta.size && meta.size !== '—' && meta.size !== 'Unknown'
+    meta.size && meta.size !== '—' && meta.size !== 'Unknown' && meta.size !== '-'
       ? meta.size
-      : '18.4 MB';
+      : (data as any).apk_size || '-';
   const fullSha256 =
     data.sha256 && data.sha256.length > 20
       ? data.sha256

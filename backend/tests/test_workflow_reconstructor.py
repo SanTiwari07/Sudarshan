@@ -30,7 +30,7 @@ def test_reconstruct_otp_theft_chain():
         {
             "id": "3",
             "category": "network",
-            "hook": "OkHttpClient.newCall",
+            "hook": "OkHttp.RealCall.execute",
             "timestamp_ms": 3000,
         },
     ]

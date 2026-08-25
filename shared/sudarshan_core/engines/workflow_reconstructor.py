@@ -138,9 +138,13 @@ _STAGE_RULES: List[_StageRule] = [
             "Application activated an Accessibility Service to monitor "
             "screen content, extract credentials, and intercept UI events."
         ),
+        # "AccessibilityManager.isEnabled" was listed here and is never emitted.
+        # The obvious substitute, AccessibilityManager.sendAccessibilityEvent, is
+        # deliberately NOT used: every app emits it whenever the UI changes so
+        # screen readers can announce it, and both benign corpus samples fired
+        # it. It would turn this rule into a detector for "app has a UI".
         trigger_hooks=[
             "AccessibilityService.onAccessibilityEvent",
-            "AccessibilityManager.isEnabled",
         ],
         category="accessibility",
         confidence_base=0.85,
@@ -166,10 +170,11 @@ _STAGE_RULES: List[_StageRule] = [
             "Application drew a system-level overlay window on top of a "
             "legitimate banking application to capture credentials."
         ),
+        # View.setType/TYPE_APPLICATION_OVERLAY and Settings.canDrawOverlays are
+        # gone: the agent hooks neither, and there is no near-equivalent to swap
+        # in. Overlay deployment rests on WindowManager.addView, which is emitted.
         trigger_hooks=[
             "WindowManager.addView",
-            "View.setType/TYPE_APPLICATION_OVERLAY",
-            "Settings.canDrawOverlays",
         ],
         category="overlay",
         confidence_base=0.90,
@@ -212,7 +217,6 @@ _STAGE_RULES: List[_StageRule] = [
         trigger_hooks=[
             "PackageManager.getInstalledPackages",
             "PackageManager.getInstalledApplications",
-            "PackageManager.queryIntentActivities",
         ],
         category="banking",
         confidence_base=0.75,
@@ -224,10 +228,16 @@ _STAGE_RULES: List[_StageRule] = [
             "Application established a network connection to a command-and-control "
             "endpoint, likely to exfiltrate harvested data or receive instructions."
         ),
+        # The agent does hook HTTP and OkHttp - under different names than the
+        # two listed here, which never fired. Corrected to the emitted ones.
         trigger_hooks=[
             "URL.openConnection",
-            "HttpURLConnection.connect",
-            "OkHttpClient.newCall",
+            "HttpURLConnection.getInputStream",
+            "HttpsURLConnection.connect",
+            "OkHttp.RealCall.execute",
+            "OkHttp.RealCall.enqueue",
+            "Retrofit.OkHttpCall.execute",
+            "WebView.loadUrl",
             "Socket.connect",
         ],
         category="network",
@@ -244,8 +254,11 @@ _STAGE_RULES: List[_StageRule] = [
             "DexClassLoader.<init>",
             "PathClassLoader.<init>",
             "InMemoryDexClassLoader.<init>",
-            "Runtime.load",
         ],
+        # "Runtime.load" is dropped rather than swapped for the emitted
+        # "Runtime.exec": loading a native library and executing a shell command
+        # are different techniques, and folding one into the other would make
+        # this stage claim something the evidence does not show.
         category="dangerous_apis",
         confidence_base=0.80,
     ),
@@ -256,11 +269,38 @@ _STAGE_RULES: List[_StageRule] = [
             "Application requested Device Administrator privileges or scheduled "
             "persistent background execution to survive reboots."
         ),
+        # setActiveAdmin and setRepeating are not emitted by the agent. Measured
+        # on Cerberus: it fired DevicePolicyManager.isAdminActive 47 times while
+        # this rule listened for a name that never appears, which is why 0 of its
+        # 103 evidence records matched any stage.
+        #
+        # isAdminActive is a CHECK rather than an acquisition, and is included
+        # deliberately: repeatedly polling device-admin state is what a trojan
+        # managing its own persistence does, the evidence store already rates it
+        # HIGH, and neither benign corpus sample emits it at all.
         trigger_hooks=[
-            "DevicePolicyManager.setActiveAdmin",
-            "AlarmManager.setRepeating",
+            "DevicePolicyManager.isAdminActive",
+            "DevicePolicyManager.lockNow",
+            "AlarmManager.setExact",
             "JobScheduler.schedule",
         ],
+        category="persistence",
+        confidence_base=0.85,
+    ),
+
+    _StageRule(
+        label="Launcher Icon Removal",
+        technique_id="T1628.001",
+        description=(
+            "The application removed itself from the launcher: its launcher "
+            "component no longer resolves, so the user cannot find or open it "
+            "again. Classic self-hiding behaviour in banking trojans."
+        ),
+        # Inferred from Android refusing to relaunch the component, NOT from a
+        # hooked API call - the agent does not hook setComponentEnabledSetting.
+        # The hook name says so, rather than implying an observation we did not
+        # make.
+        trigger_hooks=["launcher.component_unresolvable"],
         category="persistence",
         confidence_base=0.85,
     ),

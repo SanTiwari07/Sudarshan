@@ -83,6 +83,9 @@ from sudarshan_core.engines.agentic.screen_classifier import (
     should_invoke_planner,
     ScreenType,
 )
+from sudarshan_core.engines.agentic.secondary_payload import (
+    SecondaryPayloadTracker,
+)
 from sudarshan_core.engines.event_bus import RuntimeEventBus
 from sudarshan_core.engines.investigation_controller import (
     InvestigationController,
@@ -254,6 +257,10 @@ class AgenticExplorer:
         # callers that cannot resolve a launcher fall back to press_home rather
         # than issuing `am start` with a missing component.
         self.main_activity: str = main_activity or ""
+
+        # Secondary payloads (§19/§20): the second APK a dropper fetches.
+        # Fed from _on_frida_event so it sees the whole runtime stream.
+        self._payloads = SecondaryPayloadTracker(parent_package=package_name)
 
         # Permission investigation.
         #
@@ -924,6 +931,14 @@ class AgenticExplorer:
         """Receive Frida events from the bus and buffer them for the agent loop."""
         with self._events_lock:
             self._pending_frida_events.append(event)
+        # A dropper's second APK is only visible in the runtime stream, so the
+        # tracker has to see every event rather than the ones the agent loop
+        # happens to drain. Never allowed to break event delivery.
+        try:
+            self._payloads.observe_event(event)
+        except Exception:  # noqa: BLE001
+            logger.debug("[AgenticExplorer] payload tracker declined an event",
+                         exc_info=True)
         # Also append to timeline (same as UIExplorer)
         self.attack_timeline.append({
             "timestamp": self._elapsed_ts(),
@@ -1226,11 +1241,21 @@ class AgenticExplorer:
                                         "category": "persistence",
                                         "severity": "HIGH",
                                         "data": {
-                                            "hook": "PackageManager.setComponentEnabledSetting",
+                                            # Named for what we OBSERVED, not
+                                            # for the API we suppose caused it.
+                                            # The agent does not hook
+                                            # setComponentEnabledSetting; this is
+                                            # inferred from Android refusing to
+                                            # relaunch the component, and calling
+                                            # it a hooked call would overstate
+                                            # the evidence.
+                                            "hook": "launcher.component_unresolvable",
                                             "description": (
                                                 "Application's launcher component "
-                                                "no longer resolves - the app "
-                                                "removed itself from the launcher"
+                                                "no longer resolves - the app has "
+                                                "removed itself from the launcher "
+                                                "(inferred from a refused relaunch, "
+                                                "not from a hooked API call)"
                                             ),
                                             "package": self.package_name,
                                         },
@@ -2162,15 +2187,85 @@ class AgenticExplorer:
                 "edges": deep_exploration.get("edges", []),
                 "mermaid": self.exploration.to_mermaid(),
             },
-            "secondary_apks":      deep_exploration.get("secondary_apks", []),
+            # The graph's own list stays first for compatibility, but the
+            # tracker is what actually observes payloads at runtime - the
+            # graph list had no producer in the production path.
+            "secondary_apks":      (
+                list(deep_exploration.get("secondary_apks", []))
+                + self._payloads.to_records()
+            ),
+            "secondary_apk_summary": self._payloads.summary(),
             "action_traces":       action_traces,
         }
+
+    def preserve_secondary_payloads(self, output_dir: Path) -> List[Dict[str, Any]]:
+        """
+        Pull and hash every secondary APK the run detected.
+
+        Deferred to the end of the run rather than done at detection time: the
+        app is usually still writing the file when the hook fires, so hashing
+        it immediately would record the digest of a partial download.
+
+        Uses the sandbox provider's own adb - never a private path to the
+        device - and only ever reads. Failures are recorded on the payload and
+        never abort artifact flushing.
+        """
+        payloads = self._payloads.payloads
+        if not payloads:
+            return []
+        try:
+            from sudarshan_core.sandbox import get_sandbox_provider
+
+            adb = get_sandbox_provider().adb
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "[AgenticExplorer] no sandbox provider; %d secondary payload(s) "
+                "detected but not preserved: %s", len(payloads), exc,
+            )
+            return self._payloads.to_records()
+
+        target = output_dir / "secondary_apks"
+        for payload in payloads:
+            try:
+                self._payloads.preserve(
+                    payload, target, adb, device_serial=self.device_serial,
+                )
+            except Exception:  # noqa: BLE001
+                logger.warning(
+                    "[AgenticExplorer] could not preserve %s",
+                    payload.device_path, exc_info=True,
+                )
+        logger.info(
+            "[AgenticExplorer] SECONDARY_PAYLOADS %s",
+            self._payloads.summary(),
+        )
+        return self._payloads.to_records()
 
     def flush_artifacts(self, output_dir: Path) -> None:
         """
         Write agentic artifacts to disk in the same directory as APK reports.
         Called by frida_sandbox.py after get_reports().
         """
+        try:
+            records = self.preserve_secondary_payloads(output_dir)
+            if records:
+                import json as _json
+
+                with open(
+                    output_dir / "secondary_apks.json", "w", encoding="utf-8"
+                ) as f:
+                    _json.dump(
+                        {
+                            "parent_package": self.package_name,
+                            "summary": self._payloads.summary(),
+                            "payloads": records,
+                        },
+                        f, indent=2, default=str,
+                    )
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "[AgenticExplorer] secondary payload flush failed", exc_info=True
+            )
         try:
             self.audit_log.flush(output_dir / "audit_log.json")
             self.benchmark.flush(output_dir / "benchmark.json")

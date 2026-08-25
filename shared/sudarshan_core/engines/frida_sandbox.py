@@ -1837,6 +1837,12 @@ class FridaSession:
             # ── Scored ────────────────────────────────────────────────────────
             "accessibility": [], "sms": [], "overlay": [],
             "banking": [], "network": [], "persistence": [],
+            # Code execution and payload deployment: shell exec, dynamic DEX
+            # loading, writing an APK. Split out of dangerous_apis, which also
+            # held PathClassLoader (every app loads its own APK through it) and
+            # System.loadLibrary (any app with native code) - weighting that
+            # mixed bucket would have inflated every verdict equally.
+            "code_execution": [],
             # ── Unscored: evidence only ───────────────────────────────────────
             "dangerous_apis": [], "files_accessed": [],
             "anti_analysis": [],        # evasion attempted BY THE SAMPLE

@@ -509,7 +509,7 @@ def _build_default_goals() -> List[FraudGoal]:
                 "Navigate to any update or plugin screens. Monitor for DexClassLoader "
                 "instantiation with external file paths."
             ),
-            frida_categories=["dangerous_apis"],
+            frida_categories=["code_execution", "dangerous_apis"],
             # Removed: Runtime.load - not emitted. No substitute needed: native
             # library loading is already covered by System.loadLibrary below,
             # which IS emitted, so the goal loses no reachable behaviour.
@@ -518,12 +518,17 @@ def _build_default_goals() -> List[FraudGoal]:
             # also emitted under `smoke` as a start-up probe, and the agent
             # loading its own library is not the sample loading code.
             frida_hooks=[
+                # These two now complete the goal, and only these two.
+                # `code_execution` was split out of `dangerous_apis` so it could
+                # carry a BFCI weight: PathClassLoader and System.loadLibrary
+                # stayed behind because EVERY app loads its own APK through the
+                # first and any app with native code triggers the second.
+                # Keeping them as completion triggers would let a calculator
+                # complete "Dynamic Code Loading".
                 "DexClassLoader.<init>",
-                "PathClassLoader.<init>",
                 "InMemoryDexClassLoader.<init>",
-                "System.loadLibrary",
             ],
-            completion_categories=["dangerous_apis"],
+            completion_categories=["code_execution"],
             depends_on=[1, 5],
             skip_if_missing=True,
         ),

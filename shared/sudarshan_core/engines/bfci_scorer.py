@@ -35,7 +35,18 @@ logger = logging.getLogger(__name__)
 
 # ─── BFCI Weights (validated against Indian banking trojans) ──────────────────
 
-BFCI_WEIGHTS: Dict[str, float] = {
+#: Share of the model given to the code-execution axis, added after Drinik - a
+#: labelled banking trojan - was observed calling ProcessBuilder.start and
+#: native execve("/bin/sh") in a live run and scored BFCI 0.0, because those
+#: events landed in `dangerous_apis`, which carries no weight.
+#:
+#: The existing six are scaled by (1 - this) rather than re-tuned. That keeps
+#: their relative ordering exactly as validated against the corpus: adding an
+#: axis is a claim about what was MISSING, not a reason to re-rank what was
+#: already there. Every axis loses the same 10% of its share.
+CODE_EXECUTION_WEIGHT: float = 0.10
+
+_BASE_WEIGHTS: Dict[str, float] = {
     "accessibility": 0.35,   # wa - heaviest: present in 87% of banking trojans
     "sms":           0.25,   # ws - OTP theft
     "overlay":       0.20,   # wo - phishing screens
@@ -43,6 +54,22 @@ BFCI_WEIGHTS: Dict[str, float] = {
     "network":       0.05,   # wn - C2 communication
     "persistence":   0.05,   # wp - device admin / lockdown
 }
+
+BFCI_WEIGHTS: Dict[str, float] = {
+    **{k: round(v * (1.0 - CODE_EXECUTION_WEIGHT), 4)
+       for k, v in _BASE_WEIGHTS.items()},
+    # wx - shell execution, dynamic DEX loading, writing an APK to storage.
+    # Contains only hooks an ordinary app does not reach: PathClassLoader and
+    # System.loadLibrary stay in the unscored `dangerous_apis` bucket precisely
+    # because every app and every app-with-native-code trigger them.
+    "code_execution": CODE_EXECUTION_WEIGHT,
+}
+
+# raw_bfci is sum(weight * component) with no normalisation, so the weights
+# have to sum to 1.0 or the scale silently shifts.
+assert abs(sum(BFCI_WEIGHTS.values()) - 1.0) < 1e-6, (
+    f"BFCI weights must sum to 1.0, got {sum(BFCI_WEIGHTS.values())}"
+)
 
 # ─── Unscored categories - collected as evidence, never scored ────────────────
 #
@@ -84,6 +111,11 @@ _CATEGORY_CAPS: Dict[str, int] = {
     "banking":       3,
     "network":       10,
     "persistence":   2,
+    # Two events reaches the cap, matching sms/overlay/persistence. A single
+    # Runtime.exec or DexClassLoader is already the whole signal - an app that
+    # spawns one shell has demonstrated the capability, and spawning ten does
+    # not make it ten times more true.
+    "code_execution": 2,
 }
 
 # Temporal window for sequence bonus detection (seconds).

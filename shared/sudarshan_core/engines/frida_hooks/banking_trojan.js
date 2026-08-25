@@ -1483,7 +1483,7 @@ function initHooks() {
         DexClassLoader.$init.overload(
           'java.lang.String', 'java.lang.String', 'java.lang.String', 'java.lang.ClassLoader'
         ).implementation = function (dexPath, optDir, libSearchPath, parent) {
-          emit('dangerous_apis', {
+          emit('code_execution', {
             hook: 'DexClassLoader.<init>',
             class_name: 'dalvik.system.DexClassLoader',
             severity: 'HIGH',
@@ -1530,7 +1530,7 @@ function initHooks() {
         var Runtime = Java.use('java.lang.Runtime');
         Runtime.exec.overload('java.lang.String').implementation = function (cmd) {
           var cmdStr = cmd ? cmd.toString() : null;
-          emit('dangerous_apis', {
+          emit('code_execution', {
             hook: 'Runtime.exec',
             class_name: 'java.lang.Runtime',
             severity: 'CRITICAL',
@@ -1554,7 +1554,7 @@ function initHooks() {
           } catch (joinErr) {
             cmdStr = String(cmds);
           }
-          emit('dangerous_apis', {
+          emit('code_execution', {
             hook: 'Runtime.exec[]',
             class_name: 'java.lang.Runtime',
             severity: 'CRITICAL',
@@ -1575,7 +1575,7 @@ function initHooks() {
             var cmd = this.command();
             command = cmd ? cmd.toString() : '';
           } catch (e2) {}
-          emit('dangerous_apis', {
+          emit('code_execution', {
             hook: 'ProcessBuilder.start',
             class_name: 'java.lang.ProcessBuilder',
             severity: 'CRITICAL',
@@ -1851,7 +1851,7 @@ function initHooks() {
         InMemoryDexClassLoader.$init.overload(
           'java.nio.ByteBuffer', 'java.lang.ClassLoader'
         ).implementation = function (buffer, parent) {
-          emit('dangerous_apis', {
+          emit('code_execution', {
             hook: 'InMemoryDexClassLoader.<init>',
             class_name: 'dalvik.system.InMemoryDexClassLoader',
             severity: 'CRITICAL',
@@ -1993,7 +1993,7 @@ function initHooks() {
         FOSClass.$init.overload('java.lang.String').implementation = function (path) {
           try {
             if (path && path.toLowerCase().indexOf('.apk') >= 0) {
-              emit('dangerous_apis', {
+              emit('code_execution', {
                 hook: 'FileOutputStream.apkWrite',
                 class_name: 'java.io.FileOutputStream',
                 severity: 'CRITICAL',
@@ -2258,7 +2258,7 @@ function installNativeHooks() {
                   payload: {
                     event_id: 'native_ev_' + Date.now(),
                     timestamp: Date.now(),
-                    category: 'dangerous_apis',
+                    category: 'code_execution',
                     source: 'native',
                     hook: 'libc.execve',
                     severity: 'CRITICAL',

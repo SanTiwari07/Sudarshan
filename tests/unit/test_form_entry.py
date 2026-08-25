@@ -699,3 +699,105 @@ def test_a_question_is_never_a_form_commit():
     item = ActionItem(action_id="A-1", node_id="n1", action_type="click",
                       label="New user? Register")
     assert not _is_form_commit_action(item)
+
+
+# ─── F5: a data-entry form is a kind of screen ───────────────────────────────
+
+from sudarshan_core.engines.agentic.screen_classifier import (  # noqa: E402
+    ScreenType,
+    classify_screen,
+    is_explorable_screen_type,
+    should_invoke_planner,
+)
+
+
+def _classify(xml: str, activity: str = f"{TARGET}/.RegisterActivity"):
+    return classify_screen(activity, _nodes(xml), package_name=TARGET)
+
+
+def test_a_multi_field_form_is_named_as_one():
+    """
+    A registration / KYC / personal-details screen used to fall through to
+    UNKNOWN, so nothing downstream could model "a form that must be completed
+    before it means anything".
+    """
+    result = _classify(_SIGNUP_XML)
+    assert result.screen_type == ScreenType.DATA_ENTRY_FORM
+
+
+def test_a_form_screen_is_explorable_and_worth_planning_for():
+    assert is_explorable_screen_type(ScreenType.DATA_ENTRY_FORM)
+    assert should_invoke_planner(ScreenType.DATA_ENTRY_FORM)
+
+
+def test_a_login_screen_is_still_a_login_screen():
+    """The new type must not steal the screens that already had a name."""
+    login = _FORM_XML.replace("Full Name", "User ID").replace("Email", "Password")
+    assert _classify(login, f"{TARGET}/.LoginActivity").screen_type == (
+        ScreenType.BANK_LOGIN
+    )
+
+
+def test_an_otp_screen_is_still_an_otp_screen():
+    """
+    Signalled through the activity name, because plain TextView captions never
+    reach classify_screen - the parser only emits interactive nodes, so a
+    caption is consumed as a field label and is not in `ui_nodes` at all.
+    """
+    assert _classify(_SIGNUP_XML, f"{TARGET}/.OtpActivity").screen_type == (
+        ScreenType.OTP_SCREEN
+    )
+
+
+def test_a_settings_screen_with_fields_is_still_settings():
+    """Host and port boxes on a debug screen are not a registration form."""
+    cfg = _FORM_XML.replace("Full Name", "Server IP").replace("Email", "Port")
+    assert _classify(cfg, f"{TARGET}/.SettingsActivity").screen_type == (
+        ScreenType.SETTINGS
+    )
+
+
+def test_a_single_field_screen_is_not_a_form():
+    """One box is a search or a filter, not a form."""
+    one = """<?xml version='1.0' encoding='UTF-8'?>
+<hierarchy rotation="0">
+ <node class="android.widget.EditText" resource-id="com.example.form:id/q"
+       text="" enabled="true" bounds="[0,10][400,60]" />
+</hierarchy>"""
+    assert _classify(one, f"{TARGET}/.SearchActivity").screen_type != (
+        ScreenType.DATA_ENTRY_FORM
+    )
+
+
+def test_a_form_screen_does_not_become_an_authentication_state():
+    """It is data entry, not auth. AuthState must stay where it was."""
+    from sudarshan_core.engines.agentic.auth_state import (
+        AuthState,
+        AuthStateMachine,
+    )
+
+    m = AuthStateMachine()
+    m.on_screen(screen_type=ScreenType.DATA_ENTRY_FORM,
+                required_fields={"FULL_NAME", "EMAIL", "PHONE"})
+    assert m.state is AuthState.UNKNOWN
+
+
+def test_a_form_commit_is_held_until_the_form_is_complete():
+    """
+    The precondition, on the screen type that exists for it. Satisfied by the
+    unconditional ordering from F8 rather than by a second rule keyed on the
+    type - asserted here so the guarantee is pinned to DATA_ENTRY_FORM too.
+    """
+    g, st = _signup_graph()
+    inputs = [a for a in st.actionable_elements if a.action_type == "input"]
+
+    for remaining in range(len(inputs), 0, -1):
+        action = g.get_next_action(state_id=st.state_id)
+        assert action["tool"] == "type_text", (
+            f"{remaining} field(s) unfilled but the walk chose "
+            f"{action['tool']} '{action.get('text')}'"
+        )
+        item = next(a for a in inputs if a.action_id == action["_action_id"])
+        _record(g, st, item, input_verified=True)
+
+    assert g.get_next_action(state_id=st.state_id)["text"] == "REGISTER"

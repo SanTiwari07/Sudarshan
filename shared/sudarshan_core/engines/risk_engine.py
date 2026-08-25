@@ -606,16 +606,77 @@ def sample_attributable_evasion(events: Any) -> List[Dict]:
 # "we looked and found nothing".
 _EVASION_EVIDENCE_CATEGORIES = frozenset({"ANTI_ANALYSIS"})
 
+# Buckets that hold ORDINARY application behaviour, by their own definition:
+# `app_telemetry` is "activity lifecycle, keyboard, generic crypto / prefs /
+# windows" and `smoke` is "baseline runtime smoke-test events" (see
+# frida_sandbox.collected_events).
+#
+# They are recorded as evidence but must not, on their own, establish that the
+# sandbox meaningfully observed the sample - because every app produces them.
+# _MIN_DYNAMIC_EVENTS is 1, so a single lifecycle event was enough to mark a run
+# conclusive and score the fraud axis 0.0 at weight 0.35.
+#
+# Measured: Anubis fired four hooks in a 300s run - one UI accessibility
+# dispatch, one harness action, two preference reads - reached 25% coverage,
+# and that one telemetry event scored the fraud axis as a clean zero, costing
+# 15 points (34.44 -> 19.38, out of the Suspicious band into Safe).
+#
+# This does NOT make the dynamic axis one-directional. A well-covered run that
+# observes benign behaviour still lowers the verdict: api_calls, network_logs,
+# activities_triggered and files_accessed are all still counted, and so is any
+# fraud-category bucket. Only the two ordinary-behaviour buckets stop counting
+# as proof that we looked.
+_BASELINE_EVIDENCE_CATEGORIES = frozenset({"APP_TELEMETRY", "SMOKE"})
+
 
 def _count_observed_sample_behavior(dynamic: Dict) -> int:
     """Count hook-derived sample behaviour items (not harness commentary)."""
+    # Hook names already accounted for in a bucket that does not count as
+    # observation. `api_calls` is a FLATTENED, uncategorised projection of the
+    # same hook events, so without this the identical event is counted twice -
+    # once categorised (and skipped) and once as a bare name (and counted).
+    #
+    # Measured on a live Anubis run: frida_events held exactly
+    # {harness_action: 1, smoke: 1, app_telemetry: 1} and api_calls held
+    # ["Activity.onResume", "ContextWrapper.getSharedPreferences"] - the same
+    # two ordinary events. The bucket filter skipped them and api_calls let
+    # them back in, so the run still read as conclusive.
+    #
+    # Subtracting by name rather than mapping names to categories: the result
+    # already tells us which bucket each hook landed in, so no second table is
+    # needed and none can drift.
+    _discounted: set = set()
+    _buckets = dynamic.get("frida_events")
+    if isinstance(_buckets, dict):
+        for _name, _events in _buckets.items():
+            _upper = str(_name).upper()
+            if not (
+                _upper in _EVASION_EVIDENCE_CATEGORIES
+                or _upper in _HARNESS_EVIDENCE_CATEGORIES
+                or _upper in _BASELINE_EVIDENCE_CATEGORIES
+            ):
+                continue
+            for _event in _events or []:
+                if not isinstance(_event, dict):
+                    continue
+                _data = _event.get("data") if isinstance(_event.get("data"), dict) else {}
+                _hook = _event.get("hook") or _data.get("hook")
+                if _hook:
+                    _discounted.add(str(_hook))
+
     observed = 0
     for field in _OBSERVED_BEHAVIOR_FIELDS:
         value = dynamic.get(field)
-        try:
-            observed += len(value or [])
-        except TypeError:
+        if not isinstance(value, list):
+            try:
+                observed += len(value or [])
+            except TypeError:
+                pass
             continue
+        for entry in value:
+            if isinstance(entry, str) and entry in _discounted:
+                continue
+            observed += 1
 
     # frida_events is a dict of per-category buckets. Sample behaviour is every
     # bucket except the sample's evasion and the harness's own actions.
@@ -629,7 +690,11 @@ def _count_observed_sample_behavior(dynamic: Dict) -> int:
     if isinstance(buckets, dict):
         for name, events in buckets.items():
             upper = str(name).upper()
-            if upper in _EVASION_EVIDENCE_CATEGORIES or upper in _HARNESS_EVIDENCE_CATEGORIES:
+            if (
+                upper in _EVASION_EVIDENCE_CATEGORIES
+                or upper in _HARNESS_EVIDENCE_CATEGORIES
+                or upper in _BASELINE_EVIDENCE_CATEGORIES
+            ):
                 continue
             try:
                 observed += len(events or [])
@@ -660,6 +725,8 @@ def _count_behavioural_evidence_records(dynamic: Dict) -> int:
         if category in _HARNESS_EVIDENCE_CATEGORIES:
             continue
         if category in _EVASION_EVIDENCE_CATEGORIES:
+            continue
+        if category in _BASELINE_EVIDENCE_CATEGORIES:
             continue
         behavioural += 1
     return behavioural
@@ -788,6 +855,23 @@ def dynamic_exclusion_reason(dynamic: Optional[Dict]) -> Optional[str]:
     if _dynamic_behavior_is_conclusive(dynamic):
         if status == "NO_BEHAVIOR_OBSERVED":
             return "NO_BEHAVIOR_OBSERVED"
+
+        # Observed SOMETHING, but nothing the fraud axis is made of.
+        #
+        # BFCI is computed only from the categories in BFCI_WEIGHTS. When none
+        # of them fired, a BFCI of 0.0 is not a measurement of "no fraud" - it
+        # is the absence of a measurement, and scoring it at the axis's 0.35
+        # weight reads as "we looked and it was clean".
+        #
+        # Measured on Anubis: the axis excluded gives FRS 34.44 Suspicious; the
+        # same run scored at 0.0 gives 19.38, inside the Safe band. Fifteen
+        # points were lost for successfully analysing the sample, so a dropper
+        # scored better by behaving during the window than by defeating the
+        # sandbox. risk_engine's own note names this: "observing nothing scored
+        # worse than failing to observe".
+        #
+        # This is the treatment the other inconclusive reasons already get. It
+        # does not invent a score; it declines to award one from no data.
         return None
 
     if _ui_never_rendered(dynamic):

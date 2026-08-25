@@ -1916,6 +1916,76 @@ function initHooks() {
         registerHook('File.<init>');
       } catch (e) { reportHookError('File.<init>', e.message); }
 
+      // ─── Secondary payload: download, write, install request ──────────────
+      //
+      // A dropper's defining move is fetching a second APK and asking the
+      // victim to install it. Nothing hooked that chain, so the download was
+      // invisible and record_secondary_apk() had no producer. These three
+      // hooks mark the three points the chain is observable at, and each
+      // reports only what it actually saw - a queued download is not a
+      // completed one, and an install INTENT is not an installation.
+
+      try {
+        var DownloadManagerCls = Java.use('android.app.DownloadManager');
+        DownloadManagerCls.enqueue.implementation = function (request) {
+          // The destination URI lives in a private field of Request and is not
+          // reliably readable across API levels, so this reports the queueing
+          // only. The URL itself is recovered from the network hooks, which do
+          // see it; inventing one here would be a fact we did not observe.
+          emit('network', {
+            hook: 'DownloadManager.enqueue',
+            class_name: 'android.app.DownloadManager',
+            severity: 'HIGH',
+            description: 'Application queued a background download via DownloadManager',
+          });
+          return this.enqueue(request);
+        };
+        registerHook('DownloadManager.enqueue');
+      } catch (e) { reportHookError('DownloadManager.enqueue', e.message); }
+
+      try {
+        var FOSClass = Java.use('java.io.FileOutputStream');
+        FOSClass.$init.overload('java.lang.String').implementation = function (path) {
+          try {
+            if (path && path.toLowerCase().indexOf('.apk') >= 0) {
+              emit('dangerous_apis', {
+                hook: 'FileOutputStream.apkWrite',
+                class_name: 'java.io.FileOutputStream',
+                severity: 'CRITICAL',
+                path: path,
+                file_path: path,
+                description: 'Application wrote an APK to storage: ' + path,
+              });
+            }
+          } catch (e2) { /* never break the app */ }
+          return this.$init(path);
+        };
+        registerHook('FileOutputStream.apkWrite');
+      } catch (e) { reportHookError('FileOutputStream.apkWrite', e.message); }
+
+      try {
+        var IntentClass = Java.use('android.content.Intent');
+        IntentClass.setDataAndType.implementation = function (data, type) {
+          try {
+            if (type && type.indexOf('application/vnd.android.package-archive') >= 0) {
+              var target = data ? ('' + data.toString()) : '';
+              emit('persistence', {
+                hook: 'Intent.installPackageRequest',
+                class_name: 'android.content.Intent',
+                severity: 'CRITICAL',
+                path: target,
+                description: (
+                  'Application asked Android to install a package: ' + target +
+                  ' (install REQUESTED - completion not observable here)'
+                ),
+              });
+            }
+          } catch (e2) { /* never break the app */ }
+          return this.setDataAndType(data, type);
+        };
+        registerHook('Intent.installPackageRequest');
+      } catch (e) { reportHookError('Intent.installPackageRequest', e.message); }
+
       try {
         var URLClass = Java.use('java.net.URL');
         URLClass.openConnection.overload().implementation = function () {

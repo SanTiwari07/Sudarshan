@@ -4,6 +4,7 @@ import { LoadingSpinner } from '../ui/Skeleton';
 import { useAnalysis } from '../../context/AnalysisContext';
 import { InvestigationUIProvider } from '../../context/InvestigationUIContext';
 import CaseHeader from './CaseHeader';
+import PersistentCaseBar from './PersistentCaseBar';
 import ScoreLedgerSlideOver from './ScoreLedgerSlideOver';
 import EvidenceDrawer from './EvidenceDrawer';
 import FindingExplanationDrawer from './FindingExplanationDrawer';
@@ -38,7 +39,17 @@ function InvestigationChrome({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      {showCaseHeader && <CaseHeader data={analysisResult} />}
+      {/*
+        Exactly one identity header per view. CaseHeader is the full form and
+        owns the summary route; every other view gets the condensed bar, so the
+        score is always on screen without two headers competing to be the
+        authoritative one.
+      */}
+      {showCaseHeader ? (
+        <CaseHeader data={analysisResult} />
+      ) : (
+        <PersistentCaseBar data={analysisResult} />
+      )}
       {children}
       {bundle && (
         <>

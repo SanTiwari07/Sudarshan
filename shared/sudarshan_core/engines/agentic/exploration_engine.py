@@ -354,6 +354,11 @@ _MENU_KEYWORDS = (
 _SMS_KEYWORDS = ("sms", "read messages", "send sms", "text message")
 _AUTH_KEYWORDS = ("login", "sign in", "password", "otp", "pin", "captcha")
 
+#: Tie-breaking nudge for the affirmative option in a two-way decision dialog.
+#: Deliberately small: score_action() has already ranked on the security
+#: signal, and this only settles otherwise-close pairs (Yes/No, OK/Cancel).
+_AFFIRMATIVE_BOOST = 15
+
 
 def _text_matches(text: str, keywords: Tuple[str, ...]) -> bool:
     lower = text.lower()
@@ -509,11 +514,21 @@ class ActionPrioritizer:
                 a, profile, semantic_type, context_text,
             )
         ranked = sorted(actions, key=lambda a: (-a.priority, a.action_id))
-        # Boost the inferred affirmative choice for decision dialogs
+        # Boost the inferred affirmative choice for decision dialogs.
+        #
+        # This must ADD, never clamp. It previously read
+        # `min(100, priority + 15)`, which silently DEMOTED any affirmative
+        # scoring above 85 - and the clearer the acceptance signal, the higher
+        # score_action() puts it, so the clamp hit hardest exactly where the
+        # victim most needed to say yes. Measured: "Install update" scored 159
+        # against "Help" at 124, then the clamp knocked it to 100 and the
+        # explorer clicked Help. That is the shallow-exploration bug: the
+        # naive victim never reached INSTALL. Scores are an open-ended ranking
+        # signal, not a 0-100 scale, so there is nothing to clamp to.
         if len(ranked) >= 2:
             affirmative = infer_affirmative_choice(ranked, context_text=context_text)
             if affirmative is not None:
-                affirmative.priority = min(100, affirmative.priority + 15)
+                affirmative.priority += _AFFIRMATIVE_BOOST
                 ranked = sorted(ranked, key=lambda a: (-a.priority, a.action_id))
         return ranked
 
@@ -1305,8 +1320,15 @@ class ExplorationGraph:
                 return back
             pending = self._pending_state_id()
             if pending and pending != sid:
-                self._current_state_id = pending
-                return self.get_next_action(pending, memory)
+                # The device is on `sid`, not on `pending`. Returning
+                # `pending`'s action here would hand the executor a tap for a
+                # control that is not on screen: it cannot match, so
+                # record_action() never resolves it, and the same action is
+                # re-selected forever. Measured on the mock app: 20 of 30
+                # actions were spent tapping "Continue" on a Settings screen
+                # that has no Continue button, and the Update branch was
+                # never reached. Navigate there instead (§13).
+                return self._navigate_toward(pending, sid)
             return None
 
         logger.info(
@@ -1393,6 +1415,50 @@ class ExplorationGraph:
             }
 
         return self._backtrack_action(memory)
+
+    def _navigate_toward(
+        self, target_state_id: str, current_state_id: str,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Walk back toward a state that still has unexplored actions.
+
+        An action only means anything on the screen that owns it, so reaching
+        `target_state_id` is a navigation problem, not a selection one. We do
+        not know the edge sequence back to it, so we press back one step and
+        let the next observe() re-identify wherever we land - the graph is
+        re-entrant, and the pending state stays pending until it is reached.
+
+        Bounded by MAX_BACKTRACKS so an app that swallows the back key cannot
+        turn this into an infinite walk.
+        """
+        if self._backtrack_count >= ExplorationBudget.MAX_BACKTRACKS:
+            logger.info(
+                "[Explorer] Navigation budget exhausted (%d/%d); "
+                "leaving %s unexplored",
+                self._backtrack_count, ExplorationBudget.MAX_BACKTRACKS,
+                target_state_id,
+            )
+            return None
+        self._backtrack_count += 1
+        # Re-identified from the next observation rather than assumed.
+        self._current_state_id = None
+        logger.info(
+            "[Explorer] NAVIGATE from=%s toward=%s (press_back %d/%d)",
+            current_state_id, target_state_id,
+            self._backtrack_count, ExplorationBudget.MAX_BACKTRACKS,
+        )
+        return {
+            "tool": "press_back",
+            "goal": "BACKTRACK",
+            "reasoning": (
+                f"Navigate from {current_state_id} toward {target_state_id}, "
+                f"which still has unexplored actions"
+            ),
+            "confidence": 0.8,
+            "_source": "exploration_engine",
+            "_selected_by": "navigation",
+            "_state_id": target_state_id,
+        }
 
     def _backtrack_action(self, memory: Any = None) -> Optional[Dict[str, Any]]:
         """Press back to explore remaining branches."""

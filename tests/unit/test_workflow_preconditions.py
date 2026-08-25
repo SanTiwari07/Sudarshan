@@ -212,3 +212,104 @@ def test_the_sandbox_helper_tolerates_a_non_dict_report():
         reports = "unexpected"
 
     assert _build_investigation_records(_Odd()) == []
+
+
+# ── the rule table must speak the agent's vocabulary ─────────────────────────
+
+import re  # noqa: E402
+
+_JS = _ROOT / "shared" / "sudarshan_core" / "engines" / "frida_hooks" / "banking_trojan.js"
+
+#: Hooks the ENGINE synthesises rather than the Frida agent emitting them.
+#: Named so they cannot be mistaken for observed API calls.
+_SYNTHETIC_HOOKS = frozenset({
+    "launcher.component_unresolvable",   # inferred from a refused relaunch
+    "process_crash",                     # from the crash classifier
+})
+
+
+def _emittable_hooks():
+    js = _JS.read_text(encoding="utf-8", errors="replace")
+    return (
+        set(re.findall(r"hook:\s*'([^']+)'", js))
+        | set(re.findall(r'hook:\s*"([^"]+)"', js))
+        | _SYNTHETIC_HOOKS
+    )
+
+
+def test_every_rule_trigger_is_a_hook_something_actually_emits():
+    """
+    The defect this guards against, measured on Cerberus: 0 of 103 evidence
+    records matched any stage, because 9 of 25 triggers named hooks the agent
+    never emits. The device-admin rule listened for
+    DevicePolicyManager.setActiveAdmin while the sample fired
+    DevicePolicyManager.isAdminActive 47 times.
+
+    A rule that cannot fire is worse than a missing rule: it looks like coverage.
+    """
+    from sudarshan_core.engines.workflow_reconstructor import _STAGE_RULES
+
+    emittable = _emittable_hooks()
+    dead = [
+        (rule.label, hook)
+        for rule in _STAGE_RULES
+        if not rule.is_precondition
+        for hook in rule.trigger_hooks
+        if hook not in emittable
+    ]
+    assert not dead, f"rules trigger on hooks nothing emits: {dead}"
+
+
+def test_every_behavioural_rule_has_at_least_one_trigger():
+    from sudarshan_core.engines.workflow_reconstructor import _STAGE_RULES
+
+    for rule in _STAGE_RULES:
+        assert rule.trigger_hooks, f"{rule.label} can never fire"
+
+
+def test_the_accessibility_rule_does_not_trigger_on_every_app():
+    """
+    sendAccessibilityEvent is emitted by any app whose UI changes - both benign
+    corpus samples fired it. Using it here would detect "app has a UI".
+    """
+    from sudarshan_core.engines.workflow_reconstructor import _STAGE_RULES
+
+    for rule in _STAGE_RULES:
+        assert "AccessibilityManager.sendAccessibilityEvent" not in rule.trigger_hooks
+
+
+def test_the_device_admin_rule_listens_for_what_cerberus_fired():
+    from sudarshan_core.engines.workflow_reconstructor import _STAGE_RULES
+
+    persistence = [r for r in _STAGE_RULES if r.category == "persistence"]
+    triggers = {h for r in persistence for h in r.trigger_hooks}
+    assert "DevicePolicyManager.isAdminActive" in triggers
+
+
+def test_self_hiding_produces_a_behavioural_stage():
+    """Removing your own launcher icon is the app's doing, not the harness's."""
+    from sudarshan_core.engines.workflow_reconstructor import WorkflowReconstructor
+
+    workflow = WorkflowReconstructor().reconstruct([{
+        "id": "e1", "category": "persistence",
+        "hook": "launcher.component_unresolvable", "timestamp_ms": 1000,
+    }])
+    assert workflow.fraud_sequence_detected is True
+    assert workflow.stages[0].is_precondition is False
+    assert "Launcher Icon Removal" == workflow.stages[0].label
+
+
+def test_the_synthetic_hook_name_does_not_impersonate_an_api_call():
+    """
+    It was named PackageManager.setComponentEnabledSetting, which reads as a
+    hooked call. The agent does not hook that API; the finding is inferred from
+    Android refusing the relaunch.
+    """
+    js = _JS.read_text(encoding="utf-8", errors="replace")
+    assert "setComponentEnabledSetting" not in js
+
+    from sudarshan_core.engines import agentic_explorer
+
+    source = Path(agentic_explorer.__file__).read_text(encoding="utf-8", errors="replace")
+    assert "launcher.component_unresolvable" in source
+    assert '"hook": "PackageManager.setComponentEnabledSetting"' not in source

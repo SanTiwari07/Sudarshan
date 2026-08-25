@@ -385,6 +385,12 @@ class AgenticExplorer:
         self.exploration = ExplorationGraph(package_name=package_name)
         self.dispatcher = ActionDispatcher()
         self._stop_reason: Optional[StopReason] = None
+
+        # Target process identity. Re-resolved when the walk comes back from a
+        # system boundary, because an installer or a self-restart replaces the
+        # process without ending the investigation.
+        self._target_pid: int = 0
+        self._target_pid_changes: int = 0
         self._pre_action_state_id: str = ""
         self._pre_action_screen_hash: str = ""
         # Whether the retry ladder already waited for the window to settle for
@@ -454,6 +460,87 @@ class AgenticExplorer:
         if not self.package_name:
             return ""
         return f"{self.package_name}/{activity}"
+
+    def _resolve_target_pid(self) -> int:
+        """
+        Current pid of the target package, or 0 when it is not running.
+
+        Uses the sandbox provider's adb - never a private path to the device -
+        and never raises: a pid reading that fails is a missing fact, not a
+        reason to end an investigation.
+        """
+        try:
+            from sudarshan_core.sandbox import get_sandbox_provider
+
+            provider = get_sandbox_provider()
+            args = ["-s", self.device_serial] if self.device_serial else []
+            ok, out = provider.adb(
+                *args, "shell", "pidof", self.package_name, timeout=10,
+            )
+        except Exception:  # noqa: BLE001
+            return 0
+        if not ok or not isinstance(out, str):
+            return 0
+        # `pidof` prints every matching pid, newest last on AOSP. The first is
+        # the main process; the sample's :remote services are not the target.
+        match = re.search(r"\d+", out)
+        return int(match.group(0)) if match else 0
+
+    def _check_target_pid(self) -> None:
+        """
+        Notice that the sample restarted, and keep exploring it.
+
+        A dropper that goes through the package installer or the VPN consent
+        dialog frequently comes back as a NEW process: the installer replaced
+        the package, or the app restarted itself after being granted what it
+        asked for. The old pid is then dead, and everything keyed to it - a
+        Frida session, a process-scoped hook - is talking to nothing.
+
+        This is a process change, not a sandbox failure. Treating it as one
+        ended runs at the exact moment the second stage began, which is the
+        only moment that mattered. So: re-resolve, record, carry on.
+        """
+        current = self._resolve_target_pid()
+        if not current:
+            return
+        if not self._target_pid:
+            self._target_pid = current
+            return
+        if current == self._target_pid:
+            return
+
+        old, self._target_pid = self._target_pid, current
+        self._target_pid_changes += 1
+        logger.info(
+            "[VSE] Target PID changed: old=%d new=%d. Resuming exploration.",
+            old, current,
+        )
+        self.audit_log.record_system_event(
+            "target_process_changed",
+            f"{self.package_name} pid {old} -> {current} "
+            f"(change #{self._target_pid_changes})",
+        )
+        if self.event_bus:
+            try:
+                self.event_bus.publish({
+                    "type": "event",
+                    "category": "persistence",
+                    "severity": "MEDIUM",
+                    "data": {
+                        # Named for the observation - a pid that changed - not
+                        # for a cause we did not hook.
+                        "hook": "process.target_pid_changed",
+                        "description": (
+                            f"Target process restarted under a new pid "
+                            f"({old} -> {current}); exploration continued"
+                        ),
+                        "package": self.package_name,
+                        "old_pid": old,
+                        "new_pid": current,
+                    },
+                })
+            except Exception:  # noqa: BLE001
+                pass
 
     #: Actions whose effect lives in device state rather than on screen. Only
     #: these justify the four ADB queries a full probe costs; everything else is
@@ -1225,6 +1312,11 @@ class AgenticExplorer:
         last_screen_hash      = ""
         consecutive_crashes   = 0
         out_of_scope_streak   = 0
+        # Whether the previous iteration was outside the sample. Distinct from
+        # the streak, which the recovery path resets: this survives long enough
+        # for the return-to-target branch to know a boundary was crossed and
+        # that the process may have been replaced while the walk was away.
+        was_out_of_scope      = False
         # Set once the sample will not come back to the foreground. Navigation
         # stops; observation does not.
         navigation_abandoned  = False
@@ -1349,12 +1441,20 @@ class AgenticExplorer:
                 # a screen of the sample, and counting it inflates both the
                 # screen graph the planner reasons over and the coverage figure
                 # the report presents.
+                # The UI text is a real signal for boundary detection - an OEM
+                # installer is confirmed by its package fragment PLUS an
+                # install marker on screen, and passing nothing here left that
+                # second signal permanently unavailable, so every OEM installer
+                # scored one signal and failed the two-signal rule.
+                screen_text = self._screen_text(obs)
                 if not in_investigation_scope(
                     foreground_package, self.package_name,
                     activity=obs.activity,
+                    ui_text=screen_text,
                     screen_type=classification.screen_type,
                 ):
                     out_of_scope_streak += 1
+                    was_out_of_scope = True
 
                     # Blame the action that did it, once, on the first
                     # observation of the departure. memory.current_screen_hash
@@ -1368,7 +1468,7 @@ class AgenticExplorer:
                         # text (e.g. "INSTALL") from being selected again on
                         # the source screen after recovery.
                         fg_is_safe_boundary = is_safe_interactive_boundary(
-                            foreground_package, obs.activity,
+                            foreground_package, obs.activity, screen_text,
                         )
                         if not fg_is_safe_boundary:
                             self.memory.record_escaping_action(
@@ -1389,10 +1489,12 @@ class AgenticExplorer:
                             )
                         else:
                             logger.info(
-                                "[AgenticExplorer] BOUNDARY_TRANSITION "
-                                "from_package=%s to_package=%s "
-                                "ownership=safe_boundary — skipping escaping_action record",
-                                self.package_name, foreground_package,
+                                "[VSE] BOUNDARY_TRANSITION to safe system "
+                                "boundary: fg=%s screen=%s (from %s via '%s(%s)') "
+                                "- not recorded as an escaping action",
+                                foreground_package, classification.screen_type,
+                                self.package_name,
+                                last_action_tool, last_action_target,
                             )
                             self.audit_log.record_system_event(
                                 "boundary_transition_safe",
@@ -1558,6 +1660,12 @@ class AgenticExplorer:
                     last_action_failed = False
                     continue
 
+                # Coming back into scope is the one moment a pid change is
+                # both likely and cheap to detect - one adb call per boundary
+                # crossing, not one per iteration.
+                if was_out_of_scope and foreground_package == self.package_name:
+                    self._check_target_pid()
+                was_out_of_scope = False
                 out_of_scope_streak = 0
 
                 # Judge the previous screen-changing action now that the settled

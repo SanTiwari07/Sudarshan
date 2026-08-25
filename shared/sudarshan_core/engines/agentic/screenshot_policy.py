@@ -77,6 +77,43 @@ INSTALLER_PACKAGES: frozenset[str] = frozenset({
     "com.google.android.packageinstaller",
     "com.android.permissioncontroller",
     "com.google.android.permissioncontroller",
+    # OEM installers. A dropper on a Xiaomi/Samsung/Transsion image hands the
+    # APK to the vendor's installer, not to AOSP's, and an unrecognised
+    # installer was read as EXTERNAL_APP - which ended the install journey at
+    # its first step.
+    #
+    # Only single-purpose installer packages belong here. Membership makes
+    # EVERY screen of the package in scope, which is safe for a package that
+    # can only ever show an install prompt and is not safe for a package that
+    # also contains a settings tree - see OEM_BOUNDARY_HOST_PACKAGES.
+    "com.samsung.android.packageinstaller",
+    "com.miui.packageinstaller",
+    "com.transsion.installer",
+})
+
+#: OEM apps that HOST install/permission prompts among ordinary screens.
+#:
+#: com.miui.securitycenter, com.coloros.safecenter and com.vivo.safecenter are
+#: full applications - a security dashboard, a battery manager, a permission
+#: tree - that happen to also raise the install-confirmation dialog on their
+#: images. com.oppo.market is an app store. Admitting them on package identity
+#: alone repeats the com.android.settings mistake documented in
+#: perception.BOUNDARY_HOST_PACKAGES, where a measured run answered 55 of 55
+#: observations from Settings and never observed the sample at all.
+#:
+#: They are in scope only while a boundary prompt is actually on screen.
+OEM_BOUNDARY_HOST_PACKAGES: frozenset[str] = frozenset({
+    "com.miui.securitycenter",
+    "com.coloros.safecenter",
+    "com.vivo.safecenter",
+    "com.oppo.market",
+})
+
+#: The VPN consent dialog. Its own package, not part of Settings, and hosting
+#: nothing but the consent prompt itself - so being there is unambiguous.
+VPN_DIALOG_PACKAGES: frozenset[str] = frozenset({
+    "com.android.vpndialogs",
+    "com.google.android.vpndialogs",
 })
 
 SETTINGS_PACKAGES: frozenset[str] = frozenset({
@@ -119,7 +156,8 @@ class SafeInteractiveBoundaryRole(str, Enum):
     SYSTEM_PERMISSION   = "SYSTEM_PERMISSION"   # Runtime permission dialog
     SYSTEM_SETTINGS     = "SYSTEM_SETTINGS"     # Android Settings app
     ACCESSIBILITY       = "ACCESSIBILITY"       # Accessibility service settings
-    VPN_SETTINGS        = "VPN_SETTINGS"        # VPN configuration
+    VPN_SETTINGS        = "VPN_SETTINGS"        # VPN configuration in Settings
+    VPN_DIALOG          = "VPN_DIALOG"          # VpnService consent dialog
     SUPPORTED_WEBVIEW   = "SUPPORTED_WEBVIEW"   # App-owned WebView (same package)
 
 
@@ -208,6 +246,16 @@ def classify_safe_boundary(
     act = (activity or "").lower()
     txt = (ui_text or "").lower()
 
+    # ── 0. VPN_DIALOG ─────────────────────────────────────────────────────────
+    # com.android.vpndialogs exists solely to host VpnService.prepare()'s
+    # consent prompt, so the package alone is the whole signal - there is no
+    # other screen it can be showing. It used to fall through every branch
+    # below (it is not Settings, not an installer, has no "permission" in its
+    # name) and returned NONE, which made the explorer treat a VPN consent
+    # prompt raised BY THE SAMPLE as having wandered into a third-party app.
+    if fg in VPN_DIALOG_PACKAGES or "vpndialogs" in fg:
+        return SafeInteractiveBoundaryRole.VPN_DIALOG
+
     # ── 1. SYSTEM_PERMISSION ──────────────────────────────────────────────────
     # Known AOSP permission controller packages (HIGH pkg alone is sufficient).
     if foreground_package in (
@@ -222,11 +270,10 @@ def classify_safe_boundary(
         return SafeInteractiveBoundaryRole.SYSTEM_PERMISSION
 
     # ── 2. SYSTEM_INSTALLER ───────────────────────────────────────────────────
-    # Known AOSP installer packages (HIGH pkg alone is sufficient).
-    if foreground_package in (
-        "com.android.packageinstaller",
-        "com.google.android.packageinstaller",
-    ):
+    # Known AOSP and OEM installer packages (HIGH pkg alone is sufficient -
+    # these are shipped by the platform, so their package names cannot be
+    # claimed by the sample).
+    if fg in INSTALLER_PACKAGES:
         return SafeInteractiveBoundaryRole.SYSTEM_INSTALLER
     # OEM installers: require TWO signals from {pkg-fragment, activity-fragment,
     # ui-text-marker}.  UI text alone is never enough.
@@ -337,6 +384,12 @@ def resolve_screen_ownership(
             return ScreenOwnership.WEBVIEW
         return ScreenOwnership.TARGET_APP
 
+    # The VPN consent dialog is a permission prompt in everything but name:
+    # the sample called VpnService.prepare(), and what is on screen is Android
+    # asking the user to grant it.
+    if fg in VPN_DIALOG_PACKAGES:
+        return ScreenOwnership.SYSTEM_PERMISSION
+
     if fg in INSTALLER_PACKAGES:
         if semantic_type in ("EXTERNAL_APK", "PACKAGE_INSTALLER"):
             return ScreenOwnership.SYSTEM_INSTALLER
@@ -365,6 +418,7 @@ def resolve_screen_ownership(
         if role in (
             SafeInteractiveBoundaryRole.SYSTEM_PERMISSION,
             SafeInteractiveBoundaryRole.ACCESSIBILITY,
+            SafeInteractiveBoundaryRole.VPN_DIALOG,
         ):
             return ScreenOwnership.SYSTEM_PERMISSION
         if role in (

@@ -340,6 +340,32 @@ class AgentMemory:
         """Whether this action already took the agent out of the app from here."""
         return (self.current_screen_hash, tool, target or "") in self._escaping_actions
 
+    def is_action_effective(
+        self, screen_hash: str, tool: str, target: str,
+    ) -> bool:
+        """
+        Whether taking `tool(target)` on `screen_hash` is still worth an action.
+
+        Explicitly screen-scoped rather than reading ``current_screen_hash``, so
+        a planner can ask about a screen it is not standing on - scoring a
+        candidate for a screen the walk has not returned to yet is a normal
+        question, and answering it against the wrong screen is how a control
+        blacklisted on one dialog silently disappears from another.
+
+        False means the same control on the same screen already left the app,
+        or has been tried MAX_ACTIONS_PER_SCREEN times without moving anything.
+        It says nothing about whether the action is a good idea - only that
+        repeating it here cannot produce a new observation.
+        """
+        if not tool:
+            return False
+        key = (screen_hash, tool, target or "")
+        if key in self._escaping_actions:
+            return False
+        history = self._screen_action_counts.get(screen_hash, [])
+        repeats = sum(1 for t, tgt in history if t == tool and tgt == (target or ""))
+        return repeats < MAX_ACTIONS_PER_SCREEN
+
     def is_action_loop(self, tool: str, target: str) -> bool:
         """
         Return True if the same (tool, target) has been attempted

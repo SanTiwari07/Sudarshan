@@ -147,3 +147,135 @@ def test_a_successful_clear_is_reported():
         "tool": "type_text", "field_hint": "email", "x": 10, "y": 10,
     }))
     assert result.data.get("field_cleared") is True
+
+
+# ─── F2: the population verdict must decide whether a field is done ──────────
+
+from sudarshan_core.engines.agentic.exploration_engine import (  # noqa: E402
+    ExplorationBudget,
+    ExplorationGraph,
+)
+
+TARGET = "com.example.form"
+
+_FORM_XML = """<?xml version='1.0' encoding='UTF-8'?>
+<hierarchy rotation="0">
+ <node class="android.widget.TextView" text="Full Name" clickable="false"
+       bounds="[0,100][400,140]" />
+ <node class="android.widget.EditText" resource-id="com.example.form:id/name"
+       text="" password="false" enabled="true" bounds="[0,150][400,200]" />
+ <node class="android.widget.TextView" text="Email" clickable="false"
+       bounds="[0,220][400,260]" />
+ <node class="android.widget.EditText" resource-id="com.example.form:id/email"
+       text="" password="false" enabled="true" bounds="[0,270][400,320]" />
+ <node class="android.widget.Button" text="SUBMIT" clickable="true"
+       enabled="true" bounds="[0,350][400,400]" />
+</hierarchy>"""
+
+
+class _Obs:
+    """Minimal observation the graph accepts."""
+
+    def __init__(self, xml: str):
+        from sudarshan_core.engines.agentic.perception import PerceptionPipeline
+
+        pipeline = PerceptionPipeline.__new__(PerceptionPipeline)
+        self.ui_nodes = pipeline._parse_ui_nodes(xml)
+        self.activity = f"{TARGET}/.FormActivity"
+        self.screen_hash = "h-form"
+        self.is_webview = False
+        self.ocr_text = ""
+        self.logcat_tail = ""
+        self.frida_events = []
+
+
+def _form_state():
+    g = ExplorationGraph(package_name=TARGET)
+    st = g.observe(_Obs(_FORM_XML), semantic_type="UNKNOWN",
+                   foreground_package=TARGET)
+    return g, st
+
+
+def _first_input(state):
+    return next(a for a in state.actionable_elements if a.action_type == "input")
+
+
+def _record(g, st, item, *, input_verified):
+    return g.record_action(
+        source_state_id=st.state_id,
+        target_state_id=st.state_id,
+        action_type="type_text",
+        target_description=item.label,
+        success=True,
+        verified=False,
+        ui_changed=False,
+        ever_ui_changed=False,
+        attempts=1,
+        action_id=item.action_id,
+        input_verified=input_verified,
+    )
+
+
+def test_an_unchecked_input_still_resolves():
+    """
+    Today's behaviour, preserved.
+
+    Typing does not move the screen hash by design, so a caller that supplies
+    no population verdict must still see the field resolved - otherwise every
+    type_text would loop.
+    """
+    g, st = _form_state()
+    item = _first_input(st)
+    _record(g, st, item, input_verified=None)
+    assert item.explored and item.verified
+    assert item not in st.unexplored_actions()
+
+
+def test_a_confirmed_population_resolves():
+    g, st = _form_state()
+    item = _first_input(st)
+    _record(g, st, item, input_verified=True)
+    assert item.explored and item.verified
+
+
+def test_a_field_proven_empty_stays_unresolved_and_is_retried():
+    """
+    The defect: adb exited 0, so the field was marked explored and verified
+    even when the verifier had just proven it empty. It left `pending_inputs`,
+    which released the held submit control onto an unfilled form.
+    """
+    g, st = _form_state()
+    item = _first_input(st)
+    _record(g, st, item, input_verified=False)
+
+    assert not item.explored, "a field proven empty must not read as explored"
+    assert not item.verified
+    assert item in st.unexplored_actions(), "it must be offered again"
+    assert item in [a for a in st.unexplored_actions() if a.action_type == "input"]
+
+
+def test_repeated_failures_resolve_as_failed_not_verified():
+    """Bounded: a field that will not accept input must not loop forever."""
+    g, st = _form_state()
+    item = _first_input(st)
+
+    for _ in range(ExplorationBudget.MAX_INPUT_FILL_ATTEMPTS):
+        _record(g, st, item, input_verified=False)
+        assert item.fill_attempts <= ExplorationBudget.MAX_INPUT_FILL_ATTEMPTS
+
+    assert item.failed, "exhausted retries must resolve the action"
+    assert not item.verified, "and must not claim it was verified"
+    assert item not in st.unexplored_actions()
+
+
+def test_the_retry_budget_is_not_pinned_by_execution_attempts():
+    """
+    `execution_attempts` is ASSIGNED from the caller's retry count, not
+    incremented, so it sits at 1 across separate selections and cannot bound
+    anything. Fill attempts are counted separately for exactly that reason.
+    """
+    g, st = _form_state()
+    item = _first_input(st)
+    _record(g, st, item, input_verified=False)
+    _record(g, st, item, input_verified=False)
+    assert item.fill_attempts == 2

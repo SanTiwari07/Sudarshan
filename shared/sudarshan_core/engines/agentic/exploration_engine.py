@@ -65,6 +65,15 @@ class ExplorationBudget:
     MAX_RETRIES_PER_ACTION: int = int(
         os.getenv("SUDARSHAN_MAX_ACTION_RETRIES", "3")
     )
+    #: Times a field may be re-filled after the population verifier PROVED the
+    #: value did not land. Deliberately small: a field that rejects input twice
+    #: is not going to accept it on the third try, and a form has several
+    #: fields, so the cost of an over-generous budget is multiplied. Kept
+    #: separate from MAX_RETRIES_PER_ACTION, which counts retries WITHIN one
+    #: dispatch, where this counts separate selections of the same field.
+    MAX_INPUT_FILL_ATTEMPTS: int = int(
+        os.getenv("SUDARSHAN_MAX_INPUT_FILL_ATTEMPTS", "2")
+    )
     FRIDA_SILENCE_THRESHOLD: int = int(
         os.getenv("SUDARSHAN_AGENT_SILENCE_THRESHOLD", "8")
     )
@@ -235,6 +244,12 @@ class ActionItem:
     executed: bool = False
     verified: bool = False
     execution_attempts: int = 0
+    #: Times this field was filled and the population verifier then PROVED the
+    #: value had not landed. Counted separately from `execution_attempts`,
+    #: which record_action ASSIGNS from the caller's within-dispatch retry
+    #: count and which therefore sits at 1 across separate selections - it
+    #: cannot bound anything that spans them.
+    fill_attempts: int = 0
 
     def signature(self) -> str:
         """
@@ -1683,6 +1698,7 @@ class ExplorationGraph:
         new_actions_found: int = 0,
         runtime_events: int = 0,
         failure_reason: str = "",
+        input_verified: Optional[bool] = None,
     ) -> ExplorationEdge:
         """Record an action edge between states.
 
@@ -1699,12 +1715,18 @@ class ExplorationGraph:
         """
         if verified is None:
             verified = bool(success)
-        if success and action_type in ("input", "type_text"):
+        if success and action_type in ("input", "type_text") and input_verified is not False:
             # Same reasoning as the input branch below, applied to the EDGE:
             # text entry does not move the screen hash by design, so a verifier
             # that looks for a screen change can only ever report "unchanged".
             # Without this every accepted keystroke is drawn as a failed edge in
             # the exploration graph the analyst reads.
+            #
+            # `input_verified is False` means the population verifier READ the
+            # field afterwards and found our value absent. That is a positive
+            # observation, not the absence of one, and it outranks the "typing
+            # never changes the hash" allowance: drawing it as a successful
+            # edge would put a field we know is empty in the analyst's graph.
             verified = True
         # If the caller tracked UI change across all attempts, prefer that over
         # the single-attempt snapshot.  An action that moved the UI on attempt 1
@@ -1829,6 +1851,40 @@ class ExplorationGraph:
                             "(ever_ui_changed=True, adb_success=True)",
                             target_description,
                         )
+                    elif (
+                        success
+                        and action_type in ("input", "type_text")
+                        and input_verified is False
+                    ):
+                        # The field was READ after typing and our value was not
+                        # in it. adb exiting 0 only means the keystrokes were
+                        # delivered somewhere - to a field that had scrolled
+                        # away, to one that rejected them, or nowhere at all.
+                        #
+                        # Resolving this as explored is what let a walk press
+                        # Submit on a form it had not filled: the field left
+                        # `pending_inputs`, which released the held submit
+                        # control, and the app's validation error was then read
+                        # as the app rejecting our data rather than as our own
+                        # failure to enter it. So it stays unresolved and is
+                        # offered again - bounded, because a field that refuses
+                        # input twice will not take it on the third try.
+                        a.executed = True
+                        a.fill_attempts += 1
+                        if a.fill_attempts >= ExplorationBudget.MAX_INPUT_FILL_ATTEMPTS:
+                            a.failed = True
+                            logger.info(
+                                "[ExplorationGraph] Input '%s' FAILED - value "
+                                "did not land after %d fill attempt(s)",
+                                target_description, a.fill_attempts,
+                            )
+                        else:
+                            logger.info(
+                                "[ExplorationGraph] Input '%s' NOT POPULATED "
+                                "(attempt %d/%d) - left unresolved for retry",
+                                target_description, a.fill_attempts,
+                                ExplorationBudget.MAX_INPUT_FILL_ATTEMPTS,
+                            )
                     elif success and action_type in ("input", "type_text"):
                         # Text entry is deliberately NOT a state change: a
                         # field's value is no longer part of screen identity, so
@@ -1837,6 +1893,12 @@ class ExplorationGraph:
                         # type_text as failed, which is both wrong in the report
                         # and wrong for the walk - the field would be retried
                         # instead of the form being completed.
+                        #
+                        # Reached when the population verifier confirmed the
+                        # value landed, or could not tell - an INCONCLUSIVE
+                        # read (a masked field exposing neither text nor
+                        # length) must resolve exactly as it did before, or
+                        # every password box on such a device would loop.
                         a.explored = True
                         a.executed = True
                         a.verified = True

@@ -2468,12 +2468,20 @@ class AgenticExplorer:
                 field_verification = self._verify_typed_field(
                     action, result, post_obs,
                 )
-                if field_verification is not None and field_verification.failed:
-                    # Bounded recovery: re-perceive, refocus and retry happen
-                    # through the existing action ladder by leaving the action
-                    # unresolved. No new loop is introduced here - the retry
-                    # ceiling that already governs every action governs this.
-                    last_action_failed = True
+                # Tri-state, and the distinction carries the whole fix:
+                #   None  - not a type_text, or the field could not be re-read.
+                #   True  - the value is in the field.
+                #   False - the field was READ and our value is not in it.
+                # Only False resolves differently. An INCONCLUSIVE read (a
+                # masked field exposing neither text nor length) stays None and
+                # resolves as it always did, so password boxes cannot loop.
+                input_verified: Optional[bool] = None
+                if field_verification is not None:
+                    if field_verification.failed:
+                        input_verified = False
+                        last_action_failed = True
+                    elif field_verification.succeeded:
+                        input_verified = True
 
                 if self._submitted_credentials:
                     self._submitted_credentials = False
@@ -2579,6 +2587,7 @@ class AgenticExplorer:
                     action_id=action.get("_action_id", ""),
                     ui_changed=ui_changed,
                     ever_ui_changed=ever_ui_changed,
+                    input_verified=input_verified,
                 )
                 if self.dispatcher.last_trace is not None:
                     tr = self.dispatcher.last_trace

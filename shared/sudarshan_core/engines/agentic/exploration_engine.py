@@ -1697,13 +1697,45 @@ class ExplorationGraph:
             self._current_state_id = existing_id
             self._visit_history.append(existing_id)
             # Merge new actions not yet in inventory
-            existing_sigs = {a.signature() for a in state.actionable_elements}
+            existing_by_sig = {
+                a.signature(): a for a in state.actionable_elements
+            }
             for item in self._build_action_inventory(
                 ui_nodes, semantic_type, field_overrides,
             ):
-                if item.signature() not in existing_sigs:
+                known = existing_by_sig.get(item.signature())
+                if known is None:
                     state.actionable_elements.append(item)
+                    existing_by_sig[item.signature()] = item
                     self._log_action_discovered(state, item)
+                    continue
+
+                # Same control, possibly somewhere else on screen. Refresh
+                # WHERE it is, and nothing else.
+                #
+                # Focusing a field raises the soft keyboard, and a form long
+                # enough to be covered by it scrolls. Measured on Google
+                # Contacts' editor - name, phone and email in one form -
+                # tapping the bottom field moved every field up by 91px while
+                # their SIZES were unchanged. `signature()` buckets on size
+                # only, deliberately, so that a scroll does not fork the state;
+                # but that also meant the moved control matched an existing
+                # entry whose coordinates were never updated, and the walk went
+                # on tapping a point 91px stale against a field 168px tall.
+                #
+                # Exploration progress is untouched on purpose: clearing
+                # `explored` here would re-offer fields the form had already
+                # accepted, which is the loop this is meant to remove.
+                if (item.center_x, item.center_y) != (known.center_x, known.center_y):
+                    logger.debug(
+                        "[ExplorationGraph] Refreshed geometry for '%s': "
+                        "(%d,%d) -> (%d,%d)",
+                        known.label, known.center_x, known.center_y,
+                        item.center_x, item.center_y,
+                    )
+                known.center_x = item.center_x
+                known.center_y = item.center_y
+                known.bounds = item.bounds
             return state
 
         state_id = self._next_state_id()

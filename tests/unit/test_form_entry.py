@@ -14,6 +14,7 @@ regression in any one of them brings the whole symptom back.
 from __future__ import annotations
 
 import asyncio
+import re
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock
@@ -801,3 +802,76 @@ def test_a_form_commit_is_held_until_the_form_is_complete():
         _record(g, st, item, input_verified=True)
 
     assert g.get_next_action(state_id=st.state_id)["text"] == "REGISTER"
+
+
+# ─── F9: coordinates must not go stale when the form scrolls ─────────────────
+#
+# Measured on a live Pixel 6 emulator (Android 16), Google Contacts
+# EditorActivity, which is the reported scenario exactly - name, phone and
+# email in one form. Focusing the BOTTOM field scrolled the form and every
+# field moved up by 91px:
+#
+#   before  [126,1647][954,1815]  [126,1857][954,2025]  [126,2193][954,2337]
+#   after   [126,1556][954,1724]  [126,1766][954,1934]  [126,2102][954,2333]
+#
+# The first two kept their SIZE, so _bounds_bucket - which is size-only, by
+# design, to stop the keyboard forking the state - produced the same signature.
+# The merge path then matched them as already-known and never refreshed their
+# geometry, leaving centres 91px stale against a field only 168px tall.
+
+def _shifted(xml: str, dy: int) -> str:
+    """Move every node up by `dy`, as a scroll does."""
+    def move(m):
+        x1, y1, x2, y2 = (int(v) for v in m.groups())
+        return f"[{x1},{y1 - dy}][{x2},{y2 - dy}]"
+
+    return re.sub(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", move, xml)
+
+
+def test_field_coordinates_are_refreshed_when_the_form_scrolls():
+    g, st = _signup_graph()
+    before = {a.action_id: a.center_y
+              for a in st.actionable_elements if a.action_type == "input"}
+
+    again = g.observe(_Obs(_shifted(_SIGNUP_XML, 91)), semantic_type="UNKNOWN",
+                      foreground_package=TARGET)
+    assert again.state_id == st.state_id, (
+        "a scrolled form must stay ONE state - that is what _bounds_bucket "
+        "ignoring position buys, and it is why geometry must be refreshed here"
+    )
+
+    after = {a.action_id: a.center_y
+             for a in again.actionable_elements if a.action_type == "input"}
+    assert after, "inputs disappeared from the inventory"
+    for action_id, y_before in before.items():
+        assert after[action_id] == y_before - 91, (
+            f"{action_id} still points at the pre-scroll position"
+        )
+
+
+def test_refreshing_geometry_does_not_reset_exploration_progress():
+    """
+    Geometry only. If a refresh cleared `explored`, a scrolling form would
+    re-offer fields it had already filled - which is the loop this whole
+    change set exists to remove.
+    """
+    g, st = _signup_graph()
+    item = _first_input(st)
+    _record(g, st, item, input_verified=True)
+    assert item.explored
+
+    again = g.observe(_Obs(_shifted(_SIGNUP_XML, 91)), semantic_type="UNKNOWN",
+                      foreground_package=TARGET)
+    same = next(a for a in again.actionable_elements
+                if a.action_id == item.action_id)
+    assert same.explored, "a scroll must not un-explore a filled field"
+    assert same.verified
+
+
+def test_a_scrolled_form_does_not_duplicate_its_fields():
+    """The inventory must not grow every time the keyboard moves the form."""
+    g, st = _signup_graph()
+    n_before = len(st.actionable_elements)
+    again = g.observe(_Obs(_shifted(_SIGNUP_XML, 91)), semantic_type="UNKNOWN",
+                      foreground_package=TARGET)
+    assert len(again.actionable_elements) == n_before

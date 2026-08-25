@@ -26,6 +26,8 @@ import ActivitySummary from '../components/investigation/ActivitySummary';
 import BehaviorTags from '../components/investigation/BehaviorTags';
 import RelationsGraph from '../components/investigation/RelationsGraph';
 import SecondaryApkPanel from '../components/investigation/SecondaryApkPanel';
+import MitreMatrix from '../components/investigation/MitreMatrix';
+import AskAiPopover from '../components/investigation/AskAiPopover';
 
 /**
  * Row count past which a table starts collapsed.
@@ -199,7 +201,12 @@ function DangerousAPITable({ data }: { data: FraudCardData }) {
             <tbody className="font-mono">
               {apis.map((api, i) => (
                 <tr key={i} className="!bg-red-50/20">
-                  <td className="break-all text-red-700 font-semibold">{api}</td>
+                  <td className="break-all text-red-700 font-semibold">
+                    <span className="inline-flex items-start gap-1">
+                      {api}
+                      <AskAiPopover value={api} kind="api" />
+                    </span>
+                  </td>
                   <td className="text-right">
                     <span className="inline-flex px-1.5 py-0.5 text-[9px] font-bold bg-red-100 text-red-800 rounded border border-red-200/50 whitespace-nowrap">
                       DANGEROUS HOOK
@@ -886,7 +893,14 @@ function SecretsPanel({ data }: { data: FraudCardData }) {
                     <td>
                       <span className="px-1 py-0.5 text-[9px] font-bold bg-red-100 text-red-800 border border-red-200/50 rounded uppercase whitespace-nowrap">SECRET</span>
                     </td>
-                    <td className="break-all text-xs text-slate-700">{s}</td>
+                    <td className="break-all text-xs text-slate-700">
+                      <span className="inline-flex items-start gap-1">
+                        {s}
+                        {/* Obfuscated secrets are decoded locally first; the
+                            model is only asked for semantic intent. */}
+                        <AskAiPopover value={s} kind="string" />
+                      </span>
+                    </td>
                     <td className="text-right">
                       <CopyButton value={s} />
                     </td>
@@ -979,6 +993,7 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
             <ScreenshotGallery data={data} bundle={investigationBundle} />
           </div>
           {data.vide && <OverlayEvidenceViewer vide={data.vide} />}
+          <MitreMatrix data={data} />
           <DangerousAPITable data={data} />
           <CodeFindingsPanel data={data} />
           <BinaryAnalysisPanel data={data} />

@@ -188,7 +188,35 @@ class TestExternalAppDeduplication(unittest.TestCase):
         stats = policy.get_statistics()
         self.assertGreater(stats["suppressed"], 40)
 
-    def test_external_in_separate_graph(self):
+    def test_unrelated_external_app_goes_to_the_external_graph(self):
+        """A third-party app we merely landed on is recorded, not explored."""
+        graph = ExplorationGraph(TARGET)
+        obs = Observation(
+            activity="com.random.chat/.MainActivity",
+            ui_nodes=[_node("Send")],
+            screen_hash="chathash",
+        )
+        state = graph.observe(
+            obs,
+            semantic_type="UNKNOWN",
+            foreground_package="com.random.chat",
+            ownership=ScreenOwnership.EXTERNAL_APP.value,
+        )
+        self.assertTrue(state.state_id.startswith("EXT-"))
+        self.assertEqual(len(graph.external_states), 1)
+        self.assertEqual(len(graph.states), 0)
+
+    def test_the_package_installer_stays_explorable(self):
+        """
+        The installer is an external package, but it is the one screen the
+        simulated victim MUST be able to act on: "Install another APK?" ->
+        the victim follows the install flow to the sandbox boundary.
+
+        Routing it to the external graph would leave Install/Cancel
+        unclickable, so the secondary-APK chain (download -> hash -> install
+        request) could never be reached. Ownership decides *recording*;
+        whether a boundary screen is interactive decides *explorability*.
+        """
         graph = ExplorationGraph(TARGET)
         obs = Observation(
             activity=f"{INSTALLER}/.InstallApp",
@@ -201,9 +229,10 @@ class TestExternalAppDeduplication(unittest.TestCase):
             foreground_package=INSTALLER,
             ownership=ScreenOwnership.SYSTEM_INSTALLER.value,
         )
-        self.assertTrue(state.state_id.startswith("EXT-"))
-        self.assertEqual(len(graph.external_states), 1)
-        self.assertEqual(len(graph.states), 0)
+        self.assertFalse(state.state_id.startswith("EXT-"))
+        self.assertEqual(len(graph.external_states), 0)
+        # Install and Cancel are both offered to the victim.
+        self.assertEqual(len(state.unexplored_actions()), 2)
 
 
 class TestPermissionDeduplication(unittest.TestCase):

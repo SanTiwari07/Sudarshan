@@ -427,12 +427,20 @@ class GeminiProviderManager:
                     slot, contents=contents, config=config, stream=stream, extra=extra
                 )
                 latency = (self._clock() - started) * 1000.0
+                # A primary is configured but did not serve this request, so
+                # the fallback stood in for it - that is what fallback_used
+                # reports. Deriving it from `tried_fallback` instead missed
+                # every request made while the primary was in cooldown: those
+                # skip the primary in _ordered_slots(), leaving the fallback
+                # at index 0, so the whole cooldown window was recorded as
+                # normal primary traffic. When the fallback is the ONLY
+                # configured provider there is nothing to fall back from.
                 only_fallback = "primary" not in self._slots
                 return GeminiCallResult(
                     response=response,
                     provider=slot.spec.role,
                     model=slot.spec.model,
-                    fallback_used=is_fallback and (tried_fallback or only_fallback),
+                    fallback_used=is_fallback and not only_fallback,
                     retry_count=retry_count,
                     latency_ms=latency,
                     failure_type=last_fail,

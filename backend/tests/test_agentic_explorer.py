@@ -131,8 +131,29 @@ class TestGoalTracker(unittest.TestCase):
         stages = [g.stage for g in self.tracker.goals]
         self.assertEqual(stages, sorted(stages))
 
-    def test_all_goals_initially_pending(self):
+    def test_all_goals_initially_pending_unless_no_instrument_can_confirm_them(self):
+        """
+        Updated for the goal-graph deadlock fix.
+
+        A goal the Frida agent cannot possibly confirm is now resolved as
+        UNSUPPORTED in the constructor, with a stated reason, instead of
+        starting PENDING and blocking its dependents for the whole run. Every
+        OTHER goal still starts PENDING, which is what this test guards.
+        """
+        from sudarshan_core.engines.agentic.goal_tracker import ConfirmationMode
+
         for g in self.tracker.goals:
+            if g.confirmation is ConfirmationMode.UNSUPPORTED:
+                self.assertEqual(
+                    g.status, self.GoalStatus.UNSUPPORTED,
+                    f"Goal '{g.name}' declares no instrument and must resolve "
+                    f"as UNSUPPORTED rather than sit PENDING",
+                )
+                self.assertTrue(
+                    g.unsupported_reason.strip(),
+                    f"Goal '{g.name}' is UNSUPPORTED without saying why",
+                )
+                continue
             self.assertEqual(g.status, self.GoalStatus.PENDING,
                              f"Goal '{g.name}' should be PENDING at start")
 

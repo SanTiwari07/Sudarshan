@@ -62,10 +62,26 @@ def test_graph_advances_past_stage1(tracker):
 
 def test_all_downstream_goals_become_reachable(tracker):
     """
-    Every fraud category must be reachable, not just defined. Walk the graph
-    driving each goal to COMPLETED via its own declared hooks.
+    Every fraud category must be ACCOUNTED FOR, not just defined.
+
+    Updated for the goal-graph deadlock fix. "Reachable" now has two honest
+    outcomes and this test accepts either:
+
+      * the goal is selectable by next_priority_goal() and confirmable, or
+      * the goal is explicitly UNSUPPORTED with a stated reason, because no
+        instrument in this engine can confirm it.
+
+    What it still refuses is the third case - the one that caused the stall -
+    where a category is silently unreachable and nothing says so.
     """
+    from sudarshan_core.engines.agentic.goal_tracker import ConfirmationMode
+
     _confirm_launch(tracker)
+    # Stage 2 is device-state confirmed; supply the observation the explorer
+    # would, so the walk is not held at the permission stage.
+    tracker.update_from_permission_state(
+        granted_permissions=["android.permission.READ_SMS"]
+    )
     seen = set()
     for _ in range(len(tracker.goals) * 3):
         goal = tracker.next_priority_goal()
@@ -74,7 +90,7 @@ def test_all_downstream_goals_become_reachable(tracker):
         seen.add(goal.name)
         if goal.frida_hooks:
             tracker.update_from_frida_events(
-                [{"category": (goal.frida_categories or ["x"])[0],
+                [{"category": (goal.completion_categories or ["x"])[0],
                   "data": {"hook": goal.frida_hooks[0]}}]
             )
         else:
@@ -90,6 +106,14 @@ def test_all_downstream_goals_become_reachable(tracker):
         "Dynamic Code Loading",
         "Runtime Reflection",
     ):
+        goal = tracker.get_goal_by_name(critical)
+        assert goal is not None, f"{critical} is not defined at all"
+        if goal.confirmation is ConfirmationMode.UNSUPPORTED:
+            assert goal.unsupported_reason.strip(), (
+                f"{critical} is unreachable and does not say why - that is the "
+                f"silent gap this test exists to catch"
+            )
+            continue
         assert critical in seen, f"{critical} was never reachable"
 
 

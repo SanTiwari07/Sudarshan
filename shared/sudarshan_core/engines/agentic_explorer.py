@@ -52,10 +52,15 @@ from sudarshan_core.engines.agentic.benchmark import BenchmarkCollector
 from sudarshan_core.engines.agentic.goal_tracker import GoalStatus, GoalTracker
 from sudarshan_core.engines.agentic.action_verifier import (
     DeviceStateProbe,
+    FieldSnapshot,
     StateSnapshot,
     VerificationResult,
     verify_action,
+    verify_field_population,
 )
+from sudarshan_core.engines.agentic.adaptive_budget import AdaptiveBudget
+from sudarshan_core.engines.agentic.auth_state import AuthState, AuthStateMachine
+from sudarshan_core.engines.agentic.progress_tracker import ProgressTracker
 from sudarshan_core.engines.agentic.perception import (
     PerceptionPipeline,
     in_investigation_scope,
@@ -400,6 +405,20 @@ class AgenticExplorer:
         # Set when the action just dispatched submits a credential form, so the
         # post-action observation is judged as a login outcome.
         self._submitted_credentials: bool = False
+        # Explicit authentication workflow position. `login_outcome` on the
+        # exploration graph keeps its old four values and is derived from this,
+        # so nothing that already reads it has to change.
+        self.auth: AuthStateMachine = AuthStateMachine()
+        # Shared answer to "is the walk still learning anything?", used by the
+        # adaptive budget and loop recovery instead of each deriving its own.
+        self.progress: ProgressTracker = ProgressTracker(
+            stagnation_limit=ExplorationBudget.FRIDA_SILENCE_THRESHOLD,
+        )
+        # Populated in start(), where the caller's duration is known.
+        self.budget: Optional[AdaptiveBudget] = None
+        # Child applications already explored, so a package that keeps coming
+        # back to the foreground is not explored twice.
+        self._explored_children: set = set()
         # State ids that already contributed an in-app evidence frame.
         self._state_frames_captured: set = set()
         # One view hierarchy per distinct in-app screen, keyed by state id.
@@ -745,6 +764,121 @@ class AgenticExplorer:
             # the screen it was taken on must not be replayed.
             self.planner.invalidate_cache_for_screen(before.screen_hash)
         return result
+
+    @staticmethod
+    def _field_snapshot_from_obs(
+        obs: Any, action: Dict[str, Any],
+    ) -> Optional[FieldSnapshot]:
+        """
+        Find the field we typed into among the nodes of an observation.
+
+        Built from the observation the loop has ALREADY taken rather than from
+        a fresh `uiautomator dump`: a second dump costs ~700ms per typed field
+        and would roughly double the cost of filling a login form, for the same
+        answer.
+
+        Matching is by resource-id, then by the tapped point falling inside a
+        field's bounds. The coordinate route is what works on the WebView forms
+        in the corpus, where no field carries an id.
+        """
+        nodes = [n for n in (getattr(obs, "ui_nodes", None) or [])
+                 if getattr(n, "is_input", False)]
+        if not nodes:
+            return None
+
+        wanted_id = str(action.get("resource_id") or "")
+        match = None
+        if wanted_id:
+            for n in nodes:
+                if (getattr(n, "resource_id", "") or "") == wanted_id:
+                    match = n
+                    break
+
+        if match is None:
+            x, y = action.get("x"), action.get("y")
+            if isinstance(x, int) and isinstance(y, int):
+                for n in nodes:
+                    m = re.match(
+                        r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]",
+                        getattr(n, "bounds", "") or "",
+                    )
+                    if not m:
+                        continue
+                    x1, y1, x2, y2 = map(int, m.groups())
+                    if x1 <= x <= x2 and y1 <= y <= y2:
+                        match = n
+                        break
+
+        if match is None:
+            return None
+
+        text = getattr(match, "text", "") or ""
+        stripped = text.strip()
+        return FieldSnapshot(
+            found=True,
+            text=text,
+            text_read=True,
+            text_length=len(stripped),
+            is_password=bool(getattr(match, "is_password", False)),
+            # uiautomator exposes focus, but the perception parser does not
+            # carry it on UINode. None means "not reported", which the verifier
+            # treats as no evidence either way rather than as unfocused.
+            focused=None,
+            enabled=bool(getattr(match, "enabled", True)),
+            resource_id=getattr(match, "resource_id", "") or "",
+            node_id=getattr(match, "node_id", "") or "",
+            content_desc=getattr(match, "desc", "") or "",
+        )
+
+    def _verify_typed_field(
+        self, action: Dict[str, Any], result: Any, post_obs: Any,
+    ) -> Optional[VerificationResult]:
+        """
+        Verify that a type_text actually populated the field it aimed at.
+
+        The screen-change rule cannot answer this: typing rarely changes the
+        screen hash, so every type_text came back INCONCLUSIVE and a tap that
+        missed the field was indistinguishable from a successful one. The walk
+        then pressed Login on an empty form and read the resulting error as
+        "credentials refused" - a wrong conclusion about the sample, drawn from
+        a mechanical failure of our own.
+
+        Returns None when the action was not a type_text or the field could not
+        be located, which is INCONCLUSIVE rather than a failure.
+        """
+        if action.get("tool") != "type_text":
+            return None
+
+        snapshot = self._field_snapshot_from_obs(post_obs, action)
+        if snapshot is None:
+            return None
+
+        data = getattr(result, "data", None) or {}
+        expected_length = data.get("typed_length")
+
+        verification = verify_field_population(
+            action, snapshot, expected_length=expected_length,
+        )
+        # The value is never in this line - only its length and the field's
+        # identity, both of which are already visible on the screen itself.
+        logger.info("[AgenticExplorer] %s", verification.log_line())
+        self.audit_log.record_system_event(
+            "field_population_verified",
+            f"field_hint={action.get('field_hint', '')} "
+            f"field_type={data.get('field_type', '')} "
+            f"outcome={verification.outcome}",
+        )
+
+        if verification.succeeded:
+            # Only a VERIFIED population advances the authentication state. An
+            # action that did not fill a field did not fill a field, whatever
+            # ADB returned.
+            self.auth.on_field_filled(
+                str(data.get("field_type") or action.get("field_hint") or ""),
+                verified=True,
+                elapsed=self._elapsed_ts(),
+            )
+        return verification
 
     def _action_retry_variants(
         self, action: Dict[str, Any], attempt: int
@@ -1274,10 +1408,22 @@ class AgenticExplorer:
         self._start_time   = time.monotonic()
         self._duration     = duration_seconds
 
+        # The caller's duration is the STARTING budget, not the whole story.
+        # frida_sandbox passes FRIDA_ANALYSIS_DURATION (300s by default) to
+        # every sample alike, which cuts off an app that is mid-login and
+        # idles for four minutes on one that finished at t=40. The deadline now
+        # follows the walk, within a hard maximum that nothing can move.
+        self.budget = AdaptiveBudget(
+            initial_seconds=float(duration_seconds),
+            started_monotonic=self._start_time,
+        )
+
         self.audit_log.record_system_event(
             "exploration_start",
             f"AgenticExplorer started. Budget={ACTION_BUDGET}, "
-            f"Duration={duration_seconds}s, Package={self.package_name}"
+            f"Duration={duration_seconds}s (adaptive max "
+            f"{self.budget.max_seconds:.0f}s, enabled={self.budget.enabled}), "
+            f"Package={self.package_name}"
         )
         self.attack_timeline.append({
             "timestamp": "00:00",
@@ -1340,20 +1486,38 @@ class AgenticExplorer:
             while self._is_running and not self._cancel_task:
                 elapsed = time.monotonic() - self._start_time
 
-                # ── SC4: Time budget ───────────────────────────────────────────
-                if elapsed >= duration_seconds:
+                # ── SC4: Time budget (adaptive, hard-capped) ───────────────────
+                # Two ways to stop: the deadline arrived, or the walk stopped
+                # learning and has nothing left to try. The first is
+                # unconditional - that is what guarantees no run is unbounded.
+                _work_remaining = bool(self.exploration.coverage_metrics().get(
+                    "actionable_elements_unresolved", 0
+                ))
+                if self.budget.should_finish(
+                    stagnant_streak=self.progress.stagnant_streak,
+                    recovery_exhausted=(frida_silence_streak >= FRIDA_SILENCE_THRESHOLD),
+                    work_remaining=_work_remaining,
+                ):
                     _exp_cov = self.exploration.coverage_metrics()
                     logger.info(
                         "[AgenticExplorer] STOP reason=TIME_BUDGET_EXHAUSTED "
-                        "elapsed=%.1fs states=%d actions_taken=%d "
+                        "elapsed=%.1fs deadline=%.0fs extensions=%d finish=%s "
+                        "states=%d actions_taken=%d "
                         "unexplored_actions=%d current_state=%s",
                         elapsed,
+                        self.budget.deadline_seconds,
+                        self.budget.extensions,
+                        self.budget.finish_reason,
                         _exp_cov.get("states_discovered", 0),
                         actions_taken,
                         _exp_cov.get("actionable_elements_unresolved", 0),
                         self.exploration._current_state_id or "none",
                     )
-                    self.audit_log.record_system_event("stop_time_budget", f"elapsed={elapsed:.1f}s")
+                    self.audit_log.record_system_event(
+                        "stop_time_budget",
+                        f"elapsed={elapsed:.1f}s reason={self.budget.finish_reason} "
+                        f"extensions={self.budget.extensions}",
+                    )
                     self._stop_reason = StopReason.TIME_BUDGET_EXHAUSTED
                     break
 
@@ -1447,7 +1611,44 @@ class AgenticExplorer:
                 # second signal permanently unavailable, so every OEM installer
                 # scored one signal and failed the two-signal rule.
                 screen_text = self._screen_text(obs)
-                if not in_investigation_scope(
+                # ── G8: a child application is IN scope ───────────────────────
+                # An APK the sample downloaded and installed is not a foreign
+                # app that the walk wandered into - it is the payload, and it is
+                # usually where the interesting behaviour lives. Treating its
+                # foreground as a departure made the guard navigate straight
+                # back out of the one surface worth looking at. The parent
+                # investigation still owns it: evidence stays attached here and
+                # the original APK context is never replaced.
+                _is_child = self._payloads.is_child_package(foreground_package)
+                if _is_child and foreground_package not in self._explored_children:
+                    self._explored_children.add(foreground_package)
+                    relationship = self._payloads.relationship_for(foreground_package)
+                    self._payloads.mark_child_exploration(
+                        foreground_package,
+                        state="exploring",
+                        launched_at_ms=int(time.time() * 1000),
+                    )
+                    logger.info(
+                        "[AgenticExplorer] CHILD_APP_FOREGROUND parent=%s child=%s "
+                        "trigger=%s - exploring as a surface of this investigation",
+                        self.package_name, foreground_package,
+                        (relationship or {}).get("trigger", "unknown"),
+                    )
+                    self.audit_log.record_system_event(
+                        "child_application_entered",
+                        f"parent={self.package_name} child={foreground_package}",
+                    )
+                    self.attack_timeline.append({
+                        "timestamp": self._elapsed_ts(),
+                        "source":    "System",
+                        "action":    "Child Application Explored",
+                        "details":   (
+                            f"{foreground_package} installed by "
+                            f"{self.package_name}"
+                        ),
+                    })
+
+                if not _is_child and not in_investigation_scope(
                     foreground_package, self.package_name,
                     activity=obs.activity,
                     ui_text=screen_text,
@@ -1687,6 +1888,7 @@ class AgenticExplorer:
                     ],
                 )
 
+
                 # ── DEEP EXPLORATION: update state graph ─────────────────────
                 graph_state = self.exploration.observe(
                     obs,
@@ -1696,6 +1898,24 @@ class AgenticExplorer:
                     elapsed_ts=self._elapsed_ts(),
                 )
                 self._record_permission_from_screen(obs, classification)
+
+                # ── G5: authentication position ───────────────────────────────
+                # Fed from the same observation the investigation controller
+                # sees, so the two cannot describe different screens. The
+                # required-field set comes from the classified inputs on this
+                # screen, which is what makes "partially filled" a fact rather
+                # than a guess about how many boxes a login form usually has.
+                self.auth.on_screen(
+                    screen_type=classification.screen_type,
+                    required_fields={
+                        a.field_type
+                        for a in getattr(graph_state, "actionable_elements", [])
+                        if getattr(a, "is_input", False)
+                        and getattr(a, "field_type", "UNKNOWN") != "UNKNOWN"
+                    },
+                    screen_text=screen_text,
+                    elapsed=self._elapsed_ts(),
+                )
 
                 # ── HOME_LAUNCHER handling ────────────────────────────────────
                 if classification.screen_type == ScreenType.HOME_LAUNCHER:
@@ -2241,8 +2461,23 @@ class AgenticExplorer:
                 # Silence is not an answer: the vault issues a new identity and
                 # the form is offered again, up to MAX_LOGIN_ATTEMPTS. An
                 # explicit "invalid credentials" closes the branch immediately.
+                # ── G9: did the typed text actually reach the field? ──────────
+                # Runs before the login-outcome judgement below, so a submit is
+                # judged against a form we know was filled rather than one we
+                # assumed was.
+                field_verification = self._verify_typed_field(
+                    action, result, post_obs,
+                )
+                if field_verification is not None and field_verification.failed:
+                    # Bounded recovery: re-perceive, refocus and retry happen
+                    # through the existing action ladder by leaving the action
+                    # unresolved. No new loop is introduced here - the retry
+                    # ceiling that already governs every action governs this.
+                    last_action_failed = True
+
                 if self._submitted_credentials:
                     self._submitted_credentials = False
+                    self.auth.on_submit(elapsed=self._elapsed_ts())
                     outcome = self.exploration.note_login_outcome(
                         screen_text=self._screen_text(post_obs),
                         current_state_id=post_state.state_id,
@@ -2250,9 +2485,24 @@ class AgenticExplorer:
                             post_obs.activity != getattr(obs, "activity", "")
                         ),
                     )
+                    # The state machine judges the same evidence, but does not
+                    # accept an activity change as authentication: an error
+                    # screen is a new activity too. That is why `accepted`
+                    # below and AuthState.AUTHENTICATED can legitimately
+                    # disagree, and the stricter one is the one reported.
+                    self.auth.on_submit_result(
+                        rejected=(outcome == "rejected"),
+                        activity_changed=(
+                            post_obs.activity != getattr(obs, "activity", "")
+                        ),
+                        screen_type=post_classification.screen_type,
+                        screen_text=self._screen_text(post_obs),
+                        elapsed=self._elapsed_ts(),
+                    )
                     self.audit_log.record_system_event(
                         "login_outcome",
-                        f"{outcome} attempt={self.exploration.login_attempts}",
+                        f"{outcome} attempt={self.exploration.login_attempts} "
+                        f"auth_state={self.auth.state.value}",
                     )
                     if outcome == "accepted":
                         self._capture_state_frame(
@@ -2357,6 +2607,28 @@ class AgenticExplorer:
                     logger.debug(
                         "[Investigation] Unproductive action (%d): %s",
                         progress.score, "; ".join(progress.reasons) or "no change",
+                    )
+
+                # ── G6/G7: shared progress signal, and the adaptive budget ────
+                # The same verdict feeds loop recovery and the deadline, so the
+                # two can no longer disagree about whether the walk is moving.
+                verdict = self.progress.record(
+                    screen_hash=post_obs.screen_hash,
+                    state_id=post_state.state_id,
+                    activity=post_obs.activity,
+                    package=package_of(post_obs.activity),
+                    actionable_element_ids={
+                        a.action_id for a in post_state.actionable_elements
+                    },
+                    runtime_events=len(frida_events_this_cycle) + len(post_frida),
+                    workflow_stage=self.investigation.state.value,
+                    auth_state=self.auth.state.value,
+                    failed_action=last_action_failed,
+                )
+                if self.budget is not None:
+                    self.budget.note_progress(
+                        meaningful=verdict.meaningful,
+                        detail="; ".join(verdict.novelty[:3]),
                     )
                 last_screen_hash = post_obs.screen_hash
 
@@ -2646,7 +2918,19 @@ class AgenticExplorer:
                 for sid, xml in self.state_ui_hierarchies.items()
             ],
             "login_attempts": self.exploration.login_attempts,
+            # Unchanged key, unchanged four values. The richer AuthState sits
+            # beside it rather than replacing it, so existing report consumers
+            # and frida_sandbox's session key are untouched.
             "login_outcome":  self.exploration.login_outcome,
+            "auth_state":     self.auth.to_dict(),
+            "progress":       self.progress.to_dict(),
+            "time_budget":    self.budget.to_dict() if self.budget else {},
+            "child_applications": [
+                rel for rel in (
+                    self._payloads.relationship_for(pkg)
+                    for pkg in sorted(self._payloads.child_packages())
+                ) if rel
+            ],
             # ── UIExplorer-compatible keys (required by frida_sandbox.py) ──────
             "exploration_graph":   self.exploration_graph,
             "coverage":            self.coverage_metrics,

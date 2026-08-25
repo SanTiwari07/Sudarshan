@@ -42,6 +42,14 @@ from sudarshan_core.sandbox import get_sandbox_provider
 logger = logging.getLogger(__name__)
 
 # ─── Safe synthetic test credentials (analysis-only, not real user data) ─────
+#
+# Static last-resort table for a caller that passes a legacy hint before any
+# vault exists. The AUTHORITATIVE source is credentials.CredentialVault, whose
+# values are regenerated per run; these are only reached when that lookup
+# misses. Every value here is also registered with credentials._ISSUED (see
+# register_static_values below) so the audit log redacts them by the same
+# mechanism as vault-issued values - a value that can be typed must be a value
+# that can be redacted.
 FORM_VALUES: Dict[str, str] = {
     "username": "demo_user",
     "email":    "demo@sudarshan-analysis.test",
@@ -54,6 +62,15 @@ FORM_VALUES: Dict[str, str] = {
     "address":  "1 Security Lab, Cyber District",
     "search":   "search_query",
 }
+
+# Enrol the static fallbacks in the process-wide redaction set at import time,
+# so AuditLog._sanitize_action redacts them through all_secret_values() rather
+# than needing to import this table directly.
+try:
+    from sudarshan_core.engines.agentic.credentials import register_static_values
+    register_static_values(FORM_VALUES)
+except Exception:  # pragma: no cover - redaction must never block startup
+    logger.warning("[ToolExecutor] Could not register static form values for redaction")
 
 # ─── Screen dimensions ────────────────────────────────────────────────────────
 # Module-level defaults, kept for backwards compatibility with callers that
@@ -608,9 +625,41 @@ class ToolExecutor:
         from sudarshan_core.engines.agentic.credentials import get_vault
 
         vault = get_vault(self.package_name)
-        actual_value = vault.values.get(field_hint) or FORM_VALUES.get(
-            field_hint, "test"
-        )
+
+        # When the caller resolved a semantic field type, the value is built to
+        # FIT the field. field_hint alone cannot do this: "password" is the
+        # hint for both a 4-digit MPIN and a 12-character login password, and
+        # the six digits the legacy vault issued for the former were truncated
+        # or rejected, which the walk then read as a refused login.
+        field_type = action.get("field_type") or ""
+        actual_value = ""
+        if field_type and field_type != "UNKNOWN":
+            try:
+                from sudarshan_core.engines.agentic.field_constraints import (
+                    FieldConstraints,
+                )
+                from sudarshan_core.engines.agentic.field_taxonomy import (
+                    coerce_field_type,
+                )
+
+                constraints = FieldConstraints(
+                    field_type=coerce_field_type(field_type),
+                    min_length=action.get("field_min_length"),
+                    max_length=action.get("field_max_length"),
+                    numeric_only=bool(action.get("field_numeric_only")),
+                )
+                actual_value = vault.value_for_field(constraints)
+            except Exception as e:
+                # A generation failure must cost this field, not the run.
+                logger.debug(
+                    "[ToolExecutor] Constraint-aware value failed for %s: %s",
+                    field_type, e,
+                )
+
+        if not actual_value:
+            actual_value = vault.values.get(field_hint) or FORM_VALUES.get(
+                field_hint, "test"
+            )
         safe_text    = actual_value.replace(" ", "%s")
 
         # Tap the field first to focus it
@@ -626,8 +675,22 @@ class ToolExecutor:
             success=ok,
             tool="type_text",
             output=out,
-            # field_hint stored, actual value is NOT
-            data={"field_hint": field_hint},
+            # field_hint stored, actual value is NOT.
+            #
+            # `typed_length` is the LENGTH of what was typed, never the value.
+            # The verifier needs it to tell a field that accepted the whole
+            # value from one that silently truncated it, and a length leaks
+            # nothing usable: it is already implied by the field's own
+            # constraints, which are visible on screen.
+            data={
+                "field_hint": field_hint,
+                "field_type": field_type or "",
+                "typed_length": len(actual_value),
+                "resource_id": action.get("resource_id", ""),
+                "node_id": action.get("node_id", ""),
+                "x": x,
+                "y": y,
+            },
             error=out if not ok else None,
         )
 
@@ -690,11 +753,24 @@ class ToolExecutor:
             )
             return "SKIPPED: no accessibility_service_class set"
 
-        # Build the fully-qualified component name
-        if svc_class.startswith("."):
-            component = f"{self.package_name}{svc_class}"
-        else:
-            component = svc_class
+        # Flatten to a ComponentName ("pkg/.Svc").
+        #
+        # This used to build "pkg" + ".Svc" = "com.pkg.Svc" - a bare CLASS name
+        # with no "pkg/" half. `enabled_accessibility_services` is a
+        # colon-separated list of FLATTENED components and silently ignores
+        # anything else, so the write did nothing and the service was never
+        # enabled. PermissionOrchestrator already fixed this for its own path;
+        # this path kept its own copy of the broken construction, so the same
+        # bug survived here. Reuse the fixed helper rather than a third copy.
+        from sudarshan_core.engines.permission_orchestrator import _flatten_component
+
+        component = _flatten_component(self.package_name, svc_class)
+        if not component:
+            logger.warning(
+                "[ToolExecutor] accessibility service class %r did not flatten "
+                "to a component", svc_class,
+            )
+            return "SKIPPED: service class did not resolve to a component"
 
         logger.info(
             f"[ToolExecutor] Granting accessibility for component: {component}"

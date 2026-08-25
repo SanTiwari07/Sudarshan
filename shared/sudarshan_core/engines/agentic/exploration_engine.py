@@ -199,7 +199,21 @@ class ActionItem:
     #: What this input wants ("username", "password", "otp", ...). Resolved once
     #: at discovery from the field's password flag and its caption, and carried
     #: to the executor as `field_hint`, so the value typed matches the field.
+    #: This stays the LEGACY vocabulary - it is what travels on the wire.
     field_kind: str = ""
+    #: The semantic type behind `field_kind` ("MPIN", "CIF", "CARD_CVV"). The
+    #: legacy string cannot distinguish an MPIN from a login password, and the
+    #: two need values of different shapes, so the specific answer is carried
+    #: alongside rather than re-derived from the degraded one.
+    field_type: str = "UNKNOWN"
+    field_confidence: float = 0.0
+    field_evidence: List[str] = field(default_factory=list)
+    field_source: str = ""
+    #: Length window observed or inferred for this field, so the executor can
+    #: size the value it types. `None` means "not stated".
+    field_min_length: Optional[int] = None
+    field_max_length: Optional[int] = None
+    field_numeric_only: bool = False
     priority: int = 50
     explored: bool = False
     failed: bool = False
@@ -1150,7 +1164,9 @@ class ExplorationGraph:
             "_state_id": self._current_state_id or "",
         }
 
-    def _build_action_inventory(self, ui_nodes: List[Any]) -> List[ActionItem]:
+    def _build_action_inventory(
+        self, ui_nodes: List[Any], screen_type: str = "",
+    ) -> List[ActionItem]:
         """Enumerate all actionable elements from UI nodes."""
         from sudarshan_core.engines.agentic.device_properties import (
             FALLBACK_SCREEN_HEIGHT,
@@ -1174,18 +1190,42 @@ class ExplorationGraph:
             desc = getattr(n, "desc", "") or ""
             is_input = _is_input_node(n)
             field_kind = ""
+            field_classification = None
+            field_constraints = None
             if is_input:
                 from sudarshan_core.engines.agentic.credentials import (
-                    resolve_field_kind,
+                    resolve_field_classification,
                 )
-                field_kind = resolve_field_kind(
+                from sudarshan_core.engines.agentic.field_constraints import (
+                    extract_constraints,
+                )
+                # The full classification, not just the legacy string: the
+                # value typed has to fit the field, and "password" cannot tell
+                # a 4-digit MPIN from a 12-character login password.
+                field_classification = resolve_field_classification(
                     field_label=getattr(n, "field_label", "") or "",
                     resource_id=getattr(n, "resource_id", "") or "",
                     content_desc=desc,
                     class_name=getattr(n, "class_name", "") or "",
                     text=text,
+                    hint=getattr(n, "hint", "") or "",
+                    input_type=getattr(n, "input_type", "") or "",
                     is_password=bool(getattr(n, "is_password", False)),
                     index=input_index,
+                    screen_type=screen_type,
+                )
+                field_kind = field_classification.legacy_kind
+                field_constraints = extract_constraints(
+                    field_type=field_classification.field_type,
+                    field_label=getattr(n, "field_label", "") or "",
+                    hint=getattr(n, "hint", "") or "",
+                    resource_id=getattr(n, "resource_id", "") or "",
+                    content_desc=desc,
+                    class_name=getattr(n, "class_name", "") or "",
+                    text=text,
+                    is_password=bool(getattr(n, "is_password", False)),
+                    max_length=getattr(n, "max_length", None),
+                    input_type=getattr(n, "input_type", "") or "",
                 )
                 input_index += 1
                 # An input's label must name the FIELD, never its contents.
@@ -1266,6 +1306,29 @@ class ExplorationGraph:
                     center_y=cy,
                     is_input=True,
                     field_kind=field_kind,
+                    field_type=(
+                        field_classification.field_type.value
+                        if field_classification else "UNKNOWN"
+                    ),
+                    field_confidence=(
+                        field_classification.confidence if field_classification else 0.0
+                    ),
+                    field_evidence=(
+                        list(field_classification.evidence)
+                        if field_classification else []
+                    ),
+                    field_source=(
+                        field_classification.source if field_classification else ""
+                    ),
+                    field_min_length=(
+                        field_constraints.min_length if field_constraints else None
+                    ),
+                    field_max_length=(
+                        field_constraints.max_length if field_constraints else None
+                    ),
+                    field_numeric_only=(
+                        field_constraints.numeric_only if field_constraints else False
+                    ),
                     semantic_role=SemanticRole.INPUT.value,
                     detection_source=detection_source,
                     confidence=confidence,
@@ -1475,14 +1538,14 @@ class ExplorationGraph:
             self._visit_history.append(existing_id)
             # Merge new actions not yet in inventory
             existing_sigs = {a.signature() for a in state.actionable_elements}
-            for item in self._build_action_inventory(ui_nodes):
+            for item in self._build_action_inventory(ui_nodes, semantic_type):
                 if item.signature() not in existing_sigs:
                     state.actionable_elements.append(item)
                     self._log_action_discovered(state, item)
             return state
 
         state_id = self._next_state_id()
-        actions = self._build_action_inventory(ui_nodes)
+        actions = self._build_action_inventory(ui_nodes, semantic_type)
         scrollable = [a.node_id for a in actions if a.is_scrollable]
 
         # Enforce exploration state budget
@@ -2100,7 +2163,20 @@ class ExplorationGraph:
                 # key, so every field received the same placeholder and no
                 # login could succeed.
                 **(
-                    {"field_hint": action.field_kind}
+                    {
+                        "field_hint": action.field_kind,
+                        # Carried alongside field_hint, never instead of it, so
+                        # the executor can size the value: "password" is the
+                        # same hint for a 4-digit MPIN and a login password,
+                        # and typing six digits into the first is a validation
+                        # error the walk would misread as a refused login.
+                        "field_type": action.field_type,
+                        "field_min_length": action.field_min_length,
+                        "field_max_length": action.field_max_length,
+                        "field_numeric_only": action.field_numeric_only,
+                        "resource_id": action.resource_id,
+                        "node_id": action.node_id,
+                    }
                     if action.action_type == "input" and action.field_kind
                     else {}
                 ),

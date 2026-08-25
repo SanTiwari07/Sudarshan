@@ -44,6 +44,16 @@ LAUNCH_CONFIRMATIONS_REQUIRED: int = 2
 # How many times a FAILED goal may be retried before it is given up on.
 MAX_GOAL_RETRIES: int = 1
 
+# Actions a goal must have received ITSELF before it may be auto-skipped.
+#
+# The caller passes a GLOBAL Frida-silence streak, which keeps climbing while
+# the app is quiet. Once it passes the threshold, every goal selected after
+# that point would otherwise be skipped on its first pass without ever being
+# genuinely tried - trading the old "never skipped" deadlock for a new "skipped
+# on sight" one. A goal must have spent at least this many of its own actions
+# before "we tried and nothing confirming happened" is a true statement.
+MIN_ATTEMPTS_BEFORE_SKIP: int = 2
+
 # Name of the stage-1 goal, referenced by the foreground completion path.
 LAUNCH_GOAL_NAME: str = "Launch Application"
 
@@ -56,6 +66,54 @@ class GoalStatus(str, Enum):
     COMPLETED   = "COMPLETED"     # Evidence collected or goal satisfied
     SKIPPED     = "SKIPPED"       # Evidence proves not applicable; skip safely
     FAILED      = "FAILED"        # Agent tried but could not trigger
+    UNSUPPORTED = "UNSUPPORTED"   # No instrument exists that could confirm this
+
+
+#: Statuses that RESOLVE a goal for dependency purposes.
+#:
+#: FAILED is included, and that inclusion is the fix for a measured deadlock.
+#: Previously only COMPLETED and SKIPPED counted, so a goal the agent genuinely
+#: attempted and could not trigger held every dependent stage PENDING for the
+#: rest of the run. Measured: one ordinary `dangerous_apis` event left stage 2
+#: FAILED and 11 of 15 goals never attempted, while the tracker reported
+#: "ALL GOALS COMPLETED OR SKIPPED".
+#:
+#: "Resolved" is deliberately NOT "satisfied". A dependent unblocked only
+#: because its prerequisite failed records that fact in
+#: ``ran_without_prerequisite`` so the report can say the chain was broken -
+#: see :meth:`GoalTracker._unblock_reason`. Nothing here claims the
+#: precondition held.
+RESOLVED_STATES: frozenset = frozenset({
+    GoalStatus.COMPLETED,
+    GoalStatus.SKIPPED,
+    GoalStatus.FAILED,
+    GoalStatus.UNSUPPORTED,
+})
+
+#: Statuses that mean the goal was actually SATISFIED - the behaviour was
+#: observed. Only COMPLETED. Used for coverage reporting, never for unblocking.
+SATISFIED_STATES: frozenset = frozenset({GoalStatus.COMPLETED})
+
+
+# ─── Confirmation modes ───────────────────────────────────────────────────────
+#
+# How a goal may be confirmed. Every goal MUST declare at least one, and
+# tests/unit/test_goal_hook_contract.py fails the build if one does not: a goal
+# with no confirmation route is unreachable by construction, which is the
+# defect class this enum exists to make impossible.
+
+class ConfirmationMode(str, Enum):
+    #: Confirmed by a named Frida hook firing under an accepted category.
+    FRIDA_HOOK = "FRIDA_HOOK"
+    #: Confirmed by observed device state (foreground window, verified
+    #: permission grant). Used where no hook CAN confirm the goal - stage 1
+    #: precedes every hook, and a permission grant is a property of the
+    #: package manager, not of a call the app makes.
+    DEVICE_STATE = "DEVICE_STATE"
+    #: The current Frida agent emits nothing that honestly demonstrates this
+    #: goal. The goal resolves as UNSUPPORTED and says so, rather than sitting
+    #: PENDING forever while the run reports itself finished.
+    UNSUPPORTED = "UNSUPPORTED"
 
 
 # ─── Goal Definition ──────────────────────────────────────────────────────────
@@ -69,11 +127,37 @@ class FraudGoal:
         name:               Short identifier (used in prompts and logs).
         stage:              Dependency order - lower stages must complete first.
         description:        What the agent should do to trigger this goal.
-        frida_categories:   Frida event categories that signal this goal is active.
-        frida_hooks:        Specific hook names that confirm goal completion.
-        depends_on:         Stage numbers that must be COMPLETED or SKIPPED first.
-        skip_if_missing:    If True, auto-skip when no relevant Frida signals appear.
-        evidence_collected: Frida events observed that relate to this goal.
+        frida_categories:   Frida event categories that signal this goal is ACTIVE.
+                            Activity only - never completion. Every app emits
+                            `network`, and most emit `dangerous_apis`.
+        frida_hooks:        Hook names that CONFIRM completion. A hook only
+                            confirms when it fires under one of
+                            `completion_categories`; see `matches_completion`.
+        completion_categories:
+                            Categories under which `frida_hooks` count as
+                            completion. Defaults to `frida_categories`.
+                            Separate because the agent emits several hook names
+                            under TWO categories - `SharedPreferences.getString`
+                            goes to `banking` for a credential key and to
+                            `app_telemetry` for a session key - and matching on
+                            the name alone completed "Login Flow" on an
+                            ordinary preferences read.
+        depends_on:         Stage numbers that must be RESOLVED first
+                            (see RESOLVED_STATES).
+        skip_if_missing:    If True, auto-skip when no COMPLETION-relevant
+                            evidence appears.
+        confirmation:       How this goal can be confirmed at all.
+        unsupported_reason: Required when confirmation is UNSUPPORTED. States
+                            what instrument is missing, so the gap is a
+                            documented fact rather than a silent stall.
+        evidence_collected: Every event related to this goal, completion or not.
+        completion_evidence:
+                            The subset that could actually confirm it. The skip
+                            predicate reads THIS, not the raw count.
+        ran_without_prerequisite:
+                            Stages this goal depended on that resolved WITHOUT
+                            being satisfied. Non-empty means the goal ran on a
+                            broken chain and the report must say so.
         status:             Current lifecycle status.
         attempts:           How many actions the agent has taken toward this goal.
     """
@@ -82,23 +166,66 @@ class FraudGoal:
     description:      str
     frida_categories: List[str]           = field(default_factory=list)
     frida_hooks:      List[str]           = field(default_factory=list)
+    completion_categories: List[str]      = field(default_factory=list)
     depends_on:       List[int]           = field(default_factory=list)
     skip_if_missing:  bool                = False
+    confirmation:     ConfirmationMode    = ConfirmationMode.FRIDA_HOOK
+    unsupported_reason: str               = ""
     evidence_collected: List[Dict]        = field(default_factory=list)
+    completion_evidence: List[Dict]       = field(default_factory=list)
+    ran_without_prerequisite: List[int]   = field(default_factory=list)
     status:           GoalStatus          = GoalStatus.PENDING
     attempts:         int                 = 0
     retries_used:     int                 = 0
 
-    def is_unblocked(self, completed_stages: Set[int]) -> bool:
-        """Return True if all dependency stages are done (completed or skipped)."""
-        return all(d in completed_stages for d in self.depends_on)
+    def __post_init__(self) -> None:
+        if not self.completion_categories:
+            self.completion_categories = list(self.frida_categories)
+
+    def accepts_completion_category(self, category: str) -> bool:
+        """
+        Whether a hook firing under `category` may complete this goal.
+
+        An empty `completion_categories` accepts any category. That is the
+        permissive case and is only correct for goals whose hooks are emitted
+        under exactly one category anyway; the contract test pins which.
+        """
+        if not self.completion_categories:
+            return True
+        return category in self.completion_categories
+
+    def matches_completion(self, hook: str, category: str) -> bool:
+        """
+        Whether this event confirms the goal.
+
+        BOTH conditions must hold. Name alone is not enough - the agent
+        deliberately routes the same hook to a scored or an unscored category
+        depending on what it saw, and honouring that routing is the difference
+        between "the app read a credential" and "the app read a preference".
+        """
+        if self.confirmation is not ConfirmationMode.FRIDA_HOOK:
+            return False
+        if not hook or not self.frida_hooks:
+            return False
+        if not self.accepts_completion_category(category):
+            return False
+        return any(h in hook for h in self.frida_hooks)
+
+    def is_unblocked(self, resolved_stages: Set[int]) -> bool:
+        """True when every dependency stage has RESOLVED (see RESOLVED_STATES)."""
+        return all(d in resolved_stages for d in self.depends_on)
 
     def to_prompt_context(self) -> str:
         """Compact string representation for inclusion in agent prompts."""
-        evidence_count = len(self.evidence_collected)
+        broken = (
+            f", prerequisite(s) {self.ran_without_prerequisite} unmet"
+            if self.ran_without_prerequisite else ""
+        )
         return (
             f"[Stage {self.stage}] {self.name} - {self.status.value} "
-            f"(evidence: {evidence_count}, attempts: {self.attempts}): {self.description}"
+            f"(evidence: {len(self.evidence_collected)}, "
+            f"confirming: {len(self.completion_evidence)}, "
+            f"attempts: {self.attempts}{broken}): {self.description}"
         )
 
 
@@ -123,6 +250,10 @@ def _build_default_goals() -> List[FraudGoal]:
             ),
             frida_categories=[],
             frida_hooks=[],
+            # Stage 1 precedes every hook - hooks cannot fire before the process
+            # they are attached to is running - so it is confirmed by observing
+            # the foreground window instead. See update_from_foreground().
+            confirmation=ConfirmationMode.DEVICE_STATE,
             depends_on=[],
             skip_if_missing=False,
         ),
@@ -135,7 +266,21 @@ def _build_default_goals() -> List[FraudGoal]:
                 "Tap 'Allow' on any dialog boxes."
             ),
             frida_categories=["dangerous_apis"],
-            frida_hooks=["ContextImpl.checkPermission", "PackageManager.checkPermission"],
+            # No hook. This goal previously declared ContextImpl.checkPermission
+            # and PackageManager.checkPermission; the agent emits NEITHER, so
+            # stage 2 could never complete - and stages 3, 4 and 5 all depend on
+            # it, which is how one event stalled the whole graph.
+            #
+            # The dead names are not replaced by a firing hook, because no hook
+            # would be honest: whether a permission is HELD is a property of the
+            # package manager, not of any call the app makes. A checkPermission
+            # hook would only prove the app ASKED, and every app asks.
+            #
+            # It is confirmed by the same device read the ActionVerifier already
+            # performs - `dumpsys package <pkg>` -> runtime permissions granted.
+            # See update_from_permission_state().
+            frida_hooks=[],
+            confirmation=ConfirmationMode.DEVICE_STATE,
             depends_on=[1],
             skip_if_missing=True,
         ),
@@ -148,10 +293,26 @@ def _build_default_goals() -> List[FraudGoal]:
                 "Use `start_activity` with android.settings.ACCESSIBILITY_SETTINGS."
             ),
             frida_categories=["accessibility"],
+            # Removed: AccessibilityManager.isEnabled and
+            # Settings.Secure.getString/accessibility - neither is emitted, and
+            # neither has an equivalent. Both are CAPABILITY CHECKS in any case:
+            # they would prove the app asked whether it had accessibility, not
+            # that it used it.
+            #
+            # Deliberately NOT substituted with the agent's
+            # AccessibilityManager.sendAccessibilityEvent, which IS emitted but
+            # fires on every UI change in every app - the exact false-completion
+            # this reconciliation exists to avoid (see INCIDENTAL_CATEGORIES in
+            # investigation_controller, which documents a legitimate file
+            # manager tripping it).
+            #
+            # Added instead: performAction and dispatchGesture, both already
+            # emitted, and both evidence of the service ACTING rather than
+            # merely existing.
             frida_hooks=[
                 "AccessibilityService.onAccessibilityEvent",
-                "AccessibilityManager.isEnabled",
-                "Settings.Secure.getString/accessibility",
+                "AccessibilityNodeInfo.performAction",
+                "AccessibilityService.dispatchGesture",
             ],
             depends_on=[1, 2],
             skip_if_missing=False,
@@ -165,11 +326,22 @@ def _build_default_goals() -> List[FraudGoal]:
                 "Use `start_activity` with android.settings.action.MANAGE_OVERLAY_PERMISSION."
             ),
             frida_categories=["overlay"],
+            # Removed: View.setType/TYPE_APPLICATION_OVERLAY and
+            # Settings.canDrawOverlays - neither emitted, no equivalent, and
+            # canDrawOverlays is a capability check rather than an overlay.
+            #
+            # updateViewLayout and removeView ARE emitted and the agent scopes
+            # them correctly (overlay only for a view it saw added as an
+            # overlay, app_telemetry otherwise). They are added here because
+            # completion is now category-gated: under `overlay` they mean a live
+            # overlay was manipulated, and the app_telemetry emission of the
+            # same name can no longer complete this goal.
             frida_hooks=[
                 "WindowManager.addView",
-                "View.setType/TYPE_APPLICATION_OVERLAY",
-                "Settings.canDrawOverlays",
+                "WindowManager.updateViewLayout",
+                "WindowManager.removeView",
             ],
+            completion_categories=["overlay"],
             depends_on=[1, 2],
             skip_if_missing=True,
         ),
@@ -186,17 +358,29 @@ def _build_default_goals() -> List[FraudGoal]:
             # Goal COMPLETION is hook-driven and unaffected; this keeps the
             # IN_PROGRESS transition firing as it did before.
             frida_categories=["banking", "dangerous_apis", "app_telemetry"],
+            # Removed: the four "Activity.onResume/<suffix>" triggers. The agent
+            # emits a bare `Activity.onResume` and has never emitted a suffixed
+            # form, so all four were dead. They are NOT replaced by bare
+            # Activity.onResume: that fires on every screen of every app and
+            # would complete "Login Flow" on the splash screen.
+            #
+            # Also removed: Cipher.doFinal. It IS emitted, so it was not dead -
+            # but it is emitted ONLY to `app_telemetry`, and the agent's own
+            # note beside it says it "fires on ANY encryption ... is not
+            # evidence of banking-credential theft on its own" and is "retained
+            # as unscored context". Completing Login Flow on it was a false
+            # completion; removing it is not a substitution, it is deleting a
+            # trigger that never demonstrated the goal.
+            #
+            # The survivor is category-gated to `banking`, where the agent emits
+            # it only for a credential-shaped preference key ("App read
+            # credential material from SharedPreferences"). The same hook name
+            # under `app_telemetry` is an ordinary session read and can no
+            # longer complete this goal.
             frida_hooks=[
                 "SharedPreferences.getString",
-                "Cipher.doFinal",
-                # Banking trojans often skip login and go straight to a dashboard.
-                # Activity.onResume for any 'home', 'main', 'dashboard', or 'wallet'
-                # activity is a reliable signal that the post-auth state is reached.
-                "Activity.onResume/home",
-                "Activity.onResume/main",
-                "Activity.onResume/dashboard",
-                "Activity.onResume/wallet",
             ],
+            completion_categories=["banking"],
             depends_on=[1, 2],
             # skip_if_missing=True allows auto-skip after MAX_ATTEMPTS_PER_GOAL
             # when the app has no conventional login screen (most banking trojans).
@@ -211,11 +395,21 @@ def _build_default_goals() -> List[FraudGoal]:
                 "Monitor for SmsManager or SMS ContentProvider access."
             ),
             frida_categories=["sms"],
+            # Removed: ContentResolver.query/sms - the agent emits a bare
+            # `ContentResolver.query`, but it fires for sms OR mms OR CONTACTS.
+            # A contacts read does not demonstrate OTP interception, so the bare
+            # name is not an honest substitute for the /sms-scoped trigger.
+            #
+            # Removed: BroadcastReceiver.onReceive/SMS_RECEIVED - the agent has
+            # no BroadcastReceiver hook at all and no equivalent.
+            #
+            # Added: SmsMessage.getMessageBody, already emitted, severity
+            # CRITICAL, described by the agent as "OTP interception confirmed".
+            # This is the exact behaviour the goal is named for.
             frida_hooks=[
                 "SmsManager.sendTextMessage",
                 "SmsManager.sendMultipartTextMessage",
-                "ContentResolver.query/sms",
-                "BroadcastReceiver.onReceive/SMS_RECEIVED",
+                "SmsMessage.getMessageBody",
             ],
             depends_on=[1, 2, 5],
             skip_if_missing=True,
@@ -233,10 +427,12 @@ def _build_default_goals() -> List[FraudGoal]:
             # reconnaissance, not proof of banking targeting. Completion is still
             # hook-driven; this preserves the IN_PROGRESS transition.
             frida_categories=["banking", "device_fingerprint"],
+            # Removed: PackageManager.queryIntentActivities - not emitted, no
+            # equivalent. The two survivors are emitted under
+            # `device_fingerprint` and already cover package enumeration.
             frida_hooks=[
                 "PackageManager.getInstalledPackages",
                 "PackageManager.getInstalledApplications",
-                "PackageManager.queryIntentActivities",
             ],
             depends_on=[1, 5],
             skip_if_missing=True,
@@ -250,12 +446,23 @@ def _build_default_goals() -> List[FraudGoal]:
                 "Monitor for HTTP/HTTPS connections to non-CDN endpoints."
             ),
             frida_categories=["network"],
+            # Substituted, both to the agent's real name for the same event:
+            #   HttpURLConnection.connect -> HttpURLConnection.getInputStream
+            #   OkHttpClient.newCall      -> OkHttp.RealCall.execute / .enqueue
+            # Each names the moment an HTTP request is actually issued, which is
+            # what the dead name meant. These are renames, not widenings.
+            #
+            # completion_categories pins `network`, excluding the `smoke`
+            # emission of URL.openConnection - that one is the agent's own
+            # start-up liveness probe, not the sample reaching a C2.
             frida_hooks=[
                 "URL.openConnection",
-                "HttpURLConnection.connect",
-                "OkHttpClient.newCall",
+                "HttpURLConnection.getInputStream",
+                "OkHttp.RealCall.execute",
+                "OkHttp.RealCall.enqueue",
                 "Socket.connect",
             ],
+            completion_categories=["network"],
             depends_on=[1, 5],
             skip_if_missing=True,
         ),
@@ -268,11 +475,28 @@ def _build_default_goals() -> List[FraudGoal]:
                 "Navigate to 'Device Admin' settings if prompted."
             ),
             frida_categories=["persistence"],
+            # Substituted:
+            #   AlarmManager.setRepeating -> AlarmManager.setExact. Both mean
+            #     "the app scheduled a future wake-up"; the agent describes its
+            #     hook as "scheduled exact alarm for persistence/wakeup".
+            #   PackageInstaller.createSession -> Intent.installPackageRequest.
+            #     Both mean "the app asked Android to install a package"; the
+            #     agent scopes its hook to the package-archive MIME type.
+            #
+            # Removed: DevicePolicyManager.setActiveAdmin - not emitted. The
+            # agent has isAdminActive, but that is a CHECK, not an activation,
+            # and completing a persistence goal on it would claim device-admin
+            # abuse from a query any app may make.
+            #
+            # Added: DevicePolicyManager.lockNow - emitted, CRITICAL, described
+            # by the agent as "RANSOMWARE/EXTORTION BEHAVIOR CONFIRMED". That is
+            # device-admin power being exercised, which is what the dead name
+            # was reaching for.
             frida_hooks=[
-                "DevicePolicyManager.setActiveAdmin",
-                "AlarmManager.setRepeating",
+                "AlarmManager.setExact",
                 "JobScheduler.schedule",
-                "PackageInstaller.createSession",
+                "Intent.installPackageRequest",
+                "DevicePolicyManager.lockNow",
             ],
             depends_on=[1, 3],
             skip_if_missing=True,
@@ -286,13 +510,20 @@ def _build_default_goals() -> List[FraudGoal]:
                 "instantiation with external file paths."
             ),
             frida_categories=["dangerous_apis"],
+            # Removed: Runtime.load - not emitted. No substitute needed: native
+            # library loading is already covered by System.loadLibrary below,
+            # which IS emitted, so the goal loses no reachable behaviour.
+            #
+            # completion_categories pins `dangerous_apis`; System.loadLibrary is
+            # also emitted under `smoke` as a start-up probe, and the agent
+            # loading its own library is not the sample loading code.
             frida_hooks=[
                 "DexClassLoader.<init>",
                 "PathClassLoader.<init>",
                 "InMemoryDexClassLoader.<init>",
-                "Runtime.load",
                 "System.loadLibrary",
             ],
+            completion_categories=["dangerous_apis"],
             depends_on=[1, 5],
             skip_if_missing=True,
         ),
@@ -305,11 +536,29 @@ def _build_default_goals() -> List[FraudGoal]:
                 "Class.forName calls with suspicious class names."
             ),
             frida_categories=["dangerous_apis"],
-            frida_hooks=[
-                "Method.invoke",
-                "Class.forName",
-                "Constructor.newInstance",
-            ],
+            # Method.invoke, Class.forName and Constructor.newInstance are all
+            # dead - the agent has no reflection hooks - and none was replaced.
+            #
+            # Adding them would be worse than leaving them out. The Android
+            # framework itself reflects constantly (resource loading, Parcelable
+            # creators, every androidx initialiser), so a Method.invoke hook
+            # fires thousands of times for a calculator and would complete this
+            # goal for every sample ever run.
+            #
+            # Reflection IS detected statically - apk_analyzer.REFLECTION_APIS
+            # feeds the OB axis of STEI. This goal is the DYNAMIC confirmation,
+            # and the instrument for it does not exist. Saying so is the honest
+            # outcome; sitting PENDING while the run reports itself complete is
+            # not.
+            frida_hooks=[],
+            confirmation=ConfirmationMode.UNSUPPORTED,
+            unsupported_reason=(
+                "The Frida agent emits no reflection hook. Method.invoke / "
+                "Class.forName cannot be hooked usefully - the Android "
+                "framework reflects on every app, so the signal would complete "
+                "for every sample. Reflection is reported from static analysis "
+                "(apk_analyzer.REFLECTION_APIS) instead."
+            ),
             depends_on=[1, 10],
             skip_if_missing=True,
         ),
@@ -322,11 +571,23 @@ def _build_default_goals() -> List[FraudGoal]:
                 "URLs in static analysis findings."
             ),
             frida_categories=["dangerous_apis"],
-            frida_hooks=[
-                "Activity.getIntent",
-                "Uri.parse",
-                "Intent.getData",
-            ],
+            # Activity.getIntent, Uri.parse and Intent.getData are all dead, and
+            # none was replaced for the same reason as stage 11: every Android
+            # app parses URIs and reads its own Intent on every Activity start.
+            # A hook on those would confirm this goal for a calculator.
+            #
+            # Deep-link HANDLING is observable in principle (an Activity started
+            # by a VIEW intent with a custom scheme), but the agent emits no
+            # such event today, and inventing one from Activity.onCreate would
+            # not distinguish a deep link from an ordinary launch.
+            frida_hooks=[],
+            confirmation=ConfirmationMode.UNSUPPORTED,
+            unsupported_reason=(
+                "The Frida agent emits no deep-link event. Uri.parse / "
+                "Intent.getData fire for every app on every launch and cannot "
+                "distinguish a deep link from ordinary navigation. Declared "
+                "intent-filter URIs are reported from the manifest instead."
+            ),
             depends_on=[1],
             skip_if_missing=True,
         ),
@@ -339,10 +600,25 @@ def _build_default_goals() -> List[FraudGoal]:
                 "(BOOT_COMPLETED, SMS_RECEIVED, PACKAGE_REPLACED, etc.)."
             ),
             frida_categories=["persistence", "dangerous_apis"],
-            frida_hooks=[
-                "BroadcastReceiver.onReceive",
-                "IntentFilter.addAction",
-            ],
+            # BroadcastReceiver.onReceive and IntentFilter.addAction are both
+            # dead and neither was replaced. The agent hooks no receiver.
+            #
+            # This one is genuinely ADDABLE - a BroadcastReceiver.onReceive hook
+            # carrying the action string would be a real, scoped signal, unlike
+            # stages 11 and 12. It is left UNSUPPORTED rather than added here
+            # because adding a hook means editing the agent and rebuilding the
+            # 685 KB bundle, which cannot be verified without an emulator, and
+            # shipping an unverified hook is how the original contract broke.
+            # Recorded as future work rather than silently attempted.
+            frida_hooks=[],
+            confirmation=ConfirmationMode.UNSUPPORTED,
+            unsupported_reason=(
+                "The Frida agent hooks no BroadcastReceiver. This IS a "
+                "hookable signal (onReceive carrying the action string) and is "
+                "the best candidate for closing a real gap - see the agent "
+                "hook backlog. Not added blind: it needs an emulator run to "
+                "verify before it can be a completion trigger."
+            ),
             depends_on=[1, 9],
             skip_if_missing=True,
         ),
@@ -355,12 +631,23 @@ def _build_default_goals() -> List[FraudGoal]:
                 "static analysis. Enumerate ContentProvider URIs."
             ),
             frida_categories=["dangerous_apis"],
+            # Removed: ContentProvider.query, ContentProvider.insert and
+            # Service.onStartCommand - none is emitted and none has an
+            # equivalent. (ContentResolver.query exists but is the CALLER side,
+            # scoped to sms/mms/contacts; it does not show a provider of THIS
+            # app being invoked.)
+            #
+            # Activity.onCreate survives, category-gated to `smoke`, which is
+            # the only category it is emitted under. It is a weak trigger - it
+            # fires for any Activity start, not only an externally injected one
+            # - and it is retained rather than strengthened because this goal's
+            # method is ADB intent injection: the explorer knows it launched the
+            # component, so an Activity actually starting is the confirmation
+            # that the injection landed.
             frida_hooks=[
-                "ContentProvider.query",
-                "ContentProvider.insert",
-                "Service.onStartCommand",
                 "Activity.onCreate",
             ],
+            completion_categories=["smoke"],
             depends_on=[1],
             skip_if_missing=True,
         ),
@@ -373,12 +660,23 @@ def _build_default_goals() -> List[FraudGoal]:
                 "hook activity (network, SMS, accessibility events in background)."
             ),
             frida_categories=["persistence", "network", "accessibility"],
+            # Removed: Service.onStartCommand, Service.onCreate,
+            # NotificationManager.notify and WorkManager.enqueue - all four
+            # dead, no Service or WorkManager hooks exist.
+            #
+            # Added: JobScheduler.schedule, which IS emitted and which the agent
+            # describes as "scheduled background JobScheduler job". That is
+            # precisely "the app arranged to run in the background".
+            #
+            # Note this trigger is shared with stage 9 (Persistence). That is
+            # intentional and not double-counting: the goal graph tracks
+            # exploration coverage, not score. Scheduling background work is
+            # honestly evidence for both questions, and neither goal feeds BFCI
+            # or FRS.
             frida_hooks=[
-                "Service.onStartCommand",
-                "Service.onCreate",
-                "NotificationManager.notify",
-                "WorkManager.enqueue",
+                "JobScheduler.schedule",
             ],
+            completion_categories=["persistence"],
             depends_on=[1, 9],
             skip_if_missing=True,
         ),
@@ -407,6 +705,29 @@ class GoalTracker:
         # Consecutive observations of the target package in the foreground.
         # Reset whenever the reading is unavailable or shows another package.
         self._launch_confirmations: int = 0
+        # Goals whose instrument does not exist are resolved once, up front,
+        # rather than left PENDING to block their dependents. Doing it in the
+        # constructor means the gap is visible in the very first status dump.
+        self._resolve_unsupported_goals()
+
+    def _resolve_unsupported_goals(self) -> None:
+        """
+        Settle goals that no instrument can confirm, loudly.
+
+        UNSUPPORTED is a claim about the ENGINE, not about the sample: it says
+        Sudarshan cannot answer this question, which is why it is logged at
+        WARNING and carried into the report by audit_unfulfilled_goals(). It is
+        never reported as an absence of the behaviour.
+        """
+        for goal in self._goals:
+            if goal.confirmation is not ConfirmationMode.UNSUPPORTED:
+                continue
+            goal.status = GoalStatus.UNSUPPORTED
+            logger.warning(
+                "[GoalTracker] '%s' (stage %d) is UNSUPPORTED - %s",
+                goal.name, goal.stage,
+                goal.unsupported_reason or "no confirmation route declared",
+            )
 
     # ── Public read API ────────────────────────────────────────────────────────
 
@@ -420,12 +741,56 @@ class GoalTracker:
     def get_goal_by_name(self, name: str) -> Optional[FraudGoal]:
         return next((g for g in self._goals if g.name == name), None)
 
+    def _resolved_stages(self) -> Set[int]:
+        """
+        Stage numbers that have RESOLVED - see :data:`RESOLVED_STATES`.
+
+        Includes FAILED and UNSUPPORTED, which is the deadlock fix. A goal the
+        agent genuinely attempted and could not trigger, or one no instrument
+        can confirm, must not hold every dependent stage PENDING for the rest
+        of the run.
+        """
+        return {g.stage for g in self._goals if g.status in RESOLVED_STATES}
+
+    def _satisfied_stages(self) -> Set[int]:
+        """Stage numbers actually CONFIRMED. Used for reporting, not unblocking."""
+        return {g.stage for g in self._goals if g.status in SATISFIED_STATES}
+
     def _completed_stages(self) -> Set[int]:
-        """Return set of stage numbers that are COMPLETED or SKIPPED."""
-        return {
-            g.stage for g in self._goals
-            if g.status in (GoalStatus.COMPLETED, GoalStatus.SKIPPED)
-        }
+        """
+        Deprecated alias for :meth:`_resolved_stages`.
+
+        Kept because external callers and tests reference it. The name is now
+        misleading - "completed" no longer describes what unblocks a dependent
+        - so new code should say which of the two it means.
+        """
+        return self._resolved_stages()
+
+    def _mark_broken_chain(self, goal: FraudGoal) -> None:
+        """
+        Record that this goal is running without a satisfied prerequisite.
+
+        Called at selection time, because that is the moment the graph decides
+        to proceed on an unmet precondition. Without this the report could not
+        distinguish "SMS interception found nothing" from "SMS interception ran
+        without ever having been granted permissions", and those are different
+        findings.
+        """
+        satisfied = self._satisfied_stages()
+        unmet = [d for d in goal.depends_on if d not in satisfied]
+        for stage in unmet:
+            if stage in goal.ran_without_prerequisite:
+                continue
+            goal.ran_without_prerequisite.append(stage)
+            dep = self._by_stage.get(stage)
+            logger.warning(
+                "[GoalTracker] '%s' (stage %d) is proceeding WITHOUT its "
+                "prerequisite stage %d ('%s', %s) - results from this stage "
+                "must be read as unconditioned.",
+                goal.name, goal.stage, stage,
+                dep.name if dep else "unknown",
+                dep.status.value if dep else "MISSING",
+            )
 
     def next_priority_goal(self) -> Optional[FraudGoal]:
         """
@@ -435,22 +800,28 @@ class GoalTracker:
           1. IN_PROGRESS goals first (resume interrupted work).
           2. PENDING goals in stage order (lower stage = higher priority).
           3. FAILED goals last (retry once before giving up).
-        Returns None when all goals are COMPLETED, SKIPPED, or permanently FAILED.
+
+        Returns None only when nothing is left that could be progressed.
+        "Unblocked" now means every dependency has RESOLVED, not that every
+        dependency succeeded - a goal selected on a broken chain is marked via
+        _mark_broken_chain() so the report can say the precondition was unmet.
         """
-        completed = self._completed_stages()
+        resolved = self._resolved_stages()
 
         in_progress = [
             g for g in self._goals
-            if g.status == GoalStatus.IN_PROGRESS and g.is_unblocked(completed)
+            if g.status == GoalStatus.IN_PROGRESS and g.is_unblocked(resolved)
         ]
         if in_progress:
+            self._mark_broken_chain(in_progress[0])
             return in_progress[0]
 
         pending = [
             g for g in self._goals
-            if g.status == GoalStatus.PENDING and g.is_unblocked(completed)
+            if g.status == GoalStatus.PENDING and g.is_unblocked(resolved)
         ]
         if pending:
+            self._mark_broken_chain(pending[0])
             return pending[0]
 
         # FAILED goals get exactly one retry before being given up on. Without
@@ -460,7 +831,7 @@ class GoalTracker:
         retryable = [
             g for g in self._goals
             if g.status == GoalStatus.FAILED
-            and g.is_unblocked(completed)
+            and g.is_unblocked(resolved)
             and g.retries_used < MAX_GOAL_RETRIES
         ]
         if retryable:
@@ -496,8 +867,23 @@ class GoalTracker:
         if next_goal:
             lines.append(f">>> CURRENT PRIORITY GOAL: [{next_goal.name}]")
             lines.append(f"    Description: {next_goal.description}")
+            if next_goal.ran_without_prerequisite:
+                lines.append(
+                    f"    NOTE: prerequisite stage(s) "
+                    f"{next_goal.ran_without_prerequisite} were NOT satisfied. "
+                    f"This stage is proceeding on an incomplete chain."
+                )
         else:
-            lines.append(">>> ALL GOALS COMPLETED OR SKIPPED")
+            # Never claim completion the run did not achieve.
+            #
+            # This line previously read ">>> ALL GOALS COMPLETED OR SKIPPED"
+            # whenever next_priority_goal() returned None - which it does when
+            # goals are merely blocked, failed or unsupported. A measured run
+            # printed it into the planner prompt with 11 of 15 goals never
+            # attempted. Stating a false summary to the model is the same
+            # defect class as reporting one to the analyst.
+            lines.append(">>> NO FURTHER GOALS CAN BE PROGRESSED")
+            lines.append(f"    {self.disposition_line()}")
         return "\n".join(lines)
 
     # ── Evidence ingestion (deterministic - no AI involved) ───────────────────
@@ -513,13 +899,24 @@ class GoalTracker:
         """
         changed: List[str] = []
         for event in events:
+            if not isinstance(event, dict):
+                continue
             category = event.get("category", "")
-            hook = event.get("data", {}).get("hook", "")
+            data = event.get("data")
+            hook = (data or {}).get("hook", "") if isinstance(data, dict) else ""
 
             for goal in self._goals:
-                if goal.status in (GoalStatus.COMPLETED, GoalStatus.SKIPPED):
+                # UNSUPPORTED goals are terminal: no event can confirm a goal
+                # whose instrument does not exist, and letting one drift back
+                # into IN_PROGRESS would re-open the stall.
+                if goal.status in (
+                    GoalStatus.COMPLETED, GoalStatus.SKIPPED, GoalStatus.UNSUPPORTED,
+                ):
                     continue
-                # Match by category
+
+                # ── Activity: this goal's subject matter is happening ────────
+                # Category alone. Deliberately weak - `network` fires for every
+                # app - so it only ever moves PENDING -> IN_PROGRESS.
                 if category in goal.frida_categories:
                     goal.evidence_collected.append(event)
                     if goal.status == GoalStatus.PENDING:
@@ -529,14 +926,21 @@ class GoalTracker:
                             f"[GoalTracker] Goal '{goal.name}' → IN_PROGRESS "
                             f"(Frida category: {category})"
                         )
-                # Check specific hook completion
-                if any(h in hook for h in goal.frida_hooks):
+
+                # ── Completion: this goal's specific behaviour was observed ──
+                # Name AND category. The category half is the fix for a false
+                # completion: the agent routes several hook names to a scored
+                # or an unscored category depending on what it saw, and the old
+                # name-only match ignored that, completing "Login Flow" on an
+                # ordinary preferences read.
+                if goal.matches_completion(hook, category):
+                    goal.completion_evidence.append(event)
                     if goal.status != GoalStatus.COMPLETED:
                         goal.status = GoalStatus.COMPLETED
                         changed.append(goal.name)
                         logger.info(
                             f"[GoalTracker] Goal '{goal.name}' → COMPLETED "
-                            f"(hook: {hook})"
+                            f"(hook: {hook} category: {category})"
                         )
         return changed
 
@@ -595,6 +999,7 @@ class GoalTracker:
                     "consecutive_observations": self._launch_confirmations,
                 },
             })
+            goal.completion_evidence.append(goal.evidence_collected[-1])
             changed.append(goal.name)
             logger.info(
                 f"[GoalTracker] '{goal.name}' → COMPLETED "
@@ -602,30 +1007,118 @@ class GoalTracker:
             )
         return changed
 
+    def update_from_permission_state(
+        self,
+        granted_permissions: Any = (),
+        runtime_declared: Any = (),
+    ) -> List[str]:
+        """
+        Deterministic completion path for Stage 2 ("Grant Runtime Permissions").
+
+        Stage 2 has no Frida hook, and deliberately so: whether a permission is
+        HELD is a property of the package manager, not of any call the app
+        makes. The old declaration named ContextImpl.checkPermission, which the
+        agent never emitted - and because stages 3, 4 and 5 all depend on stage
+        2, that one dead contract stalled the entire graph.
+
+        The confirming observation is the same device read the ActionVerifier
+        already performs: ``dumpsys package <pkg>`` -> runtime permissions
+        granted. Pass the verified grant set here.
+
+        ``runtime_declared`` is optional. When supplied and EMPTY it means the
+        manifest requests no runtime permission at all, so there is nothing to
+        grant and the goal is SKIPPED rather than left hanging - a calculator
+        must not sit forever on a stage that cannot apply to it.
+
+        This is observed device state, not LLM output.
+        """
+        changed: List[str] = []
+        goal = self.get_goal(2)
+        if goal is None or goal.status in (
+            GoalStatus.COMPLETED, GoalStatus.SKIPPED, GoalStatus.UNSUPPORTED,
+        ):
+            return changed
+
+        granted = {str(p) for p in (granted_permissions or ()) if p}
+        declared = {str(p) for p in (runtime_declared or ()) if p}
+
+        if not granted:
+            # Nothing granted yet. If we KNOW the manifest asks for no runtime
+            # permission, settle the goal now instead of retrying an impossible
+            # grant; otherwise leave it for a later observation.
+            if runtime_declared is not None and not declared and runtime_declared != ():
+                goal.status = GoalStatus.SKIPPED
+                changed.append(goal.name)
+                logger.info(
+                    "[GoalTracker] '%s' → SKIPPED (manifest declares no "
+                    "runtime permissions - nothing to grant)", goal.name,
+                )
+            return changed
+
+        goal.status = GoalStatus.COMPLETED
+        evidence = {
+            "category": "device_state",
+            "data": {
+                "hook": "runtime_permission_granted_verified",
+                "granted": sorted(granted),
+                "granted_count": len(granted),
+            },
+        }
+        goal.evidence_collected.append(evidence)
+        goal.completion_evidence.append(evidence)
+        changed.append(goal.name)
+        logger.info(
+            "[GoalTracker] '%s' → COMPLETED (%d runtime permission(s) verified "
+            "held on device: %s)",
+            goal.name, len(granted), ", ".join(sorted(granted)[:4]),
+        )
+        return changed
+
     def mark_failed(self, goal_name: str) -> None:
         """Called when the agent exhausts retries on a goal."""
         goal = self.get_goal_by_name(goal_name)
-        if goal and goal.status != GoalStatus.COMPLETED:
+        if goal and goal.status not in (GoalStatus.COMPLETED, GoalStatus.UNSUPPORTED):
             goal.status = GoalStatus.FAILED
             logger.warning(f"[GoalTracker] '{goal_name}' → FAILED (max attempts)")
 
     def auto_skip_if_applicable(self, consecutive_empty_actions: int, threshold: int = 5) -> None:
         """
-        Auto-skip goals flagged with `skip_if_missing=True` if they have
-        received no Frida evidence after `threshold` consecutive empty actions.
+        Skip a `skip_if_missing` goal that has produced no CONFIRMING evidence.
+
+        The predicate reads ``completion_evidence``, not ``evidence_collected``,
+        and that distinction is the fix for a measured deadlock. The old test
+        was ``len(evidence_collected) == 0``, but a category match appends to
+        that list, and stage 2's category is `dangerous_apis` - emitted by 8
+        hook sites. So a single ordinary ``Runtime.exec`` gave stage 2 one piece
+        of category evidence, permanently disqualifying it from being skipped,
+        while its (dead) completion hooks meant it could never complete either.
+        Stages 3, 4 and 5 depend on stage 2, so the whole graph stalled.
+
+        Ordering alone would not have fixed it: the goal legitimately HAS
+        same-category evidence, and forever. What matters is that none of that
+        evidence could ever CONFIRM the goal, and only completion_evidence
+        answers that question.
+
         Called by the agent loop after each iteration.
         """
         next_goal = self.next_priority_goal()
         if next_goal and next_goal.skip_if_missing:
             if (
                 next_goal.status == GoalStatus.IN_PROGRESS
-                and len(next_goal.evidence_collected) == 0
+                and len(next_goal.completion_evidence) == 0
                 and consecutive_empty_actions >= threshold
+                # The goal's OWN budget, not just the global silence streak.
+                # Without this, a long-quiet run skips every subsequent goal on
+                # first sight - see MIN_ATTEMPTS_BEFORE_SKIP.
+                and next_goal.attempts >= MIN_ATTEMPTS_BEFORE_SKIP
             ):
                 next_goal.status = GoalStatus.SKIPPED
                 logger.info(
-                    f"[GoalTracker] '{next_goal.name}' → SKIPPED "
-                    f"(no Frida evidence after {consecutive_empty_actions} actions)"
+                    "[GoalTracker] '%s' → SKIPPED (no confirming evidence after "
+                    "%d of its own actions and %d quiet actions overall; %d "
+                    "same-category event(s) seen but none could complete it)",
+                    next_goal.name, next_goal.attempts, consecutive_empty_actions,
+                    len(next_goal.evidence_collected),
                 )
 
     def record_attempt(self, goal_name: str) -> None:
@@ -655,30 +1148,38 @@ class GoalTracker:
             The run ended - budget, timeout or crash - before the goal came up.
             Says nothing about the sample at all.
 
+        ``unsupported``
+            No instrument in this engine could confirm the goal. A statement
+            about Sudarshan, not about the sample, and never an absence of the
+            behaviour.
+
         Ordered by stage so the earliest unmet goal, which usually unblocks the
         rest, is first.
         """
-        completed = self._completed_stages()
+        resolved = self._resolved_stages()
+        satisfied = self._satisfied_stages()
         audit: List[Dict[str, Any]] = []
 
         for goal in sorted(self._goals, key=lambda g: g.stage):
             if goal.status == GoalStatus.COMPLETED:
                 continue
-            if goal.evidence_collected:
-                # Evidence arrived even though the status never advanced; not a
-                # gap, and reporting it as one would send an analyst chasing a
-                # trigger that already fired.
+            # A goal with CONFIRMING evidence is not a gap. Previously any
+            # same-category event suppressed the audit entry, which hid exactly
+            # the goals that had noise but no confirmation - the stalled ones.
+            if goal.completion_evidence:
                 continue
 
-            unblocked = goal.is_unblocked(completed)
-            if not unblocked:
+            if goal.status == GoalStatus.UNSUPPORTED:
+                reason = "unsupported"
+            elif not goal.is_unblocked(resolved):
                 reason = "blocked"
             elif goal.attempts > 0 or goal.status == GoalStatus.FAILED:
                 reason = "attempted"
             else:
                 reason = "never_attempted"
 
-            blocking_stages = [s for s in goal.depends_on if s not in completed]
+            blocking_stages = [s for s in goal.depends_on if s not in resolved]
+            unsatisfied_deps = [s for s in goal.depends_on if s not in satisfied]
             audit.append(
                 {
                     "goal_name": goal.name,
@@ -688,28 +1189,100 @@ class GoalTracker:
                     "reason": reason,
                     "attempts": goal.attempts,
                     "retries_used": goal.retries_used,
-                    "evidence_count": 0,
+                    # Split so a reader can tell "nothing happened" from
+                    # "things happened but none of them confirmed this".
+                    "evidence_count": len(goal.evidence_collected),
+                    "confirming_evidence_count": 0,
                     "blocked_by_stages": blocking_stages,
                     "blocked_by_goals": [
                         g.name for g in self._goals if g.stage in blocking_stages
                     ],
+                    "unsatisfied_prerequisites": unsatisfied_deps,
+                    "ran_without_prerequisite": list(goal.ran_without_prerequisite),
+                    "confirmation_mode": goal.confirmation.value,
+                    "unsupported_reason": goal.unsupported_reason,
                     "frida_categories": list(goal.frida_categories),
                     "skippable": goal.skip_if_missing,
                 }
             )
         return audit
 
+    def disposition_line(self) -> str:
+        """
+        One self-describing sentence about where the goal graph ended up.
+
+        Exists because "1/15" meant three different things and said none of
+        them. Used in the planner prompt and in the report header.
+        """
+        counts: Dict[str, int] = {}
+        for goal in self._goals:
+            counts[goal.status.value] = counts.get(goal.status.value, 0) + 1
+        parts = [
+            f"{counts[status]} {status.lower()}"
+            for status in (
+                GoalStatus.COMPLETED.value, GoalStatus.SKIPPED.value,
+                GoalStatus.FAILED.value, GoalStatus.UNSUPPORTED.value,
+                GoalStatus.IN_PROGRESS.value, GoalStatus.PENDING.value,
+            )
+            if counts.get(status)
+        ]
+        return f"{len(self._goals)} goals: " + ", ".join(parts)
+
     def coverage_report(self) -> Dict[str, Any]:
-        """Goal-graph coverage for the report's gap-analysis section."""
+        """
+        Goal-graph coverage for the report's gap-analysis section.
+
+        Reports TWO ratios, because one number could not honestly carry the
+        question. The old single `coverage_ratio` counted COMPLETED over all 15
+        goals, so a run that legitimately skipped nine inapplicable stages and
+        confirmed all six that applied scored 0.40 and read as poor coverage -
+        the same number as a run that stalled.
+
+          ``confirmed_ratio``   satisfied / all goals. What was PROVEN.
+          ``assessed_ratio``    resolved / all goals. What was actually
+                                ADJUDICATED - completed, skipped, failed or
+                                unsupported - as opposed to left hanging.
+
+        `coverage_ratio` is retained as an alias of `confirmed_ratio` so
+        existing consumers keep their meaning rather than silently shifting.
+        """
         total = len(self._goals)
         by_status: Dict[str, int] = {}
         for goal in self._goals:
             by_status[goal.status.value] = by_status.get(goal.status.value, 0) + 1
+
         satisfied = by_status.get(GoalStatus.COMPLETED.value, 0)
+        resolved = sum(
+            1 for g in self._goals if g.status in RESOLVED_STATES
+        )
+        unattempted = [
+            g.stage for g in self._goals
+            if g.attempts == 0 and g.status not in RESOLVED_STATES
+        ]
+        broken_chain = [
+            {"stage": g.stage, "goal_name": g.name,
+             "unsatisfied_prerequisites": list(g.ran_without_prerequisite)}
+            for g in self._goals if g.ran_without_prerequisite
+        ]
+        unsupported = [
+            {"stage": g.stage, "goal_name": g.name, "reason": g.unsupported_reason}
+            for g in self._goals if g.status == GoalStatus.UNSUPPORTED
+        ]
+
         return {
             "total_goals": total,
             "satisfied_goals": satisfied,
+            "resolved_goals": resolved,
+            "confirmed_ratio": round(satisfied / total, 4) if total else 0.0,
+            "assessed_ratio": round(resolved / total, 4) if total else 0.0,
+            # Alias, kept so existing readers do not silently change meaning.
             "coverage_ratio": round(satisfied / total, 4) if total else 0.0,
+            "disposition": self.disposition_line(),
             "by_status": by_status,
+            # A non-empty list here means the graph stalled. It is the direct
+            # regression signal for the deadlock this module was fixed for.
+            "unattempted_stages": unattempted,
+            "goals_run_without_prerequisite": broken_chain,
+            "unsupported_goals": unsupported,
             "unfulfilled": self.audit_unfulfilled_goals(),
         }

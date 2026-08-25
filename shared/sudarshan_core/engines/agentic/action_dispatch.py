@@ -115,6 +115,17 @@ class ExecutableAction:
             payload["direction"] = self.extra.get("direction", "down")
         if self.action_type == "TYPE_TEXT":
             payload["field_hint"] = self.extra.get("field_hint", self.target or "text")
+            # The semantic type and its length window ride ALONGSIDE the legacy
+            # field_hint, never instead of it, so an executor that has only
+            # ever read field_hint is unaffected. They are what lets the
+            # executor size the value: field_hint="password" is the same string
+            # for a 4-digit MPIN and a 12-character login password.
+            for key in (
+                "field_type", "field_min_length", "field_max_length",
+                "field_numeric_only", "resource_id", "node_id",
+            ):
+                if key in self.extra and self.extra[key] is not None:
+                    payload[key] = self.extra[key]
         return payload
 
 

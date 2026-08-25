@@ -35,7 +35,7 @@ import zipfile
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +115,18 @@ class SecondaryPayload:
     #: device_path for it would claim an artifact that does not exist there.
     child_artifacts: List[Dict[str, Any]] = field(default_factory=list)
     notes: List[str] = field(default_factory=list)
+    #: What the parent did that produced this payload ("download", "install
+    #: intent", the hook name). Distinct from `source_hook`, which names the
+    #: instrumentation that saw it, where this names the app behaviour.
+    trigger: str = ""
+    #: Exploration state of the installed child, as a surface in its own right.
+    #: "" until the child is actually installed and launchable.
+    exploration_state: str = ""
+    #: Screens attributed to the child, so its coverage can be reported without
+    #: being confused with the parent's.
+    child_states_explored: int = 0
+    child_actions_taken: int = 0
+    launched_at_ms: int = 0
 
     def __post_init__(self) -> None:
         if not self.filename and self.device_path:
@@ -153,6 +165,11 @@ class SecondaryPayload:
             "blocked_by_policy": self.blocked_by_policy,
             "child_artifacts": [dict(c) for c in self.child_artifacts],
             "notes": list(self.notes),
+            "trigger": self.trigger,
+            "exploration_state": self.exploration_state,
+            "child_states_explored": self.child_states_explored,
+            "child_actions_taken": self.child_actions_taken,
+            "launched_at_ms": self.launched_at_ms,
         }
 
 
@@ -423,6 +440,108 @@ class SecondaryPayloadTracker:
                     PayloadStatus.INSTALLED.value,
                     f"Package {package_name} confirmed present on the device",
                 )
+                return payload
+        return None
+
+    # ── child applications as exploration surfaces ───────────────────────────
+    #
+    # An installed child APK is not just an artifact to hash. It is a second
+    # application the sample chose to put on the device, and the interesting
+    # behaviour - the overlay, the accessibility abuse, the SMS interception -
+    # usually lives there rather than in the dropper. The walk therefore has to
+    # be able to treat it as somewhere to go.
+    #
+    # Two rules make that safe, and both exist because the explorer's scope
+    # guard would otherwise fight it:
+    #
+    #   · the parent investigation OWNS the child. Evidence collected inside
+    #     the child stays attached to the parent's investigation, and the
+    #     original APK context is never replaced.
+    #   · a foreground package that is a KNOWN CHILD is in scope. Without this
+    #     the scope guard sees a foreign package, calls it a departure, and
+    #     navigates back - which is exactly the wrong response to the sample
+    #     having just installed its own payload.
+
+    def child_packages(self) -> Set[str]:
+        """Packages installed by the sample that are known children."""
+        return {
+            p.package_name for p in self._by_path.values()
+            if p.package_name and p.install_confirmed
+        }
+
+    def is_child_package(self, package_name: str) -> bool:
+        """Whether this foreground package is a child of the investigation."""
+        if not package_name:
+            return False
+        return package_name in self.child_packages()
+
+    def relationship_for(self, package_name: str) -> Optional[Dict[str, Any]]:
+        """
+        The parent→child relationship record for an installed child.
+
+        Returned rather than logged so the caller can attach it to the
+        investigation's evidence with the parent context intact.
+        """
+        for payload in self._by_path.values():
+            if payload.package_name and payload.package_name == package_name:
+                return {
+                    "parent_package": payload.parent_package or self.parent_package,
+                    "child_package": payload.package_name,
+                    "trigger": payload.trigger or payload.source_hook,
+                    "installation_event": {
+                        "install_requested": payload.install_requested,
+                        "install_confirmed": payload.install_confirmed,
+                        "status": payload.status,
+                        "device_path": payload.device_path,
+                        "url": payload.url,
+                    },
+                    "child_state": payload.exploration_state or "not_explored",
+                    "sha256": payload.sha256,
+                    "relationship": "installed_by",
+                }
+        return None
+
+    def exploration_candidates(self) -> List[SecondaryPayload]:
+        """
+        Installed children that are worth exploring and have not been yet.
+
+        A payload policy refused to preserve is excluded: the run declined to
+        handle that artifact, and launching it anyway would contradict the
+        containment decision already taken.
+        """
+        return [
+            p for p in self._by_path.values()
+            if p.package_name
+            and p.install_confirmed
+            and not p.blocked_by_policy
+            and p.exploration_state in ("", "pending")
+        ]
+
+    def mark_child_exploration(
+        self,
+        package_name: str,
+        *,
+        state: str,
+        states_explored: int = 0,
+        actions_taken: int = 0,
+        launched_at_ms: int = 0,
+    ) -> Optional[SecondaryPayload]:
+        """Record how far exploration of a child application got."""
+        for payload in self._by_path.values():
+            if payload.package_name and payload.package_name == package_name:
+                payload.exploration_state = state
+                if states_explored:
+                    payload.child_states_explored = states_explored
+                if actions_taken:
+                    payload.child_actions_taken = actions_taken
+                if launched_at_ms:
+                    payload.launched_at_ms = launched_at_ms
+                if state == "explored":
+                    payload.promote(
+                        PayloadStatus.ANALYZED.value,
+                        f"Child application {package_name} explored as a "
+                        f"first-class surface of this investigation",
+                    )
                 return payload
         return None
 

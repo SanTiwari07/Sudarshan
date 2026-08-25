@@ -228,6 +228,33 @@ except ImportError:
 # The cost is real: every dynamic run is now ~5 minutes rather than ~90s.
 ANALYSIS_DURATION_SECONDS = int(os.getenv("FRIDA_ANALYSIS_DURATION", "300"))
 
+# ── Adaptive exploration window ───────────────────────────────────────────────
+# ANALYSIS_DURATION_SECONDS above is the STARTING budget, not a fixed one. It is
+# the same number for every sample, and it is wrong in both directions: an app
+# that is mid-login at t=299 is cut off with the interesting part unobserved,
+# and an app that reached a dead end at t=40 keeps the emulator for another four
+# minutes producing nothing.
+#
+# The explorer owns the decision (see agentic.adaptive_budget) and extends its
+# own deadline while it is still learning something. This side of the lifecycle
+# has to allow that: the wait below used to time out at exactly
+# duration_seconds and then force explorer.stop(), so an extension granted by
+# the explorer would have been overruled here and the adaptive budget would have
+# changed nothing.
+#
+# So the wait is bounded by the HARD MAXIMUM rather than the starting budget,
+# and released early by the explorer thread the moment it genuinely finishes.
+# The run is still bounded - by MAX_EXPLORATION_BUDGET_SECONDS, which no amount
+# of progress can move.
+try:
+    from sudarshan_core.engines.agentic.adaptive_budget import (
+        ADAPTIVE_EXPLORATION_ENABLED,
+        MAX_EXPLORATION_BUDGET_SECONDS,
+    )
+except Exception:  # pragma: no cover - keep the sandbox importable
+    ADAPTIVE_EXPLORATION_ENABLED = False
+    MAX_EXPLORATION_BUDGET_SECONDS = ANALYSIS_DURATION_SECONDS
+
 # ── Session lifecycle pacing ──────────────────────────────────────────────────
 # The session is OPEN -> ANALYSE -> CLOSE. Nothing may touch the UI until the
 # app has finished starting: a cold Activity start on an emulator is routinely
@@ -3061,6 +3088,13 @@ class FridaSession:
                         # the window.
                         self._stop_event.set()
                     finally:
+                        # Release the main wait as soon as exploration really
+                        # finishes, however it finished. Without this the wait
+                        # below always runs to its full timeout, so raising
+                        # that timeout to the adaptive maximum would make every
+                        # short run wait for the maximum instead of the walk's
+                        # actual duration.
+                        self._stop_event.set()
                         try:
                             loop.close()
                         except Exception as close_exc:
@@ -3077,7 +3111,18 @@ class FridaSession:
             # not the event loop. What it must NOT be is uninterruptible: use a
             # stop Event so stop() can cut the analysis short, and join the
             # explorer so we return as soon as exploration genuinely finishes.
-            self._stop_event.wait(timeout=duration_seconds)
+            # Bounded by the hard maximum when an adaptive explorer is driving,
+            # and released early by _run_explorer's finally the moment the walk
+            # ends. A run with no explorer (or with adaptation switched off)
+            # keeps exactly the old fixed window.
+            wait_timeout = duration_seconds
+            if explorer_thread is not None and ADAPTIVE_EXPLORATION_ENABLED:
+                wait_timeout = max(duration_seconds, MAX_EXPLORATION_BUDGET_SECONDS)
+                logger.info(
+                    f"[Frida] ANALYSE: adaptive window - starting budget "
+                    f"{duration_seconds}s, hard maximum {wait_timeout}s"
+                )
+            self._stop_event.wait(timeout=wait_timeout)
 
             if explorer_thread is not None and explorer_thread.is_alive():
                 # Ask the explorer to wind down BEFORE waiting on it. Without
@@ -4286,6 +4331,8 @@ def get_sandbox_status() -> Dict[str, Any]:
         "hooks_script_present": hooks_ok,
         "hooks_script_path": str(_HOOKS_SCRIPT),
         "analysis_duration_seconds": ANALYSIS_DURATION_SECONDS,
+        "adaptive_exploration_enabled": ADAPTIVE_EXPLORATION_ENABLED,
+        "max_exploration_budget_seconds": MAX_EXPLORATION_BUDGET_SECONDS,
         "bfci_weights": BFCI_WEIGHTS,
         "message": (
             "Frida sandbox is ready for dynamic analysis."

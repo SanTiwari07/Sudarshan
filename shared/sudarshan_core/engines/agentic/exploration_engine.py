@@ -209,6 +209,10 @@ class ActionItem:
     scroll_direction: str = ""
     scroll_position: int = 0
     semantic_role: str = "UNKNOWN"
+    #: Victim-policy score for this control on the screen it was ranked for.
+    #: Recomputed by every rank_actions() call, because the same label scores
+    #: differently on a permission prompt than in a settings list.
+    victim_score: int = 0
     detection_source: str = "uiautomator"
     confidence: float = 0.99
     bounds: str = ""
@@ -745,6 +749,7 @@ class ActionPrioritizer:
             acceptance_priority_boost,
             is_acceptance_role,
         )
+        from sudarshan_core.engines.agentic.victim_policy import score_ui_node
 
         score = 50
         label_lower = (action.label or "").lower()
@@ -803,6 +808,17 @@ class ActionPrioritizer:
             score -= 20  # deprioritize but don't exclude
         if _is_unlabeled_action(action):
             score -= 35
+
+        # ── Victim policy ────────────────────────────────────────────────────
+        # The scoring above answers "what is worth exploring". This answers
+        # "what would a gullible user tap", which is a different question and
+        # the one that decides whether a multi-stage journey continues. Added,
+        # not substituted: exploration value still ranks the screens where no
+        # control is a consent control.
+        action.victim_score = score_ui_node(
+            action.label, "", action.resource_id, action.class_name, semantic_type,
+        )
+        score += action.victim_score
 
         return max(0, score)
 
@@ -1998,6 +2014,42 @@ class ExplorationGraph:
                 return diverted
             # Nowhere else to go: fall through and keep working this screen
             # rather than stopping with reachable work outstanding.
+
+        # ── Victim filter ────────────────────────────────────────────────────
+        # CANCEL / DENY / CLOSE are held back, not deleted. A victim does not
+        # cancel while any affirmative control is still untried; once they are
+        # all tried (or blocked) the negatives come back, because a screen with
+        # nothing left but Cancel still has to be left somehow, and pressing
+        # back would abandon a boundary prompt the sample is waiting on.
+        from sudarshan_core.engines.agentic.victim_policy import is_victim_rejected
+
+        rejected = [
+            a for a in ranked
+            if is_victim_rejected(a.victim_score) and a.action_type != "scroll"
+        ]
+        if rejected:
+            remaining = [a for a in ranked if a not in rejected]
+            usable = [
+                a for a in remaining
+                if not a.blocked
+                and not a.unreachable
+                and a.execution_attempts < ExplorationBudget.MAX_RETRIES_PER_ACTION
+            ]
+            if usable:
+                logger.info(
+                    "[VSE] state=%s deferring %d declining action(s) (%s) - "
+                    "%d affirmative option(s) still open",
+                    sid, len(rejected),
+                    ", ".join(a.label for a in rejected[:4]),
+                    len(usable),
+                )
+                ranked = remaining + rejected
+            else:
+                logger.info(
+                    "[VSE] state=%s affirmative options exhausted - "
+                    "declining action(s) released",
+                    sid,
+                )
 
         for action in ranked:
             tool = "click_text"

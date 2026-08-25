@@ -855,11 +855,35 @@ class FallbackPlanner:
             return action_dict
 
         # ── Score UI nodes against keyword map (legacy fallback) ─────────────
+        #
+        # Walked in victim order rather than hierarchy order. The keyword map
+        # alone cannot separate "Allow" from "Don't allow" - both contain
+        # "allow" and both score the same priority - so a boundary prompt was
+        # decided by whichever button uiautomator happened to dump first.
+        from sudarshan_core.engines.agentic.victim_policy import (
+            is_victim_rejected,
+            rank_action_candidates,
+        )
+
+        screen_type = ""
+        try:
+            screen_type = classify_screen(
+                obs.activity, obs.ui_nodes, getattr(obs, "ui_xml_raw", "") or "",
+            ).screen_type
+        except Exception:  # noqa: BLE001 - classification is an optimisation here
+            screen_type = ""
+
         best_node = None
         best_score = -1
         destructive_keywords = {"close app", "force stop", "uninstall", "app info", "clear data"}
 
-        for node in obs.ui_nodes:
+        scored_nodes = rank_action_candidates(list(obs.ui_nodes), screen_type)
+        affirmative = [(n, v) for n, v in scored_nodes if not is_victim_rejected(v)]
+        # Declining controls are appended, never dropped: if nothing else on
+        # this screen is actionable, Cancel is still a way forward.
+        ordered = affirmative + [(n, v) for n, v in scored_nodes if is_victim_rejected(v)]
+
+        for node, victim_score in ordered:
             content = (node.text + " " + node.desc).lower().strip()
             if not content or any(dkw in content for dkw in destructive_keywords):
                 continue
@@ -871,8 +895,9 @@ class FallbackPlanner:
                     )
                     if memory.is_escaping_action(tool, candidate_target):
                         continue
-                    if priority > best_score:
-                        best_score = priority
+                    combined = priority + victim_score
+                    if combined > best_score:
+                        best_score = combined
                         best_node  = (node, tool)
 
         if best_node:
@@ -887,7 +912,10 @@ class FallbackPlanner:
                 "y":          node.center_y,
                 "goal":       goal_name,
                 "reasoning":  f"Fallback deterministic match for '{target}' (score={best_score})",
-                "confidence": round(best_score / 100.0, 2),
+                # Clamped: best_score is now a keyword priority PLUS a victim
+                # score and is an open-ended ranking signal, while confidence
+                # is a 0..1 field the action schema validates.
+                "confidence": round(min(1.0, max(0.0, best_score / 200.0)), 2),
                 "_source":    "fallback",
             }
 

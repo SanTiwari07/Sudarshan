@@ -31,6 +31,7 @@ import hashlib
 import logging
 import posixpath
 import re
+import zipfile
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -48,7 +49,21 @@ HOOK_APK_WRITE = "FileOutputStream.apkWrite"
 HOOK_DOWNLOAD_ENQUEUE = "DownloadManager.enqueue"
 HOOK_INSTALL_REQUEST = "Intent.installPackageRequest"
 
-_APK_PATH_RE = re.compile(r"(/[\w./@\-+ ]*?\.apk)", re.IGNORECASE)
+#: Executable payload extensions. A dropper that ships its second stage as a
+#: ZIP of DEX and SO files is not doing anything exotic - it is the ordinary
+#: way to avoid an install prompt - and matching only ".apk" meant those runs
+#: reported no secondary payload at all while the archive sat on disk.
+PAYLOAD_EXTENSIONS: frozenset[str] = frozenset({
+    ".apk", ".zip", ".dex", ".jar", ".so",
+})
+
+_PAYLOAD_PATH_RE = re.compile(
+    r"(/[\w./@\-+ ]*?\.(?:apk|zip|dex|jar|so))", re.IGNORECASE
+)
+
+#: Retained under its old name: it is imported by name elsewhere, and a rename
+#: is not what this change is about.
+_APK_PATH_RE = _PAYLOAD_PATH_RE
 
 
 class PayloadStatus(str, Enum):
@@ -94,6 +109,11 @@ class SecondaryPayload:
     install_requested: bool = False
     install_confirmed: bool = False
     blocked_by_policy: bool = False
+    #: Executable members recovered from this artifact when it is an archive.
+    #: Kept on the parent rather than promoted to payloads of their own: a DEX
+    #: inside a ZIP was never written to the device as a file, and inventing a
+    #: device_path for it would claim an artifact that does not exist there.
+    child_artifacts: List[Dict[str, Any]] = field(default_factory=list)
     notes: List[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -131,17 +151,24 @@ class SecondaryPayload:
             "install_requested": self.install_requested,
             "install_confirmed": self.install_confirmed,
             "blocked_by_policy": self.blocked_by_policy,
+            "child_artifacts": [dict(c) for c in self.child_artifacts],
             "notes": list(self.notes),
         }
 
 
 def extract_apk_path(event: Dict[str, Any]) -> str:
-    """Recover an APK path from an event, or "" when it names none."""
+    """
+    Recover a payload path from an event, or "" when it names none.
+
+    Matches every extension in :data:`PAYLOAD_EXTENSIONS`, not only ``.apk``.
+    The name is unchanged because callers import it by name; what it finds is
+    wider than it once was.
+    """
     for key in ("path", "file_path", "url", "description"):
         value = event.get(key) or (event.get("data") or {}).get(key)
         if not isinstance(value, str):
             continue
-        match = _APK_PATH_RE.search(value)
+        match = _PAYLOAD_PATH_RE.search(value)
         if match:
             return match.group(1)
     return ""
@@ -287,7 +314,7 @@ class SecondaryPayloadTracker:
             payload.notes.append(f"Could not create output directory: {exc}")
             return payload
 
-        local = output_dir / (payload.filename or "secondary.apk")
+        local = output_dir / (payload.filename or "secondary_payload.bin")
         args = ["-s", device_serial] if device_serial else []
         try:
             adb(*args, "pull", payload.device_path, str(local), timeout=60)
@@ -313,7 +340,44 @@ class SecondaryPayloadTracker:
             "[SecondaryPayload] HASHED %s sha256=%s size=%d",
             payload.filename, payload.sha256, payload.size_bytes,
         )
+        self.unpack(payload, output_dir)
         self.identify(payload)
+        return payload
+
+    def unpack(self, payload: SecondaryPayload, output_dir: Path) -> SecondaryPayload:
+        """
+        Catalogue the executable code inside a preserved archive.
+
+        Reads only. The child artifacts are recorded against the parent's hash
+        so the chain "app wrote un2vis.zip, which contained classes.dex" can be
+        stated as one fact rather than two unconnected ones. A non-archive is
+        left alone, and a failure to unpack leaves the payload exactly where it
+        was on the ladder - nothing here promotes anything.
+        """
+        if not payload.local_path:
+            return payload
+        local = Path(payload.local_path)
+        # An APK is a ZIP too, and unpacking every preserved APK would copy its
+        # whole classes*.dex and lib/ tree onto disk for no new claim - APKs go
+        # through identify() instead. Archives are the case where the executable
+        # code is otherwise invisible.
+        if local.suffix.lower() == ".apk":
+            return payload
+        if not zipfile.is_zipfile(local):
+            return payload
+
+        children = extract_and_catalog_archive(
+            local,
+            output_dir / f"{local.stem}_unpacked",
+            parent_sha256=payload.sha256,
+        )
+        if not children:
+            return payload
+        payload.child_artifacts = children
+        payload.notes.append(
+            f"Archive contained {len(children)} executable artifact(s): "
+            + ", ".join(sorted({c["type"] for c in children}))
+        )
         return payload
 
     def _device_file_size(
@@ -379,8 +443,134 @@ class SecondaryPayloadTracker:
             "install_requested": sum(1 for p in payloads if p.install_requested),
             "install_confirmed": sum(1 for p in payloads if p.install_confirmed),
             "blocked": sum(1 for p in payloads if p.blocked_by_policy),
+            "archives_unpacked": sum(1 for p in payloads if p.child_artifacts),
+            "child_artifacts": sum(len(p.child_artifacts) for p in payloads),
             "dropped_over_budget": self.dropped_over_budget,
         }
+
+
+def extract_and_catalog_archive(
+    archive_path: Path,
+    output_dir: Path,
+    parent_sha256: str = "",
+    max_members: int = 64,
+    max_total_bytes: int = MAX_PAYLOAD_BYTES,
+) -> List[Dict[str, Any]]:
+    """
+    Unpack a downloaded archive and catalogue the executable code inside it.
+
+    Extracts only members with an executable extension - a ZIP of a thousand
+    PNGs is not the finding - and records SHA-256 and declared size for each,
+    linked to `parent_sha256` so the report can show provenance rather than a
+    flat list of hashes.
+
+    Three things the sample controls are bounded here, because it authored the
+    archive and every one of them is a way to attack the analyst:
+
+      * member paths, which may contain ``../`` or an absolute root and would
+        otherwise write outside `output_dir` (Zip Slip);
+      * member count, capped at `max_members`;
+      * uncompressed size, capped in aggregate at `max_total_bytes`, which is
+        what stops a zip bomb.
+
+    Never raises on a malformed archive: an unreadable archive is a finding,
+    not a crash. Returns the catalogue, which is empty when nothing executable
+    was recovered.
+    """
+    discovered: List[Dict[str, Any]] = []
+    if not archive_path.is_file() or not zipfile.is_zipfile(archive_path):
+        return discovered
+
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        logger.warning(
+            "[SecondaryPayload] could not create %s for archive %s: %s",
+            output_dir, archive_path.name, exc,
+        )
+        return discovered
+
+    resolved_out = output_dir.resolve()
+    extracted_bytes = 0
+
+    try:
+        with zipfile.ZipFile(archive_path, "r") as zf:
+            for member in zf.infolist():
+                if len(discovered) >= max_members:
+                    logger.warning(
+                        "[SecondaryPayload] archive %s: member cap %d reached",
+                        archive_path.name, max_members,
+                    )
+                    break
+                if member.is_dir():
+                    continue
+
+                ext = Path(member.filename).suffix.lower()
+                if ext not in PAYLOAD_EXTENSIONS:
+                    continue
+
+                # Zip Slip: resolve the destination and require it to stay
+                # inside output_dir. Checked BEFORE extraction, because
+                # ZipFile.extract writes the file and then there is nothing
+                # left to prevent.
+                try:
+                    target_file = (output_dir / member.filename).resolve()
+                except (OSError, ValueError):
+                    logger.warning(
+                        "[Security] Unusable member path in archive %s: %s",
+                        archive_path.name, member.filename,
+                    )
+                    continue
+                if resolved_out not in target_file.parents and target_file != resolved_out:
+                    logger.warning(
+                        "[Security] Path traversal attempt in archive: %s",
+                        member.filename,
+                    )
+                    continue
+
+                if extracted_bytes + member.file_size > max_total_bytes:
+                    logger.warning(
+                        "[SecondaryPayload] archive %s: %s would exceed the "
+                        "%d-byte extraction budget; not extracted",
+                        archive_path.name, member.filename, max_total_bytes,
+                    )
+                    continue
+
+                try:
+                    extracted = zf.extract(member, path=output_dir)
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(
+                        "[SecondaryPayload] could not extract %s from %s: %s",
+                        member.filename, archive_path.name, exc,
+                    )
+                    continue
+
+                extracted_path = Path(extracted)
+                extracted_bytes += extracted_path.stat().st_size
+                discovered.append({
+                    "filename": member.filename,
+                    "local_path": str(extracted_path),
+                    "sha256": sha256_file(extracted_path),
+                    "size_bytes": member.file_size,
+                    "type": ext.lstrip(".").upper(),
+                    "parent_sha256": parent_sha256,
+                    "parent_archive": archive_path.name,
+                })
+    except (zipfile.BadZipFile, OSError) as exc:
+        logger.warning(
+            "[SecondaryPayload] archive %s could not be read: %s",
+            archive_path.name, exc,
+        )
+        return discovered
+
+    if discovered:
+        logger.info(
+            "[SecondaryPayload] ARCHIVE_UNPACKED %s -> %d executable child "
+            "artifact(s): %s",
+            archive_path.name, len(discovered),
+            ", ".join(c["filename"] for c in discovered[:6]),
+        )
+    return discovered
 
 
 def sha256_file(path: Path, chunk_size: int = 1 << 20) -> str:

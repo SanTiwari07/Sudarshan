@@ -48,7 +48,23 @@ _SAFE_INTERACTIVE_TYPES: frozenset = frozenset({
     ScreenType.UPDATE_PROMPT,
     ScreenType.DOWNLOAD_PROMPT,
     ScreenType.SETTINGS,
+    # A bare consent dialog raised over an external surface is still a decision
+    # the sample forced. Without this the "Do you want to install this app?"
+    # sheet that classify_screen() reads as DIALOG (short text, OK/Cancel)
+    # collapsed to EXTERNAL_APP and the journey stopped one tap short.
+    ScreenType.DIALOG,
 })
+
+#: Safe-boundary role → the screen type it implies, used only when the text
+#: classifier could not name the screen itself. An installer showing nothing
+#: but an unreadable progress spinner is still an installer.
+_ROLE_TO_SCREEN_TYPE: dict = {
+    "VPN_DIALOG": ScreenType.VPN_REQUEST,
+    "VPN_SETTINGS": ScreenType.VPN_REQUEST,
+    "SYSTEM_INSTALLER": ScreenType.PACKAGE_INSTALLER,
+    "SYSTEM_PERMISSION": ScreenType.SYSTEM_PERMISSION,
+    "ACCESSIBILITY": ScreenType.ACCESSIBILITY_DIALOG,
+}
 
 
 @dataclass
@@ -139,6 +155,8 @@ def classify_screen(
     apk_keywords = [
         "package installer", "unknown sources", "install application",
         "install security app", "install this app",
+        "do you want to install", "staging app", "allow from this source",
+        "install unknown apps", "install anyway", "harmful app blocked",
     ]
     if (
         "packageinstaller" in activity_lower
@@ -148,7 +166,13 @@ def classify_screen(
         return ScreenClassification(ScreenType.EXTERNAL_APK, "HIGH", matched_rules)
 
     # 8. VPN_REQUEST
-    vpn_keywords = ["enable vpn", "install vpn", "vpn required", "configure vpn", "vpn connection"]
+    vpn_keywords = [
+        "vpn", "vpn connection", "connection request",
+        "wants to set up a vpn", "allow connection",
+        "monitoring network traffic", "monitor network traffic",
+        "configure vpn", "set up a vpn", "enable vpn", "install vpn",
+        "vpn required",
+    ]
     if any(k in combined_text for k in vpn_keywords) or "vpn" in activity_lower:
         matched_rules.append("vpn_request_match")
         return ScreenClassification(ScreenType.VPN_REQUEST, "HIGH", matched_rules)
@@ -259,6 +283,29 @@ def classify_screen_with_ownership(
         ScreenOwnership.SYSTEM_PERMISSION,
     ):
         base = classify_screen(activity_name, ui_nodes, raw_xml, package_name)
+        if base.screen_type in _SAFE_INTERACTIVE_TYPES:
+            return ScreenClassification(
+                base.screen_type, base.confidence,
+                ["system_boundary", f"fg={fg}"] + base.matched_rules,
+                ownership=ownership.value,
+            )
+        # The text classifier could not name this screen (an installer mid
+        # progress bar, a consent dialog whose body failed to dump). Ownership
+        # already established WHICH system surface it is, and dropping that to
+        # UNKNOWN loses the one fact we are certain of - the ExplorationGraph
+        # then reads a non-interactive type and stops building actions for a
+        # screen the victim still has to answer.
+        from sudarshan_core.engines.agentic.screenshot_policy import classify_safe_boundary
+
+        role = classify_safe_boundary(fg, activity_name, "")
+        implied = _ROLE_TO_SCREEN_TYPE.get(role.value, "")
+        if implied:
+            return ScreenClassification(
+                implied, "MED",
+                ["system_boundary_role_inferred", f"fg={fg}", f"role={role.value}"]
+                + base.matched_rules,
+                ownership=ownership.value,
+            )
         return ScreenClassification(
             base.screen_type, base.confidence,
             ["system_boundary", f"fg={fg}"] + base.matched_rules,

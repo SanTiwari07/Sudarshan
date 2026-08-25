@@ -283,6 +283,16 @@ INVESTIGATION_SCOPE_PACKAGES: FrozenSet[str] = frozenset({
     "com.android.packageinstaller",
     "com.google.android.packageinstaller",
     "com.android.systemui",
+    # The VpnService consent dialog. Reaching it means the sample called
+    # VpnService.prepare(); answering it is the only way to observe what the
+    # sample does with the tunnel, and bouncing off it made the VPN half of a
+    # multi-stage journey unobservable.
+    "com.android.vpndialogs",
+    "com.google.android.vpndialogs",
+    # Single-purpose OEM installers.
+    "com.samsung.android.packageinstaller",
+    "com.miui.packageinstaller",
+    "com.transsion.installer",
 })
 
 #: Full system applications that HOST boundary prompts among ordinary screens.
@@ -296,6 +306,13 @@ INVESTIGATION_SCOPE_PACKAGES: FrozenSet[str] = frozenset({
 #: denying the rest of the Settings app.
 BOUNDARY_HOST_PACKAGES: FrozenSet[str] = frozenset({
     "com.android.settings",
+    # OEM security centres / app stores that raise install and permission
+    # prompts among hundreds of ordinary screens. Same rule as Settings: in
+    # scope while a prompt is up, out of scope otherwise.
+    "com.miui.securitycenter",
+    "com.coloros.safecenter",
+    "com.vivo.safecenter",
+    "com.oppo.market",
 })
 
 #: Screen types that make a boundary-host package in scope.

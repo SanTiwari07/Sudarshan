@@ -59,6 +59,13 @@ from sudarshan_core.engines.agentic.action_verifier import (
     verify_field_population,
 )
 from sudarshan_core.engines.agentic.adaptive_budget import AdaptiveBudget
+from sudarshan_core.engines.agentic.field_classifier import (
+    ClassificationSource,
+    classify_field,
+    classify_field_with_gemini,
+    needs_escalation,
+)
+from sudarshan_core.engines.agentic.field_taxonomy import FieldType
 from sudarshan_core.engines.agentic.auth_state import AuthState, AuthStateMachine
 from sudarshan_core.engines.agentic.progress_tracker import ProgressTracker
 from sudarshan_core.engines.agentic.perception import (
@@ -764,6 +771,94 @@ class AgenticExplorer:
             # the screen it was taken on must not be replayed.
             self.planner.invalidate_cache_for_screen(before.screen_hash)
         return result
+
+    async def _resolve_ambiguous_fields(
+        self, obs: Any, screen_type: str = "",
+    ) -> Dict[str, Any]:
+        """
+        Name the input fields the local patterns could not.
+
+        A registration / KYC / personal-details form rendered in a WebView
+        gives its fields no caption, no resource-id and no content-desc, so
+        every one of them falls through to the positional guess: the first is
+        assumed to be the identifier and the rest resolve to UNKNOWN. They then
+        all receive the same generic string, no email or phone validator
+        accepts it, the form can never be submitted, and the walk eventually
+        abandons a screen it never had a chance on.
+
+        The deterministic pass still leads and still decides the ordinary
+        captioned field. Only fields it could not name, on a screen that looks
+        like a form, cost a model round trip.
+
+        Returns {node_id: FieldClassification}, empty when nothing needed
+        resolving. Never raises: an unavailable model degrades the
+        classification, it does not stop the walk.
+        """
+        inputs = [n for n in (getattr(obs, "ui_nodes", None) or [])
+                  if getattr(n, "is_input", False)]
+        if not inputs:
+            return {}
+
+        deterministic: List[tuple] = []
+        for index, node in enumerate(inputs):
+            deterministic.append((node, classify_field(
+                field_label=getattr(node, "field_label", "") or "",
+                resource_id=getattr(node, "resource_id", "") or "",
+                content_desc=getattr(node, "desc", "") or "",
+                class_name=getattr(node, "class_name", "") or "",
+                text=getattr(node, "text", "") or "",
+                hint=getattr(node, "hint", "") or "",
+                input_type=getattr(node, "input_type", "") or "",
+                is_password=bool(getattr(node, "is_password", False)),
+                index=index,
+                screen_type=screen_type,
+            )))
+
+        is_webview = bool(getattr(obs, "is_webview", False))
+        pending = [
+            (node, c) for node, c in deterministic
+            if needs_escalation(
+                c, screen_type=screen_type, is_webview=is_webview,
+            )
+        ]
+        if not pending:
+            return {}
+
+        unnamed = sum(
+            1 for _, c in deterministic
+            if c.source == ClassificationSource.POSITIONAL
+        )
+        logger.info(
+            "[AgenticExplorer] FIELD_ESCALATION screen_type=%s inputs=%d "
+            "unnamed=%d escalating=%d",
+            screen_type or "UNKNOWN", len(inputs), unnamed, len(pending),
+        )
+
+        resolved: Dict[str, Any] = {}
+        for node, det in pending:
+            try:
+                answer = await classify_field_with_gemini(
+                    det,
+                    field_label=getattr(node, "field_label", "") or "",
+                    hint=getattr(node, "hint", "") or "",
+                    resource_id=getattr(node, "resource_id", "") or "",
+                    content_desc=getattr(node, "desc", "") or "",
+                    class_name=getattr(node, "class_name", "") or "",
+                    input_type=getattr(node, "input_type", "") or "",
+                    is_password=bool(getattr(node, "is_password", False)),
+                    screen_type=screen_type,
+                    package=self.package_name,
+                    activity=getattr(obs, "activity", "") or "",
+                    ocr_text=self._screen_text(obs)[:400],
+                )
+            except Exception as exc:
+                logger.debug(
+                    "[AgenticExplorer] Field escalation failed: %s", exc,
+                )
+                continue
+            if answer is not None and answer.field_type is not FieldType.UNKNOWN:
+                resolved[getattr(node, "node_id", "")] = answer
+        return resolved
 
     @staticmethod
     def _field_snapshot_from_obs(
@@ -1890,12 +1985,21 @@ class AgenticExplorer:
 
 
                 # ── DEEP EXPLORATION: update state graph ─────────────────────
+                # Name any input the local patterns could not, before the
+                # inventory is built from them. Done here because this is the
+                # async side: the graph's build is synchronous and cannot
+                # await a model call.
+                field_overrides = await self._resolve_ambiguous_fields(
+                    obs, screen_type=classification.screen_type,
+                )
+
                 graph_state = self.exploration.observe(
                     obs,
                     semantic_type=classification.screen_type,
                     foreground_package=foreground_package,
                     ownership=classification.ownership,
                     elapsed_ts=self._elapsed_ts(),
+                    field_overrides=field_overrides,
                 )
                 self._record_permission_from_screen(obs, classification)
 

@@ -1180,7 +1180,10 @@ class ExplorationGraph:
         }
 
     def _build_action_inventory(
-        self, ui_nodes: List[Any], screen_type: str = "",
+        self,
+        ui_nodes: List[Any],
+        screen_type: str = "",
+        field_overrides: Optional[Dict[str, Any]] = None,
     ) -> List[ActionItem]:
         """Enumerate all actionable elements from UI nodes."""
         from sudarshan_core.engines.agentic.device_properties import (
@@ -1217,18 +1220,28 @@ class ExplorationGraph:
                 # The full classification, not just the legacy string: the
                 # value typed has to fit the field, and "password" cannot tell
                 # a 4-digit MPIN from a 12-character login password.
-                field_classification = resolve_field_classification(
-                    field_label=getattr(n, "field_label", "") or "",
-                    resource_id=getattr(n, "resource_id", "") or "",
-                    content_desc=desc,
-                    class_name=getattr(n, "class_name", "") or "",
-                    text=text,
-                    hint=getattr(n, "hint", "") or "",
-                    input_type=getattr(n, "input_type", "") or "",
-                    is_password=bool(getattr(n, "is_password", False)),
-                    index=input_index,
-                    screen_type=screen_type,
+                # An answer already resolved for this node wins. The caller is
+                # async and can consult the model for fields the local patterns
+                # could not name; this build is synchronous and cannot, which
+                # is why the resolution arrives as data rather than being done
+                # here. Nothing is resolved for the ordinary captioned field,
+                # so the deterministic path below stays the normal one.
+                field_classification = (field_overrides or {}).get(
+                    getattr(n, "node_id", "")
                 )
+                if field_classification is None:
+                    field_classification = resolve_field_classification(
+                        field_label=getattr(n, "field_label", "") or "",
+                        resource_id=getattr(n, "resource_id", "") or "",
+                        content_desc=desc,
+                        class_name=getattr(n, "class_name", "") or "",
+                        text=text,
+                        hint=getattr(n, "hint", "") or "",
+                        input_type=getattr(n, "input_type", "") or "",
+                        is_password=bool(getattr(n, "is_password", False)),
+                        index=input_index,
+                        screen_type=screen_type,
+                    )
                 field_kind = field_classification.legacy_kind
                 field_constraints = extract_constraints(
                     field_type=field_classification.field_type,
@@ -1416,8 +1429,17 @@ class ExplorationGraph:
         entry_action: str = "",
         elapsed_ts: str = "00:00",
         ownership: str = "",
+        field_overrides: Optional[Dict[str, Any]] = None,
     ) -> ExplorationState:
-        """Incorporate an observation into the graph. Returns the state node."""
+        """
+        Incorporate an observation into the graph. Returns the state node.
+
+        `field_overrides` maps a UINode's `node_id` to an already-resolved
+        FieldClassification, for inputs whose type the caller worked out by
+        means this synchronous path cannot use - currently the model
+        escalation for unlabelled WebView forms. Omitting it leaves the
+        deterministic classification in charge, which is the normal case.
+        """
         from sudarshan_core.engines.agentic.screen_classifier import (
             ScreenType,
             is_explorable_screen_type,
@@ -1553,14 +1575,18 @@ class ExplorationGraph:
             self._visit_history.append(existing_id)
             # Merge new actions not yet in inventory
             existing_sigs = {a.signature() for a in state.actionable_elements}
-            for item in self._build_action_inventory(ui_nodes, semantic_type):
+            for item in self._build_action_inventory(
+                ui_nodes, semantic_type, field_overrides,
+            ):
                 if item.signature() not in existing_sigs:
                     state.actionable_elements.append(item)
                     self._log_action_discovered(state, item)
             return state
 
         state_id = self._next_state_id()
-        actions = self._build_action_inventory(ui_nodes, semantic_type)
+        actions = self._build_action_inventory(
+            ui_nodes, semantic_type, field_overrides,
+        )
         scrollable = [a.node_id for a in actions if a.is_scrollable]
 
         # Enforce exploration state budget

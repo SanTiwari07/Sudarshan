@@ -279,3 +279,209 @@ def test_the_retry_budget_is_not_pinned_by_execution_attempts():
     _record(g, st, item, input_verified=False)
     _record(g, st, item, input_verified=False)
     assert item.fill_attempts == 2
+
+
+# ─── F3 + F4: unlabeled fields must not all become the same junk ─────────────
+
+from sudarshan_core.engines.agentic.field_classifier import (  # noqa: E402
+    ClassificationSource,
+    FieldClassification,
+    classify_field,
+    needs_escalation,
+)
+from sudarshan_core.engines.agentic.field_taxonomy import FieldType  # noqa: E402
+
+#: Three EditTexts with no caption, no resource-id and no content-desc - the
+#: shape a WebView registration form actually has.
+_UNLABELLED_FORM_XML = """<?xml version='1.0' encoding='UTF-8'?>
+<hierarchy rotation="0">
+ <node class="android.webkit.WebView" text="app" clickable="true"
+       bounds="[0,0][1080,2200]">
+  <node class="android.widget.EditText" text="" password="false"
+        enabled="true" bounds="[60,300][1020,400]" />
+  <node class="android.widget.EditText" text="" password="false"
+        enabled="true" bounds="[60,450][1020,550]" />
+  <node class="android.widget.EditText" text="" password="false"
+        enabled="true" bounds="[60,600][1020,700]" />
+  <node class="android.widget.Button" text="SUBMIT" clickable="true"
+        enabled="true" bounds="[60,800][1020,900]" />
+ </node>
+</hierarchy>"""
+
+
+def test_unlabelled_fields_are_indistinguishable_to_the_deterministic_pass():
+    """
+    Establishes the premise. Not a bug in itself - there genuinely is no local
+    signal - which is exactly why the escalation path has to exist.
+    """
+    obs = _Obs(_UNLABELLED_FORM_XML)
+    inputs = [n for n in obs.ui_nodes if n.is_input]
+    assert len(inputs) == 3
+    types = [
+        classify_field(
+            field_label=n.field_label, resource_id=n.resource_id,
+            content_desc=n.desc, class_name=n.class_name, text=n.text,
+            is_password=n.is_password, index=i,
+        ).field_type
+        for i, n in enumerate(inputs)
+    ]
+    assert types[1] is FieldType.UNKNOWN and types[2] is FieldType.UNKNOWN
+
+
+def test_a_positional_guess_escalates_from_any_screen_type():
+    """
+    The escalation POLICY was already right for a details form, and no
+    screen-type rule is needed.
+
+    A first-input guess scores 0.35 and the rest resolve to UNKNOWN at 0.10 -
+    under the confidence threshold, and UNKNOWN is caught outright - so every
+    unreadable field already qualifies wherever it appears. This is pinned
+    because a rule keyed on UNKNOWN/WEBVIEW screens was added here and then
+    removed as provably dead; it should not come back.
+    """
+    first = classify_field(index=0)
+    rest = classify_field(index=1)
+    assert first.source == ClassificationSource.POSITIONAL
+    assert first.confidence < 0.55
+
+    for screen in ("UNKNOWN", "WEBVIEW", "", "BANK_LOGIN"):
+        assert needs_escalation(first, screen_type=screen), screen
+        assert needs_escalation(rest, screen_type=screen), screen
+
+
+def test_a_confidently_named_field_never_escalates():
+    """The bar stays where it was: no model call for a field we can read."""
+    named = classify_field(field_label="Email address")
+    assert not needs_escalation(named, screen_type="UNKNOWN")
+    assert not needs_escalation(named, screen_type="WEBVIEW")
+
+
+def test_resolved_field_types_reach_the_action_inventory():
+    """
+    The wiring: what the escalation resolved must actually decide what gets
+    typed, or the fields still all receive the same junk.
+    """
+    obs = _Obs(_UNLABELLED_FORM_XML)
+    inputs = [n for n in obs.ui_nodes if n.is_input]
+    overrides = {
+        inputs[0].node_id: FieldClassification(
+            field_type=FieldType.FULL_NAME, confidence=0.9,
+            source=ClassificationSource.GEMINI),
+        inputs[1].node_id: FieldClassification(
+            field_type=FieldType.EMAIL, confidence=0.9,
+            source=ClassificationSource.GEMINI),
+        inputs[2].node_id: FieldClassification(
+            field_type=FieldType.PHONE, confidence=0.9,
+            source=ClassificationSource.GEMINI),
+    }
+
+    g = ExplorationGraph(package_name=TARGET)
+    st = g.observe(obs, semantic_type="WEBVIEW", foreground_package=TARGET,
+                   field_overrides=overrides)
+
+    got = [a.field_type for a in st.actionable_elements if a.action_type == "input"]
+    assert got == ["FULL_NAME", "EMAIL", "PHONE"]
+    assert len(set(got)) == 3, "three fields must not share one type"
+
+
+def test_without_overrides_the_inventory_is_unchanged():
+    """The new argument is additive: omitting it changes nothing."""
+    g = ExplorationGraph(package_name=TARGET)
+    st = g.observe(_Obs(_FORM_XML), semantic_type="UNKNOWN",
+                   foreground_package=TARGET)
+    got = [a.field_type for a in st.actionable_elements if a.action_type == "input"]
+    assert got == ["FULL_NAME", "EMAIL"]
+
+
+def test_the_explorer_escalates_ambiguous_fields(monkeypatch):
+    """
+    End of the wiring: the async explorer must actually call the escalation
+    and hand the answers to the synchronous graph.
+    """
+    from sudarshan_core.engines import agentic_explorer as ae
+
+    resolved = {
+        0: FieldType.FULL_NAME, 1: FieldType.EMAIL, 2: FieldType.PHONE,
+    }
+    seen: list = []
+
+    async def _fake_gemini(deterministic, **ctx):
+        idx = len(seen)
+        seen.append(ctx)
+        return FieldClassification(
+            field_type=resolved[idx], confidence=0.95,
+            source=ClassificationSource.GEMINI,
+        )
+
+    monkeypatch.setattr(ae, "classify_field_with_gemini", _fake_gemini)
+
+    explorer = ae.AgenticExplorer.__new__(ae.AgenticExplorer)
+    explorer.package_name = TARGET
+
+    obs = _Obs(_UNLABELLED_FORM_XML)
+    overrides = asyncio.run(
+        explorer._resolve_ambiguous_fields(obs, screen_type="WEBVIEW")
+    )
+
+    assert len(seen) == 3, "all three ambiguous fields should be escalated"
+    assert {c.field_type for c in overrides.values()} == {
+        FieldType.FULL_NAME, FieldType.EMAIL, FieldType.PHONE,
+    }
+
+
+def test_escalation_is_skipped_on_an_unambiguous_form(monkeypatch):
+    """No model call for a form the local patterns already read correctly."""
+    from sudarshan_core.engines import agentic_explorer as ae
+
+    called = []
+
+    async def _fake_gemini(deterministic, **ctx):
+        called.append(ctx)
+        return deterministic
+
+    monkeypatch.setattr(ae, "classify_field_with_gemini", _fake_gemini)
+
+    explorer = ae.AgenticExplorer.__new__(ae.AgenticExplorer)
+    explorer.package_name = TARGET
+    asyncio.run(explorer._resolve_ambiguous_fields(_Obs(_FORM_XML),
+                                                   screen_type="UNKNOWN"))
+    assert called == [], "captioned fields must not cost a model round trip"
+
+
+def test_a_planner_hint_can_correct_the_graphs_unknown_field():
+    """
+    `select_canonical_action` gave the graph's type_text unconditional
+    priority, so the LLM had no way to correct a field_hint the graph had
+    guessed wrong.
+    """
+    from sudarshan_core.engines.agentic.action_dispatch import (
+        select_canonical_action,
+    )
+
+    graph_action = {
+        "tool": "type_text", "field_hint": "text", "field_type": "UNKNOWN",
+        "x": 100, "y": 200, "_action_id": "A-7",
+    }
+    planner_action = {
+        "tool": "type_text", "field_hint": "email", "confidence": 0.9,
+    }
+    chosen, _ = select_canonical_action(graph_action, planner_action)
+
+    assert chosen["field_hint"] == "email", "planner should correct the hint"
+    assert chosen["_action_id"] == "A-7", "graph bookkeeping must survive"
+    assert chosen["x"] == 100, "graph geometry must survive"
+
+
+def test_a_planner_hint_does_not_override_a_confident_graph_field():
+    from sudarshan_core.engines.agentic.action_dispatch import (
+        select_canonical_action,
+    )
+
+    graph_action = {
+        "tool": "type_text", "field_hint": "password", "field_type": "MPIN",
+        "x": 1, "y": 2, "_action_id": "A-1",
+    }
+    planner_action = {"tool": "type_text", "field_hint": "email",
+                      "confidence": 0.99}
+    chosen, _ = select_canonical_action(graph_action, planner_action)
+    assert chosen["field_hint"] == "password"

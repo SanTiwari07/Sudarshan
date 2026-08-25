@@ -40,6 +40,12 @@ PLANNER_NON_INTERACTIVE = frozenset({
     "",
 })
 
+#: Confidence a planner must express before its `field_hint` may replace one
+#: the graph could not resolve. High on purpose: the graph's hint is wrong here
+#: by admission (UNKNOWN), but a hesitant model guess is not obviously better,
+#: and a wrong hint types the wrong value into a real form.
+PLANNER_FIELD_HINT_MIN_CONFIDENCE: float = 0.75
+
 MAX_EXECUTION_ATTEMPTS: int = 3
 
 
@@ -330,6 +336,29 @@ def select_canonical_action(
         if gtool in ("click_text", "tap", "tap_sequence", "type_text", "check"):
             chosen = dict(graph_action)
             chosen["_selected_by"] = "exploration_graph"
+            # One narrow exception: the graph knows WHERE to type, the planner
+            # may know WHAT. When the graph could not name the field - an
+            # unlabelled WebView box that fell through to the positional guess
+            # - a confident planner hint replaces the hint ONLY. The
+            # coordinates, action id and state id stay the graph's, because
+            # those are what record_action resolves against and what keeps
+            # coverage bookkeeping honest.
+            #
+            # Without this the graph's type_text won unconditionally and the
+            # model had no way to correct a field it could see was an email
+            # box, so every unnamed field on a form received the same generic
+            # value and the form could never be submitted.
+            if (
+                gtool == "type_text"
+                and str(graph_action.get("field_type", "")) in ("", "UNKNOWN")
+                and ptool == "type_text"
+                and planner_action
+                and planner_action.get("field_hint")
+                and float(planner_action.get("confidence") or 0.0)
+                >= PLANNER_FIELD_HINT_MIN_CONFIDENCE
+            ):
+                chosen["field_hint"] = planner_action["field_hint"]
+                chosen["_field_hint_source"] = "planner"
             return chosen, "exploration_graph"
         if ptool in PLANNER_NON_INTERACTIVE or planner_action is None:
             chosen = dict(graph_action)

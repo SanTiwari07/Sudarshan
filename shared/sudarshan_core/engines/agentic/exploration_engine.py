@@ -715,6 +715,43 @@ def _is_submit_action(item: "ActionItem") -> bool:
         return False
     return _is_submit_label(item.label)
 
+
+#: Captions that commit a data-entry form without being a CREDENTIAL submit.
+#: Kept apart from _SUBMIT_KEYWORDS on purpose: `_is_submit_label` also decides
+#: whether a click counts as a login attempt, and on a login screen "Register"
+#: opens a different flow, so counting it there spent the credential-retry
+#: budget on a navigation link. Ordering and login-outcome detection are
+#: different questions, and only ordering needs these.
+_FORM_COMMIT_KEYWORDS = (
+    "register", "sign up", "signup", "create account", "create an account",
+    "get started", "join now",
+)
+
+_FORM_COMMIT_RE = re.compile(
+    r"\b(" + "|".join(re.escape(k) for k in _FORM_COMMIT_KEYWORDS) + r")\b",
+    re.IGNORECASE,
+)
+
+
+def _is_form_commit_action(item: "ActionItem") -> bool:
+    """
+    Whether this control is what finishes the form it sits on.
+
+    Wider than :func:`_is_submit_action`: a registration form is committed by a
+    button reading "REGISTER" or "Create Account", neither of which is a
+    credential submit. Used ONLY to hold such a control behind the fields it
+    depends on - it never makes a click count as a login attempt.
+    """
+    if item.action_type not in ("click", "check"):
+        return False
+    if _is_submit_label(item.label):
+        return True
+    label = (item.label or "").strip()
+    # A question is a prompt, not a button: "New user? Register".
+    if not label or "?" in label:
+        return False
+    return bool(_FORM_COMMIT_RE.search(label))
+
 #: Tie-breaking nudge for the affirmative option in a two-way decision dialog.
 #: Deliberately small: score_action() has already ranked on the security
 #: signal, and this only settles otherwise-close pairs (Yes/No, OK/Cancel).
@@ -2186,21 +2223,30 @@ class ExplorationGraph:
         # happen, burned the retry ladder and marked the only way into the app
         # as failed. While any input on this screen is still unfilled, submit
         # controls are held back.
+        # The ordering is now UNCONDITIONAL. It used to apply only when a
+        # submit control was RECOGNISED, so on a registration form - whose
+        # button reads "REGISTER", deliberately not a credential submit - no
+        # ordering happened at all. A plain field scores ~140 against a
+        # captioned button's ~220, so the button went first and the walk
+        # submitted an empty form, read the validation error as the app
+        # refusing its data, and gave up on a screen it never had a chance on.
+        #
+        # Fields first is the floor: whatever else is on the screen, a form is
+        # filled before it is committed.
         pending_inputs = [a for a in ranked if a.action_type == "input"]
         if pending_inputs:
-            held = [a for a in ranked if _is_submit_action(a)]
-            if held:
-                logger.info(
-                    "[Explorer] FORM_FILL_FIRST state=%s - holding %d submit "
-                    "control(s) until %d input(s) are filled: %s",
-                    sid, len(held), len(pending_inputs),
-                    [a.label for a in pending_inputs],
-                )
-                rest = [
-                    a for a in ranked
-                    if a.action_type != "input" and not _is_submit_action(a)
-                ]
-                ranked = pending_inputs + rest + held
+            held = [a for a in ranked if _is_form_commit_action(a)]
+            rest = [
+                a for a in ranked
+                if a.action_type != "input" and not _is_form_commit_action(a)
+            ]
+            logger.info(
+                "[Explorer] FORM_FILL_FIRST state=%s - %d input(s) before "
+                "%d commit control(s): %s",
+                sid, len(pending_inputs), len(held),
+                [a.label for a in pending_inputs],
+            )
+            ranked = pending_inputs + rest + held
 
         # ── Fair scheduling: clicks must not starve scroll ────────────────────
         # rank_actions puts clicks above scroll and the loop below returns the

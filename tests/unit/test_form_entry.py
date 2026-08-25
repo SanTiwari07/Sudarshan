@@ -592,3 +592,110 @@ def test_the_signature_has_no_dead_parameter():
 
     params = inspect.signature(compute_composite_state_signature).parameters
     assert "visible_text" not in params
+
+
+# ─── F8: fields before the button, whatever the button is called ─────────────
+
+_SIGNUP_XML = """<?xml version='1.0' encoding='UTF-8'?>
+<hierarchy rotation="0">
+ <node class="android.widget.TextView" text="Full Name" clickable="false"
+       bounds="[0,100][400,140]" />
+ <node class="android.widget.EditText" resource-id="com.example.form:id/name"
+       text="" password="false" enabled="true" bounds="[0,150][400,200]" />
+ <node class="android.widget.TextView" text="Email" clickable="false"
+       bounds="[0,220][400,260]" />
+ <node class="android.widget.EditText" resource-id="com.example.form:id/email"
+       text="" password="false" enabled="true" bounds="[0,270][400,320]" />
+ <node class="android.widget.TextView" text="Mobile Number" clickable="false"
+       bounds="[0,340][400,380]" />
+ <node class="android.widget.EditText" resource-id="com.example.form:id/phone"
+       text="" password="false" enabled="true" bounds="[0,390][400,440]" />
+ <node class="android.widget.Button" text="REGISTER" clickable="true"
+       enabled="true" bounds="[0,470][400,530]" />
+</hierarchy>"""
+
+
+def _signup_graph():
+    g = ExplorationGraph(package_name=TARGET)
+    st = g.observe(_Obs(_SIGNUP_XML), semantic_type="UNKNOWN",
+                   foreground_package=TARGET)
+    return g, st
+
+
+def test_inputs_rank_first_even_when_the_button_is_not_a_known_submit():
+    """
+    The reorder used to happen only when a submit control was RECOGNISED, and
+    "REGISTER" is deliberately not one. So on a signup form no ordering was
+    applied at all and the button - which outscores a plain field - went first,
+    submitting an empty form.
+    """
+    g, st = _signup_graph()
+    action = g.get_next_action(state_id=st.state_id)
+    assert action["tool"] == "type_text", (
+        f"expected a field first, got {action['tool']} '{action.get('text')}'"
+    )
+
+
+def test_the_commit_control_is_offered_once_the_fields_are_filled():
+    g, st = _signup_graph()
+    for item in [a for a in st.actionable_elements if a.action_type == "input"]:
+        _record(g, st, item, input_verified=True)
+
+    action = g.get_next_action(state_id=st.state_id)
+    assert action["tool"] == "click_text"
+    assert action["text"] == "REGISTER"
+
+
+def test_register_is_held_behind_pending_inputs():
+    """Ordering must treat it as a commit even though submit detection does not."""
+    from sudarshan_core.engines.agentic.exploration_engine import (
+        _is_form_commit_action,
+    )
+
+    g, st = _signup_graph()
+    button = next(a for a in st.actionable_elements if a.action_type == "click")
+    assert _is_form_commit_action(button)
+
+
+@pytest.mark.parametrize("label", [
+    "REGISTER", "Sign Up", "Create Account", "Sign up now", "Create an account",
+])
+def test_signup_captions_are_recognised_as_form_commits(label):
+    from sudarshan_core.engines.agentic.exploration_engine import (
+        ActionItem,
+        _is_form_commit_action,
+    )
+
+    item = ActionItem(action_id="A-1", node_id="n1", action_type="click",
+                      label=label)
+    assert _is_form_commit_action(item), label
+
+
+def test_register_is_still_not_a_credential_submit():
+    """
+    Preserved on purpose. On a login screen "Register" opens a different flow,
+    and treating it as a submit made the walk spend its credential-retry budget
+    on a navigation link. Ordering and login-outcome detection are separate
+    questions and only the first one changed.
+    """
+    from sudarshan_core.engines.agentic.exploration_engine import (
+        _is_submit_label,
+    )
+
+    assert not _is_submit_label("Register")
+    assert not _is_submit_label("Sign Up")
+    assert not _is_submit_label("Create Account")
+    assert _is_submit_label("Login")
+    assert _is_submit_label("Continue")
+
+
+def test_a_question_is_never_a_form_commit():
+    """"New user? Register" is a prompt, not a button that commits the form."""
+    from sudarshan_core.engines.agentic.exploration_engine import (
+        ActionItem,
+        _is_form_commit_action,
+    )
+
+    item = ActionItem(action_id="A-1", node_id="n1", action_type="click",
+                      label="New user? Register")
+    assert not _is_form_commit_action(item)

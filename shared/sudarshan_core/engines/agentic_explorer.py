@@ -100,6 +100,13 @@ from sudarshan_core.engines.agentic.screen_classifier import (
 from sudarshan_core.engines.agentic.secondary_payload import (
     SecondaryPayloadTracker,
 )
+from sudarshan_core.engines.agentic.form_recovery import (
+    SOURCE as FORM_RECOVERY_SOURCE,
+    STAGNATION_THRESHOLD as FORM_STAGNATION_THRESHOLD,
+    FormRecoveryLadder,
+    describe_form_screen,
+)
+from sudarshan_core.engines.agentic.ui_observation import describe_screen
 from sudarshan_core.engines.event_bus import RuntimeEventBus
 from sudarshan_core.engines.screenshot_manager import ScreenshotReason
 from sudarshan_core.engines.investigation_controller import (
@@ -428,6 +435,16 @@ class AgenticExplorer:
         self._explored_children: set = set()
         # State ids that already contributed an in-app evidence frame.
         self._state_frames_captured: set = set()
+        # ── Form stagnation ───────────────────────────────────────────────────
+        # Consecutive actions after which the screen was unchanged, and the
+        # per-screen escalation ladder that answers it. A form the walk has
+        # stopped being able to move is not a planning failure - the action was
+        # aimed at a control the keyboard was standing in front of - so it needs
+        # a different answer than re-planning or backtracking. See
+        # form_recovery.
+        self._unchanged_action_streak: int = 0
+        self._form_recovery: FormRecoveryLadder = FormRecoveryLadder()
+        self._form_recoveries_issued: int = 0
         # One view hierarchy per distinct in-app screen, keyed by state id.
         # VIDE compares view structure to decide whether a sample is a clone,
         # and a single hierarchy of the login form - the one screen a clone and
@@ -593,6 +610,78 @@ class AgenticExplorer:
             parts.extend(re.findall(r'content-desc="([^"]+)"', raw))
         return " ".join(parts)
 
+    async def _form_recovery_action(
+        self,
+        state: Any,
+        classification: Any,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Something to try when a form has stopped responding, or None.
+
+        Engages only after FORM_STAGNATION_THRESHOLD consecutive actions left
+        the screen unchanged, and only on a screen that actually has input
+        fields. One unchanged screen is not stagnation - typing into a field is
+        SUPPOSED to leave the hash where it was - and reacting to it would fire
+        the ladder on every well-behaved form.
+
+        The IME probe is the one device call this makes, and it only happens
+        once stagnation is established, so a healthy walk never pays for it.
+        """
+        if self._unchanged_action_streak < FORM_STAGNATION_THRESHOLD:
+            return None
+
+        screen_type = str(getattr(classification, "screen_type", "") or "")
+        form = describe_form_screen(state, screen_type)
+        if not form.is_form:
+            return None
+
+        try:
+            form.keyboard_visible = await self.executor.is_keyboard_visible()
+        except Exception as exc:
+            logger.debug("[AgenticExplorer] IME probe failed: %s", exc)
+            form.keyboard_visible = None
+
+        action = self._form_recovery.plan(form)
+        if action is None:
+            return None
+
+        self._form_recoveries_issued += 1
+        logger.info(
+            "[AgenticExplorer] FORM_STAGNATION state=%s streak=%d step=%s "
+            "inputs=%d unfilled=%d keyboard=%s",
+            form.state_id, self._unchanged_action_streak,
+            action.get("_recovery_step"), form.input_count,
+            form.unfilled_input_count, form.keyboard_visible,
+        )
+        self.audit_log.record_system_event(
+            "form_stagnation_recovery",
+            f"state={form.state_id} step={action.get('_recovery_step')} "
+            f"streak={self._unchanged_action_streak} "
+            f"inputs={form.input_count} unfilled={form.unfilled_input_count}",
+        )
+        return action
+
+    def _screen_observation(self, obs: Any, classification: Any) -> Any:
+        """
+        A perceptual description of what is on screen right now.
+
+        Attached to every frame this explorer captures so the Screenshot
+        Appendix and the evidence modal can say what a picture SHOWS rather
+        than repeating why it was taken. Never raises: a description that
+        cannot be built costs a sentence, not a frame.
+        """
+        try:
+            return describe_screen(
+                activity=getattr(obs, "activity", "") or "",
+                ui_nodes=getattr(obs, "ui_nodes", None) or None,
+                ui_xml=getattr(obs, "ui_xml_raw", "") or "",
+                screen_type=str(getattr(classification, "screen_type", "") or ""),
+                app_label=str(self.static_findings.get("app_label") or ""),
+            )
+        except Exception as exc:
+            logger.debug("[AgenticExplorer] screen description failed: %s", exc)
+            return None
+
     def _capture_state_frame(
         self,
         obs: Any,
@@ -630,6 +719,11 @@ class AgenticExplorer:
         if raw_xml and len(self.state_ui_hierarchies) < MAX_STATE_HIERARCHIES:
             self.state_ui_hierarchies[state_id] = raw_xml[:120_000]
         semantic = str(getattr(classification, "screen_type", "") or "")
+        # What this frame SHOWS, read from the hierarchy that produced it. The
+        # capture reason says why the shutter fired and describes no picture;
+        # this travels with the frame into the manifest so the appendix and the
+        # evidence modal have something screen-specific to print.
+        observation = self._screen_observation(obs, classification)
         try:
             self.screenshot_manager.capture_async(
                 label=label or f"state_{state_id}_{semantic}".lower(),
@@ -643,6 +737,7 @@ class AgenticExplorer:
                 layout_hash=getattr(obs, "screen_hash", ""),
                 semantic_type=semantic,
                 explorer_action=f"state:{state_id}",
+                screen_observation=observation,
             )
             logger.info(
                 "[AgenticExplorer] IN_APP_FRAME state=%s semantic=%s activity=%s",
@@ -2260,14 +2355,28 @@ class AgenticExplorer:
                         # Re-evaluate next goal after state change
                         next_goal = self.goals.next_priority_goal()
 
-                planner_action = None
-                if should_invoke_planner(classification.screen_type):
-                    planner_action = await self.planner.decide(obs, self.memory, self.goals)
-
-                graph_action = self.exploration.get_next_action(
-                    state_id=graph_state.state_id, memory=self.memory,
+                # ── Form stagnation outranks planning ─────────────────────────
+                # When the screen has stopped moving on a form, neither planner
+                # has anything new to say: the graph re-offers the action it
+                # already chose and the LLM re-derives it, because the action
+                # was never wrong - the keyboard was standing in front of the
+                # control it aimed at. Recovery is tried FIRST, and only for as
+                # many rungs as its ladder has, after which selection returns
+                # to normal.
+                action = await self._form_recovery_action(
+                    graph_state, classification,
                 )
-                action, selected_by = select_canonical_action(graph_action, planner_action)
+                selected_by = "form_recovery"
+
+                planner_action = None
+                if action is None:
+                    if should_invoke_planner(classification.screen_type):
+                        planner_action = await self.planner.decide(obs, self.memory, self.goals)
+
+                    graph_action = self.exploration.get_next_action(
+                        state_id=graph_state.state_id, memory=self.memory,
+                    )
+                    action, selected_by = select_canonical_action(graph_action, planner_action)
                 if action is not None:
                     action["_selected_by"] = selected_by
                     pipeline_log(
@@ -2337,6 +2446,11 @@ class AgenticExplorer:
                 chosen_tool = action.get("tool", "")
                 _exploration_sources = frozenset({
                     "exploration_engine", "backtrack", "exploration_fallback",
+                    # Recovery answers a screen that has stopped responding.
+                    # Gating it on the investigation stage would leave the walk
+                    # stuck on exactly the form whose completion advances that
+                    # stage in the first place.
+                    FORM_RECOVERY_SOURCE,
                 })
                 if (
                     not self.investigation.is_action_allowed(chosen_tool)
@@ -2372,9 +2486,20 @@ class AgenticExplorer:
                 # onboarding carousel is not a login attempt, and treating it as
                 # one would spend the credential-retry budget on the wrong
                 # screen.
+                # `press_enter` counts too: the IME's action key commits the
+                # form exactly as its button would, and recovery reaches for it
+                # precisely when that button is unreachable. Leaving it out
+                # would have the walk submit credentials the auth state machine
+                # never hears about, so the app's answer is read as an
+                # unexplained screen change.
                 self._submitted_credentials = bool(
-                    last_action_tool in ("click_text", "tap")
-                    and _is_submit_label(last_action_target)
+                    (
+                        (
+                            last_action_tool in ("click_text", "tap")
+                            and _is_submit_label(last_action_target)
+                        )
+                        or last_action_tool == "press_enter"
+                    )
                     and any(
                         getattr(n, "is_password", False)
                         or getattr(n, "is_input", False)
@@ -2676,6 +2801,18 @@ class AgenticExplorer:
                 if post_state.state_id != self._pre_action_state_id:
                     ever_ui_changed = True
 
+                # ── Form stagnation streak ────────────────────────────────────
+                # Counts actions that left the screen exactly where it was.
+                # A screen that moved has nothing to recover from, so its ladder
+                # is forgotten too: if the walk comes back to the same form
+                # later - after a validation error, say - it gets the full set
+                # of escapes again rather than an already-spent one.
+                if ever_ui_changed:
+                    self._unchanged_action_streak = 0
+                    self._form_recovery.reset(self._pre_action_state_id)
+                else:
+                    self._unchanged_action_streak += 1
+
                 adb_ok = bool(result.success)
                 verified = bool(adb_ok and ui_changed)
                 self.exploration.record_action(
@@ -2823,6 +2960,9 @@ class AgenticExplorer:
                             foreground_package=package_of(obs.activity),
                             layout_hash=obs.screen_hash,
                             semantic_type=post_classification.screen_type,
+                            screen_observation=self._screen_observation(
+                                post_obs, post_classification,
+                            ),
                         )
                     except Exception as exc:
                         logger.debug(

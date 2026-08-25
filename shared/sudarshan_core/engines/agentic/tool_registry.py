@@ -222,7 +222,47 @@ TOOL_REGISTRY: Dict[str, ToolDef] = {
         min_android_api=21,
     ),
 
+    "hide_keyboard": ToolDef(
+        name="hide_keyboard",
+        description=(
+            "Dismiss the on-screen software keyboard. Use this after typing "
+            "when the next field or the form's submit button sits behind the "
+            "keyboard - a tap on an occluded control hits a keyboard key "
+            "instead and the screen does not change."
+        ),
+        params=[],
+        timeout_seconds=6,
+        retry_count=1,
+        failure_strategy="log_and_continue",
+        min_android_api=21,
+        notes=(
+            "Sends KEYCODE_BACK only when the IME is confirmed visible. With "
+            "no keyboard up the same key would leave the Activity, so an "
+            "unreadable IME state is treated as 'do not press'."
+        ),
+    ),
+
     # ── Text Input ─────────────────────────────────────────────────────────────
+
+    "press_enter": ToolDef(
+        name="press_enter",
+        description=(
+            "Send the keyboard's action key (Go / Done / Next / Search) to the "
+            "focused input field. Commits a form whose submit button is "
+            "covered by the keyboard, or moves to the next field."
+        ),
+        params=[
+            ToolParam("key", "str", required=False,
+                      description=(
+                          "Which action key: 'enter' (default, also go/done/"
+                          "send), 'next' or 'tab' to advance a field, 'search'."
+                      )),
+        ],
+        timeout_seconds=6,
+        retry_count=1,
+        failure_strategy="log_and_continue",
+        min_android_api=21,
+    ),
 
     "type_text": ToolDef(
         name="type_text",
@@ -244,8 +284,24 @@ TOOL_REGISTRY: Dict[str, ToolDef] = {
             ToolParam("y", "int", required=True,
                       description="Y coordinate of the input field",
                       min_val=0, max_val=DEFAULT_SCREEN_HEIGHT),
+            ToolParam("press_key", "str", required=False,
+                      description=(
+                          "Optional IME action key to send once the value is "
+                          "in: 'enter' to commit the form, 'next' to advance "
+                          "to the following field."
+                      )),
+            ToolParam("dismiss_keyboard", "bool", required=False,
+                      description=(
+                          "Whether to put the keyboard away afterwards. "
+                          "Defaults to true so the controls below the field "
+                          "stay tappable."
+                      )),
         ],
-        timeout_seconds=8,
+        # Raised from 8s: typing now also probes the IME state and, when the
+        # keyboard is up, dismisses it and re-probes. Three extra shell round
+        # trips on a contended emulator do not fit in the old budget, and a
+        # timeout here reads downstream as a field the app refused to fill.
+        timeout_seconds=16,
         retry_count=2,
         failure_strategy="log_and_continue",
         min_android_api=21,

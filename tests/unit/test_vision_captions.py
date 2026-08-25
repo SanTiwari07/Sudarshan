@@ -15,6 +15,8 @@ from sudarshan_core.engines.screenshot_manager import UNCLEAR_CAPTION
 @pytest.fixture(autouse=True)
 def _clear_flag(monkeypatch):
     monkeypatch.delenv("SUDARSHAN_VISION_CAPTIONS", raising=False)
+    monkeypatch.delenv("SUDARSHAN_VISION_CAPTION_SCOPE", raising=False)
+    monkeypatch.delenv("SUDARSHAN_VISION_CAPTION_MAX", raising=False)
 
 
 def _png(tmp_path):
@@ -69,14 +71,57 @@ def test_enabled_returns_model_caption(tmp_path, monkeypatch):
     assert client.calls == 1
 
 
-def test_only_ambiguous_reasons_are_eligible(monkeypatch):
+def test_every_capture_is_eligible_by_default(monkeypatch):
+    """
+    Scope widened deliberately.
+
+    The old policy only looked at AMBIGUOUS_REASONS, which meant the three
+    frames a login-gated sample actually produces - LIFECYCLE launch,
+    STATE_DISCOVERY, LIFECYCLE final - were the exact three the model never
+    saw, and every one of them kept a caption derived from the capture reason.
+    Screenshots are the report's primary evidence; once an operator has turned
+    vision on, all of them are worth describing.
+    """
     monkeypatch.setenv("SUDARSHAN_VISION_CAPTIONS", "1")
+    assert cg.should_caption("OTHER", "anything") is True
+    assert cg.should_caption("EXPLORER_ACTION", "x") is True
+    assert cg.should_caption("LIFECYCLE", "Lifecycle capture - 01_app_opened") is True
+    assert cg.should_caption("OVERLAY", "Overlay window displayed over target app") is True
+
+
+def test_ambiguous_scope_restores_the_narrow_policy(monkeypatch):
+    """A deployment that wants to spend fewer calls can still opt back."""
+    monkeypatch.setenv("SUDARSHAN_VISION_CAPTIONS", "1")
+    monkeypatch.setenv("SUDARSHAN_VISION_CAPTION_SCOPE", "ambiguous")
     assert cg.should_caption("OTHER", "anything") is True
     assert cg.should_caption("EXPLORER_ACTION", "x") is True
     # A confident deterministic caption is left alone.
     assert cg.should_caption("OVERLAY", "Overlay window displayed over target app") is False
     # ...unless the table gave up on it.
     assert cg.should_caption("OVERLAY", UNCLEAR_CAPTION) is True
+
+
+def test_scope_never_overrides_the_off_switch(monkeypatch):
+    """The no-network guarantee outranks every other setting."""
+    monkeypatch.setenv("SUDARSHAN_VISION_CAPTION_SCOPE", "all")
+    assert cg.should_caption("LIFECYCLE", "anything") is False
+
+
+def test_unspent_frames_are_ordered_by_how_little_they_say(monkeypatch):
+    """A run that cannot afford every frame spends what it has best."""
+    assert cg.caption_priority("OVERLAY", UNCLEAR_CAPTION) == 0
+    assert cg.caption_priority("EXPLORER_ACTION", "tapped Login") == 1
+    assert cg.caption_priority("LIFECYCLE", "Lifecycle capture - 01_app_opened") == 2
+
+
+def test_budget_is_bounded_and_configurable(monkeypatch):
+    assert cg.caption_budget() == cg.DEFAULT_CAPTION_BUDGET
+    monkeypatch.setenv("SUDARSHAN_VISION_CAPTION_MAX", "3")
+    assert cg.caption_budget() == 3
+    monkeypatch.setenv("SUDARSHAN_VISION_CAPTION_MAX", "0")
+    assert cg.caption_budget() == 0
+    monkeypatch.setenv("SUDARSHAN_VISION_CAPTION_MAX", "not-a-number")
+    assert cg.caption_budget() == cg.DEFAULT_CAPTION_BUDGET
 
 
 def test_caption_is_length_bounded(tmp_path, monkeypatch):

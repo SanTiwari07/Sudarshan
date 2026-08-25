@@ -28,6 +28,19 @@ class VisualEvidenceRecord:
   vide_baseline_id: str = ""
   negative_proof: bool = False
   analyst_note: str = ""
+  # ── What the frame shows, as distinct from what it is claimed to prove ─────
+  # `investigative_claim` is a rendered template about SECURITY SIGNIFICANCE,
+  # and when no runtime hook corroborated a frame it degrades to "insufficient
+  # corroborating runtime evidence...". The UI made that sentence do double
+  # duty as the description of the picture, so the evidence modal printed it
+  # under "Visual observation" and again under "Why it matters".
+  #
+  # These two answer the other question - what is on the screen - and are read
+  # from the screen itself (agentic.ui_observation) or from vision captioning.
+  # They are deliberately never claims: nothing here decides whether a screen
+  # is malicious, and nothing here feeds the risk engine.
+  visual_observation: str = ""
+  screen_summary: str = ""
 
   def to_dict(self) -> Dict[str, Any]:
     return asdict(self)
@@ -55,6 +68,8 @@ class VisualEvidenceRecord:
       vide_baseline_id=str(data.get("vide_baseline_id") or ""),
       negative_proof=bool(data.get("negative_proof")),
       analyst_note=str(data.get("analyst_note") or ""),
+      visual_observation=str(data.get("visual_observation") or ""),
+      screen_summary=str(data.get("screen_summary") or ""),
     )
 
 

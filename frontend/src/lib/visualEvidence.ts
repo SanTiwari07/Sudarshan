@@ -16,6 +16,15 @@ export type VisualEvidencePayload = {
   png_sha256?: string;
   timestamp_ms?: number;
   capture_trigger?: string;
+  /**
+   * What the frame SHOWS, read from the UI hierarchy captured with it (or
+   * from vision captioning when configured). Deliberately separate from
+   * `investigative_claim`, which is a statement about security significance
+   * and degrades to a generic sentence when nothing corroborated the frame.
+   */
+  visual_observation?: string;
+  screen_summary?: string;
+  corroboration_summary?: string;
 };
 
 const MEANINGFUL_CORRELATION = new Set(['causal', 'linked', 'temporal']);
@@ -38,6 +47,9 @@ export function visualFromEntry(entry: ScreenshotManifestEntry): VisualEvidenceP
       timeline_eligible: entry.timeline_eligible,
       capture_trigger: entry.capture_trigger,
       timestamp_ms: entry.timestamp_ms,
+      visual_observation: entry.visual_observation,
+      screen_summary: entry.screen_summary,
+      corroboration_summary: entry.corroboration_summary,
     };
   }
   return null;

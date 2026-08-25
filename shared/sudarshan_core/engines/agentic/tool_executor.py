@@ -98,6 +98,46 @@ DEFAULT_SCROLL_AMOUNT: int = 600
 DEFAULT_SWIPE_DURATION_MS: int = 300
 
 
+# ─── Soft keyboard ────────────────────────────────────────────────────────────
+#
+# Typing raises the IME, and the IME covers the bottom half of the screen.
+# Everything the agent wants next on a login form - the second field, the
+# "Login" button - lives exactly there. `input tap` at those coordinates lands
+# on a key of the keyboard instead, uiautomator dumps the IME's own hierarchy
+# over the app's, and the screen hash stops changing: the walk reads that as
+# "the app did nothing" and stalls on the form it had almost completed.
+#
+# So a field is not finished until the keyboard it raised is put away again.
+#
+# The dismissal is BACK, and it is only ever sent once the IME has been
+# CONFIRMED visible. Android routes BACK to the IME while the input view is
+# shown and the IME consumes it; with no IME up the same key leaves the
+# Activity, which on a login screen means leaving the app. "Cannot tell" is
+# therefore treated as "do not press", never as "press and hope".
+DISMISS_KEYBOARD_AFTER_TYPING: bool = os.getenv(
+    "SUDARSHAN_DISMISS_KEYBOARD", "1"
+).lower() in ("1", "true", "yes")
+
+#: Probes the IME state. `mInputShown` is the field on every API level the
+#: corpus runs on; `mIsInputViewShown` is its name on some vendor builds, so
+#: both are read and either one answers.
+_KEYBOARD_PROBE = "dumpsys input_method | grep -E 'mInputShown|mIsInputViewShown'"
+
+#: IME action keys. "next" is a TAB rather than an ENTER on purpose: on a
+#: multi-field form ENTER commits and TAB advances, and asking for the wrong
+#: one submits a half-filled form.
+ACTION_KEYCODES: Dict[str, str] = {
+    "enter":  "KEYCODE_ENTER",
+    "go":     "KEYCODE_ENTER",
+    "done":   "KEYCODE_ENTER",
+    "send":   "KEYCODE_ENTER",
+    "search": "KEYCODE_SEARCH",
+    "next":   "KEYCODE_TAB",
+    "tab":    "KEYCODE_TAB",
+    "escape": "KEYCODE_ESCAPE",
+}
+
+
 # ─── Action pacing ────────────────────────────────────────────────────────────
 #
 # The agent used to drive the device as fast as ADB would accept input: each
@@ -142,7 +182,7 @@ def _paced(seconds: float) -> float:
 # a screenshot or a logcat read pay for one would waste most of the time budget.
 NAVIGATIONAL_TOOLS: frozenset = frozenset({
     "tap", "tap_sequence", "click_text", "swipe", "scroll", "long_press",
-    "press_back", "press_home", "press_enter",
+    "press_back", "press_home", "press_enter", "hide_keyboard",
     # "am_start" used to be listed here, but no tool of that name exists in
     # TOOL_REGISTRY or on this class - the real one is "start_activity", which
     # was missing. The effect was that relaunching the app never waited for the
@@ -611,6 +651,96 @@ class ToolExecutor:
         return ToolResult(success=ok, tool="press_home", output=out,
                           error=out if not ok else None)
 
+    # ── Soft keyboard ─────────────────────────────────────────────────────────
+
+    async def is_keyboard_visible(self) -> Optional[bool]:
+        """
+        Whether the IME's input view is on screen.
+
+        Tri-state on purpose. `None` means the probe could not answer - a
+        failed shell, a build that reports neither field - and the caller must
+        read that as "unknown", never as "not shown". The only irreversible
+        action downstream (pressing BACK) is gated on a definite True.
+        """
+        ok, out = await self._adb("shell", _KEYBOARD_PROBE)
+        if not ok or not out:
+            return None
+        text = out.lower()
+        if "mInputShown=true".lower() in text or "misinputviewshown=true" in text:
+            return True
+        if "minputshown=false" in text or "misinputviewshown=false" in text:
+            return False
+        return None
+
+    async def hide_keyboard(self) -> ToolResult:
+        """
+        Put the soft keyboard away so the controls under it become tappable.
+
+        A no-op - reported as success - when the keyboard is already down or
+        when the IME state cannot be read. Success here means "the screen is
+        not occluded as far as we can tell", which is what the caller needs to
+        decide whether its next tap is worth dispatching.
+        """
+        visible = await self.is_keyboard_visible()
+        if visible is not True:
+            return ToolResult(
+                success=True,
+                tool="hide_keyboard",
+                output="keyboard not shown" if visible is False else "keyboard state unknown",
+                data={
+                    "keyboard_was_visible": bool(visible),
+                    "keyboard_state": "hidden" if visible is False else "unknown",
+                    "dismissed": False,
+                },
+            )
+
+        ok, out = await self._adb("shell", "input", "keyevent", "KEYCODE_BACK")
+        await asyncio.sleep(_paced(0.5))
+        still_visible = await self.is_keyboard_visible()
+        dismissed = still_visible is not True
+        if not dismissed:
+            logger.debug("[ToolExecutor] Keyboard still shown after BACK")
+        return ToolResult(
+            success=ok,
+            tool="hide_keyboard",
+            output=out,
+            error=out if not ok else None,
+            adb_command="input keyevent KEYCODE_BACK",
+            adb_return_code=0 if ok else 1,
+            data={
+                "keyboard_was_visible": True,
+                "keyboard_state": "hidden" if dismissed else "shown",
+                "dismissed": bool(dismissed),
+            },
+        )
+
+    async def press_action_key(self, key: str = "enter") -> ToolResult:
+        """
+        Send an IME action key (Go / Done / Next / Search) to the focused field.
+
+        This is how a login form is committed when its button is under the
+        keyboard: the IME's own action key is always reachable, whatever the
+        layout below it looks like.
+        """
+        keycode = ACTION_KEYCODES.get(str(key or "enter").lower(), "KEYCODE_ENTER")
+        ok, out = await self._adb("shell", "input", "keyevent", keycode)
+        await asyncio.sleep(_paced(0.8))
+        return ToolResult(
+            success=ok,
+            tool="press_enter",
+            output=out,
+            error=out if not ok else None,
+            adb_command=f"input keyevent {keycode}",
+            adb_return_code=0 if ok else 1,
+            data={"key": str(key or "enter").lower(), "keycode": keycode},
+        )
+
+    async def _tool_hide_keyboard(self, action: Dict) -> ToolResult:
+        return await self.hide_keyboard()
+
+    async def _tool_press_enter(self, action: Dict) -> ToolResult:
+        return await self.press_action_key(action.get("key", "enter"))
+
     async def _tool_type_text(self, action: Dict) -> ToolResult:
         """
         Type text into a focused input field.
@@ -725,6 +855,34 @@ class ToolExecutor:
         ok, out = await self._adb("shell", "input", "text", shlex.quote(safe_text))
         await asyncio.sleep(_paced(0.6))
 
+        # ── Put the keyboard away ────────────────────────────────────────────
+        #
+        # The field is filled but the IME it raised is still covering the
+        # bottom of the screen, and that is where the next field and the submit
+        # button are. Leaving it up is what stalled the walk on a login form:
+        # the tap for "Login" landed on a keyboard key, the screen hash did not
+        # move, and the loop read the form as unresponsive.
+        #
+        # `press_key` commits through the IME's own action key first when the
+        # caller asks for it - useful when the button really is unreachable -
+        # and `dismiss_keyboard=False` opts a caller out entirely.
+        keyboard_data: Dict[str, Any] = {}
+        press_key = action.get("press_key") or ""
+        if ok and press_key:
+            key_result = await self.press_action_key(press_key)
+            keyboard_data["action_key"] = (key_result.data or {}).get("keycode", "")
+            keyboard_data["action_key_sent"] = bool(key_result.success)
+
+        dismiss = action.get("dismiss_keyboard")
+        if dismiss is None:
+            dismiss = DISMISS_KEYBOARD_AFTER_TYPING
+        if ok and dismiss:
+            hide_result = await self.hide_keyboard()
+            hide_data = hide_result.data or {}
+            keyboard_data["keyboard_was_visible"] = hide_data.get("keyboard_was_visible")
+            keyboard_data["keyboard_state"] = hide_data.get("keyboard_state", "unknown")
+            keyboard_data["keyboard_dismissed"] = bool(hide_data.get("dismissed"))
+
         return ToolResult(
             success=ok,
             tool="type_text",
@@ -749,6 +907,7 @@ class ToolExecutor:
                 "node_id": action.get("node_id", ""),
                 "x": x,
                 "y": y,
+                **keyboard_data,
             },
             error=out if not ok else None,
         )

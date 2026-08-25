@@ -3,8 +3,9 @@ import {
   illustratedByEvidenceId,
   isTimelineEligibleVisual,
   executiveVisualEntries,
+  visualFromEntry,
 } from './visualEvidence';
-import type { ScreenshotManifestEntry } from './screenshotManifest';
+import { screenshotDescription, type ScreenshotManifestEntry } from './screenshotManifest';
 
 const entry = (overrides: Partial<ScreenshotManifestEntry>): ScreenshotManifestEntry => ({
   screenshot_id: 'SCR-001',
@@ -61,5 +62,49 @@ describe('visualEvidence', () => {
       entry({ screenshot_id: 'SCR-003' }),
     ];
     expect(executiveVisualEntries(list)).toHaveLength(2);
+  });
+
+  // The evidence modal used to print the investigative claim under "Visual
+  // observation" AND again under "Why it matters", so an uncorroborated frame
+  // showed the same generic sentence twice and described the picture neither
+  // time. These carry the fields that keep the three questions apart.
+  it('carries the visual observation alongside the claim', () => {
+    const ve = visualFromEntry(
+      entry({
+        visual_evidence: undefined,
+        claim_type: 'inconclusive_visual',
+        investigative_claim: 'Visual capture completed but insufficient corroborating…',
+        visual_observation: 'Bank login screen (LoginActivity) showing 2 input fields.',
+        screen_summary: 'Bank login screen (LoginActivity)',
+        corroboration_summary: 'No runtime hook fired while this screen was displayed.',
+      }),
+    );
+    expect(ve?.visual_observation).toBe(
+      'Bank login screen (LoginActivity) showing 2 input fields.',
+    );
+    expect(ve?.visual_observation).not.toBe(ve?.investigative_claim);
+    expect(ve?.corroboration_summary).not.toBe(ve?.visual_observation);
+  });
+
+  it('captions a tile with the screen it shows, not the capture reason', () => {
+    expect(
+      screenshotDescription({
+        screenshot_id: 'SCR-001',
+        filename: 'screenshots/a.png',
+        label: 'state_state-002_bank_login',
+        reason: 'SUSPICIOUS_UI',
+        screen_summary: 'Bank login screen (LoginActivity)',
+      }),
+    ).toBe('Bank login screen (LoginActivity)');
+  });
+
+  it('falls back to the old label when no summary was recorded', () => {
+    expect(
+      screenshotDescription({
+        screenshot_id: 'SCR-001',
+        filename: 'screenshots/a.png',
+        label: '01_app_opened',
+      }),
+    ).toBe('01_app_opened');
   });
 });

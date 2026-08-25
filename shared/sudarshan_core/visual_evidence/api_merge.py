@@ -61,6 +61,20 @@ def merge_entry_with_visual_evidence(
         merged["visual_evidence"] = None
         return merged
 
+    # What the frame shows. The linker prefers the manifest's own reading and
+    # falls back to one derived from the frame's metadata, so the VER value
+    # leads here; the manifest value remains as a floor for a row the linker
+    # never saw.
+    merged["visual_observation"] = (
+        ver.get("visual_observation")
+        or manifest_entry.get("visual_observation")
+        or ""
+    )
+    merged["screen_summary"] = (
+        ver.get("screen_summary") or manifest_entry.get("screen_summary") or ""
+    )
+    merged["corroboration_summary"] = ver.get("corroboration_summary") or ""
+
     merged["visual_evidence"] = {
         "screenshot_id": ver.get("screenshot_id"),
         "claim_type": ver.get("claim_type"),
@@ -77,6 +91,9 @@ def merge_entry_with_visual_evidence(
         "png_sha256": ver.get("png_sha256"),
         "timestamp_ms": ver.get("timestamp_ms"),
         "capture_trigger": ver.get("capture_trigger") or merged.get("capture_trigger"),
+        "visual_observation": merged["visual_observation"],
+        "screen_summary": merged["screen_summary"],
+        "corroboration_summary": merged["corroboration_summary"],
     }
     # Top-level aliases for simpler clients
     merged["claim_type"] = ver.get("claim_type")

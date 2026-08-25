@@ -230,6 +230,60 @@ def _suspicious_ui_shot(shot: Dict[str, Any]) -> bool:
     return reason in SUSPICIOUS_UI_REASONS or "perception" in str(shot.get("label") or "").lower()
 
 
+def _shot_observation(shot: Dict[str, Any]) -> Tuple[str, str]:
+    """
+    (visual_observation, screen_summary) for one manifest row.
+
+    Prefers what the capture path recorded: the explorer and the lifecycle
+    captures now describe the screen from its UI hierarchy at the moment of
+    capture, and vision captioning refines that when it is configured.
+
+    A manifest row without either - one written before those fields existed, or
+    by a capture path that holds no hierarchy - is described from what the row
+    DOES carry: its Activity and its screen classification. That is still a
+    statement about this screen. What it must never fall back to is the
+    investigative claim, because on an uncorroborated frame that claim reads
+    "insufficient corroborating runtime evidence was available", which describes
+    the analysis and not the picture, and printing it here is what made the
+    evidence modal show the same sentence twice.
+    """
+    recorded = str(shot.get("visual_observation") or "").strip()
+    summary = str(shot.get("screen_summary") or "").strip()
+    if recorded:
+        return recorded, summary
+
+    try:
+        from sudarshan_core.engines.agentic.ui_observation import (
+            describe_from_metadata,
+            describe_screen,
+        )
+    except Exception as exc:  # pragma: no cover - description must never block
+        logger.debug("[VisualEvidence] ui_observation unavailable: %s", exc)
+        return "", summary
+
+    activity = str(shot.get("activity") or "")
+    screen_type = str(shot.get("semantic_type") or shot.get("screen_type") or "")
+    try:
+        if not summary:
+            summary = describe_screen(
+                activity=activity, screen_type=screen_type,
+            ).screen_summary
+        return (
+            describe_from_metadata(
+                activity=activity,
+                screen_type=screen_type,
+                label=str(shot.get("label") or ""),
+                reason=str(shot.get("reason") or ""),
+                explorer_action=str(shot.get("explorer_action") or ""),
+            ),
+            summary,
+        )
+    except Exception as exc:  # pragma: no cover
+        logger.debug("[VisualEvidence] Could not describe %s: %s",
+                     shot.get("screenshot_id"), exc)
+        return "", summary
+
+
 def _load_workflow(artifact_dir: Path) -> Dict[str, Any]:
     data = _load_json(artifact_dir / "workflow.json")
     return data if isinstance(data, dict) else {}
@@ -579,6 +633,20 @@ class VisualEvidenceLinker:
                 corroboration = "Visual evidence captured from observed UI state."
             elif correlation == CORRELATION_NOT_APPLICABLE:
                 corroboration = "Lifecycle capture without hook correlation."
+            else:
+                # Nothing correlated this frame. That is a real result and worth
+                # stating, but it is a statement about the RUNTIME evidence, not
+                # about the picture - which is described separately in
+                # visual_observation. Leaving this empty is what made the UI
+                # duplicate the observation into "Why it matters".
+                corroboration = (
+                    "No runtime hook fired while this screen was displayed; "
+                    "the frame is retained as a visual record of the state the "
+                    "application presented and was reviewed for overlay and "
+                    "credential-entry indicators."
+                )
+
+            visual_observation, screen_summary = _shot_observation(shot)
 
             records.append(
                 VisualEvidenceRecord(
@@ -602,6 +670,8 @@ class VisualEvidenceLinker:
                     vide_baseline_id=vide_baseline_id if claim_type == CLAIM_VISUAL_IMPERSONATION else "",
                     negative_proof=False,
                     analyst_note="",
+                    visual_observation=visual_observation,
+                    screen_summary=screen_summary,
                 )
             )
 

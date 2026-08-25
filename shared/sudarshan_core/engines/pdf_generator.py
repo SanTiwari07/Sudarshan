@@ -2252,7 +2252,21 @@ class ReportLabPDFGenerator:
             if isinstance(scr, dict):
                 scr_path_str = scr.get("path") or scr.get("filename") or f"screenshot_{idx}.png"
                 title_str = scr.get("title") or scr.get("screenshot_id") or f"Screenshot #{idx}"
-                desc_str = scr.get("description") or scr.get("investigative_claim") or "Captured during dynamic execution."
+                # What the frame SHOWS leads. `description` is looked up from
+                # the capture REASON, so an appendix built from it repeated the
+                # same five templates down the page; `investigative_claim`
+                # degrades to "insufficient corroborating runtime evidence" when
+                # nothing correlated the frame. Both are retained behind the
+                # perceptual reading rather than ahead of it.
+                desc_str = (
+                    scr.get("visual_observation")
+                    or scr.get("description")
+                    or scr.get("investigative_claim")
+                    or "Captured during dynamic execution."
+                )
+                claim_str = scr.get("investigative_claim") or ""
+                if claim_str and claim_str != desc_str:
+                    desc_str = f"{desc_str}<br/><br/><b>Claim:</b> {claim_str}"
                 trigger_str = scr.get('capture_trigger', 'Dynamic Event')
                 quality_str = scr.get('quality', 'A')
             else:

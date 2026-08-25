@@ -437,11 +437,78 @@ def _is_input_node(node: Any) -> bool:
     return "edittext" in cls or "autocomplete" in cls or "searchview" in cls
 
 
+#: Text that is the app complaining about what is in a field, not a statement
+#: about what the screen IS. Deliberately narrow - imperative validation
+#: phrasing only - because collapsing two genuinely different screens hides one
+#: of them from the walk, which is a worse failure than the fork this prevents.
+_VALIDATION_TEXT_RE = re.compile(
+    r"("
+    r"please\s+(enter|provide|fill|select|input)"
+    r"|enter\s+(a\s+)?valid"
+    r"|(is|are)\s+required\b"
+    r"|required\s+field"
+    r"|(can'?t|cannot|should\s+not|must\s+not)\s+be\s+(empty|blank)"
+    r"|field\s+(is\s+)?mandatory"
+    r"|invalid\s+(e[\s\-]?mail|email|phone|mobile|number|format|input|entry|value)"
+    r"|too\s+(short|long)"
+    r")",
+    re.IGNORECASE,
+)
+
+#: Resource-id / class fragments that name an error slot outright. Material's
+#: TextInputLayout renders its message into a child called `textinput_error`.
+_ERROR_SLOT_HINTS = ("error", "validation", "warning_text")
+
+
+def _is_validation_text(node: Any, has_input: bool) -> bool:
+    """
+    Whether this node is transient validation feedback about a field.
+
+    Only true on a screen that HAS a field: validation feedback exists next to
+    something to fill, and without that guard a screen whose whole purpose is
+    to say "invalid card" would lose its only distinguishing text.
+
+    Interactive nodes are never treated this way. An error that is also a
+    button ("Retry") is a control, and dropping it would hide an action.
+    """
+    if not has_input:
+        return False
+    if _is_input_node(node):
+        return False
+    if (
+        bool(getattr(node, "is_checkable", False))
+        or bool(getattr(node, "is_scrollable", False))
+    ):
+        return False
+
+    # `is_clickable` alone cannot answer this. A caption inside a clickable row
+    # is emitted with is_clickable=True because tapping it means tapping the
+    # row - and that recovery is the ONLY way validation text reaches the node
+    # list at all, since a bare TextView on a plain layout is never emitted. So
+    # a recovered node is judged on its text; only a control in its own right
+    # is exempt, because dropping one would hide a real action.
+    recovered = (
+        getattr(node, "detection_source", "") == "clickable_parent_recovery"
+    )
+    if bool(getattr(node, "is_clickable", False)) and not recovered:
+        return False
+
+    res_id = (getattr(node, "resource_id", "") or "").lower()
+    cls = (getattr(node, "class_name", "") or "").lower()
+    if any(h in res_id or h in cls for h in _ERROR_SLOT_HINTS):
+        return True
+
+    text = (getattr(node, "text", "") or "").strip()
+    # A paragraph is prose about the screen, not a field-level complaint.
+    if text and len(text) <= 120 and _VALIDATION_TEXT_RE.search(text):
+        return True
+    return False
+
+
 def compute_composite_state_signature(
     activity: str,
     package: str,
     ui_nodes: List[Any],
-    visible_text: str = "",
     webview_sig: str = "",
     scroll_position: int = 0,
 ) -> Tuple[str, str]:
@@ -469,7 +536,26 @@ def compute_composite_state_signature(
     """
     tree_parts: List[str] = [activity, package]
 
+    # Whether this screen has anything to fill, decided once: it gates the
+    # validation-text rule below, which must not apply to a screen that has no
+    # fields and may legitimately be ABOUT an error.
+    has_input = any(_is_input_node(n) for n in ui_nodes)
+
     for n in ui_nodes:
+        # An inline validation message is the app reacting to a field's
+        # CONTENT, and content is already excluded from identity below. Left
+        # in, it forked the form: pressing Submit raised "Please enter a valid
+        # email", which added a node, which made a second state holding its own
+        # unexplored copy of the same fields. Filling those cleared the message,
+        # the hash returned to the first state whose fields were also still
+        # unexplored, and the walk refilled between the two until it gave up
+        # and pressed Back.
+        #
+        # Skipped entirely rather than replaced with a marker: a marker is
+        # still a node, and the count would differ between the screen with the
+        # message and the same screen without it.
+        if _is_validation_text(n, has_input):
+            continue
         cls = getattr(n, "class_name", "") or ""
         text = getattr(n, "text", "") or ""
         desc = getattr(n, "desc", "") or ""
@@ -1557,7 +1643,7 @@ class ExplorationGraph:
             self._boundary_return_required = False
 
         screen_hash, ui_tree_hash = compute_composite_state_signature(
-            activity, fg, ui_nodes, visible,
+            activity, fg, ui_nodes,
             webview_sig="webview" if getattr(obs, "is_webview", False) else "",
         )
 
@@ -2829,7 +2915,7 @@ class ExplorationGraph:
     ) -> ExplorationState:
         """Record external-app state in separate external graph."""
         screen_hash, ui_tree_hash = compute_composite_state_signature(
-            activity, fg, ui_nodes, visible,
+            activity, fg, ui_nodes,
             webview_sig="webview" if getattr(obs, "is_webview", False) else "",
         )
 

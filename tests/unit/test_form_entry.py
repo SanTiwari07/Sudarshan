@@ -485,3 +485,110 @@ def test_a_planner_hint_does_not_override_a_confident_graph_field():
                       "confidence": 0.99}
     chosen, _ = select_canonical_action(graph_action, planner_action)
     assert chosen["field_hint"] == "password"
+
+
+# ─── F6: a validation error must not fork the screen ─────────────────────────
+
+from sudarshan_core.engines.agentic.exploration_engine import (  # noqa: E402
+    compute_composite_state_signature,
+)
+
+
+def _nodes(xml: str):
+    from sudarshan_core.engines.agentic.perception import PerceptionPipeline
+
+    return PerceptionPipeline.__new__(PerceptionPipeline)._parse_ui_nodes(xml)
+
+
+def _sig(xml: str) -> str:
+    return compute_composite_state_signature(
+        f"{TARGET}/.FormActivity", TARGET, _nodes(xml),
+    )[0]
+
+
+#: A form row that is itself clickable - a Material card, a RecyclerView row.
+#: This is the ONLY shape in which validation text reaches the state signature:
+#: the parser emits a non-clickable TextView only when it can be recovered
+#: through a clickable ancestor smaller than a full screen. A bare
+#: `textinput_error` slot on a plain layout never enters `ui_nodes` at all and
+#: could never have forked anything.
+def _card_form(error: str = "") -> str:
+    error_node = (
+        f'<node class="android.widget.TextView" text="{error}"\n'
+        f'        resource-id="com.example.form:id/textinput_error"\n'
+        f'        clickable="false" bounds="[10,205][390,225]" />'
+        if error else ""
+    )
+    return f"""<?xml version='1.0' encoding='UTF-8'?>
+<hierarchy rotation="0">
+ <node class="android.widget.LinearLayout" clickable="true"
+       bounds="[0,90][400,240]">
+  <node class="android.widget.TextView" text="Email" clickable="false"
+        bounds="[10,95][390,135]" />
+  <node class="android.widget.EditText" resource-id="com.example.form:id/email"
+        text="" password="false" enabled="true" bounds="[10,150][390,200]" />
+  {error_node}
+ </node>
+</hierarchy>"""
+
+
+def test_an_inline_validation_error_does_not_fork_the_state():
+    """
+    The ping-pong: inside a clickable row the error text IS recovered into the
+    node list, so the screen hashed differently and the same form became two
+    states, each holding its own unexplored copy of the same fields. Filling
+    them cleared the error, the hash returned to the first state whose fields
+    were also still unexplored, and the walk refilled until it gave up.
+    """
+    clean = _card_form()
+    dirty = _card_form("Please enter a valid email")
+    assert any(n.text == "Please enter a valid email" for n in _nodes(dirty)), (
+        "fixture must actually put the error into the node list"
+    )
+    assert _sig(clean) == _sig(dirty)
+
+
+@pytest.mark.parametrize("message", [
+    "Please enter a valid email",
+    "This field is required",
+    "Mobile number cannot be empty",
+    "Invalid phone number",
+])
+def test_common_validation_phrasings_are_all_treated_as_volatile(message):
+    assert _sig(_card_form(message)) == _sig(_card_form()), message
+
+
+def test_a_real_label_change_still_forks_the_state():
+    """
+    The rule must stay narrow. "Sign in" becoming "Welcome back" is a genuine
+    transition and collapsing it would hide screens from the walk.
+    """
+    a = _card_form().replace("Email", "Sign in")
+    b = _card_form().replace("Email", "Welcome back")
+    assert _sig(a) != _sig(b)
+
+
+def test_error_shaped_text_on_a_screen_with_no_inputs_still_counts():
+    """
+    Conservative by construction: validation feedback only exists next to a
+    field, so a screen with nothing to fill keeps every node it has.
+    """
+    clean = _card_form().replace(
+        '<node class="android.widget.EditText" '
+        'resource-id="com.example.form:id/email"\n'
+        '        text="" password="false" enabled="true" '
+        'bounds="[10,150][390,200]" />', "")
+    dirty = clean.replace(
+        '</node>',
+        '<node class="android.widget.TextView" text="This field is required"\n'
+        '        clickable="false" bounds="[10,205][390,225]" /></node>')
+    assert not any(n.is_input for n in _nodes(clean)), "fixture must have no inputs"
+    assert _sig(clean) != _sig(dirty)
+
+
+def test_the_signature_has_no_dead_parameter():
+    """`visible_text` was accepted and never read. It is gone, not ignored."""
+    import inspect
+
+    params = inspect.signature(compute_composite_state_signature).parameters
+    assert "visible_text" not in params

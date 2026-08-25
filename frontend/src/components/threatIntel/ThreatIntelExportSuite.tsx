@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileText, Globe, Database, Code, Layers, Download, RefreshCw } from 'lucide-react';
+import { FileText, Globe, Database, Code, Layers, Shield, Download, RefreshCw } from 'lucide-react';
 import SocCard from '../ui/Card';
 import SectionHeader from '../ui/SectionHeader';
 import { API_BASE, authHeaders, downloadAuthed } from '../../config';
@@ -29,7 +29,7 @@ export default function ThreatIntelExportSuite({ sha256 }: { sha256: string }) {
 
   return (
     <SocCard>
-      <SectionHeader icon={<FileText className="h-4 w-4" />} title="Export suite" subtitle="STIX, IOC, YARA, MITRE" />
+      <SectionHeader icon={<FileText className="h-4 w-4" />} title="Export suite" subtitle="STIX, IOC, YARA, Suricata, Snort, MITRE" />
       <div className="p-4 grid grid-cols-2 gap-2">
         {[
           { id: 'pdf', label: 'PDF Report', path: `/report/pdf/${sha256}`, file: `sudarshan_report_${sha256.slice(0, 8)}.pdf`, icon: FileText },
@@ -38,6 +38,9 @@ export default function ThreatIntelExportSuite({ sha256 }: { sha256: string }) {
           { id: 'csv', label: 'IOC CSV', path: `/report/iocs/${sha256}`, file: `sudarshan_iocs_${sha256.slice(0, 8)}.csv`, icon: Database },
           { id: 'yara', label: 'YARA', path: `/report/yara/${sha256}`, file: `sudarshan_rule_${sha256.slice(0, 8)}.yar`, icon: Code },
           { id: 'mitre', label: 'MITRE JSON', path: `/report/mitre/${sha256}`, file: `sudarshan_mitre_${sha256.slice(0, 8)}.json`, icon: Layers },
+          // Network signatures: YARA matches the file, these match the traffic.
+          { id: 'suricata', label: 'Suricata', path: `/report/suricata/${sha256}`, file: `sudarshan_suricata_${sha256.slice(0, 8)}.rules`, icon: Shield },
+          { id: 'snort', label: 'Snort', path: `/report/snort/${sha256}`, file: `sudarshan_snort_${sha256.slice(0, 8)}.rules`, icon: Shield },
         ].map((ex) => (
           <button
             key={ex.id}

@@ -60,7 +60,7 @@ const SEQUENCE_STYLES: Record<string, { label: string; color: string; bg: string
   BEHAVIORAL_ANOMALY: {
     label: 'Behavioral Anomaly',
     color: 'text-gray-700',
-    bg: 'bg-gray-50',
+    bg: 'bg-surface-secondary',
     border: 'border-gray-300',
   },
   NONE: {
@@ -126,7 +126,7 @@ function StageCard({
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-semibold text-gray-800">{stage.label}</span>
-                <span className="text-xs font-mono px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">
+                <span className="text-xs font-mono px-1.5 py-0.5 bg-surface-secondary text-gray-600 rounded">
                   {stage.technique_id}
                 </span>
                 <span className={`text-xs font-medium ${confidenceText(stage.confidence)}`}>
@@ -146,7 +146,7 @@ function StageCard({
         </button>
 
         {expanded && (
-          <div className="mt-1 ml-0 p-3 rounded-lg border border-gray-100 bg-gray-50 text-xs space-y-2">
+          <div className="mt-1 ml-0 p-3 rounded-lg border border-gray-100 bg-surface-secondary text-xs space-y-2">
             <div>
               <span className="font-medium text-gray-600">Full description: </span>
               <span className="text-gray-700">{stage.description}</span>

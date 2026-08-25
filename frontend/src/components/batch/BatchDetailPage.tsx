@@ -234,7 +234,7 @@ export default function BatchDetailPage() {
 
         {/* Jobs / Results Table */}
         <SocCard className="overflow-hidden border-slate-200/80 shadow-sm">
-          <div className="py-4 px-6 border-b border-slate-200/80 bg-slate-50/50 flex items-center justify-between">
+          <div className="py-4 px-6 border-b border-slate-200/80 bg-surface-secondary flex items-center justify-between">
             <h2 className="text-sm font-bold text-slate-900 font-mono uppercase tracking-wider flex items-center gap-2">
               <Layers className="w-4 h-4 text-blue-600" />
               Analysis Queue & Results ({batch.jobs.length})
@@ -247,7 +247,7 @@ export default function BatchDetailPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider font-mono bg-slate-50/80">
+                <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider font-mono bg-surface-secondary">
                   <th className="py-3 px-4">APK File</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4">Risk Band</th>

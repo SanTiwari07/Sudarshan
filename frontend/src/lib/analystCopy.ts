@@ -171,11 +171,21 @@ export function extractAppMetadata(data: FraudCardData): {
 } {
   const cert = data.certificate || {};
   const version =
-    String(cert.versionName || cert.version_name || data.apktool_enrichment?.versionName || '-');
+    String(
+      cert.versionName ||
+      cert.version_name ||
+      data.apktool_enrichment?.versionName ||
+      (data as any).version_name ||
+      ''
+    ).trim() || '-';
   const targetSdk = String(
     cert.targetSdkVersion || cert.target_sdk_version || data.apktool_enrichment?.targetSdkVersion || '-',
   );
-  const size = String(cert.file_size || cert.size || '-');
+  const size = String(
+    cert.file_size || cert.size ||
+    (data as any).apk_size ||
+    ''
+  ).trim() || '-';
   const subject = cert.subject || cert.certificate_info || cert.issuer;
   const certSummary =
     typeof subject === 'string'

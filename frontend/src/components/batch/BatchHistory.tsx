@@ -112,7 +112,7 @@ export default function BatchHistory() {
           <span>Loading batch history…</span>
         </div>
       ) : batches.length === 0 ? (
-        <div className="py-12 px-4 text-center border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+        <div className="py-12 px-4 text-center border-2 border-dashed border-slate-200 rounded-xl bg-surface-secondary">
           <Layers className="w-8 h-8 text-slate-400 mx-auto mb-2" />
           <p className="text-sm font-semibold text-slate-700">No batches analyzed yet</p>
           <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
@@ -120,11 +120,11 @@ export default function BatchHistory() {
           </p>
         </div>
       ) : (
-        <div className="bg-white border border-slate-200/80 rounded-xl shadow-xs overflow-hidden w-full">
+        <div className="bg-surface-card border border-slate-200/80 rounded-xl shadow-xs overflow-hidden w-full">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider font-mono bg-slate-50/80">
+                <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider font-mono bg-surface-secondary">
                   <th className="py-3 px-4">Batch ID</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4">Date & Time</th>

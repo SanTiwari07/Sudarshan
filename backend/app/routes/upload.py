@@ -938,6 +938,8 @@ async def _run_analysis_pipeline(
         "package_name": package_name,
         "dangerous_apis_found_raw": flags_dict.get("dangerous_apis_found", []),
         "app_name": mobsf_report.get("app_name") if mobsf_report else None,
+        "version_name": mobsf_report.get("version_name") if mobsf_report else None,
+        "apk_size": mobsf_report.get("size") if mobsf_report else None,
         "analysis_mode": analysis_mode,
         "family_classification": family_class,
         "base_score": risk_result["base_score"],

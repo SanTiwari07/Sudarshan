@@ -1,137 +1,99 @@
-# 04 - Dynamic Analysis Engine & Agentic Explorer Specification
+# 04 — Dynamic Analysis Engine & Deep Exploration Specification
+
+> **Authoritative Technical Specification**  
+> **Source Repository**: `SanTiwari07/Sudarshan`  
+> **Last Verified Against Active Codebase**: 2026-08-25  
 
 ```yaml
-Module Title:        Dynamic Analysis Engine (DAE) & Agentic Explorer
+Module Title:        Dynamic Analysis Engine (DAE) & Deep UI Explorer
 Version:             2.1.0
 Primary Files:       analysis-engine/app/main.py
                      backend/app/routes/runtime_api.py
                      shared/sudarshan_core/engines/frida_sandbox.py
                      shared/sudarshan_core/engines/agentic_explorer.py
-                     shared/sudarshan_core/engines/apk_repair.py
-                     shared/sudarshan_core/engines/network_capture.py
+                     shared/sudarshan_core/engines/agentic/exploration_engine.py
+                     shared/sudarshan_core/engines/agentic/perception.py
+                     shared/sudarshan_core/engines/agentic/screen_classifier.py
+                     shared/sudarshan_core/engines/agentic/screen_graph.py
+                     shared/sudarshan_core/engines/agentic/action_dispatch.py
+                     shared/sudarshan_core/engines/agentic/action_verifier.py
+                     shared/sudarshan_core/engines/execution_assertions.py
                      shared/sudarshan_core/engines/bfci_scorer.py
                      shared/sudarshan_core/engines/workflow_reconstructor.py
-                     shared/sudarshan_core/engines/frida_hooks/banking_trojan.js
-                     shared/sudarshan_core/engines/frida_hooks/java_probe.js
-                     shared/sudarshan_core/engines/frida_hooks/bisect_sec.js
-                     frontend/src/components/WorkflowDiagram.tsx
-Test Suite:          tests/unit/test_frida_pipeline_full.py, scripts/verify_runtime_pipeline.py, scripts/preflight.py, analysis-engine/test_frida_*.py, backend/tests/test_analysis_client.py, backend/tests/test_agentic_explorer.py, backend/tests/test_frida_preflight.py
+                     shared/sudarshan_core/engines/frida_hooks/banking_trojan.bundle.js
+Test Suite:          tests/unit/test_frida_pipeline_full.py, tests/unit/test_deep_exploration.py, tests/unit/test_action_verifier.py, backend/tests/test_launch_ladder.py, backend/tests/test_agentic_explorer.py
 ```
-
----
-
-## Table of Contents
-- [1. Executive Overview](#1-executive-overview)
-- [2. Dynamic Execution Architecture](#2-dynamic-execution-architecture)
-- [3. Frida 17 Runtime & ART Deoptimization](#3-frida-17-runtime--art-deoptimization)
-- [4. Dynamic Hook Bundle Inventory](#4-dynamic-hook-bundle-inventory)
-- [5. mitmproxy Sidecar & Network Interception](#5-mitmproxy-sidecar--network-interception)
-- [6. Agentic UI Explorer & 15-Stage Goal DAG](#6-agentic-ui-explorer--15-stage-goal-dag)
-- [7. Scripted vs Agentic Analysis Comparison](#7-scripted-vs-agentic-analysis-comparison)
-- [8. Behavioral Fraud Confidence Index (BFCI v2)](#8-behavioral-fraud-confidence-index-bfci-v2)
-- [9. Fraud Workflow Reconstruction](#9-fraud-workflow-reconstruction)
 
 ---
 
 ## 1. Executive Overview
 
-The **Dynamic Analysis Engine (DAE)** executes suspicious Android applications inside an isolated host sandbox selected via `SandboxProvider` (default: **Genymotion Desktop**; optional: Android Studio AVD). Compatible with Android 10/11 (API 29/30), x86 / x86_64. Combining Frida 17 binary instrumentation, `mitmproxy` transparent HTTPS decryption, an autonomous LLM UI explorer ([`agentic_explorer.py`](../../shared/sudarshan_core/engines/agentic_explorer.py)), and a causal workflow reconstructor ([`workflow_reconstructor.py`](../../shared/sudarshan_core/engines/workflow_reconstructor.py)), the DAE captures real-time behavioral evidence of mobile banking fraud.
+The **Dynamic Analysis Engine (DAE)** executes suspicious Android applications inside an isolated Android sandbox environment (Genymotion Desktop VM or Android Studio AVD).
 
-The DAE communicates with the emulator **only** through `sudarshan_core.sandbox.SandboxProvider`. Install, launch, Frida hooks, Agentic Explorer, Risk Engine, and MobSF integration are unchanged.
+Combining Frida 17 binary instrumentation, compiled Java-bridge hook scripts (`banking_trojan.bundle.js`), an autonomous deterministic UI explorer with AI prioritization (`AgenticExplorer`), and an Execution Assertion Matrix, the DAE safely observes runtime fraud behavior without corrupting evidence.
 
 ---
 
-## 2. Dynamic Execution Architecture & 7-Step Launch Fallback Ladder
+## 2. Dynamic Execution Architecture & Lifecycle
 
 ```mermaid
 graph TD
-    PREP[ADB Sandbox Prep & Low-SDK Install] --> LAUNCH[Launch Fallback Ladder]
-    LAUNCH --> L1[Step 1: am start_main]
-    L1 -->|Fail| L1b[Step 1b: implicit intent]
-    L1b -->|Fail| L2[Step 2: explicit intent]
-    L2 -->|Fail| L3[Step 3: exported activity]
-    L3 -->|Fail| L4[Step 4: boot broadcasts]
-    L4 -->|Fail| L5[Step 5: deep links]
-    L5 -->|Fail| L6[Step 6: force stop & retry]
-    L6 -->|Fail| L7[Step 7: monkey launcher]
-    L7 --> ATTACH
-    L1 -->|Success| ATTACH[Attach Frida 17 Script via PID]
-    L1b -->|Success| ATTACH
-    L2 -->|Success| ATTACH
-    L3 -->|Success| ATTACH
-    L4 -->|Success| ATTACH
-    L5 -->|Success| ATTACH
-    L6 -->|Success| ATTACH
+    START["run_frida_analysis(apk_path, package_name)"]
     
-    ATTACH --> DEOPT[Execute Java.deoptimizeEverything]
-    ATTACH --> CANARY[Emit Fail-Loud Canary Event]
+    subgraph Device_Lifecycle["1. Device Lifecycle & Pacing"]
+        DISCOVER["SandboxProvider.find_device()<br/>Auto-detects Genymotion / AVD"]
+        DEV_LOCK["Per-Device Async Lock (_DEVICE_LOCKS[serial])"]
+        SELINUX["SELinux Check: setenforce 0 (if enforcing)"]
+        INSTALL["ADB Install: pm install -r -g<br/>(Optional pregrant permissions)"]
+        LAUNCH["Launch Stability Ladder<br/>1. Launcher Intent → 2. am start → 3. monkey"]
+        PID_STABLE["Exact PID Resolution via pidof<br/>Monitored for >= 5s stability"]
+    end
 
-    DEOPT --> EXPLORE[Agentic UI Explorer Loop]
-    DEOPT --> HOOKS[Runtime API Instrumentation]
-    DEOPT --> PROXY[mitmproxy HTTPS Intercept]
+    subgraph Instrumentation["2. Instrumentation"]
+        PORT_FWD["ADB Port Forward (tcp:27055 -> tcp:27055)"]
+        ATTACH["Frida Attach by exact PID<br/>(10 retries, 1.5s delay)"]
+        BUNDLE["Load banking_trojan.bundle.js<br/>Compiled bundle with frida-java-bridge"]
+        DEOPT["Java.deoptimizeEverything()<br/>Disables JIT inlining"]
+    end
 
-    EXPLORE --> BUS[Runtime Event Bus]
-    HOOKS --> BUS
-    PROXY --> BUS
+    subgraph Monitoring_Exploration["3. Monitoring & Deep Exploration"]
+        HOOKS["Runtime API Hooks<br/>Accessibility · SMS · Overlays · C2 Sockets · Evasion"]
+        EXPLORER["AgenticExplorer<br/>5-Level Perception → ScreenClassifier → Graph → Actions"]
+    end
 
-    BUS --> STORE[Evidence Store]
-    STORE --> WORKFLOW[Workflow Reconstructor]
-    STORE --> BFCI[BFCI v2 Scorer]
+    subgraph Assertions_Scoring["4. Assertions & Scoring"]
+        ASSERT["ExecutionAssertionMatrix<br/>Checks if fraud triggers were exercised"]
+        BFCI["Compute BFCI v2 Score"]
+        EVIDENCE["Flush EvidenceStore & Artifacts"]
+    end
+
+    START --> DISCOVER --> DEV_LOCK --> SELINUX --> INSTALL --> LAUNCH --> PID_STABLE
+    PID_STABLE --> PORT_FWD --> ATTACH --> BUNDLE --> DEOPT
+    DEOPT --> HOOKS
+    DEOPT --> EXPLORER
+    HOOKS --> ASSERT
+    EXPLORER --> ASSERT
+    ASSERT --> BFCI --> EVIDENCE
 ```
 
 ---
 
-## 2a. Preflight Checklist & SELinux (required)
+## 3. Launch Stability & PID Resolution
 
-Before dynamic analysis is attempted, the robust `sudarshan_core.preflight` pipeline automatically checks the host and sandbox environments for common silent degradation causes. You can manually run this via:
-
-```powershell
-python scripts/preflight.py
-```
-
-Before `frida-server` is checked, `run_frida_analysis` performs:
-
-```powershell
-adb -s <serial> root
-adb -s <serial> shell getenforce      # if "Enforcing":
-adb -s <serial> shell setenforce 0
-```
-
-**Why this is not optional.** SELinux is Enforcing by default on Android 13+ and denies the `ptrace` that Frida injection requires, *even for uid 0*. Without this step every attach fails with `PermissionDeniedError: unable to access process with pid <n>` while `frida-server` reports healthy.
+Android process lifecycles require strict synchronization before dynamic instrumentation can begin:
+1. **Launch Stability Ladder**: Attempts primary launcher intent via `am start -n`, falls back to explicit component intents, and finally triggers `monkey -p <package> -c android.intent.category.LAUNCHER 1`.
+2. **Exact PID Resolution**: Attaching by package name fails on Android. The sandbox resolves the exact PID using `pidof <package>` and monitors process existence continuously for $\ge 5.0\text{s}$ (`LAUNCH_PID_STABLE_MIN_SECONDS`) to prevent attaching to transient splash screen forks.
+3. **Pacing Constants**:
+   - `APP_OPEN_SETTLE_SECONDS`: `8.0s` delay allowing complex banking frameworks to finish cold-start initialization before input is dispatched.
+   - `FRIDA_ANALYSIS_DURATION`: Default `300s` window ensuring second-stage droppers deploy before analysis terminates.
 
 ---
 
-## 2b. Live Runtime Telemetry Streaming (`runtime_api.py`)
+## 4. Frida 17 Instrumentation & Compiled Bundle
 
-The DAE exposes real-time telemetry, hook execution statistics, and evidence snapshots via [`backend/app/routes/runtime_api.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/routes/runtime_api.py):
-
-- **`/api/runtime/status`**: Returns high-level pipeline health summary and active `PipelineTracker` states across analysis jobs.
-- **`/api/runtime/hooks`**: Tracks Frida hook installation status, hit counters, and runtime error rates per hook.
-- **`/api/runtime/events`**: Exposes a ring buffer of recent telemetry events (max 500 events) for real-time analyst streaming.
-- **`/api/runtime/pipeline`**: Reports state machine transitions across `INIT`, `DECOMPILING`, `SANDBOXING`, `CORRELATING`, `SCORING`, `RAG_INDEXING`, and `COMPLETED` stages.
-- **`/api/runtime/metrics`**: Calculates rolling event processing rate (events/sec), dropped event metrics, and error totals.
-- **`/api/runtime/evidence`**: Provides snapshots of `evidence.json` generated during dynamic analysis runs.
-
----
-
-## 2c. Sandbox containment & ADB policy
-
-Dynamic analysis reaches the guest only through [`SandboxProvider`](../../shared/sudarshan_core/sandbox/provider.py) and [`adb_gateway.run_adb`](../../shared/sudarshan_core/security/adb_gateway.py). [`sandbox_containment.py`](../../shared/sudarshan_core/security/sandbox_containment.py) enforces:
-
-- Valid `ADB_HOST` for Genymotion (private NIC; not `host.docker.internal`).
-- Blocked ADB subcommands (`tcpip`, `kill-server`, `start-server`, …).
-- Loopback-only Frida on the guest (`FRIDA_LISTEN_HOST=127.0.0.1`).
-- Startup audit or fail-closed when `SANDBOX_CONTAINMENT_STRICT=true` or `SUDARSHAN_ENV=production`.
-
-The analysis-engine exposes port **8001** only on the internal Docker network and optionally requires `ANALYSIS_ENGINE_INTERNAL_TOKEN`. Operational runbooks: [`../security/P0_SANDBOX_ESCAPE_INCIDENT.md`](../security/P0_SANDBOX_ESCAPE_INCIDENT.md).
-
----
-
-## 3. Frida 17 Runtime & ART Deoptimization
-
-- **PID Attachment**: Resolves exact running application process name and ID via `pidof` and `ps -A -o PID,NAME`, preventing silent false positives on shells running the probe.
-- **Transport Selection & Port Forwarding**: Frida explicitly prefers the remote TCP device when the configured port differs from the USB/ADB default (27042). If transport ports differ, Frida falls back to jailed mode. ADB forward binding is resolved through explicit host routing (`adb_server_host()`, `frida_client_hosts()`) rather than defaulting to container loopback (`127.0.0.1`), ensuring consistent behavior across host and Docker container execution.
-- **Unconditional ART Deoptimization ([`banking_trojan.js`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/frida_hooks/banking_trojan.js))**:
+Frida 17 removed the global `Java` object. The hook script must be linked at build time:
+* **Compiled Bundle (`banking_trojan.bundle.js`)**: An ES module compiled using `frida-compile` that packages `frida-java-bridge` (~540 KB). Loading raw uncompiled JS is rejected by the runtime controller.
+* **Unconditional ART Deoptimization**:
   ```javascript
   if (Java.available) {
     Java.perform(function () {
@@ -142,145 +104,87 @@ The analysis-engine exposes port **8001** only on the internal Docker network an
     });
   }
   ```
-  Forces Android Runtime (ART) into interpreter mode, eliminating JIT inlining silent hook suppression.
-- **Fail-Loud Canary**: Emits a `canary` event at load time. If unreceived, [`frida_sandbox.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/frida_sandbox.py) flags `INSTRUMENTATION_FAILED`, invoking the **Static Fallback Risk Engine**.
+  Disables JIT compilation across the VM, preventing the runtime from inlining critical method hooks.
+
+### Dynamic Hook Coverage:
+* **Accessibility**: `AccessibilityService`, `AccessibilityEvent` (monitors screen scraping, node clicking, text scraping).
+* **SMS Interception**: `SmsManager.sendTextMessage`, `SmsMessage.createFromPdu`, telephony broadcast receivers.
+* **Overlays**: `WindowManager.addView`, `TYPE_APPLICATION_OVERLAY`, alert window creation.
+* **Network C2**: `OkHttpClient`, `HttpURLConnection`, `Socket.connect`, SSL socket handshakes.
+* **Anti-Analysis**: Root checks (`/system/bin/su`), Frida server ports, emulator build properties (`ro.kernel.qemu`).
 
 ---
 
-## 4. Dynamic Hook Bundle Inventory
+## 5. Deep UI Exploration Subsystem
 
-The DAE injects modular hook profiles selected by the `InvestigationManifest`:
-
-| Hook Bundle | Monitored API / Classes | Fraud Behavioral Signatures |
-| :--- | :--- | :--- |
-| `canary` | Synthetic Script Health Check | Asserts runtime script load and bridge health. |
-| `accessibility` | `AccessibilityService`, `AccessibilityEvent` | UI scraping, OTP field extraction, node clicking. |
-| `sms` | `SmsManager`, `SmsMessage`, `BroadcastReceiver` | Inbound SMS interception, OTP theft, SMS exfiltration. |
-| `overlay` | `WindowManager`, `TYPE_APPLICATION_OVERLAY` | Phishing window overlays over banking applications. |
-| `banking` | Target package intent launches | Financial app detection, overlay triggers. |
-| `dynamic_code` | `DexClassLoader`, `InMemoryDexClassLoader`, `PathClassLoader` | Secondary payload dropping and dynamic DEX loading. |
-| `persistence` | `DeviceAdminReceiver`, `PackageManager` | Device administrator privilege escalation and app icon hiding. |
-| `network` | `OkHttp3`, `URLConnection`, `Socket`, `SSLSocket` | C2 heartbeat communication, exfiltration POST requests. |
-
----
-
-## 5. mitmproxy Sidecar & Network Interception
-
-[`network_capture.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/network_capture.py) combines two network evidence streams:
-1. **Frida Socket Hooks**: Intercepts HTTP/HTTPS connections at call time.
-2. **mitmproxy Sidecar Container**: Intercepts transparent proxy traffic via port 8080. Parses HAR dumps (`dump.har`) written to shared volumes to extract full decrypted HTTP request/response headers, status codes, and body sizes.
-
----
-
-## 6. Agentic UI Explorer & 15-Stage Goal DAG
-
-`AgenticExplorer` uses an LLM planner and screen-hash state abstraction to navigate app UIs:
+The **Agentic Explorer** operates on a deterministic state graph, using Gemini for intelligent prioritization:
 
 ```mermaid
 graph TD
-    S1[Stage 1: App Launch] --> S2[Stage 2: Permission Prompt]
-    S2 --> S3[Stage 3: Accessibility Enable]
-    S3 --> S4[Stage 4: Welcome Screen]
-    S4 --> S5[Stage 5: Login / Form Entry]
-    S5 --> S6[Stage 6: OTP Request]
-    S5 --> S7[Stage 7: Banking App Detection]
-    S5 --> S8[Stage 8: Phishing Overlay]
-    S6 --> S9[Stage 9: SMS Interception]
-    S7 --> S10[Stage 10: Account Takeover]
-    S8 --> S10
-    S9 --> S10
-    S10 --> S11[Stage 11: C2 Exfiltration]
-    S11 --> S12[Stage 12: Anti-Analysis Evasion]
-    S11 --> S13[Stage 13: Local Data Theft]
-    S12 --> S14[Stage 14: Secondary Payload Execution]
-    S13 --> S14
-    S14 --> S15[Stage 15: Deep Root Persistence]
+    PERCEPTION["PerceptionPipeline (5 Priority Levels)"]
+    
+    subgraph Levels["Observation Levels"]
+        L1["Level 1: UI XML Hierarchy (uiautomator dump)"]
+        L2["Level 2: Current Activity & Package"]
+        L3["Level 3: Frida Runtime Event Stream"]
+        L4["Level 4: Logcat Tail (if nodes empty)"]
+        L5["Level 5: Screenshot + Vision (Triggered only when needed)"]
+    end
+
+    subgraph Semantics["Semantic State Modeling"]
+        CLASSIFIER["Rule-Based ScreenClassifier<br/>(17 Semantic Screen Types)"]
+        OWNERSHIP["Screen Ownership Context<br/>TARGET_APP · SYSTEM_PERMISSION · EXTERNAL_APP · HOME_LAUNCHER · CRASH"]
+        GRAPH["ScreenGraphBuilder<br/>Screen Hash: SHA256(Activity + Element Topology)[:16]"]
+    end
+
+    subgraph Actions["Action Dispatch & Progress"]
+        DISPATCH["ActionDispatcher<br/>Maps Semantic Goals → Canonical Executable Actions"]
+        EXEC["ToolExecutor / ADB Layer<br/>input tap, input text, back, grant permission"]
+        VERIFY["ActionVerifier<br/>Pre vs Post Observation Diffing & Transition Verification"]
+    end
+
+    PERCEPTION --> L1 --> L2 --> L3 --> L4 --> L5
+    L1 & L2 & L5 --> CLASSIFIER --> OWNERSHIP --> GRAPH
+    GRAPH --> DISPATCH --> EXEC --> VERIFY
+    VERIFY -->|State Updated| PERCEPTION
 ```
 
-- **Loop Detection**: Maintains screen view hashes to break out of redundant navigation loops.
-- **Input Sanitization**: Prevents prompt injection attacks via [`sanitizer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/agentic/sanitizer.py).
+### Perception Priority System
+* **Level 1**: UI XML via `uiautomator dump` (primary).
+* **Level 2**: Foreground activity name.
+* **Level 3**: Frida event queue since last step.
+* **Level 4**: Logcat tail (captured if XML yields no actionable nodes).
+* **Level 5 (Vision)**: Invoked **only** when XML is empty, lacks actionable nodes, labeled node fraction $<20\%$, current activity is a known WebView class, or previous action failed.
 
-### 6.1 Deep Exploration State Graph (v2.2)
-
-The 15-stage fraud DAG is **threat-intelligence prioritization only** — it is NOT the exploration boundary.
-
-`ExplorationGraph` ([`exploration_engine.py`](../../shared/sudarshan_core/engines/agentic/exploration_engine.py)) maintains:
-
-| Component | Purpose |
-| :--- | :--- |
-| `ExplorationState` nodes | Composite identity (activity + UI tree + visible text + webview sig) |
-| `ExplorationEdge` edges | Action transitions with causal screenshot/evidence links |
-| `ApplicationProfile` | Evolving understanding of unknown APK purpose |
-| `EvidenceMoment` | Security-relevant points (permissions, VPN, external APK, updates) |
-| `VictimJourneyBuilder` | Evidence-backed narrative chain |
-| `ActionPrioritizer` | Deterministic unexplored-branch coverage with AI reordering |
-
-**Architecture**: `DETERMINISTIC EXPLORATION ENGINE + AI PRIORITIZER + STATE/GRAPH MEMORY + RUNTIME TELEMETRY + EVIDENCE COLLECTION`
-
-**Stop conditions** (explicit `StopReason` enum):
-- `EXPLORATION_COMPLETE` — all reachable branches explored
-- `EXPLORATION_BUDGET_EXHAUSTED` — action budget (default 120)
-- `TIME_BUDGET_EXHAUSTED` — duration window
-- `NO_UNEXPLORED_ACTIONS` — Frida silent AND graph exhausted
-- `APPLICATION_CRASH_LOOP` — repeated crashes
-- `SAFETY_BOUNDARY_REACHED` — sandbox policy block
-
-**Artifacts** flushed to `deep_exploration.json`, `state_graph.mmd`, `victim_journey.json`.
-
-### 6.2 Screenshot Policy & Evidence Quality (v2.3)
-
-All screenshot requests flow through `ScreenshotPolicy.should_capture()` before adb screencap runs.
-
-| Decision | Meaning |
-| :--- | :--- |
-| `CAPTURE` | New state or high-priority trigger — take screenshot |
-| `DEDUPLICATED` | Perceptual/layout hash match — skip |
-| `SUPPRESSED` | Repeated home/external/permission observation — skip |
-| `REUSE` | Same visible screen — reference existing screenshot ID |
-| `BLOCKED` | Sandbox policy — skip |
-
-**Screen ownership** (`resolve_screen_ownership`) uses foreground package vs target package:
-- `HOME_LAUNCHER` — launcher foreground, target not foreground → not explored, max 1 transition screenshot
-- `EXTERNAL_APP` / `SYSTEM_INSTALLER` — separate `external_states` graph, one boundary screenshot
-- `CRASH_STATE` — one crash-context screenshot per crash transition
-- `SYSTEM_PERMISSION` — one screenshot per unique permission dialog
-
-**Invariant:** Screenshot deduplication ≠ event deduplication. Runtime events and evidence moments are always recorded even when screenshots are suppressed.
-
-Manifest includes `policy_statistics` (total requests, captured, suppressed, reused, most_suppressed_state).
+### Rule-Based Screen Classification
+Classifies screens into 17 deterministic types:
+`BANK_LOGIN`, `OTP_SCREEN`, `ACCESSIBILITY_DIALOG`, `SYSTEM_PERMISSION`, `OVERLAY_ATTACK`, `UPDATE_PROMPT`, `EXTERNAL_APK`, `VPN_REQUEST`, `WEBVIEW`, `DIALOG`, `SETTINGS`, `HOME`, `HOME_LAUNCHER`, `CRASH_STATE`, `APP_NOT_RESPONDING`, `TRANSITION`, `UNKNOWN`.
 
 ---
 
-## 7. Scripted vs Agentic Analysis Comparison
+## 6. Execution Assertion Matrix & Safety Floors
 
-| Feature Dimension | Traditional Scripted Frida | Sudarshan Agentic Dynamic Analysis |
-| :--- | :--- | :--- |
-| **Navigation Model** | Hardcoded UI clicks / random input fuzzing | Autonomous LLM + 15-stage Goal DAG |
-| **Hook Activation** | Monolithic static script load | Dynamic profile loading via `manifest.json` |
-| **JIT Bypass** | Prone to silent inline suppression | Unconditional `Java.deoptimizeEverything()` |
-| **Network Visibility** | Host socket URLs only | Frida hooks + mitmproxy HAR decrypted bodies |
-| **Scoring Logic** | Count API invocations | Causal workflow reconstruction & sequence bonuses |
+To ensure sterile or dormant runs do not masquerade as benign:
+1. **Execution Assertions (`execution_assertions.py`)**: Checks whether the sample's preconditions were exercised (e.g., target bank foregrounded, accessibility granted, SMS received).
+2. **`INCOMPLETE_EXERCISE` Verdict**: If no fraud trigger condition was reached during analysis, `verdict` is set to `INCOMPLETE_EXERCISE` and floored to `Suspicious` if the numerical score $\le 30$.
+3. **Evasion Floor**: If anti-analysis checks are observed followed by zero behavior, the run is flagged as `EVASION_ONLY` and floored to `Suspicious`.
+4. **Visibility Floor**: If a concealed payload was detected statically but never deployed dynamically, the run is floored to `Suspicious`.
 
 ---
 
-## 8. Behavioral Fraud Confidence Index (BFCI v2)
+## 7. Behavioral Fraud Crime Impact (BFCI v2) Formula
+
+The behavioral dynamic score is calculated in `shared/sudarshan_core/engines/bfci_scorer.py`:
 
 $$BFCI_{\text{v2}} = \min\left(100.0, \sum_{c} W_c \cdot \min\left(1.0, \frac{\ln(1 + N_c)}{\ln(1 + M_c)}\right) \times 100 + S_{\text{sequence}}\right)$$
 
-Where $W_c$ is category weight, $N_c$ is event count, $M_c$ is saturation threshold, and $S_{\text{sequence}} = +15$ when a temporal causal chain completes within 30 seconds. Implemented in [`bfci_scorer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/bfci_scorer.py).
+| Component | Weight ($W_c$) | Saturation ($M_c$) | Target Fraud Behavior |
+| :--- | :--- | :--- | :--- |
+| **Accessibility ($A$)** | **0.35** | 10 events | Screen scraping, tap injection, OTP field extraction |
+| **SMS Interception ($S$)** | **0.25** | 5 events | Reading SMS messages, stealing 2FA tokens |
+| **Overlay Window ($O$)** | **0.20** | 3 events | Drawing phishing login overlays over legitimate apps |
+| **Banking Interaction ($B$)**| **0.10** | 5 events | Target package launching and financial API activity |
+| **Network C2 ($N$)** | **0.05** | 20 events | C2 heartbeat beacons and credential exfiltration |
+| **Persistence ($P$)** | **0.05** | 3 events | Device administrator elevation and icon hiding |
 
----
-
-## 9. Fraud Workflow Reconstruction
-
-[`workflow_reconstructor.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/workflow_reconstructor.py) maps raw Frida events into MITRE ATT&CK causal stages:
-
-- **Full Account Takeover**: Accessibility Enable $\rightarrow$ Overlay Phishing $\rightarrow$ SMS Intercept $\rightarrow$ C2 Exfiltration.
-- **OTP Theft Chain**: SMS Intercept $\rightarrow$ C2 POST.
-- **Interactive UI Timeline**: Rendered in the frontend via [`WorkflowDiagram.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/components/WorkflowDiagram.tsx).
-
----
-
-## 10. VIDE runtime inputs (WebView HTML)
-
-The **Visual Impersonation Detection Engine** ([`engines/vide/`](../../shared/sudarshan_core/engines/vide/)) consumes Frida events from `banking_trojan.bundle.js` (WebView `loadData` / `loadDataWithBaseURL`) via `collect_webview_html_from_frida_events()`. The analysis microservice runs `safe_run_vide_analysis()` after dynamic analysis and attaches `vide` to the consolidated result ([`analysis-engine/app/main.py`](../../analysis-engine/app/main.py)). Specification and verification matrix: [`VIDE.md`](VIDE.md).
+*$S_{\text{sequence}} = +15.0$ bonus is awarded when a complete temporal attack sequence (e.g. Accessibility $\rightarrow$ Overlay $\rightarrow$ SMS) is observed.*

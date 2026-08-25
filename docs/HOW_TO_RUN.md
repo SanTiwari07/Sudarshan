@@ -52,12 +52,14 @@ GEMINI_PRIMARY_MODEL="gemini-3.6-flash"
 GEMINI_FALLBACK_API_KEY="your_fallback_api_key"
 GEMINI_FALLBACK_MODEL="gemini-2.5-flash"
 GEMINI_PRIMARY_COOLDOWN_SECONDS=60
+SUDARSHAN_AGENT_MAX_OUTPUT_TOKENS="2048"
 # Legacy aliases (optional if PRIMARY_* is set):
 GEMINI_API_KEY="your_primary_api_key"
 GEMINI_MODEL="gemini-3.6-flash"
 
 # ── Dynamic Sandbox & ADB ──
 SANDBOX_PROVIDER="genymotion"
+SUDARSHAN_PREGRANT_PERMISSIONS="1"
 # ADB_HOST controls where the container connects to ADB. When left blank (default),
 # the analysis-engine automatically determines the host interface based on the
 # chosen SANDBOX_PROVIDER. Override this only if your host network topology requires it.

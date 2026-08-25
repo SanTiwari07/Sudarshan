@@ -1,118 +1,134 @@
-# 05 - AI Investigation Engine & RAG Specification
+# 05 — AI Investigation Engine & Grounded RAG Specification
+
+> **Authoritative Technical Specification**  
+> **Source Repository**: `SanTiwari07/Sudarshan`  
+> **Last Verified Against Active Codebase**: 2026-08-25  
 
 ```yaml
 Module Title:        AI Investigation Engine & RAG Core
 Version:             2.1.0
-Primary Files:       backend/app/ai/gemini_rag.py
+Primary Files:       shared/sudarshan_core/ai/gemini_provider.py
+                     shared/sudarshan_core/ai/gemini_settings.py
+                     shared/sudarshan_core/ai/gemini_errors.py
                      backend/app/ai/gemini_client.py
+                     backend/app/ai/gemini_rag.py
                      shared/sudarshan_core/engines/agentic/sanitizer.py
-Test Suite:          backend/tests/test_prompt_injection.py
+Test Suite:          tests/unit/test_gemini_provider.py, tests/unit/test_gemini_fallback.py, backend/tests/test_prompt_injection.py, backend/tests/test_visual_evidence_rag.py
 ```
-
----
-
-## Table of Contents
-- [1. Executive Overview](#1-executive-overview)
-- [2. RAG Architecture & Context Vector Graph](#2-rag-architecture--context-vector-graph)
-- [3. Gemini Primary / Fallback Providers](#3-gemini-primary--fallback-providers)
-- [4. Prompt Injection Sanitization Guard](#4-prompt-injection-sanitization-guard)
-- [5. Anti-Hallucination Evidence Clamps](#5-anti-hallucination-evidence-clamps)
-- [6. Threat Attribution & Banking Intelligence Graph](#6-threat-attribution--banking-intelligence-graph)
 
 ---
 
 ## 1. Executive Overview
 
-The **AI Investigation Engine** serves as the intelligence layer of the Sudarshan platform. It transforms structured findings ($STEI$, $BFCI\text{ v2}$, $FRS$, extracted string IOCs, Frida events, and reconstructed fraud workflows) into plain-English executive narratives, technical SOC breakdowns, CERT-In regulatory advisories, and real-time analyst chat responses.
+The **AI Investigation Engine** transforms low-level binary analysis findings and dynamic telemetry into plain-English executive summaries, deep technical SOC narratives, CERT-In compliance advisories, and grounded multi-turn analyst chat responses.
+
+To ensure stability, security, and accuracy:
+1. **Determinism Isolation**: The AI **never** calculates or alters the numerical Fraud Risk Score (FRS).
+2. **Resilient Failover**: Managed by `GeminiProviderManager` with a 3-state circuit breaker (`AVAILABLE`, `DEGRADED`, `OPEN`), 60-second cooldown, and primary-to-fallback failover.
+3. **Prompt Sanitization**: Protects against prompt injection from untrusted APK strings and user inputs.
+4. **Vector RAG Grounding**: Chat and report generation are strictly grounded on finding chunks indexed in `InvestigationRAG`.
 
 ---
 
-## 2. RAG Architecture & Context Vector Graph (`gemini_rag.py`)
+## 2. RAG Architecture & Vector Indexing (`backend/app/ai/gemini_rag.py`)
 
 ```mermaid
 graph TD
-    CASE[Case Analysis JSON Record] --> PARSE[RAG Document Builder]
+    CASE["Analysis Result Payload (cases.raw_result)"] --> BUILDER["RAG Document Builder"]
 
-    PARSE --> V1[Verdict & FRS Breakdown]
-    PARSE --> V2[Risk Engine Score Factors]
-    PARSE --> V3[Fraud Workflow Stages]
-    PARSE --> V4[Static & Dynamic Findings]
-    PARSE --> V5[Threat Correlation & IOCs]
+    BUILDER --> C1["Chunk 1: Verdict & FRS Breakdown"]
+    BUILDER --> C2["Chunk 2: Static Findings & Dangerous Permissions"]
+    BUILDER --> C3["Chunk 3: Dynamic Telemetry & Hook Hits"]
+    BUILDER --> C4["Chunk 4: Reconstructed Fraud Workflows"]
+    BUILDER --> C5["Chunk 5: Threat Correlation & IOC Reputations"]
+    BUILDER --> C6["Chunk 6: VIDE Visual Clone & Certificate Matches"]
 
-    V1 --> RAG[RAG Vector Graph Index]
-    V2 --> RAG
-    V3 --> RAG
-    V4 --> RAG
-    V5 --> RAG
+    C1 & C2 & C3 & C4 & C5 & C6 --> INDEX["InvestigationRAG (In-Memory Vector Store)"]
 
-    QUERY[Analyst Chat Query] --> SEARCH[Cosine Similarity Search]
-    RAG --> SEARCH
-    SEARCH --> PROMPT[Grounding Prompt Assembly]
-    PROMPT --> LLM[Gemini primary 3.x / fallback 2.5]
-    LLM --> RESP[Grounded Investigation Response]
+    USER_Q["Analyst Chat Query (POST /api/v1/cases/{sha256}/chat)"] --> SANITIZE["Input Sanitizer (sanitizer.py)"]
+    SANITIZE --> COSINE["Cosine Similarity Search & Context Assembly"]
+    INDEX --> COSINE
+    COSINE --> PROMPT["Grounded System & User Prompt"]
+    PROMPT --> GEMINI["GeminiProviderManager.generate_content()"]
+    GEMINI --> RESP["Grounded Structured JSON / Conversational Response"]
 ```
 
-Implemented in [`gemini_rag.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/ai/gemini_rag.py).
-
-**VIDE facts:** There is no dedicated `vide` RAG section. Deterministic **VIDE-F001** strings are merged into `report.evidence` by [`risk_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/risk_engine.py) and indexed under the `risk_engine` chunk list (first 10 evidence lines). The dashboard reads the structured `vide` object directly for UI panels.
-
----
-
-## 3. Gemini Primary / Fallback Providers
-
-Sudarshan talks to Gemini through a single manager (`shared/sudarshan_core/ai/gemini_provider.py`). Callers (RAG, report synthesis, agentic planner, UI explorer, optional captions, VIDE semantic matcher) never construct `google.genai.Client` themselves.
-
-- **Primary**: Gemini 3.x Flash (`GEMINI_PRIMARY_MODEL`, defaulting through `GEMINI_MODEL`) on `GEMINI_PRIMARY_API_KEY` (or legacy `GEMINI_API_KEY`).
-- **Fallback**: Gemini 2.5 Flash (`GEMINI_FALLBACK_MODEL`, typically `gemini-2.5-flash`) on `GEMINI_FALLBACK_API_KEY`.
-- **Routing**: every request tries primary first. Quota (429), rate limits, 5xx, timeouts, and primary-key auth failures fail over to fallback after the existing retry/backoff. Invalid requests (400 / schema) do **not** fail over.
-- **Cooldown**: after a failover-worthy primary failure, primary is skipped for `GEMINI_PRIMARY_COOLDOWN_SECONDS` (default 60), then probed again. Primary is never permanently disabled.
-- **Compatibility**: thinking_budget=0 is stripped for Gemini 3.x; 3.x-only thinking config is stripped on 2.5 Flash. JSON MIME type, system instructions, and temperature are preserved.
-- **Investigation client**: structured JSON prompts remain in [`gemini_client.py`](file:///c:/Projects/Sudarshan/backend/app/ai/gemini_client.py); transport retries live in the manager.
-- **Output contracts**: Standardized Pydantic `IntelligenceReport` model:
-  - `plain_english_narrative`
-  - `fraud_objective`
-  - `affected_banking_apps`
-  - `mitre_techniques_used`
-  - `cert_in_recommendations`
-  - `customer_advisory_draft`
+### Context Chunking Strategy:
+Findings are split into semantically structured blocks (max 1000 characters per chunk) and embedded using local TF-IDF / term-overlap scoring or vector embeddings. Responses cite explicit Finding IDs (e.g. `STATIC-P001`, `VIDE-F001`, `DYNAMIC-ACC-01`).
 
 ---
 
-## 4. Prompt Injection Sanitization Guard (`sanitizer.py`)
+## 3. Gemini Provider & Resilient Failover (`shared/sudarshan_core/ai/gemini_provider.py`)
 
-> [!NOTE]
-> **G2d — RESOLVED (verified in `_ground_truth_2026-08-14.md` §5):** `sanitizer.py` is now imported by both production LLM prompt paths:
-> - `backend/app/ai/gemini_client.py:18` — `from sudarshan_core.engines.agentic.sanitizer import sanitize`; all evidence values recursively sanitized before prompt assembly.
-> - `backend/app/ai/gemini_rag.py:31` — `from sudarshan_core.engines.agentic.sanitizer import sanitize, sanitize_block`; chunk text and user questions sanitized.
->
-> APK-controlled strings now pass through `sanitize()` / `sanitize_block()` before reaching Gemini API calls. The prior code gap is closed.
+All Gemini calls across the codebase flow through `GeminiProviderManager`. Callers never instantiate `google.genai.Client` directly.
 
-[`sanitizer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/agentic/sanitizer.py) implements the guard:
+```mermaid
+graph TD
+    CALL["GeminiProviderManager.generate_content(prompt, config)"]
+    
+    subgraph Circuit_State["Circuit Breaker State"]
+        AVAIL["AVAILABLE (Normal Operation)"]
+        DEGRAD["DEGRADED (Primary in Cooldown)"]
+        OPEN_ST["OPEN (All Providers Exhausted)"]
+    end
+
+    subgraph Resolution["Provider Resolution"]
+        PRIMARY["Primary Provider<br/>GEMINI_PRIMARY_MODEL (gemini-3.6-flash / 2.5)<br/>GEMINI_PRIMARY_API_KEY"]
+        FALLBACK["Fallback Provider<br/>GEMINI_FALLBACK_MODEL (gemini-2.5-flash)<br/>GEMINI_FALLBACK_API_KEY"]
+    end
+
+    CALL --> AVAIL
+    AVAIL --> PRIMARY
+    PRIMARY -->|Success| RETURN["Return GeminiCallResult"]
+    PRIMARY -->|429 Rate Limit / 5xx / Timeout| COOLDOWN["Trigger 60s Cooldown"]
+    COOLDOWN --> DEGRAD --> FALLBACK
+    FALLBACK -->|Success| RETURN
+    FALLBACK -->|Failure| OPEN_ST --> TEMPLATE["Deterministic Fallback Narrative"]
+```
+
+### Failover & Configuration Details:
+* **Primary Key / Model**: Configured via `GEMINI_PRIMARY_API_KEY` and `GEMINI_PRIMARY_MODEL` (defaults to `gemini-3.6-flash`).
+* **Fallback Key / Model**: Configured via `GEMINI_FALLBACK_API_KEY` and `GEMINI_FALLBACK_MODEL` (defaults to `gemini-2.5-flash`).
+* **Cooldown Policy**: When primary fails with retryable errors (HTTP 429, HTTP 503, connection timeouts), it enters `DEGRADED` state for `GEMINI_PRIMARY_COOLDOWN_SECONDS` (default `60.0s`). In-flight requests route to fallback. Primary is automatically re-probed after cooldown expires.
+* **Thinking Token Budgeting**: On Gemini 3.x Flash models, internal reasoning tokens consume output budget before JSON is emitted. The system sets `SUDARSHAN_AGENT_MAX_OUTPUT_TOKENS=2048` to prevent mid-stream truncation, and automatically strips incompatible `thinking_config` knobs when failing over to `gemini-2.5-flash`.
+
+---
+
+## 4. Prompt Injection Sanitization (`sanitizer.py`)
+
+Untrusted APK strings (package names, activity names, button labels, and user chat inputs) are sanitized before prompt assembly:
 
 ```python
 def sanitize_input(text: str) -> str:
-    """Strip system prompt override attempts and markdown fencing escape sequences."""
-    text = re.sub(r'(?i)(ignore previous instructions|system prompt|you are now)', '[REDACTED_PROMPT_INJECTION]', text)
+    """Strip prompt override patterns and markdown fencing escape sequences."""
+    text = re.sub(
+        r'(?i)(ignore previous instructions|system prompt|you are now|disregard above)',
+        '[REDACTED_PROMPT_INJECTION]',
+        text
+    )
     text = text.replace('```', "'''")
     return text[:2000]
 ```
 
-Tested against 64 adversarial injection payloads ([`test_prompt_injection.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_prompt_injection.py)).
+Applied recursively across evidence trees in `backend/app/ai/gemini_client.py` and `backend/app/ai/gemini_rag.py`.
 
 ---
 
-## 5. Anti-Hallucination Evidence Clamps
+## 5. Output Data Contracts
 
-To guarantee zero hallucinated verdicts:
-1. **Determinism Isolation**: The LLM is **never permitted to generate or modify numerical risk scores** ($FRS$).
-2. **Context Clamping**: Prompts mandate that any claim regarding targeted banking apps or exfiltrated data must reference an explicit finding ID in the RAG context.
-3. **Structured Fallback**: If LLM services fail or return 404/500, a rule-derived fallback narrative is generated deterministically.
+The AI investigation client produces structured JSON validated against the `IntelligenceReport` schema:
 
----
-
-## 6. Threat Attribution & Banking Intelligence Graph
-
-The engine maps observed evidence against known threat actors and banking malware families (*Drinik*, *Xenomorph*, *Anatsa*, *Cerberus*):
-
-- **MITRE ATT&CK for Mobile**: Maps findings to technique IDs (`T1628` Accessibility Abuse, `T1637` App Overlay, `T1643` SMS Theft).
-- **Banking Application Graph**: Cross-references package names against **21** Indian banking app package prefixes (`INDIAN_BANK_PACKAGES` in `apk_analyzer.py` — SBI, HDFC, ICICI, Axis, PhonePe, Paytm, BHIM, Google Pay family).
+```json
+{
+  "plain_english_narrative": "Drinik is an Android banking trojan that impersonates the Income Tax Department of India to harvest netbanking credentials...",
+  "fraud_objective": "Netbanking credential theft and automated OTP exfiltration",
+  "affected_banking_apps": ["State Bank of India (SBI)", "HDFC Bank", "ICICI Bank"],
+  "mitre_techniques_used": ["T1628 - Accessibility Abuse", "T1637 - Phishing Overlay", "T1643 - SMS Interception"],
+  "cert_in_recommendations": [
+    "Block C2 IP 185.220.101.5 at perimeter banking firewalls",
+    "Advise customers to revoke accessibility permissions for suspicious tax utility apps"
+  ],
+  "customer_advisory_draft": "Security Alert: Beware of fake Income Tax refund applications requesting SMS or accessibility permissions...",
+  "confidence": "HIGH"
+}
+```

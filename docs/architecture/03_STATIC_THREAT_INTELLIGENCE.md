@@ -1,115 +1,126 @@
-# 03 - Static Threat Intelligence Engine Specification
+# 03 — Static Threat Intelligence & Decompilation Specification
+
+> **Authoritative Technical Specification**  
+> **Source Repository**: `SanTiwari07/Sudarshan`  
+> **Last Verified Against Active Codebase**: 2026-08-25  
 
 ```yaml
 Module Title:        Static Threat Intelligence & Decompilation Engine
 Version:             2.1.0
 Primary Files:       analysis-engine/app/main.py
-                     shared/sudarshan_core/models/manifest.py
+                     shared/sudarshan_core/analyzers/apk_analyzer.py
                      shared/sudarshan_core/engines/apk_repair.py
                      shared/sudarshan_core/engines/apktool_engine.py
                      shared/sudarshan_core/engines/jadx_engine.py
-                     shared/sudarshan_core/analyzers/apk_analyzer.py
+                     shared/sudarshan_core/engines/vide/pipeline.py
+                     shared/sudarshan_core/models/manifest.py
                      shared/sudarshan_core/services/mobsf_client.py
                      backend/app/routes/upload.py
-Test Suite:          backend/tests/test_analysis_client.py, backend/tests/test_manifest_repair.py, backend/tests/test_remaining_features.py
+Test Suite:          backend/tests/test_analysis_client.py, backend/tests/test_manifest_repair.py, backend/tests/test_remaining_features.py, tests/unit/test_labelled_corpus.py
 ```
-
----
-
-## Table of Contents
-- [1. Executive Overview](#1-executive-overview)
-- [2. Multi-Engine Decompilation Strategy](#2-multi-engine-decompilation-strategy)
-- [3. APKTool Engine Integration](#3-apktool-engine-integration)
-- [4. JADX Engine Integration](#4-jadx-engine-integration)
-- [5. MobSF & Native APK Analysis](#5-mobsf--native-apk-analysis)
-- [6. Investigation Manifest Generation](#6-investigation-manifest-generation)
-- [7. Static Threat Exposure Index (STEI) Formula](#7-static-threat-exposure-index-stei-formula)
 
 ---
 
 ## 1. Executive Overview
 
-The **Static Threat Intelligence Engine** performs pre-execution binary analysis on uploaded Android APKs. Rather than relying on a single analyzer, Sudarshan deploys a four-layered defense-in-depth static extraction pipeline (**MobSF**, native [`apk_analyzer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/analyzers/apk_analyzer.py), **APKTool**, and **JADX**) to extract permissions, components, API calls, hardcoded secrets, obfuscation signals, and banking app targets.
+The **Static Threat Intelligence Engine** performs multi-layered pre-execution binary analysis on uploaded Android APKs. Rather than relying on a single tool, SUDARSHAN deploys a layered defense-in-depth static extraction pipeline:
+1. **Native APK Analyzer ([`apk_analyzer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/analyzers/apk_analyzer.py))**: Native Python DEX/AXML bytecode parsing via `androguard`.
+2. **APK Corruption Repair ([`apk_repair.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/apk_repair.py))**: Automated reconstruction of obfuscated/corrupted `AndroidManifest.xml` files.
+3. **APKTool Engine ([`apktool_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/apktool_engine.py))**: Decompiles binary XMLs, smali, layout hierarchies, and string tables.
+4. **JADX Engine ([`jadx_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/jadx_engine.py))**: Decompiles DEX bytecode to Java source code and scans for 10 fraud signatures.
+5. **VIDE Static Profile ([`shared/sudarshan_core/engines/vide/`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/vide/))**: Extracts UI layout ASTs and brand colors to detect visual impersonation of protected Indian banks.
+6. **Optional MobSF Client ([`mobsf_client.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/services/mobsf_client.py))**: Provides supplementary AppSec vulnerability ratings when available.
 
-Findings are normalized via [`upload.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/routes/upload.py) and compiled into a pre-sandbox **Investigation Manifest** (`manifest.json`), which configures dynamic sandbox hooks and goal priorities.
+Findings are normalized and compiled into an **Investigation Manifest** (`InvestigationManifest`), configuring the dynamic sandbox hooks and priority goals.
 
 ---
 
-## 2. Multi-Engine Decompilation Strategy
+## 2. Multi-Engine Decompilation Pipeline
 
 ```mermaid
 graph TD
-    APK[Target APK Upload] --> SPLIT{Analysis Dispatcher}
+    APK["Target APK Upload (/app/uploads/<sha256>.apk)"]
+    
+    subgraph Decompilation_Pipeline["Decompilation & Extraction"]
+        REPAIR["ApkRepairEngine<br/>AXML String Pool & Header Repair"]
+        ANDRO["Native APK Analyzer (Androguard)<br/>Manifest, Permissions, DEX Strings"]
+        APKT["APKTool Engine (v2.10.0)<br/>Layout XMLs, Smali, Drawables"]
+        JADX["JADX Source Scanner (v1.5.1)<br/>Java Decompilation & Secret Scanner"]
+        VIDE_P["VIDE Layout Extractor<br/>UI AST & Color Palette Profiles"]
+        MOBSF_CLI["MobSF Client (Optional)<br/>Containerized Port 8008"]
+    end
+    
+    subgraph Normalization["Evidence Normalization"]
+        NORM["Evidence Normalizer & Deduplicator"]
+    end
+    
+    subgraph Outputs["Pipeline Outputs"]
+        MANIFEST["Investigation Manifest (manifest.py)"]
+        STEI["5-Axis STEI Score (risk_engine.py)"]
+    end
 
-    SPLIT -->|REST API Port 8008| MobSF[MobSF Container]
-    SPLIT -->|Native Python| Andro[Native APK Analyzer]
-    SPLIT -->|CLI Subprocess| APKT[APKTool Engine]
-    SPLIT -->|CLI Subprocess| JADX[JADX Source Scanner]
+    APK --> REPAIR --> ANDRO
+    APK --> APKT
+    APK --> JADX
+    APK --> VIDE_P
+    APK --> MOBSF_CLI
 
-    MobSF --> NORM[Evidence Normalizer]
-    Andro --> NORM
+    ANDRO --> NORM
     APKT --> NORM
     JADX --> NORM
+    VIDE_P --> NORM
+    MOBSF_CLI --> NORM
 
-    NORM --> MANIFEST[Investigation Manifest Generator]
-    NORM --> STEI[5-Axis STEI Score Calculator]
+    NORM --> MANIFEST
+    NORM --> STEI
 ```
 
-### Why Both APKTool and JADX Are Used
-- **APKTool ([`apktool_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/apktool_engine.py))**: Specializes in decompiling raw Android binary XML files (`AndroidManifest.xml`), layout resources (`res/layout/`), and string tables (`res/values/strings.xml`). It detects obfuscated single-character resource names and resource-embedded URLs.
-- **JADX ([`jadx_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/jadx_engine.py))**: Specializes in decompiling DEX bytecode to readable Java source code. It scans method bodies for complex fraud logic patterns (`DexClassLoader`, `SmsManager.sendTextMessage`, `AccessibilityService`, `WindowManager.addView`) that raw resource tools cannot parse.
+---
 
-Together, APKTool provides structural & asset visibility while JADX provides behavioral source code visibility.
+## 3. APK Corruption Repair (`apk_repair.py`)
+
+Malware authors intentionally corrupt `AndroidManifest.xml` headers and string pool offsets to crash standard disassemblers while allowing Android's lenient `PackageParser` to install the app.
+
+The `ApkRepairEngine`:
+* **Validates AXML Magic**: Ensures the file header starts with `0x00080003`.
+* **String Pool Offset Repair**: Fixes invalid offsets and malformed UTF-8/UTF-16 string table lengths.
+* **Chunk Header Bounds**: Validates that XML chunk lengths do not exceed the actual file size.
+* **Clean Fallback**: Reconstructs a valid AXML binary structure, allowing Androguard and APKTool to parse the manifest successfully.
 
 ---
 
-## 3. APKTool Engine Integration (`apktool_engine.py`)
+## 4. APKTool & JADX Engines
 
-Wraps the APKTool CLI to decompile resources and extract decoded XML files when MobSF is offline:
+### APKTool Engine (`apktool_engine.py`)
+* Decompiles resources and raw binary XML files.
+* Extracts layout hierarchies from `res/layout/` and text strings from `res/values/strings.xml`.
+* Measures resource name entropy (detects obfuscation with single-character resource names like `a.xml`, `b.png`).
+* Supplies decoded XML layouts to the VIDE engine.
 
-- **Decoded Manifest Extraction**: Reads `AndroidManifest.xml` in human-readable text format.
-- **VIDE static UI profile**: Layout XML and `assets/*.html` extracted here feed [`build_static_ui_profile()`](../../shared/sudarshan_core/engines/vide/ui_profile.py) for deterministic baseline comparison (see [`VIDE.md`](VIDE.md)).
-- **Obfuscation Detection**: Counts single-character resource files (e.g., `a.xml`, `b.png`) to measure resource obfuscation entropy.
-- **Suspicious Resource Scanning**: Scans text resource files for embedded IP addresses, C2 URLs, and permission strings.
-- **Graceful Fallback**: If `apktool` is not in PATH, analysis logs a warning and continues cleanly using native parser/JADX.
-
----
-
-## 4. JADX Engine Integration (`jadx_engine.py`)
-
-Wraps the JADX CLI to decompile `.dex` bytecode into Java source code files:
-
-- **10 Fraud Pattern Signature Scanners**:
-  1. `ACCESSIBILITY_SERVICE`: `extends AccessibilityService`
-  2. `DEVICE_ADMIN`: `extends DeviceAdminReceiver`
-  3. `SMS_RECEIVER`: `SmsManager.sendTextMessage` / `sendMultipartTextMessage`
-  4. `OVERLAY_WINDOW`: `WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY`
-  5. `DYNAMIC_CLASS_LOAD`: `DexClassLoader` / `InMemoryDexClassLoader`
-  6. `REFLECTION_INVOKE`: `Class.forName` / `getDeclaredMethod` / `invoke`
-  7. `BANKING_KEYWORD`: Regex for Indian banking packages (`sbi`, `hdfc`, `icici`, `axis`, `kotak`, `phonepe`, `paytm`)
-  8. `OTP_HARVEST`: `SmsMessage.createFromPdu` / `getMessageBody`
-  9. `OVERLAY_DRAW`: `canDrawOverlays` / `WindowManager.addView`
-  10. `C2_SOCKET`: `new Socket(...)` / `SSLSocketFactory`
-- **Extracted String Literals**: Extracts hardcoded C2 HTTP/HTTPS endpoints.
+### JADX Engine (`jadx_engine.py`)
+Decompiles `.dex` bytecode into Java source code and scans for 10 banking fraud patterns:
+1. `ACCESSIBILITY_SERVICE`: `extends AccessibilityService`
+2. `DEVICE_ADMIN`: `extends DeviceAdminReceiver`
+3. `SMS_RECEIVER`: `SmsManager.sendTextMessage` / `sendMultipartTextMessage`
+4. `OVERLAY_WINDOW`: `WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY`
+5. `DYNAMIC_CLASS_LOAD`: `DexClassLoader` / `InMemoryDexClassLoader`
+6. `REFLECTION_INVOKE`: `Class.forName` / `getDeclaredMethod` / `invoke`
+7. `BANKING_KEYWORD`: Targeting strings for Indian banks (`sbi`, `hdfc`, `icici`, `axis`, `kotak`, `boi`, `pnb`)
+8. `OTP_HARVEST`: `SmsMessage.createFromPdu` / `getMessageBody`
+9. `OVERLAY_DRAW`: `canDrawOverlays` / `WindowManager.addView`
+10. `C2_SOCKET`: `new Socket(...)` / `SSLSocketFactory`
 
 ---
 
-## 5. MobSF & Native APK Analysis
+## 5. Investigation Manifest (`shared/sudarshan_core/models/manifest.py`)
 
-- **MobSF Engine ([`mobsf_client.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/services/mobsf_client.py))**: Interfaces with the OpenSecurity MobSF container (Port 8008). Extracts security scores, manifest vulnerability findings, dangerous permissions, code analysis findings, hardcoded secrets, and certificate metadata.
-- **Native APK Analyzer ([`apk_analyzer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/analyzers/apk_analyzer.py))**: Native fallback when MobSF is unavailable. Parses `AndroidManifest.xml` via `androguard` to extract package details, permissions, activities, services, receivers, and bytecode strings.
-
----
-
-## 6. Investigation Manifest Generation (`manifest.py`)
-
-Static analysis results are compiled into a formal pre-sandbox data contract: `InvestigationManifest`.
+The static analysis outputs are synthesized into the `InvestigationManifest` data contract:
 
 ```json
 {
   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   "package_name": "com.sbi.lotus.fake",
-  "analysis_mode": "mobsf",
+  "analysis_mode": "androguard",
   "stei_score": 78.5,
   "family_classification": "Drinik",
   "capability_flags": {
@@ -117,9 +128,10 @@ Static analysis results are compiled into a formal pre-sandbox data contract: `I
     "has_sms_read_write": true,
     "has_system_alert_window": true,
     "targets_indian_banks": true,
-    "indian_bank_packages": ["com.sbi.lotus"]
+    "indian_bank_packages": ["com.sbi.lotus"],
+    "has_concealed_payload": true
   },
-  "hook_profiles": ["canary", "accessibility", "sms", "overlay", "banking", "network"],
+  "hook_profiles": ["accessibility", "sms", "overlay", "banking", "network", "anti_analysis"],
   "goal_priority_config": {
     "accessibility_priority": 1,
     "sms_priority": 2,
@@ -130,16 +142,16 @@ Static analysis results are compiled into a formal pre-sandbox data contract: `I
 
 ---
 
-## 7. Static Threat Exposure Index (STEI) Formula
+## 6. Static Threat Evaluation Index (STEI) Formula
 
-The **STEI** score ($0.0 - 100.0$) is computed via a 5-axis mathematical model in [`risk_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/risk_engine.py):
+The **STEI** score ($0.0 - 100.0$) is calculated in `shared/sudarshan_core/engines/risk_engine.py`:
 
-$$STEI = 0.60 \times CT + 0.20 \times BT + 0.10 \times PR + 0.05 \times OB + 0.05 \times IR$$
+$$\text{STEI} = 0.60 \times \text{CT} + 0.20 \times \text{BT} + 0.10 \times \text{PR} + 0.05 \times \text{OB} + 0.05 \times \text{IR}$$
 
-| Axis | Weight | Indicators Evaluated |
+| Axis | Weight | Indicators & Contributions |
 | :--- | :--- | :--- |
-| **Credential Theft ($CT$)** | 60% | Accessibility abuse, SMS read/write, System Alert Window overlay abuse. |
-| **Banking Targeting ($BT$)** | 20% | Package matching against 21 Indian banking app package prefixes (`INDIAN_BANK_PACKAGES` in `apk_analyzer.py`). |
-| **Permission Risk ($PR$)** | 10% | Count of dangerous Android permissions requested vs expected baseline. |
-| **Obfuscation ($OB$)** | 5% | Shannon entropy ratio of DEX bytecode and class/method reflection calls. |
-| **Infrastructure Risk ($IR$)** | 5% | Hardcoded malicious IPs, C2 domains, and suspicious string literals. |
+| **Credential Theft ($\text{CT}$)** | **60%** | Accessibility abuse (+40), SMS read/intercept (+35), Overlay window (+25). Capped at 100. |
+| **Banking Targeting ($\text{BT}$)** | **20%** | Matched Indian banking package names (base 20 + 10/pkg) or VIDE visual clone boost ($35 + 40 \times \text{conf}$). Capped at 100. |
+| **Permission Risk ($\text{PR}$)** | **10%** | Dangerous permissions requested (`BIND_ACCESSIBILITY_SERVICE`: 20, `READ_SMS`: 18, `RECEIVE_SMS`: 18, `SYSTEM_ALERT_WINDOW`: 15, `REQUEST_INSTALL_PACKAGES`: 20, etc.). Capped at 100. |
+| **Obfuscation ($\text{OB}$)** | **5%** | Dynamic DEX loading (+40), native libraries (+20), reflection (+25), string entropy (+15), concealed payload (+60). Capped at 100. |
+| **Infrastructure Risk ($\text{IR}$)** | **5%** | Hardcoded C2 URLs and IPs (10 pts each). Capped at 100. |

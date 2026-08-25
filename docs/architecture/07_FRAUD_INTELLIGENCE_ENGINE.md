@@ -1,4 +1,8 @@
-# 07 - Fraud Intelligence Engine Specification
+# 07 — Fraud Intelligence & Attribution Specification
+
+> **Authoritative Technical Specification**  
+> **Source Repository**: `SanTiwari07/Sudarshan`  
+> **Last Verified Against Active Codebase**: 2026-08-25  
 
 ```yaml
 Module Title:        Threat Intelligence Correlation & Family Classification
@@ -7,65 +11,59 @@ Primary Files:       shared/sudarshan_core/services/threat_correlator.py
                      shared/sudarshan_core/engines/classification_engine.py
                      backend/app/main.py
                      backend/app/db/database.py
-Test Suite:          backend/tests/test_risk_engine.py
+Test Suite:          tests/unit/test_virustotal_crosscheck.py, backend/tests/test_classification_engine.py, backend/tests/test_risk_engine.py
 ```
-
----
-
-## Table of Contents
-- [1. Executive Overview](#1-executive-overview)
-- [2. Threat Intelligence Correlation Architecture](#2-threat-intelligence-correlation-architecture)
-- [3. External Threat Intel Providers](#3-external-threat-intel-providers)
-- [4. Deterministic Malware Family Classification](#4-deterministic-malware-family-classification)
 
 ---
 
 ## 1. Executive Overview
 
-The **Fraud Intelligence Engine** correlates extracted indicators of compromise (SHA-256 hashes, domains, IP addresses, URL endpoints) against external threat intelligence sources and classifies suspicious APK binaries into known banking malware families.
+The **Fraud Intelligence Engine** correlates extracted indicators of compromise (file SHA-256 hashes, domains, IP addresses, URL endpoints) against external threat intelligence sources (VirusTotal, AlienVault OTX, AbuseIPDB) and performs deterministic classification of APK binaries into known banking malware families.
 
 ---
 
-## 2. Threat Intelligence Correlation Architecture (`threat_correlator.py`)
+## 2. Threat Intelligence Correlation Architecture
 
 ```mermaid
 graph TD
-    EXT[Extracted IOCs & Hashes] --> CORR[Threat Correlator Engine]
+    EXT["Extracted IOCs & Hashes (SHA-256, URLs, IPs)"] --> CACHE_CHECK{"Check 24h SQLite Cache (ioc_cache table)"}
+    
+    CACHE_CHECK -->|Hit| CACHE_RES["Return Cached Reputation"]
+    CACHE_CHECK -->|Miss| CORR["ThreatCorrelator Engine (threat_correlator.py)"]
 
-    CORR -->|SHA-256 / Domain Lookup| VT[VirusTotal API v3]
-    CORR -->|Pulse Lookup| OTX[AlienVault OTX API]
-    CORR -->|IP Abuse Score| ABUSE[AbuseIPDB API]
+    CORR -->|SHA-256 & Domain Lookups| VT["VirusTotal API v3 (Rate limited: 4/min)"]
+    CORR -->|Pulse & Campaign Lookups| OTX["AlienVault OTX API"]
+    CORR -->|IP Abuse Confidence Score| ABUSE["AbuseIPDB API"]
 
-    VT --> MODEL[ThreatCorrelationResult Model]
-    OTX --> MODEL
-    ABUSE --> MODEL
-
-    MODEL --> RISK[Fraud Risk Engine Inputs]
+    VT --> SAVE_CACHE["Save to SQLite ioc_cache (24h TTL)"]
+    OTX --> SAVE_CACHE
+    ABUSE --> SAVE_CACHE
+    SAVE_CACHE --> MODEL["ThreatCorrelationResult Model"]
+    CACHE_RES --> MODEL
+    MODEL --> RISK["Fraud Risk Engine Input (Correlation Axis)"]
 ```
-
-Implemented in [`threat_correlator.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/services/threat_correlator.py).
 
 ---
 
-## 3. External Threat Intel Providers
+## 3. External Threat Intel Providers & 24h TTL Caching
 
-1. **VirusTotal API**: Queries file SHA-256 hashes and domain IOCs to compute detection ratios (`sha256_detections` / `sha256_total`) and vendor malicious labels.
+1. **VirusTotal API v3**: Queries file SHA-256 hashes and domain IOCs to compute detection ratios (`sha256_detections` / `sha256_total`) and vendor malicious labels.
 2. **AlienVault OTX**: Queries pulses and threat campaigns associated with extracted C2 IPs.
 3. **AbuseIPDB**: Queries IP abuse confidence scores ($0 - 100$) and country location metadata.
 
-### 3.1 Persistent IOC Reputation Cache (24h TTL)
+### Persistent IOC Reputation Cache (24h TTL)
 To prevent API rate-limit exhaustion against VirusTotal, OTX, and AbuseIPDB free tier endpoints (max 4 req/min), the system wires a 24-hour TTL SQLite cache during startup (`backend/app/main.py` calling `configure_ioc_cache`). Lookups check `ioc_cache` table in `sudarshan.db` prior to dispatching outbound HTTP requests.
 
-If external APIs fail or are unconfigured, `threat_correlator.py` degrades gracefully and returns a clean `available: false` correlation payload.
+If external APIs fail or are unconfigured, `threat_correlator.py` degrades gracefully and returns a clean `available: false` correlation payload, which allows the FRS engine to exclude and renormalize the correlation axis.
 
 ---
 
-## 4. Deterministic Malware Family Classification (`classification_engine.py`)
+## 4. Deterministic Malware Family Classification
 
-Classifies binaries into target banking trojan families via a deterministic `if/elif` rule chain in [`classification_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/classification_engine.py):
+Malware family classification is deterministic and executed in `shared/sudarshan_core/engines/classification_engine.py`:
 
 ```python
-# Rule order (Drinik before Xenomorph — verified in _ground_truth_2026-08-14.md §6):
+# Rule order:
 # 1. Drinik:   targets_indian_banks AND DexClassLoader in dangerous_apis_found
 #              → "Banking Target + Dynamic Code Loading = Drinik-pattern"
 # 2. Xenomorph: has_accessibility_abuse AND has_sms_read_write AND targets_indian_banks
@@ -84,9 +82,3 @@ Classifies binaries into target banking trojan families via a deterministic `if/
 ```
 
 Returns `family_classification` (e.g., `Drinik`, `Xenomorph`, or `Unknown`) and `matched_rule`.
-
----
-
-## 5. Visual impersonation (VIDE) - not external TI
-
-Bank-brand UI impersonation is detected deterministically by **VIDE** ([`architecture/VIDE.md`](VIDE.md)) using lab UI baselines and certificate registry data - not VirusTotal/OTX. VIDE output is exposed as `vide` on the analysis/case payload and folded into FRS via [`risk_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/risk_engine.py).

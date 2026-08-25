@@ -1,135 +1,134 @@
-# 08 - Deterministic Risk Engine Specification
+# 08 — Deterministic Risk Engine & FRS Specification
+
+> **Authoritative Technical Specification**  
+> **Source Repository**: `SanTiwari07/Sudarshan`  
+> **Last Verified Against Active Codebase**: 2026-08-25  
 
 ```yaml
 Module Title:        Deterministic Risk Engine & Mathematical Models
 Version:             2.1.0
 Primary Files:       shared/sudarshan_core/engines/risk_engine.py
                      shared/sudarshan_core/engines/bfci_scorer.py
-Test Suite:          backend/tests/test_risk_engine.py, backend/tests/test_bfci_scorer.py
+                     shared/sudarshan_core/engines/execution_assertions.py
+Test Suite:          backend/tests/test_risk_engine.py, backend/tests/test_bfci_scorer.py, tests/unit/test_risk_engine_nothing_happened.py, tests/unit/test_labelled_corpus.py
 ```
-
----
-
-## Table of Contents
-- [1. Executive Overview](#1-executive-overview)
-- [2. Mathematical Scoring Formulas](#2-mathematical-scoring-formulas)
-- [3. Static Threat Exposure Index (STEI)](#3-static-threat-exposure-index-stei)
-- [4. Behavioral Fraud Confidence Index (BFCI v2)](#4-behavioral-fraud-confidence-index-bfci-v2)
-- [5. Fraud Risk Score (FRS)](#5-fraud-risk-score-frs)
-- [6. Static Risk Fallback Engine](#6-dynamic-axis-exclusion-static-only-and-inconclusive-runs)
-- [7. Threat Scenario Correlation Matrix](#7-threat-scenario-correlation-matrix)
-- [8. VIDE deterministic escalations](#8-vide-deterministic-escalations)
 
 ---
 
 ## 1. Executive Overview
 
-The **Deterministic Risk Engine** ([`risk_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/risk_engine.py)) provides the core mathematical risk scoring logic of the Sudarshan platform. To maintain regulatory compliance and auditability, numerical risk scores ($0.0 - 100.0$) are derived strictly from mathematical formulas and observable evidence - never from LLM predictions.
+The **Deterministic Risk Engine** (`shared/sudarshan_core/engines/risk_engine.py`) provides the core mathematical risk scoring logic of the SUDARSHAN platform.
+
+To maintain strict regulatory compliance, auditability, and determinism, numerical risk scores ($0.0 - 100.0$) and risk bands are calculated **strictly from mathematical formulas, observable signals, and deterministic escalation rules** — LLMs never calculate or alter numerical risk scores.
 
 ---
 
-## 2. Mathematical Scoring Formulas
+## 2. Mathematical Scoring Architecture
 
 ```mermaid
 graph TD
-    STATIC[Static Findings] --> STEI_CALC[5-Axis STEI Calculator]
-    DYNAMIC[Frida / HAR Events] --> BFCI_CALC[Volume BFCI v2 Calculator]
-    INTEL[VirusTotal / OTX] --> CORR_CALC[Threat Correlation Score]
-    BANKS[Target Packages] --> BANK_CALC[Banking Impact Score]
+    STATIC["Static Analysis Flags"] --> STEI_CALC["5-Axis STEI Calculator"]
+    DYNAMIC["Frida Sandbox Telemetry"] --> BFCI_CALC["BFCI v2 Scorer"]
+    INTEL["VirusTotal / OTX / AbuseIPDB"] --> CORR_CALC["Correlation Scorer"]
+    BANKS["Targeted Packages & Regulatory Signals"] --> BANK_CALC["Banking Impact Scorer"]
 
-    STEI_CALC -->|Nominal 0.25| FRS_ENG[Fraud Risk Engine]
-    BFCI_CALC -->|Nominal 0.35| FRS_ENG
-    CORR_CALC -->|Nominal 0.20| FRS_ENG
-    BANK_CALC -->|Nominal 0.20| FRS_ENG
+    STEI_CALC -->|Nominal Weight: 0.25| FRS_ENG["Fraud Risk Engine"]
+    BFCI_CALC -->|Nominal Weight: 0.35| FRS_ENG
+    CORR_CALC -->|Nominal Weight: 0.20| FRS_ENG
+    BANK_CALC -->|Nominal Weight: 0.20| FRS_ENG
 
-    FRS_ENG --> FRS[Fraud Risk Score: 0.0 - 100.0]
+    VIDE["VIDE Results (Clones / Signatures)"] --> FRS_ENG
+    ASSERT["Execution Assertion Matrix"] --> FRS_ENG
+
+    FRS_ENG -->|Axis Exclusion & Renormalization| BASE_FRS["Base FRS (0 - 100)"]
+    BASE_FRS -->|Floors & Escalations| FINAL_SCORE["Final Risk Score & Band"]
 ```
 
 ---
 
-## 3. Static Threat Exposure Index (STEI)
+## 3. Static Threat Evaluation Index (STEI)
 
-$$STEI = 0.60 \times CT + 0.20 \times BT + 0.10 \times PR + 0.05 \times OB + 0.05 \times IR$$
+The **STEI** score measures static pre-execution fraud potential:
 
-- **Credential Theft ($CT$)**: Accessibility, SMS, and Overlay abuse ($0.0 - 1.0$).
-- **Banking Targeting ($BT$)**: Matches against 21 Indian banking app package prefixes (`apk_analyzer.py`, `INDIAN_BANK_PACKAGES`) ($0.0 - 1.0$).
-- **Permission Risk ($PR$)**: Ratio of requested dangerous permissions ($0.0 - 1.0$).
-- **Obfuscation ($OB$)**: Shannon entropy ratio of classes.dex & reflection usage ($0.0 - 1.0$).
-- **Infrastructure Risk ($IR$)**: Malicious C2 domains and hardcoded IP addresses ($0.0 - 1.0$).
+$$\text{STEI} = 0.60 \times \text{CT} + 0.20 \times \text{BT} + 0.10 \times \text{PR} + 0.05 \times \text{OB} + 0.05 \times \text{IR}$$
+
+* **Credential Theft ($\text{CT}$, Weight 0.60)**:
+  - Accessibility service abuse (`BIND_ACCESSIBILITY_SERVICE`): $+40$
+  - SMS interception (`READ_SMS` / `RECEIVE_SMS`): $+35$
+  - Phishing overlay window (`SYSTEM_ALERT_WINDOW`): $+25$
+  - Capped at $100.0$.
+* **Banking Targeting ($\text{BT}$, Weight 0.20)**:
+  - Matched Indian banking package names (base $20 + 10$ per additional package up to $100.0$).
+  - VIDE visual clone boost: $\min(35 + 40 \times \text{confidence}, 85.0)$.
+* **Permission Risk ($\text{PR}$, Weight 0.10)**:
+  - Dangerous permissions requested: `BIND_ACCESSIBILITY_SERVICE` (20), `READ_SMS` (18), `RECEIVE_SMS` (18), `REQUEST_INSTALL_PACKAGES` (20), `SYSTEM_ALERT_WINDOW` (15), `READ_CONTACTS` (8), `RECORD_AUDIO` (8), etc. Capped at $100.0$.
+* **Obfuscation ($\text{OB}$, Weight 0.05)**:
+  - Dynamic DEX loading (`DexClassLoader` / `PathClassLoader`): $+40$
+  - Native library loading (`System.loadLibrary`): $+20$
+  - Java reflection (`Class.forName` / `getDeclaredMethod` / `invoke`): $+25$
+  - String pool entropy ($>0.5$ entropy): up to $+15$
+  - Concealed executable payload in assets: $+60$
+* **Infrastructure Risk ($\text{IR}$, Weight 0.05)**:
+  - Hardcoded C2 URLs / IP addresses: $+10$ per indicator, capped at $100.0$.
 
 ---
 
-## 4. Behavioral Fraud Confidence Index (BFCI v2)
+## 4. Behavioral Fraud Crime Impact (BFCI v2)
 
-Calculated in [`bfci_scorer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/bfci_scorer.py) using logarithmic volume scaling and temporal sequence bonuses:
+Calculated in `shared/sudarshan_core/engines/bfci_scorer.py`:
 
 $$BFCI_{\text{v2}} = \min\left(100.0, \sum_{c} W_c \cdot \min\left(1.0, \frac{\ln(1 + N_c)}{\ln(1 + M_c)}\right) \times 100 + S_{\text{sequence}}\right)$$
 
-- **Category Weights ($W_c$)**: Accessibility (0.35), SMS (0.25), Overlay (0.20), Banking (0.10), Network (0.05), Persistence (0.05).
-- **Sequence Bonus ($S_{\text{sequence}}$)**: $+15.0$ points when a causal sequence (e.g., Overlay $\rightarrow$ SMS Intercept) executes within 30 seconds.
+Where $W_c$ is category weight, $N_c$ is event count, $M_c$ is saturation threshold, and $S_{\text{sequence}} = +15.0$ when a temporal causal attack chain completes within 30 seconds.
 
 ---
 
-## 5. Fraud Risk Score (FRS)
-
-[`calculate_risk_score`](../../shared/sudarshan_core/engines/risk_engine.py) uses **nominal** axis weights that **renormalize** over only the axes that have data. An absent axis is excluded (not scored as zero).
-
-| Axis | Nominal weight | Included when |
-| :--- | :--- | :--- |
-| `stei` | 0.25 | Always (static analysis ran) |
-| `dynamic` | 0.35 | Dynamic run was **conclusive** (`dynamic_conclusive`) |
-| `correlation` | 0.20 | Threat-intel correlation returned `available: true` |
-| `banking_impact` | 0.20 | Always |
+## 5. Full Fraud Risk Score (FRS) & Dynamic Weight Renormalization
 
 $$\text{base\_frs} = \frac{\sum_{a \in \text{live}} w_a \cdot s_a}{\sum_{a \in \text{live}} w_a}$$
 
+| Axis | Nominal Weight | Inclusion Condition |
+| :--- | :--- | :--- |
+| **`stei`** | **0.25** | Always included |
+| **`dynamic`** | **0.35** | Dynamic analysis was **conclusive** (`dynamic_conclusive`) |
+| **`correlation`** | **0.20** | Threat intelligence provider returned `available: true` |
+| **`banking_impact`**| **0.20** | Always included |
+
 $$\text{final\_risk\_score} = \min(\text{base\_frs} \times \text{ai\_confidence\_multiplier}, 100.0)$$
 
-The `ai_confidence_multiplier` is rule-derived (family classifier / correlation), clamped to `[0.5, 1.5]` - not LLM output.
+*Note: The `ai_confidence_multiplier` is rule-derived from family classification confidence ($1.0$ or $1.2$), clamped to $[0.5, 1.5]$.*
 
-Response field `frs_breakdown.axes_used` lists the **renormalized** weights; `axes_excluded` lists omitted axes.
-
-| Final score (after multiplier) | Risk band (`risk_engine.py`) | UI label |
-| :--- | :--- | :--- |
-| **0.0 – 30.0** | `Safe` | Safe |
-| **30.1 – 60.0** | `Suspicious` | Suspicious |
-| **60.1 – 89.0** | `High Risk` | High |
-| **≥ 90.0** | `Critical` | Critical |
-
-**Visibility floor:** If the band would be `Safe`, the sample has a concealed payload (`has_concealed_payload`), and dynamic analysis did not run conclusively, the band is raised to `Suspicious` (`verdict_floored_for_visibility`).
+### Risk Bands:
+* **`0.0 – 30.0`**: **Safe**
+* **`30.1 – 60.0`**: **Suspicious**
+* **`60.1 – 89.0`**: **High Risk**
+* **`≥ 90.0`**: **Critical**
 
 ---
 
-## 6. Dynamic axis exclusion (static-only and inconclusive runs)
+## 6. Deterministic Escalation Rules
 
-There is no separate fixed-weight “static fallback” formula. When dynamic analysis is unavailable or **inconclusive** (sandbox ran but captured no observable behavior), the `dynamic` axis is excluded and the remaining weights renormalize - the same mechanism used when threat-intel keys are unset and `correlation` is excluded.
-
----
-
-## 7. Threat Scenario Correlation Matrix
-
-Maps extracted flags directly to threat scenarios in the response:
-
-```python
-class ThreatScenarioRow(BaseModel):
-    indicator: str            # e.g. "Accessibility Service"
-    threat_scenario: str      # e.g. "OTP Harvesting via UI Scraping"
-    overlay_risk: str         # High / Medium / Low / N/A
-    credential_theft_risk: str
-    c2_risk: str
-    persistence_risk: str
-    evidence: str
-    confidence: int           # 0–100
-```
+1. **CH27 On-Device Fraud Triad Rule**:
+   - Condition: High visual clone confidence ($>0.85$) + Bank signer mismatch + `BIND_ACCESSIBILITY_SERVICE`.
+   - Result: Final score floored to $\ge 95.0$, Risk Band = `Critical`.
+2. **Signer Impersonation**:
+   - Condition: App impersonates a protected bank with an unauthorized certificate.
+   - Result: Final score floored to $\ge 92.0$, Risk Band = `Critical`.
+3. **Critical Visual Cluster**:
+   - Condition: Visual clone match combined with high-risk static capability cluster.
+   - Result: Final score floored to $\ge 88.0$, Risk Band = `Critical`.
 
 ---
 
-## 8. VIDE deterministic escalations
+## 7. Safety Floors (Zero False Negatives)
 
-[`calculate_risk_score`](../../shared/sudarshan_core/engines/risk_engine.py) accepts optional `vide_result` from [`safe_run_vide_analysis()`](../../shared/sudarshan_core/engines/vide/pipeline.py). Deterministic effects (no LLM):
+To prevent evasive, dormant, or packed trojans from rating as "Safe":
 
-- **VIDE-F001** raises the Banking Targeting (`BT`) axis inside `_axis_bt()` when `visual_impersonation_detected` is set on flags derived from `vide_result`.
-- **Visual-only match**: score capped toward High Risk (~75); **not** promoted to Critical without `critical_visual_cluster` (visual + high-risk static capability at confidence ≥ 0.80) or **CH06 signer impersonation** (`signer_impersonation.detected`).
-- VIDE evidence lines are merged into the top-level `evidence` list (capped for API payload) and appear in RAG under the `risk_engine` section via those strings.
-
-Full compare weights, baselines, and verification status: [`VIDE.md`](VIDE.md).
+1. **Visibility Floor**:
+   - If a sample ships a concealed payload (`has_concealed_payload`) and the dynamic sandbox did not observe substantive payload behavior ($\text{BFCI} < 20.0$), the verdict cannot be `Safe` and is floored to `Suspicious` (`verdict_floored_for_visibility=True`).
+2. **Static Evidence Floor**:
+   - If static analysis found strong fraud capability ($\text{STEI} \ge 50.0$) and an empty dynamic run captured 0 behavior, the verdict cannot be `Safe` and is floored to `Suspicious` (an empty run is not an acquittal).
+3. **Evasion Floor**:
+   - If anti-analysis evasion events were triggered and no behavior followed, the verdict is floored to `Suspicious`.
+4. **Execution Assertion Matrix Floor**:
+   - If the sample's prerequisite triggers (e.g. accessibility grant, target bank launch) were never reached during sandbox execution, `verdict` is set to `INCOMPLETE_EXERCISE` and floored to `Suspicious`.

@@ -204,6 +204,10 @@ The primary documentation files related to introduction and system scope are loc
 ```text
 docs/
 ├── README.md               <- Master Documentation Portal Index
+├── CURRENT_ARCHITECTURE.md <- Authoritative Current Architecture Reference
+├── CODEBASE_MAP.md         <- Exhaustive Codebase Directory & Function Index
+├── FEATURE_STATUS.md       <- Feature Reality Matrix with Verification Evidence
+├── KNOWN_LIMITATIONS.md    <- Known Boundaries, Fallback Behaviors & Workarounds
 ├── 01_INTRODUCTION.md      <- Problem Statement, Principles, Target Audience (This File)
 ├── 02_SYSTEM_OVERVIEW.md   <- High-Level System Architecture & Microservices Layout
 ├── ARCHITECTURE.md         <- System Architectural Specification

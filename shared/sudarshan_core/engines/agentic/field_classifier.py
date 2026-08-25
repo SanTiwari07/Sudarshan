@@ -344,6 +344,13 @@ def needs_escalation(
     # plausible deterministic answer there rests on less than it looks.
     if is_webview and classification.confidence < 0.9:
         return True
+
+    # No screen-type rule is needed for the unlabelled-form case, and one was
+    # tried and removed as dead: a positional guess scores 0.35 (first input)
+    # or 0.10 (the rest), both under GEMINI_FIELD_CONFIDENCE_THRESHOLD, and
+    # UNKNOWN is caught outright above. Every field on a form we could not read
+    # therefore already escalates from any screen type. What was missing was
+    # not a rule here but a CALLER - see AgenticExplorer._resolve_ambiguous_fields.
     return False
 
 

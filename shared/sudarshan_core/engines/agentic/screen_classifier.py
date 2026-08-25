@@ -15,6 +15,14 @@ from typing import Any, Dict, List, Optional
 class ScreenType:
     BANK_LOGIN           = "BANK_LOGIN"
     OTP_SCREEN           = "OTP_SCREEN"
+    #: A screen whose purpose is to collect several pieces of information -
+    #: registration, KYC, personal details, a beneficiary. It has no name of
+    #: its own before this: such screens carry none of the words the rules
+    #: below look for, so they fell through to UNKNOWN and nothing downstream
+    #: could model "a form that must be completed before it means anything".
+    #: Distinct from BANK_LOGIN, which is credential entry and drives the
+    #: authentication state; this is data entry and deliberately does not.
+    DATA_ENTRY_FORM      = "DATA_ENTRY_FORM"
     ACCESSIBILITY_DIALOG = "ACCESSIBILITY_DIALOG"
     SYSTEM_PERMISSION    = "SYSTEM_PERMISSION"
     OVERLAY_ATTACK       = "OVERLAY_ATTACK"
@@ -91,6 +99,7 @@ def classify_screen(
     texts = []
     has_inputs = False
     has_password_field = False
+    input_count = 0
 
     for n in ui_nodes:
         # Accept dataclass or dict
@@ -103,6 +112,7 @@ def classify_screen(
         if d: texts.append(d.lower())
         if is_input or "edittext" in cls.lower():
             has_inputs = True
+            input_count += 1
             if "pass" in t.lower() or "pin" in t.lower() or "edittext" in cls.lower():
                 has_password_field = True
 
@@ -176,6 +186,44 @@ def classify_screen(
     if any(k in combined_text for k in vpn_keywords) or "vpn" in activity_lower:
         matched_rules.append("vpn_request_match")
         return ScreenClassification(ScreenType.VPN_REQUEST, "HIGH", matched_rules)
+
+    # 8b. DATA_ENTRY_FORM
+    #
+    # Placed after every security-relevant screen and after BANK_LOGIN/OTP, so
+    # it only claims screens that would otherwise have gone unnamed. It sits
+    # BEFORE the WEBVIEW and DIALOG rules because a registration form rendered
+    # in a WebView is still a registration form, and "what the screen is for"
+    # is more useful to the walk than "what widget hosts it".
+    #
+    # Counted, not read: plain TextView captions never reach this function -
+    # the perception parser emits only interactive nodes and consumes captions
+    # as field labels - so "Full Name" and "Date of Birth" are not in
+    # combined_text. Three or more fields is the reliable signal; two is enough
+    # when the activity or the visible text says what the form is for.
+    form_activity_keywords = [
+        "register", "signup", "sign_up", "kyc", "onboard", "enroll",
+        "profile", "details", "beneficiary", "addpayee",
+    ]
+    form_text_keywords = [
+        "register", "sign up", "create account", "personal details",
+        "your details", "kyc", "full name", "date of birth", "beneficiary",
+    ]
+    is_settings_surface = (
+        "settings" in activity_lower or "preferences" in activity_lower
+    )
+    if has_inputs and input_count >= 2 and not is_settings_surface:
+        if input_count >= 3:
+            matched_rules.append(f"data_entry_form_{input_count}_fields")
+            return ScreenClassification(
+                ScreenType.DATA_ENTRY_FORM, "HIGH", matched_rules,
+            )
+        if any(k in activity_lower for k in form_activity_keywords) or any(
+            k in combined_text for k in form_text_keywords
+        ):
+            matched_rules.append("data_entry_form_keyword_match")
+            return ScreenClassification(
+                ScreenType.DATA_ENTRY_FORM, "MED", matched_rules,
+            )
 
     # 9. WEBVIEW
     webview_keywords = ["webview", "browser", "chrome", "http", "https", "www."]

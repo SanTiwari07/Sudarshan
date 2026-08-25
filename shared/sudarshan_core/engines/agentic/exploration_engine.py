@@ -65,6 +65,15 @@ class ExplorationBudget:
     MAX_RETRIES_PER_ACTION: int = int(
         os.getenv("SUDARSHAN_MAX_ACTION_RETRIES", "3")
     )
+    #: Times a field may be re-filled after the population verifier PROVED the
+    #: value did not land. Deliberately small: a field that rejects input twice
+    #: is not going to accept it on the third try, and a form has several
+    #: fields, so the cost of an over-generous budget is multiplied. Kept
+    #: separate from MAX_RETRIES_PER_ACTION, which counts retries WITHIN one
+    #: dispatch, where this counts separate selections of the same field.
+    MAX_INPUT_FILL_ATTEMPTS: int = int(
+        os.getenv("SUDARSHAN_MAX_INPUT_FILL_ATTEMPTS", "2")
+    )
     FRIDA_SILENCE_THRESHOLD: int = int(
         os.getenv("SUDARSHAN_AGENT_SILENCE_THRESHOLD", "8")
     )
@@ -235,6 +244,12 @@ class ActionItem:
     executed: bool = False
     verified: bool = False
     execution_attempts: int = 0
+    #: Times this field was filled and the population verifier then PROVED the
+    #: value had not landed. Counted separately from `execution_attempts`,
+    #: which record_action ASSIGNS from the caller's within-dispatch retry
+    #: count and which therefore sits at 1 across separate selections - it
+    #: cannot bound anything that spans them.
+    fill_attempts: int = 0
 
     def signature(self) -> str:
         """
@@ -422,11 +437,78 @@ def _is_input_node(node: Any) -> bool:
     return "edittext" in cls or "autocomplete" in cls or "searchview" in cls
 
 
+#: Text that is the app complaining about what is in a field, not a statement
+#: about what the screen IS. Deliberately narrow - imperative validation
+#: phrasing only - because collapsing two genuinely different screens hides one
+#: of them from the walk, which is a worse failure than the fork this prevents.
+_VALIDATION_TEXT_RE = re.compile(
+    r"("
+    r"please\s+(enter|provide|fill|select|input)"
+    r"|enter\s+(a\s+)?valid"
+    r"|(is|are)\s+required\b"
+    r"|required\s+field"
+    r"|(can'?t|cannot|should\s+not|must\s+not)\s+be\s+(empty|blank)"
+    r"|field\s+(is\s+)?mandatory"
+    r"|invalid\s+(e[\s\-]?mail|email|phone|mobile|number|format|input|entry|value)"
+    r"|too\s+(short|long)"
+    r")",
+    re.IGNORECASE,
+)
+
+#: Resource-id / class fragments that name an error slot outright. Material's
+#: TextInputLayout renders its message into a child called `textinput_error`.
+_ERROR_SLOT_HINTS = ("error", "validation", "warning_text")
+
+
+def _is_validation_text(node: Any, has_input: bool) -> bool:
+    """
+    Whether this node is transient validation feedback about a field.
+
+    Only true on a screen that HAS a field: validation feedback exists next to
+    something to fill, and without that guard a screen whose whole purpose is
+    to say "invalid card" would lose its only distinguishing text.
+
+    Interactive nodes are never treated this way. An error that is also a
+    button ("Retry") is a control, and dropping it would hide an action.
+    """
+    if not has_input:
+        return False
+    if _is_input_node(node):
+        return False
+    if (
+        bool(getattr(node, "is_checkable", False))
+        or bool(getattr(node, "is_scrollable", False))
+    ):
+        return False
+
+    # `is_clickable` alone cannot answer this. A caption inside a clickable row
+    # is emitted with is_clickable=True because tapping it means tapping the
+    # row - and that recovery is the ONLY way validation text reaches the node
+    # list at all, since a bare TextView on a plain layout is never emitted. So
+    # a recovered node is judged on its text; only a control in its own right
+    # is exempt, because dropping one would hide a real action.
+    recovered = (
+        getattr(node, "detection_source", "") == "clickable_parent_recovery"
+    )
+    if bool(getattr(node, "is_clickable", False)) and not recovered:
+        return False
+
+    res_id = (getattr(node, "resource_id", "") or "").lower()
+    cls = (getattr(node, "class_name", "") or "").lower()
+    if any(h in res_id or h in cls for h in _ERROR_SLOT_HINTS):
+        return True
+
+    text = (getattr(node, "text", "") or "").strip()
+    # A paragraph is prose about the screen, not a field-level complaint.
+    if text and len(text) <= 120 and _VALIDATION_TEXT_RE.search(text):
+        return True
+    return False
+
+
 def compute_composite_state_signature(
     activity: str,
     package: str,
     ui_nodes: List[Any],
-    visible_text: str = "",
     webview_sig: str = "",
     scroll_position: int = 0,
 ) -> Tuple[str, str]:
@@ -454,7 +536,26 @@ def compute_composite_state_signature(
     """
     tree_parts: List[str] = [activity, package]
 
+    # Whether this screen has anything to fill, decided once: it gates the
+    # validation-text rule below, which must not apply to a screen that has no
+    # fields and may legitimately be ABOUT an error.
+    has_input = any(_is_input_node(n) for n in ui_nodes)
+
     for n in ui_nodes:
+        # An inline validation message is the app reacting to a field's
+        # CONTENT, and content is already excluded from identity below. Left
+        # in, it forked the form: pressing Submit raised "Please enter a valid
+        # email", which added a node, which made a second state holding its own
+        # unexplored copy of the same fields. Filling those cleared the message,
+        # the hash returned to the first state whose fields were also still
+        # unexplored, and the walk refilled between the two until it gave up
+        # and pressed Back.
+        #
+        # Skipped entirely rather than replaced with a marker: a marker is
+        # still a node, and the count would differ between the screen with the
+        # message and the same screen without it.
+        if _is_validation_text(n, has_input):
+            continue
         cls = getattr(n, "class_name", "") or ""
         text = getattr(n, "text", "") or ""
         desc = getattr(n, "desc", "") or ""
@@ -613,6 +714,43 @@ def _is_submit_action(item: "ActionItem") -> bool:
     if item.action_type not in ("click", "check"):
         return False
     return _is_submit_label(item.label)
+
+
+#: Captions that commit a data-entry form without being a CREDENTIAL submit.
+#: Kept apart from _SUBMIT_KEYWORDS on purpose: `_is_submit_label` also decides
+#: whether a click counts as a login attempt, and on a login screen "Register"
+#: opens a different flow, so counting it there spent the credential-retry
+#: budget on a navigation link. Ordering and login-outcome detection are
+#: different questions, and only ordering needs these.
+_FORM_COMMIT_KEYWORDS = (
+    "register", "sign up", "signup", "create account", "create an account",
+    "get started", "join now",
+)
+
+_FORM_COMMIT_RE = re.compile(
+    r"\b(" + "|".join(re.escape(k) for k in _FORM_COMMIT_KEYWORDS) + r")\b",
+    re.IGNORECASE,
+)
+
+
+def _is_form_commit_action(item: "ActionItem") -> bool:
+    """
+    Whether this control is what finishes the form it sits on.
+
+    Wider than :func:`_is_submit_action`: a registration form is committed by a
+    button reading "REGISTER" or "Create Account", neither of which is a
+    credential submit. Used ONLY to hold such a control behind the fields it
+    depends on - it never makes a click count as a login attempt.
+    """
+    if item.action_type not in ("click", "check"):
+        return False
+    if _is_submit_label(item.label):
+        return True
+    label = (item.label or "").strip()
+    # A question is a prompt, not a button: "New user? Register".
+    if not label or "?" in label:
+        return False
+    return bool(_FORM_COMMIT_RE.search(label))
 
 #: Tie-breaking nudge for the affirmative option in a two-way decision dialog.
 #: Deliberately small: score_action() has already ranked on the security
@@ -1165,7 +1303,10 @@ class ExplorationGraph:
         }
 
     def _build_action_inventory(
-        self, ui_nodes: List[Any], screen_type: str = "",
+        self,
+        ui_nodes: List[Any],
+        screen_type: str = "",
+        field_overrides: Optional[Dict[str, Any]] = None,
     ) -> List[ActionItem]:
         """Enumerate all actionable elements from UI nodes."""
         from sudarshan_core.engines.agentic.device_properties import (
@@ -1202,18 +1343,28 @@ class ExplorationGraph:
                 # The full classification, not just the legacy string: the
                 # value typed has to fit the field, and "password" cannot tell
                 # a 4-digit MPIN from a 12-character login password.
-                field_classification = resolve_field_classification(
-                    field_label=getattr(n, "field_label", "") or "",
-                    resource_id=getattr(n, "resource_id", "") or "",
-                    content_desc=desc,
-                    class_name=getattr(n, "class_name", "") or "",
-                    text=text,
-                    hint=getattr(n, "hint", "") or "",
-                    input_type=getattr(n, "input_type", "") or "",
-                    is_password=bool(getattr(n, "is_password", False)),
-                    index=input_index,
-                    screen_type=screen_type,
+                # An answer already resolved for this node wins. The caller is
+                # async and can consult the model for fields the local patterns
+                # could not name; this build is synchronous and cannot, which
+                # is why the resolution arrives as data rather than being done
+                # here. Nothing is resolved for the ordinary captioned field,
+                # so the deterministic path below stays the normal one.
+                field_classification = (field_overrides or {}).get(
+                    getattr(n, "node_id", "")
                 )
+                if field_classification is None:
+                    field_classification = resolve_field_classification(
+                        field_label=getattr(n, "field_label", "") or "",
+                        resource_id=getattr(n, "resource_id", "") or "",
+                        content_desc=desc,
+                        class_name=getattr(n, "class_name", "") or "",
+                        text=text,
+                        hint=getattr(n, "hint", "") or "",
+                        input_type=getattr(n, "input_type", "") or "",
+                        is_password=bool(getattr(n, "is_password", False)),
+                        index=input_index,
+                        screen_type=screen_type,
+                    )
                 field_kind = field_classification.legacy_kind
                 field_constraints = extract_constraints(
                     field_type=field_classification.field_type,
@@ -1401,8 +1552,17 @@ class ExplorationGraph:
         entry_action: str = "",
         elapsed_ts: str = "00:00",
         ownership: str = "",
+        field_overrides: Optional[Dict[str, Any]] = None,
     ) -> ExplorationState:
-        """Incorporate an observation into the graph. Returns the state node."""
+        """
+        Incorporate an observation into the graph. Returns the state node.
+
+        `field_overrides` maps a UINode's `node_id` to an already-resolved
+        FieldClassification, for inputs whose type the caller worked out by
+        means this synchronous path cannot use - currently the model
+        escalation for unlabelled WebView forms. Omitting it leaves the
+        deterministic classification in charge, which is the normal case.
+        """
         from sudarshan_core.engines.agentic.screen_classifier import (
             ScreenType,
             is_explorable_screen_type,
@@ -1520,7 +1680,7 @@ class ExplorationGraph:
             self._boundary_return_required = False
 
         screen_hash, ui_tree_hash = compute_composite_state_signature(
-            activity, fg, ui_nodes, visible,
+            activity, fg, ui_nodes,
             webview_sig="webview" if getattr(obs, "is_webview", False) else "",
         )
 
@@ -1537,15 +1697,51 @@ class ExplorationGraph:
             self._current_state_id = existing_id
             self._visit_history.append(existing_id)
             # Merge new actions not yet in inventory
-            existing_sigs = {a.signature() for a in state.actionable_elements}
-            for item in self._build_action_inventory(ui_nodes, semantic_type):
-                if item.signature() not in existing_sigs:
+            existing_by_sig = {
+                a.signature(): a for a in state.actionable_elements
+            }
+            for item in self._build_action_inventory(
+                ui_nodes, semantic_type, field_overrides,
+            ):
+                known = existing_by_sig.get(item.signature())
+                if known is None:
                     state.actionable_elements.append(item)
+                    existing_by_sig[item.signature()] = item
                     self._log_action_discovered(state, item)
+                    continue
+
+                # Same control, possibly somewhere else on screen. Refresh
+                # WHERE it is, and nothing else.
+                #
+                # Focusing a field raises the soft keyboard, and a form long
+                # enough to be covered by it scrolls. Measured on Google
+                # Contacts' editor - name, phone and email in one form -
+                # tapping the bottom field moved every field up by 91px while
+                # their SIZES were unchanged. `signature()` buckets on size
+                # only, deliberately, so that a scroll does not fork the state;
+                # but that also meant the moved control matched an existing
+                # entry whose coordinates were never updated, and the walk went
+                # on tapping a point 91px stale against a field 168px tall.
+                #
+                # Exploration progress is untouched on purpose: clearing
+                # `explored` here would re-offer fields the form had already
+                # accepted, which is the loop this is meant to remove.
+                if (item.center_x, item.center_y) != (known.center_x, known.center_y):
+                    logger.debug(
+                        "[ExplorationGraph] Refreshed geometry for '%s': "
+                        "(%d,%d) -> (%d,%d)",
+                        known.label, known.center_x, known.center_y,
+                        item.center_x, item.center_y,
+                    )
+                known.center_x = item.center_x
+                known.center_y = item.center_y
+                known.bounds = item.bounds
             return state
 
         state_id = self._next_state_id()
-        actions = self._build_action_inventory(ui_nodes, semantic_type)
+        actions = self._build_action_inventory(
+            ui_nodes, semantic_type, field_overrides,
+        )
         scrollable = [a.node_id for a in actions if a.is_scrollable]
 
         # Enforce exploration state budget
@@ -1683,6 +1879,7 @@ class ExplorationGraph:
         new_actions_found: int = 0,
         runtime_events: int = 0,
         failure_reason: str = "",
+        input_verified: Optional[bool] = None,
     ) -> ExplorationEdge:
         """Record an action edge between states.
 
@@ -1699,12 +1896,18 @@ class ExplorationGraph:
         """
         if verified is None:
             verified = bool(success)
-        if success and action_type in ("input", "type_text"):
+        if success and action_type in ("input", "type_text") and input_verified is not False:
             # Same reasoning as the input branch below, applied to the EDGE:
             # text entry does not move the screen hash by design, so a verifier
             # that looks for a screen change can only ever report "unchanged".
             # Without this every accepted keystroke is drawn as a failed edge in
             # the exploration graph the analyst reads.
+            #
+            # `input_verified is False` means the population verifier READ the
+            # field afterwards and found our value absent. That is a positive
+            # observation, not the absence of one, and it outranks the "typing
+            # never changes the hash" allowance: drawing it as a successful
+            # edge would put a field we know is empty in the analyst's graph.
             verified = True
         # If the caller tracked UI change across all attempts, prefer that over
         # the single-attempt snapshot.  An action that moved the UI on attempt 1
@@ -1829,6 +2032,40 @@ class ExplorationGraph:
                             "(ever_ui_changed=True, adb_success=True)",
                             target_description,
                         )
+                    elif (
+                        success
+                        and action_type in ("input", "type_text")
+                        and input_verified is False
+                    ):
+                        # The field was READ after typing and our value was not
+                        # in it. adb exiting 0 only means the keystrokes were
+                        # delivered somewhere - to a field that had scrolled
+                        # away, to one that rejected them, or nowhere at all.
+                        #
+                        # Resolving this as explored is what let a walk press
+                        # Submit on a form it had not filled: the field left
+                        # `pending_inputs`, which released the held submit
+                        # control, and the app's validation error was then read
+                        # as the app rejecting our data rather than as our own
+                        # failure to enter it. So it stays unresolved and is
+                        # offered again - bounded, because a field that refuses
+                        # input twice will not take it on the third try.
+                        a.executed = True
+                        a.fill_attempts += 1
+                        if a.fill_attempts >= ExplorationBudget.MAX_INPUT_FILL_ATTEMPTS:
+                            a.failed = True
+                            logger.info(
+                                "[ExplorationGraph] Input '%s' FAILED - value "
+                                "did not land after %d fill attempt(s)",
+                                target_description, a.fill_attempts,
+                            )
+                        else:
+                            logger.info(
+                                "[ExplorationGraph] Input '%s' NOT POPULATED "
+                                "(attempt %d/%d) - left unresolved for retry",
+                                target_description, a.fill_attempts,
+                                ExplorationBudget.MAX_INPUT_FILL_ATTEMPTS,
+                            )
                     elif success and action_type in ("input", "type_text"):
                         # Text entry is deliberately NOT a state change: a
                         # field's value is no longer part of screen identity, so
@@ -1837,6 +2074,12 @@ class ExplorationGraph:
                         # type_text as failed, which is both wrong in the report
                         # and wrong for the walk - the field would be retried
                         # instead of the form being completed.
+                        #
+                        # Reached when the population verifier confirmed the
+                        # value landed, or could not tell - an INCONCLUSIVE
+                        # read (a masked field exposing neither text nor
+                        # length) must resolve exactly as it did before, or
+                        # every password box on such a device would loop.
                         a.explored = True
                         a.executed = True
                         a.verified = True
@@ -2012,21 +2255,30 @@ class ExplorationGraph:
         # happen, burned the retry ladder and marked the only way into the app
         # as failed. While any input on this screen is still unfilled, submit
         # controls are held back.
+        # The ordering is now UNCONDITIONAL. It used to apply only when a
+        # submit control was RECOGNISED, so on a registration form - whose
+        # button reads "REGISTER", deliberately not a credential submit - no
+        # ordering happened at all. A plain field scores ~140 against a
+        # captioned button's ~220, so the button went first and the walk
+        # submitted an empty form, read the validation error as the app
+        # refusing its data, and gave up on a screen it never had a chance on.
+        #
+        # Fields first is the floor: whatever else is on the screen, a form is
+        # filled before it is committed.
         pending_inputs = [a for a in ranked if a.action_type == "input"]
         if pending_inputs:
-            held = [a for a in ranked if _is_submit_action(a)]
-            if held:
-                logger.info(
-                    "[Explorer] FORM_FILL_FIRST state=%s - holding %d submit "
-                    "control(s) until %d input(s) are filled: %s",
-                    sid, len(held), len(pending_inputs),
-                    [a.label for a in pending_inputs],
-                )
-                rest = [
-                    a for a in ranked
-                    if a.action_type != "input" and not _is_submit_action(a)
-                ]
-                ranked = pending_inputs + rest + held
+            held = [a for a in ranked if _is_form_commit_action(a)]
+            rest = [
+                a for a in ranked
+                if a.action_type != "input" and not _is_form_commit_action(a)
+            ]
+            logger.info(
+                "[Explorer] FORM_FILL_FIRST state=%s - %d input(s) before "
+                "%d commit control(s): %s",
+                sid, len(pending_inputs), len(held),
+                [a.label for a in pending_inputs],
+            )
+            ranked = pending_inputs + rest + held
 
         # ── Fair scheduling: clicks must not starve scroll ────────────────────
         # rank_actions puts clicks above scroll and the loop below returns the
@@ -2741,7 +2993,7 @@ class ExplorationGraph:
     ) -> ExplorationState:
         """Record external-app state in separate external graph."""
         screen_hash, ui_tree_hash = compute_composite_state_signature(
-            activity, fg, ui_nodes, visible,
+            activity, fg, ui_nodes,
             webview_sig="webview" if getattr(obs, "is_webview", False) else "",
         )
 

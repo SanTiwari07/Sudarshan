@@ -410,6 +410,26 @@ export type VideForensicBreakdown = {
   };
 };
 
+/**
+ * Why one baseline was preferred over the others.
+ *
+ * Separate from `scores`, which measure how completely the suspect reproduces a
+ * baseline. These measure which baseline - see corpus_compare.py.
+ */
+export type VideAttributionEvidence = {
+  score?: number;
+  tiers?: {
+    identity?: number;
+    discriminative_labels?: number;
+    discriminative_palette?: number;
+  };
+  identity_matches?: string[];
+  discriminative_labels?: string[];
+  discriminative_colors?: VideColorMatch[];
+  /** Features no other baseline carries. Attribution requires at least one. */
+  exclusive_hits?: string[];
+};
+
 export type VideCorpusRanked = {
   institution_id: string;
   display_name: string;
@@ -423,6 +443,7 @@ export type VideCorpusRanked = {
   matched_strings?: string[];
   matched_signatures?: string[];
   color_matches?: VideColorMatch[];
+  attribution?: VideAttributionEvidence;
 };
 
 export type VideCorpusCompare = {
@@ -436,7 +457,11 @@ export type VideCorpusCompare = {
   attribution?: {
     margin?: number;
     ambiguous?: boolean;
+    /** Why a bank was not named: "margin" | "no_exclusive_evidence". */
+    reason?: string;
     candidates?: string[];
+    /** The three attribution tiers, and the features that carried them. */
+    evidence?: VideAttributionEvidence;
   };
   suspect_signatures?: string[];
   scores?: {
@@ -448,6 +473,9 @@ export type VideCorpusCompare = {
   color_matches?: VideColorMatch[];
   ranked?: VideCorpusRanked[];
   evidence_lines?: string[];
+  /** What argues against the attribution, and the caveats it carries. */
+  conflicting_evidence?: string[];
+  limitations?: string[];
   forensics?: VideForensicBreakdown;
 };
 

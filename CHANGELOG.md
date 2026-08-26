@@ -2,6 +2,60 @@
 
 All notable changes to this project are documented in this file.
 
+## 2026-08-26
+
+### Changed - VIDE attribution rebuilt on multi-tier discriminative matching
+
+Attribution against the banking baseline corpus was decided by evidence that
+cannot distinguish one bank from another. All ten baselines' `fingerprints.json`
+ship the **same ten** `exactStrings` and the **same three** structural
+signatures, and their brand palettes collide across banks at ΔE₂₀₀₀ ≈ 0 - BOI
+`#f26522` is bit-identical to BOB's, ICICI `#f37021` sits ΔE 0.0 from BOI's
+orange, PNB and INDUS agree to 0.5. Every candidate therefore collected an
+identical `0.40 × 1.0` from the shared strings and `0.35 × 1.0` from the shared
+signatures, and the leader was decided by a colour collision.
+
+Measured over the ten reference APKs before the change: **7/10 attributed**,
+with BOI ranking *behind* Union Bank and ICICI on its own app, and ICICI, BOI
+and UNION unattributable at all (margins 0.006-0.04). After: **10/10, margins
+0.26-0.79**.
+
+- **New `discriminative.py`**: corpus-wide feature weighting,
+  `w = (1/df - 1/n) / (1 - 1/n)`. A feature every baseline carries is worth
+  exactly zero, so the shared template strings and signatures drop out of
+  attribution arithmetically instead of being excluded by name - and a
+  regenerated corpus re-weights the engine with no code change. Colour `df` is
+  counted over ΔE₂₀₀₀ neighbourhoods, not hex equality.
+- **Three attribution tiers** in `corpus_compare.py`, separate from the
+  spec-mandated confidence formula, which is unchanged: identity (0.50),
+  discriminative labels (0.30), discriminative palette (0.20).
+- **Identity tier**: the bank's own names, scored as coverage of its *readable*
+  names times a repetition factor. Package aliases no longer dilute the
+  denominator, and mock payee data naming an unrelated bank once no longer
+  outscores the bank whose app it is - the Union Bank reference app names
+  "ICICI Bank" in its payee list and matched ICICI as strongly as ICICI's own
+  app did.
+- **Corroboration requirement**: naming an institution now needs at least one
+  feature no other baseline carries, with colours counting only when actually
+  reproduced (ΔE ≤ 2.3), not approximated. A margin alone cannot supply this - a
+  lead computed over indistinguishable candidates is not evidence. Ambiguous
+  verdicts carry an `ambiguity_reason` (`margin` / `no_exclusive_evidence`).
+- **Attribution colour curve** reaches zero at ΔE 8 rather than 18. The generic
+  curve answers "would a victim see the same colour"; separating ten banks whose
+  palettes sit ΔE 4-6 apart needs a tighter test. `color_match.py` is unchanged.
+- **Attribution margin** 0.05 -> 0.15. The low value was forced by the shared
+  axes compressing every margin toward zero; with the constant removed the guard
+  is meaningful again.
+- **Colour-only suspects** are no longer dropped before comparison - a Capacitor
+  clone whose labels sit in an unreadable bundle now reaches the palette tier.
+- **`conflicting_evidence` and `limitations`** are now populated on every corpus
+  verdict, as `BASELINE_REGISTRATION_PIPELINE` §6 mandates.
+- **Tests**: `test_vide_discriminative.py` added, pinning the BOI/BOB/ICICI
+  orange collision and the identity rules. `test_vide_apk_attribution.py` and
+  `test_vide_pipeline.py` no longer assert a specific baseline *source* - the
+  same bank is registered as both a corpus and a lab baseline, and those tests
+  passed only when no corpus was checked out.
+
 ## 2026-08-25
 
 ### Changed - VIDE calibrated to a 20% detection threshold

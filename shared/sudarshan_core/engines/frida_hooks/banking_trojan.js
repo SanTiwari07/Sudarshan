@@ -1439,7 +1439,193 @@ function initHooks() {
           return this.evaluateJavascript(script, callback);
         };
         registerHook('WebView.evaluateJavascript');
+
+        // A JS->Java bridge is how a page reaches native capability - and how a
+        // phishing page ships what it collected back into the app.
+        try {
+          WebView.addJavascriptInterface.overload('java.lang.Object', 'java.lang.String')
+            .implementation = function (obj, name) {
+              emit('network', {
+                hook: 'WebView.addJavascriptInterface',
+                class_name: 'android.webkit.WebView',
+                severity: 'HIGH',
+                interface_name: name ? name.toString() : null,
+                description:
+                  'WebView exposed a Java object to page JavaScript as "' +
+                  (name ? name.toString() : '?') +
+                  '" - page script can now call into the app',
+              });
+              return this.addJavascriptInterface(obj, name);
+            };
+          registerHook('WebView.addJavascriptInterface');
+        } catch (e) { reportHookError('WebView.addJavascriptInterface', e.message); }
+
+        try {
+          WebView.postUrl.overload('java.lang.String', '[B').implementation =
+            function (url, body) {
+              emit('network', {
+                hook: 'WebView.postUrl',
+                class_name: 'android.webkit.WebView',
+                severity: 'HIGH',
+                url: url ? url.toString() : null,
+                ioc: url ? url.toString() : null,
+                description: 'WebView POSTed to: ' + (url ? url.toString() : 'null'),
+              });
+              return this.postUrl(url, body);
+            };
+          registerHook('WebView.postUrl');
+        } catch (e) { reportHookError('WebView.postUrl', e.message); }
       } catch (e) { reportHookError('WebView', e.message); }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// [W] IN-PAGE (JAVASCRIPT) NETWORK VISIBILITY
+//
+// The gap this closes: a WebView app's requests are issued by Chromium, not by
+// java.net or OkHttp, so `HttpURLConnection`, `Socket` and the OkHttp hooks
+// never see them. `WebView.loadUrl` catches only the initial navigation. An
+// HTML form that posts with fetch() is, to every Java hook, completely silent.
+//
+// The page's own JS is the only place those calls are observable, so a shim is
+// installed INTO the page: it wraps fetch, XMLHttpRequest, sendBeacon and form
+// submission, queues what it sees, and hands the queue back on the next poll.
+//
+// Deliberately observe-only. Nothing is blocked, nothing is rewritten, and
+// every wrapper calls through to the original - an analysis that changes what
+// the app does is measuring itself.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+      // Idempotent: a page that navigates loses `window`, so the shim is
+      // re-sent on every poll and returns early when it is already present.
+      // Password-typed inputs are recorded as <redacted>: the point is to show
+      // WHICH fields leave the device, not to write a synthetic secret into a
+      // forensic report.
+      var SDSN_SHIM = [
+        '(function(){',
+        'if(window.__sdsn){return window.__sdsn_drain?window.__sdsn_drain():"[]";}',
+        'window.__sdsn=1;window.__sdsnQ=[];',
+        'function push(k,m,u,b){try{if(window.__sdsnQ.length<200){',
+        'window.__sdsnQ.push({k:k,m:String(m||"GET"),u:String(u||""),',
+        'b:b?String(b).substring(0,512):"",t:Date.now()});}}catch(e){}}',
+        'function ser(f){try{var o=[],els=f.elements||[];',
+        'for(var i=0;i<els.length;i++){var el=els[i];if(!el.name)continue;',
+        'o.push(el.name+"="+(el.type==="password"?"<redacted>":',
+        'String(el.value||"").substring(0,64)));}return o.join("&");}catch(e){return "";}}',
+        'try{var of=window.fetch;if(of){window.fetch=function(i,o){try{',
+        'var u=(i&&i.url)?i.url:i;var m=(o&&o.method)||(i&&i.method)||"GET";',
+        'push("fetch",m,u,(o&&o.body)||null);}catch(e){}',
+        'return of.apply(this,arguments);};}}catch(e){}',
+        'try{var xo=XMLHttpRequest.prototype.open,xs=XMLHttpRequest.prototype.send;',
+        'XMLHttpRequest.prototype.open=function(m,u){this.__sm=m;this.__su=u;',
+        'return xo.apply(this,arguments);};',
+        'XMLHttpRequest.prototype.send=function(b){try{push("xhr",this.__sm,this.__su,b);}',
+        'catch(e){}return xs.apply(this,arguments);};}catch(e){}',
+        'try{if(navigator.sendBeacon){var sb=navigator.sendBeacon.bind(navigator);',
+        'navigator.sendBeacon=function(u,d){try{push("beacon","POST",u,d);}catch(e){}',
+        'return sb(u,d);};}}catch(e){}',
+        'try{var fsub=HTMLFormElement.prototype.submit;',
+        'HTMLFormElement.prototype.submit=function(){try{',
+        'push("form_submit",this.method,this.action,ser(this));}catch(e){}',
+        'return fsub.apply(this,arguments);};',
+        'document.addEventListener("submit",function(ev){try{var f=ev.target;',
+        'push("form_submit",f.method,f.action,ser(f));}catch(e){}},true);}catch(e){}',
+        'window.__sdsn_drain=function(){try{return JSON.stringify(window.__sdsnQ.splice(0));}',
+        'catch(e){return "[]";}};',
+        'return "[]";})()',
+      ].join('');
+
+      function sdsnHandleDrain(raw) {
+        if (!raw) return;
+        var records = null;
+        try {
+          // evaluateJavascript hands back a JSON-ENCODED value, so a JS string
+          // arrives quoted and has to be unwrapped before it can be parsed.
+          var once = JSON.parse(raw);
+          records = (typeof once === 'string') ? JSON.parse(once) : once;
+        } catch (e) { return; }
+        if (!records || !records.length) return;
+
+        for (var i = 0; i < records.length; i++) {
+          var r = records[i];
+          if (!r || !r.u) continue;
+          emit('network', {
+            hook: 'WebView.js.' + (r.k || 'request'),
+            class_name: 'android.webkit.WebView',
+            severity: 'HIGH',
+            url: r.u,
+            ioc: r.u,
+            method: r.m || 'GET',
+            body_preview: r.b || '',
+            source: 'in_page_javascript',
+            description:
+              'WebView page JavaScript issued ' + (r.m || 'GET') + ' ' + r.u +
+              ' via ' + (r.k || 'request') +
+              ' - invisible to Java networking hooks',
+          });
+        }
+      }
+
+      // The return channel. evaluateJavascript is the only way to read a value
+      // back out of a page, and it answers through a ValueCallback.
+      var SdsnDrainCallback = null;
+      try {
+        var ValueCallbackCls = Java.use('android.webkit.ValueCallback');
+        SdsnDrainCallback = Java.registerClass({
+          name: 'com.sudarshan.analysis.WebViewDrainCallback',
+          implements: [ValueCallbackCls],
+          methods: {
+            onReceiveValue: function (value) {
+              try { sdsnHandleDrain(value ? value.toString() : ''); } catch (e) { /* never throw into ART */ }
+            },
+          },
+        });
+        registerHook('WebView.js.drain_channel');
+      } catch (e) {
+        // Recorded rather than swallowed: without this channel the shim still
+        // installs and still queues, but nothing can read the queue - so the
+        // report must not imply the page was watched.
+        send({ type: 'diag', msg: 'webview_js_drain_unavailable', error: e.message });
+        reportHookError('WebView.js.drain_channel', e.message);
+      }
+
+      function sdsnPumpWebViews() {
+        if (!sdsnWebViews.length || !SdsnDrainCallback) return;
+        // WebView is not thread-safe: evaluateJavascript throws unless it is
+        // called on the thread that created the view.
+        Java.scheduleOnMainThread(function () {
+          for (var i = 0; i < sdsnWebViews.length; i++) {
+            try {
+              sdsnWebViews[i].evaluateJavascript(SDSN_SHIM, SdsnDrainCallback.$new());
+            } catch (e) { /* a detached or destroyed view is not an error */ }
+          }
+        });
+      }
+
+      // A one-off sweep of the heap, because the WebView that matters usually
+      // already exists: the page is built during startup, and on a hand-off
+      // the agent attaches to a process that has been drawing for seconds. The
+      // load hooks above only ever see views created after us.
+      function sdsnSweepForWebViews() {
+        try {
+          Java.choose('android.webkit.WebView', {
+            onMatch: function (instance) { rememberWebView(instance); },
+            onComplete: function () { },
+          });
+        } catch (e) { /* heap walk unavailable; the load hooks still register views */ }
+      }
+
+      try {
+        sdsnSweepForWebViews();
+        var sdsnPollCount = 0;
+        setInterval(function () {
+          sdsnPollCount++;
+          // Re-swept occasionally rather than every tick: a heap walk is far
+          // more expensive than a drain, and a WebView created later is picked
+          // up by the load hooks in the meantime.
+          if (sdsnPollCount % 5 === 0) sdsnSweepForWebViews();
+          sdsnPumpWebViews();
+        }, 2500);
+        registerHook('WebView.js.network_interception');
+      } catch (e) { reportHookError('WebView.js.network_interception', e.message); }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // [P] PERSISTENCE & ADMIN HOOKS (weight 0.05)

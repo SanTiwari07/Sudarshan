@@ -9,7 +9,6 @@ import pytest
 from httpx import AsyncClient, ASGITransport
 
 from app.main import app
-from app.auth.auth import create_access_token
 from app.db.database import (
     init_db,
     create_user,
@@ -36,14 +35,10 @@ def _make_dummy_apk_bytes(filename_in_zip: str = "AndroidManifest.xml") -> bytes
 
 
 async def _get_auth_headers(username: str, role: str = "analyst") -> dict:
-    await init_db()
-    user = await get_user_by_username(username)
-    if not user:
-        uid = await create_user(username, "hashed_pw", role=role)
-    else:
-        uid = user["id"]
-    token = create_access_token(uid, username, role)
-    return {"Authorization": f"Bearer {token}"}
+    # Session-backed: a bare create_access_token() token has no `sessions` row
+    # and is rejected by get_current_user.
+    from auth_helpers import auth_headers
+    return await auth_headers(username, role)
 
 
 @pytest.mark.anyio

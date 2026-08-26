@@ -17,9 +17,15 @@ services:
     environment:
       - SUDARSHAN_ENV=production
       - SANDBOX_CONTAINMENT_STRICT=true
+      - SUDARSHAN_DB_PATH=/app/data/sudarshan.db
     volumes:
       - uploads:/app/uploads
       - ./.env:/app/.env:ro
+      # Mandatory here, not merely convenient. `read_only: true` below makes
+      # /app unwritable, so without a writable volume the database cannot be
+      # created and startup fails on init_db().
+      - dbdata:/app/data
+      - ./scripts:/opt/sudarshan-scripts:ro
     # Dev bind-mounts removed - image-baked code only.
 
   analysis-engine:

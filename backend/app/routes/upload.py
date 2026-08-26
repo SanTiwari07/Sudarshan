@@ -27,6 +27,7 @@ from app.ai.gemini_client import analyze_with_llm
 from sudarshan_core.analyzers.apk_analyzer import analyze_apk
 from app.auth.auth import get_current_user, require_analyst
 from app.db.database import save_case
+from app.services.run_recorder import record_run
 from sudarshan_core.engines.classification_engine import classify_family
 from sudarshan_core.engines.frida_sandbox import artifact_dir_for, get_sandbox_status, run_frida_analysis
 from sudarshan_core.engines.risk_engine import calculate_risk_score
@@ -341,6 +342,10 @@ async def _persist_and_index(
     the AI assistant.
     """
     await save_case(sha256_hash, result, analyst_id=analyst_id)
+
+    # History row for trending. save_case cannot do this - it is also called
+    # when a case is re-opened and re-enriched, which is not a new run.
+    await record_run(result, sha256=sha256_hash, stage_name="delegated")
 
     cache_report(sha256_hash, {
         "sha256": sha256_hash,
@@ -1013,6 +1018,7 @@ async def _run_analysis_pipeline(
     timer.set_orchestrator_stage(OrchestratorStage.PERSISTING)
     timer.stage_started("PERSISTENCE")
     await save_case(sha256_hash, result, analyst_id=analyst_id)
+    await record_run(result, sha256=sha256_hash, stage_name="local")
 
     # ── Cache for export endpoints ────────────────────────────────────────────
     report_cache_data = {

@@ -280,6 +280,13 @@ class CaseDetail(CaseSummary):
     base_score: Optional[float] = None
     ai_confidence_multiplier: Optional[float] = None
     recommended_action: Optional[str] = None
+    # `risk_band` in the ordinary case, INCOMPLETE_EXERCISE when the sandbox ran
+    # but never reached any of the sample's trigger conditions. Restoring a case
+    # from history without these dropped the one signal that stops a low score
+    # from reading as a clean bill of health.
+    verdict: Optional[str] = None
+    execution_assertions: Optional[Dict[str, Any]] = None
+    incomplete_exercise: bool = False
     frs_breakdown: Optional[Dict[str, Any]] = None
     risk_explanation: Optional[Dict[str, Any]] = None
     threat_scenario_table: Optional[List[Dict[str, Any]]] = None
@@ -354,6 +361,12 @@ def _case_detail_from_row(row: Dict[str, Any]) -> CaseDetail:
         base_score=row.get("base_score"),
         ai_confidence_multiplier=row.get("ai_confidence_multiplier"),
         recommended_action=row.get("recommended_action"),
+        verdict=row.get("verdict") or row.get("risk_band"),
+        execution_assertions=row.get("execution_assertions"),
+        incomplete_exercise=bool(
+            row.get("incomplete_exercise")
+            or (row.get("execution_assertions") or {}).get("incomplete_exercise")
+        ),
         frs_breakdown=frs_breakdown,
         risk_explanation=row.get("risk_explanation"),
         threat_scenario_table=row.get("threat_scenario_table"),
@@ -530,5 +543,19 @@ async def get_case_detail(
             row["dynamic_result"] = dyn
             if "dynamic_analysis" in row:
                 row["dynamic_analysis"] = dyn
+
+    # Normalise the verdict contract so a restored case carries the same three
+    # keys as a fresh /analyze response. Cases persisted before the Execution
+    # Assertion Matrix existed have no assertions: they report verdict=risk_band
+    # and execution_assertions=None, which the UI must render as "coverage not
+    # assessed". Rebuilding a matrix after the fact would fabricate a forensic
+    # record, so we deliberately do not.
+    assertions = row.get("execution_assertions") or None
+    row["execution_assertions"] = assertions
+    row["verdict"] = row.get("verdict") or row.get("risk_band")
+    row["incomplete_exercise"] = bool(
+        row.get("incomplete_exercise")
+        or (assertions or {}).get("incomplete_exercise")
+    )
 
     return row

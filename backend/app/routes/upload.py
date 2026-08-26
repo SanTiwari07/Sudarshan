@@ -951,6 +951,15 @@ async def _run_analysis_pipeline(
         "ai_confidence_multiplier": risk_result["ai_confidence_multiplier"],
         "final_risk_score": risk_result["final_risk_score"],
         "risk_band": risk_result["risk_band"],
+        # The Execution Assertion Matrix. `risk_band` keeps its four-value
+        # vocabulary for the badge colours; `verdict` carries INCOMPLETE_EXERCISE
+        # when the sandbox ran but never reached any of the sample's own trigger
+        # conditions. Without these three keys the frontend cannot distinguish
+        # "we observed nothing bad" from "we never got to look", and a floored
+        # case reads as a clean one.
+        "verdict": risk_result.get("verdict", risk_result["risk_band"]),
+        "execution_assertions": risk_result.get("execution_assertions"),
+        "incomplete_exercise": bool(risk_result.get("incomplete_exercise", False)),
         "confidence": risk_result.get("confidence", 70.0),
         "recommended_action": risk_result.get("recommended_action", ""),
         "frs_breakdown": risk_result.get("frs_breakdown", {}),
@@ -1027,6 +1036,10 @@ async def _run_analysis_pipeline(
         "family_classification": family_class,
         "final_risk_score": risk_result["final_risk_score"],
         "risk_band": risk_result["risk_band"],
+        # Carried so the PDF renders the verdict the engine actually reached
+        # rather than rebuilding the assertion matrix from dynamic_result.
+        "verdict": risk_result.get("verdict", risk_result["risk_band"]),
+        "execution_assertions": risk_result.get("execution_assertions"),
         "confidence": risk_result.get("confidence", 70.0),
         "has_accessibility_abuse": flags_dict.get("has_accessibility_abuse", False),
         "has_sms_read_write": flags_dict.get("has_sms_read_write", False),

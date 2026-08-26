@@ -55,19 +55,19 @@ export default function DynamicAnalysisSummary({ data }: { data: FraudCardData }
 
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
           <div className="rounded-md border border-slate-200 bg-white p-2.5">
-            <dt className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Status</dt>
-            <dd className="font-mono font-bold text-slate-900 mt-1 text-xs">{runtimeStatusHeadline(status)}</dd>
+            <dt className="text-[13px] font-semibold uppercase tracking-wider text-slate-500">Status</dt>
+            <dd className="font-mono font-semibold text-slate-900 mt-1 text-xs">{runtimeStatusHeadline(status)}</dd>
           </div>
           {bfci != null && frs?.dynamic_ran && (
             <div className="rounded-md border border-slate-200 bg-white p-2.5">
-              <dt className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+              <dt className="text-[13px] font-semibold uppercase tracking-wider text-slate-500">
                 <HelpTerm term="BFCI">Observed runtime score</HelpTerm>
               </dt>
-              <dd className="font-mono font-bold text-slate-900 mt-1">{bfci.toFixed(1)} / 100</dd>
+              <dd className="font-mono font-semibold text-slate-900 mt-1">{bfci.toFixed(1)} / 100</dd>
             </div>
           )}
           <div className="rounded-md border border-slate-200 bg-white p-2.5 sm:col-span-2">
-            <dt className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Contribution to final FRS</dt>
+            <dt className="text-[13px] font-semibold uppercase tracking-wider text-slate-500">Contribution to final FRS</dt>
             <dd className="font-semibold text-slate-900 mt-1 text-xs">
               {included && contribution != null ? `${contribution.toFixed(2)} points` : 'Not included'}
             </dd>
@@ -82,20 +82,20 @@ export default function DynamicAnalysisSummary({ data }: { data: FraudCardData }
         <div className="flex flex-wrap gap-2">
           <a
             href="#runtime-screenshots"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-blue-800 bg-blue-50 border border-blue-200/50 rounded hover:bg-blue-100/50 transition-all"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-800 bg-blue-50 border border-blue-200/50 rounded hover:bg-blue-100/50 transition-all"
           >
             View runtime evidence
           </a>
           <button
             type="button"
             onClick={() => openInfluenceDetail('dynamic')}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white border border-slate-250 rounded hover:border-slate-350 hover:bg-slate-50 transition-all"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-250 rounded hover:border-slate-350 hover:bg-slate-50 transition-all"
           >
             View scoring details
           </button>
           <Link
             to={links.intel}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-blue-700 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-500 hover:text-blue-700 transition-colors"
           >
             Threat intelligence →
           </Link>

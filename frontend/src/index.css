@@ -25,6 +25,25 @@
     --surface-active: #e2e8f0;     /* slate-200 for active states */
     --surface-hover: #f8fafc;      /* Subtle hover */
     --surface-input: #ffffff;      /* Inputs */
+
+    /*
+     * Surface geometry.
+     *
+     * Structure comes from whitespace and rounded surfaces, not from borders
+     * and shadows. These are the four numbers that decide how a card reads, so
+     * they live here rather than being retyped as Tailwind classes at three
+     * hundred call sites - which is how the product ended up with seven corner
+     * radii and seven shadows in the first place.
+     *
+     * Deliberately colourless: the palette above is unchanged, and these
+     * tokens describe shape and rhythm only.
+     */
+    --card-radius: 16px;   /* the one card corner */
+    --tile-radius: 12px;   /* tiles and inner surfaces, one step down */
+    --card-pad: 20px;      /* card padding, 24px on roomy cards */
+    --card-gap: 16px;      /* gap between sibling cards */
+    --bar-height: 4px;     /* progress and confidence tracks */
+    --card-elevation: 0 1px 2px rgba(15, 23, 42, 0.03);
   }
 
   body {
@@ -388,6 +407,141 @@
       opacity: 0.5;
     }
   }
+
+  /*
+   * Sign-in page. The Sudarshan mark is scaled past the panel edge and turned
+   * once a minute, so what a reader sees is blades sweeping through the panel
+   * rather than a logo sitting on it. One minute is slow enough that the eye
+   * reads it as depth and not as a spinner; the reduced-motion block at the
+   * foot of this file stops it outright for anyone who has asked it to.
+   */
+  @keyframes signinChakraTurn {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .signin-chakra {
+    animation: signinChakraTurn 60s linear infinite;
+    transform-origin: 50% 50%;
+  }
+
+  @keyframes signinPanelIn {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .signin-enter {
+    animation: signinPanelIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /*
+   * Ask SUDARSHAN - the assistant is working.
+   *
+   * The mark turns while a reply is in flight. It is the same chakra as the
+   * sign-in panel, but at 2.4s rather than 60s, because here it is reporting
+   * state and not setting a mood: a reader has to be able to tell at a glance
+   * whether the answer is still coming. The paired opacity pulse runs on a
+   * different period so the two never sync into a single mechanical beat.
+   */
+  @keyframes sudarshanThinkingTurn {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes sudarshanThinkingPulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.45;
+    }
+  }
+
+  .sudarshan-thinking {
+    animation:
+      sudarshanThinkingTurn 2.4s linear infinite,
+      sudarshanThinkingPulse 1.6s ease-in-out infinite;
+    transform-origin: 50% 50%;
+  }
+
+  /* The label beside it, lit left-to-right like text being read. */
+  @keyframes sudarshanThinkingSheen {
+    from {
+      background-position: 200% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
+  }
+
+  /*
+   * An answer arriving.
+   *
+   * Each block of a reply rises 4px into place as it is emitted. React keeps
+   * the DOM node for a block whose key has not changed, so a paragraph that is
+   * still growing token by token does not restart its animation - only a newly
+   * appended block animates. Transform and opacity only, so this stays on the
+   * compositor while the stream writes.
+   */
+  @keyframes answerBlockIn {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .answer-block {
+    animation: answerBlockIn 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* The write head. Eased rather than stepped - a hard square blink at this
+     size strobes against the text it sits in. */
+  @keyframes answerCaretBlink {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.2;
+    }
+  }
+
+  .answer-caret {
+    animation: answerCaretBlink 1.1s ease-in-out infinite;
+  }
+
+  .sudarshan-thinking-label {
+    background: linear-gradient(
+      90deg,
+      theme('colors.slate.400') 0%,
+      theme('colors.slate.400') 35%,
+      theme('colors.blue.600') 50%,
+      theme('colors.slate.400') 65%,
+      theme('colors.slate.400') 100%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: sudarshanThinkingSheen 2.2s linear infinite;
+  }
 }
 
 /*
@@ -401,6 +555,23 @@
  * Placed outside @layer so it wins against utility-layer animation classes
  * without needing to out-specify each one.
  */
+/*
+ * Reduced transparency.
+ *
+ * The chat page builds its header and composer as translucent layers the
+ * transcript scrolls under. A reader who has asked their OS for less
+ * transparency gets the same structure as solid surfaces: the blur is the
+ * decoration, the separation is the point.
+ *
+ * Outside @layer, for the same reason the reduced-motion block below is.
+ */
+@media (prefers-reduced-transparency: reduce) {
+  .backdrop-blur-sm {
+    backdrop-filter: none !important;
+    background-color: #ffffff !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

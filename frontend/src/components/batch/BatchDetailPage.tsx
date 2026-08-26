@@ -92,7 +92,7 @@ export default function BatchDetailPage() {
                   ID: {batch.batch_id}
                 </span>
               </div>
-              <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 font-mono tracking-tight mt-0.5">
+              <h1 className="text-xl sm:text-2xl font-semibold text-slate-900 font-mono tracking-tight mt-0.5">
                 Batch #{batch.batch_id.slice(0, 8)}
               </h1>
             </div>

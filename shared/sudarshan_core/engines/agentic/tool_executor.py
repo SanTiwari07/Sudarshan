@@ -344,6 +344,13 @@ class ToolExecutor:
 
     # ── ADB Helper ─────────────────────────────────────────────────────────────
 
+    @property
+    def _channel(self):
+        """The persistent device connection shared with PerceptionPipeline."""
+        from sudarshan_core.sandbox.device_channel import get_channel
+
+        return get_channel(self.device_serial)
+
     async def _adb(self, *args: str) -> tuple[bool, str]:
         """Run an ADB command asynchronously via SandboxProvider (policy-enforced)."""
         provider = get_sandbox_provider()
@@ -375,7 +382,13 @@ class ToolExecutor:
                 data={"coordinate_validation": "FAIL", "reason": reason, "x": x, "y": y},
             )
         logger.info("[ToolExecutor] ADB_TAP x=%s y=%s", x, y)
-        ok, out = await self._adb("shell", "input", "tap", str(x), str(y))
+        # The channel taps over the connection that is already open. Same
+        # coordinate semantics, without the process spawn and TCP handshake
+        # that made a single action cost seconds.
+        if await asyncio.to_thread(self._channel.click_xy, x, y):
+            ok, out = True, ""
+        else:
+            ok, out = await self._adb("shell", "input", "tap", str(x), str(y))
         await asyncio.sleep(_paced(0.8))
         return ToolResult(
             success=ok, tool="tap", output=out,
@@ -800,6 +813,85 @@ class ToolExecutor:
             )
         safe_text    = actual_value.replace(" ", "%s")
 
+        # ── Preferred: set the field's text by NODE ──────────────────────────
+        #
+        # `input text` writes to whatever holds focus at the moment the
+        # keystrokes land, which is not necessarily the field we aimed at. A
+        # real run recorded generated credentials typed into
+        # com.google.android.apps.nexuslauncher, because the app moved to the
+        # background between the observation and the typing.
+        #
+        # set_text resolves the focused editable first and REPLACES its
+        # contents, so it also removes the MOVE_END + N x KEYCODE_DEL clearing
+        # dance below (whose failure mode was silent appending:
+        # `user4f2a` -> `user4f2auser9c1b`), needs no IME on screen, and carries
+        # characters `input text` cannot express.
+        #
+        # A False answer means the node could not be resolved - which is
+        # exactly the case where blind typing would have gone somewhere wrong -
+        # so the ADB path below runs only when the channel is absent, and the
+        # verifier still checks what actually landed in the field.
+        if self._channel.available:
+            resource_id = (action.get("resource_id") or "").strip()
+            wrote = False
+            # A resourceId names the field regardless of what is focused or
+            # what moved on screen since the observation - the strongest
+            # selector available. Focus is the fallback for the many samples
+            # whose fields carry no id.
+            if resource_id:
+                wrote = await asyncio.to_thread(
+                    self._channel.set_text_node, actual_value,
+                    resourceId=resource_id,
+                )
+            if not wrote and await asyncio.to_thread(self._channel.click_xy, x, y):
+                await asyncio.sleep(_paced(0.3))
+                wrote = await asyncio.to_thread(
+                    self._channel.set_text_focused, actual_value
+                )
+            if wrote:
+                keyboard_data: Dict[str, Any] = {}
+                dismiss = action.get("dismiss_keyboard")
+                if dismiss is None:
+                    dismiss = DISMISS_KEYBOARD_AFTER_TYPING
+                if dismiss:
+                    hide_data = (await self.hide_keyboard()).data or {}
+                    keyboard_data = {
+                        "keyboard_was_visible": hide_data.get("keyboard_was_visible"),
+                        "keyboard_state": hide_data.get("keyboard_state", "unknown"),
+                        "keyboard_dismissed": bool(hide_data.get("dismissed")),
+                    }
+                return ToolResult(
+                    success=True,
+                    tool="type_text",
+                    adb_command=f"set_text(field_hint={field_hint})",
+                    adb_return_code=0,
+                    data={
+                        "field_hint": field_hint,
+                        "field_type": field_type or "",
+                        "typed_length": len(actual_value),
+                        # set_text REPLACES the field contents, so the field is
+                        # clean by construction - there is no separate clear
+                        # step that can silently fail and leave the value
+                        # appended to what was already there.
+                        "field_cleared": True,
+                        "input_method": "node_set_text",
+                        "resource_id": resource_id,
+                        "node_id": action.get("node_id", ""),
+                        "x": x,
+                        "y": y,
+                        "coordinate_validation": "PASS",
+                        "adb_command_generated": True,
+                        "adb_command_executed": True,
+                        "adb_return_code": 0,
+                        **keyboard_data,
+                    },
+                )
+            logger.info(
+                "[ToolExecutor] set_text could not resolve a field at (%s,%s) "
+                "for field_hint=%s - falling back to input text",
+                x, y, field_hint,
+            )
+
         # Tap the field first to focus it
         await self._adb("shell", "input", "tap", str(x), str(y))
         await asyncio.sleep(_paced(0.4))
@@ -1104,6 +1196,70 @@ class ToolExecutor:
                 await asyncio.sleep(_paced(1.5))
                 # monkey exits 0 and prints its error, so the text decides.
                 launched = ok and "No activities found" not in (out or "")
+
+                # ── A package with no launcher is not a failed launch ────────
+                #
+                # monkey can only start something carrying
+                # android.intent.category.LAUNCHER. A dropped payload routinely
+                # declares none - it installs, hides its icon, and lives as a
+                # service or receiver. Measured on a live run:
+                #   pm path com.pagethan10      -> installed
+                #   resolve-activity LAUNCHER   -> No activity found
+                # and the explorer re-issued the same monkey command every ~2s,
+                # spending its action budget on a command that could never
+                # succeed.
+                #
+                # So: try any activity the package DOES export, and if there is
+                # genuinely none, say so terminally. `headless=True` marks it as
+                # a property of the sample rather than a transient failure, so
+                # the caller can record it and move on instead of retrying.
+                if not launched and "No activities found" in (out or ""):
+                    ok_r, comp = await self._adb(
+                        "shell", "cmd", "package", "resolve-activity",
+                        "--brief", shlex.quote(package),
+                    )
+                    component_line = ""
+                    for line in reversed((comp or "").splitlines()):
+                        line = line.strip()
+                        if "/" in line and package in line:
+                            component_line = line
+                            break
+                    if component_line:
+                        ok2, out2 = await self._adb(
+                            "shell", "am", "start", "-n", shlex.quote(component_line),
+                        )
+                        await asyncio.sleep(_paced(1.5))
+                        if ok2 and "Error" not in (out2 or ""):
+                            logger.info(
+                                "[ToolExecutor] %s declares no LAUNCHER activity; "
+                                "started its exported component %s instead",
+                                package, component_line,
+                            )
+                            return ToolResult(
+                                success=True, tool="start_activity", output=out2,
+                                data={
+                                    "launched_package": package,
+                                    "via": "resolved_component",
+                                    "component": component_line,
+                                },
+                            )
+                    logger.info(
+                        "[ToolExecutor] %s has no launchable activity at all - "
+                        "headless payload. Not retrying; its behaviour is "
+                        "observed through the hooks rather than the UI.",
+                        package,
+                    )
+                    return ToolResult(
+                        success=False, tool="start_activity", output=out,
+                        error=f"{package} declares no launchable activity (headless)",
+                        data={
+                            "launched_package": package,
+                            "via": "monkey",
+                            "headless": True,
+                            "retryable": False,
+                        },
+                    )
+
                 return ToolResult(
                     success=launched, tool="start_activity", output=out,
                     error=None if launched else (out or "monkey launch failed"),

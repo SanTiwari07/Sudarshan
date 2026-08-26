@@ -49,7 +49,7 @@ function FindingCell({ row }: { row: InvestigationEvidence }) {
   return (
     <div className="min-w-0 space-y-0.5">
       <p className={`${TYPOGRAPHY.codeSm} text-slate-500 leading-none`}>{row.id}</p>
-      <p className={`${TYPOGRAPHY.bodySmall} font-bold text-slate-900 leading-snug break-words break-all`}>{row.title}</p>
+      <p className={`${TYPOGRAPHY.bodySmall} font-semibold text-slate-900 leading-snug break-words break-all`}>{row.title}</p>
     </div>
   );
 }
@@ -71,7 +71,7 @@ function FindingRowMobile({
       <div className="mt-1.5 flex flex-wrap items-center gap-3">
         <SeverityIndicator severity={row.severity} />
         <SourceIndicator evidence={row} />
-        <span className={`${TYPOGRAPHY.codeSm} font-bold text-slate-700 tabular-nums`}>{row.confidence}%</span>
+        <span className={`${TYPOGRAPHY.codeSm} font-semibold text-slate-700 tabular-nums`}>{row.confidence}%</span>
       </div>
       <div className="mt-1">
         <WhyMattersCell evidence={row} />

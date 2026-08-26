@@ -1,7 +1,8 @@
 import { ScanEye } from 'lucide-react';
 import type { DnaTrait } from '../../lib/threatIntelModel';
 import { IntelCard, IntelCardBody, IntelSectionHeader } from './IntelCard';
-import { INTEL, INTEL_THEME } from './intelTokens';
+import { INTEL } from './intelTokens';
+import { ProgressBar } from '../ui/primitives';
 
 const BEHAVIOUR_ORDER: {
   key: string;
@@ -54,6 +55,25 @@ function confidenceLabel(percent: number): string {
   return 'Not observed';
 }
 
+/*
+ * The meter is coloured by what it reads, not decorated.
+ *
+ * Every bar drew in the same blue-500-to-blue-700 gradient regardless of the
+ * value behind it, so "Low confidence" and "High confidence" were the same
+ * colour and only the length differed - and a gradient on a 6px track is a
+ * texture nobody can resolve anyway. Worse, blue is this product's action
+ * colour: a blue bar beside a label reads as something to press.
+ *
+ * These four steps match confidenceLabel exactly, so the words and the colour
+ * can never disagree.
+ */
+function confidenceBar(percent: number): string {
+  if (percent >= 70) return 'bg-slate-800';
+  if (percent >= 35) return 'bg-slate-600';
+  if (percent > 0) return 'bg-slate-400';
+  return 'bg-transparent';
+}
+
 function resolveTrait(traits: DnaTrait[], aliases: string[]): DnaTrait | undefined {
   return traits.find((t) => aliases.some((a) => t.label.toLowerCase() === a.toLowerCase()));
 }
@@ -87,19 +107,20 @@ export default function ThreatDnaPanel({ traits }: { traits: DnaTrait[] }) {
               <div key={behaviour.key} className="space-y-2">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="text-sm font-semibold text-slate-900">{behaviour.label}</div>
+                    <div className="font-sans text-[14px] font-medium tracking-[-0.005em] text-slate-900">
+                      {behaviour.label}
+                    </div>
                     <p className={`${INTEL.caption} mt-0.5`}>{behaviour.explanation}</p>
                   </div>
-                  <span className={`${INTEL.caption} shrink-0 font-medium text-slate-600`}>
+                  <span className={`${INTEL.caption} shrink-0 font-medium ${percent > 0 ? 'text-slate-700' : 'text-slate-400'}`}>
                     {confidenceLabel(percent)}
                   </span>
                 </div>
-                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full ${INTEL_THEME.barGradient} transition-all duration-700 ease-out`}
-                    style={{ width: `${Math.min(100, percent)}%` }}
-                  />
-                </div>
+                <ProgressBar
+                  percent={percent}
+                  fill={confidenceBar(percent)}
+                  label={`${behaviour.label}: ${confidenceLabel(percent)}`}
+                />
                 <p className={`${INTEL.caption} leading-relaxed`}>{detail}</p>
               </div>
             );

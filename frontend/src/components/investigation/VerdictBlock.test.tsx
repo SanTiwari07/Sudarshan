@@ -144,10 +144,19 @@ describe('VerdictBlock identity strip', () => {
     );
   });
 
-  it('still leads with the decision, not the score', () => {
+  /*
+   * This asserted that the block led with the decision headline and carried an
+   * h1. Both were removed at the product owner's direction - the verdict
+   * statement, its confidence meter and the plain-language description of the
+   * build are no longer rendered anywhere on the case page.
+   *
+   * The assertion is inverted rather than deleted, so the removal stays a
+   * decision on the record instead of quietly becoming an absence nobody can
+   * account for later. If the headline comes back, this test fails and asks.
+   */
+  it('no longer renders a verdict headline - removed by request', () => {
     const { container } = draw();
-    const heading = container.querySelector('h1');
-    expect(heading).toBeInTheDocument();
-    expect(container.textContent).toMatch(/no threat observed/i);
+    expect(container.querySelector('h1')).toBeNull();
+    expect(container.textContent).not.toMatch(/no threat observed/i);
   });
 });

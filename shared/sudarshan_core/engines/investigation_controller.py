@@ -159,6 +159,71 @@ ALLOWED_ACTIONS: Dict[InvestigationState, FrozenSet[str]] = {
     InvestigationState.COMPLETE: frozenset(),
 }
 
+# ── type_text is legal wherever the agent may act at all ──────────────────────
+#
+# It used to be listed on four stages only (POST_PERMISSION_EXPLORATION,
+# AUTHENTICATION_ANALYSIS, OTP_ANALYSIS, BANKING_TARGET_ANALYSIS). The stage,
+# however, is chosen by what the SAMPLE does - CATEGORY_TO_STATE maps a single
+# `network` runtime event straight to NETWORK_ANALYSIS - while the form on
+# screen is chosen by the sample too, and the two need not agree.
+#
+# Measured on Anubis: its C2 beacon moved the investigation to NETWORK_ANALYSIS
+# while the dropped payload was displaying a four-field credential harvest
+# (Full Name, Mobile Number, Mother Name, Date Of Birth). The planner asked to
+# type five separate times and was refused every time - first by
+# NETWORK_ANALYSIS, then by FINAL_OBSERVATION, then by COMPLETE - so the run
+# filled one field of four. Filling that form is precisely the behaviour that
+# produces fraud evidence, and the sample's own network traffic was what
+# switched it off.
+#
+# Typing into a field the sample is already showing is not an escalation: the
+# tap that focuses the box is allowed in every one of these stages, and the
+# credentials are synthetic, per-run values from the vault. Gating it bought no
+# containment and cost the evidence.
+#
+# COMPLETE stays empty - it means the investigation is over, not that a
+# particular tool is disallowed.
+#: Stages that may DO something, as opposed to only look. Computed from the
+#: base table above, before either pass below widens it - otherwise the first
+#: pass makes every stage look like an acting stage and the second pass then
+#: grants permission tools to BOOTSTRAP, which is read-only by design.
+_ACTING_STATES = frozenset(
+    state for state, actions in ALLOWED_ACTIONS.items() if actions - _READ_ONLY
+)
+
+ALLOWED_ACTIONS = {
+    state: (actions | {"type_text"} if state is not InvestigationState.COMPLETE
+            else actions)
+    for state, actions in ALLOWED_ACTIONS.items()
+}
+
+# ── Permission tools follow the ability to act ───────────────────────────────
+#
+# _PERMISSION_TOOLS already documents the intent: "a runtime dialog can appear
+# at any moment, and a goal that needs a capability can come due in any
+# exploration stage, so these are permitted wherever the agent is actively
+# exploring rather than only inside PERMISSION_ANALYSIS. They remain excluded
+# from the read-only stages."
+#
+# The table did not match that intent. INITIAL_OBSERVATION, APP_LAUNCH,
+# NETWORK_ANALYSIS, PERSISTENCE_ANALYSIS and DYNAMIC_CODE_ANALYSIS can all act,
+# and all omitted the permission tools.
+#
+# Observed live, on two consecutive stages of one run:
+#   Rejected 'grant_permission' - not permitted in INITIAL_OBSERVATION
+#   Rejected 'grant_permission' - not permitted in APP_LAUNCH
+# A permission dialog is the app asking for the very capability the
+# investigation exists to characterise. Refusing to answer it costs the run the
+# SMS and accessibility behaviour the fraud axis is made of, and the dialog
+# stays on screen blocking everything behind it.
+#
+# Derived from _ACTING_STATES rather than listed per-state, so a stage added
+# later cannot silently reintroduce the same gap.
+ALLOWED_ACTIONS = {
+    state: (actions | _PERMISSION_TOOLS if state in _ACTING_STATES else actions)
+    for state, actions in ALLOWED_ACTIONS.items()
+}
+
 
 #: Observed screen -> the state that screen puts us in. Deterministic: the
 #: classifier is rule-based, so this mapping is too, and the model has no say

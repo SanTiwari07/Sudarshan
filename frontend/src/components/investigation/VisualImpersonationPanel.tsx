@@ -54,31 +54,31 @@ function AnalyzedBody({ vide, data }: { vide: VideResult; data: FraudCardData })
   return (
     <div className="p-3.5 space-y-3.5 text-xs text-slate-600">
       <div>
-        <p className="text-xs font-bold text-slate-800">No banking UI impersonation detected</p>
+        <p className="text-xs font-semibold text-slate-800">No banking UI impersonation detected</p>
         <p className="mt-1 text-[13px] text-slate-500">VIDE-F001 did not fire for this sample against lab baselines.</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="p-2.5 rounded-md border border-slate-200 bg-white">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">VIDE confidence</div>
-          <div className="text-base font-bold text-slate-900 tabular-nums mt-0.5">
+          <div className="text-[13px] font-semibold uppercase tracking-wider text-slate-500">VIDE confidence</div>
+          <div className="text-base font-semibold text-slate-900 tabular-nums mt-0.5">
             {formatVideConfidence(confidence)}
           </div>
         </div>
         <div className="p-2.5 rounded-md border border-slate-200 bg-white">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Status</div>
-          <div className="text-xs font-bold text-slate-800 mt-1">{vide.status || 'OK'}</div>
+          <div className="text-[13px] font-semibold uppercase tracking-wider text-slate-500">Status</div>
+          <div className="text-xs font-semibold text-slate-800 mt-1">{vide.status || 'OK'}</div>
         </div>
       </div>
 
       <div>
-        <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Baselines analyzed</div>
+        <div className="text-[13px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Baselines analyzed</div>
         <p className="text-slate-850 font-semibold">{Object.values(VIDE_BASELINE_SHORT_NAMES).join(' · ')}</p>
       </div>
 
       {evidence.length > 0 && (
         <div>
-          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Evidence</div>
+          <div className="text-[13px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Evidence</div>
           <p className="font-mono text-[13px]">{evidence.join(' · ')}</p>
         </div>
       )}
@@ -94,8 +94,8 @@ function AnalyzedBody({ vide, data }: { vide: VideResult; data: FraudCardData })
       )}
 
       <div className="p-2.5 rounded-md border border-slate-200 bg-slate-50/20">
-        <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Signer</div>
-        <div className="mt-1 font-bold text-slate-800">
+        <div className="text-[13px] font-semibold uppercase tracking-wider text-slate-500">Signer</div>
+        <div className="mt-1 font-semibold text-slate-800">
           {signer?.detected ? 'Mismatch / impersonation signal' : 'No signer impersonation (CH06)'}
         </div>
       </div>
@@ -108,7 +108,7 @@ function AnalyzedBody({ vide, data }: { vide: VideResult; data: FraudCardData })
 
       {(compare?.evidence_lines ?? []).length > 0 && (
         <details className="text-slate-600">
-          <summary className="cursor-pointer font-bold text-[12px] uppercase tracking-wider text-slate-700">Deterministic evidence lines</summary>
+          <summary className="cursor-pointer font-semibold text-[13px] uppercase tracking-wider text-slate-700">Deterministic evidence lines</summary>
           <ul className="mt-1.5 space-y-1 list-disc list-inside font-mono text-[13px]">
             {(compare?.evidence_lines ?? []).map((line) => (
               <li key={line}>{line}</li>
@@ -137,21 +137,21 @@ function DetectedBody({ vide, data }: { vide: VideResult; data: FraudCardData })
     <div className="p-3.5 space-y-3.5 text-xs">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Target institution</div>
-          <div className="text-base font-bold text-slate-900 mt-1">
+          <div className="text-[13px] font-semibold uppercase tracking-wider text-slate-500">Target institution</div>
+          <div className="text-base font-semibold text-slate-900 mt-1">
             {compare?.institution_display || vide.visual_impersonation_institution || 'Unknown'}
           </div>
         </div>
         <div>
-          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Rule</div>
-          <div className="text-xs font-bold text-red-700 mt-1">{compare?.rule_id || 'VIDE-F001'}</div>
+          <div className="text-[13px] font-semibold uppercase tracking-wider text-slate-500">Rule</div>
+          <div className="text-xs font-semibold text-red-700 mt-1">{compare?.rule_id || 'VIDE-F001'}</div>
           <div className="text-slate-600 mt-0.5 font-medium">Banking UI impersonation detected</div>
         </div>
       </div>
 
       <div>
-        <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Structural similarity</div>
-        <div className="text-xl font-bold text-slate-900 tabular-nums">
+        <div className="text-[13px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Structural similarity</div>
+        <div className="text-xl font-semibold text-slate-900 tabular-nums">
           {formatVideConfidence(videConfidenceValue(vide))}
         </div>
       </div>
@@ -164,7 +164,7 @@ function DetectedBody({ vide, data }: { vide: VideResult; data: FraudCardData })
 
       {matched.length > 0 && (
         <div>
-          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Matched UI elements</div>
+          <div className="text-[13px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Matched UI elements</div>
           <ul className="list-disc list-inside text-slate-700 space-y-0.5">
             {matched.slice(0, 12).map((s) => (
               <li key={s} className="capitalize">
@@ -176,8 +176,8 @@ function DetectedBody({ vide, data }: { vide: VideResult; data: FraudCardData })
       )}
 
       <div className="p-2.5 rounded-md border border-slate-200 bg-slate-50/20">
-        <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Signer</div>
-        <div className="mt-1 font-bold text-slate-800">
+        <div className="text-[13px] font-semibold uppercase tracking-wider text-slate-500">Signer</div>
+        <div className="mt-1 font-semibold text-slate-800">
           {signer?.detected ? 'MISMATCH / IMPERSONATION' : 'Unknown / Mismatch'}
         </div>
         {(signer?.evidence_lines ?? []).slice(0, 2).map((line) => (
@@ -189,7 +189,7 @@ function DetectedBody({ vide, data }: { vide: VideResult; data: FraudCardData })
 
       {vide.critical_visual_cluster && (
         <div className="p-2.5 rounded-md border border-red-200/50 bg-red-50/40">
-          <div className="flex items-center gap-1.5 text-red-800 font-bold text-[12px] uppercase tracking-wider">
+          <div className="flex items-center gap-1.5 text-red-800 font-semibold text-[13px] uppercase tracking-wider">
             <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
             Critical visual cluster
           </div>
@@ -208,7 +208,7 @@ function DetectedBody({ vide, data }: { vide: VideResult; data: FraudCardData })
 
       {(compare?.evidence_lines ?? []).length > 0 && (
         <details className="text-slate-650">
-          <summary className="cursor-pointer font-bold text-[12px] uppercase tracking-wider text-slate-700">Deterministic evidence lines</summary>
+          <summary className="cursor-pointer font-semibold text-[13px] uppercase tracking-wider text-slate-700">Deterministic evidence lines</summary>
           <ul className="mt-1.5 space-y-1 list-disc list-inside font-mono text-[13px]">
             {(compare?.evidence_lines ?? []).map((line) => (
               <li key={line}>{line}</li>
@@ -223,8 +223,8 @@ function DetectedBody({ vide, data }: { vide: VideResult; data: FraudCardData })
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="p-2 rounded-md border border-slate-200 bg-slate-50/20">
-      <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{label}</div>
-      <div className="text-xs font-bold text-slate-900 tabular-nums mt-0.5">{value}</div>
+      <div className="text-[13px] font-semibold uppercase tracking-wider text-slate-500">{label}</div>
+      <div className="text-xs font-semibold text-slate-900 tabular-nums mt-0.5">{value}</div>
     </div>
   );
 }

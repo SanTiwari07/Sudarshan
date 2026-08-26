@@ -101,7 +101,7 @@ export default function UploadDropZone({
             aria-hidden
           />
         </div>
-        <p className="text-lg sm:text-2xl font-extrabold text-slate-900 tracking-tight">
+        <p className="text-lg sm:text-2xl font-semibold text-slate-900 tracking-tight">
           Drag &amp; drop your APK
         </p>
         <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-md mx-auto">

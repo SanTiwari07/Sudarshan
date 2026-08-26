@@ -150,38 +150,24 @@ describe('drawer stack', () => {
 });
 
 describe('reading depth', () => {
-  it('defaults to summary - the twenty-second read', () => {
+  /*
+   * The Detail switch was removed from the case bar, so depth is no longer a
+   * choice. It is pinned to the deepest level: with no chooser, the old
+   * 'summary' default would have permanently hidden the raw technical section,
+   * the counts strip and the per-stage MITRE ids.
+   */
+  it('is fixed at forensic, so both gates are open', () => {
     const { result } = useUI();
-    expect(result.current.depth).toBe('summary');
-    expect(result.current.atLeastAnalyst).toBe(false);
-    expect(result.current.isForensic).toBe(false);
-  });
-
-  it('derives the two gates from the level', () => {
-    const { result } = useUI();
-
-    act(() => result.current.setDepth('analyst'));
-    expect(result.current.atLeastAnalyst).toBe(true);
-    expect(result.current.isForensic).toBe(false);
-
-    act(() => result.current.setDepth('forensic'));
+    expect(result.current.depth).toBe('forensic');
     expect(result.current.atLeastAnalyst).toBe(true);
     expect(result.current.isForensic).toBe(true);
   });
 
-  it('persists the choice across sessions', () => {
-    const first = useUI();
-    act(() => first.result.current.setDepth('forensic'));
-    first.unmount();
-
-    const second = useUI();
-    expect(second.result.current.depth).toBe('forensic');
-  });
-
-  it('ignores a corrupted stored value rather than trusting it', () => {
-    localStorage.setItem('sudarshan_case_depth', 'root-access');
+  it('ignores a stored value, which nothing can write any more', () => {
+    localStorage.setItem('sudarshan_case_depth', 'summary');
     const { result } = useUI();
-    expect(result.current.depth).toBe('summary');
+    expect(result.current.depth).toBe('forensic');
+    expect(result.current.isForensic).toBe(true);
   });
 });
 

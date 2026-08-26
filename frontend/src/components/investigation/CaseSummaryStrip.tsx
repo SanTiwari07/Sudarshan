@@ -39,8 +39,8 @@ function MetricCard({
       type={onClick ? 'button' : undefined}
       onClick={onClick}
       aria-label={`View ${title.toLowerCase()} details`}
-      className={`group relative w-full text-left p-4 rounded-lg border border-slate-200 bg-white shadow-xs flex flex-col justify-between transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 overflow-hidden ${
-        onClick ? 'cursor-pointer hover:border-slate-300 hover:shadow-sm hover:bg-slate-50/50' : ''
+      className={`group relative w-full text-left p-4 rounded-lg border border-slate-200 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex flex-col justify-between transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 overflow-hidden ${
+        onClick ? 'cursor-pointer hover:border-slate-300 hover:bg-slate-50/50' : ''
       }`}
     >
       {/* Top Subtle Accent Bar */}
@@ -59,7 +59,7 @@ function MetricCard({
 
         {/* Metric Value & Optional Status Badge */}
         <div className="flex items-baseline justify-between gap-2 mb-2 font-mono">
-          <span className="text-3xl font-bold font-mono text-slate-900 tracking-tight">
+          <span className="text-3xl font-semibold font-mono text-slate-900 tracking-tight">
             {value}
           </span>
           {statusBadge}
@@ -96,7 +96,7 @@ export default function CaseSummaryStrip({
   const totalSignals = findings + counts.iocMatches + counts.mitreTechniques + counts.evidenceRecords + counts.screenshots;
 
   return (
-    <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-xs space-y-4">
+    <div className="space-y-4 rounded-[var(--card-radius)] border border-slate-200 bg-white p-5 shadow-[var(--card-elevation)]">
       {/* Header + Supporting Description */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3.5">
         <div className="space-y-1">

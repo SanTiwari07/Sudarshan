@@ -92,6 +92,26 @@ def adb_server_host() -> str:
     return host
 
 
+def adb_server_port() -> int:
+    """
+    Port of the ADB server this process talks to. 5037 when unset.
+
+    Pairs with adb_server_host(). Libraries that speak the ADB protocol
+    directly rather than shelling out to the `adb` binary -- adbutils, and
+    uiautomator2 on top of it -- read ADB_SERVER_HOST/ADB_SERVER_PORT and know
+    nothing about ADB_SERVER_SOCKET, so the socket form has to be translated
+    for them or they silently dial a local server that is not there.
+    """
+    raw = (os.getenv("ADB_SERVER_SOCKET") or "").strip()
+    if not raw:
+        return 5037
+    value = raw[4:] if raw.lower().startswith("tcp:") else raw
+    if ":" not in value:
+        return 5037
+    port = value.rsplit(":", 1)[1].strip()
+    return int(port) if port.isdigit() else 5037
+
+
 def frida_client_hosts() -> list:
     """
     Ordered, de-duplicated hosts to try when dialling a forwarded Frida port.

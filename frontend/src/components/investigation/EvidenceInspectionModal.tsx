@@ -287,14 +287,14 @@ export default function EvidenceInspectionModal({
           {/* Header Bar overlay */}
           <div className="flex items-center justify-between px-4 py-3 bg-slate-900/90 border-b border-slate-800/80 z-20 shrink-0">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-blue-600/30 text-blue-400 border border-blue-500/40">
+              <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-blue-600/30 text-blue-400 border border-blue-500/40">
                 {screenshotId}
               </span>
               <span className="text-xs text-slate-500 font-mono hidden sm:inline">
                 {timestampText !== '—' ? timestampText : ''}
               </span>
               {workflow && (
-                <span className="text-[12px] font-mono uppercase px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 hidden md:inline">
+                <span className="text-[13px] font-mono uppercase px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 hidden md:inline">
                   {workflow}
                 </span>
               )}
@@ -368,7 +368,7 @@ export default function EvidenceInspectionModal({
             onTouchEnd={handleTouchEnd}
           >
             {loading ? (
-              <div className="flex flex-col items-center gap-2 text-slate-500 text-xs font-mono animate-pulse">
+              <div className="flex animate-pulse flex-col items-center gap-2 font-sans text-[13px] text-slate-400">
                 <Maximize2 className="h-8 w-8 text-blue-500 animate-spin" />
                 <span>Loading screenshot artifact…</span>
               </div>
@@ -383,7 +383,7 @@ export default function EvidenceInspectionModal({
                 draggable={false}
               />
             ) : (
-              <div className="text-center p-6 text-slate-500 text-xs font-mono">
+              <div className="p-6 text-center font-sans text-[13px] text-slate-400">
                 Screenshot artifact unresolvable or unavailable.
               </div>
             )}
@@ -424,7 +424,7 @@ export default function EvidenceInspectionModal({
                     onClick={() => onIndexChange(idx)}
                     className={`shrink-0 flex items-center gap-2 px-2.5 py-1.5 rounded-md border text-[13px] font-mono transition-all ${
                       isActive
-                        ? 'bg-blue-600/20 border-blue-500 text-blue-300 font-bold'
+                        ? 'bg-blue-600/20 border-blue-500 text-blue-300 font-semibold'
                         : 'bg-slate-800/60 border-slate-700/60 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
                     }`}
                   >
@@ -443,7 +443,15 @@ export default function EvidenceInspectionModal({
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-blue-600 shrink-0" />
-                <h3 className="text-base font-bold text-slate-900 font-mono">
+                {/*
+                  Sans, not mono. Monospace here is for the things an analyst
+                  copies verbatim - an evidence id, a package, an activity, a
+                  timestamp - because a fixed advance is what makes those
+                  comparable character by character. On a title it is costume:
+                  it says "forensic" without doing any of the work, and it
+                  made the panel's own heading the least legible line in it.
+                */}
+                <h3 className="font-sans text-base font-semibold tracking-[-0.01em] text-slate-900">
                   Evidence Inspection
                 </h3>
               </div>
@@ -460,7 +468,7 @@ export default function EvidenceInspectionModal({
             {/* Main Observation Header */}
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="font-mono text-xs font-extrabold px-2.5 py-1 rounded bg-slate-900 text-white">
+                <span className="rounded-full bg-slate-900 px-2.5 py-1 font-mono text-[13px] font-semibold text-white">
                   {screenshotId}
                 </span>
                 {quality && (
@@ -491,9 +499,9 @@ export default function EvidenceInspectionModal({
             </div>
 
             {/* Section 1: Evidence Details Card */}
-            <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 space-y-3 shadow-xs">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 font-mono border-b border-slate-200/80 pb-2">
-                <Info className="h-4 w-4 text-blue-600" />
+            <div className="space-y-3 rounded-[var(--tile-radius)] bg-slate-50 p-4">
+              <div className="flex items-center gap-1.5 border-b border-slate-200 pb-2 font-sans text-[13px] font-semibold tracking-[-0.005em] text-slate-700">
+                <Info className="h-4 w-4 text-slate-400" />
                 <span>Evidence Details</span>
               </div>
 
@@ -505,7 +513,7 @@ export default function EvidenceInspectionModal({
                       {evidenceIds.map((eid) => (
                         <span
                           key={eid}
-                          className="font-mono text-[13px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200"
+                          className="font-mono text-[13px] font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200"
                         >
                           {eid}
                         </span>
@@ -589,15 +597,22 @@ export default function EvidenceInspectionModal({
             </div>
 
             {/* Section 2: Investigation Context Card */}
-            <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-4 space-y-3 shadow-xs">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900 font-mono border-b border-blue-100 pb-2">
-                <ShieldAlert className="h-4 w-4 text-blue-600" />
+            {/*
+              The same surface as the panel above it. A blue tint on one of two
+              sibling panels says they are different kinds of thing; they are
+              not - both are read-only detail about this frame. Blue is also
+              this product's action colour, so a blue panel reads as something
+              to press.
+            */}
+            <div className="space-y-3 rounded-[var(--tile-radius)] bg-slate-50 p-4">
+              <div className="flex items-center gap-1.5 border-b border-slate-200 pb-2 font-sans text-[13px] font-semibold tracking-[-0.005em] text-slate-700">
+                <ShieldAlert className="h-4 w-4 text-slate-400" />
                 <span>Investigation Context</span>
               </div>
 
               <div className="space-y-2.5 text-xs">
                 <div>
-                  <span className="text-blue-900/70 font-semibold block text-[13px]">Visual observation</span>
+                  <span className="block font-sans text-[13px] font-medium tracking-[0.01em] text-slate-500">Visual observation</span>
                   <p className="text-slate-800 leading-relaxed mt-0.5">
                     {visualObservation}
                   </p>
@@ -605,7 +620,7 @@ export default function EvidenceInspectionModal({
 
                 {investigativeClaim && investigativeClaim !== visualObservation && (
                   <div>
-                    <span className="text-blue-900/70 font-semibold block text-[13px]">Investigative claim</span>
+                    <span className="block font-sans text-[13px] font-medium tracking-[0.01em] text-slate-500">Investigative claim</span>
                     <p className="text-slate-800 leading-relaxed mt-0.5">
                       {investigativeClaim}
                     </p>
@@ -614,7 +629,7 @@ export default function EvidenceInspectionModal({
 
                 {runtimeObservation && (
                   <div>
-                    <span className="text-blue-900/70 font-semibold block text-[13px]">Runtime observation</span>
+                    <span className="block font-sans text-[13px] font-medium tracking-[0.01em] text-slate-500">Runtime observation</span>
                     <p className="text-slate-800 leading-relaxed mt-0.5 font-mono text-[13px]">
                       {runtimeObservation}
                     </p>
@@ -622,7 +637,7 @@ export default function EvidenceInspectionModal({
                 )}
 
                 <div>
-                  <span className="text-blue-900/70 font-semibold block text-[13px]">Why it matters</span>
+                  <span className="block font-sans text-[13px] font-medium tracking-[0.01em] text-slate-500">Why it matters</span>
                   <p className="text-slate-800 leading-relaxed mt-0.5">
                     {corroboration || NO_CORROBORATION_NOTE}
                   </p>
@@ -630,12 +645,12 @@ export default function EvidenceInspectionModal({
 
                 {findingKeys && findingKeys.length > 0 && (
                   <div>
-                    <span className="text-blue-900/70 font-semibold block text-[13px]">Associated Finding(s)</span>
+                    <span className="block font-sans text-[13px] font-medium tracking-[0.01em] text-slate-500">Associated Finding(s)</span>
                     <div className="flex flex-wrap gap-1.5 mt-1">
                       {findingKeys.map((fk) => (
                         <span
                           key={fk}
-                          className="font-mono text-[13px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200"
+                          className="font-mono text-[13px] font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200"
                         >
                           {fk}
                         </span>
@@ -646,7 +661,7 @@ export default function EvidenceInspectionModal({
 
                 {trigger && (
                   <div>
-                    <span className="text-blue-900/70 font-semibold block text-[13px]">Supporting Runtime Event</span>
+                    <span className="block font-sans text-[13px] font-medium tracking-[0.01em] text-slate-500">Supporting Runtime Event</span>
                     <p className="font-mono text-[13px] text-slate-800 bg-white/80 p-2 rounded border border-blue-100 mt-0.5">
                       {trigger}
                     </p>
@@ -655,8 +670,8 @@ export default function EvidenceInspectionModal({
 
                 {mitreTech && (
                   <div>
-                    <span className="text-blue-900/70 font-semibold block text-[13px]">MITRE ATT&CK Technique</span>
-                    <span className="font-mono text-[13px] font-bold px-2 py-0.5 rounded bg-slate-900 text-white inline-block mt-0.5">
+                    <span className="block font-sans text-[13px] font-medium tracking-[0.01em] text-slate-500">MITRE ATT&CK Technique</span>
+                    <span className="font-mono text-[13px] font-semibold px-2 py-0.5 rounded bg-slate-900 text-white inline-block mt-0.5">
                       {mitreTech}
                     </span>
                   </div>
@@ -664,7 +679,7 @@ export default function EvidenceInspectionModal({
 
                 {analystNote && (
                   <div>
-                    <span className="text-blue-900/70 font-semibold block text-[13px]">Analyst Interpretation</span>
+                    <span className="block font-sans text-[13px] font-medium tracking-[0.01em] text-slate-500">Analyst Interpretation</span>
                     <p className="text-slate-800 italic bg-white p-2.5 rounded border border-blue-200/60 mt-0.5 leading-relaxed">
                       "{analystNote}"
                     </p>
@@ -675,7 +690,7 @@ export default function EvidenceInspectionModal({
           </div>
 
           {/* Footer Bar */}
-          <div className="pt-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 font-mono">
+          <div className="flex items-center justify-between border-t border-slate-200 pt-3 font-sans text-[13px] tracking-[0.01em] text-slate-500">
             <span>SOC Evidence Locker</span>
             <span>Use Left/Right arrows or buttons to navigate</span>
           </div>

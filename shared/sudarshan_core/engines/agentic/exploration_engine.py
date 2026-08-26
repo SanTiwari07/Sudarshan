@@ -2805,13 +2805,48 @@ class ExplorationGraph:
         #
         # Fields first is the floor: whatever else is on the screen, a form is
         # filled before it is committed.
-        pending_inputs = [a for a in ranked if a.action_type == "input"]
+        # ── Unfilled fields outrank filled ones ──────────────────────────────
+        #
+        # This used to take EVERY input, filled or not, and put the whole set
+        # in front. Within that set the order is plain priority, which does not
+        # know about fill state - so the two highest-priority boxes kept
+        # winning and the ones below them were never reached.
+        #
+        # Measured on the Anubis payload's four-field credential form
+        # (Full Name, Mobile Number, Mother Name, Date Of Birth): the run
+        # dispatched ACT-148 Full Name, ACT-149 Mobile Number, then ACT-200
+        # Full Name and ACT-201 Mobile Number again. Mother Name and Date Of
+        # Birth were never attempted once - not failed, never dispatched - and
+        # the form could not be completed however long the walk ran.
+        #
+        # `resolved` is the same notion of "filled" that _form_is_filled uses,
+        # so the hold on submit controls and this ordering agree by
+        # construction. Filled fields stay in the list, just behind the empty
+        # ones: a form that gets cleared by a validation error still gets
+        # re-entered.
+        #
+        # Within the unfilled set, fewest attempts first, so a box that cannot
+        # be typed into - a date picker that opens a calendar rather than a
+        # keyboard, say - falls behind the ones that can, instead of absorbing
+        # every remaining action.
+        all_inputs = [a for a in ranked if a.action_type == "input"]
+        unfilled = [a for a in all_inputs if not a.resolved]
+        filled = [a for a in all_inputs if a.resolved]
+        unfilled.sort(key=lambda a: getattr(a, "fill_attempts", 0))
+        pending_inputs = unfilled + filled
         if pending_inputs:
             held = [a for a in ranked if _is_form_commit_action(a)]
             rest = [
                 a for a in ranked
                 if a.action_type != "input" and not _is_form_commit_action(a)
             ]
+            if unfilled:
+                logger.info(
+                    "[Explorer] FORM_ORDER state=%s - %d unfilled before %d "
+                    "already-filled: %s",
+                    sid, len(unfilled), len(filled),
+                    [a.label for a in unfilled],
+                )
             logger.info(
                 "[Explorer] FORM_FILL_FIRST state=%s - %d input(s) before "
                 "%d commit control(s): %s",

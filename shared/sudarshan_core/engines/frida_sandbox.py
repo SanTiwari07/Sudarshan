@@ -40,6 +40,7 @@ import logging
 import os
 import re
 import subprocess
+import queue
 import threading
 import time
 from pathlib import Path
@@ -131,6 +132,13 @@ class DynamicAnalysisStatus(str, Enum):
     INCONCLUSIVE = "INCONCLUSIVE"
     EVENTS_CAPTURED = "EVENTS_CAPTURED"
     NO_UI_RENDERED = "NO_UI_RENDERED"
+    # Hooks installed correctly, the process ran, and nothing the SAMPLE did was
+    # observed - because the agent arrived after the app had already started.
+    # Distinct from RUNTIME_COMPLETED_NO_EVENTS, which claims the sample was
+    # quiet. A real run reported EVENTS_CAPTURED with 77 hooks installed and one
+    # hook fire that was the harness spoofing its own Build fields, and the
+    # report then read as though the sample had been observed doing nothing.
+    INSTRUMENTED_TOO_LATE = "INSTRUMENTED_TOO_LATE"
 
 # Path to the Frida JS hooks script (banking_trojan.js)
 _HOOKS_DIR = Path(__file__).parent / "frida_hooks"
@@ -226,7 +234,32 @@ except ImportError:
 # sample's accessibility stage was never reached.
 #
 # The cost is real: every dynamic run is now ~5 minutes rather than ~90s.
-ANALYSIS_DURATION_SECONDS = int(os.getenv("FRIDA_ANALYSIS_DURATION", "300"))
+#
+# ── Reduced to 150s once the planner stopped being on the critical path ──────
+#
+# The 300s figure was sized against "~4.2s per action". That number no longer
+# described reality: measured on Anubis, Gemini alone took 7.9s, 13.8s, 15.1s
+# and 11.2s on consecutive iterations - ~12s each - because the planner was
+# consulted BEFORE the exploration graph, every iteration, and its answer was
+# then discarded whenever the graph had a tap or a type to offer. Twenty calls
+# consumed roughly 240s of the 300s window and bought 20 actions.
+#
+# With the planner consulted only when it can change the outcome (see
+# _planner_could_change_outcome in agentic_explorer), the per-iteration cost is
+# dominated by perception and execution again, and the window no longer has to
+# be padded to absorb model latency.
+#
+# 240s is the measured floor for a DROPPER: Anubis does not install its
+# payload until t+86s, and a window that closes before the payload is
+# instrumented produces no fraud-bucket events at all - measured directly,
+# 120s gave axes_excluded=[dynamic] while ~180s+ gave axes_excluded=[] with
+# both packages instrumented. Shorter windows suit single-stage samples;
+# this default has to cover the two-stage case. Earlier note kept below.
+# The old operational constraint this engine is actually used under:
+# a whole scan - static, launch, exploration and teardown - inside 3-4 minutes.
+# Raise it with FRIDA_ANALYSIS_DURATION when a sample genuinely needs a longer
+# walk; nothing here assumes the default.
+ANALYSIS_DURATION_SECONDS = int(os.getenv("FRIDA_ANALYSIS_DURATION", "240"))
 
 # ── Adaptive exploration window ───────────────────────────────────────────────
 # ANALYSIS_DURATION_SECONDS above is the STARTING budget, not a fixed one. It is
@@ -292,6 +325,56 @@ LAUNCH_UI_RENDER_SECONDS: float = float(os.getenv("SUDARSHAN_LAUNCH_UI_RENDER", 
 # Polling interval for the PID stability loop.
 LAUNCH_PID_POLL_SECONDS: float = 0.25
 
+# ── Spawn-gated instrumentation ───────────────────────────────────────────────
+#
+# The launch ladder below starts the app with `am start` and attaches AFTER the
+# process is stable. Measured on a real run (dynamic_result.json, InsecureBankv2
+# handing off to com.tjmonh.android): the process was alive at t+50s and Frida
+# attached at t+86s. Thirty-six seconds of Application.attachBaseContext,
+# Application.onCreate, DEX loading, service registration and the C2 first
+# beacon executed with no hooks installed. The run finished with 77 hooks
+# installed and exactly one hook fire - `Build.<static fields>`, which is the
+# HARNESS spoofing its own emulator fields. Every fraud bucket read 0.
+#
+# Nothing about that is a tuning problem. Attaching to a running process cannot
+# observe what the process already did, so whether a run captures anything
+# depends on whether the sample happens to act again after the attach - which is
+# why dynamic analysis "worked sometimes".
+#
+# So: spawn the process SUSPENDED, load the agent, and only then resume. Frida's
+# own guidance is explicit that resume() must follow script.load() or early
+# entry points cannot be hooked.
+SPAWN_FIRST: bool = (os.getenv("SUDARSHAN_SPAWN_FIRST", "1").strip().lower()
+                     not in {"0", "false", "no", "off"})
+# device.spawn() on Android hangs when the forked zygote never reaches
+# setArgV0() (frida/frida#3758, #2005). Bounded, and the ladder stays a real
+# fallback rather than a formality.
+SPAWN_TIMEOUT_SECONDS: float = float(os.getenv("SUDARSHAN_SPAWN_TIMEOUT", "30.0"))
+SPAWN_MAX_ATTEMPTS: int = int(os.getenv("SUDARSHAN_SPAWN_ATTEMPTS", "3"))
+# Device-wide spawn gating: every process the SAMPLE starts is caught suspended
+# and instrumented before it runs a single instruction. This is what covers the
+# dropper case - the payload package previously ran entirely uninstrumented
+# because _detect_companion() only ran three times, all before exploration
+# began, and a hand-off during exploration was never seen.
+SPAWN_GATING: bool = (os.getenv("SUDARSHAN_SPAWN_GATING", "1").strip().lower()
+                      not in {"0", "false", "no", "off"})
+# How long after the process appears the agent may still be considered "early".
+# Beyond this, a run that observed nothing from the sample is reported as
+# INSTRUMENTED_TOO_LATE rather than as the sample having been quiet - see
+# DynamicAnalysisStatus.INSTRUMENTED_TOO_LATE. Spawn-gated runs attach before
+# the process executes anything and never reach this test.
+INSTRUMENTATION_LATENCY_BUDGET_SECONDS: float = float(
+    os.getenv("SUDARSHAN_INSTRUMENTATION_LATENCY_BUDGET", "5.0")
+)
+# How long the device's third-party package list stays fresh. Short enough that
+# a payload the sample installs mid-run is seen, long enough that the gating
+# handler never holds a suspended process waiting on adb. See _is_third_party.
+_THIRD_PARTY_TTL_SECONDS: float = 3.0
+# How long teardown waits for queued gated spawns to be instrumented and
+# resumed. Each queued item is a process sitting suspended, so this is a
+# drain deadline, not a politeness timeout.
+SPAWN_WORKER_DRAIN_SECONDS: float = 20.0
+
 # How many times to relaunch after a crash that is OURS rather than the app's.
 # See _crash_is_instrumentation_race: an ART JIT thread that SIGSEGVs while
 # hooks are being installed into methods it is concurrently compiling is a race,
@@ -315,6 +398,14 @@ _ART_JIT_CRASH_MARKERS: Tuple[str, ...] = (
     "HBasicBlockBuilder",
     "HGraphBuilder",
     "Jit thread pool",
+    # ART's heap/GC daemon. Measured on Anubis under spawn-gated
+    # instrumentation: "Fatal signal 11 (SIGSEGV), code 1 (SEGV_MAPERR), fault
+    # addr 0x0 in tid 8152 (HeapTaskDaemon)". Same phenomenon as the JIT thread
+    # - an ART daemon tripping over methods being instrumented underneath it -
+    # and it appears for the same reason: hooks now go in during startup, when
+    # these daemons are busiest.
+    "HeapTaskDaemon",
+    "ReferenceQueueD",
 )
 
 
@@ -1004,6 +1095,179 @@ def _dump_ui_xml(device: str) -> str:
         return ""
     match = re.search(r"(<\?xml.*)", xml, re.DOTALL)
     return match.group(1) if match else ""
+
+
+# ─── Blocking system dialogs ─────────────────────────────────────────────────
+#
+# A modal system dialog owns the focused window and sits ON TOP of the target,
+# and `am start` cannot get behind it: re-issuing the launch intent leaves the
+# dialog exactly where it was. The harness could not even see the problem,
+# because `_foreground_package()` regexes the first `package/activity` pair out
+# of dumpsys, and a system dialog contributes no such pair - so it read the
+# launcher from `mFocusedApp` and concluded the app had simply not come forward.
+#
+# The one that matters in practice is DeprecatedTargetSdkVersionDialog ("This
+# app was built for an older version of Android"). Android raises it on the
+# FIRST launch after install for any sample whose targetSdk is far enough
+# behind the device - which is every launch the sandbox performs, and most
+# banking-trojan samples, which are years old. Measured on this emulator
+# (Android 17 / API 37) with Cerberus (targetSdk 27): uninstall, reinstall,
+# launch -> mCurrentFocus=DeprecatedTargetSdkVersionDialog, every time.
+#
+# The consequence was the whole dynamic axis. The app never reached the
+# foreground, the explorer spent its action budget on the launcher behind the
+# dialog, no hooks fired, BFCI came out 0.0, and the risk engine excluded the
+# dynamic axis with NO_BEHAVIOR_OBSERVED - the exclusion that then floors the
+# verdict to Inconclusive and prints no score at all.
+#
+# `am compat disable 171986851 <pkg>` (DEPRECATED_TARGET_SDK_VERSION) is the
+# documented suppression and does NOT work here: API 37 reports the change as
+# unknown, and A/B tested across a fresh install the dialog appears with the
+# override applied exactly as without it. Dismissing the dialog is what works.
+_BLOCKING_DIALOG_WINDOWS = (
+    "DeprecatedTargetSdkVersionDialog",   # built for an older version of Android
+    "UnsupportedDisplaySizeDialog",       # may not display properly on this screen
+    "UnsupportedCompileSdkDialog",
+    "AppErrorDialog",                     # "<app> keeps stopping"
+    "BaseErrorDialog",
+    "AppNotRespondingDialog",             # ANR - "<app> isn't responding"
+    "AppWarnings",
+)
+
+# Ordered by preference. A blocking dialog usually offers one button that
+# proceeds and one that ends the run; picking by LABEL rather than by button
+# index is what keeps an ANR from being answered with "Close app", which would
+# kill the process mid-analysis. Nothing outside this list is ever tapped -
+# the dialog is left alone and reported rather than answered by guesswork.
+_DIALOG_DISMISS_LABELS = (
+    "wait",            # ANR: keep the process alive
+    "ok",              # deprecated-target-sdk, unsupported display size
+    "got it",
+    "continue",
+    "continue anyway",
+    "open anyway",
+    "close",           # crash dialogs: nothing left to keep alive
+    "close app",
+)
+
+_UI_NODE_RE = re.compile(r"<node\b[^>]*>")
+
+
+def _focused_window_name(device: str) -> str:
+    """The raw mCurrentFocus window description, or "" if it cannot be read."""
+    ok, out = _adb(
+        "-s", device, "shell",
+        "dumpsys window | grep -E 'mCurrentFocus'",
+        timeout=15,
+    )
+    return out.strip() if ok and out else ""
+
+
+def _blocking_dialog_in_focus(device: str) -> str:
+    """
+    Name of the blocking system dialog owning the focused window, else "".
+
+    Matched on the window description rather than on the owning package: these
+    dialogs are drawn by the system (package `android`), so a package check
+    cannot tell them apart from any other system surface.
+    """
+    focus = _focused_window_name(device)
+    if not focus:
+        return ""
+    for name in _BLOCKING_DIALOG_WINDOWS:
+        if name in focus:
+            return name
+    return ""
+
+
+def _dialog_dismiss_target(ui_xml: str) -> Optional[Tuple[int, int, str]]:
+    """
+    Centre point and label of the button that dismisses the dialog, or None.
+
+    Only buttons whose label is in `_DIALOG_DISMISS_LABELS` are considered, and
+    they are considered in that list's order, so "Wait" wins over "Close app"
+    on an ANR no matter which one the dialog lists first.
+    """
+    if not ui_xml:
+        return None
+
+    candidates: Dict[str, Tuple[int, int]] = {}
+    for match in _UI_NODE_RE.finditer(ui_xml):
+        node = match.group(0)
+        if 'clickable="true"' not in node:
+            continue
+        text_m = re.search(r'text="([^"]*)"', node)
+        bounds_m = re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', node)
+        if not text_m or not bounds_m:
+            continue
+        label = text_m.group(1).strip()
+        if not label:
+            continue
+        x1, y1, x2, y2 = (int(g) for g in bounds_m.groups())
+        candidates.setdefault(label.lower(), ((x1 + x2) // 2, (y1 + y2) // 2))
+
+    for wanted in _DIALOG_DISMISS_LABELS:
+        if wanted in candidates:
+            x, y = candidates[wanted]
+            return x, y, wanted
+    return None
+
+
+def _dismiss_blocking_system_dialog(device: str) -> Optional[Dict[str, str]]:
+    """
+    Dismiss a modal system dialog covering the target, if one is up.
+
+    Returns a record of what was dismissed, or None when there was no blocking
+    dialog (the overwhelmingly common case) or when it could not be answered
+    safely. Never raises: a dialog that cannot be dismissed must degrade the
+    run, not end it.
+    """
+    try:
+        dialog = _blocking_dialog_in_focus(device)
+        if not dialog:
+            return None
+
+        # The window is in focus a moment before its buttons are laid out, so a
+        # dump taken the instant the dialog appears returns the frame without
+        # them. Observed on the first attempt of a live run: "offers no button"
+        # on the first pass, dismissed cleanly on the next. Retry here rather
+        # than leaning on the caller's retry loop - by the time control returns
+        # there, several seconds of the exploration budget have been spent
+        # driving whatever is behind the dialog.
+        target = None
+        for _ in range(3):
+            target = _dialog_dismiss_target(_dump_ui_xml(device))
+            if target is not None:
+                break
+            time.sleep(0.8)
+
+        if target is None:
+            logger.warning(
+                "[Frida] %s is blocking the target and offers no button this "
+                "harness is willing to press - leaving it alone.", dialog,
+            )
+            return None
+
+        x, y, label = target
+        ok, _ = _adb("-s", device, "shell", f"input tap {x} {y}", timeout=15)
+        if not ok:
+            logger.warning("[Frida] Tap to dismiss %s failed.", dialog)
+            return None
+
+        time.sleep(1.0)
+        still_up = _blocking_dialog_in_focus(device)
+        if still_up == dialog:
+            logger.warning("[Frida] %s survived the '%s' tap.", dialog, label)
+            return None
+
+        logger.info("[Frida] Dismissed blocking system dialog %s via '%s'.", dialog, label)
+        return {"dialog": dialog, "button": label}
+    except Exception as exc:                                        # noqa: BLE001
+        logger.warning(
+            "[Frida] Blocking-dialog check failed (%s: %s) - continuing.",
+            type(exc).__name__, exc,
+        )
+        return None
 
 
 def _foreground_package(device: str) -> str:
@@ -2061,8 +2325,11 @@ class FridaSession:
         self.first_window_package: str = ""
         self._companion_sessions: Dict[str, Any] = {}
         self._companion_scripts: Dict[str, Any] = {}
-        #: package -> third-party? Asked of the device once per package.
-        self._third_party_cache: Dict[str, bool] = {}
+        #: The device's third-party package set, re-read on a short TTL. Held
+        #: as a SET rather than per-package answers so that a payload installed
+        #: mid-run is discovered - see _is_third_party. None means never read.
+        self._third_party_packages: Optional[set] = None
+        self._third_party_fetched_at: float = 0.0
         # True when the package was still alive after `am force-stop` at the end
         # of the session - a persistence signal (watchdog service, restart
         # receiver), surfaced in the result rather than swallowed.
@@ -2075,6 +2342,11 @@ class FridaSession:
         # True when lifecycle screenshots were taken while another package owned
         # the foreground (typically the launcher home screen).
         self.foreground_mismatch: bool = False
+        # Modal system dialogs this run had to clear out of the way, in order.
+        # Surfaced on the result so an analyst reading a thin dynamic section
+        # can tell "the sandbox was blocked and said so" from "the sample did
+        # nothing", and so a recurring blocker is visible rather than inferred.
+        self.system_dialogs_dismissed: List[Dict[str, str]] = []
         # Set by stop() to cut an in-flight analysis short instead of sleeping
         # out the full window.
         self._stop_event = threading.Event()
@@ -2098,6 +2370,30 @@ class FridaSession:
         # PID that was confirmed stable by _poll_pid_until_stable(). Used by
         # _verify_launch_readiness() to detect silent restarts.
         self._stable_pid: Optional[int] = None
+
+        # ── Spawn gating ──────────────────────────────────────────────────────
+        # True when the agent was loaded into a SUSPENDED process, i.e. before
+        # the app executed anything. False means we fell back to the `am start`
+        # ladder and attached to an already-running process, which cannot
+        # observe startup behaviour - so this flag is the difference between
+        # "the sample did nothing" and "we arrived too late to see it".
+        self.spawn_gated: bool = False
+        self.spawn_fallback_reason: str = ""
+        # True when device.spawn() actually confirmed the launch, so the process
+        # is OURS and suspended. False on the recovery path, where frida timed
+        # out confirming a launch it had in fact performed - the app is running
+        # and must NOT be resumed, only attached to.
+        self.spawn_confirmed: bool = True
+        # The connected frida Device, held so teardown can disable spawn gating
+        # from the `finally` block where the local would be unbound.
+        self._device: Any = None
+        # True when device-wide spawn gating is active, so any process the
+        # sample starts is caught suspended and instrumented.
+        self._spawn_gating_enabled: bool = False
+        # Gated spawns handed off frida's callback thread. Unbounded: dropping
+        # an item would leave a process suspended forever. See _on_spawn_added.
+        self._spawn_queue: "queue.Queue" = queue.Queue()
+        self._spawn_worker_thread: Optional[threading.Thread] = None
 
         # ── Wave 1: Evidence Store ─────────────────────────────────────────────
         # The case this session belongs to - the content sha256 on a real run,
@@ -2152,16 +2448,44 @@ class FridaSession:
 
         A failed query answers False: an unreadable device narrows what we are
         willing to instrument rather than widening it.
+
+        The whole third-party SET is cached with a short TTL, rather than one
+        yes/no per package. Two reasons, both load-bearing:
+
+          * A negative used to be cached forever. `pm list packages -3` is
+            asked once per package name, so a payload the sample INSTALLS
+            mid-run - the dropper case this engine exists to catch - was
+            answered False before it existed and never re-asked. It could then
+            never be instrumented, no matter how many times it was seen.
+          * Under spawn gating this runs on frida's callback thread while the
+            spawned process is SUSPENDED, and every unseen package name cost a
+            full adb round trip. Device-wide gating means that is every system
+            process the device starts. Membership in a cached set is free; the
+            set is refreshed at most once per _THIRD_PARTY_TTL_SECONDS, which
+            is short enough to see a freshly installed payload and long enough
+            that no process is held suspended waiting for adb.
         """
-        cached = self._third_party_cache.get(package)
-        if cached is not None:
-            return cached
-        ok, out = _adb(
-            "-s", self.device_serial, "shell", "pm list packages -3", timeout=20,
-        )
-        answer = bool(ok and f"package:{package}" in (out or ""))
-        self._third_party_cache[package] = answer
-        return answer
+        now = time.monotonic()
+        if (
+            self._third_party_packages is None
+            or (now - self._third_party_fetched_at) > _THIRD_PARTY_TTL_SECONDS
+        ):
+            ok, out = _adb(
+                "-s", self.device_serial, "shell", "pm list packages -3", timeout=20,
+            )
+            if ok:
+                self._third_party_packages = {
+                    line.split(":", 1)[1].strip()
+                    for line in (out or "").splitlines()
+                    if line.strip().startswith("package:")
+                }
+                self._third_party_fetched_at = now
+            elif self._third_party_packages is None:
+                # Never successfully read. Answer False without caching, so the
+                # next question re-asks rather than freezing an unread device
+                # into "nothing here is third party".
+                return False
+        return package in (self._third_party_packages or set())
 
     def _foreground_package(self, window_dump: Optional[str] = None) -> str:
         """
@@ -2536,11 +2860,73 @@ class FridaSession:
         time.sleep(1.0)
         return launched
 
+    def _clear_blocking_dialog(self) -> bool:
+        """
+        Dismiss a modal system dialog covering the target, and record that we did.
+
+        Recorded as `harness_action`, never as `anti_analysis`: this is something
+        the HARNESS did to the device, and the scoring path reads an
+        anti_analysis event as proof the SAMPLE evaded - which would exclude the
+        dynamic axis and floor the verdict, the exact outcome this method exists
+        to prevent. Same reasoning as the Build-field spoofing event.
+        """
+        record = _dismiss_blocking_system_dialog(self.device_serial)
+        if not record:
+            return False
+
+        self.system_dialogs_dismissed.append(record)
+        now_ms = int(time.time() * 1000)
+        self.collected_events["harness_action"].append({
+            "event_id": f"ev_{now_ms}_dialog{len(self.system_dialogs_dismissed)}",
+            "timestamp": now_ms,
+            "package": self.package_name,
+            "process": self.package_name,
+            "event_type": "HARNESS_ACTION",
+            "category": "harness_action",
+            "severity": "INFO",
+            "method": "sandbox.system_dialog_dismissed",
+            "hook": "sandbox.system_dialog_dismissed",
+            "class": "android.app.AlertDialog",
+            "class_name": "android.app.AlertDialog",
+            "source": "harness",
+            "actor": "harness",
+            "arguments": [],
+            "return_value": None,
+            "stack_trace": [],
+            "evidence": (
+                f"SANDBOX ACTION: the system dialog {record['dialog']} was "
+                f"covering the target and blocking every launch intent; the "
+                f"harness dismissed it via '{record['button']}' so the "
+                f"application could be exercised (performed by the harness, "
+                f"not by the application)."
+            ),
+            "data": {
+                "hook": "sandbox.system_dialog_dismissed",
+                "actor": "harness",
+                "severity": "INFO",
+                "dialog": record["dialog"],
+                "button": record["button"],
+            },
+        })
+        return True
+
     def _ensure_target_foreground(self, attempts: int = 4) -> bool:
         for attempt in range(attempts):
             pkg = _foreground_package(self.device_serial)
             if pkg == self.package_name:
                 return True
+
+            # Before re-issuing the launch intent, check whether anything can
+            # get through at all. A modal system dialog sits above the target
+            # and swallows the launch: `am start` returns success, the activity
+            # is resumed behind the dialog, and the foreground never changes -
+            # so without this the loop burns all its attempts and every one of
+            # them is a no-op. Dismissing first is what makes the retry mean
+            # something.
+            if self._clear_blocking_dialog():
+                if _foreground_package(self.device_serial) == self.package_name:
+                    return True
+
             logger.warning(
                 "[Frida] Foreground is %r (want %s) - bringing target forward "
                 "(attempt %d/%d)",
@@ -2567,6 +2953,10 @@ class FridaSession:
 
         while time.monotonic() < deadline:
             if _foreground_package(self.device_serial) != self.package_name:
+                # Same reason as in _ensure_target_foreground: a dialog on top
+                # makes the relaunch a no-op, so this loop would otherwise spin
+                # until `timeout` and then report "did not settle".
+                self._clear_blocking_dialog()
                 self._bring_target_to_foreground()
                 stable = 0
                 last_sig = None
@@ -2813,6 +3203,484 @@ class FridaSession:
                             return int(token)
         return None
 
+    # ── Spawn-gated instrumentation ──────────────────────────────────────────
+
+    def _on_spawn_added(self, spawn: Any) -> None:
+        """
+        frida `spawn-added` signal handler. MUST NOT call back into frida.
+
+        This runs on frida's own callback thread. frida-python's `_invoke`
+        dispatches every API call onto frida's main context and then waits for
+        the reply - so calling `device.attach()` from here waits for a context
+        that is currently executing THIS function. It deadlocks, permanently,
+        and it takes any other thread in a frida call down with it.
+
+        Observed exactly that: two threads parked forever in
+        `frida/__init__.py:210 _invoke -> Event.wait()`, one from this handler
+        and one from the launch ladder's own attach, with the run producing no
+        further output while uvicorn kept serving health checks.
+
+        So the handler does one non-frida thing - hand the spawn to a worker -
+        and returns. The queue is unbounded on purpose: a dropped item would be
+        a process left suspended, and resuming it from here is precisely what
+        is not allowed.
+        """
+        self._spawn_queue.put(
+            (getattr(spawn, "pid", None), getattr(spawn, "identifier", "") or "")
+        )
+
+    def _spawn_worker(self, device: Any, script_source: str) -> None:
+        """Drain gated spawns off frida's callback thread, where blocking is safe."""
+        while True:
+            item = self._spawn_queue.get()
+            if item is None:               # shutdown sentinel
+                self._spawn_queue.task_done()
+                return
+            pid, identifier = item
+            try:
+                self._instrument_gated_spawn(device, pid, identifier, script_source)
+            except Exception as exc:       # noqa: BLE001
+                logger.error(
+                    "[Frida] Spawn worker failed on %s (pid=%s): %s",
+                    identifier or "?", pid, exc,
+                )
+            finally:
+                self._spawn_queue.task_done()
+
+    def _instrument_gated_spawn(
+        self, device: Any, pid: Optional[int], identifier: str, script_source: str,
+    ) -> None:
+        """
+        Handle one gated spawn: instrument it if it is the sample's, resume it.
+
+        Called ONLY from _spawn_worker, never from the frida callback thread -
+        every frida call below would deadlock there. See _on_spawn_added.
+
+        Resume is unconditional and runs in a `finally`. A gated spawn that is
+        never resumed stays suspended forever, and because gating is device-wide
+        that would freeze system processes and take the emulator down with it -
+        turning a missed hook into a dead sandbox.
+        """
+        try:
+            if pid is None:
+                return
+            # Only the sample's own processes are worth the attach cost. Asked
+            # of the device (pm list packages -3) rather than matched against a
+            # denylist, for the reason _is_third_party documents: the payload's
+            # package name is unknown and usually random.
+            if not identifier or not self._is_third_party(identifier):
+                return
+            if identifier in self._companion_sessions:
+                return
+            # The target's own primary session is created by _spawn_gated_launch
+            # and owns self._script. Loading a second agent into the same
+            # process would double every event it reports.
+            if identifier == self.package_name and self._session is not None:
+                return
+            session = device.attach(pid)
+            script = session.create_script(script_source)
+            if identifier == self.package_name:
+                script.on("message", self._on_message)
+            else:
+                script.on("message", self._companion_message_handler(identifier))
+            script.load()
+            self._companion_sessions[identifier] = session
+            self._companion_scripts[identifier] = script
+            if identifier not in self.companion_packages:
+                self.companion_packages.append(identifier)
+            logger.info(
+                "[Frida] SPAWN_GATED_INSTRUMENTED %s (pid=%s) - hooks are in "
+                "place before the process executes its first instruction",
+                identifier, pid,
+            )
+            if self.event_bus:
+                try:
+                    self.event_bus.publish({
+                        "type": "event",
+                        "category": "multi_stage",
+                        "severity": "MEDIUM",
+                        "data": {
+                            "hook": "process.spawn_gated",
+                            "description": (
+                                f"{self.package_name} started process "
+                                f"{identifier}, which was caught suspended and "
+                                f"instrumented before it ran"
+                            ),
+                            "package": self.package_name,
+                            "child_package": identifier,
+                        },
+                    })
+                except Exception:
+                    pass
+        except Exception as exc:                       # noqa: BLE001
+            logger.warning(
+                "[Frida] Could not instrument gated spawn %s (pid=%s): %s: %s - "
+                "resuming it uninstrumented; its behaviour will NOT be observed.",
+                identifier or "?", pid, type(exc).__name__, exc,
+            )
+        finally:
+            if pid is not None:
+                try:
+                    device.resume(pid)
+                except Exception as exc:               # noqa: BLE001
+                    logger.error(
+                        "[Frida] FAILED to resume gated spawn pid=%s (%s): %s - "
+                        "the process is stuck suspended.",
+                        pid, identifier or "?", exc,
+                    )
+
+    def _enable_spawn_gating(self, device: Any, script_source: str) -> bool:
+        """
+        Catch every process the sample starts, instrument it, then resume it.
+
+        This is the fix for droppers. `_detect_companion()` is called three
+        times, all of them before exploration starts, so a hand-off that happens
+        mid-run - which is the normal case, the payload launches after the
+        victim taps something - was never instrumented. A real run shows exactly
+        that: clicking "New Update Available" moved the foreground to
+        com.tjmonh.android, and nothing ever attached to it.
+
+        Gating removes the race instead of narrowing it: there is no window in
+        which a new process can run uninstrumented.
+
+        Returns False (and leaves the run to the companion-polling path) when
+        the device does not support gating, rather than failing the session.
+        """
+        if not SPAWN_GATING:
+            logger.info("[Frida] Spawn gating disabled by SUDARSHAN_SPAWN_GATING")
+            return False
+        try:
+            # Worker first: the handler starts queueing the moment gating is on,
+            # and a queued spawn stays SUSPENDED until something drains it.
+            self._spawn_worker_thread = threading.Thread(
+                target=self._spawn_worker,
+                args=(device, script_source),
+                name="frida-spawn-worker",
+                daemon=True,
+            )
+            self._spawn_worker_thread.start()
+            device.on("spawn-added", self._on_spawn_added)
+            device.enable_spawn_gating()
+        except Exception as exc:                       # noqa: BLE001
+            logger.warning(
+                "[Frida] Spawn gating unavailable (%s: %s) - falling back to "
+                "foreground-polling companion detection, which cannot see a "
+                "process that starts and exits between polls.",
+                type(exc).__name__, exc,
+            )
+            return False
+        self._spawn_gating_enabled = True
+        logger.info(
+            "[Frida] Spawn gating ENABLED - every process this sample starts "
+            "will be instrumented before it runs"
+        )
+        return True
+
+    def _disable_gating_for_fallback(self, device: Any, reason: str) -> None:
+        """
+        Turn gating off before handing back to the `am start` launch ladder.
+
+        Every exit from _spawn_gated_launch that returns False says the same
+        thing: instrumenting this sample at its entry point did not work. The
+        ladder's whole value in that case is that it attaches LATE - but with
+        gating still enabled the ladder's own `am start` is caught at spawn and
+        instrumented just as early, so the sample meets the identical condition
+        and dies the identical way.
+
+        Measured on com.android.s4protect: spawn() failed with "unable to find
+        a front-door activity", the ladder took over, and step 3's `am start`
+        was then caught by the gate -
+
+            SPAWN_GATED_INSTRUMENTED com.android.s4protect (pid=13060)
+            Process ... exited after 0.6s - app crashed before becoming stable
+
+        - java.lang.RuntimeException in Application.onCreate. The run ended
+        INSTRUMENTATION_FAILED with no dynamic evidence at all, on a fallback
+        that had never actually fallen back.
+
+        Idempotent, so every failure path can call it without checking first.
+        """
+        if not self._spawn_gating_enabled:
+            return
+        try:
+            device.disable_spawn_gating()
+            self._spawn_gating_enabled = False
+            logger.info(
+                "[Frida] Spawn gating disabled for the ladder fallback (%s) - "
+                "%s will now be instrumented after it starts, not before.",
+                reason, self.package_name,
+            )
+        except Exception as exc:                       # noqa: BLE001
+            logger.warning(
+                "[Frida] Could not disable spawn gating before fallback: %s - "
+                "the relaunch may fail the same way.", exc,
+            )
+
+    def _spawn_gated_launch(self, device: Any, script_source: str) -> bool:
+        """
+        PRIMARY launch path: start the app suspended, hook it, then resume.
+
+        Order is load-bearing and is the whole point of this function:
+
+            spawn(pkg)      process created, suspended at its entry point
+            attach(pid)
+            script.load()   hooks installed - nothing has executed yet
+            resume(pid)     the app's first instruction runs INSIDE the hooks
+
+        Returns True when the process is instrumented and running. On any
+        failure returns False, having force-stopped whatever it started, and the
+        caller falls through to the `am start` launch ladder unchanged - so a
+        sample that cannot be spawned (packed loaders, samples with no launchable
+        entry point) behaves exactly as it did before.
+        """
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as _FTimeout
+
+        # A live process would make spawn() fail or, worse, succeed against a
+        # second instance while the explorer drives the first.
+        _force_stop_package(self.device_serial, self.package_name)
+
+        self.launch_timeline["launch_intent"] = time.monotonic()
+
+        pid: Optional[int] = None
+        spawn_errors: List[str] = []
+        # NOT a `with` block. ThreadPoolExecutor.__exit__ calls
+        # shutdown(wait=True), which blocks until the submitted call returns -
+        # so wrapping this in `with` made the timeout decorative: a spawn that
+        # hung still hung, and the observed 67s came from frida's own internal
+        # timeout rather than from ours. The pool is deliberately leaked on
+        # timeout (daemon-ish, one idle thread) because the alternative is
+        # blocking on the very call we are trying to bound.
+        pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="frida-spawn")
+        try:
+            for attempt in range(SPAWN_MAX_ATTEMPTS):
+                try:
+                    pid = pool.submit(device.spawn, self.package_name).result(
+                        timeout=SPAWN_TIMEOUT_SECONDS
+                    )
+                    break
+                except _FTimeout:
+                    spawn_errors.append(
+                        f"spawn timed out after {SPAWN_TIMEOUT_SECONDS:.0f}s"
+                    )
+                    logger.warning(
+                        "[Frida] Spawn attempt %d/%d exceeded our %.0fs bound",
+                        attempt + 1, SPAWN_MAX_ATTEMPTS, SPAWN_TIMEOUT_SECONDS,
+                    )
+                    # The worker thread is still inside frida's spawn. Retrying
+                    # would queue behind it on this single-worker pool and buy
+                    # nothing, so stop here and let the recovery below run.
+                    break
+                except Exception as exc:               # noqa: BLE001
+                    spawn_errors.append(f"{type(exc).__name__}: {exc}")
+                    logger.warning(
+                        "[Frida] Spawn attempt %d/%d failed: %s: %s",
+                        attempt + 1, SPAWN_MAX_ATTEMPTS, type(exc).__name__, exc,
+                    )
+                    if "timed out" in str(exc).lower():
+                        # frida's own timeout. Same reasoning as above, and the
+                        # app has usually launched anyway - see below.
+                        break
+                    time.sleep(2)
+        finally:
+            pool.shutdown(wait=False)
+
+        if not pid:
+            # ── Recover the launch frida could not confirm ────────────────────
+            #
+            # "unexpectedly timed out while waiting for app to launch" is a
+            # long-standing Android issue in frida (frida#3743, #2005, #1737,
+            # #2653, #3679; frida-core#157, #376): the app DOES launch, frida
+            # just fails to confirm it within its own window. The documented
+            # workaround in every one of those reports is to attach to the
+            # process that is now running.
+            #
+            # So look before falling back. Attaching to a process that started
+            # a second ago still observes almost everything; grinding the whole
+            # eight-step ladder first would cost ~100s and attach far later, to
+            # the same process.
+            recovered = self._resolve_pid()
+            if recovered:
+                logger.warning(
+                    "[Frida] spawn() did not confirm the launch (%s), but %s IS "
+                    "running as pid %d - attaching to it immediately rather "
+                    "than restarting it through the ladder.",
+                    spawn_errors[-1] if spawn_errors else "no error reported",
+                    self.package_name, recovered,
+                )
+                pid = recovered
+                self.spawn_confirmed = False
+            else:
+                logger.warning(
+                    "[Frida] Could not spawn %s (%s) - falling back to the am "
+                    "start launch ladder. Hooks will be installed AFTER the app "
+                    "has started, so startup behaviour will not be observed.",
+                    self.package_name,
+                    spawn_errors[-1] if spawn_errors else "no error reported",
+                )
+                self.spawn_gated = False
+                self.spawn_fallback_reason = (
+                    spawn_errors[-1] if spawn_errors else "spawn returned no pid"
+                )
+                self._disable_gating_for_fallback(device, "spawn failed")
+                return False
+
+        self.launch_timeline["first_pid"] = time.monotonic()
+
+        try:
+            self._session = device.attach(pid)
+        except Exception as exc:                       # noqa: BLE001
+            logger.warning(
+                "[Frida] Attach to spawned pid %d failed (%s: %s) - killing it "
+                "and falling back to the launch ladder.",
+                pid, type(exc).__name__, exc,
+            )
+            try:
+                device.kill(pid)
+            except Exception:
+                pass
+            self._session = None
+            self.spawn_gated = False
+            self.spawn_fallback_reason = f"attach failed: {type(exc).__name__}"
+            self._disable_gating_for_fallback(device, "attach failed")
+            return False
+
+        self.launch_timeline["frida_attach"] = time.monotonic()
+        self.dae.transition(DAEStage.ATTACH_FRIDA, "attaching to spawned (suspended) process")
+
+        try:
+            self._script = self._session.create_script(script_source)
+            self._script.on("message", self._on_message)
+            self._script.load()
+        except Exception as exc:                       # noqa: BLE001
+            logger.warning(
+                "[Frida] Agent load into spawned %s failed (%s: %s) - killing "
+                "and falling back to the launch ladder.",
+                self.package_name, type(exc).__name__, exc,
+            )
+            try:
+                device.kill(pid)
+            except Exception:
+                pass
+            self._session = None
+            self._script = None
+            self.spawn_gated = False
+            self.spawn_fallback_reason = f"script load failed: {type(exc).__name__}"
+            self._disable_gating_for_fallback(device, "agent load failed")
+            return False
+
+        # Hooks are in. Nothing has executed. Resume.
+        #
+        # Only a process WE suspended needs resuming. On the recovery path the
+        # app was launched by frida but never confirmed, so it is already
+        # running: resume() would fail there, and treating that failure as fatal
+        # would throw away a perfectly good early attach.
+        if self.spawn_confirmed:
+            try:
+                device.resume(pid)
+            except Exception as exc:                   # noqa: BLE001
+                logger.error(
+                    "[Frida] Failed to resume spawned %s (pid=%d): %s - the "
+                    "process is suspended and cannot be analysed.",
+                    self.package_name, pid, exc,
+                )
+                self.spawn_gated = False
+                self.spawn_fallback_reason = f"resume failed: {type(exc).__name__}"
+                self._disable_gating_for_fallback(device, "resume failed")
+                return False
+
+        self._stable_pid = pid
+        if self.spawn_confirmed:
+            self.launch_method_used = "spawn_gated"
+            self.spawn_gated = True
+            logger.info(
+                "[Frida] SPAWN_GATED launch of %s (pid=%d): agent loaded BEFORE "
+                "the first instruction ran - Application.onCreate and everything "
+                "after it is instrumented",
+                self.package_name, pid,
+            )
+        else:
+            # Early, but not pre-first-instruction. spawn_gated stays False so
+            # the report never claims more than we did, and so
+            # INSTRUMENTED_TOO_LATE still applies if this attach was in fact
+            # too late to see anything.
+            self.launch_method_used = "spawn_recovered_attach"
+            self.spawn_gated = False
+            self.spawn_fallback_reason = (
+                "spawn did not confirm; attached to the running process instead"
+            )
+            logger.info(
+                "[Frida] Attached to %s (pid=%d) moments after frida launched "
+                "it. Earlier than the ladder by ~100s, but the very first "
+                "instructions were not observed.",
+                self.package_name, pid,
+            )
+
+        # A spawned process starts with no window. `am start` brings the
+        # launcher activity forward so the explorer has something to drive;
+        # the process itself is already ours and is not restarted by this.
+        component = (
+            _format_activity_component(self.package_name, self.main_activity)
+            if self.main_activity
+            else _resolve_launcher_activity(self.device_serial, self.package_name)
+        )
+        if component:
+            import shlex as _shlex
+            _adb(
+                "-s", self.device_serial, "shell",
+                f"am start -n {_shlex.quote(component)}", timeout=20,
+            )
+        else:
+            _launch_main_launcher_intent(self.device_serial, self.package_name)
+
+        # The process must survive the resume. A sample that dies here has
+        # crashed under instrumentation, and that is worth knowing precisely -
+        # but it is still a launch failure, so hand back to the ladder.
+        stable, live_pid, reason = _poll_pid_until_stable(
+            self.device_serial, self.package_name,
+        )
+        if not stable:
+            logger.warning(
+                "[Frida] Spawned %s did not stay alive after resume (%s) - "
+                "falling back to the launch ladder.",
+                self.package_name, reason,
+            )
+            self._disable_gating_for_fallback(device, 'died after resume')
+            try:
+                self._session.detach()
+            except Exception:
+                pass
+            self._session = None
+            self._script = None
+            self._stable_pid = None
+            self.launch_method_used = None
+            self.spawn_gated = False
+            self.spawn_fallback_reason = f"died after resume: {reason}"
+            return False
+
+        if live_pid and live_pid != pid:
+            # The app restarted itself out from under the spawn (some loaders
+            # do this deliberately). Our session is attached to a process that
+            # no longer matters, so the ladder path is the honest answer.
+            logger.warning(
+                "[Frida] %s restarted after resume (pid %d -> %d) - the spawned "
+                "process is not the one running; falling back to the ladder.",
+                self.package_name, pid, live_pid,
+            )
+            self._disable_gating_for_fallback(device, 'process restarted')
+            try:
+                self._session.detach()
+            except Exception:
+                pass
+            self._session = None
+            self._script = None
+            self._stable_pid = None
+            self.launch_method_used = None
+            self.spawn_gated = False
+            self.spawn_fallback_reason = f"process restarted ({pid} -> {live_pid})"
+            return False
+
+        return True
+
     def run(self, duration_seconds: int = ANALYSIS_DURATION_SECONDS) -> bool:
         """
         Attach Frida to the target app and collect events for `duration_seconds`.
@@ -2935,6 +3803,10 @@ class FridaSession:
                     time.sleep(2)
             if not device:
                 raise Exception("Failed to get device after 3 attempts")
+            # Held on the session so teardown can reach it. The cleanup block
+            # runs in a `finally` that is also entered when the connect above
+            # raises, where the local `device` would be unbound.
+            self._device = device
 
             # ── Wake up Device ──
             logger.info("[Frida] Waking up device screen...")
@@ -3054,6 +3926,53 @@ class FridaSession:
                         nonlocal _ui_less_pid, _ui_less_step
                         if _ui_less_pid is None:
                             _ui_less_pid, _ui_less_step = pid, step_label
+                        elif pid == _ui_less_pid:
+                            # ── Stop laddering against a process we already have ──
+                            #
+                            # The remaining steps all issue another `am start`
+                            # against a package that is ALREADY running as this
+                            # exact pid. The platform will not create a second
+                            # process, and an intent that did not raise a window
+                            # the first time will not raise one the fourth, so
+                            # every further step costs ~13s (5s stability + 6s
+                            # window wait + adb) to re-measure an unchanged fact.
+                            #
+                            # Measured on Anubis: steps 1, 1b, 2 and 3 each
+                            # reported "produced stable PID 3727 but never owned
+                            # the foreground window", burning ~90s before the
+                            # ui-less fallback below accepted pid 3727 anyway.
+                            #
+                            # A dropper whose launcher activity finishes itself
+                            # is exhibiting BEHAVIOUR, not failing to launch.
+                            # Accept the process now and let the run proceed;
+                            # ui_render_failed still records that nothing was
+                            # drawn, so the dynamic axis is reported honestly.
+                            # Deliberately NOT setting ui_render_failed here.
+                            #
+                            # It was set on this path, and it is sticky: it
+                            # forces dynamic_status to NO_UI_RENDERED, which
+                            # excludes the dynamic axis no matter what the
+                            # exploration goes on to find. But this shortcut
+                            # fires ~25s in, and a DROPPER has not finished
+                            # installing its payload by then - the window that
+                            # eventually appears belongs to the payload, and the
+                            # post-ladder companion check below is what sees it.
+                            # Declaring "no UI rendered" before that check has
+                            # run reports a conclusion we have not reached.
+                            #
+                            # If no window ever appears, first_activity and
+                            # first_window stay null and risk_engine's own
+                            # _ui_never_rendered reaches the same verdict from
+                            # the evidence instead of from a guess.
+                            logger.warning(
+                                "[Frida] '%s' produced the SAME pid %d as '%s' "
+                                "with no window yet. Further launch strategies "
+                                "cannot change a running process - accepting it "
+                                "now and letting the companion check decide "
+                                "whether anything rendered.",
+                                step_label, pid, _ui_less_step,
+                            )
+                            return True
                         return False
                     return True
 
@@ -3096,6 +4015,33 @@ class FridaSession:
 
             launched = False
             _crash_on_step: Optional[str] = None
+
+            # ── Step 0 (PRIMARY): spawn-gated launch ──────────────────────────
+            #
+            # Everything below this block is the fallback. The ladder attaches
+            # to an already-running process, which structurally cannot observe
+            # Application.onCreate, DEX loading or the first C2 beacon - see the
+            # measurement in the SPAWN_FIRST comment at the top of this module.
+            #
+            # Every ladder step is guarded on `not launched`, so a successful
+            # spawn skips all of them without restructuring the ladder.
+            if SPAWN_FIRST:
+                # Gating first: enabling it before the target starts means any
+                # process the sample forks during its own startup is caught too.
+                self._enable_spawn_gating(device, script_source)
+                logger.info(
+                    "[Frida] Launch step 0: spawn-gated launch of %s "
+                    "(suspend -> hook -> resume)", self.package_name,
+                )
+                if self._spawn_gated_launch(device, script_source):
+                    launched = True
+                else:
+                    # _spawn_gated_launch cleans up after itself; the ladder
+                    # starts from a force-stopped package either way.
+                    self.dae.transition(
+                        DAEStage.RESOLVE_ACTIVITY,
+                        f"spawn fallback: {self.spawn_fallback_reason}",
+                    )
 
             # Step 1 - manifest-declared launcher activity (am start -W)
             if self.main_activity:
@@ -3474,6 +4420,42 @@ class FridaSession:
                 _art_dir_gate,
                 launcher_activity=self.main_activity,
             )
+            # ── A live process is worth more than a clean gate ────────────────
+            #
+            # The gate exists to stop us attaching to a DYING process. When
+            # _poll_pid_until_stable has just confirmed the pid alive for
+            # LAUNCH_PID_STABLE_MIN_SECONDS and it is still alive now, that
+            # purpose is already served, and failing the run instead throws away
+            # the only chance to observe the sample.
+            #
+            # Measured: a run aborted here with first_activity, first_window,
+            # first_ui_dump and frida_attach all null - Frida never attached,
+            # the explorer never started, and the case reported 0 runtime
+            # evidence records. The process was alive the whole time. The
+            # sample was a dropper whose own launcher activity finishes
+            # immediately, which is behaviour, not a launch failure.
+            if not gate_ok and self._stable_pid and self._resolve_pid() == self._stable_pid:
+                logger.warning(
+                    "[Frida] Readiness gate reported '%s', but pid %d is alive "
+                    "and was confirmed stable - attaching anyway. A headless or "
+                    "dropper process is still worth instrumenting; the run "
+                    "records that no window rendered rather than abandoning it.",
+                    gate_reason, self._stable_pid,
+                )
+                gate_ok = True
+            if not gate_ok and self.spawn_gated:
+                # The gate exists to stop us attaching to a dying process. On
+                # the spawn-gated path we are ALREADY attached, to a process
+                # that _poll_pid_until_stable confirmed alive after resume.
+                # Detaching an instrumented, running sample to report a launch
+                # failure would throw away the only run that observes startup
+                # behaviour - the exact outcome this whole path exists to fix.
+                logger.warning(
+                    "[Frida] Readiness gate reported '%s' on a spawn-gated "
+                    "session - continuing, since the process is already "
+                    "instrumented and alive.", gate_reason,
+                )
+                gate_ok = True
             if not gate_ok:
                 self.launch_method_used = "failed"
                 self.last_error = f"READINESS_GATE_FAIL: {gate_reason}"
@@ -3535,15 +4517,22 @@ class FridaSession:
                 self.launch_timeline["first_ui_dump"] = time.monotonic()
 
             # ── Attach Frida ──────────────────────────────────────────────────
-            # At this point:
+            # Only reached when the spawn-gated path did NOT run (SPAWN_FIRST
+            # off, or spawn/attach/resume failed and the ladder launched the
+            # app instead). When it did run, self._session is already attached
+            # to a process that was instrumented while suspended, and
+            # re-attaching here would both double-load the agent and overwrite
+            # the frida_attach timestamp that proves the hooks were early.
+            #
+            # On this fallback path, at this point:
             #   * _poll_pid_until_stable() confirmed PID was alive for ≥5 s
             #   * _verify_launch_readiness() confirmed all 6 checks passed
             # We attach by the stable PID - no polling retry needed.
-            self.launch_timeline["frida_attach"] = time.monotonic()
-            self.dae.transition(DAEStage.ATTACH_FRIDA, "attaching to stable PID")
+            if self._session is None:
+                self.launch_timeline["frida_attach"] = time.monotonic()
+                self.dae.transition(DAEStage.ATTACH_FRIDA, "attaching to stable PID")
 
-            self._session = None
-            for attempt in range(ATTACH_MAX_ATTEMPTS):
+            for attempt in range(0 if self._session is not None else ATTACH_MAX_ATTEMPTS):
                 # Use the stable PID first; fall back to a fresh pidof only if
                 # the session attach raises (rare - the process is verified alive).
                 pid = self._stable_pid or self._resolve_pid()
@@ -3618,9 +4607,13 @@ class FridaSession:
                     raise Exception("Failed to attach to spawned process")
                 is_spawned = True
 
-            self._script = self._session.create_script(script_source)
-            self._script.on("message", self._on_message)
-            self._script.load()
+            # Already loaded, while the process was suspended, by
+            # _spawn_gated_launch. Loading it again would install every hook
+            # twice and double-count every event the sample produces.
+            if self._script is None:
+                self._script = self._session.create_script(script_source)
+                self._script.on("message", self._on_message)
+                self._script.load()
 
             # ── Instrument the package that actually draws the journey ────────
             # The target's own session stays primary and is never replaced. A
@@ -3908,6 +4901,38 @@ class FridaSession:
                         exc_info=True,
                     )
 
+            # Spawn gating is device-wide, so it must be turned off before the
+            # session ends. Left enabled, the next process ANY app on the device
+            # starts is caught suspended with no handler left to resume it, and
+            # the emulator wedges - which would make this fix look like a worse
+            # bug than the one it replaces.
+            # Order matters. Gating off FIRST so nothing new is queued, then let
+            # the worker drain what is already queued - each of those is a
+            # process sitting suspended and only the worker may resume it -
+            # then stop the worker.
+            _dev = getattr(self, "_device", None)
+            if _dev is not None and getattr(self, "_spawn_gating_enabled", False):
+                try:
+                    _dev.disable_spawn_gating()
+                    self._spawn_gating_enabled = False
+                    logger.info("[Frida] Spawn gating disabled")
+                except Exception as exc:               # noqa: BLE001
+                    logger.error(
+                        "[Frida] Could not disable spawn gating: %s - new "
+                        "processes on %s may hang suspended until frida-server "
+                        "is restarted.", exc, self.device_serial,
+                    )
+            if getattr(self, "_spawn_worker_thread", None) is not None:
+                self._spawn_queue.put(None)            # shutdown sentinel
+                self._spawn_worker_thread.join(timeout=SPAWN_WORKER_DRAIN_SECONDS)
+                if self._spawn_worker_thread.is_alive():
+                    logger.warning(
+                        "[Frida] Spawn worker did not drain within %.0fs - some "
+                        "gated processes may still be suspended.",
+                        SPAWN_WORKER_DRAIN_SECONDS,
+                    )
+                self._spawn_worker_thread = None
+
             # Companions first: they were attached last, and a failure to tear
             # one down must not prevent the target's own session from closing.
             for _pkg, _cs in list(getattr(self, "_companion_scripts", {}).items()):
@@ -4091,6 +5116,74 @@ async def run_frida_analysis(
             base_result=base_result,
             static_findings=static_findings,
         )
+
+
+#: Buckets that hold events about the HARNESS, not about the sample. A run
+#: whose only events live here observed nothing, however many events it counts.
+#: `harness_action` is where the agent files its own Build-field spoofing, which
+#: fires once on every emulator run for benign apps and trojans alike.
+_HARNESS_EVENT_BUCKETS = frozenset({"harness_action"})
+
+
+def _no_sample_behaviour_observed(session: "FridaSession") -> bool:
+    """
+    True when nothing we collected describes something the SAMPLE did.
+
+    `total_hook_events_received` counts harness events too. A real run held
+    exactly {harness_action: 1} and reported EVENTS_CAPTURED, so the report said
+    the sample had been observed when the only thing observed was ourselves.
+    """
+    for bucket, events in (session.collected_events or {}).items():
+        if bucket in _HARNESS_EVENT_BUCKETS:
+            continue
+        for event in events or []:
+            hook = ""
+            if isinstance(event, dict):
+                data = event.get("data") if isinstance(event.get("data"), dict) else {}
+                hook = str(event.get("hook") or data.get("hook") or "")
+            # The Build-field spoof predates the harness_action bucket and is
+            # still filed under anti_analysis on older agents.
+            if hook in ("Build.<static fields>", "sandbox.build_fields_spoofed"):
+                continue
+            return False
+    return True
+
+
+def _instrumentation_latency(session: "FridaSession") -> Optional[float]:
+    """
+    Seconds between the process appearing and the agent being loaded.
+
+    None when either milestone is missing - an unknown latency must not be
+    treated as a late one.
+    """
+    timeline = session.launch_timeline or {}
+    first_pid = timeline.get("first_pid")
+    attach = timeline.get("frida_attach")
+    if not isinstance(first_pid, (int, float)) or isinstance(first_pid, bool):
+        return None
+    if not isinstance(attach, (int, float)) or isinstance(attach, bool):
+        return None
+    return max(0.0, float(attach) - float(first_pid))
+
+
+def _instrumentation_was_late(session: "FridaSession") -> bool:
+    """
+    Whether the agent arrived too late to have seen the app start.
+
+    A spawn-gated run loads the agent into a SUSPENDED process, so by
+    construction nothing executed before the hooks were in and this is never
+    true - which is what makes the status a regression detector rather than a
+    permanent label.
+    """
+    if session.spawn_gated:
+        return False
+    latency = _instrumentation_latency(session)
+    if latency is None:
+        # Attach happened but we cannot say when. The ladder path always
+        # attaches after a stable-PID wait of at least
+        # LAUNCH_PID_STABLE_MIN_SECONDS, so "unknown" on that path is late.
+        return True
+    return latency > INSTRUMENTATION_LATENCY_BUDGET_SECONDS
 
 
 def _build_investigation_records(session: "FridaSession") -> List[Dict[str, Any]]:
@@ -4618,6 +5711,29 @@ async def _run_device_session(
         # fire. Blaming the sample for that silence would score a launch failure
         # as benign behaviour.
         dynamic_status = DynamicAnalysisStatus.NO_UI_RENDERED.value
+    elif _no_sample_behaviour_observed(session) and _instrumentation_was_late(session):
+        # Hooks installed, the process ran, and every event we hold describes
+        # the HARNESS rather than the sample - because the agent arrived after
+        # the app had already done its work.
+        #
+        # This is the case that used to report EVENTS_CAPTURED and read, all the
+        # way through to the analyst's screen, as "the sample was observed and
+        # did nothing". It is the opposite claim: we were not there to see it.
+        # Naming it is also what stops the regression coming back silently - a
+        # future change that pushes attach latency back out shows up as this
+        # status instead of as a quiet zero.
+        dynamic_status = DynamicAnalysisStatus.INSTRUMENTED_TOO_LATE.value
+        logger.error(
+            "[Frida] INSTRUMENTED_TOO_LATE: %d hooks installed, but the agent "
+            "attached %.1fs after %s started and nothing the sample did was "
+            "observed. This run says nothing about the sample. spawn_gated=%s%s",
+            session.hooks_installed_count,
+            _instrumentation_latency(session) or -1.0,
+            session.package_name,
+            session.spawn_gated,
+            f" (spawn fallback: {session.spawn_fallback_reason})"
+            if session.spawn_fallback_reason else "",
+        )
     elif session.total_hook_events_received == 0:
         dynamic_status = DynamicAnalysisStatus.RUNTIME_COMPLETED_NO_EVENTS.value
     else:
@@ -4650,6 +5766,28 @@ async def _run_device_session(
         for e in session.collected_events.get("files_accessed", [])
         if e.get("data", {}).get("path")
     ]
+
+    # DAEPipelineTracker seeds its metrics dict with a full set of counters and
+    # only ever writes two of them (launch_retries, instrumentation_race_retries).
+    # The rest were dead fields that reported 0 forever - so a run that installed
+    # 80 hooks, captured 8 screenshots and received events still rendered
+    # "hooks_installed: 0, events_captured: 0" in the runtime panel, which reads
+    # as a sandbox that never started. Fill in the ones the session actually
+    # knows, at the point where every counter is final.
+    #
+    # Only counters with an authoritative source are set. The others are left as
+    # they are rather than being invented: a wrong number here is worse than a
+    # zero, because this panel is what an analyst checks to decide whether to
+    # trust the dynamic section at all.
+    try:
+        session.dae.metrics.update({
+            "hooks_installed": session.hooks_installed_count,
+            "events_captured": session.total_hook_events_received,
+            "screenshots_captured": len(_collect_screenshots(session)),
+            "system_dialogs_dismissed": len(session.system_dialogs_dismissed),
+        })
+    except Exception as exc:                                        # noqa: BLE001
+        logger.debug("[Frida] DAE metrics backfill skipped: %s", exc)
 
     # Map to risk_engine.py's expected _calculate_dynamic_score() keys
     # This makes the BFCI directly usable by the existing pipeline
@@ -4684,7 +5822,15 @@ async def _run_device_session(
         # Presence of non-standard launch method is itself a weak signal of
         # anti-analysis hardening. NOT consumed by risk_engine.
         "launch_method_used":  session.launch_method_used,
+        # Whether the agent was loaded into a SUSPENDED process, i.e. before the
+        # sample executed anything. This is the difference between "the sample
+        # did nothing" and "we arrived after it had already acted", which read
+        # identically in every report before spawn gating existed.
+        "spawn_gated":         session.spawn_gated,
+        "spawn_fallback_reason": session.spawn_fallback_reason,
+        "spawn_gating_enabled": getattr(session, "_spawn_gating_enabled", False),
         "foreground_mismatch": session.foreground_mismatch,
+        "system_dialogs_dismissed": session.system_dialogs_dismissed,
 
         # Launch diagnostics (Requirement 6) - timestamps for all 10 milestones.
         # Offsets are seconds since apk_install (None = milestone not reached).

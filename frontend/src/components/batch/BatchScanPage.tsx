@@ -246,7 +246,7 @@ export default function BatchScanPage() {
                       ID: #{batch.batch_id.slice(0, 8)}
                     </span>
                   </div>
-                  <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 font-mono tracking-tight mt-1">
+                  <h2 className="text-xl sm:text-2xl font-semibold text-slate-900 font-mono tracking-tight mt-1">
                     Batch #{batch.batch_id.slice(0, 8)}
                   </h2>
                   <p className="text-xs text-slate-500 mt-0.5 font-mono">
@@ -376,7 +376,7 @@ export default function BatchScanPage() {
               <div className="inline-flex items-center justify-center p-3 bg-blue-50 rounded-2xl mb-3 text-blue-600">
                 <Layers className="w-8 h-8" />
               </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 font-mono tracking-tight">
+              <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900 font-mono tracking-tight">
                 Enterprise Batch Scan
               </h1>
               <p className="text-sm text-slate-500 mt-2">

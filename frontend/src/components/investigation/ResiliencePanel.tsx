@@ -236,7 +236,7 @@ function AppliedChangesBlock({ applied }: { applied: AntiEvasionApplied }) {
 
   return (
     <div className="mb-2 rounded-md border border-slate-200 bg-white/70 px-3 py-2">
-      <p className="text-[13px] font-bold uppercase tracking-wide text-slate-500">
+      <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-500">
         Applied to the device
       </p>
 
@@ -332,7 +332,7 @@ function AntiEvasionVerdictCard({
         {style.icon}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-            <p className="text-xs font-bold tracking-wide">{style.title}</p>
+            <p className="text-xs font-semibold tracking-wide">{style.title}</p>
             <span className="text-[13px] font-medium opacity-70">
               {fromRun ? 'measured during the analysis run' : 'measured just now'}
             </span>

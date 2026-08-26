@@ -32,7 +32,7 @@ import {
 function ThreatIntelSkeleton() {
   return (
     <div className={`animate-pulse ${INTEL.gridGap} grid grid-cols-1`}>
-      <div className="h-40 bg-slate-200 rounded-2xl" />
+      <div className="h-40 bg-slate-200 rounded-xl" />
       <div className="h-48 bg-slate-200 rounded-xl" />
       <div className="h-64 bg-slate-200 rounded-xl" />
     </div>
@@ -190,7 +190,7 @@ export default function ThreatIntelView({ data }: { data: FraudCardData | null }
       ) : error ? (
         <SocCard className="p-10 text-center">
           <AlertTriangle className="h-10 w-10 text-amber-500 mx-auto mb-3" />
-          <p className={`${TYPOGRAPHY.bodySmall} font-bold text-slate-800`}>{error}</p>
+          <p className={`${TYPOGRAPHY.bodySmall} font-semibold text-slate-800`}>{error}</p>
           <button
             type="button"
             onClick={fetchIntelligence}
@@ -228,24 +228,53 @@ export default function ThreatIntelView({ data }: { data: FraudCardData | null }
             </Link>
           )}
 
-          <OperationalRecommendationCard data={data} intel={intel} actions={derived.actions} />
-
           {/*
-            Tier 3 - four lookup panels that used to stack full-width below the
-            recommendation, so the page ended in 2000px of tables nobody scrolled
-            to. They answer different questions about the same case, which makes
-            them tabs rather than sections.
+            Tier 3 - the reference panels, with the recommendation beside them.
+
+            The recommendation used to sit above these as its own full-width
+            band, which meant the one instruction on the page scrolled away the
+            moment an analyst opened a tab to check the evidence behind it. As
+            a rail it stays on screen while they read, which is the whole point
+            of a recommendation - and the tabs keep about two thirds of the
+            console, which their tables need.
+
+            `dense` is not optional here: the card's own two-up split is keyed
+            to the viewport, so without it this column would try to fit a 58ch
+            measure and a 260px rail into 400px.
+
+            One column below xl, in the original order, because a 400px rail
+            beside a table is not a layout on a laptop.
           */}
-          <SupportingIntelligence
-            dna={derived.dna}
-            intel={intel}
-            data={data}
-            bundle={investigationBundle}
-            explorer={derived.explorer}
-            similarity={derived.similarity}
-            confidenceSources={derived.confidenceSources}
-            overallConf={derived.overallConf}
-          />
+          <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(340px,400px)]">
+            {/*
+              The recommendation is first in the DOM and moved right only at
+              xl. Source order is what a screen reader and a stacked phone
+              layout follow, and on both the instruction should arrive before
+              the reference tables it is drawn from - `order-last` changes
+              where it sits, never when it is read.
+            */}
+            <div className="min-w-0 xl:sticky xl:top-28 xl:order-last">
+              <OperationalRecommendationCard
+                data={data}
+                intel={intel}
+                actions={derived.actions}
+                dense
+              />
+            </div>
+
+            <div className="min-w-0">
+              <SupportingIntelligence
+                dna={derived.dna}
+                intel={intel}
+                data={data}
+                bundle={investigationBundle}
+                explorer={derived.explorer}
+                similarity={derived.similarity}
+                confidenceSources={derived.confidenceSources}
+                overallConf={derived.overallConf}
+              />
+            </div>
+          </div>
         </div>
       ) : null}
     </ThreatIntelPageShell>

@@ -53,7 +53,7 @@ const DRIVER_ICONS: Record<RiskDriver['iconKey'], typeof ShieldAlert> = {
 
 function VerifiedBadge() {
   return (
-    <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+    <span className="inline-flex items-center gap-1 text-[13px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
       <BadgeCheck className="h-3 w-3" />
       Verified
     </span>
@@ -62,7 +62,7 @@ function VerifiedBadge() {
 
 function SourceBadge({ label }: { label: string }) {
   return (
-    <span className="text-[12px] font-medium text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md">
+    <span className="text-[13px] font-medium text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md">
       {label}
     </span>
   );
@@ -87,9 +87,9 @@ function RiskDriverCard({ driver, onEvidence }: { driver: RiskDriver; onEvidence
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-lg font-semibold text-amber-700 tabular-nums">+{driver.points}</span>
-              <h3 className="text-sm font-bold text-slate-900">{driver.title}</h3>
+              <h3 className="text-sm font-semibold text-slate-900">{driver.title}</h3>
             </div>
-            <span className={`text-[12px] font-bold uppercase px-2 py-0.5 rounded border ${impactClass}`}>
+            <span className={`text-[13px] font-semibold uppercase px-2 py-0.5 rounded border ${impactClass}`}>
               {driver.impact}
             </span>
           </div>
@@ -103,7 +103,7 @@ function RiskDriverCard({ driver, onEvidence }: { driver: RiskDriver; onEvidence
               <button
                 type="button"
                 onClick={() => onEvidence(driver.evidenceId!)}
-                className="text-[12px] font-semibold text-blue-700 hover:underline"
+                className="text-[13px] font-semibold text-blue-700 hover:underline"
               >
                 View evidence
               </button>
@@ -169,7 +169,7 @@ function MathematicalAccordion({
                 <div className="font-semibold text-slate-800">{line.label}</div>
                 <div className="text-slate-600 mt-0.5 font-mono leading-relaxed">{line.detail}</div>
                 {line.contributionLabel && (
-                  <div className="text-amber-700 font-bold mt-1">{line.contributionLabel}</div>
+                  <div className="text-amber-700 font-semibold mt-1">{line.contributionLabel}</div>
                 )}
               </div>
             ))}
@@ -227,7 +227,7 @@ export default function ScoreLedgerSlideOver({
     >
       <div className="space-y-8">
           <section className="space-y-3">
-            <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
               <Info className="h-4 w-4 text-blue-600" />
               Why this APK is Suspicious
             </h3>
@@ -241,7 +241,7 @@ export default function ScoreLedgerSlideOver({
           </section>
 
           <section className="space-y-3">
-            <h3 className="text-sm font-bold text-slate-900">Why the Score Increased</h3>
+            <h3 className="text-sm font-semibold text-slate-900">Why the Score Increased</h3>
             <div className="space-y-3">
               {drivers.length === 0 ? (
                 <p className="text-sm text-slate-600">No scoped risk drivers for this view. Open full breakdown.</p>
@@ -254,7 +254,7 @@ export default function ScoreLedgerSlideOver({
           </section>
 
           <section className="space-y-3">
-            <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
               <PieChart className="h-4 w-4 text-blue-600" />
               Final Fraud Risk
             </h3>
@@ -262,12 +262,12 @@ export default function ScoreLedgerSlideOver({
               {compositionDrivers.map((driver) => (
                 <div key={driver.id} className="flex items-center justify-between gap-3 text-sm">
                   <span className="text-slate-700">{driver.title}</span>
-                  <span className="font-mono font-bold text-amber-700 tabular-nums">+{driver.points}</span>
+                  <span className="font-mono font-semibold text-amber-700 tabular-nums">+{driver.points}</span>
                 </div>
               ))}
               <div className="border-t border-slate-200 pt-4 mt-2 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-slate-900">Final Fraud Risk Score</span>
+                  <span className="text-sm font-semibold text-slate-900">Final Fraud Risk Score</span>
                   <div className="text-right">
                     <span className={`text-xl font-semibold tabular-nums ${riskStyle.text}`}>{score}</span>
                     <span className="text-xs text-slate-500"> / 100</span>
@@ -287,7 +287,7 @@ export default function ScoreLedgerSlideOver({
           </section>
 
           <section className="space-y-3">
-            <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
               <FileText className="h-4 w-4 text-blue-600" />
               What this means
             </h3>

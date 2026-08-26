@@ -71,6 +71,48 @@ function useRowAccordion(_rowCount: number) {
  * concluded → what backs it up), so numbering them tells the reader where the
  * conclusion came from rather than just decorating the column.
  */
+/*
+ * What a tab holds, before its tables do.
+ *
+ * Every evidence tab opened straight into the first accordion, so a reader
+ * arriving at "Static" met a permissions table with no statement of how much
+ * static evidence there was in total. These are the same counts the sections
+ * below already carry on their headers, lifted to the top of the tab and
+ * given the shape used on the overview - so the tab announces its own size,
+ * and each figure links to the section it came from.
+ *
+ * Counts only, never derived rates: a tab summary that computes something the
+ * evidence does not state is a finding invented by the layout.
+ */
+function TabSummary({
+  items,
+}: {
+  items: { label: string; value: number; anchor: string; context: string }[];
+}) {
+  const present = items.filter((i) => i.value > 0);
+  if (present.length === 0) return null;
+
+  return (
+    <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+      {present.map((item) => (
+        <a
+          key={item.label}
+          href={`#${item.anchor}`}
+          className="group block rounded-xl border border-slate-200 bg-white p-4 text-left shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-[transform,border-color,box-shadow] duration-150 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_4px_12px_rgba(15,23,42,0.06)] active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        >
+          <span className={`${TYPOGRAPHY.label} block`}>{item.label}</span>
+          <span className="mt-2 block text-[30px] font-semibold leading-none tabular-nums tracking-[-0.03em] text-slate-900">
+            {item.value}
+          </span>
+          <span className="mt-2 block text-[13px] leading-tight tracking-[0.01em] text-slate-500">
+            {item.context}
+          </span>
+        </a>
+      ))}
+    </div>
+  );
+}
+
 function OverviewGroup({
   eyebrow,
   title,
@@ -91,16 +133,31 @@ function OverviewGroup({
   blurb?: string;
   children: ReactNode;
 }) {
+  /*
+   * The step and its content are one card, not a floating heading above a box.
+   *
+   * The three headings sat naked on the page while everything they introduced
+   * was boxed, so the page read as loose captions with unrelated panels under
+   * them - nothing said which heading owned which box, and the eye had to
+   * infer it from vertical order alone. Putting the heading inside the surface
+   * it describes is what makes a step a step.
+   */
   return (
-    <section className="space-y-3">
+    <section className="flex h-full flex-col rounded-[var(--card-radius)] border border-slate-200 bg-white p-5 shadow-[var(--card-elevation)] sm:p-6">
       <div className="space-y-1">
-        <p className="font-sans text-[13px] font-semibold uppercase tracking-[0.08em] text-blue-700">
+        {/*
+          Sentence case, and slate rather than blue. Uppercase is reserved for
+          badges in this product, and blue is the colour of things you can
+          press - "Step 1" is neither, so it was reading as a link shouting at
+          the heading directly beneath it.
+        */}
+        <p className="font-sans text-[13px] font-medium tracking-[0.01em] text-slate-500">
           {eyebrow}
         </p>
         <h2 className={`${TYPOGRAPHY.h2} text-[22px]`}>{title}</h2>
         {blurb && <p className={`${TYPOGRAPHY.helper} max-w-[68ch]`}>{blurb}</p>}
       </div>
-      {children}
+      <div className="mt-5 min-w-0 flex-1">{children}</div>
     </section>
   );
 }
@@ -129,12 +186,17 @@ function ExplainabilityEngine({ data }: { data: FraudCardData }) {
   const matched = Boolean(rule) && !/^no\b/i.test(rule ?? '');
 
   return (
-    <SocCard rank="standard">
+    /*
+      No card of its own: it is the body of the "What the engine concluded"
+      step, and that step is already a surface. A SocCard here put a bordered
+      panel inside a bordered panel to deliver one label and one sentence.
+    */
+    <div>
       <SectionHeader
         icon={<Cpu className="h-4 w-4" />}
         title="Classification"
       />
-      <div className="px-5 py-4 space-y-3">
+      <div className="space-y-3 pt-4">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <span
             className={`text-xl font-semibold tracking-[-0.01em] ${
@@ -162,12 +224,12 @@ function ExplainabilityEngine({ data }: { data: FraudCardData }) {
         )}
 
         {matched && (
-          <p className="font-mono text-[15px] text-slate-700 bg-slate-50 border border-slate-200 rounded-md px-3 py-2 leading-relaxed break-words">
+          <p className="font-mono text-[15px] text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 leading-relaxed break-words">
             {rule}
           </p>
         )}
       </div>
-    </SocCard>
+    </div>
   );
 }
 
@@ -198,7 +260,7 @@ function APKMetadata({ data }: { data: FraudCardData }) {
             key={r.label}
             className="grid grid-cols-1 sm:grid-cols-[minmax(9rem,28%)_1fr] gap-x-4 gap-y-0.5 py-1.5 border-b border-slate-150 last:border-0 hover:bg-slate-50/50 rounded px-1.5 -mx-1.5 transition-colors duration-100 items-center"
           >
-            <span className="text-[13px] font-bold text-slate-500">{r.label}</span>
+            <span className="text-[13px] font-semibold text-slate-500">{r.label}</span>
             <div className="flex items-center gap-1.5 min-w-0">
               <span
                 className={`text-xs min-w-0 ${r.mono ? 'font-mono' : ''} ${r.highlight ? 'text-red-700 font-semibold' : 'text-slate-800'} ${r.truncate ? 'truncate' : 'break-all'}`}
@@ -235,7 +297,7 @@ function PermissionTable({ data }: { data: FraudCardData }) {
             value={filter}
             onChange={e => setFilter(e.target.value)}
             placeholder="Filter permissions..."
-            className="w-full pl-7 pr-3 py-1 text-xs bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full pl-7 pr-3 py-1 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
       </div>
@@ -255,7 +317,7 @@ function PermissionTable({ data }: { data: FraudCardData }) {
                   <td className="break-all">{p}</td>
                   <td className="text-right">
                     {isFired ? (
-                      <span className="inline-flex px-1.5 py-0.5 text-[11px] font-bold bg-red-100 text-red-800 rounded border border-red-200/50 whitespace-nowrap">
+                      <span className="inline-flex px-1.5 py-0.5 text-[13px] font-semibold bg-red-100 text-red-800 rounded-full border border-red-200/50 whitespace-nowrap">
                         CRITICAL
                       </span>
                     ) : (
@@ -303,7 +365,7 @@ function DangerousAPITable({ data }: { data: FraudCardData }) {
                     </span>
                   </td>
                   <td className="text-right">
-                    <span className="inline-flex px-1.5 py-0.5 text-[11px] font-bold bg-red-100 text-red-800 rounded border border-red-200/50 whitespace-nowrap">
+                    <span className="inline-flex px-1.5 py-0.5 text-[13px] font-semibold bg-red-100 text-red-800 rounded-full border border-red-200/50 whitespace-nowrap">
                       DANGEROUS HOOK
                     </span>
                   </td>
@@ -376,14 +438,14 @@ function DecompilationPanel({ data }: { data: FraudCardData }) {
       <SectionHeader icon={<Code className="h-4 w-4" />} title="Static Decompilation Intelligence" subtitle="APKTool Resources & JADX Java Source Hits" />
       <div className="p-3 space-y-2.5 font-mono text-xs">
         {jadx?.fraud_class_hits?.length > 0 && (
-          <div className="p-2.5 bg-red-50/50 border border-red-200 rounded-md">
-            <span className="font-bold text-red-800 uppercase tracking-wider text-[12px]">JADX Fraud Classes Found:</span>
+          <div className="p-2.5 bg-red-50/50 border border-red-200 rounded-lg">
+            <span className="font-sans text-[13px] font-medium tracking-[0.01em] text-red-800">JADX fraud classes found</span>
             <div className="mt-1 text-red-900 text-xs break-all leading-relaxed">{jadx.fraud_class_hits.join(', ')}</div>
           </div>
         )}
         {apktool?.decoded_manifest_xml && (
-          <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-md text-slate-700">
-            <span className="font-bold text-slate-800 uppercase tracking-wider text-[12px]">Decoded Manifest Excerpt:</span>
+          <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700">
+            <span className="font-sans text-[13px] font-medium tracking-[0.01em] text-slate-600">Decoded manifest excerpt</span>
             <pre className="mt-1 text-[13px] text-slate-600 overflow-x-auto whitespace-pre-wrap font-mono leading-normal bg-white p-2 border border-slate-150 rounded">
               {apktool.decoded_manifest_xml.slice(0, 300)}...
             </pre>
@@ -422,7 +484,7 @@ function NetworkCapturePanel({ networkLogs }: { networkLogs?: any[] }) {
           <tbody className="font-mono">
             {networkLogs.map((req, i) => (
               <tr key={i} className={req.is_suspicious ? '!bg-red-50/40' : ''}>
-                <td className="font-bold text-slate-900">{req.method || 'GET'}</td>
+                <td className="font-semibold text-slate-900">{req.method || 'GET'}</td>
                 <td className="break-all text-slate-700">{req.domain || req.ip || '-'}</td>
                 <td className="max-w-[14rem] truncate text-slate-600" title={req.url || undefined}>{req.url || '-'}</td>
                 <td className="text-right font-semibold tabular-nums text-slate-900">{req.response_status || 200}</td>
@@ -450,7 +512,7 @@ function LogcatInspectorPanel({ logcat }: { logcat?: string }) {
   return (
     <SocCard>
       <SectionHeader icon={<Terminal className="h-4 w-4" />} title="Logcat System Diagnostics" subtitle="Monospace Android System Log Inspector" />
-      <div className="p-3 bg-slate-950 font-mono text-[13px] text-emerald-400 max-h-60 overflow-y-auto scrollbar-hidden rounded-b-md whitespace-pre-wrap leading-normal border-t border-slate-800">
+      <div className="p-3 bg-slate-950 font-mono text-[13px] text-slate-200 max-h-60 overflow-y-auto scrollbar-hidden rounded-b-md whitespace-pre-wrap leading-normal border-t border-slate-800">
         {logcat}
       </div>
     </SocCard>
@@ -479,9 +541,9 @@ function DynamicAnalysisPanel({ data }: { data: FraudCardData }) {
       <div className="p-3 border-b border-slate-200 bg-slate-50/40">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-2.5">
           <div className="flex items-center gap-2">
-            <span className="text-[13px] font-bold text-slate-500">Runtime status:</span>
+            <span className="text-[13px] font-semibold text-slate-500">Runtime status:</span>
             <span
-              className={`px-1.5 py-0.5 text-[12px] font-bold rounded border font-mono uppercase ${
+              className={`px-1.5 py-0.5 text-[13px] font-semibold rounded border font-mono uppercase ${
                 isOk
                   ? 'bg-emerald-50 text-emerald-800 border-emerald-200/50'
                   : 'bg-amber-50 text-amber-800 border-amber-200/50'
@@ -504,23 +566,23 @@ function DynamicAnalysisPanel({ data }: { data: FraudCardData }) {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
           {data.frs_breakdown?.dynamic_ran && (
             <div className="p-2 bg-white rounded border border-slate-200">
-              <span className="text-slate-500 block text-[11px] uppercase font-bold tracking-wider">
+              <span className="block font-sans text-[13px] font-medium tracking-[0.01em] text-slate-500">
                 <HelpTerm term="BFCI">Observed BFCI</HelpTerm>
               </span>
-              <span className="font-mono font-bold text-slate-800 text-sm">
+              <span className="font-mono font-semibold text-slate-800 text-sm">
                 {(dyn.bfci ?? data.frs_breakdown?.dynamic ?? 0).toFixed(1)} / 100
               </span>
             </div>
           )}
           <div className="p-2 bg-white rounded border border-slate-200">
-            <span className="text-slate-500 block text-[11px] uppercase font-bold tracking-wider">Raw events</span>
-            <span className="font-mono font-bold text-slate-800 text-sm">
+            <span className="block font-sans text-[13px] font-medium tracking-[0.01em] text-slate-500">Raw events</span>
+            <span className="font-mono font-semibold text-slate-800 text-sm">
               {dyn.evidence_record_count || (dyn.api_calls || []).length}
             </span>
           </div>
           <div className="p-2 bg-white rounded border border-slate-200">
-            <span className="text-slate-500 block text-[11px] uppercase font-bold tracking-wider">Hook errors</span>
-            <span className="font-mono font-bold text-slate-800 text-sm">{(dyn.hook_errors || []).length}</span>
+            <span className="block font-sans text-[13px] font-medium tracking-[0.01em] text-slate-500">Hook errors</span>
+            <span className="font-mono font-semibold text-slate-800 text-sm">{(dyn.hook_errors || []).length}</span>
           </div>
         </div>
       </div>
@@ -596,12 +658,12 @@ function ManifestFindingsPanel({ data }: { data: FraudCardData }) {
             <div className="relative flex-1 min-w-[140px]">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
               <input type="text" value={filter} onChange={e => setFilter(e.target.value)}
-                placeholder="Filter findings..." className="w-full pl-7 pr-3 py-1 text-xs bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                placeholder="Filter findings..." className="w-full pl-7 pr-3 py-1 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500" />
             </div>
             <div className="flex items-center gap-1">
               {['all', 'high', 'warning', 'info'].map(s => (
                 <button key={s} onClick={() => setSev(s)}
-                  className={`px-2 py-0.5 text-[11px] font-bold uppercase rounded border transition-all ${sev === s ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>
+                  className={`px-2 py-0.5 text-[13px] font-semibold uppercase rounded border transition-all ${sev === s ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>
                   {s}{s !== 'all' && sevCounts[s] ? ` (${sevCounts[s]})` : ''}
                 </button>
               ))}
@@ -611,11 +673,11 @@ function ManifestFindingsPanel({ data }: { data: FraudCardData }) {
             {visible.map((f, i) => (
               <div key={i} className="p-3 hover:bg-slate-50/50 transition-colors">
                 <div className="flex items-start gap-2.5">
-                  <span className={`mt-0.5 px-1.5 py-0.5 text-[11px] font-bold rounded border flex-shrink-0 ${sevColor(f.severity)}`}>{f.severity?.toUpperCase()}</span>
+                  <span className={`mt-0.5 px-1.5 py-0.5 text-[13px] font-semibold rounded border flex-shrink-0 ${sevColor(f.severity)}`}>{f.severity?.toUpperCase()}</span>
                   <div className="min-w-0">
-                    <p className="text-xs font-bold text-slate-800 leading-tight">{f.title}</p>
-                    {f.component && <p className="text-[12px] font-mono text-slate-500 truncate mt-0.5">{f.component}</p>}
-                    {f.description && <p className="text-[12px] text-slate-500 mt-1 leading-normal">{f.description}</p>}
+                    <p className="text-xs font-semibold text-slate-800 leading-tight">{f.title}</p>
+                    {f.component && <p className="text-[13px] font-mono text-slate-500 truncate mt-0.5">{f.component}</p>}
+                    {f.description && <p className="text-[13px] text-slate-500 mt-1 leading-normal">{f.description}</p>}
                   </div>
                 </div>
               </div>
@@ -680,12 +742,12 @@ function CodeFindingsPanel({ data }: { data: FraudCardData }) {
             <div className="relative min-w-[130px]">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
               <input type="text" value={filter} onChange={e => setFilter(e.target.value)}
-                placeholder="Search..." className="pl-7 pr-3 py-1 text-xs bg-white border border-slate-200 rounded-md w-36 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                placeholder="Search..." className="pl-7 pr-3 py-1 text-xs bg-white border border-slate-200 rounded-lg w-36 focus:outline-none focus:ring-1 focus:ring-blue-500" />
             </div>
             <div className="flex gap-1">
               {CODE_CATEGORIES.map(c => (
                 <button key={c.id} onClick={() => setCat(c.id)}
-                  className={`px-2 py-0.5 text-[11px] font-bold rounded border transition-all ${cat === c.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>
+                  className={`px-2 py-0.5 text-[13px] font-semibold rounded border transition-all ${cat === c.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>
                   {c.label}
                 </button>
               ))}
@@ -693,7 +755,7 @@ function CodeFindingsPanel({ data }: { data: FraudCardData }) {
             <div className="flex gap-1 ml-auto">
               {['all', 'high', 'warning', 'info'].map(s => (
                 <button key={s} onClick={() => setSev(s)}
-                  className={`px-1.5 py-0.5 text-[11px] font-bold rounded border transition-all ${sev === s ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50'}`}>
+                  className={`px-1.5 py-0.5 text-[13px] font-semibold rounded border transition-all ${sev === s ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50'}`}>
                   {s}
                 </button>
               ))}
@@ -703,20 +765,20 @@ function CodeFindingsPanel({ data }: { data: FraudCardData }) {
             {visible.map((f, i) => (
               <div key={i} className="p-3 hover:bg-slate-50/50 transition-colors">
                 <div className="flex items-start justify-between gap-2.5 mb-1.5">
-                  <p className="text-xs font-bold text-slate-800 leading-tight">{f.title}</p>
-                  <span className={`px-1.5 py-0.5 text-[11px] font-bold rounded border flex-shrink-0 ${sevColor(f.severity)}`}>{f.severity?.toUpperCase()}</span>
+                  <p className="text-xs font-semibold text-slate-800 leading-tight">{f.title}</p>
+                  <span className={`px-1.5 py-0.5 text-[13px] font-semibold rounded border flex-shrink-0 ${sevColor(f.severity)}`}>{f.severity?.toUpperCase()}</span>
                 </div>
-                {f.description && <p className="text-[12px] text-slate-500 mb-2 leading-relaxed">{f.description}</p>}
+                {f.description && <p className="text-[13px] text-slate-500 mb-2 leading-relaxed">{f.description}</p>}
                 <div className="flex flex-wrap gap-1.5">
-                  {(f as any).rule_id && <code className="text-[11px] bg-slate-100 text-slate-600 border border-slate-200 px-1.5 py-0.5 rounded font-mono">{(f as any).rule_id}</code>}
-                  {(f as any).masvs && <span className="text-[11px] bg-purple-50 text-purple-700 border border-purple-200/50 px-1.5 py-0.5 rounded font-mono">MASVS: {(f as any).masvs}</span>}
-                  {(f as any).cwe && <span className="text-[11px] bg-orange-50 text-orange-700 border border-orange-200/50 px-1.5 py-0.5 rounded font-mono">{(f as any).cwe}</span>}
-                  {(f as any).owasp && <span className="text-[11px] bg-green-50 text-green-700 border border-green-200/50 px-1.5 py-0.5 rounded font-mono">{(f as any).owasp}</span>}
+                  {(f as any).rule_id && <code className="text-[13px] bg-slate-100 text-slate-600 border border-slate-200 px-1.5 py-0.5 rounded font-mono">{(f as any).rule_id}</code>}
+                  {(f as any).masvs && <span className="text-[13px] bg-purple-50 text-purple-700 border border-purple-200/50 px-1.5 py-0.5 rounded font-mono">MASVS: {(f as any).masvs}</span>}
+                  {(f as any).cwe && <span className="text-[13px] bg-orange-50 text-orange-700 border border-orange-200/50 px-1.5 py-0.5 rounded font-mono">{(f as any).cwe}</span>}
+                  {(f as any).owasp && <span className="text-[13px] bg-green-50 text-green-700 border border-green-200/50 px-1.5 py-0.5 rounded font-mono">{(f as any).owasp}</span>}
                 </div>
                 {f.files?.length > 0 && (
                   <div className="mt-2 space-y-0.5 border-t border-slate-100 pt-1.5">
                     {f.files.slice(0, 3).map((file, fi) => (
-                      <p key={fi} className="text-[11px] font-mono text-slate-500 truncate">{file}</p>
+                      <p key={fi} className="text-[13px] font-mono text-slate-500 truncate">{file}</p>
                     ))}
                   </div>
                 )}
@@ -769,7 +831,7 @@ function ExportedComponentsPanel({ data }: { data: FraudCardData }) {
             <div className="relative">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
               <input type="text" value={filter} onChange={e => setFilter(e.target.value)}
-                placeholder="Filter by component name..." className="w-full pl-7 pr-3 py-1 text-xs bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                placeholder="Filter by component name..." className="w-full pl-7 pr-3 py-1 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500" />
             </div>
           </div>
           <div className="soc-table-wrap !border-0 rounded-none max-h-72">
@@ -785,7 +847,7 @@ function ExportedComponentsPanel({ data }: { data: FraudCardData }) {
                 {visible.map((row, i) => (
                   <tr key={i}>
                     <td>
-                      <span className={`px-1.5 py-0.5 text-[11px] font-bold rounded border ${row.color}`}>{row.type}</span>
+                      <span className={`px-1.5 py-0.5 text-[13px] font-semibold rounded border ${row.color}`}>{row.type}</span>
                     </td>
                     <td className="break-all text-slate-800 text-xs">{row.name}</td>
                     <td className="text-right">
@@ -814,9 +876,9 @@ function BinaryAnalysisPanel({ data }: { data: FraudCardData }) {
   const flagStyle = (val?: string | null) => {
     if (!val) return 'text-slate-500';
     const v = String(val).toLowerCase();
-    if (v === 'true' || v === 'full' || v === 'enabled') return 'text-emerald-700 font-bold';
-    if (v === 'false' || v === 'none' || v === 'disabled') return 'text-red-700 font-bold';
-    if (v === 'partial') return 'text-orange-700 font-bold';
+    if (v === 'true' || v === 'full' || v === 'enabled') return 'text-emerald-700 font-semibold';
+    if (v === 'false' || v === 'none' || v === 'disabled') return 'text-red-700 font-semibold';
+    if (v === 'partial') return 'text-orange-700 font-semibold';
     return 'text-slate-600';
   };
 
@@ -850,7 +912,7 @@ function BinaryAnalysisPanel({ data }: { data: FraudCardData }) {
                   <td className={`text-center font-mono ${flagStyle(b.nx)}`}>{String(b.nx ?? '-')}</td>
                   <td className={`text-center font-mono ${flagStyle(b.stack_canary)}`}>{String(b.stack_canary ?? '-')}</td>
                   <td className={`text-center font-mono ${flagStyle(b.relro)}`}>{String(b.relro ?? '-')}</td>
-                  <td className={`text-center font-mono ${b.rpath && String(b.rpath) !== 'False' ? 'text-red-700 font-bold' : 'text-emerald-700'}`}>{String(b.rpath ?? '-')}</td>
+                  <td className={`text-center font-mono ${b.rpath && String(b.rpath) !== 'False' ? 'text-red-700 font-semibold' : 'text-emerald-700'}`}>{String(b.rpath ?? '-')}</td>
                   <td className={`text-center font-mono ${flagStyle(b.fortify)}`}>{String(b.fortify ?? '-')}</td>
                 </tr>
               ))}
@@ -895,7 +957,7 @@ function NetworkSecurityPanel({ data }: { data: FraudCardData }) {
               {entries.map(([k, v]) => (
                 <tr key={k}>
                   <td className="text-slate-500 capitalize">{k.replace(/_/g, ' ')}</td>
-                  <td className={`text-right break-all ${String(v) === 'true' ? 'text-red-700 font-bold' : String(v) === 'false' ? 'text-emerald-700' : 'text-slate-800'}`}>
+                  <td className={`text-right break-all ${String(v) === 'true' ? 'text-red-700 font-semibold' : String(v) === 'false' ? 'text-emerald-700' : 'text-slate-800'}`}>
                     {typeof v === 'object' ? JSON.stringify(v) : String(v)}
                   </td>
                 </tr>
@@ -937,12 +999,12 @@ function TrackersPanel({ data }: { data: FraudCardData }) {
       {open && (
         <div className="p-3 flex flex-wrap gap-2 bg-white">
           {trackers.map((t, i) => (
-            <div key={i} className="flex items-center gap-2 px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-md text-xs">
-              <span className="font-bold text-slate-800">{t.name}</span>
+            <div key={i} className="flex items-center gap-2 px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs">
+              <span className="font-semibold text-slate-800">{t.name}</span>
               {t.categories.length > 0 && (
                 <div className="flex gap-1">
                   {t.categories.slice(0, 2).map((c, ci) => (
-                    <span key={ci} className={`px-1.5 py-0.2 text-[11px] font-bold rounded border uppercase ${catColor([c])}`}>{c}</span>
+                    <span key={ci} className={`px-1.5 py-0.2 text-[13px] font-semibold rounded border uppercase ${catColor([c])}`}>{c}</span>
                   ))}
                 </div>
               )}
@@ -983,7 +1045,7 @@ function SecretsPanel({ data }: { data: FraudCardData }) {
             <div className="relative">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
               <input type="text" value={filter} onChange={e => setFilter(e.target.value)}
-                placeholder="Filter secrets..." className="w-full pl-7 pr-3 py-1 text-xs bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                placeholder="Filter secrets..." className="w-full pl-7 pr-3 py-1 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500" />
             </div>
           </div>
           <div className="soc-table-wrap !border-0 rounded-none max-h-72">
@@ -999,7 +1061,7 @@ function SecretsPanel({ data }: { data: FraudCardData }) {
                 {display.map((s, i) => (
                   <tr key={i}>
                     <td>
-                      <span className="px-1 py-0.5 text-[11px] font-bold bg-red-100 text-red-800 border border-red-200/50 rounded uppercase whitespace-nowrap">SECRET</span>
+                      <span className="px-1 py-0.5 text-[13px] font-semibold bg-red-100 text-red-800 border border-red-200/50 rounded uppercase whitespace-nowrap">SECRET</span>
                     </td>
                     <td className="break-all text-xs text-slate-700">
                       <span className="inline-flex items-start gap-1">
@@ -1019,7 +1081,7 @@ function SecretsPanel({ data }: { data: FraudCardData }) {
           </div>
           {visible.length > 15 && (
             <div className="p-2.5 border-t border-slate-200 text-center bg-slate-50/50">
-              <button onClick={() => setShowAll(a => !a)} className="text-xs text-blue-700 font-bold hover:text-blue-800 transition-colors">
+              <button onClick={() => setShowAll(a => !a)} className="text-xs text-blue-700 font-semibold hover:text-blue-800 transition-colors">
                 {showAll ? 'Show fewer' : `Show all ${visible.length} secrets`}
               </button>
             </div>
@@ -1072,21 +1134,33 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
            * numbers with no statement of what they counted - fine for the
            * analyst who built it, opaque to the manager reading the verdict.
            */}
-          <OverviewGroup
-            eyebrow="Step 1"
-            title="What this analysis recorded"
-            blurb="Counts taken directly from the run. Click any number to jump to the records behind it."
-          >
-            <ActivitySummary data={data} counts={investigationBundle?.counts} />
-          </OverviewGroup>
+          {/*
+            Steps 1 and 2 answer short questions - how much did we find, and
+            what did we call it - and each was spending a full console width on
+            three numbers and one label. Side by side they fit one glance, and
+            `items-stretch` keeps their two cards the same height so the row
+            reads as a row rather than as two cards that happen to be adjacent.
 
-          <OverviewGroup
-            eyebrow="Step 2"
-            title="What the engine concluded"
-            blurb="A deterministic rules engine assigns the label. No AI output contributes to it."
-          >
-            <ExplainabilityEngine data={data} />
-          </OverviewGroup>
+            Step 3 stays full width below: it is a filterable table of every
+            record in the case, and it is the reason anyone scrolls this far.
+          */}
+          <div className="grid grid-cols-1 items-stretch gap-4 xl:grid-cols-2">
+            <OverviewGroup
+              eyebrow="Step 1"
+              title="What this analysis recorded"
+              blurb="Counts taken directly from the run. Click any number to jump to the records behind it."
+            >
+              <ActivitySummary data={data} counts={investigationBundle?.counts} />
+            </OverviewGroup>
+
+            <OverviewGroup
+              eyebrow="Step 2"
+              title="What the engine concluded"
+              blurb="A deterministic rules engine assigns the label. No AI output contributes to it."
+            >
+              <ExplainabilityEngine data={data} />
+            </OverviewGroup>
+          </div>
 
           <OverviewGroup
             eyebrow="Step 3"
@@ -1123,6 +1197,34 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
       ],
       content: (
         <>
+          <TabSummary
+            items={[
+              {
+                label: 'Permissions',
+                value: (data.all_permissions ?? []).length,
+                anchor: 'permissions',
+                context: 'Requested in the manifest',
+              },
+              {
+                label: 'Manifest findings',
+                value: (data.manifest_findings ?? []).length,
+                anchor: 'manifest-findings',
+                context: 'Components and flags of note',
+              },
+              {
+                label: 'Code findings',
+                value: (data.code_findings ?? []).length,
+                anchor: 'code-findings',
+                context: 'Matches in decompiled source',
+              },
+              {
+                label: 'Hardcoded secrets',
+                value: (data.hardcoded_secrets ?? []).length,
+                anchor: 'secrets',
+                context: 'Keys and tokens left in the build',
+              },
+            ]}
+          />
           <EvidenceSection
             id="permissions"
             title="Permissions"
@@ -1177,22 +1279,34 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
             <SecretsPanel data={data} />
           </EvidenceSection>
 
-          <EvidenceSection
-            id="certificate"
-            title="Signing certificate"
-            subtitle="X.509 identity and attribution"
-            icon={<Lock className="h-4 w-4" />}
-          >
-            <CertificatePanel certificate={data.certificate} />
-          </EvidenceSection>
+          {/*
+            Two narrow panels, paired.
 
-          <EvidenceSection
-            id="apk-metadata"
-            title="APK identifiers"
-            icon={<Tag className="h-4 w-4" />}
-          >
-            <APKMetadata data={data} />
-          </EvidenceSection>
+            Both are label-and-value lists roughly 400px wide, and each was
+            spending the whole console on one column of pairs with white to the
+            right of it. Paired only at xl: below that the split would put a
+            9rem label column and its value into half a tablet, and a truncated
+            certificate subject is worse than a taller page. `items-start` so
+            one expanding does not stretch the other.
+          */}
+          <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
+            <EvidenceSection
+              id="certificate"
+              title="Signing certificate"
+              subtitle="X.509 identity and attribution"
+              icon={<Lock className="h-4 w-4" />}
+            >
+              <CertificatePanel certificate={data.certificate} />
+            </EvidenceSection>
+
+            <EvidenceSection
+              id="apk-metadata"
+              title="APK identifiers"
+              icon={<Tag className="h-4 w-4" />}
+            >
+              <APKMetadata data={data} />
+            </EvidenceSection>
+          </div>
 
           <EvidenceSection
             id="decompilation"
@@ -1212,6 +1326,28 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
       anchors: ['dynamic-analysis', 'mitre', 'dangerous-apis', 'resilience'],
       content: (
         <>
+          <TabSummary
+            items={[
+              {
+                label: 'Runtime behaviours',
+                value: investigationBundle?.counts.runtimeBehaviors ?? 0,
+                anchor: 'dynamic-analysis',
+                context: 'Actions seen while the app ran',
+              },
+              {
+                label: 'MITRE techniques',
+                value: data.intelligence_report?.mitre_techniques_used?.length ?? 0,
+                anchor: 'mitre',
+                context: 'Mapped to the ATT&CK matrix',
+              },
+              {
+                label: 'Dangerous APIs',
+                value: (data.technical_view?.apis_fired ?? []).length,
+                anchor: 'dangerous-apis',
+                context: 'Sensitive calls actually invoked',
+              },
+            ]}
+          />
           <EvidenceSection
             id="dynamic-analysis"
             title="Runtime behaviour"
@@ -1223,23 +1359,36 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
             <DynamicAnalysisSummary data={data} />
           </EvidenceSection>
 
-          <EvidenceSection
-            id="mitre"
-            title="MITRE ATT&amp;CK mapping"
-            count={data.intelligence_report?.mitre_techniques_used?.length}
-            icon={<Shield className="h-4 w-4" />}
-          >
-            <MitreMatrix data={data} />
-          </EvidenceSection>
+                    {/*
+            Two reference panels, paired.
 
-          <EvidenceSection
-            id="dangerous-apis"
-            title="Dangerous API calls"
-            count={(data.technical_view?.apis_fired ?? []).length}
-            icon={<Terminal className="h-4 w-4" />}
-          >
-            <DangerousAPITable data={data} />
-          </EvidenceSection>
+            Neither carries a viewport-keyed grid inside it, so neither
+            collapses into slivers at half width - checked before pairing,
+            because that is exactly what would happen to the panels that do.
+            Paired at xl only, and `items-start` so opening one does not
+            stretch the other to match.
+          */}
+          <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
+  <EvidenceSection
+              id="mitre"
+              title="MITRE ATT&amp;CK mapping"
+              count={data.intelligence_report?.mitre_techniques_used?.length}
+              icon={<Shield className="h-4 w-4" />}
+            >
+              <MitreMatrix data={data} />
+            </EvidenceSection>
+
+  <EvidenceSection
+              id="dangerous-apis"
+              title="Dangerous API calls"
+              count={(data.technical_view?.apis_fired ?? []).length}
+              icon={<Terminal className="h-4 w-4" />}
+            >
+              <DangerousAPITable data={data} />
+            </EvidenceSection>
+          </div>
+
+          
 
           <EvidenceSection
             id="resilience"
@@ -1270,6 +1419,16 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
       anchors: ['screenshots', 'impersonation', 'overlay-payloads'],
       content: (
         <>
+          <TabSummary
+            items={[
+              {
+                label: 'Screenshots',
+                value: screenshotEntries.length,
+                anchor: 'screenshots',
+                context: 'Frames captured in the sandbox',
+              },
+            ]}
+          />
           <EvidenceSection
             id="screenshots"
             title="Screenshots"
@@ -1318,6 +1477,25 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
       ],
       content: (
         <>
+          <TabSummary
+            items={[
+              {
+                label: 'Hardcoded endpoints',
+                value: (data.hardcoded_urls_ips ?? []).length,
+                anchor: 'network-capture',
+                context: 'URLs and IPs found in the build',
+              },
+              {
+                label: 'Secondary APKs',
+                value: (
+                  (data.dynamic_analysis as Record<string, unknown> | undefined)
+                    ?.secondary_apks as unknown[] | undefined ?? []
+                ).length,
+                anchor: 'secondary-apks',
+                context: 'Payloads dropped or bundled',
+              },
+            ]}
+          />
           <EvidenceSection
             id="network-capture"
             title="Network capture"
@@ -1346,23 +1524,36 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
             <SecondaryApkPanel data={data} />
           </EvidenceSection>
 
-          <EvidenceSection
-            id="network-security"
-            title="Network security config"
-            subtitle="Cleartext policy, pinning and trust anchors"
-            icon={<Lock className="h-4 w-4" />}
-          >
-            <NetworkSecurityPanel data={data} />
-          </EvidenceSection>
+                    {/*
+            Two reference panels, paired.
 
-          <EvidenceSection
-            id="trackers"
-            title="Third-party SDKs"
-            count={(data.trackers ?? []).length}
-            icon={<Tag className="h-4 w-4" />}
-          >
-            <TrackersPanel data={data} />
-          </EvidenceSection>
+            Neither carries a viewport-keyed grid inside it, so neither
+            collapses into slivers at half width - checked before pairing,
+            because that is exactly what would happen to the panels that do.
+            Paired at xl only, and `items-start` so opening one does not
+            stretch the other to match.
+          */}
+          <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
+  <EvidenceSection
+              id="network-security"
+              title="Network security config"
+              subtitle="Cleartext policy, pinning and trust anchors"
+              icon={<Lock className="h-4 w-4" />}
+            >
+              <NetworkSecurityPanel data={data} />
+            </EvidenceSection>
+
+  <EvidenceSection
+              id="trackers"
+              title="Third-party SDKs"
+              count={(data.trackers ?? []).length}
+              icon={<Tag className="h-4 w-4" />}
+            >
+              <TrackersPanel data={data} />
+            </EvidenceSection>
+          </div>
+
+          
         </>
       ),
     },

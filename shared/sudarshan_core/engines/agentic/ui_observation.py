@@ -38,6 +38,12 @@ import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+# One definition of "is this text shaped like a field caption?", shared with
+# perception's caption walk. Neither module imports the other today, so this
+# introduces no cycle; keeping the rule in one place is what stops the two
+# walks from disagreeing about the same screen.
+from sudarshan_core.engines.agentic.perception import _looks_like_field_caption
+
 logger = logging.getLogger(__name__)
 
 #: How many field captions / control captions are named before the sentence
@@ -128,8 +134,14 @@ class _Widget:
         return self.area >= _FULLSCREEN_AREA_PX
 
     def input_caption(self) -> str:
-        """What this field is asking for, by the most reliable name available."""
-        for candidate in (self.field_label, self.hint, self.desc, self.resource_id):
+        """What this field is asking for, by the most reliable name available.
+
+        `hint` outranks `field_label`. A hint is an attribute ON the field -
+        the app stating what it wants in the box. `field_label` is inferred
+        from document order by the caption walk, which is a good guess and
+        only a guess. When the field says what it is, believe the field.
+        """
+        for candidate in (self.hint, self.field_label, self.desc, self.resource_id):
             cleaned = _clean_label(candidate)
             if cleaned:
                 return cleaned
@@ -245,7 +257,10 @@ def _widgets_from_xml(ui_xml: str) -> List[_Widget]:
             is_checkable=attrib.get("checkable") == "true",
         )
         out.append(widget)
-        if text and not is_input:
+        # Same guard as perception's caption walk: a paragraph of prose sitting
+        # above the first box is not that box's label. Without it the intro
+        # sentence on a form becomes the caption of the field beneath it.
+        if text and not is_input and _looks_like_field_caption(text):
             pending_label = text
     return out
 

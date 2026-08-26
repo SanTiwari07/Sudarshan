@@ -99,7 +99,7 @@ export default function EvidenceSection({
     <section
       ref={ref}
       id={id}
-      className="border border-slate-200 rounded-md bg-white overflow-hidden scroll-mt-28"
+      className="scroll-mt-28 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
     >
       <h3>
         <button
@@ -126,7 +126,7 @@ export default function EvidenceSection({
           <span className="flex items-center gap-2.5 shrink-0">
             {hasCount && (
               <span
-                className={`text-[13px] font-medium tabular-nums px-1.5 py-0.5 rounded ${
+                className={`rounded-full px-2 py-0.5 text-[13px] font-medium tabular-nums tracking-[0.01em] ${
                   empty ? 'bg-slate-50 text-slate-500' : 'bg-slate-100 text-slate-700'
                 }`}
               >

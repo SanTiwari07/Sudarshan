@@ -39,7 +39,7 @@ export default function EvidenceConfidenceMeter({
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
               <span className="text-2xl font-semibold text-blue-800 tabular-nums">{overall}%</span>
-              <span className="text-[11px] uppercase text-slate-500">Overall</span>
+              <span className="text-[13px] font-medium tracking-[0.01em] text-slate-500">Overall</span>
             </div>
           </div>
         </div>

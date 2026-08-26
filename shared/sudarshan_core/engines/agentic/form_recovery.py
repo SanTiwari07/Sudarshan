@@ -175,7 +175,22 @@ class FormRecoveryLadder:
             # refusal.
             return form.all_inputs_filled
         if step == STEP_TAP_SUBMIT:
-            return form.submit is not None and form.submit.usable
+            # Same guard as STEP_PRESS_ENTER above, for the same reason: both
+            # commit the form. Enter was guarded and the submit TAP was not,
+            # which is the inconsistency this closes.
+            #
+            # Measured on the Anubis payload's four-field form: two fields were
+            # filled and verified, stagnation fired anyway (populating a WebView
+            # input does not change the screen hash), recovery climbed to
+            # tap_submit and committed the form with Mother Name and Date Of
+            # Birth still empty. The app validated, refused, and the walk read
+            # that refusal as the app rejecting our data rather than as us
+            # submitting half a form.
+            return (
+                form.all_inputs_filled
+                and form.submit is not None
+                and form.submit.usable
+            )
         if step == STEP_SCROLL_REVEAL:
             return True
         return False

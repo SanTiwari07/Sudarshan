@@ -120,7 +120,7 @@ export function AskAiPopover({
             <>
               {result.decoded && (
                 <div className="mb-2">
-                  <div className="text-[12px] font-bold uppercase tracking-wider text-slate-500">
+                  <div className="text-[13px] font-semibold uppercase tracking-wider text-slate-500">
                     Decoded ({result.encoding})
                   </div>
                   <code className="block text-[13px] bg-slate-50 border border-slate-200 rounded p-1.5 break-all text-slate-800">
@@ -134,7 +134,7 @@ export function AskAiPopover({
               </p>
 
               {result.notes?.map((note, i) => (
-                <p key={i} className="mt-1 text-[12px] text-slate-500">
+                <p key={i} className="mt-1 text-[13px] text-slate-500">
                   · {note}
                 </p>
               ))}
@@ -145,7 +145,7 @@ export function AskAiPopover({
                 separate from the tables around it.
               */}
               <p
-                className={`mt-2 pt-1.5 border-t border-slate-100 text-[12px] ${
+                className={`mt-2 pt-1.5 border-t border-slate-100 text-[13px] ${
                   result.source === 'refused' ? 'text-amber-700' : 'text-slate-500'
                 }`}
               >

@@ -122,11 +122,31 @@ class RuntimeLifecycleTracker:
         summary = reports.get("exploration_summary") or {}
         deep = reports.get("deep_exploration") or {}
         cov = deep.get("coverage") or summary
+        # Read the keys the exploration engine actually writes.
+        #
+        # It emits `actionable_elements_discovered` / `actionable_elements_explored`;
+        # these lines asked for `actions_discovered` / `actions_explored`, which
+        # nothing writes. So actions_discovered reported 0 on every run - a real
+        # one showed "actions_discovered: 0" beside five entries in
+        # action_pipeline - and actions_executed silently fell through to
+        # `buttons_clicked`, a different measurement that happens to be close
+        # enough to look right.
+        #
+        # The engine's own names are tried first and the legacy names kept
+        # after, so a stored run from either shape still reads correctly.
         self.actions_discovered = int(
-            cov.get("actions_discovered") or summary.get("actions_discovered") or 0
+            cov.get("actionable_elements_discovered")
+            or cov.get("actions_discovered")
+            or summary.get("actionable_elements_discovered")
+            or summary.get("actions_discovered")
+            or 0
         )
         self.actions_executed = int(
-            cov.get("actions_explored") or summary.get("buttons_clicked") or 0
+            cov.get("actionable_elements_explored")
+            or cov.get("actions_explored")
+            or summary.get("actionable_elements_explored")
+            or summary.get("buttons_clicked")
+            or 0
         )
         self.actions_verified = int(cov.get("actions_verified") or 0)
         pipeline = deep.get("action_traces") or reports.get("action_traces") or []

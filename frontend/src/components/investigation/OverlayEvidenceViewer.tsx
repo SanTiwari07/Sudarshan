@@ -62,7 +62,7 @@ function PayloadCard({ payload, index }: { payload: VideOverlayPayload; index: n
           <p className="text-[13px] font-semibold text-slate-800 truncate">
             {payload.hook || payload.source || 'WebView payload'}
           </p>
-          <p className="text-[12px] text-slate-500 font-mono truncate">
+          <p className="text-[13px] text-slate-500 font-mono truncate">
             {payload.sha256?.slice(0, 24)}… · {formatBytes(payload.length ?? 0)}
             {payload.truncated ? ' · truncated' : ''}
           </p>
@@ -90,7 +90,7 @@ function PayloadCard({ payload, index }: { payload: VideOverlayPayload; index: n
           {signals.map((s) => (
             <span
               key={s}
-              className="text-[12px] bg-rose-50 border border-rose-200 text-rose-800 rounded px-1.5 py-0.5"
+              className="text-[13px] bg-rose-50 border border-rose-200 text-rose-800 rounded px-1.5 py-0.5"
             >
               {s}
             </span>
@@ -101,7 +101,7 @@ function PayloadCard({ payload, index }: { payload: VideOverlayPayload; index: n
       {expanded && (
         // Escaped source text. React escapes this automatically; it is never
         // set as innerHTML.
-        <pre className="px-2.5 py-2 max-h-72 overflow-auto text-[12px] font-mono text-slate-700 whitespace-pre-wrap break-all bg-slate-50/40">
+        <pre className="px-2.5 py-2 max-h-72 overflow-auto text-[13px] font-mono text-slate-700 whitespace-pre-wrap break-all bg-slate-50/40">
           {payload.html}
         </pre>
       )}

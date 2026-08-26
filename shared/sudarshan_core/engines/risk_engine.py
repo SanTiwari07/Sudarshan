@@ -822,6 +822,11 @@ def reconcile_frs_breakdown(
 _INCONCLUSIVE_STATUSES = frozenset({
     "NO_BEHAVIOR_OBSERVED",
     "NO_UI_RENDERED",
+    # Hooks installed, the process ran, and the agent arrived after the app had
+    # already acted. The sandbox observed nothing about the sample, so scoring
+    # the fraud axis from it would award a clean zero at 0.35 weight for a run
+    # that measured the harness.
+    "INSTRUMENTED_TOO_LATE",
     "INSTRUMENTATION_FAILED",
     "FRIDA_ATTACH_FAILED",
     "EMULATOR_UNAVAILABLE",

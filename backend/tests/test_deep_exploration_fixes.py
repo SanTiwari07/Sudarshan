@@ -828,8 +828,15 @@ class TestDeploymentBudget(unittest.TestCase):
         m = re.search(
             r"FRIDA_ANALYSIS_DURATION=\$\{FRIDA_ANALYSIS_DURATION:-(\d+)\}", compose)
         self.assertIsNotNone(m, "compose no longer sets FRIDA_ANALYSIS_DURATION")
+        # Compare against the SOURCE default rather than a frozen number. The
+        # invariant this guards is "the deployment must not silently undercut
+        # the code", and that survives the default being retuned - which it was,
+        # from 300 to 120, once the Gemini planner came off the critical path of
+        # every action and the window no longer had to absorb ~12s per step.
+        from sudarshan_core.engines.frida_sandbox import ANALYSIS_DURATION_SECONDS
+
         self.assertGreaterEqual(
-            int(m.group(1)), 300,
+            int(m.group(1)), ANALYSIS_DURATION_SECONDS,
             "deployed dynamic-analysis window is shorter than the source default",
         )
 

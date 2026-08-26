@@ -839,6 +839,25 @@ async def load_analysis_job(job_id: str) -> Optional[Dict[str, Any]]:
             result = json.loads(data["result_json"])
         except json.JSONDecodeError:
             logger.warning("[DB] analysis_jobs.result_json corrupt for %s", job_id[:8])
+    # This function had no return statement: it decoded result_json and then fell
+    # off the end, so every caller got None. get_job() falls back to it whenever
+    # the job is not in the in-memory _jobs dict - after a backend restart, or
+    # once retention has evicted it - so GET /status/<job_id> answered 404 for
+    # jobs that were sitting in the table with status 'done'. The row is only
+    # useful rehydrated into the shape the worker and the status route expect.
+    data["result"] = result
+    data.pop("result_json", None)
+    # Live pipeline telemetry is in-memory only; a rehydrated job is either
+    # finished or was interrupted, so report terminal progress rather than 0%.
+    data.setdefault("progress_pct", 100 if data.get("status") == "done" else 0)
+    data.setdefault("pipeline_stage", "COMPLETED" if data.get("status") == "done" else "")
+    data.setdefault("pipeline_substage", "")
+    data.setdefault("pipeline_message", "")
+    data.setdefault("elapsed_ms", 0)
+    data.setdefault("stage_timings", [])
+    return data
+
+
 # ─── Discovery State ────────────────────────────────────────────────────────
 
 async def save_discovery_session(session: Dict[str, Any]) -> None:

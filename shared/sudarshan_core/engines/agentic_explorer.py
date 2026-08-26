@@ -45,7 +45,7 @@ import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from sudarshan_core.engines.agentic.agent_memory import AgentMemory
 from sudarshan_core.engines.agentic.audit_log import AuditLog
@@ -162,6 +162,47 @@ FRIDA_SILENCE_THRESHOLD: int = ExplorationBudget.FRIDA_SILENCE_THRESHOLD
 # (e.g. Stage 5 Login Flow when the app has no conventional login screen).
 # This activates mark_failed → retry branch in next_priority_goal().
 MAX_ATTEMPTS_PER_GOAL: int = int(os.getenv("SUDARSHAN_MAX_ATTEMPTS_PER_GOAL", "8"))
+
+# ── Planner budget ────────────────────────────────────────────────────────────
+#
+# How many consecutive graph-led iterations may pass before the planner is
+# consulted anyway. The graph cannot propose device-state work - granting a
+# permission, injecting a test SMS, warping the clock - so the model has to get
+# a turn even when the graph always has a tap to offer.
+#
+# Four is a deliberate trade: at ~12s per call it costs ~3s per iteration
+# amortised, against ~12s when every iteration paid for one.
+PLANNER_CONSULT_EVERY: int = int(os.getenv("SUDARSHAN_PLANNER_CONSULT_EVERY", "4"))
+
+#: Tools the graph wins outright in select_canonical_action. When the graph
+#: offers one of these, the planner's answer is discarded - so computing it is
+#: pure latency. Kept in sync with that function by the test in
+#: test_planner_budget.py, which fails if the two lists drift apart.
+_GRAPH_WINS_TOOLS = frozenset({
+    "click_text", "tap", "tap_sequence", "type_text", "check",
+})
+
+
+def _planner_could_change_outcome(graph_action: Optional[Dict[str, Any]]) -> bool:
+    """
+    Whether consulting the planner can still affect what happens this iteration.
+
+    False only when the graph already holds an action that select_canonical_action
+    will pick over anything the planner returns. The one exception it keeps is
+    the narrow hint-substitution path: a `type_text` whose field the graph could
+    not name is exactly where a model that can read the screen earns its cost.
+    """
+    if not graph_action:
+        return True
+    tool = graph_action.get("tool", "")
+    if tool not in _GRAPH_WINS_TOOLS:
+        return True
+    if tool == "type_text":
+        # The graph knows WHERE to type; the planner may know WHAT. Only worth
+        # asking when the graph could not work the field out for itself.
+        return str(graph_action.get("field_type", "")) in ("", "UNKNOWN")
+    return False
+
 
 # Attempts after which a demonstrably inert control stops being retried.
 # Applies ONLY when ADB reported success, the window settled, and the screen is
@@ -406,7 +447,15 @@ class AgenticExplorer:
         # Verification reads device state through the executor's ADB channel,
         # which routes via the policy-enforcing SandboxProvider. The probe must
         # never open its own transport or it would bypass those controls.
-        self._probe = DeviceStateProbe(self.executor._adb, package_name)
+        self._probe = DeviceStateProbe(
+            self.executor._adb,
+            package_name,
+            # The persistent device channel, injected the same way: the probe
+            # still owns no transport, it is just handed a hierarchy read that
+            # does not cost a subprocess. Falls back to ADB on its own when the
+            # channel is unavailable.
+            dump_hierarchy=self.executor._channel.dump_hierarchy,
+        )
         # A screen-changing action awaiting judgement by the next observation.
         self._pending_verification = None
         # Every crash this run, classified. Reported rather than summed: three
@@ -462,6 +511,9 @@ class AgenticExplorer:
         #: package -> "was this installed onto the device, or shipped with the
         #: image?". Answered once per package; see _is_third_party_package.
         self._third_party_cache: Dict[str, bool] = {}
+        #: Third-party packages present before the walk started, filled in by
+        #: run(). None until then, which reads as "no baseline, prove nothing".
+        self._baseline_third_party: Optional[Set[str]] = None
         # State ids that already contributed an in-app evidence frame.
         self._state_frames_captured: set = set()
         # ── Form stagnation ───────────────────────────────────────────────────
@@ -1734,6 +1786,53 @@ class AgenticExplorer:
         self._third_party_cache[package] = answer
         return answer
 
+    def _snapshot_third_party_packages(self) -> Set[str]:
+        """
+        Every third-party package present right now, as a set.
+
+        Taken once at the start of the walk. A failed query returns an empty
+        set, and the caller treats "no baseline" as "cannot prove anything was
+        installed" - so an unreadable device narrows scope rather than
+        adopting every foreign package it meets.
+        """
+        try:
+            out = subprocess.run(
+                [self.adb_path, "-s", self.device_serial, "shell",
+                 "pm", "list", "packages", "-3"],
+                capture_output=True, text=True, timeout=20,
+            ).stdout or ""
+        except Exception as exc:                      # noqa: BLE001
+            logger.warning(
+                "[AgenticExplorer] Could not snapshot installed packages (%s) - "
+                "a payload installed during this run will not be recognised as "
+                "the sample's own.", exc,
+            )
+            return set()
+        packages = {
+            line.split("package:", 1)[1].strip()
+            for line in out.splitlines()
+            if line.strip().startswith("package:")
+        }
+        logger.info(
+            "[AgenticExplorer] Baseline: %d third-party package(s) on device "
+            "before the walk.", len(packages),
+        )
+        return packages
+
+    def _installed_during_this_run(self, package: str) -> bool:
+        """
+        Whether `package` arrived on the device after the walk started.
+
+        The baseline is the whole test. A package that was not there when we
+        started and is there now was put there during the session, and the
+        sample is the only thing installing packages inside the sandbox.
+        """
+        if not package or self._baseline_third_party is None:
+            return False
+        if package in self._baseline_third_party:
+            return False
+        return self._is_third_party_package(package)
+
     def _detect_launch_handoff(self, foreground_package: str, obs: Any) -> bool:
         """
         Adopt a package the SAMPLE launched to render its own UI.
@@ -1757,6 +1856,50 @@ class AgenticExplorer:
             return False
         if foreground_package in self.exploration.companion_packages:
             return True
+
+        # (0) A package that was installed DURING this run is the sample's own
+        # second stage, whatever the victim did in between.
+        #
+        # Condition (1) below restricts adoption to a foreground that appears
+        # before any victim action, on the reasoning that a foreign app which
+        # shows up after a tap was reached BY that tap and is therefore a
+        # departure. That is right for navigation - tapping a link that opens
+        # Chrome IS leaving - and exactly wrong for a dropper, where the taps
+        # are the install: measured on Anubis (com.tjmonh.android, posing as
+        # "RTO eChallan"), the walk clicked Install -> OK -> Allow from this
+        # source -> Install, Android installed com.hsjjsjs.android, and its
+        # phishing form - Full Name, Mobile Number, Mother Name, Date Of Birth -
+        # took the screen. Ten actions had been attempted by then, so (1)
+        # rejected it, the scope guard called the payload a departure, and the
+        # run spent its remaining budget pressing back towards the inert
+        # dropper. forms_found: 0, forms_completed: 0, login_outcome:
+        # not_attempted - on a screen built for nothing but credential theft.
+        #
+        # SecondaryPayloadTracker.child_packages() was supposed to cover this
+        # (its own comment: "a foreground package that is a KNOWN CHILD is in
+        # scope"), and the scope guard at G8 already honours it. But that set is
+        # fed by confirm_installed(), which nothing in the production path ever
+        # calls - the same "the API existed, the producer did not" gap that
+        # module's docstring describes for record_secondary_apk(). This is the
+        # producer, and it asks the device rather than depending on the install
+        # hooks firing.
+        if self._installed_during_this_run(foreground_package):
+            logger.info(
+                "[DAE][HANDOFF] %s was not on the device when this run started "
+                "- the sample installed it. Adopting the payload as a surface "
+                "of this investigation.", foreground_package,
+            )
+            self._payloads.confirm_installed(foreground_package)
+            return self.adopt_companion_package(
+                foreground_package,
+                activity=getattr(obs, "activity", ""),
+                evidence=(
+                    f"absent from the device at session start and in the "
+                    f"foreground now - installed by {self.package_name} "
+                    f"during this run"
+                ),
+            )
+
         # (1) nothing the victim did can explain this foreground.
         if self.exploration.actions_attempted > 0:
             return False
@@ -1900,6 +2043,13 @@ class AgenticExplorer:
         self._cancel_task  = False
         self._start_time   = time.monotonic()
         self._duration     = duration_seconds
+
+        # Everything third-party already on the device, before the walk touches
+        # anything. Any third-party package that appears in the foreground later
+        # and is NOT in this set was installed DURING the session - and the only
+        # thing installing packages in here is the sample. See
+        # _detect_launch_handoff for what that buys.
+        self._baseline_third_party = self._snapshot_third_party_packages()
 
         # The caller's duration is the STARTING budget, not the whole story.
         # frida_sandbox passes FRIDA_ANALYSIS_DURATION (300s by default) to
@@ -2704,12 +2854,45 @@ class AgenticExplorer:
 
                 planner_action = None
                 if action is None:
-                    if should_invoke_planner(classification.screen_type):
-                        planner_action = await self.planner.decide(obs, self.memory, self.goals)
-
+                    # ── Ask the graph first, and only pay for the model when
+                    #    its answer can still change the outcome ─────────────
+                    #
+                    # This used to call the planner BEFORE looking at the graph,
+                    # every iteration. But select_canonical_action gives the
+                    # graph priority for click_text / tap / tap_sequence /
+                    # type_text / check, so on those iterations the model's
+                    # answer was computed and then discarded.
+                    #
+                    # Measured on a live Anubis run: Gemini took 7.9s, 13.8s,
+                    # 15.1s and 11.2s on consecutive iterations - ~12s average
+                    # against ~10s for all of perception, execution and
+                    # verification combined. Twenty calls consumed roughly 240s
+                    # of a 300s window, which is why a four-field form could not
+                    # be filled inside one run: each field cost a round trip
+                    # whose result was thrown away.
+                    #
+                    # The planner is still consulted whenever it could matter:
+                    #   * the graph has nothing to offer
+                    #   * the graph's action is not one the graph wins with
+                    #   * the graph wants to type but cannot name the field, so
+                    #     the planner's hint would be substituted in
+                    #   * periodically regardless, so privileged device-state
+                    #     moves (grant_permission, inject_test_sms, ...) still
+                    #     get their turn - those can never come from the graph
                     graph_action = self.exploration.get_next_action(
                         state_id=graph_state.state_id, memory=self.memory,
                     )
+                    self._planner_skips = getattr(self, "_planner_skips", 0)
+                    force_planner = self._planner_skips >= PLANNER_CONSULT_EVERY
+                    if (
+                        should_invoke_planner(classification.screen_type)
+                        and (force_planner or _planner_could_change_outcome(graph_action))
+                    ):
+                        planner_action = await self.planner.decide(obs, self.memory, self.goals)
+                        self._planner_skips = 0
+                    else:
+                        self._planner_skips += 1
+
                     action, selected_by = select_canonical_action(graph_action, planner_action)
                 if action is not None:
                     action["_selected_by"] = selected_by
@@ -3161,7 +3344,32 @@ class AgenticExplorer:
                 # is forgotten too: if the walk comes back to the same form
                 # later - after a validation error, say - it gets the full set
                 # of escapes again rather than an already-spent one.
-                if ever_ui_changed:
+                # ── Filling a field is progress, even on a still screen ───────
+                #
+                # The streak used to reset only on a state-id change. Populating
+                # a WebView input does not change one: the hierarchy keeps the
+                # same nodes and the same structure, only an attribute moves.
+                # So every successful fill counted as stagnation.
+                #
+                # Measured on the Anubis payload's four-field form: Full Name
+                # and Mobile Number were both filled and verified
+                # (field_populated len=11, len=10), and the very next line was
+                #   FORM_STAGNATION streak=2 ... inputs=4 unfilled=2
+                # Recovery then took the loop - it runs BEFORE the graph, by
+                # design - and walked its ladder to `tap_submit`, submitting the
+                # form with two fields still empty. Mother Name and Date Of
+                # Birth were never filled on a form the walk was actively
+                # completing.
+                #
+                # A verified population is unambiguous evidence the screen is
+                # responding to us, which is exactly what the streak is meant to
+                # detect the absence of.
+                _filled_a_field = (
+                    (action or {}).get("tool") == "type_text"
+                    and bool(result.success)
+                    and bool((getattr(result, "data", None) or {}).get("typed_length"))
+                )
+                if ever_ui_changed or _filled_a_field:
                     self._unchanged_action_streak = 0
                     self._form_recovery.reset(self._pre_action_state_id)
                 else:

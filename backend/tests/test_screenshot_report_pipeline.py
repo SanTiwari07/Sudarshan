@@ -31,7 +31,7 @@ def test_report_gallery_reads_canonical_manifest(tmp_path):
     assert len(entries) == 1
 
     html = build_report({"package_name": "com.test", "final_risk_score": 1}, tmp_path)
-    assert "Visual UI" in html
+    assert "Runtime Screenshot Plates" in html
     assert "SCR-001" in html
     assert "data:image/png;base64," in html
 

@@ -29,6 +29,14 @@ type InfluenceRow = {
   included: boolean;
   /** Why an excluded axis was excluded. Empty when the axis counted. */
   exclusionLabel: string;
+  /**
+   * The share of the final score this axis is counted at, 0-1.
+   *
+   * Held so the card can state the arithmetic instead of asserting a number:
+   * contribution is raw score x weight, and a reader who is being asked to act
+   * on "+17.7 pts" is entitled to see where 17.7 came from.
+   */
+  weight: number;
 };
 
 function buildRows(data: FraudCardData): InfluenceRow[] {
@@ -94,7 +102,9 @@ function buildRows(data: FraudCardData): InfluenceRow[] {
         ? 'No sandbox emulator was available when dynamic analysis was requested.'
         : runtimeFailed
           ? `Runtime analysis failed (${dynamicStatus || 'FAILED'}). The sandbox did not produce scorable evidence.`
-          : exclusionReason === 'NO_UI_RENDERED'
+          : exclusionReason === 'INSTRUMENTED_TOO_LATE'
+            ? 'The sandbox attached to the app after it had already started, so its startup behaviour was never observed. Excluded from the score - this describes the sandbox, not the app.'
+            : exclusionReason === 'NO_UI_RENDERED'
             ? 'The app never rendered a screen in the sandbox, so no runtime behaviour could be observed. Excluded from the score - this is not evidence the app is safe.'
             : exclusionReason === 'EVASION_ONLY'
               ? 'The app ran anti-analysis checks and then did nothing observable. Excluded from the score - evasion is not evidence of safety.'
@@ -118,6 +128,7 @@ function buildRows(data: FraudCardData): InfluenceRow[] {
         : 0,
       summary: buildStaticCardSummary(data),
       included: staticIncluded,
+      weight: axesUsed['stei'] ?? 0,
       exclusionLabel: staticIncluded ? '' : 'Not included',
     },
     {
@@ -129,6 +140,7 @@ function buildRows(data: FraudCardData): InfluenceRow[] {
       contribution: dynamicContribution,
       summary: dynamicSummary,
       included: dynamicIncluded,
+      weight: axesUsed['dynamic'] ?? 0,
       exclusionLabel: dynamicIncluded
         ? ''
         : runtimeFailed
@@ -148,6 +160,7 @@ function buildRows(data: FraudCardData): InfluenceRow[] {
         : 0,
       summary: buildThreatCardSummary(data),
       included: correlationIncluded,
+      weight: axesUsed['correlation'] ?? 0,
       exclusionLabel: correlationIncluded ? '' : 'Not included',
     },
   ];
@@ -174,7 +187,9 @@ function InfluenceRowItem({
       type="button"
       onClick={onOpen}
       aria-label={`View ${row.label.toLowerCase()} details`}
-      className={`flex h-full w-full cursor-pointer flex-col rounded-md border p-3.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
+      // Roomier now that it carries its own arithmetic: the card radius from
+      // the tokens, and 20px of padding rather than 14px.
+      className={`flex h-full w-full cursor-pointer flex-col rounded-[var(--card-radius)] border p-5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
         row.included
           ? 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/30'
           : // Recessed rather than alarmed: it belongs in the account of the
@@ -217,15 +232,57 @@ function InfluenceRowItem({
         />
       </div>
 
-      <p className={`${TYPOGRAPHY.bodySmall} mt-2.5`}>{row.summary}</p>
+      <p className={`${TYPOGRAPHY.bodySmall} mt-3`}>{row.summary}</p>
 
-      {row.key === 'dynamic' && !row.included && row.score > 0 && (
-        <p className={`${TYPOGRAPHY.caption} mt-1.5`}>
-          Observed {row.score.toFixed(1)} / 100, not counted toward the final score.
-        </p>
-      )}
+      {/*
+        Where the number came from, in a sentence.
+        
+        The card asserted "+17.7 pts" and left the reader to trust it. The
+        contribution is raw axis score multiplied by the share that axis is
+        counted at, and both halves are in the payload - so the card can show
+        the working instead. On a console whose claim is that every score
+        traces to evidence, the arithmetic behind the headline figure is the
+        last place to ask for trust.
+      */}
+      <p className={`${TYPOGRAPHY.caption} mt-3 border-t border-slate-200 pt-3`}>
+        {row.included ? (
+          <>
+            Scored{' '}
+            <span className="font-medium tabular-nums text-slate-700">
+              {row.score.toFixed(1)}
+            </span>{' '}
+            out of 100 on this axis, counted at{' '}
+            <span className="font-medium tabular-nums text-slate-700">
+              {Math.round(row.weight * 100)}%
+            </span>{' '}
+            of the final score
+            {row.contribution >= 0.05 ? (
+              <>
+                {' '}— adding{' '}
+                <span className="font-medium tabular-nums text-slate-700">
+                  {row.contribution.toFixed(1)}
+                </span>{' '}
+                points.
+              </>
+            ) : (
+              <> — adding nothing, because the axis scored nothing.</>
+            )}
+          </>
+        ) : row.score > 0 ? (
+          <>
+            Scored{' '}
+            <span className="font-medium tabular-nums text-slate-700">
+              {row.score.toFixed(1)}
+            </span>{' '}
+            out of 100, but excluded — so it added nothing, and its absence is
+            not evidence of safety.
+          </>
+        ) : (
+          <>Never scored, so it could neither raise nor lower the result.</>
+        )}
+      </p>
 
-      <span className={`${TYPOGRAPHY.linkAction} mt-auto pt-2.5`}>
+      <span className={`${TYPOGRAPHY.linkAction} mt-auto pt-4`}>
         View details
         <ChevronRight className="h-3.5 w-3.5" aria-hidden />
       </span>
@@ -236,9 +293,11 @@ function InfluenceRowItem({
 export default function RiskInfluenceCard({
   data,
   embedded = false,
+  bare = false,
 }: {
   data: FraudCardData;
   embedded?: boolean;
+  bare?: boolean;
 }) {
   const { openInfluenceDetail, openLedger } = useInvestigationUI();
   const allRows = buildRows(data);
@@ -271,7 +330,7 @@ export default function RiskInfluenceCard({
    * against each other directly.
    */
   const body = (
-    <div className={embedded ? 'space-y-3' : 'p-4 space-y-3'}>
+    <div className={embedded || bare ? 'space-y-3' : 'p-4 space-y-3'}>
       <div
         className={
           embedded
@@ -299,6 +358,15 @@ export default function RiskInfluenceCard({
       )}
     </div>
   );
+
+  /*
+   * `bare` is the row of axis cards with no surface of its own and no header -
+   * for a caller that supplies its own heading and wants the three cards to
+   * sit directly on the page. `embedded` stacks them in a narrow column;
+   * `bare` keeps the three-across grid. Neither wraps them in a card, because
+   * each axis is already one.
+   */
+  if (bare) return body;
 
   if (embedded) {
     return (

@@ -10,9 +10,10 @@ import {
   buildWhySudarshanConcluded,
   qualitativeConfidence,
 } from '../../lib/threatIntelOverview';
-import { SearchX, BadgeCheck, BrainCircuit, Check, ClipboardCheck, ShieldAlert, Sparkles } from 'lucide-react';
+import { SearchX, BadgeCheck, BrainCircuit, ClipboardCheck, ShieldAlert, Sparkles } from 'lucide-react';
 import { isInconclusive } from '../../lib/decision';
 import SocCard from '../ui/Card';
+import { Card, Chip, ProgressBar } from '../ui/primitives';
 import { TYPOGRAPHY } from '../../theme/typography';
 import { INTEL } from './intelTokens';
 
@@ -35,7 +36,7 @@ function Bullet({ children }: { children: ReactNode }) {
  */
 function InsightColumn({ icon, title, items }: { icon: ReactNode; title: string; items: string[] }) {
   return (
-    <div className="px-5 py-5 sm:px-6 sm:py-6">
+    <Card>
       <div className="mb-3.5 flex items-center gap-2.5">
         <span className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-blue-700">
           {icon}
@@ -47,16 +48,26 @@ function InsightColumn({ icon, title, items }: { icon: ReactNode; title: string;
           <Bullet key={item}>{item}</Bullet>
         ))}
       </ul>
-    </div>
+    </Card>
   );
 }
 
+/*
+ * One fact, one card.
+ *
+ * These were cells divided by hairlines inside a single grey box, so four
+ * separate facts - a confidence score, a family name, a runtime verdict and a
+ * provenance list - read as one table the eye had to segment before it could
+ * use any of them. Given their own surface and a gap between them, each is
+ * legible on its own, and the row reflows to however many the case produced
+ * rather than holding a fixed four columns.
+ */
 function SnapshotRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="px-4 py-3">
+    <Card>
       <dt className={INTEL.eyebrow}>{label}</dt>
-      <dd className="mt-1">{children}</dd>
-    </div>
+      <dd className="mt-2">{children}</dd>
+    </Card>
   );
 }
 
@@ -95,7 +106,7 @@ export default function AIIntelligenceOverview({
       : 'Not run';
 
   return (
-    <SocCard rank="primary" className="rounded-lg">
+    <SocCard rank="primary">
       <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 border-b border-slate-200 bg-slate-50/70 px-5 py-4 sm:px-6">
         <div className="flex min-w-0 items-start gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-blue-100 bg-blue-50 text-blue-700">
@@ -139,20 +150,22 @@ export default function AIIntelligenceOverview({
       */}
       <section aria-labelledby="ai-intel-overview-title" className="px-5 py-6 sm:px-6">
         <dl
-          className={`grid grid-cols-1 divide-y divide-slate-200 rounded-md border border-slate-200 bg-slate-50/60 sm:grid-cols-2 sm:divide-y-0 ${
+          className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${
             family ? 'lg:grid-cols-4' : 'lg:grid-cols-3'
-          } [&>div]:border-slate-200 sm:[&>div]:border-b sm:[&>div+div]:border-l lg:[&>div]:border-b-0`}
+          }`}
         >
           <SnapshotRow label="Evidence confidence">
             <div className="flex items-baseline gap-1.5">
-              <span className="font-sans text-2xl font-semibold leading-none tracking-[-0.02em] text-slate-900 tabular-nums">
+              <span className="font-sans text-[30px] font-medium leading-none tracking-[-0.03em] text-slate-900 tabular-nums">
                 {confPercent}%
               </span>
               <span className={TYPOGRAPHY.caption}>{confLabel}</span>
             </div>
-            <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-slate-200">
-              <div className="h-full rounded-full bg-blue-600" style={{ width: `${confPercent}%` }} />
-            </div>
+            <ProgressBar
+              className="mt-3"
+              percent={confPercent}
+              label={`Evidence confidence ${confPercent} percent`}
+            />
           </SnapshotRow>
           {family && (
             <SnapshotRow label="Malware family">
@@ -166,13 +179,9 @@ export default function AIIntelligenceOverview({
             {chips.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
                 {chips.map((chip) => (
-                  <span
-                    key={chip.id}
-                    className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700"
-                  >
-                    <Check className="h-3 w-3 shrink-0 text-emerald-600" aria-hidden />
+                  <Chip key={chip.id} checked>
                     {chip.label}
-                  </span>
+                  </Chip>
                 ))}
               </div>
             ) : (
@@ -189,27 +198,52 @@ export default function AIIntelligenceOverview({
           continuous one. It is a single block of prose again, set a step up
           from body copy because it is the conclusion of the page.
         */}
-        <p className="mt-6 font-sans text-[17px] font-normal leading-[1.75] tracking-[-0.003em] text-slate-800">
-          {narrative}
-        </p>
       </section>
 
-      <div className="grid grid-cols-1 divide-y divide-slate-200 border-t border-slate-200 lg:grid-cols-3 lg:divide-x lg:divide-y-0">
-        <InsightColumn
-          icon={<ShieldAlert className="h-4 w-4" aria-hidden />}
-          title="What was discovered"
-          items={discovered}
-        />
-        <InsightColumn
-          icon={<BrainCircuit className="h-4 w-4" aria-hidden />}
-          title="Why Sudarshan concluded this"
-          items={why}
-        />
-        <InsightColumn
-          icon={<ClipboardCheck className="h-4 w-4" aria-hidden />}
-          title="Recommended analyst action"
-          items={recommended}
-        />
+      {/*
+        The assessment and its three answers, side by side.
+
+        The briefing ran the full width, and the three answer cards sat in a
+        row beneath it - so reading the conclusion and checking what it was
+        based on were two separate screens, and the card was roughly twice as
+        tall as it needed to be. On a wide console the prose takes a reading
+        measure on the left and the three answers stack in a rail on the right,
+        which puts the whole assessment in one view.
+
+        It collapses to the old order below xl: at narrower widths a 72ch
+        measure plus a rail does not fit, and prose squeezed into half a tablet
+        is worse than a taller card.
+      */}
+      <div className="grid grid-cols-1 gap-3 border-t border-slate-200 bg-slate-50/50 p-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] xl:items-start">
+        <Card roomy>
+          <p className="max-w-[72ch] font-sans text-[17px] font-normal leading-[1.75] tracking-[-0.003em] text-slate-700 [text-wrap:pretty]">
+            {narrative}
+          </p>
+        </Card>
+
+        {/*
+          Three answers, three cards. Hairline-divided columns inside one
+          surface made "what was discovered", "why Sudarshan concluded this"
+          and "recommended analyst action" look like three paragraphs of one
+          text rather than three separate answers.
+        */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 xl:grid-cols-1">
+          <InsightColumn
+            icon={<ShieldAlert className="h-4 w-4" aria-hidden />}
+            title="What was discovered"
+            items={discovered}
+          />
+          <InsightColumn
+            icon={<BrainCircuit className="h-4 w-4" aria-hidden />}
+            title="Why Sudarshan concluded this"
+            items={why}
+          />
+          <InsightColumn
+            icon={<ClipboardCheck className="h-4 w-4" aria-hidden />}
+            title="Recommended analyst action"
+            items={recommended}
+          />
+        </div>
       </div>
 
     </SocCard>

@@ -61,7 +61,8 @@ def test_executive_caps_at_two_and_excludes_d(tmp_path):
     )
     html = build_executive_visual_html(tmp_path)
     assert "SCR-D" not in html
-    assert html.count("gallery-card") == 2
+    # Executive frames render as full-width plates, not gallery cards.
+    assert html.count('class="plate"') == 2
 
 
 def test_technical_includes_ab_quality_only(tmp_path):

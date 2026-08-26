@@ -39,17 +39,22 @@ export type CaseDepth = 'summary' | 'analyst' | 'forensic';
 
 export const CASE_DEPTHS: CaseDepth[] = ['summary', 'analyst', 'forensic'];
 
-const DEPTH_STORAGE_KEY = 'sudarshan_case_depth';
-
-function readStoredDepth(): CaseDepth {
-  try {
-    const raw = localStorage.getItem(DEPTH_STORAGE_KEY);
-    if (raw && (CASE_DEPTHS as string[]).includes(raw)) return raw as CaseDepth;
-  } catch {
-    // Private mode, or storage disabled. The default is correct either way.
-  }
-  return 'summary';
-}
+/*
+ * Depth is now fixed at the deepest level, and there is no switch.
+ *
+ * The Detail control that used to set this was removed from the case bar. That
+ * left a choice with no chooser, and the old default - 'summary' - was the one
+ * that hides things: the raw section on the technical view (logcat, Frida
+ * events, binary analysis), the counts strip on the case summary, and the
+ * MITRE technique id on each attack stage. Keeping that default would have
+ * turned "remove a control" into "delete evidence from the product", which is
+ * not the same edit.
+ *
+ * The stored value is deliberately not read any more. Nothing can write it
+ * now, so all it could do is pin a returning reader to whatever they last
+ * picked - including 'summary' - with no way back.
+ */
+const FIXED_DEPTH: CaseDepth = 'forensic';
 
 export type DrawerRequest =
   | { kind: 'evidence'; id: string }
@@ -87,10 +92,9 @@ type InvestigationUIContextValue = {
   setTimelineFocus: (ms: number | null) => void;
 
   depth: CaseDepth;
-  setDepth: (d: CaseDepth) => void;
-  /** True when the reader has opted into at least the analyst level. */
+  /** True when at least the analyst level is shown. Fixed true. */
   atLeastAnalyst: boolean;
-  /** True only at the deepest level. Gate raw forensic dumps on this. */
+  /** True at the deepest level. Fixed true - raw forensic dumps always show. */
   isForensic: boolean;
   influenceDetailOpen: boolean;
   influenceAxis: ScoreInfluenceAxis | null;
@@ -112,16 +116,6 @@ export function InvestigationUIProvider({ children }: { children: React.ReactNod
   const [searchParams, setSearchParams] = useSearchParams();
   const [stack, setStack] = useState<DrawerRequest[]>([]);
   const [timelineFocusMs, setTimelineFocusMs] = useState<number | null>(null);
-  const [depth, setDepthState] = useState<CaseDepth>(readStoredDepth);
-
-  const setDepth = useCallback((d: CaseDepth) => {
-    setDepthState(d);
-    try {
-      localStorage.setItem(DEPTH_STORAGE_KEY, d);
-    } catch {
-      // Persisting is a convenience; failing to persist must not break the switch.
-    }
-  }, []);
 
   const activeDrawer = stack.length > 0 ? stack[stack.length - 1] : null;
 
@@ -241,10 +235,9 @@ export function InvestigationUIProvider({ children }: { children: React.ReactNod
       timelineFocusMs,
       setTimelineFocus: setTimelineFocusMs,
 
-      depth,
-      setDepth,
-      atLeastAnalyst: depth !== 'summary',
-      isForensic: depth === 'forensic',
+      depth: FIXED_DEPTH,
+      atLeastAnalyst: FIXED_DEPTH !== 'summary',
+      isForensic: FIXED_DEPTH === 'forensic',
 
       influenceDetailOpen: activeDrawer?.kind === 'score-influence',
       influenceAxis: activeDrawer?.kind === 'score-influence' ? activeDrawer.axis : null,
@@ -263,8 +256,6 @@ export function InvestigationUIProvider({ children }: { children: React.ReactNod
       openFindingEvidence,
       openInfluenceDetail,
       timelineFocusMs,
-      depth,
-      setDepth,
     ],
   );
 

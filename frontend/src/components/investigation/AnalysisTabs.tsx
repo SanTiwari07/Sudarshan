@@ -122,7 +122,7 @@ export function AnalysisTabs({ tabs, initialTabId, urlParam }: AnalysisTabsProps
          * tabs at 375px, which turns a one-line control into a third of the
          * viewport before any content is reached.
          */
-        className="flex gap-2 mb-5 overflow-x-auto scrollbar-hidden snap-x snap-mandatory pb-1"
+        className="mb-5 flex w-fit max-w-full gap-1 overflow-x-auto scrollbar-hidden snap-x snap-mandatory rounded-full bg-slate-100 p-1"
       >
         {available.map((tab, index) => {
           const selected = tab.id === active.id;
@@ -137,19 +137,33 @@ export function AnalysisTabs({ tabs, initialTabId, urlParam }: AnalysisTabsProps
               onKeyDown={(e) => onTabKeyDown(e, index)}
               onClick={() => selectTab(tab.id)}
               className={[
-                'px-5 py-3 text-left rounded-lg shrink-0 snap-start border transition-colors',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-blue-600',
+                /*
+                 * The press is where the feedback belongs. A tab that only
+                 * changes on the release reads as dead for the length of the
+                 * click; scaling on `:active` answers the finger instead.
+                 */
+                /*
+                 * A selected tab is a dark pill on a light track, matching the
+                 * case bar's section nav. It used to be a saturated blue slab
+                 * with a border, which made the row of tabs the loudest thing
+                 * on a page whose actual content is the evidence below it -
+                 * and it spent the accent colour on "where you are" rather
+                 * than on "what you can press".
+                 */
+                'shrink-0 snap-start rounded-full px-4 py-2 text-left',
+                'transition-[color,background-color,transform] duration-150 active:scale-[0.97]',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
                 selected
-                  ? 'border-blue-700 bg-blue-700 text-white shadow-sm'
-                  : 'border-slate-300 bg-white text-slate-700 hover:border-slate-500 hover:text-slate-900',
+                  ? 'bg-slate-900 text-white'
+                  : 'text-slate-600 hover:text-slate-900',
               ].join(' ')}
             >
-              <span className="flex items-center gap-2 font-sans text-[17px] font-semibold tracking-[-0.01em]">
+              <span className="flex items-center gap-2 font-sans text-[15px] font-semibold tracking-[-0.01em]">
                 {tab.label}
                 {typeof tab.count === 'number' && tab.count > 0 && (
                   <span
-                    className={`text-[14px] font-semibold tabular-nums px-2 py-0.5 rounded ${
-                      selected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-800'
+                    className={`rounded-full px-1.5 text-[13px] font-semibold tabular-nums tracking-[0.01em] ${
+                      selected ? 'bg-white/20 text-white' : 'bg-slate-200/80 text-slate-600'
                     }`}
                   >
                     {tab.count}

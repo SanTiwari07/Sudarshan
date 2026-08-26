@@ -83,10 +83,22 @@ export default function OperationalRecommendationCard({
   data,
   intel,
   actions,
+  dense = false,
 }: {
   data: FraudCardData;
   intel: IntelApiPayload;
   actions: AnalystAction[];
+  /*
+   * Lay out for a narrow column rather than for the viewport.
+   *
+   * Tailwind's `lg:` is keyed to the window, not to this card's box, so when
+   * the page places it in a half-width column the two-up split still fires and
+   * tries to fit a 58ch measure and a 260px rail into ~430px. There is no
+   * breakpoint that can express "narrow parent on a wide screen", so the
+   * parent has to say so. Container queries would remove the need for this
+   * prop; until the plugin is in, this is the honest version of the same idea.
+   */
+  dense?: boolean;
 }) {
   const raw =
     data.recommended_action ||
@@ -102,7 +114,7 @@ export default function OperationalRecommendationCard({
   const supporting = mergeActions(actions).filter((a) => a.label !== action);
 
   return (
-    <SocCard rank="primary" className="rounded-lg">
+    <SocCard rank="primary">
       <SectionHeader
         icon={<Compass className="h-4 w-4" />}
         title="Operational recommendation"
@@ -116,7 +128,11 @@ export default function OperationalRecommendationCard({
         I do" and "what else follows" - so they sit side by side and the card
         stops being mostly margin.
       */}
-      <div className="grid grid-cols-1 gap-6 px-5 py-5 sm:px-6 lg:grid-cols-[minmax(0,58ch)_minmax(260px,1fr)] lg:gap-10">
+      <div
+        className={`grid grid-cols-1 gap-6 px-5 py-5 sm:px-6 ${
+          dense ? '' : 'lg:grid-cols-[minmax(0,58ch)_minmax(260px,1fr)] lg:gap-10'
+        }`}
+      >
         <div className="min-w-0 space-y-3">
           <span className="inline-flex items-center rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-[15px] font-semibold text-blue-900">
             {action}
@@ -127,12 +143,23 @@ export default function OperationalRecommendationCard({
         {supporting.length > 0 && (
           <div>
             <p className={`${INTEL.eyebrow} mb-2`}>Supporting actions</p>
-            <ul className="divide-y divide-slate-200 rounded-md border border-slate-200 bg-slate-50/60">
+            {/*
+              Flat rows, not a bordered list inside a bordered card.
+
+              This was a grey box with its own border and radius sitting inside
+              the recommendation card - two surfaces to deliver four lines, and
+              the inner one competed with the card that owned it. The rows now
+              sit directly on the card, separated by a hairline each, which is
+              the only separation four short items need.
+            */}
+            <ul>
               {supporting.slice(0, 4).map((a) => (
-                <li key={a.label} className="px-3.5 py-2.5">
-                  <p className="font-sans text-[15px] font-semibold leading-snug text-slate-900">{a.label}</p>
+                <li key={a.label} className="border-t border-slate-200 py-4 first:border-t-0 first:pt-0">
+                  <p className="font-sans text-[14px] font-medium leading-snug tracking-[-0.005em] text-slate-900">
+                    {a.label}
+                  </p>
                   {a.reasons.length > 0 && (
-                    <p className={`${TYPOGRAPHY.caption} mt-0.5`}>{a.reasons.join(' · ')}</p>
+                    <p className={`${TYPOGRAPHY.caption} mt-1`}>{a.reasons.join(' · ')}</p>
                   )}
                 </li>
               ))}

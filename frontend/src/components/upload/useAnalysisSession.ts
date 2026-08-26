@@ -20,6 +20,56 @@ async function sha256Hex(file: File): Promise<string> {
     .join('');
 }
 
+// Threat-intel correlation (VirusTotal family attribution and the score uplift it
+// carries) is not run by the analysis pipeline. It runs lazily, server-side, the
+// first time GET /cases/{sha256} is called. So the job result a fresh upload polls
+// for still says family "Unknown" and carries the pre-correlation score, while the
+// same case opened later from Case History shows the real family and a higher
+// score. Fetching the case once, here, both triggers that correlation and gives
+// the just-uploaded view the same numbers the case page will show.
+//
+// Only the correlation-derived fields are taken. The case record uses different
+// names for some collections (dangerous_perms vs dangerous_permissions,
+// services_list vs services), so replacing the object wholesale would blank the
+// panels that read the response-model names.
+const INTEL_FIELDS = [
+  'family_classification',
+  'final_risk_score',
+  'risk_band',
+  'base_score',
+  'confidence',
+  'ai_confidence_multiplier',
+  'recommended_action',
+  'risk_explanation',
+  'threat_correlation',
+  'threat_scenario_table',
+  'frs_breakdown',
+] as const;
+
+async function mergeCorrelatedIntel(
+  result: FraudCardData,
+  token: string | null,
+): Promise<FraudCardData> {
+  const sha256 = (result as unknown as { sha256?: string }).sha256;
+  if (!sha256) return result;
+  try {
+    const res = await fetch(`${API_BASE}/cases/${sha256}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) return result;
+    const enriched = (await res.json()) as Record<string, unknown>;
+    const merged: Record<string, unknown> = { ...(result as unknown as Record<string, unknown>) };
+    for (const key of INTEL_FIELDS) {
+      if (enriched[key] !== undefined && enriched[key] !== null) merged[key] = enriched[key];
+    }
+    return merged as unknown as FraudCardData;
+  } catch {
+    // A correlation lookup that fails must not fail the analysis the analyst is
+    // watching. Fall back to the uncorrelated result.
+    return result;
+  }
+}
+
 export function useAnalysisSession(onComplete: (data: FraudCardData) => void) {
   const navigate = useNavigate();
   const [phase, setPhase] = useState<AnalysisSessionState>('idle');
@@ -100,7 +150,7 @@ export function useAnalysisSession(onComplete: (data: FraudCardData) => void) {
         } else if (data.status === 'done' && data.result) {
           targetProgressRef.current = 100;
           setSmoothProgress(100);
-          return data.result as FraudCardData;
+          return await mergeCorrelatedIntel(data.result as FraudCardData, token);
         } else if (data.status === 'failed') {
           throw new Error(data.error || 'Analysis job failed');
         }

@@ -19,6 +19,7 @@ Usage:
     build_report(analysis_response_dict, apk_artifact_dir, output_path=Path("report.html"))
 """
 
+import hashlib
 import json
 import logging
 import re
@@ -26,6 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from sudarshan_core import brand as BRAND
 from sudarshan_core.visual_evidence.report_sections import (
     build_appendix_visual_html,
     build_executive_visual_html,
@@ -38,181 +40,519 @@ logger = logging.getLogger(__name__)
 # CSS - self-contained, dark screen theme + light print theme
 # ---------------------------------------------------------------------------
 
+from sudarshan_core.engines import report_theme as T
+
 _CSS = """
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#0d1117;--bg2:#161b22;--bg3:#1c2128;--bg4:#21262d;
-  --border:#30363d;--border2:#21262d;
-  --text:#e6edf3;--text2:#8b949e;--text3:#6e7681;
-  --blue:#58a6ff;--green:#3fb950;--yellow:#d29922;
-  --orange:#f0883e;--red:#f85149;--purple:#d2a8ff;
-  --radius:6px;--radius2:12px;
-  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
-  --font-mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+  --ink:%(INK)s;--ink-strong:%(INK_STRONG)s;--ink-muted:%(INK_MUTED)s;
+  --ink-faint:%(INK_FAINT)s;--ink-disabled:%(INK_DISABLED)s;
+  --paper:%(PAPER)s;--surface:%(SURFACE)s;--surface-inset:%(SURFACE_INSET)s;
+  --surface-sunk:%(SURFACE_SUNK)s;
+  --border:%(BORDER)s;--border-strong:%(BORDER_STRONG)s;--rule-hair:%(RULE_HAIR)s;
+  --accent:%(ACCENT)s;--accent-soft:%(ACCENT_SOFT)s;
+
+  --risk-critical:%(RISK_CRITICAL)s;--risk-high:%(RISK_HIGH)s;
+  --risk-suspicious:%(RISK_SUSPICIOUS)s;--risk-safe:%(RISK_SAFE)s;
+  --risk-neutral:%(RISK_NEUTRAL)s;
+  --tint-critical:%(TINT_CRITICAL)s;--tint-high:%(TINT_HIGH)s;
+  --tint-suspicious:%(TINT_SUSPICIOUS)s;--tint-safe:%(TINT_SAFE)s;
+  --tint-neutral:%(TINT_NEUTRAL)s;
+  --edge-critical:%(EDGE_CRITICAL)s;--edge-high:%(EDGE_HIGH)s;
+  --edge-suspicious:%(EDGE_SUSPICIOUS)s;--edge-safe:%(EDGE_SAFE)s;
+  --edge-neutral:%(EDGE_NEUTRAL)s;
+
+  --font:%(FONT_SANS)s;
+  --font-serif:%(FONT_SERIF)s;
+  --font-mono:%(FONT_MONO)s;
+
+  /* 4pt spacing scale - every gap in the document is a multiple of it */
+  --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:20px;--s6:24px;
+  --s7:32px;--s8:40px;--s9:56px;
+  --radius:2px;
+  --label:.6875rem;   /* 11px - all uppercase micro-labels */
 }
-body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;line-height:1.6}
-.container{max-width:1100px;margin:0 auto;padding:24px 16px}
-h1{font-size:1.6rem;font-weight:700}
-h2{font-size:1.15rem;font-weight:600;margin-bottom:12px}
-h3{font-size:.9rem;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
-p{color:var(--text2);margin-bottom:8px}
-code{font-family:var(--font-mono);font-size:.82em;background:var(--bg3);padding:1px 5px;border-radius:3px;color:var(--purple)}
-a{color:var(--blue);text-decoration:none}
 
-/* Layout */
-.section{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius2);padding:24px;margin-bottom:20px}
-.section-header{display:flex;align-items:center;gap:10px;margin-bottom:18px;padding-bottom:12px;border-bottom:1px solid var(--border)}
-.section-icon{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+html{-webkit-text-size-adjust:100%%}
+body{
+  font-family:var(--font-serif);background:var(--surface-inset);color:var(--ink);
+  font-size:14px;line-height:1.62;
+  font-variant-numeric:lining-nums;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
 
-/* Report header */
-.report-header{background:linear-gradient(135deg,#1a2332 0%,#0d1117 60%,#1a1420 100%);border:1px solid var(--border);border-radius:var(--radius2);padding:28px 32px;margin-bottom:20px}
-.report-meta{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px}
-.brand-mark{background:linear-gradient(135deg,#1f6feb,#388bfd);width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:900;color:#fff}
-.brand-name{font-size:1.1rem;font-weight:700;color:var(--blue)}
-.brand-sub{font-size:.75rem;color:var(--text3);text-transform:uppercase;letter-spacing:.08em}
-.report-brand{display:flex;align-items:center;gap:12px}
-.report-ts{font-size:.78rem;color:var(--text3);text-align:right}
-.app-identity{margin-top:20px}
-.app-name{font-size:1.4rem;font-weight:700;margin-bottom:4px}
-.app-pkg{font-family:var(--font-mono);font-size:.85rem;color:var(--text2)}
-.hash-row{display:flex;align-items:center;gap:8px;margin-top:10px;font-family:var(--font-mono);font-size:.78rem;color:var(--text3)}
+/* Page shell */
+.container{
+  max-width:1000px;margin:0 auto;background:var(--paper);
+  padding:var(--s9) var(--s8) var(--s8);
+  border-left:1px solid var(--border);border-right:1px solid var(--border);
+  min-height:100vh;
+}
 
-/* Score dial */
-.score-block{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius2);padding:20px 24px;display:flex;align-items:center;gap:24px}
-.dial-wrap{position:relative;width:90px;height:90px;flex-shrink:0}
-.dial-svg{width:90px;height:90px}
-.dial-track{fill:none;stroke:var(--border);stroke-width:8}
-.dial-fill{fill:none;stroke-width:8;stroke-linecap:round;transform:rotate(-90deg);transform-origin:45px 45px}
-.dial-value{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:1.3rem;font-weight:900;text-align:center;line-height:1}
-.dial-label{font-size:.6rem;color:var(--text3);letter-spacing:.05em;margin-top:2px}
-.score-detail{flex:1}
-.risk-band-badge{display:inline-block;padding:4px 14px;border-radius:20px;font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
-.band-critical{background:rgba(248,81,73,.15);color:#f85149;border:1px solid rgba(248,81,73,.35)}
-.band-high{background:rgba(240,136,62,.15);color:#f0883e;border:1px solid rgba(240,136,62,.35)}
-.band-medium{background:rgba(210,153,34,.15);color:#d29922;border:1px solid rgba(210,153,34,.35)}
-.band-safe{background:rgba(63,185,80,.15);color:#3fb950;border:1px solid rgba(63,185,80,.35)}
-.score-tagline{font-size:.95rem;font-weight:600;margin-bottom:6px}
-.score-subtext{font-size:.82rem;color:var(--text2)}
+/* Type */
+h1{font-family:var(--font-serif);font-size:1.75rem;font-weight:600;
+   line-height:1.25;color:var(--ink-strong);letter-spacing:-.01em}
+h2{font-family:var(--font);font-size:1.0625rem;font-weight:600;
+   color:var(--ink-strong);letter-spacing:-.005em;line-height:1.4}
+h3{font-family:var(--font);font-size:.8125rem;font-weight:700;
+   color:var(--ink-strong);letter-spacing:.01em;margin-bottom:var(--s3);
+   padding-bottom:var(--s2);border-bottom:1px solid var(--rule-hair)}
+h4{font-family:var(--font);font-size:.8125rem;font-weight:600;
+   color:var(--ink);margin-bottom:var(--s2)}
+/* Continuous prose is held to a 90-character measure; only tables and
+   evidence blocks are set to the full width of the text block. */
+p{color:var(--ink);margin-bottom:var(--s3);max-width:90ch}
+p:last-child{margin-bottom:0}
+strong,b{color:var(--ink-strong);font-weight:600}
+code{font-family:var(--font-mono);font-size:.8125em;background:var(--surface-inset);
+     padding:1px 5px;border-radius:var(--radius);color:var(--ink);
+     border:1px solid var(--rule-hair)}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--border-strong)}
 
-/* Verdict banner */
-.verdict-banner{border-radius:var(--radius);padding:14px 18px;margin-top:16px;display:flex;align-items:flex-start;gap:12px}
-.verdict-critical{background:rgba(248,81,73,.08);border-left:3px solid #f85149}
-.verdict-high{background:rgba(240,136,62,.08);border-left:3px solid #f0883e}
-.verdict-medium{background:rgba(210,153,34,.08);border-left:3px solid #d29922}
-.verdict-safe{background:rgba(63,185,80,.08);border-left:3px solid #3fb950}
-.verdict-icon{font-size:1.2rem;flex-shrink:0;margin-top:1px}
-.verdict-q{font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);margin-bottom:4px}
-.verdict-answer{font-size:.9rem;font-weight:600}
-.verdict-narrative{font-size:.84rem;color:var(--text2);margin-top:6px}
+/* Cover */
+.report-header{
+  border-bottom:1px solid var(--border-strong);
+  padding:0 0 var(--s7);margin-bottom:var(--s8);
+}
+/* Masthead band: brand left, document control right, 2pt rule beneath. */
+.report-meta{display:flex;align-items:center;justify-content:space-between;
+             gap:var(--s6);flex-wrap:wrap;
+             padding-bottom:var(--s4);
+             border-bottom:2px solid var(--ink-strong)}
+.report-brand{display:flex;align-items:center;gap:var(--s4)}
+/* The mark is the one image in the document's furniture. It is black line art
+   on transparency - the same single ink as the type beside it - so it prints,
+   photocopies and greyscales without turning to mush, which the colour
+   version of the mark would not. */
+.brand-mark{width:46px;height:46px;flex-shrink:0;display:block}
+.brand-mark-fallback{
+  width:46px;height:46px;border:1px solid var(--ink-strong);
+  color:var(--ink-strong);display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-serif);font-size:22px;font-weight:600;flex-shrink:0;
+}
+.brand-name{font-family:var(--font);font-size:1.5rem;font-weight:700;
+            color:var(--ink-strong);letter-spacing:.02em;
+            text-transform:uppercase;line-height:1.05}
+.brand-sub{font-family:var(--font);font-size:.8125rem;color:var(--ink-muted);
+           letter-spacing:.01em;margin-top:3px}
+.report-ts{font-family:var(--font);font-size:.6875rem;color:var(--ink-faint);
+           text-align:right;line-height:1.85}
+.report-ts b{color:var(--ink-strong);font-weight:600}
+.report-ts .doc-classification{letter-spacing:.04em}
 
-/* STEI */
-.stei-grid{display:flex;flex-direction:column;gap:10px}
-.stei-row{display:flex;align-items:center;gap:10px}
-.stei-label{font-size:.8rem;color:var(--text2);width:130px;flex-shrink:0}
-.stei-bar-track{flex:1;background:var(--bg4);border-radius:4px;height:8px;overflow:hidden}
-.stei-bar-fill{height:100%;border-radius:4px}
-.stei-score{font-size:.8rem;font-family:var(--font-mono);color:var(--text);width:38px;text-align:right;flex-shrink:0}
-.axis-ct .stei-bar-fill{background:linear-gradient(90deg,#f85149,#ff7b72)}
-.axis-bt .stei-bar-fill{background:linear-gradient(90deg,#d29922,#e3b341)}
-.axis-pr .stei-bar-fill{background:linear-gradient(90deg,#f0883e,#ffa657)}
-.axis-ob .stei-bar-fill{background:linear-gradient(90deg,#8b949e,#c9d1d9)}
-.axis-ir .stei-bar-fill{background:linear-gradient(90deg,#58a6ff,#79c0ff)}
+.app-identity{margin-top:var(--s7);padding-top:var(--s6);
+              border-top:1px solid var(--rule-hair)}
+.doc-kicker{font-size:var(--label);letter-spacing:.14em;text-transform:uppercase;
+            color:var(--ink-faint);margin-bottom:var(--s2)}
+.app-name{font-family:var(--font-serif);font-size:1.75rem;font-weight:600;
+          color:var(--ink-strong);line-height:1.25;margin-bottom:var(--s1)}
+.app-pkg{font-family:var(--font-mono);font-size:.8125rem;color:var(--ink-muted)}
+.hash-row{margin-top:var(--s3);font-family:var(--font-mono);font-size:.75rem;
+          color:var(--ink-faint);word-break:break-all}
 
-/* Info cards */
-.info-card{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);padding:12px 14px}
-.info-key{font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:3px}
-.info-val{font-size:.88rem;color:var(--text);word-break:break-all}
-.info-val-mono{font-family:var(--font-mono);font-size:.78rem}
+/* Verdict block. There is no dial: a dial encodes with angle, which reads
+   worse than position or length and cannot be read to a decimal place, and
+   the exact figure is printed here anyway. */
+.score-block{
+  display:grid;grid-template-columns:1fr;
+  gap:var(--s3);padding:var(--s5) 0;margin-top:var(--s6);
+  border-top:1px solid var(--border-strong);
+  border-bottom:1px solid var(--border-strong);
+}
+.score-figure{font-family:var(--font-serif);font-size:2rem;font-weight:600;
+              line-height:1;color:var(--ink-strong);
+              font-variant-numeric:lining-nums tabular-nums}
+.score-of{font-size:.8125rem;color:var(--ink-faint);margin-left:var(--s2)}
+.score-detail{min-width:0}
+.risk-band-badge{
+  font-family:var(--font);display:inline-block;padding:2px 0;
+  font-size:.8125rem;font-weight:700;text-transform:uppercase;
+  letter-spacing:.04em;margin-bottom:var(--s2);border:0;background:none;
+}
+.band-critical{background:var(--tint-critical);color:var(--risk-critical);border-color:var(--edge-critical)}
+.band-high{background:var(--tint-high);color:var(--risk-high);border-color:var(--edge-high)}
+.band-medium{background:var(--tint-suspicious);color:var(--risk-suspicious);border-color:var(--edge-suspicious)}
+.band-safe{background:var(--tint-safe);color:var(--risk-safe);border-color:var(--edge-safe)}
+.score-subtext{font-size:.8125rem;color:var(--ink-muted);max-width:90ch}
+.scope-note{font-size:.75rem;color:var(--ink-faint);line-height:1.65;
+            max-width:90ch;margin-top:var(--s4)}
+
+/* Verdict / advisory callout */
+/* A ruled block, not a tinted panel with a coloured edge. */
+.verdict-banner{
+  border:0;border-top:1px solid var(--border-strong);
+  border-bottom:1px solid var(--border-strong);
+  padding:var(--s5) 0;margin-top:var(--s4);
+  display:grid;grid-template-columns:1fr;gap:var(--s2);
+}
+.verdict-critical,.verdict-high,.verdict-medium,.verdict-safe{background:none}
+.verdict-icon{display:none}
+.verdict-q{font-size:var(--label);font-weight:700;text-transform:uppercase;
+           letter-spacing:.11em;color:var(--ink-faint)}
+.verdict-answer{font-size:.9375rem;font-weight:600;color:var(--ink-strong);line-height:1.55}
+.verdict-narrative{font-size:.8438rem;color:var(--ink-muted);line-height:1.75;max-width:76ch}
+
+/* Part dividers */
+.part{margin-top:var(--s9)}
+.part-divider{
+  display:grid;grid-template-columns:auto 1fr;align-items:baseline;
+  column-gap:var(--s5);row-gap:var(--s2);
+  border-top:2px solid var(--ink-strong);padding-top:var(--s4);
+  margin-bottom:var(--s6);
+}
+.part-label{
+  font-size:var(--label);font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--ink-faint);white-space:nowrap;
+}
+.part-title{font-family:var(--font-serif);font-size:1.25rem;font-weight:600;
+            color:var(--ink-strong)}
+.part-desc{grid-column:2;font-size:.8125rem;color:var(--ink-muted);
+           margin:0;max-width:76ch}
+
+/* Sections */
+/* A section is a run of the document, not a card floated on a ground. The
+   border and the inset padding both went: a page of outlined panels is
+   dashboard furniture, and it is the first thing that reads as generated. */
+.section{
+  background:var(--paper);padding:0;margin-bottom:var(--s7);
+}
+.section-header{
+  display:grid;grid-template-columns:1fr auto;align-items:baseline;
+  gap:var(--s4);margin-bottom:var(--s5);padding-bottom:var(--s3);
+  border-bottom:1px solid var(--border);
+}
+.section-icon{display:none}
+.section-note{font-size:var(--label);color:var(--ink-faint);letter-spacing:.06em;
+              text-transform:uppercase;white-space:nowrap;text-align:right}
+.section-lead{font-size:.8125rem;color:var(--ink-muted);margin-bottom:var(--s4)}
+
+.grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s3)}
+.grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--s3)}
+
+/* Key/value cards */
+.info-card{
+  background:var(--paper);border:0;border-top:1px solid var(--rule-hair);
+  padding:var(--s3) 0;
+  display:grid;grid-template-rows:auto 1fr;gap:var(--s1);align-content:start;
+}
+.info-key{font-size:.6875rem;font-weight:700;text-transform:uppercase;
+          letter-spacing:.09em;color:var(--ink-faint)}
+.info-val{font-size:.875rem;color:var(--ink-strong);word-break:break-word;line-height:1.5}
+.info-val-mono{font-family:var(--font-mono);font-size:.75rem}
 
 /* Tables */
-.data-table{width:100%;border-collapse:collapse;font-size:.83rem}
-.data-table th{text-align:left;padding:8px 10px;background:var(--bg3);color:var(--text3);font-weight:600;font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border)}
-.data-table td{padding:8px 10px;border-bottom:1px solid var(--border2);color:var(--text2);vertical-align:top}
-.data-table tr:last-child td{border-bottom:none}
+.data-table,.tbl{width:100%%;border-collapse:collapse;font-size:.8125rem}
+.data-table th,.tbl th{
+  font-family:var(--font);text-align:left;padding:var(--s2) var(--s3);
+  background:var(--surface-inset);color:var(--ink-strong);font-weight:700;
+  font-size:.6875rem;letter-spacing:.02em;
+  border-top:1px solid var(--border-strong);
+  border-bottom:1px solid var(--border-strong);white-space:nowrap;
+}
+.data-table td,.tbl td{
+  padding:var(--s3);border-bottom:1px solid var(--rule-hair);
+  color:var(--ink-muted);vertical-align:top;line-height:1.6;
+}
+.data-table tbody tr:last-child td,.tbl tbody tr:last-child td{
+  border-bottom:1px solid var(--border-strong);
+}
+/* Numerals in a table column align on the decimal point. */
+.data-table td,.tbl td,.col-num,.ledger-num,.stei-score{
+  font-variant-numeric:lining-nums tabular-nums;
+}
+.data-table td b,.tbl td b{color:var(--ink-strong)}
+.col-id{font-family:var(--font-mono);font-size:.75rem;color:var(--ink-faint);
+        white-space:nowrap;width:1%%}
+.col-num{text-align:right;font-family:var(--font-mono);white-space:nowrap;width:1%%}
 
-/* Permission / tag badges */
-.perm-grid{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
-.perm-tag{display:inline-block;padding:3px 9px;border-radius:12px;font-family:var(--font-mono);font-size:.72rem}
-.perm-danger{background:rgba(248,81,73,.12);color:#f85149;border:1px solid rgba(248,81,73,.25)}
-.perm-normal{background:var(--bg4);color:var(--text3);border:1px solid var(--border2)}
+/* Score ledger (deterministic contribution grid) */
+.ledger{display:grid;grid-template-columns:1fr;gap:0;
+        border-top:1px solid var(--border-strong)}
+.ledger-row{
+  display:grid;
+  grid-template-columns:minmax(130px,1.3fr) minmax(100px,1.6fr) 62px 62px 92px;
+  align-items:center;gap:var(--s4);
+  padding:var(--s3) 0;border-bottom:1px solid var(--rule-hair);
+}
+.ledger-head{
+  font-size:.625rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
+  color:var(--ink-faint);border-bottom:1px solid var(--border-strong);
+  align-items:end;line-height:1.4;
+}
+.ledger-head>span{min-width:0;overflow-wrap:anywhere}
+.ledger-head>span:nth-child(n+3){text-align:right}
+.ledger-name{font-size:.8125rem;color:var(--ink-strong);font-weight:600}
+.ledger-num{font-family:var(--font-mono);font-size:.8125rem;color:var(--ink-muted);
+            text-align:right}
+.ledger-num-strong{color:var(--ink-strong);font-weight:600}
+.ledger-total{border-bottom:none;border-top:1px solid var(--border-strong);
+              padding-top:var(--s4);margin-top:var(--s1)}
+.meter{background:var(--surface-sunk);border-radius:1px;height:6px;overflow:hidden}
+.meter-fill{height:100%%;background:var(--accent)}
 
-/* Finding cards */
-.finding{display:flex;gap:12px;padding:10px 12px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);margin-bottom:8px}
-.finding-id{font-family:var(--font-mono);font-size:.7rem;color:var(--text3);white-space:nowrap;padding-top:2px;min-width:80px}
-.finding-body{flex:1}
-.finding-title{font-size:.85rem;font-weight:600;color:var(--text);margin-bottom:2px}
-.finding-desc{font-size:.8rem;color:var(--text2)}
-.sev{display:inline-block;padding:1px 7px;border-radius:10px;font-size:.68rem;font-weight:700;text-transform:uppercase;margin-left:6px}
-.sev-critical{background:rgba(248,81,73,.15);color:#f85149}
-.sev-high{background:rgba(240,136,62,.15);color:#f0883e}
-.sev-medium{background:rgba(210,153,34,.15);color:#d29922}
-.sev-low{background:rgba(63,185,80,.15);color:#3fb950}
+/* STEI axes */
+.stei-grid{display:grid;grid-template-columns:1fr;gap:0;
+           border-top:1px solid var(--border-strong)}
+.stei-row{
+  display:grid;grid-template-columns:minmax(150px,180px) 1fr 52px;
+  align-items:center;gap:var(--s4);
+  padding:var(--s3) 0;border-bottom:1px solid var(--rule-hair);
+}
+.stei-row:last-child{border-bottom:none}
+.stei-label{font-size:.8125rem;color:var(--ink-strong);font-weight:600}
+.stei-bar-track{background:var(--surface-sunk);border-radius:1px;height:6px;overflow:hidden}
+.stei-bar-fill{height:100%%;background:var(--ink-muted)}
+.stei-score{font-family:var(--font-mono);font-size:.8125rem;color:var(--ink-strong);
+            text-align:right}
+.axis-ct .stei-bar-fill{background:var(--risk-critical)}
+.axis-bt .stei-bar-fill{background:var(--risk-high)}
+.axis-pr .stei-bar-fill{background:var(--risk-suspicious)}
+.axis-ob .stei-bar-fill{background:var(--ink-faint)}
+.axis-ir .stei-bar-fill{background:var(--accent)}
 
-/* MITRE chips */
-.mitre-grid{display:flex;flex-wrap:wrap;gap:8px}
-.mitre-chip{background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.2);border-radius:var(--radius);padding:6px 10px}
-.mitre-id{font-family:var(--font-mono);font-size:.75rem;color:var(--blue);font-weight:700}
-.mitre-name{font-size:.78rem;color:var(--text2);margin-top:2px}
+/* Tags */
+.perm-grid{display:flex;flex-wrap:wrap;gap:var(--s2)}
+.perm-tag{
+  display:inline-block;padding:2px 9px;border-radius:var(--radius);
+  font-family:var(--font-mono);font-size:.6875rem;line-height:1.7;
+  border:1px solid var(--border);background:var(--surface);color:var(--ink-muted);
+}
+.perm-danger{background:var(--tint-high);color:var(--risk-high);border-color:var(--edge-high)}
+.perm-normal{background:var(--surface);color:var(--ink-muted);border-color:var(--border)}
 
-/* Dynamic / state-aware banner */
-.dynamic-status-banner{background:rgba(139,148,158,.05);border:1px dashed var(--border);border-radius:var(--radius);padding:20px 24px;text-align:center}
-.dynamic-status-title{font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);margin-bottom:10px}
-.dynamic-status-code{font-family:var(--font-mono);font-size:.88rem;color:#d29922;margin-bottom:12px}
-.dynamic-status-detail{font-size:.82rem;color:var(--text3);line-height:1.7}
+/* Findings */
+.finding{
+  display:grid;grid-template-columns:82px 1fr;gap:var(--s4);
+  padding:var(--s3) 0;border-bottom:1px solid var(--rule-hair);
+}
+.finding:last-child{border-bottom:none}
+.finding-id{font-family:var(--font-mono);font-size:.6875rem;color:var(--ink-faint);
+            white-space:nowrap;padding-top:2px}
+.finding-body{min-width:0}
+.finding-title{font-size:.875rem;font-weight:600;color:var(--ink-strong);
+               margin-bottom:2px;line-height:1.5;word-break:break-word}
+.finding-desc{font-size:.8125rem;color:var(--ink-muted);line-height:1.65;max-width:76ch}
+.sev{
+  display:inline-block;padding:0 7px;border-radius:var(--radius);
+  font-size:.625rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;
+  margin-left:var(--s2);vertical-align:1px;border:1px solid;line-height:1.7;
+}
+.sev-critical{background:var(--tint-critical);color:var(--risk-critical);border-color:var(--edge-critical)}
+.sev-high{background:var(--tint-high);color:var(--risk-high);border-color:var(--edge-high)}
+.sev-medium{background:var(--tint-suspicious);color:var(--risk-suspicious);border-color:var(--edge-suspicious)}
+.sev-low{background:var(--tint-safe);color:var(--risk-safe);border-color:var(--edge-safe)}
+
+/* MITRE */
+.mitre-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));
+            gap:var(--s2)}
+.mitre-chip{background:var(--paper);border:0;
+            border-top:1px solid var(--rule-hair);padding:var(--s2) 0}
+.mitre-id{font-family:var(--font-mono);font-size:.75rem;color:var(--accent);font-weight:600}
+.mitre-name{font-size:.75rem;color:var(--ink-muted);margin-top:2px;line-height:1.5}
+
+/* State banners */
+.dynamic-status-banner{
+  background:none;border:0;border-top:1px solid var(--border-strong);
+  border-bottom:1px solid var(--border-strong);padding:var(--s5) 0;
+}
+.dynamic-status-title{font-size:var(--label);font-weight:700;text-transform:uppercase;
+                      letter-spacing:.11em;color:var(--ink-faint);margin-bottom:var(--s2)}
+.dynamic-status-code{font-family:var(--font-mono);font-size:.8125rem;
+                     color:var(--risk-suspicious);margin-bottom:var(--s3)}
+.dynamic-status-detail{font-size:.8125rem;color:var(--ink-muted);line-height:1.8;max-width:80ch}
+.qualifier{
+  background:none;border:0;border-top:1px solid var(--border-strong);
+  border-bottom:1px solid var(--border-strong);
+  padding:var(--s4) 0;margin-bottom:var(--s4);
+}
+.qualifier-title{font-size:var(--label);font-weight:700;text-transform:uppercase;
+                 letter-spacing:.11em;color:var(--risk-suspicious);margin-bottom:var(--s1)}
+.qualifier-body{font-size:.8125rem;line-height:1.7;color:var(--ink-muted);max-width:80ch}
 
 /* Timeline */
-.timeline{position:relative;padding-left:28px}
-.timeline::before{content:"";position:absolute;left:10px;top:0;bottom:0;width:1px;background:var(--border)}
-.tl-event{position:relative;margin-bottom:12px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 12px}
-.tl-event::before{content:"";position:absolute;left:-22px;top:14px;width:8px;height:8px;border-radius:50%;background:var(--blue);border:2px solid var(--bg)}
-.tl-ts{font-family:var(--font-mono);font-size:.7rem;color:var(--text3)}
-.tl-api{font-family:var(--font-mono);font-size:.82rem;color:var(--purple);font-weight:600}
-.tl-desc{font-size:.8rem;color:var(--text2);margin-top:2px}
+.timeline{border-left:1px solid var(--border);padding-left:var(--s5);
+          margin-left:var(--s1)}
+.tl-event{position:relative;padding:var(--s3) 0;
+          border-bottom:1px solid var(--rule-hair)}
+.tl-event:last-child{border-bottom:none}
+.tl-event::before{content:"";position:absolute;left:calc(-1 * var(--s5) - 3px);
+                  top:20px;width:5px;height:5px;border-radius:50%%;
+                  background:var(--ink-faint)}
+.tl-ts{font-family:var(--font-mono);font-size:.6875rem;color:var(--ink-faint);
+       margin-bottom:2px}
+.tl-api{font-family:var(--font-mono);font-size:.8125rem;color:var(--ink-strong);
+        font-weight:600;word-break:break-word}
+.tl-desc{font-size:.8125rem;color:var(--ink-muted);margin-top:2px;
+         line-height:1.65;max-width:76ch}
 
-/* Threat intel */
-.intel-stat{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);padding:14px;text-align:center}
-.intel-num{font-size:1.5rem;font-weight:900;line-height:1}
-.intel-sub{font-size:.72rem;color:var(--text3);text-transform:uppercase;margin-top:4px}
-.rep-malicious{color:#f85149}
-.rep-suspicious{color:#f0883e}
-.rep-clean{color:#3fb950}
-.rep-unknown{color:var(--text3)}
+/* Stat tiles */
+.intel-stat{
+  background:var(--paper);border:0;border-top:1px solid var(--border-strong);
+  padding:var(--s3) 0;display:grid;gap:var(--s1);align-content:start;
+  text-align:left;
+}
+.intel-num{font-family:var(--font-serif);font-size:1.5rem;font-weight:600;
+           line-height:1.1;color:var(--ink-strong)}
+.intel-sub{font-size:.6875rem;color:var(--ink-faint);text-transform:uppercase;
+           letter-spacing:.09em;font-weight:700}
+.rep-malicious{color:var(--risk-critical)}
+.rep-suspicious{color:var(--risk-suspicious)}
+.rep-clean{color:var(--risk-safe)}
+.rep-unknown{color:var(--ink-faint)}
 
 /* Recommendations */
-.rec-list{list-style:none;display:flex;flex-direction:column;gap:8px}
-.rec-item{display:flex;gap:10px;align-items:flex-start;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 12px}
-.rec-num{background:rgba(88,166,255,.15);color:var(--blue);border-radius:50%;width:20px;height:20px;min-width:20px;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;flex-shrink:0;margin-top:1px}
-.rec-text{font-size:.84rem;color:var(--text2)}
+.rec-list{list-style:none;display:grid;grid-template-columns:1fr;gap:0;
+          border-top:1px solid var(--border-strong)}
+.rec-item{display:grid;grid-template-columns:28px 1fr;gap:var(--s3);
+          align-items:baseline;padding:var(--s3) 0;
+          border-bottom:1px solid var(--rule-hair)}
+.rec-item:last-child{border-bottom:none}
+.rec-num{font-family:var(--font-mono);font-size:.75rem;font-weight:700;
+         color:var(--ink-faint)}
+.rec-text{font-size:.875rem;color:var(--ink-muted);line-height:1.7;max-width:76ch}
 
-/* Utility */
-.mt8{margin-top:8px}.mt12{margin-top:12px}.mt16{margin-top:16px}
-.mb8{margin-bottom:8px}
-.no-data{color:var(--text3);font-style:italic;font-size:.82rem;padding:8px 0}
+/* Screenshot plates */
+.gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
+              gap:var(--s5);margin-top:var(--s4)}
+.gallery-card{
+  background:var(--paper);border:1px solid var(--border);border-radius:var(--radius);
+  display:grid;grid-template-rows:auto auto 1fr;overflow:hidden;
+}
+.scr-header{
+  display:grid;grid-template-columns:auto 1fr;align-items:baseline;
+  gap:var(--s3);padding:var(--s3) var(--s4);
+  border-bottom:1px solid var(--border);background:var(--surface-inset);
+}
+.scr-id{font-family:var(--font-mono);font-size:.6875rem;font-weight:700;
+        color:var(--ink-faint);letter-spacing:.04em;white-space:nowrap}
+.scr-label{font-size:.8125rem;font-weight:600;color:var(--ink-strong);
+           text-align:right;word-break:break-word}
+.scr-body{
+  display:flex;align-items:center;justify-content:center;
+  padding:var(--s4);background:var(--surface-inset);
+  border-bottom:1px solid var(--border);min-height:180px;
+}
+.scr-img{max-width:100%%;max-height:340px;object-fit:contain;display:block;
+         border:1px solid var(--border-strong);background:var(--paper)}
+/* Metadata is a two-column definition grid: every label sits on the same
+   left edge and every value on the same one, plate to plate. */
+.scr-meta{display:grid;grid-template-columns:auto 1fr;
+          column-gap:var(--s4);row-gap:var(--s2);
+          padding:var(--s4);align-content:start}
+.scr-meta dt{font-size:.6875rem;font-weight:700;text-transform:uppercase;
+             letter-spacing:.09em;color:var(--ink-faint);white-space:nowrap;
+             line-height:1.6}
+.scr-meta dd{font-size:.8125rem;color:var(--ink);line-height:1.6;
+             word-break:break-word;min-width:0}
+.scr-meta dd.mono{font-family:var(--font-mono);font-size:.75rem;color:var(--ink-muted)}
+.scr-caption{grid-column:1 / -1;font-size:.8125rem;color:var(--ink-muted);
+             line-height:1.7;padding-top:var(--s3);
+             border-top:1px solid var(--rule-hair)}
+.scr-tags{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:var(--s1);
+          padding-top:var(--s1)}
+.grade{display:inline-block;min-width:20px;text-align:center;padding:0 6px;
+       border:1px solid;border-radius:var(--radius);font-size:.6875rem;
+       font-weight:700;letter-spacing:.06em;line-height:1.7}
+.grade-a{background:var(--tint-safe);color:var(--risk-safe);border-color:var(--edge-safe)}
+.grade-b{background:var(--tint-neutral);color:var(--ink-muted);border-color:var(--edge-neutral)}
+.grade-c{background:var(--tint-suspicious);color:var(--risk-suspicious);border-color:var(--edge-suspicious)}
 
-/* Visual Gallery */
-.gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:12px}
-.gallery-card{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);overflow:hidden;display:flex;flex-direction:column}
-.scr-header{padding:8px 12px;background:var(--bg4);border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;font-size:.78rem}
-.scr-id{font-family:var(--font-mono);font-weight:700;color:var(--blue)}
-.scr-label{color:var(--text2);font-weight:600}
-.scr-body{padding:10px;display:flex;align-items:center;justify-content:center;background:#000;min-height:160px}
-.scr-img{max-width:100%;max-height:320px;object-fit:contain;border-radius:4px;border:1px solid var(--border)}
-.scr-meta{padding:8px 12px;background:var(--bg3);border-top:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;font-size:.72rem;color:var(--text3)}
+/* Full-width evidence plate: image beside metadata, both top-aligned. */
+.plate{display:grid;grid-template-columns:minmax(200px,240px) 1fr;
+       gap:var(--s6);align-items:start;padding:var(--s5) 0;
+       border-bottom:1px solid var(--rule-hair)}
+.plate:last-of-type{border-bottom:none}
+.plate-figure{margin:0;display:grid;gap:var(--s2)}
+.plate-figure img{width:100%%;display:block;border:1px solid var(--border-strong);
+                  background:var(--surface-inset)}
+.plate-figure figcaption{font-family:var(--font-mono);font-size:.6875rem;
+                         color:var(--ink-faint);letter-spacing:.04em}
+.plate-body{min-width:0;display:grid;gap:var(--s3);align-content:start}
+.plate-claim{font-size:.875rem;color:var(--ink-strong);line-height:1.65;
+             font-weight:600;max-width:70ch}
+.plate-meta{display:grid;grid-template-columns:auto 1fr;
+            column-gap:var(--s5);row-gap:var(--s2);
+            border-top:1px solid var(--rule-hair);padding-top:var(--s3)}
+.plate-meta dt{font-size:.6875rem;font-weight:700;text-transform:uppercase;
+               letter-spacing:.09em;color:var(--ink-faint);white-space:nowrap;
+               line-height:1.6}
+.plate-meta dd{font-size:.8125rem;color:var(--ink);line-height:1.6;min-width:0;
+               word-break:break-word}
 
 /* Footer */
-.report-footer{text-align:center;padding:20px;font-size:.75rem;color:var(--text3);border-top:1px solid var(--border);margin-top:8px}
-
-/* Print */
-@media print{
-  :root{--bg:#fff;--bg2:#f8f9fa;--bg3:#f0f2f4;--bg4:#e8eaed;--border:#d0d7de;--border2:#e8eaed;--text:#24292f;--text2:#57606a;--text3:#8c959f}
-  body{background:#fff;color:#24292f;font-size:12px}
-  .container{max-width:100%;padding:8px}
-  .section{break-inside:avoid;margin-bottom:12px}
-  .brand-mark,.dial-fill,.stei-bar-fill,.risk-band-badge,.sev,.perm-tag,.mitre-chip,.dynamic-status-code{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.report-footer{
+  margin-top:var(--s9);padding-top:var(--s5);
+  border-top:2px solid var(--ink-strong);
+  font-size:.75rem;color:var(--ink-faint);line-height:1.9;
 }
-"""
+.report-footer .fine{display:block;margin-top:var(--s2);color:var(--ink-disabled)}
+
+/* Utility */
+.mt8{margin-top:var(--s2)}.mt12{margin-top:var(--s3)}.mt16{margin-top:var(--s4)}
+.mb8{margin-bottom:var(--s2)}
+.muted{color:var(--ink-faint)}
+.no-data{color:var(--ink-disabled);font-size:.8125rem;padding:var(--s2) 0;display:inline-block}
+
+/* Print / PDF */
+@page{
+  size:A4;
+  margin:25mm 20mm 22mm 28mm;
+  @top-left{content:string(report-id);font-size:8pt;color:#3D4655}
+  @top-center{content:string(classification);font-size:8pt;color:#3D4655}
+  @top-right{content:"Page " counter(page) " of " counter(pages);
+             font-size:8pt;color:#3D4655}
+  @bottom-center{content:"Uncontrolled when printed";font-size:7pt;color:#6B7280}
+}
+/* The running head reads these from the cover block, so a printed extract
+   still carries its case reference and its handling marking. */
+.doc-report-id{string-set:report-id content()}
+.doc-classification{string-set:classification content()}
+@media print{
+  body{background:var(--paper);font-size:10.5pt;line-height:1.24}
+  .container{max-width:100%%;padding:0;border:none;min-height:0}
+  .section{border:0;padding:0;margin-bottom:14pt;break-inside:avoid}
+  .part{margin-top:0;break-before:page}
+  .report-header{break-after:avoid}
+  .part-divider{break-after:avoid}
+  .section-header,h3,h4{break-after:avoid}
+  table,.finding,.ledger-row,.stei-row,.gallery-card,.plate{break-inside:avoid}
+  thead{display:table-header-group}
+  a{color:var(--ink);border-bottom:none}
+  .scr-img{max-height:200pt}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+
+@media (max-width:760px){
+  .container{padding:var(--s6) var(--s4)}
+  .grid-2,.grid-3,.score-block,.plate{grid-template-columns:1fr}
+  .ledger-row{grid-template-columns:1fr 1fr;row-gap:var(--s2)}
+  .part-divider{grid-template-columns:1fr}
+  .part-desc{grid-column:1}
+  /* Dense forensic tables cannot narrow past their content. Let the section
+     scroll them rather than the page: a document that scrolls sideways as a
+     whole loses the left margin every other section is aligned to. */
+  .section{overflow-x:auto}
+  .scr-meta,.plate-meta{grid-template-columns:1fr;row-gap:0}
+  .scr-meta dt,.plate-meta dt{padding-top:var(--s2)}
+}
+""" % {
+    "INK": T.INK, "INK_STRONG": T.INK_STRONG, "INK_MUTED": T.INK_MUTED,
+    "INK_FAINT": T.INK_FAINT, "INK_DISABLED": T.INK_DISABLED,
+    "PAPER": T.PAPER, "SURFACE": T.SURFACE, "SURFACE_INSET": T.SURFACE_INSET,
+    "SURFACE_SUNK": T.SURFACE_SUNK,
+    "BORDER": T.BORDER, "BORDER_STRONG": T.BORDER_STRONG, "RULE_HAIR": T.RULE_HAIR,
+    "ACCENT": T.ACCENT, "ACCENT_SOFT": T.ACCENT_SOFT,
+    "RISK_CRITICAL": T.RISK_CRITICAL, "RISK_HIGH": T.RISK_HIGH,
+    "RISK_SUSPICIOUS": T.RISK_SUSPICIOUS, "RISK_SAFE": T.RISK_SAFE,
+    "RISK_NEUTRAL": T.RISK_NEUTRAL,
+    "TINT_CRITICAL": T.TINT_CRITICAL, "TINT_HIGH": T.TINT_HIGH,
+    "TINT_SUSPICIOUS": T.TINT_SUSPICIOUS, "TINT_SAFE": T.TINT_SAFE,
+    "TINT_NEUTRAL": T.TINT_NEUTRAL,
+    "EDGE_CRITICAL": T.EDGE_CRITICAL, "EDGE_HIGH": T.EDGE_HIGH,
+    "EDGE_SUSPICIOUS": T.EDGE_SUSPICIOUS, "EDGE_SAFE": T.EDGE_SAFE,
+    "EDGE_NEUTRAL": T.EDGE_NEUTRAL,
+    "FONT_SANS": T.FONT_SANS, "FONT_SERIF": T.FONT_SERIF, "FONT_MONO": T.FONT_MONO,
+}
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -262,29 +602,29 @@ def _verdict_css(band: str) -> str:
 
 
 def _verdict_icon(band: str) -> str:
-    b = band.lower()
-    if "critical" in b: return "&#x1F6A8;"   # 🚨
-    if "high" in b: return "&#x26A0;&#xFE0F;"  # ⚠️
-    if "suspicious" in b or "medium" in b: return "&#x1F536;"  # 🔶
-    return "&#x2705;"  # ✅
+    """Retained for call-site compatibility. The dossier carries no pictograms."""
+    return ""
 
 
 def _verdict_answer(band: str) -> str:
     b = band.lower()
     if "critical" in b:
-        return "NO &#x2014; This application is highly likely to be malicious and should not be trusted."
+        return ("NOT TRUSTED &#x2014; the evidence below is consistent with an "
+                "operational banking trojan. Treat every device that ran this "
+                "package as compromised.")
     if "high" in b:
-        return "LIKELY NOT &#x2014; High-risk behaviors consistent with banking fraud were detected."
+        return ("NOT TRUSTED &#x2014; capabilities and indicators consistent with "
+                "banking fraud are present. Withhold trust pending containment.")
     if "suspicious" in b or "medium" in b:
-        return "EXERCISE CAUTION &#x2014; Suspicious characteristics detected; further investigation recommended."
-    return "LIKELY SAFE &#x2014; No significant threat indicators detected in this analysis."
+        return ("QUALIFIED &#x2014; indicators warrant scrutiny but fall short of a "
+                "fraud determination on this evidence. Escalate for analyst review.")
+    return ("NO ADVERSE FINDING &#x2014; this run surfaced no indicator meeting the "
+            "threshold for a fraud determination. The scope statement below "
+            "bounds that conclusion.")
 
 
 def _score_color(score: float) -> str:
-    if score >= 90: return "#f85149"
-    if score >= 60: return "#f0883e"
-    if score >= 30: return "#d29922"
-    return "#3fb950"
+    return T.score_ink(score)
 
 
 def _sev_class(sev: str) -> str:
@@ -453,17 +793,72 @@ def _render_investigation(r: Any, idx: Any) -> str:
 
 
 def _section_header(icon: str, icon_bg: str, title: str, subtitle: str = "") -> str:
-    sub = (f'<span style="font-size:.78rem;color:var(--text3);margin-left:6px">'
-           f'{_esc(subtitle)}</span>') if subtitle else ""
+    """
+    Section rule: title left, run qualifier right, hairline underneath.
+
+    `icon` / `icon_bg` are accepted and ignored. Every call site passed an emoji
+    and a translucent neon wash; both are gone from the dossier, and dropping
+    the parameters would have meant editing twenty call sites for no gain.
+    Subtitles arrive already entity-encoded from several call sites, so they are
+    emitted verbatim rather than double-escaped.
+    """
+    note = f'<span class="section-note">{subtitle}</span>' if subtitle else "<span></span>"
     return (
         f'<div class="section-header">'
-        f'<div class="section-icon" style="background:{icon_bg}">{icon}</div>'
-        f'<h2 style="margin:0">{_esc(title)}{sub}</h2>'
+        f'<h2>{_esc(title)}</h2>'
+        f'{note}'
         f'</div>'
     )
 
 
+def _part(label: str, title: str, description: str) -> str:
+    """Opens a numbered part of the dossier. Forces a page break in print."""
+    return (
+        f'<div class="part">'
+        f'<div class="part-divider">'
+        f'<div class="part-label">{_esc(label)}</div>'
+        f'<div class="part-title">{_esc(title)}</div>'
+        f'<p class="part-desc">{_esc(description)}</p>'
+        f'</div>'
+    )
+
+
+def _part_end() -> str:
+    return "</div>"
+
+
+DOCUMENT_CLASSIFICATION = "CONFIDENTIAL &mdash; TLP:AMBER"
+
+
+def _brand_mark_html() -> str:
+    """
+    The mark, inlined as a data URI.
+
+    This export is a single file that has to survive being emailed with no
+    network behind it, so the mark travels in the document rather than beside
+    it. If the asset is missing the masthead falls back to a ruled monogram
+    and the report still renders - a dossier without its logo is still a
+    dossier, one that fails to export is not.
+    """
+    uri = BRAND.mark_data_uri(small=True)
+    if not uri:
+        return '<div class="brand-mark-fallback" aria-hidden="true">S</div>'
+    return (f'<img class="brand-mark" src="{uri}" alt="" width="46" height="46">')
+
+
 def _build_header(r: Dict, ts: str) -> str:
+    """
+    The cover block: what the document is, what it examined, and what it found.
+
+    The verdict used to open on a 104px dial. A dial encodes its value with
+    angle - third in Cleveland and McGill's ordering of the elementary
+    perceptual tasks, behind position and length - and it cannot be read to a
+    decimal place. In an evidentiary document the reader does not need to
+    estimate the score at all: the figure is printed, and the arithmetic that
+    produced it is printed under it in the score ledger. What replaced the dial
+    is the figure, the band with its position on the four-step scale, and the
+    determination as a sentence.
+    """
     pkg = _esc(_get(r, "package_name", default="Unknown"))
     app = _esc(_get(r, "app_name") or _get(r, "package_name", default="Unknown"))
     sha = _esc(_get(r, "sha256", default=""))
@@ -472,13 +867,12 @@ def _build_header(r: Dict, ts: str) -> str:
     conf = float(_get(r, "confidence", default=70))
     action = _esc(_get(r, "recommended_action", default=""))
     mode = _esc(_get(r, "analysis_mode", default="androguard"))
+    case_id = _esc(_get(r, "case_id", default="") or
+                   _get(r, "job_id", default="") or "unassigned")
 
-    circ = 251.3
-    offset = circ * (1.0 - min(frs, 100.0) / 100.0)
-    dial_col = _score_color(frs)
+    band_phrase = _esc(T.band_label(band))
     band_css = _band_css(band)
     verdict_css = _verdict_css(band)
-    v_icon = _verdict_icon(band)
     v_answer = _verdict_answer(band)
 
     intel = _get(r, "intelligence_report") or {}
@@ -489,55 +883,63 @@ def _build_header(r: Dict, ts: str) -> str:
 
     narrative_html = f'<div class="verdict-narrative">{narrative}</div>' if narrative else ""
 
+    sha_display = f"{sha[:32]}&#8203;{sha[32:]}" if len(sha) > 32 else (sha or "not recorded")
+
     return (
         f'<div class="report-header">'
         f'<div class="report-meta">'
         f'<div class="report-brand">'
-        f'<div class="brand-mark">S</div>'
-        f'<div><div class="brand-name">Sudarshan</div>'
-        f'<div class="brand-sub">Banking Malware Intelligence Platform</div></div>'
+        f'{_brand_mark_html()}'
+        f'<div><div class="brand-name">{BRAND.WORDMARK}</div>'
+        f'<div class="brand-sub">{BRAND.DESCRIPTOR}</div></div>'
         f'</div>'
-        f'<div class="report-ts">Generated: {_esc(ts)}<br>Mode: <code>{mode}</code><br>Confidence: {conf:.0f}%</div>'
+        f'<div class="report-ts">'
+        f'Reference <b class="doc-report-id">{case_id}</b><br>'
+        f'Issued <b>{_esc(ts)}</b><br>'
+        f'Analysis mode <b>{mode}</b><br>'
+        f'Confidence <b>{conf:.0f}%</b><br>'
+        f'<b class="doc-classification">{DOCUMENT_CLASSIFICATION}</b>'
+        f'</div>'
         f'</div>'
         f'<div class="app-identity">'
+        f'<div class="doc-kicker">Threat Investigation Report</div>'
         f'<div class="app-name">{app}</div>'
         f'<div class="app-pkg">{pkg}</div>'
-        f'<div class="hash-row">SHA-256: {sha[:16]}&hellip;{sha[-8:] if len(sha) > 24 else sha}</div>'
+        f'<div class="hash-row">SHA-256 {sha_display}</div>'
         f'</div>'
-        f'<div class="score-block mt16">'
-        f'<div class="dial-wrap">'
-        f'<svg class="dial-svg" viewBox="0 0 90 90">'
-        f'<circle class="dial-track" cx="45" cy="45" r="36"/>'
-        f'<circle class="dial-fill" cx="45" cy="45" r="36"'
-        f' stroke="{dial_col}"'
-        f' stroke-dasharray="{circ:.1f}"'
-        f' stroke-dashoffset="{offset:.1f}"/>'
-        f'</svg>'
-        f'<div class="dial-value" style="color:{dial_col}">'
-        f'{frs:.0f}<div class="dial-label">/ 100</div>'
-        f'</div>'
-        f'</div>'
+        f'<div class="score-block">'
         f'<div class="score-detail">'
-        f'<span class="risk-band-badge {band_css}">{_esc(band)}</span>'
-        f'<div class="score-tagline">Fraud Risk Score (FRS): <strong>{frs:.1f}</strong></div>'
-        f'<div class="score-subtext">{action}</div>'
+        f'<span class="risk-band-badge {band_css}">{band_phrase}</span>'
+        f'<div><span class="score-figure">{frs:.1f}</span>'
+        f'<span class="score-of">of 100 &mdash; verdict score, computed by the '
+        f'fixed formula in the score ledger below</span></div>'
+        f'<div class="score-subtext mt8">{action}</div>'
         f'</div>'
         f'</div>'
         f'<div class="verdict-banner {verdict_css}">'
-        f'<div class="verdict-icon">{v_icon}</div>'
-        f'<div>'
-        f'<div class="verdict-q">Should this application be trusted?</div>'
+        f'<div class="verdict-q">Determination</div>'
         f'<div class="verdict-answer">{v_answer}</div>'
         f'{narrative_html}'
         f'</div>'
-        f'</div>'
+        f'<p class="scope-note">The results relate only to the item identified '
+        f'above, as submitted. They do not extend to any other build, version '
+        f'or repackaging of the same application. A section recording an '
+        f'absence of evidence records exactly that and is not a finding that '
+        f'the sample is benign. Severity is stated on a four-step ordinal '
+        f'scale &mdash; SAFE (1 of 4), SUSPICIOUS (2 of 4), HIGH (3 of 4), '
+        f'CRITICAL (4 of 4) &mdash; and colour is never the only thing '
+        f'carrying it.</p>'
         f'</div>'
     )
 
 
 def _build_stei(r: Dict) -> str:
     frs_bd = _get(r, "frs_breakdown") or {}
-    axes = _get(frs_bd, "stei_axes") or {}
+    raw_axes = _get(frs_bd, "stei_axes") or {}
+    # risk_engine emits lowercase axis keys; older persisted cases and the test
+    # fixtures use uppercase. Reading only one spelling rendered every axis at
+    # zero next to a non-zero STEI total, which is an unexplained number.
+    axes = {str(k).upper(): v for k, v in raw_axes.items()} if raw_axes else {}
 
     if not axes:
         ct = 0.0
@@ -553,18 +955,26 @@ def _build_stei(r: Dict) -> str:
         }
 
     axis_defs = [
-        ("CT", "Credential Theft", "axis-ct"),
-        ("BT", "Banking Targeting", "axis-bt"),
-        ("PR", "Permission Risk", "axis-pr"),
-        ("OB", "Obfuscation", "axis-ob"),
-        ("IR", "Infrastructure Risk", "axis-ir"),
+        ("CT", "Credential Theft", "axis-ct", 0.60),
+        ("BT", "Banking Targeting", "axis-bt", 0.20),
+        ("PR", "Permission Risk", "axis-pr", 0.10),
+        ("OB", "Obfuscation", "axis-ob", 0.05),
+        ("IR", "Infrastructure Risk", "axis-ir", 0.05),
     ]
-    rows = ""
-    for key, label, cls in axis_defs:
+    dropped = {str(a).upper() for a in (_get(frs_bd, "stei_axes_excluded") or [])}
+
+    rows = (
+        '<div class="stei-row ledger-head">'
+        '<span>Axis</span><span></span><span>Score</span>'
+        '</div>'
+    )
+    for key, label, cls, weight in axis_defs:
         val = float(axes.get(key, 0))
+        note = " &mdash; not scored" if key in dropped else f" &mdash; weight {weight:.2f}"
         rows += (
             f'<div class="stei-row {cls}">'
-            f'<div class="stei-label">{label}</div>'
+            f'<div class="stei-label">{label}'
+            f'<span class="muted" style="font-weight:400">{note}</span></div>'
             f'<div class="stei-bar-track">'
             f'<div class="stei-bar-fill" style="width:{min(val, 100):.1f}%"></div>'
             f'</div>'
@@ -573,13 +983,300 @@ def _build_stei(r: Dict) -> str:
         )
 
     formula = _get(frs_bd, "formula_used", default="static_only_frs")
-    formula_label = "Dynamic-Weighted FRS" if "dynamic" in str(formula) else "Static-Only FRS"
+    formula_label = ("Dynamic-weighted formula" if "dynamic" in str(formula)
+                     else "Static-only formula")
 
     return (
         f'<div class="section">'
-        + _section_header("&#x1F4CA;", "rgba(88,166,255,.15)", "5-Axis STEI Breakdown", formula_label)
+        + _section_header("", "", "Five-Axis STEI Breakdown", formula_label)
+        + '<p class="section-lead">Each axis scores 0&ndash;100 against its own '
+          'evidence set. An axis marked <em>not scored</em> carried no evidence '
+          'in this run and was dropped from the weighting rather than recorded '
+          'as a zero.</p>'
         + f'<div class="stei-grid">{rows}</div>'
         f'</div>'
+    )
+
+
+_AXIS_LABELS = {
+    "stei": "Static Threat Evidence Index (STEI)",
+    "dynamic": "Runtime behaviour (BFCI)",
+    "correlation": "External threat-intelligence correlation",
+    "banking_impact": "Banking impact assessment",
+    "vide": "Visual impersonation (VIDE)",
+}
+
+
+def _build_score_ledger(r: Dict) -> str:
+    """
+    Risk contributors: which axes were scored, at what renormalised weight, and
+    what each one contributed to the verdict score. This is the arithmetic the
+    verdict rests on, printed so a reviewer can reproduce it by hand.
+    """
+    frs_bd = _get(r, "frs_breakdown") or {}
+    weights = _get(frs_bd, "axes_used") or {}
+    excluded = _get(frs_bd, "axes_excluded") or []
+    frs = float(_get(r, "final_risk_score", default=0))
+    multiplier = float(_get(r, "ai_confidence_multiplier", default=1.0) or 1.0)
+
+    if not weights and not excluded:
+        return ""
+
+    rows = (
+        '<div class="ledger-row ledger-head">'
+        '<span>Contributor</span><span>Share of verdict</span>'
+        '<span>Score</span><span>Weight</span><span>Contribution</span>'
+        '</div>'
+    )
+    running = 0.0
+    for axis, weight in weights.items():
+        raw = float(_get(frs_bd, axis, default=0) or 0)
+        w = float(weight or 0)
+        contribution = raw * w
+        running += contribution
+        rows += (
+            f'<div class="ledger-row">'
+            f'<div class="ledger-name">{_esc(_AXIS_LABELS.get(axis, axis))}</div>'
+            f'<div class="meter"><div class="meter-fill" '
+            f'style="width:{min(w * 100, 100):.1f}%"></div></div>'
+            f'<div class="ledger-num">{raw:.1f}</div>'
+            f'<div class="ledger-num">{w:.3f}</div>'
+            f'<div class="ledger-num ledger-num-strong">{contribution:.2f}</div>'
+            f'</div>'
+        )
+
+    for axis in excluded:
+        rows += (
+            f'<div class="ledger-row">'
+            f'<div class="ledger-name">{_esc(_AXIS_LABELS.get(axis, axis))}</div>'
+            f'<div class="muted" style="font-size:.8125rem">'
+            f'excluded &mdash; no evidence to score</div>'
+            f'<div class="ledger-num">&mdash;</div>'
+            f'<div class="ledger-num">0.000</div>'
+            f'<div class="ledger-num">0.00</div>'
+            f'</div>'
+        )
+
+    mult_row = ""
+    if abs(multiplier - 1.0) > 1e-6:
+        mult_row = (
+            f'<div class="ledger-row">'
+            f'<div class="ledger-name">Confidence multiplier</div>'
+            f'<div class="muted" style="font-size:.8125rem">'
+            f'applied to the weighted sum</div>'
+            f'<div class="ledger-num">&mdash;</div>'
+            f'<div class="ledger-num">&times;{multiplier:.2f}</div>'
+            f'<div class="ledger-num ledger-num-strong">'
+            f'{running * multiplier - running:+.2f}</div>'
+            f'</div>'
+        )
+
+    rows += mult_row + (
+        f'<div class="ledger-row ledger-total">'
+        f'<div class="ledger-name">Verdict score</div>'
+        f'<div class="muted" style="font-size:.8125rem">'
+        f'weighted sum, capped at 100</div>'
+        f'<div class="ledger-num">&mdash;</div>'
+        f'<div class="ledger-num">&mdash;</div>'
+        f'<div class="ledger-num ledger-num-strong">{frs:.1f}</div>'
+        f'</div>'
+    )
+
+    floors = [
+        ("verdict_floored_for_visibility", "sandbox visibility was insufficient"),
+        ("verdict_floored_for_evasion", "the sample resisted instrumentation"),
+        ("verdict_floored_for_static_evidence", "static evidence alone met the floor"),
+        ("verdict_floored_for_incomplete_exercise", "the run did not exercise the sample"),
+    ]
+    applied = [text for key, text in floors if _get(frs_bd, key)]
+    floor_note = ""
+    if applied:
+        floor_note = (
+            '<p class="section-lead mt12" style="margin-bottom:0">'
+            'A verdict floor was applied because ' + _esc("; ".join(applied)) +
+            '. The floor raises the score above the weighted sum; it never lowers it.'
+            '</p>'
+        )
+
+    return (
+        '<div class="section">'
+        + _section_header("", "", "Risk Contributors",
+                          "Deterministic &mdash; no model output in this table")
+        + '<p class="section-lead">Weights are renormalised across the axes that '
+          'carried evidence. Contribution is score multiplied by weight.</p>'
+        + f'<div class="ledger">{rows}</div>'
+        + floor_note
+        + '</div>'
+    )
+
+
+def _build_key_findings(r: Dict) -> str:
+    """
+    The ten findings a reviewer should read first, ranked by severity.
+
+    Assembled from the same underlying fields the technical part enumerates in
+    full - this is a précis of that evidence, not a second source for it.
+    """
+    order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+    rows: List[Tuple[str, str, str, str]] = []  # (severity, area, finding, basis)
+
+    def add(sev: str, area: str, finding: str, basis: str) -> None:
+        rows.append((sev, area, finding, basis))
+
+    tc = _get(r, "threat_correlation") or {}
+    if _get(tc, "known_family"):
+        add("CRITICAL", "Threat intelligence",
+            f'Sample matches known family {_get(tc, "known_family")}',
+            "SHA-256 match against external intelligence sources")
+    vt_det = int(_get(tc, "sha256_detections", default=0) or 0)
+    if vt_det:
+        add("HIGH", "Threat intelligence",
+            f"{vt_det} anti-malware vendors flag this binary",
+            "Multi-engine detection ratio")
+
+    if _get(r, "has_accessibility_abuse"):
+        add("CRITICAL", "Capability",
+            "Accessibility service abuse capability present",
+            "Manifest declaration and service binding")
+    if _get(r, "has_sms_read_write"):
+        add("HIGH", "Capability", "SMS read and write capability present",
+            "Declared SMS permissions - the standard OTP interception path")
+    if _get(r, "has_system_alert_window"):
+        add("HIGH", "Capability", "Screen overlay capability present",
+            "SYSTEM_ALERT_WINDOW - the standard credential-overlay path")
+    if _get(r, "targets_indian_banks"):
+        add("HIGH", "Targeting", "References Indian banking application packages",
+            "Package-name targets extracted from application resources")
+
+    urls = _get(r, "hardcoded_urls_ips") or []
+    if urls:
+        add("HIGH", "Infrastructure",
+            f"{len(urls)} hardcoded network endpoints embedded in the binary",
+            f"First: {str(urls[0])[:64]}")
+    secrets = _get(r, "hardcoded_secrets") or []
+    if secrets:
+        add("MEDIUM", "Credentials",
+            f"{len(secrets)} embedded secrets recovered from application strings",
+            "Static string extraction")
+
+    obf = float(_get(r, "obfuscation_score", default=0) or 0)
+    obf_pct = obf * 100 if obf <= 1.0 else obf
+    if obf_pct > 30:
+        add("MEDIUM", "Evasion", f"Obfuscation at {obf_pct:.0f}% string entropy",
+            "Identifier and string entropy measurement")
+    if _get(r, "has_reflection"):
+        add("MEDIUM", "Evasion", "Dynamic reflection used to resolve call targets",
+            "Class.forName / Method.invoke references in decompiled code")
+
+    for mf in (_get(r, "manifest_findings") or [])[:6]:
+        sev = str(_get(mf, "severity", default="LOW")).upper()
+        if sev in ("CRITICAL", "HIGH"):
+            add(sev, "Manifest", str(_get(mf, "title", default=""))[:110],
+                str(_get(mf, "description", default=""))[:130])
+
+    anti_analysis = _get(_get(r, "dynamic_analysis") or {}, "anti_analysis_events") or []
+    for aa in anti_analysis[:3]:
+        add("HIGH", "Anti-analysis",
+            str(_get(aa, "technique", default=str(aa)))[:110],
+            "Observed during instrumented execution")
+
+    for crash in (_get(r, "crashes") or [])[:2]:
+        add(str(_get(crash, "severity", default="MEDIUM")).upper(), "Stability",
+            str(_get(crash, "crash_type", default="Process crash"))[:110],
+            str(_get(crash, "summary", default=""))[:130])
+
+    if not rows:
+        return (
+            '<div class="section">'
+            + _section_header("", "", "Key Findings", "None at reportable severity")
+            + '<p>No finding in this run reached a severity that warrants '
+              'executive escalation. The technical part records the full '
+              'enumeration, including findings held below that threshold.</p>'
+              '</div>'
+        )
+
+    rows.sort(key=lambda x: order.get(x[0].lower(), 5))
+    body = ""
+    for i, (sev, area, finding, basis) in enumerate(rows[:10], 1):
+        body += (
+            f'<tr>'
+            f'<td class="col-id">KF-{i:02d}</td>'
+            f'<td><span class="sev {_sev_class(sev)}" style="margin-left:0">'
+            f'{_esc(sev)}</span></td>'
+            f'<td>{_esc(area)}</td>'
+            f'<td><b>{_esc(finding)}</b></td>'
+            f'<td>{_esc(basis)}</td>'
+            f'</tr>'
+        )
+
+    return (
+        '<div class="section">'
+        + _section_header("", "", "Key Findings",
+                          f"{min(len(rows), 10)} of {len(rows)} shown, by severity")
+        + '<table class="data-table"><thead><tr>'
+          '<th>Ref</th><th>Severity</th><th>Area</th><th>Finding</th><th>Basis</th>'
+          '</tr></thead><tbody>' + body + '</tbody></table>'
+        + '</div>'
+    )
+
+
+def _build_executive_conclusion(r: Dict) -> str:
+    """Prose statement of the determination, its scope, and its limits."""
+    intel = _get(r, "intelligence_report") or {}
+    ev = _get(r, "executive_view") or {}
+
+    narrative = _get(intel, "plain_english_narrative") or _get(ev, "plain_english_narrative") or ""
+    objective = _get(intel, "fraud_objective") or ""
+    impact = (_get(intel, "customer_impact")
+              or _get(intel, "banking_impact_assessment")
+              or _get(intel, "banking_impact") or "")
+
+    frs_bd = _get(r, "frs_breakdown") or {}
+    dyn_ran = bool(_get(frs_bd, "dynamic_ran"))
+    dyn_conclusive = bool(_get(frs_bd, "dynamic_conclusive"))
+    corr_available = bool(_get(_get(r, "threat_correlation") or {}, "available"))
+    incomplete = bool(_get(r, "incomplete_exercise"))
+
+    if dyn_ran and dyn_conclusive:
+        scope = ("Static decomposition and instrumented execution both completed; "
+                 "runtime telemetry was conclusive.")
+    elif dyn_ran:
+        scope = ("Static decomposition completed. The sandbox executed but returned "
+                 "no conclusive telemetry, so the runtime axis is excluded from the "
+                 "score rather than scored as benign.")
+    else:
+        scope = ("Static decomposition completed. The sandbox did not execute this "
+                 "sample, so this determination rests on static evidence alone.")
+
+    scope += (" External threat-intelligence correlation was available."
+              if corr_available else
+              " External threat-intelligence correlation was unavailable in this run.")
+
+    if incomplete:
+        scope += (" The run reached none of the sample's own trigger conditions; "
+                  "reported confidence is reduced accordingly and this dossier "
+                  "does not certify the sample as benign.")
+
+    blocks = ""
+    if narrative:
+        blocks += f'<p>{_esc(narrative)}</p>'
+    if objective and str(objective).lower() not in ("not available", "unknown"):
+        blocks += (f'<p><b>Assessed objective.</b> {_esc(objective)}</p>')
+    if impact and str(impact).lower() not in ("not available", "unknown"):
+        blocks += (f'<p><b>Exposure.</b> {_esc(impact)}</p>')
+    if not blocks:
+        blocks = (
+            '<p>No narrative assessment was recorded for this run. The '
+            'determination above rests entirely on the deterministic evidence '
+            'enumerated in Part B.</p>'
+        )
+
+    return (
+        '<div class="section">'
+        + _section_header("", "", "Executive Conclusion")
+        + blocks
+        + f'<h3 class="mt16">Scope of this determination</h3><p>{_esc(scope)}</p>'
+        + '</div>'
     )
 
 
@@ -596,7 +1293,8 @@ def _build_static(r: Dict, idx: _FindingIndex) -> str:
     has_ref = bool(_get(r, "has_reflection"))
     jadx = _get(r, "jadx_enrichment") or {}
 
-    html = f'<div class="section">' + _section_header("&#x1F52C;", "rgba(63,185,80,.15)", "Static Forensic Analysis")
+    html = f'<div class="section">' + _section_header("", "", "Forensic Evidence — Static",
+                                                        "APK identity and static findings")
 
     cert_subject = _get(cert, "subject") or _get(cert, "issuer") or ""
     cert_valid = _get(cert, "valid_from") or ""
@@ -753,19 +1451,24 @@ def _build_threat_intel(r: Dict, idx: _FindingIndex) -> str:
 
     html = (
         f'<div class="section">'
-        + _section_header("&#x1F310;", "rgba(210,153,34,.15)", "Threat Intelligence &amp; MITRE ATT&amp;CK")
+        + _section_header("", "", "Threat Intelligence & MITRE ATT&CK",
+                          "External corroboration")
     )
 
     if not available:
         sources_str = ", ".join(sources) if sources else "VirusTotal, AlienVault OTX, AbuseIPDB"
         html += (
             f'<div class="dynamic-status-banner">'
-            f'<div class="dynamic-status-title">Threat Intelligence Correlation</div>'
+            f'<div class="dynamic-status-title">External Correlation Status</div>'
             f'<div class="dynamic-status-code">[INTEL-STATUS: API KEYS NOT CONFIGURED]</div>'
             f'<div class="dynamic-status-detail">'
-            f'Correlation requires API keys for {_esc(sources_str)}.<br>'
-            f'Configure <code>VT_API_KEY</code>, <code>OTX_API_KEY</code>, <code>ABUSEIPDB_API_KEY</code> in <code>.env</code>.<br>'
-            f'<strong>FRS uses the static-only formula</strong> (0.50&middot;STEI + 0.25&middot;Correlation + 0.25&middot;BankingImpact) when correlation is unavailable.'
+            f'No external source was queried for this sample. Correlation is '
+            f'configured against {_esc(sources_str)}, and credentials for those '
+            f'services were not present in this deployment.<br><br>'
+            f'The correlation axis is therefore excluded from the weighting rather '
+            f'than scored as clean, and the verdict uses the '
+            f'<strong>static-only formula</strong>. A sample with no external '
+            f'reputation in this dossier has not been checked against one.'
             f'</div></div>'
         )
     else:
@@ -814,7 +1517,7 @@ def _build_threat_intel(r: Dict, idx: _FindingIndex) -> str:
                 fid = idx.next("INTEL", f"IOC: {str(ind)[:50]}")
                 ioc_rows += (
                     f'<tr>'
-                    f'<td style="font-family:var(--font-mono);color:var(--blue)">[{fid}]</td>'
+                    f'<td class="col-id">[{fid}]</td>'
                     f'<td><code>{_esc(str(ind)[:60])}</code></td>'
                     f'<td>{_esc(itype)}</td>'
                     f'<td class="{_rep_class(str(rep))}">{_esc(rep)}</td>'
@@ -876,8 +1579,8 @@ def _build_dynamic(r: Dict, evidence_json: Optional[Dict], idx: _FindingIndex) -
 
     html = (
         f'<div class="section">'
-        + _section_header("&#x26A1;", "rgba(248,81,73,.15)",
-                          "Dynamic Analysis", "Runtime Telemetry &amp; Attack Narrative")
+        + _section_header("", "", "Attack & Behaviour Analysis",
+                          "Runtime telemetry")
     )
 
     if not has_any_dynamic:
@@ -887,30 +1590,33 @@ def _build_dynamic(r: Dict, evidence_json: Optional[Dict], idx: _FindingIndex) -
 
         if dyn_ran:
             cause = (
-                "The sandbox executed but no hook-triggering behaviour was observed during the analysis window. "
-                "Likely causes: the application detects the Frida environment and goes dormant; "
-                "the malicious payload requires a specific external trigger (SMS, locale match, C2 command, or time delay) "
-                "not present in the analysis session; or the hardcoded accessibility service class name is obfuscated "
-                "and was not resolved correctly (see DAE_CURRENT_STATE.md Defect #1)."
+                "The sandbox executed the sample but no instrumented API fired within "
+                "the analysis window. Three explanations account for nearly all such "
+                "runs: the sample detects the instrumentation and stays dormant; the "
+                "payload waits on an external trigger — an inbound message, a locale "
+                "match, an operator command, a dormancy timer — that the session did "
+                "not supply; or the class name the hooks target is obfuscated and did "
+                "not resolve."
             )
         else:
             cause = (
-                "The dynamic sandbox did not execute for this sample. "
-                "Likely causes: SELinux enforcement blocked ptrace injection; "
-                "the APK has no launchable activity declared in the manifest; "
-                "or the sample failed to install (malformed manifest, missing signature). "
-                "The FRS score above reflects static-only analysis."
+                "The sandbox did not execute this sample. The usual causes are an "
+                "SELinux policy that blocks process injection, a manifest that "
+                "declares no launchable activity, or an installation that failed on a "
+                "malformed manifest or an absent signature. The verdict score above "
+                "rests on static evidence alone."
             )
 
         html += (
             f'<div class="dynamic-status-banner">'
-            f'<div class="dynamic-status-title">Dynamic Execution Status</div>'
+            f'<div class="dynamic-status-title">Runtime Telemetry Status</div>'
             f'<div class="dynamic-status-code">[DYNAMIC-STATUS: NO TELEMETRY CAPTURED]</div>'
             f'<div class="dynamic-status-detail">'
             f'{_esc(cause)}<br><br>'
             f'<strong>This is an honest system state, not a report error.</strong> '
-            f'No dynamic event rows have been generated because no runtime events were observed. '
-            f'The FRS score and all findings above are based solely on static analysis evidence.'
+            f'No runtime rows appear below because no runtime events were observed. '
+            f'Nothing has been inferred to fill the gap, and absence of observed '
+            f'behaviour is not a finding of benign behaviour.'
             f'</div></div>'
         )
     else:
@@ -1084,9 +1790,14 @@ def _build_visual_gallery(
     report: Optional[Dict[str, Any]] = None,
 ) -> str:
     """
-    Renders the Visual UI & Dynamic Evidence Gallery section.
-    Loads screenshots/manifest.json from apk_dir, reads screenshot PNG files,
-    encodes them as Base64 data URIs, and renders responsive cards.
+    Runtime screenshot plates.
+
+    Every plate carries the same metadata grid in the same order - lifecycle
+    trigger, screen state, quality grade, then provenance - so the labels line
+    up column-for-column down the page and a reader comparing two frames scans
+    one axis instead of hunting. Fields the manifest did not record are omitted
+    from that frame rather than printed empty, which keeps a sparse capture
+    honest without breaking the alignment of the rest.
     """
     if not apk_dir and not report:
         return ""
@@ -1095,21 +1806,21 @@ def _build_visual_gallery(
     if not screenshots:
         return ""
 
+    count = len(screenshots)
     html = (
-        f'<div class="section">'
-        + _section_header("&#x1F4F8;", "rgba(88,166,255,.15)", "Visual UI &amp; Dynamic Evidence Gallery", f"{len(screenshots)} screenshots captured")
+        '<div class="section">'
+        + _section_header("", "", "Runtime Screenshot Plates",
+                          f"{count} frame{'s' if count != 1 else ''} captured")
+        + '<p class="section-lead">Frames recorded by the instrumented sandbox '
+          'during execution. Each plate states what triggered the capture, what '
+          'the screen was showing, and how far the frame can be relied upon.</p>'
         + '<div class="gallery-grid">'
     )
 
     import base64
     for scr in screenshots:
         scr_id = _esc(scr.get("screenshot_id", "SCR-???"))
-        label = _esc(scr.get("label", "ui_capture"))
-        trigger_evid = _esc(scr.get("trigger_event", ""))
-        category = _esc(scr.get("category", "ui"))
-        source = _esc(scr.get("source", "manual"))
-        reason = _esc(scr.get("reason", ""))
-        activity = _esc(scr.get("activity", ""))
+        label = _esc(scr.get("label") or scr.get("title") or "UI capture")
         rel_fn = scr.get("filename", "")
 
         img_path = Path(rel_fn) if rel_fn else Path()
@@ -1131,37 +1842,97 @@ def _build_visual_gallery(
                 logger.warning("[ReportGen] Failed to encode %s: %s", img_path, e)
 
         fid = idx.next("SCR", f"Screenshot {scr_id}: {label}")
-        evid_badge = f'<span class="perm-tag perm-danger">Ref: [{trigger_evid}]</span>' if trigger_evid else ""
-        src_badge = f'<span class="perm-tag perm-normal">{source}</span>'
-        reason_line = (
-            f'<span>Reason: {reason}</span>' if reason else ""
-        )
-        act_line = (
-            f'<span>Activity: {activity}</span>' if activity else ""
-        )
 
         img_html = (
-            f'<img src="{b64_uri}" alt="{scr_id}" class="scr-img" loading="lazy" />'
-            if b64_uri else '<div class="no-data">Image payload unavailable</div>'
+            f'<img src="{b64_uri}" alt="Runtime capture {scr_id}" '
+            f'class="scr-img" loading="lazy" />'
+            if b64_uri else
+            '<div class="no-data">Frame not retained in this artifact set</div>'
         )
 
         html += (
             f'<div class="gallery-card">'
             f'<div class="scr-header">'
-            f'<span class="scr-id">[{fid}] {scr_id}</span>'
+            f'<span class="scr-id">{fid} &middot; {scr_id}</span>'
             f'<span class="scr-label">{label}</span>'
             f'</div>'
             f'<div class="scr-body">{img_html}</div>'
-            f'<div class="scr-meta">'
-            f'<span>Cat: {category}</span>'
-            f'{reason_line}{act_line}'
-            f'<div>{src_badge}{evid_badge}</div>'
-            f'</div>'
-            f'</div>'
+            f'<dl class="scr-meta">'
+            + _screenshot_meta_rows(scr)
+            + '</dl></div>'
         )
 
     html += '</div></div>'
     return html
+
+
+def _quality_grade_html(grade: str) -> str:
+    """A / B / C capture-quality grade as a muted pill."""
+    g = str(grade or "").strip().upper()[:1]
+    cls = {"A": "grade-a", "B": "grade-b", "C": "grade-c"}.get(g, "grade-b")
+    if not g:
+        return '<span class="muted">not graded</span>'
+    caption = {
+        "A": "corroborates a finding directly",
+        "B": "supporting context",
+        "C": "background only",
+    }.get(g, "")
+    tail = f' <span class="muted">&mdash; {caption}</span>' if caption else ""
+    return f'<span class="grade {cls}">{g}</span>{tail}'
+
+
+def _screenshot_meta_rows(scr: Dict[str, Any]) -> str:
+    """
+    The aligned definition grid shared by every screenshot plate.
+
+    Row order is fixed and never varies with what a frame happens to carry;
+    absent rows collapse, present rows keep their position, so labels stay on
+    one left edge and values on another across the whole appendix.
+    """
+    def first(*keys: str) -> str:
+        for k in keys:
+            v = scr.get(k)
+            if v not in (None, "", [], {}):
+                return str(v)
+        return ""
+
+    trigger = first("capture_trigger", "trigger_event", "trigger_reason", "stage", "reason")
+    screen_state = first("screen_summary", "visual_observation", "semantic_type", "category")
+    activity = first("activity", "window", "fragment")
+    package = first("foreground_package", "target_package", "package")
+    linked = scr.get("linked_evidence_ids") or []
+    if isinstance(linked, (list, tuple)):
+        linked_str = ", ".join(str(x) for x in linked if x)
+    else:
+        linked_str = str(linked)
+    if not linked_str:
+        linked_str = first("evidence_id", "evidence_moment_id")
+    claim = first("investigative_claim", "description")
+    source = first("source", "observation_source")
+    correlation = first("correlation_status", "deduplication_status")
+
+    rows: List[Tuple[str, str, bool]] = [
+        ("Lifecycle trigger", trigger, False),
+        ("Screen state", screen_state, False),
+        ("Activity", activity, True),
+        ("Package", package, True),
+        ("Linked evidence", linked_str, True),
+        ("Correlation", correlation, False),
+        ("Capture source", source, False),
+    ]
+
+    out = ""
+    for label, value, mono in rows:
+        if not value:
+            continue
+        cls = ' class="mono"' if mono else ""
+        out += f'<dt>{_esc(label)}</dt><dd{cls}>{_esc(value[:220])}</dd>'
+
+    out += f'<dt>Quality grade</dt><dd>{_quality_grade_html(scr.get("quality", ""))}</dd>'
+
+    if claim:
+        out += f'<div class="scr-caption">{_esc(claim[:300])}</div>'
+    return out
 
 
 def _build_exploration_coverage(r: Dict, apk_dir: Optional[Path], idx: _FindingIndex) -> str:
@@ -1195,7 +1966,7 @@ def _build_exploration_coverage(r: Dict, apk_dir: Optional[Path], idx: _FindingI
 
     html = (
         f'<div class="section">'
-        + _section_header("&#x1F9E0;", "rgba(139,148,158,.15)", "Autonomous UI Exploration &amp; Coverage Metrics", f"[{fid}]")
+        + _section_header("", "", "Exploration Coverage", f"[{fid}]")
         + '<div class="grid-3 mb8">'
         + f'<div class="intel-stat"><div class="intel-num">{visited_screens}/{total_screens}</div><div class="intel-sub">Screens Visited</div></div>'
         + f'<div class="intel-stat"><div class="intel-num">{cov_pct:.1f}%</div><div class="intel-sub">Coverage Score</div></div>'
@@ -1234,11 +2005,9 @@ def _build_execution_assertions(r: Dict, idx: _FindingIndex) -> str:
     banner = ""
     if incomplete:
         banner = (
-            '<div style="background:rgba(245,158,11,.12);border:1px solid #f59e0b;'
-            'border-radius:8px;padding:12px 14px;margin-bottom:12px">'
-            '<div style="font-weight:700;color:#b45309;margin-bottom:4px">'
-            '&#9888; INCOMPLETE EXERCISE &mdash; verdict qualified</div>'
-            '<div style="font-size:13px;line-height:1.5">'
+            '<div class="qualifier">'
+            '<div class="qualifier-title">Incomplete exercise &mdash; verdict qualified</div>'
+            '<div class="qualifier-body">'
             'This run did not exercise the sample. The sandbox reached none of the '
             'trigger conditions below and observed no threat behaviour. '
             '<b>Absence of evidence is not evidence of absence</b> &mdash; an '
@@ -1252,8 +2021,7 @@ def _build_execution_assertions(r: Dict, idx: _FindingIndex) -> str:
     body = [
         '<div class="section">',
         _section_header(
-            "&#9201;",
-            "rgba(245,158,11,.15)",
+            "", "",
             "Execution Assertion Matrix",
             f"[{fid}] &mdash; {fired}/{total} trigger conditions reached",
         ),
@@ -1266,9 +2034,9 @@ def _build_execution_assertions(r: Dict, idx: _FindingIndex) -> str:
         reached = bool(_get(row, "fired"))
         detail = _get(row, "evidence") if reached else _get(row, "remediation")
         mark = (
-            '<span style="color:#15803d;font-weight:700">YES</span>'
+            '<span class="sev sev-low" style="margin-left:0">Reached</span>'
             if reached
-            else '<span style="color:#b45309;font-weight:700">NO</span>'
+            else '<span class="sev sev-medium" style="margin-left:0">Not reached</span>'
         )
         body.append(
             f'<tr><td><b>{_esc(_get(row, "label", default=""))}</b></td>'
@@ -1343,7 +2111,7 @@ def _build_recommendations(r: Dict) -> str:
 
     html = (
         f'<div class="section">'
-        + _section_header("&#x1F6E1;&#xFE0F;", "rgba(63,185,80,.15)", "Recommendations &amp; Remediation")
+        + _section_header("", "", "Recommended Response")
         + '<ul class="rec-list">'
     )
     for i, act in enumerate(actions, 1):
@@ -1357,11 +2125,10 @@ def _build_recommendations(r: Dict) -> str:
 
     if advisory:
         html += (
-            f'<div class="verdict-banner verdict-medium mt12">'
-            f'<div class="verdict-icon">&#x1F4E2;</div>'
-            f'<div><div class="verdict-q">Customer Advisory Draft</div>'
+            f'<div class="verdict-banner verdict-medium mt16">'
+            f'<div class="verdict-q">Customer advisory &mdash; draft for approval</div>'
             f'<div class="verdict-narrative">{_esc(advisory)}</div>'
-            f'</div></div>'
+            f'</div>'
         )
 
     html += '</div>'
@@ -1380,7 +2147,7 @@ def _build_threat_scenario_table(r: Dict, idx: _FindingIndex) -> str:
 
     html = (
         f'<div class="section">'
-        + _section_header("&#x1F3AF;", "rgba(240,136,62,.15)", "Threat Scenario Correlation Table")
+        + _section_header("", "", "Threat Scenario Correlation")
         + '<table class="data-table"><thead>'
         + '<tr><th>ID</th><th>Indicator</th><th>Threat Scenario</th>'
         + '<th>Overlay</th><th>Credential Theft</th><th>C2 Risk</th><th>Confidence</th></tr>'
@@ -1396,7 +2163,7 @@ def _build_threat_scenario_table(r: Dict, idx: _FindingIndex) -> str:
         fid = idx.next("STAT", f"Threat scenario: {str(scenario)[:50]}")
         html += (
             f'<tr>'
-            f'<td style="font-family:var(--font-mono);color:var(--blue)">[{fid}]</td>'
+            f'<td class="col-id">[{fid}]</td>'
             f'<td>{_esc(ind)}</td><td>{_esc(scenario)}</td>'
             f'<td>{rbadge(overlay)}</td><td>{rbadge(cred)}</td><td>{rbadge(c2)}</td>'
             f'<td>{conf}%</td>'
@@ -1412,7 +2179,7 @@ def _build_ledger(idx: _FindingIndex) -> str:
     html = (
         f'<div class="section">'
         + _section_header(
-            "&#x1F4CB;", "rgba(139,148,158,.15)",
+            "", "",
             "Evidence Ledger",
             f"{len(idx.ledger)} findings indexed"
         )
@@ -1421,19 +2188,66 @@ def _build_ledger(idx: _FindingIndex) -> str:
         + '</thead><tbody>'
     )
     for fid, cat, title in idx.ledger:
-        html += f'<tr><td style="font-family:var(--font-mono);color:var(--blue)">[{fid}]</td><td>{_esc(cat)}</td><td>{_esc(title[:100])}</td></tr>'
+        html += f'<tr><td class="col-id">[{fid}]</td><td>{_esc(cat)}</td><td>{_esc(title[:100])}</td></tr>'
     html += '</tbody></table></div>'
     return html
+
+
+def _build_chain_of_custody(r: Dict, ts: str) -> str:
+    """
+    Chain of custody: the hashes and run identifiers that bind this document to
+    the artifacts it was rendered from.
+    """
+    sha = str(_get(r, "sha256", default="") or "")
+    pkg = str(_get(r, "package_name", default="") or "")
+    mode = str(_get(r, "analysis_mode", default="") or "")
+    case_id = str(_get(r, "case_id", default="") or _get(r, "job_id", default="") or "")
+
+    integrity_src = "|".join([sha, pkg, str(_get(r, "final_risk_score", default="")), ts])
+    integrity = hashlib.sha256(integrity_src.encode("utf-8")).hexdigest()
+
+    rows = [
+        ("Sample SHA-256", sha or "not recorded", True),
+        ("Package name", pkg or "not recorded", True),
+        ("Case reference", case_id or "not assigned", True),
+        ("Analysis mode", mode or "not recorded", False),
+        ("Document rendered", ts, False),
+        ("Document integrity digest", integrity, True),
+    ]
+    body = ""
+    for label, value, mono in rows:
+        cls = ' class="info-val info-val-mono"' if mono else ' class="info-val"'
+        body += (
+            f'<div class="info-card">'
+            f'<div class="info-key">{_esc(label)}</div>'
+            f'<div{cls}>{_esc(value)}</div>'
+            f'</div>'
+        )
+
+    return (
+        '<div class="section">'
+        + _section_header("", "", "Chain of Custody",
+                          "Bind this document to its artifacts")
+        + '<p class="section-lead">The integrity digest is computed over the '
+          'sample hash, package name, verdict score and render timestamp. A '
+          'document whose digest does not reproduce has been altered after '
+          'rendering.</p>'
+        + f'<div class="grid-2">{body}</div>'
+        + '</div>'
+    )
 
 
 def _build_footer(r: Dict) -> str:
     sha = _esc(_get(r, "sha256", default=""))
     return (
         f'<div class="report-footer">'
-        f'Sudarshan Banking Malware Intelligence Platform &nbsp;&middot;&nbsp; '
-        f'Deterministic scoring &mdash; AI explains, AI does not decide &nbsp;&middot;&nbsp; '
-        f'SHA-256: {sha} &nbsp;&middot;&nbsp; '
-        f'Dynamic findings marked [TARGET-STATE] are design intent not confirmed by runtime instrumentation.'
+        f'<b>Sudarshan</b> &middot; Banking Malware Intelligence &middot; '
+        f'SHA-256 {sha}'
+        f'<span class="fine">Scoring is deterministic. Narrative sections are '
+        f'generated from the recorded evidence and do not influence the verdict '
+        f'score. Findings marked [TARGET-STATE] describe design intent inferred '
+        f'from static structure and were not confirmed by runtime '
+        f'instrumentation in this run.</span>'
         f'</div>'
     )
 
@@ -1480,21 +2294,55 @@ class ReportGenerator:
         visual_tech = build_technical_visual_html(self.apk_dir)
         visual_appendix = build_appendix_visual_html(self.apk_dir)
 
+        # Part order mirrors the PDF edition exactly, so a reader who has one
+        # in front of them can find the same section in the other.
+        #
+        # The gallery is rendered ahead of composition even though it prints
+        # last: it mints SCR-NNN identifiers, and the Evidence Ledger in Part C
+        # has to already know about them.
+        gallery = _build_visual_gallery(self.apk_dir, idx, self.r)
+
         body = (
             _build_header(self.r, ts)
+
+            + _part("Part A", "Executive Summary",
+                    "The determination, the arithmetic behind it, and the findings "
+                    "that carry it. Written to be read without reference to the "
+                    "technical part.")
+            + _build_executive_conclusion(self.r)
+            + _build_key_findings(self.r)
+            + _build_score_ledger(self.r)
+            + visual_exec
+            + _build_recommendations(self.r)
+            + _part_end()
+
+            + _part("Part B", "Technical Analysis",
+                    "The full evidence set: score decomposition, static forensics, "
+                    "external correlation, and observed runtime behaviour.")
             + _build_stei(self.r)
-            + _build_threat_scenario_table(self.r, idx)
             + _build_static(self.r, idx)
+            + _build_threat_scenario_table(self.r, idx)
             + _build_threat_intel(self.r, idx)
             + _build_dynamic(self.r, evidence_json, idx)
-            + visual_exec
-            + _build_visual_gallery(self.apk_dir, idx, self.r)
             + visual_tech
+            + _part_end()
+
+            + _part("Part C", "Audit & Traceability",
+                    "What this run reached, what it did not, and the record binding "
+                    "each finding to the artifact it came from.")
             + _build_exploration_coverage(self.r, self.apk_dir, idx)
             + _build_execution_assertions(self.r, idx)
-            + _build_recommendations(self.r)
-            + visual_appendix
             + _build_ledger(idx)
+            + _build_chain_of_custody(self.r, ts)
+            + _part_end()
+
+            + _part("Appendix", "Runtime Screenshots & Visual Evidence",
+                    "Frames captured during instrumented execution, each with the "
+                    "trigger that produced it and the weight it can carry.")
+            + gallery
+            + visual_appendix
+            + _part_end()
+
             + _build_footer(self.r)
         )
 
@@ -1506,9 +2354,9 @@ class ReportGenerator:
             f'<!DOCTYPE html>\n<html lang="en">\n<head>\n'
             f'<meta charset="UTF-8">\n'
             f'<meta name="viewport" content="width=device-width,initial-scale=1">\n'
-            f'<title>Sudarshan Report &mdash; {pkg}</title>\n'
-            f'<meta name="description" content="Sudarshan malware analysis report for {pkg}. '
-            f'FRS: {frs:.0f}, Band: {band}.">\n'
+            f'<title>Threat Investigation Dossier &mdash; {pkg}</title>\n'
+            f'<meta name="description" content="Sudarshan threat investigation dossier '
+            f'for {pkg}. Verdict score {frs:.0f} of 100, risk band {band}.">\n'
             f'<style>{_CSS}</style>\n'
             f'</head>\n<body>\n<div class="container">\n'
             f'{body}\n'

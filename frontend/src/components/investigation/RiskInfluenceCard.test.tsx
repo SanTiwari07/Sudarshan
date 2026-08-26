@@ -142,6 +142,15 @@ describe('RiskInfluenceCard', () => {
         </InvestigationUIProvider>
       </MemoryRouter>,
     );
-    expect(container.textContent).toMatch(/not counted toward the final score/i);
+    /*
+     * Asserted against the intent, not the sentence. The wording changed when
+     * the card started showing its arithmetic; what must hold is that an
+     * excluded axis still reports the score it observed, and still says that
+     * score did not count - so a reader cannot mistake the exclusion for a
+     * clean result.
+     */
+    expect(container.textContent).toMatch(/62\.0 out of 100/i);
+    expect(container.textContent).toMatch(/excluded/i);
+    expect(container.textContent).toMatch(/not evidence of safety/i);
   });
 });

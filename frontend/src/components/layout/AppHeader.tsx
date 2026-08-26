@@ -13,7 +13,7 @@ export default function AppHeader({ isAuthed }: AppHeaderProps) {
         <Link to="/login" className="flex items-center gap-2.5 shrink-0">
           <Shield className="h-5 w-5 text-blue-500 shrink-0" />
           <div>
-            <span className="font-extrabold text-[13px] tracking-widest block leading-none text-white font-mono">
+            <span className="font-semibold text-[13px] tracking-widest block leading-none text-white font-mono">
               SUDARSHAN
             </span>
             <span className="text-[11px] text-blue-400 font-bold leading-none tracking-wider uppercase">

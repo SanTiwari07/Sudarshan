@@ -68,8 +68,8 @@ export function ConfidenceIndicator({ confidence }: { confidence: number }) {
   return (
     <div className="text-right min-w-[4.75rem]">
       <div className="text-[15px] font-semibold text-slate-800 tabular-nums leading-none">{pct}%</div>
-      <div className="text-[12px] text-slate-600 mt-1 leading-tight">{tier}</div>
-      <div className="text-[12px] text-slate-500 mt-0.5">Verified</div>
+      <div className="text-[13px] text-slate-600 mt-1 leading-tight">{tier}</div>
+      <div className="text-[13px] text-slate-500 mt-0.5">Verified</div>
     </div>
   );
 }
@@ -84,7 +84,7 @@ export function RiskBandLabel({ band }: { band: string }) {
         : b.includes('suspicious')
           ? 'text-amber-800'
           : 'text-slate-700';
-  return <span className={`text-xs font-bold uppercase tracking-wide ${cls}`}>{band}</span>;
+  return <span className={`text-xs font-semibold uppercase tracking-wide ${cls}`}>{band}</span>;
 }
 
 export function PipelineStatusChip({
@@ -107,7 +107,7 @@ export function PipelineStatusChip({
   return (
     <span className="inline-flex items-center gap-1 text-[13px] font-medium text-slate-600">
       {label}
-      <span className={`font-bold ${symCls}`} aria-hidden>{sym}</span>
+      <span className={`font-semibold ${symCls}`} aria-hidden>{sym}</span>
     </span>
   );
 }

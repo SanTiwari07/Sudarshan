@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
-  Send, Shield, RefreshCw, AlertTriangle, CheckCircle2,
-  Copy, CopyCheck, Info, AlertOctagon, Terminal, ArrowUpRight, BarChart2, HelpCircle
+  Shield, Square, AlertTriangle, CheckCircle2,
+  Copy, CopyCheck, Info, AlertOctagon, Terminal, ArrowUpRight, BarChart2, HelpCircle, RotateCcw, ArrowUp
 } from 'lucide-react';
 import type { FraudCardData } from '../App';
 import { API_BASE, authHeaders } from '../config';
@@ -12,13 +12,31 @@ import { buildCaseQuestions, buildChatGreeting } from '../lib/caseQuestions';
 import { TYPOGRAPHY } from '../theme/typography';
 
 /** How long a stream may go silent before the client calls the answer finished. */
-const IDLE_TIMEOUT_MS = 15_000;
+const IDLE_TIMEOUT_MS = 45_000;
+
+/*
+ * How often a growing answer is painted, in ms.
+ *
+ * Every token used to call setMessages, and every render re-ran
+ * autoFormatInvestigationText over the *whole* accumulated answer - a code
+ * fence extraction, twenty section-heading regexes, a per-line pass and a
+ * paragraph split. Cost per token therefore grew with the length of the answer
+ * already on screen, so the work to render one reply was quadratic in its
+ * size. Short replies looked fine; long ones froze the tab partway through,
+ * which is what "it hangs after some lines" was.
+ *
+ * Painting on a 60ms floor caps that at ~16 renders a second no matter how
+ * fast the tokens arrive, and no reader can tell the difference.
+ */
+const STREAM_PAINT_MS = 60;
 
 const GROUP_LABEL = {
-  decision: 'Decide',
-  evidence: 'Evidence',
-  action: 'Act',
+  decision: 'The verdict',
+  evidence: 'The evidence',
+  action: 'Next steps',
 } as const;
+
+const STARTER_KINDS = ['decision', 'evidence', 'action'] as const;
 import { useCaseLinks } from '../hooks/useCaseLinks';
 import type { CaseSection } from '../lib/caseRoutes';
 
@@ -46,10 +64,10 @@ function Callout({ type, title, children }: { type: 'info' | 'warning' | 'critic
   const cfg = configs[type] || configs.info;
 
   return (
-    <div className={`my-4 p-4 rounded-xl border ${cfg.border} ${cfg.bg} flex items-start gap-3 shadow-2xs`}>
+    <div className={`my-4 p-4 rounded-xl border ${cfg.border} ${cfg.bg} flex items-start gap-3 shadow-[0_1px_2px_rgba(0,0,0,0.02)]`}>
       {cfg.icon}
       <div className="space-y-1 text-xs leading-relaxed flex-1">
-        {title && <div className={`font-bold ${cfg.text} text-sm`}>{title}</div>}
+        {title && <div className={`font-semibold ${cfg.text} text-sm`}>{title}</div>}
         <div className="text-slate-800">{children}</div>
       </div>
     </div>
@@ -68,9 +86,9 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
   };
 
   return (
-    <div className="my-4 rounded-xl overflow-hidden border border-slate-800 bg-slate-900 text-slate-100 shadow-md">
+    <div className="my-4 rounded-xl overflow-hidden border border-slate-800 bg-slate-900 text-slate-100 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
       <div className="flex items-center justify-between px-4 py-2 bg-slate-950/80 border-b border-slate-800 text-[13px] font-mono text-slate-400">
-        <span className="text-[12px] font-semibold uppercase tracking-[0.06em] flex items-center gap-1.5">
+        <span className="text-[13px] font-semibold uppercase tracking-[0.06em] flex items-center gap-1.5">
           <Terminal className="h-3.5 w-3.5 text-blue-400" />
           {language || 'code'}
         </span>
@@ -102,7 +120,7 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
 
 function TableRenderer({ headers, rows }: { headers: string[]; rows: string[][] }) {
   return (
-    <div className="my-4 rounded-xl border border-slate-200 overflow-hidden shadow-2xs">
+    <div className="answer-block my-5 overflow-hidden rounded-xl border border-slate-200">
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead className="bg-slate-100/90 border-b border-slate-200">
@@ -120,7 +138,7 @@ function TableRenderer({ headers, rows }: { headers: string[]; rows: string[][] 
                 {row.map((cell, cIdx) => (
                   <td key={cIdx} className="px-4 py-2.5 text-slate-800 whitespace-nowrap">
                     {cell.startsWith('`') && cell.endsWith('`') ? (
-                      <code className="bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-purple-700 font-mono text-[13px]">
+                      <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[13px] font-medium text-slate-700">
                         {cell.slice(1, -1)}
                       </code>
                     ) : (
@@ -230,7 +248,41 @@ function autoFormatInvestigationText(text: string): string {
   return processed;
 }
 
-const HIGHLIGHT_PATTERNS = /\b(?:\d{1,3}\.\d{1,2}\s*\/\s*100|\d{1,3}\.\d{1,2}%?|\d{1,3}%|T\d{4}(?:\.\d{3})?|READ_SMS|SYSTEM_ALERT_WINDOW|ACCESSIBILITY_SERVICE|BIND_ACCESSIBILITY_SERVICE|RECORD_AUDIO|RECEIVE_SMS|CAMERA|READ_CONTACTS|Critical|High|Moderate|Low|Suspicious|Anatsa|Hook|Hydra|Teabot|Sudarshan|Cerberus|Alien|Vultun)\b/gi;
+/*
+ * What is worth marking inside a sentence, and how.
+ *
+ * The previous single pattern put an amber highlighter-pen fill behind every
+ * match, which had three consequences worth naming:
+ *
+ * - Amber is the warning colour in this file's callouts, so a perfectly
+ *   ordinary "0.0" read as a caution.
+ * - It matched bare `Critical|High|Moderate|Low`, so the adjective in "a low
+ *   final risk score" was marked as though it were a verdict.
+ * - It matched `Sudarshan`, so the assistant highlighted its own name in its
+ *   own greeting - visible in every conversation's first line.
+ *
+ * Two categories survive, because only two earn it. A measurement is set in
+ * medium weight with tabular figures, so columns of scores line up and the eye
+ * finds them without a colour telling it to. An identifier a reader may need
+ * to copy - a MITRE technique, an Android permission - gets a quiet mono chip.
+ * Neither is a fill, and neither carries a severity colour it has not earned.
+ */
+const MEASUREMENT = String.raw`\d{1,3}\.\d{1,2}\s*\/\s*100|\d{1,3}\.\d{1,2}%?|\d{1,3}%`;
+const IDENTIFIER = String.raw`T\d{4}(?:\.\d{3})?|[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+`;
+/*
+ * Boundaries, not `\b`.
+ *
+ * The old pattern was wrapped in `\b...\b`, and a trailing `\b` cannot match
+ * after a `%` - both sides of that position are non-word characters. So the
+ * `\d{1,3}%` alternative never fired: "a 60% confidence rating" went unmarked
+ * for as long as the rule has existed. A lookahead for a word character does
+ * what the `\b` was meant to do, and the lookbehind stops a version number
+ * from being chopped up mid-string.
+ */
+const HIGHLIGHT_PATTERNS = new RegExp(
+  `(?<![\\w.])(?:${MEASUREMENT}|${IDENTIFIER})(?!\\w)`,
+  'g'
+);
 
 function highlightKeywords(text: string): React.ReactNode[] {
   if (!text) return [];
@@ -243,10 +295,20 @@ function highlightKeywords(text: string): React.ReactNode[] {
     result.push(part);
     if (i < matches.length) {
       const match = matches[i];
+      const isIdentifier = /^[A-Z]/.test(match);
       result.push(
-        <strong key={i} className="font-bold text-slate-950 bg-amber-100/70 px-1 py-0.5 rounded shadow-2xs">
-          {match}
-        </strong>
+        isIdentifier ? (
+          <code
+            key={i}
+            className="mx-0.5 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[13px] font-medium text-slate-700"
+          >
+            {match}
+          </code>
+        ) : (
+          <span key={i} className="font-medium tabular-nums text-slate-900">
+            {match}
+          </span>
+        )
       );
     }
   });
@@ -259,11 +321,15 @@ function highlightKeywords(text: string): React.ReactNode[] {
 function MarkdownRenderer({ content, isStreaming }: { content: string; isStreaming?: boolean }) {
   if (!content) return null;
 
-  const formattedContent = autoFormatInvestigationText(content);
-  const blocks = formattedContent.split(/(```[\s\S]*?```)/g);
+  // Keyed on the text alone: a caret blinking on and off must not re-run the
+  // whole formatting pass over the answer behind it.
+  const blocks = useMemo(
+    () => autoFormatInvestigationText(content).split(/(```[\s\S]*?```)/g),
+    [content]
+  );
 
   return (
-    <div className="w-full min-w-0 space-y-4 font-sans text-[16px] leading-[1.75] text-slate-800">
+    <div className="w-full min-w-0 space-y-3 font-sans text-[16px] leading-[1.7] text-slate-700">
       {blocks.map((block, bIdx) => {
         if (block.startsWith('```') && block.endsWith('```')) {
           const match = block.match(/^```(\w+)?\n([\s\S]*?)```$/);
@@ -292,7 +358,7 @@ function MarkdownRenderer({ content, isStreaming }: { content: string; isStreami
         const flushList = (key: string) => {
           if (inList && listItems.length > 0) {
             elements.push(
-              <ul key={key} className="my-4 pl-5 space-y-2 list-disc text-slate-800 font-normal leading-relaxed">
+              <ul key={key} className="answer-block my-4 max-w-[68ch] list-disc space-y-1.5 pl-5 font-normal leading-[1.7] text-slate-700 marker:text-slate-400">
                 {listItems}
               </ul>
             );
@@ -361,27 +427,28 @@ function MarkdownRenderer({ content, isStreaming }: { content: string; isStreami
             elements.push(<h1 key={lIdx} className="font-sans text-xl font-semibold tracking-[-0.02em] text-slate-900 mt-6 mb-3 border-b border-slate-200 pb-2">{renderFormattedInline(trimmed.slice(2))}</h1>);
             return;
           }
+          /*
+           * A section heading is a heading.
+           *
+           * Every `##` used to become a filled, bordered, shadowed pill with a
+           * shield icon on it, so "Direct Answer", "Executive Summary" and
+           * "Key Decision Evidence" arrived as three identical blue banners
+           * stacked down the page. Everything shouted at one volume, so
+           * nothing ranked, and the shield - repeated verbatim on each - said
+           * nothing at all. Rank now comes from weight, size and the space
+           * above the line, which is what ranks a heading in any document a
+           * bank would otherwise be reading.
+           */
           if (trimmed.startsWith('## ') || trimmed.startsWith('### ')) {
             const headingTitle = trimmed.replace(/^#{2,3}\s*/, '');
-            const isDirectAnswer = headingTitle.toLowerCase().includes('direct answer') || headingTitle.toLowerCase().includes('summary');
-            const isAction = headingTitle.toLowerCase().includes('recommend');
-
-            elements.push(
-              <div
+            return void elements.push(
+              <h2
                 key={lIdx}
-                className={`mt-6 mb-3.5 px-4 py-2.5 rounded-xl border flex items-center gap-2.5 font-bold text-[15px] shadow-2xs ${
-                  isDirectAnswer
-                    ? 'bg-blue-50/90 border-blue-200 text-blue-900'
-                    : isAction
-                    ? 'bg-amber-50/90 border-amber-200 text-amber-900'
-                    : 'bg-slate-100/80 border-slate-200 text-slate-800'
-                }`}
+                className="answer-block mt-8 mb-3 max-w-[68ch] font-sans text-[19px] font-semibold tracking-[-0.02em] leading-snug text-slate-900 first:mt-0"
               >
-                <Shield className="h-4 w-4 text-blue-600 flex-shrink-0" />
-                <span>{renderFormattedInline(headingTitle)}</span>
-              </div>
+                {renderFormattedInline(headingTitle)}
+              </h2>
             );
-            return;
           }
 
           if (trimmed.startsWith('> [!NOTE]') || trimmed.startsWith('> [!INFO]')) {
@@ -398,13 +465,19 @@ function MarkdownRenderer({ content, isStreaming }: { content: string; isStreami
           }
 
           if (trimmed === '---' || trimmed === '***' || trimmed === '___') {
-            elements.push(<hr key={lIdx} className="my-6 border-slate-200" />);
+            elements.push(<hr key={lIdx} className="answer-block my-7 border-slate-200" />);
             return;
           }
 
           // Regular Paragraph with clean spacing
           elements.push(
-            <p key={lIdx} className="my-4 leading-[1.85] text-slate-800 font-normal">
+            // `text-wrap: pretty` keeps a paragraph from ending on a single
+            // orphaned word, which is the kind of thing that reads as careless
+            // in a document somebody is about to forward to a bank.
+            <p
+              key={lIdx}
+              className="answer-block my-4 max-w-[68ch] font-normal leading-[1.7] text-slate-700 [text-wrap:pretty]"
+            >
               {renderFormattedInline(trimmed)}
             </p>
           );
@@ -417,7 +490,12 @@ function MarkdownRenderer({ content, isStreaming }: { content: string; isStreami
       })}
 
       {isStreaming && (
-        <span className="inline-block w-2 h-4 bg-blue-600 ml-1 animate-pulse font-mono font-bold">▋</span>
+        // A caret sized to the text it writes: a 2px rule on the baseline, not
+        // a filled block glyph with a second block character inside it.
+        <span
+          aria-hidden
+          className="answer-caret ml-0.5 inline-block h-[1.05em] w-[2px] translate-y-[0.18em] rounded-full bg-blue-600 align-baseline"
+        />
       )}
     </div>
   );
@@ -430,7 +508,10 @@ function renderFormattedInline(text: string): React.ReactNode {
     if (part.startsWith('`') && part.endsWith('`')) {
       const val = part.slice(1, -1);
       return (
-        <code key={i} className="mx-0.5 bg-slate-100 border border-slate-200/80 px-2 py-0.5 rounded-md text-purple-700 font-mono text-xs font-semibold shadow-2xs">
+        // Purple appears nowhere else in this product. A package name is not a
+        // different kind of thing from the sentence around it - it is the same
+        // sentence, in a face you can copy accurately.
+        <code key={i} className="mx-0.5 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[13px] font-medium text-slate-700">
           {val}
         </code>
       );
@@ -440,7 +521,7 @@ function renderFormattedInline(text: string): React.ReactNode {
     return boldParts.map((bPart, j) => {
       if (bPart.startsWith('**') && bPart.endsWith('**')) {
         const boldVal = bPart.slice(2, -2);
-        return <strong key={j} className="font-bold text-slate-950">{boldVal}</strong>;
+        return <strong key={j} className="font-semibold text-slate-950">{boldVal}</strong>;
       }
       return <span key={j}>{highlightKeywords(bPart)}</span>;
     });
@@ -587,7 +668,7 @@ function InvestigationResponseRenderer({
                 key={idx}
                 onClick={() => onSendMessage(q)}
                 disabled={isStreaming}
-                className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-left font-sans text-[13px] font-medium text-slate-700 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-800 disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-left font-sans text-[13px] font-medium text-slate-700 transition-all duration-150 hover:-translate-y-px hover:border-blue-300 hover:bg-blue-50 hover:text-blue-800 active:translate-y-0 active:scale-[0.98] disabled:opacity-50 disabled:hover:translate-y-0"
               >
                 <span>{q}</span>
               </button>
@@ -595,6 +676,73 @@ function InvestigationResponseRenderer({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/*
+ * What you can do with an answer, once it has finished arriving.
+ *
+ * Icon-only and ghost-weight, because these sit under every reply and a row of
+ * labelled buttons repeated down a transcript becomes the loudest recurring
+ * element on the page. Each one still carries a real label for a screen reader
+ * and a tooltip for a pointer.
+ *
+ * There is deliberately no thumbs-up/thumbs-down pair here. Nothing in this
+ * product receives a rating - a control that swallows a judgement and does
+ * nothing with it is worse than no control, particularly on a screen whose
+ * whole claim is that findings are traceable.
+ */
+function MessageActions({
+  content,
+  onRetry,
+  disabled,
+}: {
+  content: string;
+  onRetry?: () => void;
+  disabled?: boolean;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const action =
+    'inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 transition-[color,background-color,transform] duration-100 hover:bg-slate-100 hover:text-slate-700 active:scale-90 disabled:opacity-40 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500';
+
+  return (
+    <div className="mt-2 flex items-center gap-0.5">
+      <button
+        type="button"
+        title={copied ? 'Copied' : 'Copy answer'}
+        aria-label={copied ? 'Answer copied' : 'Copy answer'}
+        onClick={() => {
+          navigator.clipboard.writeText(content);
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 2000);
+        }}
+        className={action}
+      >
+        {copied ? (
+          <CopyCheck className="h-3.5 w-3.5 text-emerald-600" aria-hidden />
+        ) : (
+          <Copy className="h-3.5 w-3.5" aria-hidden />
+        )}
+      </button>
+
+      {onRetry && (
+        <button
+          type="button"
+          title="Ask again"
+          aria-label="Ask this question again"
+          onClick={onRetry}
+          disabled={disabled}
+          className={action}
+        >
+          <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+        </button>
+      )}
+
+      <span aria-live="polite" className="sr-only">
+        {copied ? 'Answer copied to clipboard' : ''}
+      </span>
     </div>
   );
 }
@@ -629,16 +777,46 @@ export default function InvestigationChat({ data }: { data: FraudCardData | null
     },
   ]);
   const questions = buildCaseQuestions(data);
+  /*
+   * Three openers, one per kind, and only kinds this case actually produced -
+   * a partial run may yield no runtime evidence to ask about, and an opener
+   * pointing at nothing is worse than one fewer card.
+   */
+  const starters = STARTER_KINDS.flatMap((kind) => {
+    const first = questions.find((q) => q.kind === kind);
+    return first ? [{ title: GROUP_LABEL[kind], question: first.text }] : [];
+  });
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const prefilledHandled = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  /*
+   * Follow the answer, but only while the reader is already at the bottom.
+   *
+   * This fired `scrollIntoView({ behavior: 'smooth' })` on every message
+   * change - so once per token. Hundreds of overlapping smooth-scroll
+   * animations queue against each other, and worse, every one of them yanked
+   * the viewport back down: an analyst who scrolled up to re-read a line was
+   * dragged to the foot of the page again on the next token, which is
+   * indistinguishable from the page having seized.
+   *
+   * Scrolling up now means the transcript leaves you alone until you come
+   * back down to the end of it.
+   */
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const end = bottomRef.current;
+    const viewport = end?.closest('[data-chat-scroll]');
+    if (!end || !(viewport instanceof HTMLElement)) return;
+
+    const distanceFromBottom =
+      viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+    if (distanceFromBottom > 120) return;
+
+    end.scrollIntoView({ block: 'end', behavior: 'auto' });
   }, [messages]);
 
   const handleStop = () => {
@@ -669,6 +847,9 @@ export default function InvestigationChat({ data }: { data: FraudCardData | null
 
     setMessages(prev => [...prev, userMsg, assistantMsg]);
     setInput('');
+    // The composer grows with its content, so clearing the value is not enough
+    // to shrink it back - the inline height set on the last keystroke survives.
+    if (inputRef.current) inputRef.current.style.height = 'auto';
     setIsStreaming(true);
 
     const history = messages
@@ -677,6 +858,7 @@ export default function InvestigationChat({ data }: { data: FraudCardData | null
 
     const controller = new AbortController();
     abortRef.current = controller;
+    let paintHandle: number | null = null;
 
     try {
       const res = await fetch(`${API_BASE}/chat/stream`, {
@@ -724,17 +906,30 @@ export default function InvestigationChat({ data }: { data: FraudCardData | null
        * stalls, `read()` never settles and the composer stays locked behind a
        * spinner over a finished answer. Silence this long ends the read.
        */
+      let stalled = false;
       const readWithIdleGuard = () =>
         new Promise<ReadableStreamReadResult<Uint8Array>>((resolve, reject) => {
-          const timer = window.setTimeout(
-            () => resolve({ done: true, value: undefined }),
-            IDLE_TIMEOUT_MS
-          );
+          const timer = window.setTimeout(() => {
+            stalled = true;
+            resolve({ done: true, value: undefined });
+          }, IDLE_TIMEOUT_MS);
           reader
             .read()
             .then(resolve, reject)
             .finally(() => window.clearTimeout(timer));
         });
+
+      const paint = () => {
+        paintHandle = null;
+        setMessages(prev =>
+          prev.map(m =>
+            m.id === assistantId ? { ...m, content: accumulated, sectionsUsed } : m
+          )
+        );
+      };
+      const schedulePaint = () => {
+        if (paintHandle === null) paintHandle = window.setTimeout(paint, STREAM_PAINT_MS);
+      };
 
       let streamDone = false;
       let buffer = '';
@@ -781,33 +976,15 @@ export default function InvestigationChat({ data }: { data: FraudCardData | null
               }
             } else if (currentEvent === 'token') {
               accumulated += dataStr;
-              setMessages(prev =>
-                prev.map(m =>
-                  m.id === assistantId
-                    ? { ...m, content: accumulated, sectionsUsed }
-                    : m
-                )
-              );
+              schedulePaint();
             } else if (currentEvent === 'error') {
               accumulated += (accumulated ? '\n\n' : '') + `> [!CRITICAL]\n> ${dataStr.trim()}`;
-              setMessages(prev =>
-                prev.map(m =>
-                  m.id === assistantId
-                    ? { ...m, content: accumulated, sectionsUsed }
-                    : m
-                )
-              );
+              schedulePaint();
             } else if (currentEvent === 'done' || currentEvent === 'end') {
               // Terminator payload, not answer text.
             } else {
               accumulated += dataStr;
-              setMessages(prev =>
-                prev.map(m =>
-                  m.id === assistantId
-                    ? { ...m, content: accumulated, sectionsUsed }
-                    : m
-                )
-              );
+              schedulePaint();
             }
           }
         }
@@ -822,6 +999,24 @@ export default function InvestigationChat({ data }: { data: FraudCardData | null
        * composer never ran. Release the UI first, tear the socket down after,
        * and do not wait on it.
        */
+      if (paintHandle !== null) {
+        window.clearTimeout(paintHandle);
+        paintHandle = null;
+      }
+      /*
+       * A truncated answer must say it is truncated.
+       *
+       * When the idle guard ends the read, the reply simply stopped
+       * mid-sentence and was then rendered as though it were complete - on a
+       * console whose whole claim is that findings are traceable, an answer
+       * that silently loses its last paragraph is the worst possible failure.
+       */
+      if (stalled && accumulated.trim()) {
+        accumulated +=
+          `\n\n> [!WARNING]\n> The answer stopped early - the assistant went quiet for ` +
+          `${Math.round(IDLE_TIMEOUT_MS / 1000)} seconds. Ask again to get the rest.`;
+      }
+      paint();
       setIsStreaming(false);
       setMessages(prev =>
         prev.map(m => (m.id === assistantId ? { ...m, streaming: false } : m))
@@ -843,6 +1038,10 @@ export default function InvestigationChat({ data }: { data: FraudCardData | null
         );
       }
     } finally {
+      if (paintHandle !== null) {
+        window.clearTimeout(paintHandle);
+        paintHandle = null;
+      }
       setIsStreaming(false);
       setMessages(prev =>
         prev.map(m => (m.id === assistantId ? { ...m, streaming: false } : m))
@@ -873,7 +1072,7 @@ export default function InvestigationChat({ data }: { data: FraudCardData | null
    * moves.
    */
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/*
         One context strip.
 
@@ -885,11 +1084,9 @@ export default function InvestigationChat({ data }: { data: FraudCardData | null
       {/* The visible heading is the case bar's active tab; keep one for readers. */}
       <h1 className="sr-only">Ask SUDARSHAN about this case</h1>
 
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-slate-200 bg-slate-50/70 px-5 py-2.5">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 px-1 pb-3 sm:px-2">
         <p className={TYPOGRAPHY.caption}>
-          {ledgerSummary
-            ? `Answers cite this case's evidence only. ${ledgerSummary}`
-            : "Answers cite this case's evidence only."}
+          {ledgerSummary || "Answers cite this case's evidence only."}
         </p>
         {ledgerSummary && (
           <button type="button" onClick={() => openLedger('full')} className={TYPOGRAPHY.linkAction}>
@@ -900,7 +1097,14 @@ export default function InvestigationChat({ data }: { data: FraudCardData | null
       </div>
 
       {/*
-        The transcript uses the width it is given.
+        The transcript uses the width it is given, but prose does not.
+
+        The column is wide because an evidence table needs to be. A paragraph
+        set to the same width runs past 120 characters a line, which is roughly
+        twice what an eye tracks comfortably - the reader loses the start of
+        the next line on every return sweep. Paragraphs, headings and lists
+        carry a 68ch measure of their own; tables and cards still spend the
+        whole column.
 
         `max-w-3xl` on a full-width case page left a band of empty white down
         both sides wider than some of the answers, and evidence tables wrapped
@@ -908,11 +1112,40 @@ export default function InvestigationChat({ data }: { data: FraudCardData | null
         is now `max-w-5xl`: wide enough for a table, still short enough a line
         of prose does not run away from the eye.
       */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6 sm:px-8">
-        <div className="mx-auto max-w-5xl space-y-7">
-          {messages.map((msg) => (
+      <div data-chat-scroll className="flex min-h-0 flex-1 flex-col overflow-y-auto px-1 py-2 sm:px-2 [mask-image:linear-gradient(to_bottom,transparent_0,black_20px,black_calc(100%-20px),transparent_100%)]">
+        {/*
+          An empty conversation fills from the bottom.
+
+          With nothing asked yet, a greeting and a row of openers pinned to the
+          top of a tall panel leaves the reader looking at a screen of white
+          with the thing they are meant to touch furthest from the composer
+          they will touch it with. `mt-auto` drops the opening move down beside
+          the input; once the first answer arrives the column has real content
+          and fills normally, top-down, the way a transcript must.
+        */}
+        <div
+          className={`mx-auto w-full max-w-5xl space-y-7 ${
+            messages.length <= 1 ? 'mt-auto' : ''
+          }`}
+        >
+          {messages.map((msg, msgIdx) => (
             <div key={msg.id} className={msg.role === 'user' ? 'flex flex-col items-end' : ''}>
-              <div className="mb-1.5 flex items-baseline gap-2">
+              {/*
+                The mark is the assistant's avatar, and it is also its status
+                light: `sudarshan-thinking` turns it while the reply is in
+                flight, so the reader can tell from the speaker's own byline
+                whether the answer has finished arriving.
+              */}
+              <div className="mb-2 flex items-center gap-2">
+                {msg.role === 'assistant' && (
+                  <img
+                    src="/brand/sudarshan-mark-colour.png"
+                    alt=""
+                    className={`h-[26px] w-[26px] shrink-0 select-none ${
+                      msg.streaming ? 'sudarshan-thinking' : ''
+                    }`}
+                  />
+                )}
                 <span className="font-sans text-xs font-semibold tracking-[-0.01em] text-slate-500">
                   {msg.role === 'user' ? 'You' : 'SUDARSHAN'}
                 </span>
@@ -931,17 +1164,59 @@ export default function InvestigationChat({ data }: { data: FraudCardData | null
               */}
               {msg.role === 'assistant' ? (
                 <div className="min-w-0">
-                  <InvestigationResponseRenderer
-                    content={msg.content}
-                    isStreaming={msg.streaming}
-                    onSendMessage={sendMessage}
-                  />
+                  {/*
+                    Before the first token there is nothing to render, and an
+                    empty block under a byline reads as a failed answer. One
+                    honest word - not a fabricated progress stage, since the
+                    stream reports none.
+                  */}
+                  {msg.streaming && !msg.content ? (
+                    <p
+                      aria-live="polite"
+                      className="sudarshan-thinking-label py-0.5 font-sans text-[16px] font-medium"
+                    >
+                      Thinking…
+                    </p>
+                  ) : (
+                    <InvestigationResponseRenderer
+                      content={msg.content}
+                      isStreaming={msg.streaming}
+                      onSendMessage={sendMessage}
+                    />
+                  )}
                   {msg.sectionsUsed && msg.sectionsUsed.length > 0 && (
                     <SectionChips sections={msg.sectionsUsed} />
                   )}
+                  {/*
+                    An answer here is something an analyst pastes into a case
+                    note or a mail to the bank, so it needs to leave the page
+                    intact. Held back until the stream finishes - copying half
+                    an answer is worse than not offering to.
+                  */}
+                  {!msg.streaming && msg.content && msg.id !== 'welcome' && (
+                    <MessageActions
+                      content={msg.content}
+                      onRetry={
+                        messages[msgIdx - 1]?.role === 'user'
+                          ? () => sendMessage(messages[msgIdx - 1].content)
+                          : undefined
+                      }
+                      disabled={isStreaming}
+                    />
+                  )}
                 </div>
               ) : (
-                <p className="max-w-[80%] rounded-2xl rounded-br-md bg-blue-700 px-4 py-2.5 font-sans text-[16px] leading-relaxed text-white">
+                /*
+                 * The reader's own question is the quietest thing on the page.
+                 *
+                 * It used to be a saturated blue block, which made the loudest
+                 * element in the transcript the one part nobody needs to read -
+                 * they wrote it. Blue is this product's action colour; spending
+                 * it here weakens it everywhere it actually means "press this".
+                 * A white surface on the tinted page reads as "yours" without
+                 * competing with the answer underneath it.
+                 */
+                <p className="max-w-[80%] rounded-2xl rounded-br-md border border-slate-200 bg-white px-4 py-2.5 font-sans text-[16px] leading-relaxed text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
                   {msg.content}
                 </p>
               )}
@@ -949,35 +1224,32 @@ export default function InvestigationChat({ data }: { data: FraudCardData | null
           ))}
 
           {/*
-            Suggested questions, derived from this case, and inside the
-            transcript rather than pinned above it: they are the opening move of
-            the conversation, and as a fixed band they cost the message list a
-            third of its height on every case.
+            The opening move, as cards rather than a chip row.
+
+            One card per kind of question this case supports, each carrying the
+            name of the thing it answers and the question itself. A chip row
+            made every opener the same size and shape regardless of what it
+            did; a card gives the reader a heading to scan and a sentence to
+            commit to.
           */}
-          {messages.length <= 1 && questions.length > 0 && (
-            <div className="space-y-2.5 border-t border-slate-200 pt-5">
-              {(['decision', 'evidence', 'action'] as const).map((kind) => {
-                const group = questions.filter((q) => q.kind === kind);
-                if (group.length === 0) return null;
-                return (
-                  <div key={kind} className="flex flex-wrap items-center gap-2">
-                    <span className={`${TYPOGRAPHY.label} w-full sm:w-16 shrink-0`}>
-                      {GROUP_LABEL[kind]}
-                    </span>
-                    {group.map((q) => (
-                      <button
-                        key={q.text}
-                        type="button"
-                        onClick={() => sendMessage(q.text)}
-                        disabled={isStreaming}
-                        className="rounded-md border border-slate-200 bg-white px-3 py-1.5 font-sans text-[13px] font-medium text-slate-700 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-800 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                      >
-                        {q.text}
-                      </button>
-                    ))}
-                  </div>
-                );
-              })}
+          {messages.length <= 1 && starters.length > 0 && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {starters.map((card) => (
+                <button
+                  key={card.question}
+                  type="button"
+                  onClick={() => sendMessage(card.question)}
+                  disabled={isStreaming}
+                  className="group rounded-xl border border-slate-200 bg-white p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-[transform,border-color,box-shadow] duration-150 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_4px_12px_rgba(15,23,42,0.06)] active:translate-y-0 active:scale-[0.99] disabled:opacity-50 disabled:hover:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                >
+                  <span className="block font-sans text-[15px] font-semibold tracking-[-0.01em] text-slate-900">
+                    {card.title}
+                  </span>
+                  <span className="mt-1.5 block font-sans text-[13px] leading-relaxed tracking-[0.01em] text-slate-500">
+                    {card.question}
+                  </span>
+                </button>
+              ))}
             </div>
           )}
 
@@ -994,44 +1266,85 @@ export default function InvestigationChat({ data }: { data: FraudCardData | null
         waited forever. The field is always live; only the send is held back
         while a reply is in flight, and the stop button is right there.
       */}
-      <div className="shrink-0 border-t border-slate-200 bg-white px-6 py-4 sm:px-8">
-        <div className="mx-auto flex max-w-5xl items-center gap-2.5 rounded-2xl border border-slate-200 bg-slate-50 px-2 py-1.5 transition-colors focus-within:border-blue-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500/30">
-          <input
+      <div className="shrink-0 px-1 pb-1 pt-3 sm:px-2">
+        {/*
+          A question about an investigation is often two sentences, and a
+          single-line input hid the first one as soon as the second was typed.
+          The field grows with the text to a six-line ceiling and then scrolls
+          inside itself, so the composer can never push the transcript off
+          screen. Enter sends; Shift+Enter breaks the line.
+        */}
+        {/*
+          One surface, holding everything the composer needs.
+
+          The field, who is answering, and the commit all used to be three
+          separate things stacked down the page - a box, then a caption row
+          under it. Pulling the chip and the button inside makes the composer
+          read as a single object you write into and press, and it is the only
+          raised surface on the page, which is what makes it the obvious place
+          to start.
+        */}
+        <div className="mx-auto max-w-5xl rounded-2xl border border-slate-200 bg-white px-4 pb-3 pt-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-[border-color,box-shadow] focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/25">
+          <textarea
             ref={inputRef}
-            type="text"
+            rows={1}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              const el = e.currentTarget;
+              el.style.height = 'auto';
+              el.style.height = `${Math.min(el.scrollHeight, 168)}px`;
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 sendMessage(input);
+                const el = e.currentTarget;
+                el.style.height = 'auto';
               }
             }}
             placeholder={isStreaming ? 'Type your next question...' : 'Ask about this investigation...'}
-            className="min-w-0 flex-1 border-0 bg-transparent px-3 py-2 font-sans text-[16px] leading-relaxed text-slate-900 placeholder-slate-400 focus:outline-none"
+            className="block w-full resize-none border-0 bg-transparent p-0 font-sans text-[16px] leading-relaxed text-slate-900 placeholder-slate-400 focus:outline-none"
           />
 
-          {isStreaming ? (
-            <button
-              type="button"
-              onClick={handleStop}
-              className="shrink-0 rounded-xl bg-slate-900 p-2.5 text-white transition-colors hover:bg-slate-800"
-              title="Stop generating"
-            >
-              <RefreshCw className="h-4 w-4 animate-spin" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => sendMessage(input)}
-              disabled={!input.trim()}
-              className="shrink-0 rounded-xl bg-blue-700 p-2.5 text-white transition-colors hover:bg-blue-800 disabled:opacity-40"
-              title="Send question"
-            >
-              <Send className="h-4 w-4" />
-            </button>
-          )}
+          <div className="mt-3 flex items-end justify-between gap-3">
+            <span className={`inline-flex items-center gap-1.5 ${TYPOGRAPHY.caption}`}>
+              <img
+                src="/brand/sudarshan-mark-colour.png"
+                alt=""
+                className="h-4 w-4 shrink-0 select-none"
+              />
+              SUDARSHAN · answers only from this case&apos;s evidence
+            </span>
+
+            {isStreaming ? (
+              <button
+                type="button"
+                onClick={handleStop}
+                className="shrink-0 rounded-full bg-slate-900 p-2.5 text-white transition-transform duration-100 hover:bg-slate-800 active:scale-90"
+                title="Stop generating"
+                aria-label="Stop generating"
+              >
+                <Square className="h-4 w-4 fill-current" aria-hidden />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => sendMessage(input)}
+                disabled={!input.trim()}
+                className="shrink-0 rounded-full bg-slate-900 p-2.5 text-white transition-transform duration-100 hover:bg-slate-800 active:scale-90 disabled:bg-slate-300 disabled:active:scale-100"
+                title="Send question"
+                aria-label="Send question"
+              >
+                <ArrowUp className="h-4 w-4" aria-hidden />
+              </button>
+            )}
+          </div>
         </div>
+
+        <p className={`mx-auto mt-2 max-w-5xl text-right ${TYPOGRAPHY.caption}`}>
+          Enter to send · Shift+Enter for a new line
+        </p>
       </div>
     </div>
   );

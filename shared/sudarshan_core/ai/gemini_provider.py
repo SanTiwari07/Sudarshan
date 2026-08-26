@@ -511,11 +511,31 @@ class GeminiProviderManager:
 
         iterator = await asyncio.to_thread(_open)
         while True:
-            try:
-                chunk = await asyncio.to_thread(next, iterator)
-            except StopIteration:
+            # `await asyncio.to_thread(next, iterator)` looks correct and hangs
+            # forever. When the sync iterator is exhausted, next() raises
+            # StopIteration inside the worker thread; asyncio refuses to set a
+            # StopIteration on a Future ("StopIteration interacts badly with
+            # generators"), so the callback dies with TypeError, the future is
+            # never resolved, and this await never returns. The `except
+            # StopIteration` below it is unreachable. The SSE generator then
+            # never reaches its `done` event and the client's connection is
+            # held open until it times out. Convert exhaustion into a sentinel
+            # value that can legally cross the thread boundary.
+            chunk = await asyncio.to_thread(_next_or_sentinel, iterator)
+            if chunk is _STREAM_EXHAUSTED:
                 break
             yield chunk
+
+
+_STREAM_EXHAUSTED = object()
+
+
+def _next_or_sentinel(iterator: Iterator[Any]) -> Any:
+    """next() for a worker thread: exhaustion returns a sentinel, not StopIteration."""
+    try:
+        return next(iterator)
+    except StopIteration:
+        return _STREAM_EXHAUSTED
 
 
 _MANAGER_LOCK = threading.Lock()

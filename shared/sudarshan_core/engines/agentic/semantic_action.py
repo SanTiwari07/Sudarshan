@@ -35,6 +35,27 @@ class SemanticRole(str, Enum):
     UNKNOWN = "UNKNOWN"
 
 
+#: Longest a label may be and still read as a button rather than a sentence.
+#: The real controls on these dialogs are "Allow", "Don't allow", "Allow from
+#: this source", "Install", "Update" - all comfortably inside this.
+_MAX_BUTTON_LABEL_CHARS = 30
+
+
+def _is_dialog_prompt(label: str) -> bool:
+    """
+    Whether this text is a dialog's question rather than one of its controls.
+
+    Deliberately narrow: BOTH long AND question-shaped. "Allow?" stays a
+    button, and a long imperative like "Allow from this source" stays a button
+    because it asks nothing. Only the sentence-length question - which is what
+    Android renders as a permission dialog's title - is excluded.
+    """
+    text = (label or "").strip()
+    if len(text) <= _MAX_BUTTON_LABEL_CHARS:
+        return False
+    return text.endswith("?")
+
+
 # Linguistic patterns — examples, not an exhaustive allowlist.
 _ACCEPT_PATTERNS: Tuple[re.Pattern[str], ...] = tuple(
     re.compile(p, re.I) for p in (
@@ -148,6 +169,31 @@ def classify_semantic_role(
         if _match_any(text, _DECLINE_PATTERNS):
             return SemanticClassification(SemanticRole.DECLINE, 0.8, ("checkable_decline",))
         return SemanticClassification(SemanticRole.ENABLE, 0.75, ("checkable_toggle",))
+
+    # ── A dialog's question is not its button ────────────────────────────────
+    #
+    # Android permission dialogs read "Allow RTO eChallan to make and manage
+    # phone calls?" as their TITLE, and that title sits inside a clickable
+    # container, so it arrives here looking actionable. It also matches
+    # `\ballow\b`, so it scored ACCEPT 0.55+ - exactly what the real Allow
+    # button scores - and the agent kept choosing the prompt.
+    #
+    # Measured on the Anubis payload: three consecutive
+    #   click_text(Allow RTO eChallan to make and manage phone calls?)
+    # before it finally reached click_text(Allow). Permission screens go
+    # through the planner, so each wasted pick cost ~25s: three dialogs
+    # consumed 263 seconds - more than half the walk - and the credential form
+    # was not reached until t+382s.
+    #
+    # Told apart the way this codebase already separates a field caption from
+    # prose: by shape. A button label is short and imperative; a permission
+    # prompt is a long question. Returning UNKNOWN keeps the node available
+    # (it is still a legal tap target if nothing better exists) while letting
+    # the actual Allow/Deny button outrank it.
+    if _is_dialog_prompt(label):
+        return SemanticClassification(
+            SemanticRole.UNKNOWN, 0.2, ("dialog_prompt_not_control",),
+        )
 
     # Pattern scoring
     if _match_any(text, _ACCEPT_PATTERNS):

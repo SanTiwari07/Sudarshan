@@ -63,9 +63,26 @@ INITIAL_EXPLORATION_BUDGET_SECONDS: int = _env_int(
 
 #: The hard ceiling. Progress can extend the deadline up to here and no
 #: further, whatever happens.
+#:
+#: Was `max(INITIAL * 3, 900)` - a 15-minute ceiling. That is not a ceiling in
+#: practice, it is the actual runtime: the explorer extends while it is still
+#: learning something, and on a dropper it always is - Anubis spends the first
+#: two minutes walking its own install flow (Install -> Allow from this source
+#: -> Install this app? -> Update), every step of which is real progress. A
+#: 150s starting budget ran for over six minutes.
+#:
+#: Sized instead against the operational constraint: a whole scan inside 3-4
+#: minutes. Static costs ~25s, launch ~30-50s (spawn attempt plus ladder) and
+#: teardown ~40s, so exploration has to fit in roughly two minutes for the
+#: total to land where it needs to. One 60s extension on top of the starting
+#: budget is enough for a walk that is genuinely mid-login at the deadline,
+#: without letting steady progress run indefinitely.
+#:
+#: Raise MAX_EXPLORATION_BUDGET_SECONDS when a sample needs a longer walk and
+#: the wall-clock is not the binding constraint.
 MAX_EXPLORATION_BUDGET_SECONDS: int = _env_int(
     "MAX_EXPLORATION_BUDGET_SECONDS",
-    max(INITIAL_EXPLORATION_BUDGET_SECONDS * 3, 900),
+    max(INITIAL_EXPLORATION_BUDGET_SECONDS + 60, 180),
 )
 
 ADAPTIVE_EXPLORATION_ENABLED: bool = (

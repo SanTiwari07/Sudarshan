@@ -69,5 +69,5 @@ export const SECTION_LABELS: Record<CaseSection, { label: string; hint: string }
   summary: { label: 'Case', hint: 'what is it, and what should we do?' },
   evidence: { label: 'Evidence', hint: 'what proves it?' },
   intel: { label: 'Intelligence', hint: 'have we seen it before?' },
-  ask: { label: 'Ask SUDARSHAN', hint: 'anything else' },
+  ask: { label: 'Ask Sudarshan', hint: 'anything else' },
 };

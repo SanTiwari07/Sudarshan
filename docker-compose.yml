@@ -163,7 +163,12 @@ services:
       # A measured exploration iteration costs ~14.8s (see .env), so the old 90s
       # default bought only 4-7 actions per sample and every run ended in
       # TIME_BUDGET_EXHAUSTED with unexplored work still in hand.
-      - FRIDA_ANALYSIS_DURATION=${FRIDA_ANALYSIS_DURATION:-300}
+      # Exploration window. 300 was sized when the Gemini planner sat on the
+      # critical path of every action (~12s each); it no longer does, so the
+      # window does not have to absorb that latency. 120 keeps a whole scan -
+      # static, launch, exploration, teardown - inside ~3-4 minutes.
+      # Override in .env when a sample needs a longer walk.
+      - FRIDA_ANALYSIS_DURATION=${FRIDA_ANALYSIS_DURATION:-240}
       # Raise on a slow sandbox: scales every UI action delay.
       - SUDARSHAN_ACTION_DELAY_SCALE=${SUDARSHAN_ACTION_DELAY_SCALE:-1.0}
       - SUDARSHAN_APP_OPEN_SETTLE=${SUDARSHAN_APP_OPEN_SETTLE:-8.0}

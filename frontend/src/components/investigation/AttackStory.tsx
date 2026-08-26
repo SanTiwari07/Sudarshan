@@ -75,7 +75,7 @@ function StageRow({
                 `Screen captured during ${stage.title}`
               }
               loading="lazy"
-              className="max-h-56 w-auto rounded-md border border-slate-200 bg-slate-50"
+              className="max-h-56 w-auto rounded-lg border border-slate-200 bg-slate-50"
             />
             <figcaption className={`${TYPOGRAPHY.caption} mt-1.5`}>
               {stage.screenshot.investigative_claim ||
@@ -113,7 +113,7 @@ function StageRow({
 
         {/* Everything below here is the analyst/engineer layer. */}
         {open && (
-          <div className="mt-3 rounded-md border border-slate-200 bg-slate-50/70 p-3.5 space-y-3">
+          <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/70 p-3.5 space-y-3">
             <p className={TYPOGRAPHY.bodySmall}>{stage.detail}</p>
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
@@ -156,7 +156,7 @@ function StageRow({
                       key={id}
                       type="button"
                       onClick={() => openEvidence(id)}
-                      className="font-mono text-[12px] px-2 py-0.5 rounded border border-blue-100 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
+                      className="font-mono text-[13px] px-2 py-0.5 rounded border border-blue-100 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
                     >
                       {id}
                     </button>

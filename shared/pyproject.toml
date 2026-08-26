@@ -19,3 +19,7 @@ include = ["sudarshan_core*"]
 # The Frida agent is loaded from disk at runtime via
 # Path(__file__).parent / "frida_hooks", so it must ship inside the package.
 "sudarshan_core.engines" = ["frida_hooks/*.js", "frida_hooks/*.json"]
+# The brand mark is resolved the same way, by both report renderers. Without
+# this the PDF masthead and the HTML export lose their logo in any installed
+# copy of the package while still working from a source checkout.
+"sudarshan_core.brand" = ["*.png"]

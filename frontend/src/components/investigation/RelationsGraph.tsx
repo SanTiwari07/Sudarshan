@@ -168,7 +168,7 @@ export function RelationsGraph({ data }: { data: FraudCardData }) {
                   x={labelX}
                   y={y + 3.5}
                   textAnchor={anchor}
-                  className="text-[12px]"
+                  className="text-[13px]"
                   fill="#475569"
                   fontFamily="ui-monospace, monospace"
                 >

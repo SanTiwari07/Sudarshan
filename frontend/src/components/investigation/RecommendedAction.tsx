@@ -35,7 +35,7 @@ function CopyBlock({ label, text }: { label: string; text: string }) {
   };
 
   return (
-    <div className="rounded-md border border-slate-200 bg-white">
+    <div className="rounded-lg border border-slate-200 bg-white">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

@@ -100,7 +100,7 @@ export default function AiExplanation({ data }: { data: FraudCardData }) {
     >
       <header className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 border-b border-slate-200">
         <div className="flex items-center gap-2.5">
-          <span className={`p-1.5 rounded-md shrink-0 ${meta.iconClass}`}>
+          <span className={`p-1.5 rounded-lg shrink-0 ${meta.iconClass}`}>
             <Icon className="h-4 w-4" aria-hidden />
           </span>
           <h2 className={TYPOGRAPHY.h3}>{meta.badge}</h2>

@@ -345,6 +345,7 @@ def in_investigation_scope(
     activity: str = "",
     ui_text: str = "",
     screen_type: str = "",
+    companion_packages: Optional[Any] = None,
 ) -> bool:
     """
     Whether the foreground window is somewhere the agent should keep exploring.
@@ -374,6 +375,11 @@ def in_investigation_scope(
     if not foreground_package or not target_package:
         return True
     if foreground_package == target_package:
+        return True
+    # A package the SAMPLE put in front of the victim is a surface of this
+    # investigation, not somewhere the walk wandered. Checked before the
+    # boundary rules below so a payload can never be mistaken for one.
+    if companion_packages and foreground_package in companion_packages:
         return True
     if foreground_package in INVESTIGATION_SCOPE_PACKAGES:
         return True

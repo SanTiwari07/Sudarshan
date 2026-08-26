@@ -243,36 +243,75 @@ def classify_field(
 
     blob = _haystack(field_label, hint, resource_id, content_desc, text, class_name)
 
+    # DECLARED attributes outrank an INFERRED caption.
+    #
+    # `hint`, `resource-id` and `content-desc` belong to the field itself.
+    # `field_label` is a guess - the nearest preceding text node - and on a
+    # form whose captions render INSIDE their fields that guess is off by one:
+    # every field inherits the previous field's caption.
+    #
+    # Measured on a live e-challan form. The "Mother Name" box carries
+    # hint="Mother Name*" and resource-id="mt", but its inferred caption is the
+    # previous field's "Mobile Number*". Everything used to be concatenated
+    # into one blob, so both matched and pattern order decided: the box was
+    # classified MOBILE at 0.92 and received a phone number. The form could
+    # never validate, "Get Details" never advanced, and the run produced no
+    # runtime behaviour at all.
+    #
+    # The caption is NOT discarded - it is the only human-readable name a field
+    # has on the WebView banking corpus, where hint, id and desc are all empty.
+    # It is simply consulted second, which is exactly when it is the best
+    # evidence available.
+    declared_blob = _haystack(hint, resource_id, content_desc)
+    matched_on_declared = False
+    hit = None
+    if declared_blob.strip():
+        for ftype, pattern, base_conf in _PATTERNS:
+            if re.search(pattern, declared_blob):
+                hit = (ftype, pattern, base_conf)
+                matched_on_declared = True
+                break
+    if hit is None:
+        for ftype, pattern, base_conf in _PATTERNS:
+            if re.search(pattern, blob):
+                hit = (ftype, pattern, base_conf)
+                break
+
     # The platform's own `password` attribute is the strongest single signal
     # available on a WebView form, where nothing else distinguishes the boxes.
     # It says "this is masked", not "this is a password" - so we still run the
     # patterns to separate MPIN/PIN/PASSCODE/OTP from PASSWORD, and only fall
     # back to PASSWORD when the words add nothing.
-    for ftype, pattern, base_conf in _PATTERNS:
-        if re.search(pattern, blob):
-            conf = base_conf
-            # Two independent signals agreeing is worth more than either.
-            if is_password and ftype in {
-                FieldType.PASSWORD, FieldType.PIN, FieldType.MPIN,
-                FieldType.PASSCODE, FieldType.OTP, FieldType.CARD_CVV,
-            }:
-                conf = min(0.99, conf + 0.05)
-                evidence.append("password attribute agrees with label")
-            # ...and disagreeing is worth less. A field the platform masks
-            # whose caption says "Amount" is one of the two signals lying.
-            elif is_password and ftype in {
-                FieldType.SEARCH, FieldType.AMOUNT, FieldType.ADDRESS,
-                FieldType.CITY, FieldType.STATE,
-            }:
-                conf = min(conf, 0.45)
-                evidence.append("password attribute contradicts label")
-            return FieldClassification(
-                field_type=ftype,
-                confidence=conf,
-                evidence=evidence,
-                source=ClassificationSource.DETERMINISTIC,
-                reason=f"matched /{pattern}/",
-            )
+    if hit is not None:
+        ftype, pattern, base_conf = hit
+        conf = base_conf
+        if matched_on_declared:
+            evidence.append("matched on the field's own declared attributes")
+        # Two independent signals agreeing is worth more than either.
+        if is_password and ftype in {
+            FieldType.PASSWORD, FieldType.PIN, FieldType.MPIN,
+            FieldType.PASSCODE, FieldType.OTP, FieldType.CARD_CVV,
+        }:
+            conf = min(0.99, conf + 0.05)
+            evidence.append("password attribute agrees with label")
+        # ...and disagreeing is worth less. A field the platform masks
+        # whose caption says "Amount" is one of the two signals lying.
+        elif is_password and ftype in {
+            FieldType.SEARCH, FieldType.AMOUNT, FieldType.ADDRESS,
+            FieldType.CITY, FieldType.STATE,
+        }:
+            conf = min(conf, 0.45)
+            evidence.append("password attribute contradicts label")
+        return FieldClassification(
+            field_type=ftype,
+            confidence=conf,
+            evidence=evidence,
+            source=ClassificationSource.DETERMINISTIC,
+            reason=(
+                f"matched /{pattern}/ on "
+                f"{'declared attributes' if matched_on_declared else 'label and attributes'}"
+            ),
+        )
 
     if is_password:
         return FieldClassification(

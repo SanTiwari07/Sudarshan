@@ -205,6 +205,15 @@ class SecondaryPayloadTracker:
         self.max_payloads = max_payloads
         self._by_path: Dict[str, SecondaryPayload] = {}
         self.dropped_over_budget = 0
+        #: Packages the sample LAUNCHED rather than installed, keyed by package.
+        #:
+        #: A loader whose own UI is empty and whose entire journey lives in a
+        #: second, already-installed package is not covered by the payload
+        #: machinery above: nothing was downloaded, so no install hook fires and
+        #: `child_packages()` stays empty. Without this the payload's screens are
+        #: EXTERNAL_APP, get no action inventory, and the run reports that the
+        #: app never rendered a screen while a form sits on the emulator.
+        self._launched: Dict[str, Dict[str, Any]] = {}
 
     # ── observation ──────────────────────────────────────────────────────────
 
@@ -462,12 +471,62 @@ class SecondaryPayloadTracker:
     #     navigates back - which is exactly the wrong response to the sample
     #     having just installed its own payload.
 
+    def register_launch_handoff(
+        self,
+        package_name: str,
+        *,
+        activity: str = "",
+        detected_at_ms: int = 0,
+        evidence: str = "",
+    ) -> Dict[str, Any]:
+        """
+        Record that the sample put ANOTHER package's UI in front of the victim.
+
+        This is a hand-off, not a departure: the sample chose the destination,
+        the sample is still running behind it, and the journey the analysis
+        exists to observe is happening there. Registering it makes the package
+        a first-class surface of THIS investigation - in scope for the walk,
+        TARGET_APP for ownership, and counted in target-app depth - while the
+        parent package remains the subject of the report.
+
+        Idempotent: re-registering the same package refreshes nothing and
+        returns the existing record, so a package that keeps returning to the
+        foreground does not accumulate duplicates.
+        """
+        if not package_name or package_name == self.parent_package:
+            return {}
+        existing = self._launched.get(package_name)
+        if existing is not None:
+            return existing
+        record = {
+            "parent_package": self.parent_package,
+            "child_package": package_name,
+            "trigger": "launched_by_sample",
+            "activity": activity,
+            "detected_at_ms": detected_at_ms,
+            "evidence": evidence,
+            "relationship": "launched_by",
+            "child_state": "not_explored",
+        }
+        self._launched[package_name] = record
+        logger.info(
+            "[SecondaryPayload] LAUNCH_HANDOFF parent=%s child=%s activity=%s "
+            "- adopting as a surface of this investigation (%s)",
+            self.parent_package, package_name, activity,
+            evidence or "no further evidence",
+        )
+        return record
+
+    def launched_packages(self) -> Set[str]:
+        """Packages the sample launched but did not install."""
+        return set(self._launched)
+
     def child_packages(self) -> Set[str]:
-        """Packages installed by the sample that are known children."""
+        """Packages the sample installed or launched - either way, its own."""
         return {
             p.package_name for p in self._by_path.values()
             if p.package_name and p.install_confirmed
-        }
+        } | set(self._launched)
 
     def is_child_package(self, package_name: str) -> bool:
         """Whether this foreground package is a child of the investigation."""
@@ -482,6 +541,9 @@ class SecondaryPayloadTracker:
         Returned rather than logged so the caller can attach it to the
         investigation's evidence with the parent context intact.
         """
+        launched = self._launched.get(package_name)
+        if launched is not None:
+            return launched
         for payload in self._by_path.values():
             if payload.package_name and payload.package_name == package_name:
                 return {
@@ -527,6 +589,16 @@ class SecondaryPayloadTracker:
         launched_at_ms: int = 0,
     ) -> Optional[SecondaryPayload]:
         """Record how far exploration of a child application got."""
+        launched = self._launched.get(package_name)
+        if launched is not None:
+            launched["child_state"] = state
+            if states_explored:
+                launched["child_states_explored"] = states_explored
+            if actions_taken:
+                launched["child_actions_taken"] = actions_taken
+            if launched_at_ms:
+                launched["launched_at_ms"] = launched_at_ms
+            return None
         for payload in self._by_path.values():
             if payload.package_name and payload.package_name == package_name:
                 payload.exploration_state = state

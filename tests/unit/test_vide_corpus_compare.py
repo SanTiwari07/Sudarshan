@@ -220,16 +220,48 @@ def test_brand_palette_attributes_the_right_bank(colors, expected):
     "institution_id",
     ["BASE-01-SBI", "BASE-03-ICICI", "BASE-08-KOTAK", "BASE-10-UNION"],
 )
-def test_distinctive_labels_attribute_the_right_bank(institution_id):
+def test_the_institution_name_attributes_the_right_bank(institution_id):
     """
-    A clone copying one bank's distinctive labels is attributed to that bank
-    even when its colours are neutral.
+    A clone that puts a bank's name on screen is attributed to that bank even
+    when its colours are neutral.
+
+    Tier 1: names are exclusive by construction, which is what makes this work
+    on a corpus whose label sets and structural signatures are identical across
+    all ten baselines.
+    """
+    baseline = _baseline(institution_id)
+    name = baseline.app_name or baseline.display_name
+    # As a clone renders it: on the splash, the header and the welcome copy.
+    branding = [name, f"Welcome to {name}", f"New to {name}?"]
+    verdict = _verdict(generic_bank_strings() + branding, ["#888888"], LOGIN_HTML)
+
+    assert verdict.best.institution_id == institution_id
+    assert verdict.attribution_ambiguous is False
+    assert any(
+        hit.startswith("name:") for hit in verdict.best.attribution.exclusive_hits
+    )
+
+
+@requires_corpus
+@pytest.mark.parametrize(
+    "institution_id",
+    ["BASE-03-ICICI", "BASE-06-PNB", "BASE-07-BOI"],
+)
+def test_shared_template_labels_attribute_nothing(institution_id):
+    """
+    The false positive this architecture exists to prevent.
+
+    Every corpus baseline ships the same ``exactStrings``, so reproducing one
+    bank's label set reproduces all ten. Naming a bank on that evidence is
+    naming one at random - BOI, ICICI and PNB separated by under 0.01 before
+    the discriminative tiers were introduced - so the comparer must decline.
     """
     baseline = _baseline(institution_id)
     verdict = _verdict(list(baseline.profile.strings), ["#888888"], LOGIN_HTML)
 
-    assert verdict.best.institution_id == institution_id
-    assert verdict.attribution_ambiguous is False
+    assert verdict.attribution_ambiguous is True
+    assert verdict.detected is False
+    assert verdict.ambiguity_reason == "no_exclusive_evidence"
 
 
 @requires_corpus

@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Set
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from sudarshan_core.engines.agentic.field_classifier import FieldClassification
     from sudarshan_core.engines.agentic.field_constraints import FieldConstraints
+    from sudarshan_core.engines.agentic.victim_profile import SyntheticVictimProfile
 
 __all__ = [
     "FIELD_KINDS",
@@ -183,6 +184,9 @@ class CredentialVault:
     #: legacy dict keeps exactly its old thirteen keys and old readers of it
     #: are unaffected.
     typed_values: Dict[str, str] = field(default_factory=dict)
+    #: The coherent synthetic citizen this vault is currently presenting, or
+    #: None once the vault has rotated past its first identity.
+    profile: Optional["SyntheticVictimProfile"] = None
 
     def __post_init__(self) -> None:
         if not self.values:
@@ -216,6 +220,39 @@ class CredentialVault:
             "port":     "8080",
             "text":     f"t{suffix}",
         }
+        # First identity: the coherent synthetic citizen (§P8). Applied to the
+        # LEGACY dict too, not only the typed path, because ToolExecutor still
+        # fills a field from a legacy `field_hint` string whenever the graph
+        # could not resolve a specific FieldType - and a form filled half from
+        # the profile and half from `user4f2kqz` is not one person, which is
+        # precisely what an app cross-checking two fields will notice.
+        #
+        # Rotation (attempt >= 2) drops back to the randomised values above:
+        # presenting a DIFFERENT identity is the entire purpose of the retry,
+        # and a profile that persisted across it would make every attempt look
+        # the same to the app.
+        if self.attempt <= 1:
+            from sudarshan_core.engines.agentic.victim_profile import (
+                build_victim_profile,
+            )
+
+            # Built per vault, not fetched from a process-level cache: two
+            # vaults in one process must not present the same login, or a
+            # sample can fingerprint the analysis on one string compare.
+            self.profile = build_victim_profile()
+            p = self.profile
+            self.values.update({
+                "username": p.username,
+                "password": p.password,
+                "email":    p.email,
+                "phone":    p.phone,
+                "otp":      p.otp,
+                "name":     p.full_name,
+                "address":  p.address,
+            })
+        else:
+            self.profile = None
+        _ISSUED.update(v for v in self.values.values() if v)
 
     def value_for(self, kind: str) -> str:
         return self.values.get(kind, self.values.get("text", "test"))
@@ -246,7 +283,18 @@ class CredentialVault:
         if cached is not None:
             return cached
 
-        value = generate_value(constraints, seed_token=self.seed_token)
+        # The FIRST identity a run offers is the coherent synthetic citizen
+        # (§P8): it is the one that has to survive the app's own validators,
+        # and a name that reads like a name is also what makes the resulting
+        # screenshot legible as evidence. Once the app has refused that
+        # identity the vault has rotated, and the whole point of the retry is
+        # to present a DIFFERENT person - so the profile steps aside and the
+        # randomised generator takes over.
+        value = generate_value(
+            constraints,
+            seed_token=self.seed_token,
+            profile=self.profile,
+        )
         self.typed_values[key] = value
         _ISSUED.add(value)
         return value

@@ -8,6 +8,7 @@ import { AnalysisProvider, useAnalysis } from './context/AnalysisContext';
 import { caseSectionPath, type CaseSection } from './lib/caseRoutes';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoadingSpinner, ErrorState } from './components/ui/Skeleton';
+import type { AntiEvasionResult } from './lib/resilience';
 
 function lazyWithRetry<T extends React.ComponentType<any>>(
   componentImport: () => Promise<{ default: T }>
@@ -178,6 +179,8 @@ export type DynamicAnalysis = {
     title: string;
     result_summary: string;
   }[];
+  /** Autonomous anti-evasion delta, measured mid-session. Absent = not run. */
+  anti_evasion?: AntiEvasionResult | null;
   bfci?: number;
   bfci_components?: Record<string, number>;
   bfci_evidence?: string[];

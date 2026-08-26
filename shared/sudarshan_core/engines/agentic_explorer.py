@@ -40,6 +40,7 @@ import asyncio
 import logging
 import os
 import re
+import subprocess
 import threading
 import time
 from datetime import datetime, timezone
@@ -124,6 +125,15 @@ from sudarshan_core.engines.agentic.exploration_engine import (
 )
 
 logger = logging.getLogger(__name__)
+
+#: Screens where entering data IS entering credentials, so a submit on them
+#: advances the authentication state and may be retried with a fresh identity.
+#: DATA_ENTRY_FORM is deliberately absent - see its definition in
+#: :mod:`~sudarshan_core.engines.agentic.screen_classifier`.
+_CREDENTIAL_SCREEN_TYPES: frozenset = frozenset({
+    "BANK_LOGIN",
+    "OTP_SCREEN",
+})
 
 # ─── Configuration (env overrides) ────────────────────────────────────────────
 
@@ -433,6 +443,9 @@ class AgenticExplorer:
         # Child applications already explored, so a package that keeps coming
         # back to the foreground is not explored twice.
         self._explored_children: set = set()
+        #: package -> "was this installed onto the device, or shipped with the
+        #: image?". Answered once per package; see _is_third_party_package.
+        self._third_party_cache: Dict[str, bool] = {}
         # State ids that already contributed an in-app evidence frame.
         self._state_frames_captured: set = set()
         # ── Form stagnation ───────────────────────────────────────────────────
@@ -1052,6 +1065,18 @@ class AgenticExplorer:
         # The value is never in this line - only its length and the field's
         # identity, both of which are already visible on the screen itself.
         logger.info("[AgenticExplorer] %s", verification.log_line())
+        # §P28 / §P34: the forensic record of an input is (field_type,
+        # value_source, result). The VALUE is deliberately absent: it is a
+        # synthetic secret, and a persistent report carrying it in plaintext is
+        # the thing §P28 exists to prevent. `value_source` names where the
+        # value came from, which is what an analyst actually needs to know when
+        # reading a screenshot of the filled form.
+        logger.info(
+            "[DAE][INPUT] field=%s source=%s result=%s",
+            data.get("field_type") or action.get("field_hint") or "UNKNOWN",
+            action.get("value_source") or "SYNTHETIC_PERSONA",
+            "SUCCESS" if verification.succeeded else verification.outcome,
+        )
         self.audit_log.record_system_event(
             "field_population_verified",
             f"field_hint={action.get('field_hint', '')} "
@@ -1571,11 +1596,185 @@ class AgenticExplorer:
             "data":      event.get("data", {}),
         })
 
+    def _is_third_party_package(self, package: str) -> bool:
+        """
+        Whether `package` was installed onto this device rather than shipped
+        with the image.
+
+        Asked of the device instead of matched against a denylist, because a
+        denylist of "apps that are not payloads" cannot be written: the whole
+        point is that the payload's package name is unknown and often random.
+        Chrome, Settings and the launcher are system packages on every image we
+        run, so this single question excludes them all without naming any.
+
+        Cached per package - the answer cannot change during a run - and a
+        failed query answers False, so an unreadable device narrows scope
+        rather than widening it.
+        """
+        cached = self._third_party_cache.get(package)
+        if cached is not None:
+            return cached
+        answer = False
+        try:
+            out = subprocess.run(
+                [self.adb_path, "-s", self.device_serial, "shell",
+                 "pm", "list", "packages", "-3"],
+                capture_output=True, text=True, timeout=20,
+            ).stdout
+            answer = f"package:{package}" in (out or "")
+        except Exception as exc:                      # noqa: BLE001
+            logger.debug(
+                "[AgenticExplorer] Could not classify '%s' as third-party: %s",
+                package, exc,
+            )
+        self._third_party_cache[package] = answer
+        return answer
+
+    def _detect_launch_handoff(self, foreground_package: str, obs: Any) -> bool:
+        """
+        Adopt a package the SAMPLE launched to render its own UI.
+
+        Four conditions, all required, and each one removes a specific way this
+        could go wrong:
+
+        1. The victim has taken no action yet. A foreign app that appears after
+           a tap was reached BY that tap - that is a departure, and §P24 owns
+           it. Only a foreground that appears as a consequence of launching the
+           target can be a hand-off.
+        2. The sample's process is still alive. A sample that died and left
+           something else on screen did not hand off to it.
+        3. The foreground is a third-party package. Excludes the launcher,
+           Settings, Chrome and every other system surface without naming them.
+        4. It is not already a known boundary surface.
+
+        Returns True when a hand-off was adopted, and is idempotent afterwards.
+        """
+        if not foreground_package or foreground_package == self.package_name:
+            return False
+        if foreground_package in self.exploration.companion_packages:
+            return True
+        # (1) nothing the victim did can explain this foreground.
+        if self.exploration.actions_attempted > 0:
+            return False
+        # (4) a system boundary is a boundary, however early it appears.
+        if in_investigation_scope(
+            foreground_package, self.package_name, activity=obs.activity,
+        ):
+            return False
+        from sudarshan_core.engines.agentic.screenshot_policy import (
+            LAUNCHER_PACKAGES,
+        )
+        if foreground_package in LAUNCHER_PACKAGES:
+            return False
+        # (2) the sample is still running behind whatever is on screen.
+        if self._resolve_target_pid() <= 0:
+            logger.info(
+                "[DAE][HANDOFF] rejected foreground=%s - target process is not "
+                "running, so the sample did not hand off to it",
+                foreground_package,
+            )
+            return False
+        # (3) shipped with the image, or installed onto it?
+        if not self._is_third_party_package(foreground_package):
+            return False
+
+        return self.adopt_companion_package(
+            foreground_package,
+            activity=getattr(obs, "activity", ""),
+            evidence=(
+                f"foreground before any victim action while {self.package_name} "
+                f"(pid {self._target_pid}) was still running"
+            ),
+        )
+
+    def adopt_companion_package(
+        self,
+        package: str,
+        *,
+        activity: str = "",
+        evidence: str = "",
+    ) -> bool:
+        """
+        Take ownership of a package the sample launched to render its journey.
+
+        Public because the SANDBOX detects this first. The hand-off completes
+        milliseconds after launch, long before the explorer starts, so
+        frida_sandbox sees it while deciding which processes to instrument -
+        and it must not have to be rediscovered here, where the "before any
+        victim action" test could already have expired.
+
+        Idempotent, so the sandbox seeding it and the explorer observing it
+        independently cannot produce two adoptions.
+        """
+        if not package or package == self.package_name:
+            return False
+        if package in self.exploration.companion_packages:
+            return True
+
+        record = self._payloads.register_launch_handoff(
+            package,
+            activity=activity,
+            detected_at_ms=int(time.time() * 1000),
+            evidence=evidence,
+        )
+        if not record:
+            return False
+        foreground_package = package
+        self.exploration.companion_packages.add(foreground_package)
+        logger.info(
+            "[DAE][HANDOFF] target=%s companion=%s activity=%s "
+            "- adopted as a target surface",
+            self.package_name, foreground_package, activity,
+        )
+        self.audit_log.record_system_event(
+            "launch_handoff_detected",
+            f"{self.package_name} -> {foreground_package} (activity={activity})",
+        )
+        self.attack_timeline.append({
+            "timestamp": self._elapsed_ts(),
+            "source":    "System",
+            "action":    "Launch Hand-off",
+            "details":   (
+                f"{self.package_name} launched {foreground_package}, which "
+                f"renders the user-facing journey"
+            ),
+        })
+        if self.event_bus:
+            try:
+                self.event_bus.publish({
+                    "type": "event",
+                    "category": "multi_stage",
+                    "severity": "MEDIUM",
+                    "data": {
+                        # Named for what was OBSERVED - a foreground change
+                        # while the sample was running - not for an API we did
+                        # not hook.
+                        "hook": "activity.launch_handoff",
+                        "description": (
+                            f"{self.package_name} put {foreground_package} in "
+                            f"front of the user immediately after launch; the "
+                            f"app's journey is rendered by a second package"
+                        ),
+                        "package": self.package_name,
+                        "child_package": foreground_package,
+                    },
+                })
+            except Exception:
+                pass
+        return True
+
     def _drain_frida_events(self) -> List[Dict]:
         """Drain and return all buffered Frida events since the last drain."""
         with self._events_lock:
             events = list(self._pending_frida_events)
             self._pending_frida_events.clear()
+        # The Smart Investigator's tally. Counted on the drain rather than in
+        # the graph because the event stream belongs to the explorer, and
+        # counted even when a branch is blocked: a sample that keeps calling
+        # hooked APIs while the victim is stuck at a boundary is exactly the
+        # case §P29 asks to keep observing.
+        if events:
+            self.exploration.runtime_events_observed += len(events)
         return events
 
     # ── Main agent loop ────────────────────────────────────────────────────────
@@ -1777,6 +1976,12 @@ class AgenticExplorer:
                 # not by the LLM. Without this the whole dependency graph stays
                 # blocked on stage 1 forever.
                 foreground_package = package_of(obs.activity)
+                # Adoption runs BEFORE classification so the payload's very
+                # first screen - usually its most interesting - is classified
+                # as the sample's own rather than as EXTERNAL_APP. It needs
+                # only the foreground package and the observation, so there is
+                # nothing to wait for.
+                self._detect_launch_handoff(foreground_package, obs)
                 # Classified here rather than after the scope guard: the guard
                 # needs the screen type to distinguish a consent prompt hosted
                 # by Settings from an ordinary Settings screen. Reused verbatim
@@ -1784,6 +1989,7 @@ class AgenticExplorer:
                 classification = classify_screen_with_ownership(
                     obs.activity, obs.ui_nodes, obs.ui_xml_raw,
                     self.package_name, foreground_package,
+                    companion_packages=self.exploration.companion_packages,
                 )
                 self.goals.update_from_foreground(
                     foreground_package=foreground_package,
@@ -1809,6 +2015,9 @@ class AgenticExplorer:
                 # back out of the one surface worth looking at. The parent
                 # investigation still owns it: evidence stays attached here and
                 # the original APK context is never replaced.
+                # A package the sample launched to render its own journey was
+                # adopted above, before classification. See
+                # _detect_launch_handoff.
                 _is_child = self._payloads.is_child_package(foreground_package)
                 if _is_child and foreground_package not in self._explored_children:
                     self._explored_children.add(foreground_package)
@@ -1843,6 +2052,7 @@ class AgenticExplorer:
                     activity=obs.activity,
                     ui_text=screen_text,
                     screen_type=classification.screen_type,
+                    companion_packages=self.exploration.companion_packages,
                 ):
                     out_of_scope_streak += 1
                     was_out_of_scope = True
@@ -2492,8 +2702,26 @@ class AgenticExplorer:
                 # would have the walk submit credentials the auth state machine
                 # never hears about, so the app's answer is read as an
                 # unexplained screen change.
+                # A CREDENTIAL screen, not merely a screen with boxes on it.
+                #
+                # ScreenType.DATA_ENTRY_FORM is documented as deliberately not
+                # driving the authentication state - it is data entry, not
+                # credential entry - but this site did not honour that, and the
+                # `press_enter` branch fires on the IME action after ANY field.
+                # Measured on an e-challan form whose four boxes are a name, a
+                # phone, a mother's name and a date: typing them raised seven
+                # LOGIN_ATTEMPTs and three LOGIN_ATTEMPTS_EXHAUSTED, and each
+                # "rejection" rotated the vault to a fresh identity. The form
+                # was then re-filled with one persona's name beside another
+                # persona's phone number - incoherent data that the app itself
+                # would be right to reject.
+                _auth_screen = classification.screen_type in _CREDENTIAL_SCREEN_TYPES or any(
+                    getattr(n, "is_password", False)
+                    for n in (getattr(obs, "ui_nodes", []) or [])
+                )
                 self._submitted_credentials = bool(
-                    (
+                    _auth_screen
+                    and (
                         (
                             last_action_tool in ("click_text", "tap")
                             and _is_submit_label(last_action_target)
@@ -2596,6 +2824,7 @@ class AgenticExplorer:
                     post_obs.activity, post_obs.ui_nodes,
                     post_obs.ui_xml_raw, self.package_name,
                     package_of(post_obs.activity),
+                    companion_packages=self.exploration.companion_packages,
                 )
                 post_state = self.exploration.observe(
                     post_obs,
@@ -2653,6 +2882,7 @@ class AgenticExplorer:
                             post_obs.activity, post_obs.ui_nodes,
                             post_obs.ui_xml_raw, self.package_name,
                             package_of(post_obs.activity),
+                            companion_packages=self.exploration.companion_packages,
                         )
                         post_state = self.exploration.observe(
                             post_obs,
@@ -3162,6 +3392,20 @@ class AgenticExplorer:
         deep_exploration = self.exploration.to_dict()
         action_traces = [t.to_dict() for t in self.dispatcher.traces]
 
+        # ── Dynamic status (§P25) ────────────────────────────────────────────
+        # Instrumentation is judged by whether the run ever had a target
+        # process to watch, not by whether the walk got far: a sample that was
+        # launched, attached to and then blocked at a boundary produced real
+        # evidence, and reporting that as INSTRUMENTATION_FAILED would let a
+        # partial run be mistaken for an unobserved one.
+        instrumentation_ok = bool(self._target_pid) or bool(
+            self.exploration.states
+        )
+        dynamic_status = self.exploration.dynamic_status(
+            instrumentation_ok=instrumentation_ok
+        ).value
+        exploration_summary["dynamic_status"] = dynamic_status
+
         return {
             # One view hierarchy per distinct in-app screen, for VIDE. Consumed
             # by vide.pipeline._dynamic_ui_hierarchies(); the single
@@ -3216,6 +3460,10 @@ class AgenticExplorer:
             ),
             "secondary_apk_summary": self._payloads.summary(),
             "action_traces":       action_traces,
+            # ── Target-boundary and status reporting (§P24, §P25, §P26) ───────
+            "dynamic_status":      dynamic_status,
+            "boundary_events":     deep_exploration.get("boundary_events", []),
+            "loop_events":         deep_exploration.get("loop_events", []),
         }
 
     def preserve_secondary_payloads(self, output_dir: Path) -> List[Dict[str, Any]]:

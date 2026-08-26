@@ -27,7 +27,7 @@ export default function EvidenceToolbar({
     <div className="p-3 border-b border-slate-200 bg-white">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
         <div>
-          <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Evidence Registry</h2>
+          <h2 className="text-xs font-bold text-slate-900">Evidence Registry</h2>
           <p className="text-[11px] text-slate-500 mt-0.5">
             {total} verified finding{total === 1 ? '' : 's'} · Static, runtime, and threat correlation evidence
           </p>
@@ -43,7 +43,7 @@ export default function EvidenceToolbar({
                 key={f.id}
                 type="button"
                 onClick={() => onFilterChange(f.id)}
-                className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-all border-b-2 -mb-[1px] ${
+                className={`px-3 py-1.5 text-xs font-bold transition-all border-b-2 -mb-[1px] ${
                   active
                     ? 'border-blue-600 text-blue-700 font-bold'
                     : 'border-transparent text-slate-500 hover:text-slate-900'
@@ -63,7 +63,7 @@ export default function EvidenceToolbar({
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search findings…"
-            className="w-full pl-8 pr-3 py-1 text-xs rounded-md border border-slate-200 bg-white text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full pl-8 pr-3 py-1 text-xs rounded-md border border-slate-200 bg-white text-slate-800 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             aria-label="Search findings"
           />
         </div>

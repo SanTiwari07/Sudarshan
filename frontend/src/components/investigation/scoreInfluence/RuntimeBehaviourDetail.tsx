@@ -23,7 +23,7 @@ export default function RuntimeBehaviourDetail({
             view.includedInFrs ? 'border-emerald-200 bg-emerald-50/50' : 'border-amber-200 bg-amber-50/40'
           }`}
         >
-          <div className="text-lg font-black tracking-wide text-slate-900">{view.statusHeadline}</div>
+          <div className="text-lg font-semibold tracking-wide text-slate-900">{view.statusHeadline}</div>
           {view.observedScore != null && (
             <p className="text-sm mt-2">
               Observed runtime score:{' '}

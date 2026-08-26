@@ -54,7 +54,7 @@ function AnalyzedBody({ vide, data }: { vide: VideResult; data: FraudCardData })
   return (
     <div className="p-3.5 space-y-3.5 text-xs text-slate-600">
       <div>
-        <p className="text-xs font-bold text-slate-800 uppercase tracking-wider">No banking UI impersonation detected</p>
+        <p className="text-xs font-bold text-slate-800">No banking UI impersonation detected</p>
         <p className="mt-1 text-[11px] text-slate-500">VIDE-F001 did not fire for this sample against lab baselines.</p>
       </div>
 

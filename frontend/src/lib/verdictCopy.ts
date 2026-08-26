@@ -28,8 +28,33 @@ export function formatScore(score: number | null | undefined): string {
  */
 export function bandOverrideReason(data: FraudCardData): string | null {
   const frs = data.frs_breakdown;
+
+  /*
+   * Ordered most-specific first.
+   *
+   * The engine emits four floor flags. Only two of them were declared on the
+   * TypeScript type and only two were read here, so a case floored for
+   * incomplete exercise or for strong static evidence showed a band that
+   * outranked its own score with nothing on screen explaining why - which reads
+   * as a broken scale rather than as the most interesting sentence on the page.
+   */
+  if (data.verdict === 'INCOMPLETE_EXERCISE' || data.execution_assertions?.incomplete_exercise) {
+    const a = data.execution_assertions;
+    const coverage =
+      a && a.total_count > 0
+        ? ` Only ${a.fired_count} of ${a.total_count} trigger conditions were reached.`
+        : '';
+    return (
+      'The sandbox ran but never exercised this sample, so no threat behaviour could be ' +
+      'observed. The score reflects what could be measured, not what the app can do.' +
+      coverage
+    );
+  }
   if (!frs) return null;
 
+  if (frs.verdict_floored_for_incomplete_exercise) {
+    return 'Band raised above the raw score: no fraud trigger condition was reached during the sandbox run, so the absence of malicious behaviour is unexplained rather than exonerating.';
+  }
   if (frs.verdict_floored_for_evasion) {
     return 'Band raised above the raw score: the sample ran anti-analysis checks and then withheld its behaviour. Evasion is not evidence of safety.';
   }
@@ -39,8 +64,11 @@ export function bandOverrideReason(data: FraudCardData): string | null {
   if (frs.verdict_floored_for_visibility) {
     return 'Band raised above the raw score: too little of the sample was observable to certify it, so the verdict is floored for analyst visibility.';
   }
-  if (data.verdict === 'INCOMPLETE_EXERCISE' || data.execution_assertions?.incomplete_exercise) {
-    return 'The sandbox never exercised this sample, so the score reflects what could be measured, not what the app can do.';
+  if (frs.verdict_floored_for_static_evidence) {
+    return 'Band raised above the raw score: static analysis found capability strong enough to outweigh a quiet runtime result.';
+  }
+  if (frs.dynamic_ran && !frs.dynamic_conclusive) {
+    return 'Runtime analysis ran but was not conclusive, so this score describes what was observed rather than what the application can do.';
   }
   return null;
 }

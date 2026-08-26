@@ -38,7 +38,7 @@ export default function ThreatEvidenceExplorer({ groups }: { groups: Group[] }) 
               >
                 {open ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
                 {g.group}
-                <span className="text-slate-400 font-normal">({g.items.length})</span>
+                <span className="text-slate-500 font-normal">({g.items.length})</span>
               </button>
               {open && (
                 <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200">
@@ -62,7 +62,7 @@ export default function ThreatEvidenceExplorer({ groups }: { groups: Group[] }) 
                                 type="button"
                                 onClick={() => !disabled && openEvidence(item.id)}
                                 disabled={disabled}
-                                className="text-[11px] font-semibold text-blue-700 hover:text-blue-900 disabled:text-slate-400 disabled:cursor-default"
+                                className="text-[11px] font-semibold text-blue-700 hover:text-blue-900 disabled:text-slate-500 disabled:cursor-default"
                               >
                                 {disabled ? '-' : 'Open'}
                               </button>

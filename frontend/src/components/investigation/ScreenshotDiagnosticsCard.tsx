@@ -12,6 +12,7 @@ import type { FraudCardData } from '../../App';
 import type { RuntimeScreenshotMeta } from '../../lib/screenshotManifest';
 import { formatScreenshotTime, inferFailureReasonFromCase } from '../../lib/screenshotManifest';
 import type { ScreenshotUxState } from '../../lib/investigationRuntime';
+import { useCaseLinks } from '../../hooks/useCaseLinks';
 
 const POSSIBLE_CAUSES = [
   'App crashed during launch',
@@ -36,6 +37,7 @@ export default function ScreenshotDiagnosticsCard({
   uxState,
   compact = false,
 }: Props) {
+  const links = useCaseLinks();
   const reason =
     runtime?.failureReason || inferFailureReasonFromCase(data, captured) || 'Screenshots unavailable';
 
@@ -83,32 +85,32 @@ export default function ScreenshotDiagnosticsCard({
             <>
               <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-1 text-[10px]">
             <div>
-              <dt className="text-slate-400 uppercase tracking-wide">Expected</dt>
+              <dt className="text-slate-500 uppercase tracking-wide">Expected</dt>
               <dd className="font-mono font-semibold text-slate-800">{expected}</dd>
             </div>
             <div>
-              <dt className="text-slate-400 uppercase tracking-wide">Captured</dt>
+              <dt className="text-slate-500 uppercase tracking-wide">Captured</dt>
               <dd className="font-mono font-semibold text-slate-800">{reported}</dd>
             </div>
             <div>
-              <dt className="text-slate-400 uppercase tracking-wide">Interval</dt>
+              <dt className="text-slate-500 uppercase tracking-wide">Interval</dt>
               <dd className="font-mono text-slate-700">{interval}</dd>
             </div>
             <div>
-              <dt className="text-slate-400 uppercase tracking-wide">Dyn. duration</dt>
+              <dt className="text-slate-500 uppercase tracking-wide">Dyn. duration</dt>
               <dd className="font-mono text-slate-700 flex items-center gap-1">
-                <Clock className="h-3 w-3 text-slate-400" />
+                <Clock className="h-3 w-3 text-slate-500" />
                 {duration}
               </dd>
             </div>
             <div className="col-span-2 sm:col-span-2">
-              <dt className="text-slate-400 uppercase tracking-wide">Last capture</dt>
+              <dt className="text-slate-500 uppercase tracking-wide">Last capture</dt>
               <dd className="font-mono text-slate-700">{lastCapture}</dd>
             </div>
           </dl>
 
           <div>
-            <p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Possible causes</p>
+            <p className="text-[10px] font-bold uppercase text-slate-500 mb-1">Possible causes</p>
             <ul className="text-[10px] text-slate-600 columns-1 sm:columns-2 gap-x-4 leading-relaxed">
               {POSSIBLE_CAUSES.map((c) => (
                 <li key={c} className="break-inside-avoid">
@@ -137,7 +139,7 @@ export default function ScreenshotDiagnosticsCard({
               Retry Capture
             </Link>
             <Link
-              to="/technical"
+              to={links.evidence}
               className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-md hover:border-blue-300"
             >
               <ScrollText className="h-3 w-3" />

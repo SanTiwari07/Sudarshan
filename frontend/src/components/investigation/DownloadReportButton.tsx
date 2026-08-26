@@ -27,7 +27,7 @@ export default function DownloadReportButton({ sha256, className }: { sha256: st
       disabled={downloading}
       className={
         className ||
-        'inline-flex items-center justify-center gap-2.5 px-6 py-3 bg-blue-700 hover:bg-blue-800 text-white text-xs sm:text-sm font-mono font-extrabold uppercase tracking-wider rounded-lg shadow-sm transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-60'
+        'inline-flex items-center justify-center gap-2.5 px-6 py-3 bg-blue-700 hover:bg-blue-800 text-white text-xs sm:text-sm font-mono font-extrabold rounded-lg shadow-sm transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-60'
       }
     >
       <Download className="h-4 w-4 sm:h-5 sm:w-5" />

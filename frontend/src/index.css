@@ -29,6 +29,9 @@
 
   body {
     @apply antialiased text-slate-900 bg-[var(--surface-page)] min-w-0 font-sans;
+    /* Wide content scrolls inside its own container, never by moving the page
+       - which would carry the verdict off screen with it. */
+    overflow-x: hidden;
     /* cv11 = single-storey g, ss03 = disambiguated punctuation. Both make
        package names and hashes read cleanly at 11-12px. */
     font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss03";
@@ -80,7 +83,7 @@
     @apply font-sans text-[13px] font-medium inline-flex items-center justify-center gap-2 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 disabled:opacity-50;
   }
   .typo-code {
-    @apply font-mono text-xs font-normal text-slate-700 tabular-nums break-all select-all;
+    @apply font-mono text-xs font-normal text-slate-700 tabular-nums break-all;
   }
 }
 
@@ -90,17 +93,39 @@
     @apply p-3 sm:p-4 min-h-0 bg-surface-page;
   }
 
+  /*
+   * Reference views keep the full width - tables want it.
+   */
   .analyst-page {
     @apply w-full min-w-0 max-w-[1920px] mx-auto space-y-4;
+  }
+
+  /*
+   * The case summary is prose, and prose has a measure.
+   *
+   * A 62-character line inside a 1920px container was the single largest
+   * contributor to the page reading as a wall: the eye has to travel the full
+   * width to find the next line's start, and the verdict sentence - the thing a
+   * bank manager is here for - sat marooned in whitespace beside it.
+   */
+  .case-page {
+    @apply w-full min-w-0 max-w-[1280px] mx-auto space-y-4;
   }
 
   .technical-view {
     @apply w-full min-w-0 max-w-[1920px] mx-auto space-y-4;
   }
 
-  /* Bloomberg-level dense, highly structured tables */
+  /*
+   * Dense forensic tables.
+   *
+   * The wrapper scrolls horizontally so a wide table never forces the page body
+   * to. A reader on a phone can pan the table; a page that pans takes the
+   * verdict off screen with it.
+   */
   .soc-table-wrap {
     @apply overflow-x-auto overflow-y-auto border border-slate-200/80 rounded-md bg-surface-card shadow-sm;
+    -webkit-overflow-scrolling: touch;
   }
 
   .soc-table {
@@ -282,6 +307,59 @@
     }
   }
 
+  /*
+   * Dialog entrance.
+   *
+   * The screenshot lightbox carried `animate-in fade-in duration-150` -
+   * utilities from `tailwindcss-animate`, which this project does not install.
+   * The classes were inert, so a modal specified to fade in has been appearing
+   * instantly since it was written.
+   *
+   * Scale is deliberately shallow (0.98, not 0.9). A forensic image viewer
+   * opening should read as "this arrived", not as a zoom effect over evidence.
+   * Both utilities are inside @layer utilities, so the reduced-motion guard at
+   * the end of this file collapses them for a reader who asked for less.
+   */
+  .dialog-backdrop-enter {
+    animation: dialogBackdropIn 0.15s ease-out both;
+  }
+
+  .dialog-panel-enter {
+    animation: dialogPanelIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* Side drawers travel from the edge they are anchored to. */
+  .drawer-panel-enter {
+    animation: drawerPanelIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  @keyframes drawerPanelIn {
+    from {
+      opacity: 0;
+      transform: translateX(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes dialogBackdropIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  @keyframes dialogPanelIn {
+    from {
+      opacity: 0;
+      transform: scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
   .investigation-stage-active {
     animation: investigationStageIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
@@ -309,5 +387,27 @@
     50% {
       opacity: 0.5;
     }
+  }
+}
+
+/*
+ * Reduced motion.
+ *
+ * There were six keyframe animations here, two of them infinite, and no media
+ * query anywhere in the product. Animation must never be required to understand
+ * a fraud verdict, so a reader who has asked their OS for less motion gets the
+ * same information with none of it.
+ *
+ * Placed outside @layer so it wins against utility-layer animation classes
+ * without needing to out-specify each one.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

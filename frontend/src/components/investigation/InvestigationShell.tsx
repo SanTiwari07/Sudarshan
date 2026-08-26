@@ -1,24 +1,16 @@
 import { useEffect } from 'react';
-import { Navigate, useLocation, useParams } from 'react-router-dom';
+import { Navigate, useParams } from 'react-router-dom';
 import { LoadingSpinner } from '../ui/Skeleton';
 import { useAnalysis } from '../../context/AnalysisContext';
 import { InvestigationUIProvider } from '../../context/InvestigationUIContext';
-import CaseHeader from './CaseHeader';
-import PersistentCaseBar from './PersistentCaseBar';
-import ScoreLedgerSlideOver from './ScoreLedgerSlideOver';
-import EvidenceDrawer from './EvidenceDrawer';
-import FindingExplanationDrawer from './FindingExplanationDrawer';
-import FindingEvidenceDrawer from './FindingEvidenceDrawer';
-import ScoreInfluenceDetailDrawer from './ScoreInfluenceDetailDrawer';
+import CaseBar from './CaseBar';
+import InvestigationDrawers from './InvestigationDrawers';
 import AnalystNotesPanel from './AnalystNotesPanel';
 
 function InvestigationChrome({ children }: { children: React.ReactNode }) {
-  const { pathname } = useLocation();
   const { sha256: routeSha } = useParams<{ sha256?: string }>();
   const { analysisResult, investigationBundle, loading, activeSha256, loadCaseByHash, runtimeEvidenceRaw } =
     useAnalysis();
-
-  const showCaseHeader = pathname === '/fraud-card' || pathname.startsWith('/fraud-card/');
 
   const pendingHash = routeSha || activeSha256;
 
@@ -40,29 +32,22 @@ function InvestigationChrome({ children }: { children: React.ReactNode }) {
   return (
     <>
       {/*
-        Exactly one identity header per view. CaseHeader is the full form and
-        owns the summary route; every other view gets the condensed bar, so the
-        score is always on screen without two headers competing to be the
-        authoritative one.
+        One case bar on every section.
+
+        It carries identity, the verdict and the section tabs, so moving between
+        Case, Evidence, Intelligence and Ask reads as turning a page inside one
+        investigation rather than leaving it. The summary route keeps it too:
+        this is thin sticky navigation, not a second hero competing with
+        VerdictBlock for the same job.
       */}
-      {showCaseHeader ? (
-        <CaseHeader data={analysisResult} />
-      ) : (
-        <PersistentCaseBar data={analysisResult} />
-      )}
+      <CaseBar data={analysisResult} />
       {children}
       {bundle && (
-        <>
-          <ScoreLedgerSlideOver data={analysisResult} bundle={bundle} />
-          <EvidenceDrawer data={analysisResult} bundle={bundle} />
-          <FindingExplanationDrawer
-            data={analysisResult}
-            bundle={bundle}
-            rawRuntime={runtimeEvidenceRaw}
-          />
-          <FindingEvidenceDrawer data={analysisResult} bundle={bundle} rawRuntime={runtimeEvidenceRaw} />
-          <ScoreInfluenceDetailDrawer data={analysisResult} bundle={bundle} />
-        </>
+        <InvestigationDrawers
+          data={analysisResult}
+          bundle={bundle}
+          rawRuntime={runtimeEvidenceRaw}
+        />
       )}
       <AnalystNotesPanel sha256={analysisResult.sha256} />
     </>

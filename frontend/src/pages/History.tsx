@@ -203,12 +203,12 @@ export default function History() {
 
       <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
         {loading && cases.length === 0 ? (
-          <div className={`flex items-center justify-center py-16 text-slate-400 gap-3 ${TYPOGRAPHY.caption}`}>
+          <div className={`flex items-center justify-center py-16 text-slate-500 gap-3 ${TYPOGRAPHY.caption}`}>
             <RefreshCw className="h-5 w-5 animate-spin" aria-hidden />
             Loading cases
           </div>
         ) : cases.length === 0 ? (
-          <div className={`py-16 text-center text-slate-400 ${TYPOGRAPHY.caption}`}>
+          <div className={`py-16 text-center text-slate-500 ${TYPOGRAPHY.caption}`}>
             <Database className="h-8 w-8 mx-auto mb-2 opacity-40" aria-hidden />
             <p>No cases found{appliedSearch ? ` matching “${appliedSearch}”` : ''}.</p>
           </div>
@@ -244,7 +244,7 @@ export default function History() {
                         {c.app_name || c.package_name || 'Unnamed'}
                       </div>
                       {c.app_name && c.package_name && (
-                        <div className={`${TYPOGRAPHY.codeSm} text-slate-400 truncate`}>
+                        <div className={`${TYPOGRAPHY.codeSm} text-slate-500 truncate`}>
                           {c.package_name}
                         </div>
                       )}
@@ -261,7 +261,7 @@ export default function History() {
                       {c.family_classification && c.family_classification !== 'Unknown' ? (
                         c.family_classification
                       ) : (
-                        <span className="text-slate-400">—</span>
+                        <span className="text-slate-500">—</span>
                       )}
                     </td>
                     <td className={`px-4 py-2.5 ${TYPOGRAPHY.tableCell}`}>

@@ -10,7 +10,8 @@ import {
   buildWhySudarshanConcluded,
   qualitativeConfidence,
 } from '../../lib/threatIntelOverview';
-import { BadgeCheck, BrainCircuit, ClipboardCheck, ShieldAlert, Sparkles } from 'lucide-react';
+import { SearchX, BadgeCheck, BrainCircuit, ClipboardCheck, ShieldAlert, Sparkles } from 'lucide-react';
+import { isInconclusive } from '../../lib/decision';
 
 function InsightBlock({
   icon,
@@ -54,6 +55,7 @@ export default function AIIntelligenceOverview({
   evidenceConfidence: number;
   actions: AnalystAction[];
 }) {
+  const inconclusive = isInconclusive(data);
   const narrative = buildThreatIntelExecutiveNarrative(data, intel, bundle, evidenceConfidence);
   const discovered = buildWhatWasDiscovered(data, intel);
   const why = buildWhySudarshanConcluded(data, intel, bundle);
@@ -103,10 +105,22 @@ export default function AIIntelligenceOverview({
           className="rounded-xl border border-slate-200/80 bg-white/90 shadow-sm p-4 sm:p-5 space-y-4 lg:sticky lg:top-4"
           aria-label="Briefing snapshot"
         >
-          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-800 text-xs font-semibold w-full justify-center sm:justify-start">
-            <BadgeCheck className="h-3.5 w-3.5 shrink-0" aria-hidden />
-            Evidence verified
-          </span>
+          {/*
+            This badge was unconditional - every case, however inconclusive its
+            run, was crowned "Evidence verified" in green. It now reports what
+            the analysis actually earned.
+          */}
+          {inconclusive ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-300 bg-slate-50 text-slate-700 text-xs font-semibold w-full justify-center sm:justify-start">
+              <SearchX className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              Coverage incomplete
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-800 text-xs font-semibold w-full justify-center sm:justify-start">
+              <BadgeCheck className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              Evidence verified
+            </span>
+          )}
 
           <dl className="space-y-3 text-sm">
             <div>
@@ -116,15 +130,6 @@ export default function AIIntelligenceOverview({
               <dd className="mt-0.5 font-semibold text-slate-900">
                 {Math.round(evidenceConfidence)}%
                 <span className="text-slate-500 font-normal"> · {confLabel}</span>
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                Risk verdict
-              </dt>
-              <dd className="mt-0.5 font-semibold text-slate-900">
-                {data.risk_band}
-                <span className="text-slate-500 font-normal"> · FRS {data.final_risk_score.toFixed(1)}</span>
               </dd>
             </div>
             {family && (

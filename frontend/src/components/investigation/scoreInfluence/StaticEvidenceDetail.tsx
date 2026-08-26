@@ -36,7 +36,7 @@ export default function StaticEvidenceDetail({ data }: { data: FraudCardData }) 
                     className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-blue-50/40"
                   >
                     <span className="text-sm font-semibold text-slate-900">{f.title}</span>
-                    <ChevronDown className={`h-4 w-4 text-slate-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`h-4 w-4 text-slate-500 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
                   </button>
                   {open && (
                     <div className="px-3 pb-3 space-y-2 text-xs border-t border-slate-100">
@@ -95,7 +95,7 @@ export default function StaticEvidenceDetail({ data }: { data: FraudCardData }) 
           {steiAxisRows(view.steiAxes).map((row) => (
             <div key={row.key} className="flex items-center justify-between gap-2 text-xs">
               <span className="text-slate-700">
-                {row.label} <span className="text-slate-400">({row.weight})</span>
+                {row.label} <span className="text-slate-500">({row.weight})</span>
               </span>
               <span className="font-mono font-bold text-slate-900 tabular-nums">{row.value.toFixed(1)}</span>
             </div>

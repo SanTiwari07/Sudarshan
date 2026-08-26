@@ -1,8 +1,11 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Terminal, Cpu, Search, Lock, Code, Package,
-  ChevronDown, ChevronUp, Shield, Globe, AlertTriangle, Database, Tag, Key
+  ChevronDown, ChevronUp, ChevronRight, Shield, Globe, AlertTriangle, Database, Tag, Key
 } from 'lucide-react';
+import { TYPOGRAPHY } from '../theme/typography';
+import { caseSectionPath } from '../lib/caseRoutes';
 import type { FraudCardData } from '../App';
 import VisualImpersonationPanel from '../components/investigation/VisualImpersonationPanel';
 import VisualDiffViewer from '../components/investigation/VisualDiffViewer';
@@ -10,7 +13,6 @@ import OverlayEvidenceViewer from '../components/investigation/OverlayEvidenceVi
 import SocCard from '../components/ui/Card';
 import SectionHeader from '../components/ui/SectionHeader';
 import CopyButton from '../components/ui/CopyButton';
-import WorkflowDiagram from '../components/WorkflowDiagram';
 import EvidenceRegistrySection from '../components/investigation/EvidenceRegistrySection';
 import ScreenshotGallery from '../components/investigation/ScreenshotGallery';
 import DynamicAnalysisSummary from '../components/investigation/DynamicAnalysisSummary';
@@ -21,6 +23,9 @@ import {
   runtimeStatusHeadline,
 } from '../lib/investigationRuntime';
 import { useAnalysis } from '../context/AnalysisContext';
+import { useRuntimeScreenshots } from '../hooks/useRuntimeScreenshots';
+import { useInvestigationUI } from '../context/InvestigationUIContext';
+import EvidenceSection from '../components/ui/EvidenceSection';
 import AnalysisTabs, { type AnalysisTab } from '../components/investigation/AnalysisTabs';
 import ActivitySummary from '../components/investigation/ActivitySummary';
 import BehaviorTags from '../components/investigation/BehaviorTags';
@@ -30,26 +35,24 @@ import MitreMatrix from '../components/investigation/MitreMatrix';
 import AskAiPopover from '../components/investigation/AskAiPopover';
 
 /**
- * Row count past which a table starts collapsed.
- *
- * Every panel opened expanded, so arriving at the technical view meant
- * hundreds of rows at once and no way to see the shape of the page. Blanket
- * collapsing is the opposite mistake: a two-row table costs nothing to show,
- * and hiding it behind a click makes small findings easy to miss entirely.
- */
-const COLLAPSE_ABOVE_ROWS = 0;
-
-/**
- * Start collapsed whenever there is anything to collapse.
+ * Panel-level open state.
  *
  * These are lookup tables - permissions, exported components, trackers, raw
  * strings. They are the answer to a question the analyst has already decided
- * to ask, and rendering them all expanded is what made the tab read as a wall.
- * The section header still carries the row count, so nothing is hidden, only
- * deferred. An empty table stays open so its "nothing found" state is visible.
+ * to ask.
+ *
+ * That deferral now belongs to the EvidenceSection wrapping each panel, which
+ * owns the disclosure and carries the row count on its header. Leaving the
+ * inner collapse in place as well meant opening a section revealed a second
+ * collapsed header - two clicks to reach one table, and the outer count
+ * promising content the panel then hid.
+ *
+ * Kept as a hook rather than deleted so the panels keep their existing
+ * open/close control for a reader who wants to fold one table away without
+ * closing the whole section.
  */
-function useRowAccordion(rowCount: number) {
-  return useState(rowCount <= COLLAPSE_ABOVE_ROWS);
+function useRowAccordion(_rowCount: number) {
+  return useState(true);
 }
 
 // ─── Explainability Engine ────────────────────────────────────────────────────────
@@ -111,7 +114,7 @@ function APKMetadata({ data }: { data: FraudCardData }) {
             key={r.label}
             className="grid grid-cols-1 sm:grid-cols-[minmax(9rem,28%)_1fr] gap-x-4 gap-y-0.5 py-1.5 border-b border-slate-150 last:border-0 hover:bg-slate-50/50 rounded px-1.5 -mx-1.5 transition-colors duration-100 items-center"
           >
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{r.label}</span>
+            <span className="text-[11px] font-bold text-slate-500">{r.label}</span>
             <div className="flex items-center gap-1.5 min-w-0">
               <span
                 className={`text-xs min-w-0 ${r.mono ? 'font-mono' : ''} ${r.highlight ? 'text-red-700 font-semibold' : 'text-slate-800'} ${r.truncate ? 'truncate' : 'break-all'}`}
@@ -142,7 +145,7 @@ function PermissionTable({ data }: { data: FraudCardData }) {
       <SectionHeader icon={<Lock className="h-4 w-4" />} title="Permission Analysis" subtitle={`${data.all_permissions.length} total permissions extracted`} />
       <div className="p-2 border-b border-slate-200 bg-slate-50/30">
         <div className="relative">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
           <input
             type="text"
             value={filter}
@@ -172,7 +175,7 @@ function PermissionTable({ data }: { data: FraudCardData }) {
                         CRITICAL
                       </span>
                     ) : (
-                      <span className="text-slate-400">Normal</span>
+                      <span className="text-slate-500">Normal</span>
                     )}
                   </td>
                 </tr>
@@ -194,7 +197,7 @@ function DangerousAPITable({ data }: { data: FraudCardData }) {
     <SocCard>
       <SectionHeader icon={<Code className="h-4 w-4" />} title="Dangerous API Detection" subtitle={`${apis.length} dangerous API(s) detected`} />
       {apis.length === 0 ? (
-        <div className="p-6 text-center text-xs text-slate-400 font-mono">
+        <div className="p-6 text-center text-xs text-slate-500 font-mono">
           No dangerous Java/Android API invocations detected in DEX bytecode.
         </div>
       ) : (
@@ -237,7 +240,7 @@ function CertificatePanel({ certificate }: { certificate?: Record<string, any> }
     return (
       <SocCard>
         <SectionHeader icon={<Lock className="h-4 w-4" />} title="Digital Certificate & Signature" subtitle="X.509 Cryptographic Identity" />
-        <div className="p-6 text-center text-xs text-slate-400 font-mono">No certificate metadata available</div>
+        <div className="p-6 text-center text-xs text-slate-500 font-mono">No certificate metadata available</div>
       </SocCard>
     );
   }
@@ -279,7 +282,7 @@ function DecompilationPanel({ data }: { data: FraudCardData }) {
     return (
       <SocCard>
         <SectionHeader icon={<Code className="h-4 w-4" />} title="Static Decompilation Intelligence" subtitle="APKTool Resources & JADX Source Pattern Scanner" />
-        <div className="p-4 text-center text-xs text-slate-400 font-mono">Decompilation enrichment data unavailable for this scan</div>
+        <div className="p-4 text-center text-xs text-slate-500 font-mono">Decompilation enrichment data unavailable for this scan</div>
       </SocCard>
     );
   }
@@ -314,7 +317,7 @@ function NetworkCapturePanel({ networkLogs }: { networkLogs?: any[] }) {
     return (
       <SocCard>
         <SectionHeader icon={<Terminal className="h-4 w-4" />} title="Network Capture & C2 Telemetry" subtitle="Runtime mitmproxy & PCAP logs" />
-        <div className="p-6 text-center text-xs text-slate-400 font-mono">No dynamic network traffic captured</div>
+        <div className="p-6 text-center text-xs text-slate-500 font-mono">No dynamic network traffic captured</div>
       </SocCard>
     );
   }
@@ -355,7 +358,7 @@ function LogcatInspectorPanel({ logcat }: { logcat?: string }) {
     return (
       <SocCard>
         <SectionHeader icon={<Terminal className="h-4 w-4" />} title="Logcat System Diagnostics" subtitle="Android OS Event Stream" />
-        <div className="p-6 text-center text-xs text-slate-400 font-mono">No logcat telemetry collected</div>
+        <div className="p-6 text-center text-xs text-slate-500 font-mono">No logcat telemetry collected</div>
       </SocCard>
     );
   }
@@ -392,7 +395,7 @@ function DynamicAnalysisPanel({ data }: { data: FraudCardData }) {
       <div className="p-3 border-b border-slate-200 bg-slate-50/40">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-2.5">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Runtime status:</span>
+            <span className="text-[11px] font-bold text-slate-500">Runtime status:</span>
             <span
               className={`px-1.5 py-0.5 text-[10px] font-bold rounded border font-mono uppercase ${
                 isOk
@@ -417,7 +420,7 @@ function DynamicAnalysisPanel({ data }: { data: FraudCardData }) {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
           {data.frs_breakdown?.dynamic_ran && (
             <div className="p-2 bg-white rounded border border-slate-200">
-              <span className="text-slate-400 block text-[9px] uppercase font-bold tracking-wider">
+              <span className="text-slate-500 block text-[9px] uppercase font-bold tracking-wider">
                 <HelpTerm term="BFCI">Observed BFCI</HelpTerm>
               </span>
               <span className="font-mono font-bold text-slate-800 text-sm">
@@ -426,22 +429,35 @@ function DynamicAnalysisPanel({ data }: { data: FraudCardData }) {
             </div>
           )}
           <div className="p-2 bg-white rounded border border-slate-200">
-            <span className="text-slate-400 block text-[9px] uppercase font-bold tracking-wider">Raw events</span>
+            <span className="text-slate-500 block text-[9px] uppercase font-bold tracking-wider">Raw events</span>
             <span className="font-mono font-bold text-slate-800 text-sm">
               {dyn.evidence_record_count || (dyn.api_calls || []).length}
             </span>
           </div>
           <div className="p-2 bg-white rounded border border-slate-200">
-            <span className="text-slate-400 block text-[9px] uppercase font-bold tracking-wider">Hook errors</span>
+            <span className="text-slate-500 block text-[9px] uppercase font-bold tracking-wider">Hook errors</span>
             <span className="font-mono font-bold text-slate-800 text-sm">{(dyn.hook_errors || []).length}</span>
           </div>
         </div>
       </div>
 
-      <div className="p-3 bg-white">
-        <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2.5">Reconstructed behavioral chain</h3>
-        <WorkflowDiagram workflow={data.fraud_workflow} />
-      </div>
+      {/*
+        The reconstructed chain used to render here, thirteen panels down in the
+        behaviour tab, below the certificate table. It is the most
+        executive-legible artifact the engine produces, so it now leads the case
+        summary instead - and this points at it rather than rendering a second
+        copy that could drift from the first.
+      */}
+      {data.fraud_workflow?.fraud_sequence_detected && (
+        <div className="p-3 bg-white border-t border-slate-200">
+          <Link to={caseSectionPath(data.sha256, 'summary')} className={TYPOGRAPHY.linkAction}>
+            View the reconstructed attack chain
+            {typeof data.fraud_workflow.stage_count === 'number' &&
+              ` (${data.fraud_workflow.stage_count} stages)`}
+            <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+          </Link>
+        </div>
+      )}
     </SocCard>
   );
 }
@@ -487,14 +503,14 @@ function ManifestFindingsPanel({ data }: { data: FraudCardData }) {
           icon={<AlertTriangle className="h-4 w-4" />}
           title="Manifest Security Findings"
           subtitle={`${findings.length} finding(s) from AndroidManifest.xml analysis`}
-          action={open ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+          action={open ? <ChevronUp className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
         />
       </button>
       {open && (
         <>
           <div className="flex flex-wrap items-center justify-between gap-2 p-2 border-b border-slate-200 bg-slate-50/40">
             <div className="relative flex-1 min-w-[140px]">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
               <input type="text" value={filter} onChange={e => setFilter(e.target.value)}
                 placeholder="Filter findings..." className="w-full pl-7 pr-3 py-1 text-xs bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500" />
             </div>
@@ -520,7 +536,7 @@ function ManifestFindingsPanel({ data }: { data: FraudCardData }) {
                 </div>
               </div>
             ))}
-            {visible.length === 0 && <div className="p-6 text-center text-xs text-slate-400 font-mono">No findings match the current filter.</div>}
+            {visible.length === 0 && <div className="p-6 text-center text-xs text-slate-500 font-mono">No findings match the current filter.</div>}
           </div>
         </>
       )}
@@ -571,14 +587,14 @@ function CodeFindingsPanel({ data }: { data: FraudCardData }) {
           icon={<Code className="h-4 w-4" />}
           title="Static Code Security Findings"
           subtitle={`${findings.length} finding(s) from source analysis - with MASVS/CWE/OWASP`}
-          action={open ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+          action={open ? <ChevronUp className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
         />
       </button>
       {open && (
         <>
           <div className="flex flex-wrap items-center gap-2 p-2.5 border-b border-slate-200 bg-slate-50/40">
             <div className="relative min-w-[130px]">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
               <input type="text" value={filter} onChange={e => setFilter(e.target.value)}
                 placeholder="Search..." className="pl-7 pr-3 py-1 text-xs bg-white border border-slate-200 rounded-md w-36 focus:outline-none focus:ring-1 focus:ring-blue-500" />
             </div>
@@ -616,13 +632,13 @@ function CodeFindingsPanel({ data }: { data: FraudCardData }) {
                 {f.files?.length > 0 && (
                   <div className="mt-2 space-y-0.5 border-t border-slate-100 pt-1.5">
                     {f.files.slice(0, 3).map((file, fi) => (
-                      <p key={fi} className="text-[9px] font-mono text-slate-400 truncate">{file}</p>
+                      <p key={fi} className="text-[9px] font-mono text-slate-500 truncate">{file}</p>
                     ))}
                   </div>
                 )}
               </div>
             ))}
-            {visible.length === 0 && <div className="p-6 text-center text-xs text-slate-400 font-mono">No findings match the current filter.</div>}
+            {visible.length === 0 && <div className="p-6 text-center text-xs text-slate-500 font-mono">No findings match the current filter.</div>}
           </div>
         </>
       )}
@@ -660,14 +676,14 @@ function ExportedComponentsPanel({ data }: { data: FraudCardData }) {
           icon={<Shield className="h-4 w-4" />}
           title="Exported Components - Attack Surface"
           subtitle={`${total} exported component(s) accessible by external apps / intents`}
-          action={open ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+          action={open ? <ChevronUp className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
         />
       </button>
       {open && (
         <>
           <div className="p-2 border-b border-slate-200 bg-slate-50/40">
             <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
               <input type="text" value={filter} onChange={e => setFilter(e.target.value)}
                 placeholder="Filter by component name..." className="w-full pl-7 pr-3 py-1 text-xs bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500" />
             </div>
@@ -695,7 +711,7 @@ function ExportedComponentsPanel({ data }: { data: FraudCardData }) {
                 ))}
               </tbody>
             </table>
-            {visible.length === 0 && <div className="p-6 text-center text-xs text-slate-400 font-mono">No components match filter.</div>}
+            {visible.length === 0 && <div className="p-6 text-center text-xs text-slate-500 font-mono">No components match filter.</div>}
           </div>
         </>
       )}
@@ -712,7 +728,7 @@ function BinaryAnalysisPanel({ data }: { data: FraudCardData }) {
   if (bins.length === 0) return null;
 
   const flagStyle = (val?: string | null) => {
-    if (!val) return 'text-slate-400';
+    if (!val) return 'text-slate-500';
     const v = String(val).toLowerCase();
     if (v === 'true' || v === 'full' || v === 'enabled') return 'text-emerald-700 font-bold';
     if (v === 'false' || v === 'none' || v === 'disabled') return 'text-red-700 font-bold';
@@ -727,7 +743,7 @@ function BinaryAnalysisPanel({ data }: { data: FraudCardData }) {
           icon={<Database className="h-4 w-4" />}
           title="Native Binary Analysis"
           subtitle={`${bins.length} native library (SO) file(s) - NX, Stack Canary, RELRO, RPATH`}
-          action={open ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+          action={open ? <ChevronUp className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
         />
       </button>
       {open && (
@@ -779,7 +795,7 @@ function NetworkSecurityPanel({ data }: { data: FraudCardData }) {
           icon={<Globe className="h-4 w-4" />}
           title="Network Security Config"
           subtitle={`${entries.length} NSC configuration entries (cleartext, pinning, trust anchors)`}
-          action={open ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+          action={open ? <ChevronUp className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
         />
       </button>
       {open && (
@@ -831,7 +847,7 @@ function TrackersPanel({ data }: { data: FraudCardData }) {
           icon={<Tag className="h-4 w-4" />}
           title="Third-Party SDKs & Trackers"
           subtitle={`${trackers.length} SDK fingerprint(s) identified`}
-          action={open ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+          action={open ? <ChevronUp className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
         />
       </button>
       {open && (
@@ -874,14 +890,14 @@ function SecretsPanel({ data }: { data: FraudCardData }) {
           icon={<Key className="h-4 w-4" />}
           title="Hardcoded Secrets & Credentials"
           subtitle={`${secrets.length} secret(s) found - API keys, tokens, Firebase configs, JWT`}
-          action={open ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+          action={open ? <ChevronUp className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
         />
       </button>
       {open && (
         <>
           <div className="p-2 border-b border-slate-200 bg-slate-50/40">
             <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
               <input type="text" value={filter} onChange={e => setFilter(e.target.value)}
                 placeholder="Filter secrets..." className="w-full pl-7 pr-3 py-1 text-xs bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500" />
             </div>
@@ -935,99 +951,353 @@ function SecretsPanel({ data }: { data: FraudCardData }) {
 
 export default function TechnicalView({ data }: { data: FraudCardData | null }) {
   const { investigationBundle, loading } = useAnalysis();
+  const { isForensic } = useInvestigationUI();
+  // The gallery renders manifest entries, while bundle.counts.screenshots is
+  // derived from dynamic_analysis.screenshots - the two disagree. A header
+  // count has to come from the same place as the panel under it.
+  const { entries: screenshotEntries } = useRuntimeScreenshots(data?.sha256);
   if (!data) return null;
 
-  // Four questions, four tabs. The previous single scroll rendered every panel
-  // expanded at once, so the page had no hierarchy: a certificate table and a
-  // critical runtime finding occupied identical boxes, one after the other.
+  const dyn = data.dynamic_analysis;
+
+  /*
+   * Five questions, five tabs, and inside each one nothing but collapsed
+   * sections.
+   *
+   * The previous shape had four tabs, and the behaviour tab alone stacked
+   * thirteen expanded panels - so the fix that tabs had made at the top level
+   * had simply not been applied one level down. A reader looking for the
+   * certificate still scrolled past everything between them and it.
+   *
+   * Every section carries a count on its header, so collapsing moves the work
+   * from scrolling to reading rather than from scrolling to clicking, and every
+   * section has a stable anchor so the assistant can cite it.
+   */
   const tabs: AnalysisTab[] = [
     {
-      id: 'summary',
-      label: 'Summary',
-      hint: 'what should I do?',
+      id: 'overview',
+      label: 'Overview',
+      hint: 'what should I look at?',
       count: investigationBundle?.counts.evidenceRecords,
+      anchors: ['evidence-registry'],
       content: (
         <>
           <ActivitySummary data={data} />
           <ExplainabilityEngine data={data} />
-          <EvidenceRegistrySection
-            data={data}
-            bundle={investigationBundle}
-            loading={loading}
-          />
+          <EvidenceSection
+            id="evidence-registry"
+            title="Evidence registry"
+            subtitle="Every verified record behind this case"
+            count={investigationBundle?.counts.evidenceRecords}
+            icon={<Database className="h-4 w-4" />}
+            defaultOpen
+          >
+            <EvidenceRegistrySection data={data} bundle={investigationBundle} loading={loading} />
+          </EvidenceSection>
         </>
       ),
     },
     {
       id: 'static',
-      label: 'Static details',
-      hint: 'what is it?',
-      count: (data.manifest_findings ?? []).length,
+      label: 'Static',
+      hint: 'what is in the file?',
+      count: (data.manifest_findings ?? []).length + (data.code_findings ?? []).length,
+      anchors: [
+        'permissions',
+        'manifest-findings',
+        'code-findings',
+        'certificate',
+        'exported-components',
+        'decompilation',
+        'secrets',
+        'apk-metadata',
+      ],
       content: (
         <>
-          <APKMetadata data={data} />
-          <div className="analyst-grid-2">
+          <EvidenceSection
+            id="permissions"
+            title="Permissions"
+            subtitle="What the application asked the device for"
+            count={(data.all_permissions ?? []).length}
+            icon={<Lock className="h-4 w-4" />}
+            defaultOpen
+          >
             <PermissionTable data={data} />
+          </EvidenceSection>
+
+          <EvidenceSection
+            id="manifest-findings"
+            title="Manifest findings"
+            count={(data.manifest_findings ?? []).length}
+            icon={<Shield className="h-4 w-4" />}
+          >
+            <ManifestFindingsPanel data={data} />
+          </EvidenceSection>
+
+          <EvidenceSection
+            id="code-findings"
+            title="Code findings"
+            subtitle="Static source analysis, with MASVS / CWE / OWASP mapping"
+            count={(data.code_findings ?? []).length}
+            icon={<Code className="h-4 w-4" />}
+          >
+            <CodeFindingsPanel data={data} />
+          </EvidenceSection>
+
+          <EvidenceSection
+            id="exported-components"
+            title="Exported components"
+            subtitle="Attack surface reachable by other applications"
+            count={
+              (data.exported_activities ?? []).length +
+              (data.exported_services ?? []).length +
+              (data.exported_receivers ?? []).length +
+              (data.providers ?? []).length
+            }
+            icon={<Package className="h-4 w-4" />}
+          >
+            <ExportedComponentsPanel data={data} />
+          </EvidenceSection>
+
+          <EvidenceSection
+            id="secrets"
+            title="Hardcoded secrets"
+            count={(data.hardcoded_secrets ?? []).length}
+            icon={<Key className="h-4 w-4" />}
+          >
+            <SecretsPanel data={data} />
+          </EvidenceSection>
+
+          <EvidenceSection
+            id="certificate"
+            title="Signing certificate"
+            subtitle="X.509 identity and attribution"
+            icon={<Lock className="h-4 w-4" />}
+          >
             <CertificatePanel certificate={data.certificate} />
-          </div>
-          <ManifestFindingsPanel data={data} />
-          <ExportedComponentsPanel data={data} />
-          <DecompilationPanel data={data} />
+          </EvidenceSection>
+
+          <EvidenceSection
+            id="apk-metadata"
+            title="APK identifiers"
+            icon={<Tag className="h-4 w-4" />}
+          >
+            <APKMetadata data={data} />
+          </EvidenceSection>
+
+          <EvidenceSection
+            id="decompilation"
+            title="Decompilation"
+            subtitle="APKTool resources and JADX source hits"
+            icon={<Code className="h-4 w-4" />}
+          >
+            <DecompilationPanel data={data} />
+          </EvidenceSection>
         </>
       ),
     },
     {
-      id: 'behavior',
-      label: 'Behaviour & code',
-      hint: 'what does it do?',
-      count: (data.code_findings ?? []).length,
+      id: 'dynamic',
+      label: 'Runtime',
+      hint: 'what did it do when it ran?',
+      count: investigationBundle?.counts.runtimeBehaviors,
+      anchors: ['dynamic-analysis', 'mitre', 'dangerous-apis', 'resilience'],
       content: (
         <>
-          <div id="dynamic-analysis">
+          <EvidenceSection
+            id="dynamic-analysis"
+            title="Runtime behaviour"
+            subtitle="Observed during sandbox execution"
+            count={investigationBundle?.counts.runtimeBehaviors}
+            icon={<Cpu className="h-4 w-4" />}
+            defaultOpen
+          >
             <DynamicAnalysisSummary data={data} />
-          </div>
-          <div id="screenshots">
+          </EvidenceSection>
+
+          <EvidenceSection
+            id="mitre"
+            title="MITRE ATT&amp;CK mapping"
+            count={data.intelligence_report?.mitre_techniques_used?.length}
+            icon={<Shield className="h-4 w-4" />}
+          >
+            <MitreMatrix data={data} />
+          </EvidenceSection>
+
+          <EvidenceSection
+            id="dangerous-apis"
+            title="Dangerous API calls"
+            count={(data.technical_view?.apis_fired ?? []).length}
+            icon={<Terminal className="h-4 w-4" />}
+          >
+            <DangerousAPITable data={data} />
+          </EvidenceSection>
+
+          <EvidenceSection
+            id="resilience"
+            title="Sandbox resilience"
+            subtitle="Evasion attempts, and what was done about them"
+            icon={<Shield className="h-4 w-4" />}
+          >
+            <ResiliencePanel sessionId={data.sha256} packageName={data.package_name} />
+          </EvidenceSection>
+        </>
+      ),
+    },
+    {
+      id: 'visual',
+      label: 'Visual',
+      hint: 'what did it show the user?',
+      count: screenshotEntries.length,
+      anchors: ['screenshots', 'impersonation', 'overlay-payloads'],
+      content: (
+        <>
+          <EvidenceSection
+            id="screenshots"
+            title="Screenshots"
+            subtitle="Captured during the sandbox run"
+            count={screenshotEntries.length}
+            icon={<Search className="h-4 w-4" />}
+            defaultOpen
+          >
             <ScreenshotGallery data={data} bundle={investigationBundle} />
-          </div>
-          {data.vide && <OverlayEvidenceViewer vide={data.vide} />}
-          <VisualImpersonationPanel data={data} />
-          {data.vide && <VisualDiffViewer vide={data.vide} />}
-          <ResiliencePanel sessionId={data.sha256} packageName={data.package_name} />
-          <MitreMatrix data={data} />
-          <DangerousAPITable data={data} />
-          <CodeFindingsPanel data={data} />
-          <BinaryAnalysisPanel data={data} />
-          <SecretsPanel data={data} />
-          <div id="logcat">
-            <LogcatInspectorPanel logcat={data.dynamic_analysis?.logcat} />
-          </div>
-          <DynamicAnalysisPanel data={data} />
+          </EvidenceSection>
+
+          <EvidenceSection
+            id="impersonation"
+            title="Visual impersonation"
+            subtitle="Comparison against banking design baselines"
+            icon={<Globe className="h-4 w-4" />}
+          >
+            <VisualImpersonationPanel data={data} />
+            {data.vide && <VisualDiffViewer vide={data.vide} />}
+          </EvidenceSection>
+
+          {data.vide && (
+            <EvidenceSection
+              id="overlay-payloads"
+              title="Intercepted overlay payloads"
+              subtitle="Raw HTML captured from WebView hooks"
+              count={data.vide.overlay_payloads?.length}
+              icon={<Code className="h-4 w-4" />}
+            >
+              <OverlayEvidenceViewer vide={data.vide} />
+            </EvidenceSection>
+          )}
         </>
       ),
     },
     {
       id: 'network',
-      label: 'Network & relations',
-      hint: 'what does it touch?',
+      label: 'Network',
+      hint: 'what did it talk to?',
       count: (data.hardcoded_urls_ips ?? []).length,
+      anchors: [
+        'network-capture',
+        'relations',
+        'secondary-apks',
+        'network-security',
+        'trackers',
+      ],
       content: (
         <>
-          <RelationsGraph data={data} />
-          <div id="network-capture">
-            <NetworkCapturePanel
-              networkLogs={data.dynamic_analysis?.network_logs}
-            />
-          </div>
-          <div id="secondary-apks">
+          <EvidenceSection
+            id="network-capture"
+            title="Network capture"
+            subtitle="Runtime requests observed in the sandbox"
+            count={(dyn?.network_logs ?? []).length}
+            icon={<Globe className="h-4 w-4" />}
+            defaultOpen
+          >
+            <NetworkCapturePanel networkLogs={dyn?.network_logs} />
+          </EvidenceSection>
+
+          <EvidenceSection
+            id="relations"
+            title="Indicator relationships"
+            icon={<Database className="h-4 w-4" />}
+          >
+            <RelationsGraph data={data} />
+          </EvidenceSection>
+
+          <EvidenceSection
+            id="secondary-apks"
+            title="Secondary payloads"
+            subtitle="Additional packages the sample tried to install"
+            icon={<Package className="h-4 w-4" />}
+          >
             <SecondaryApkPanel data={data} />
-          </div>
-          <div className="analyst-grid-2">
+          </EvidenceSection>
+
+          <EvidenceSection
+            id="network-security"
+            title="Network security config"
+            subtitle="Cleartext policy, pinning and trust anchors"
+            icon={<Lock className="h-4 w-4" />}
+          >
             <NetworkSecurityPanel data={data} />
+          </EvidenceSection>
+
+          <EvidenceSection
+            id="trackers"
+            title="Third-party SDKs"
+            count={(data.trackers ?? []).length}
+            icon={<Tag className="h-4 w-4" />}
+          >
             <TrackersPanel data={data} />
-          </div>
+          </EvidenceSection>
         </>
       ),
     },
+    /*
+     * Raw forensics, offered only at the deepest reading level.
+     *
+     * Not a permission boundary - the depth switch is one click away in the
+     * case bar. It keeps a 50,000-line logcat and native binary hardening
+     * tables out of the default view for the nine readers in ten who did not
+     * come for them.
+     */
+    ...(isForensic
+      ? [
+          {
+            id: 'raw',
+            label: 'Raw',
+            hint: 'show me everything',
+            anchors: ['logcat', 'frida-events', 'binary-analysis'],
+            content: (
+              <>
+                <EvidenceSection
+                  id="frida-events"
+                  title="Instrumentation events"
+                  subtitle="Unaggregated Frida hook records"
+                  icon={<Terminal className="h-4 w-4" />}
+                >
+                  <DynamicAnalysisPanel data={data} />
+                </EvidenceSection>
+
+                <EvidenceSection
+                  id="logcat"
+                  title="Logcat"
+                  subtitle="Android system event stream"
+                  icon={<Terminal className="h-4 w-4" />}
+                >
+                  <LogcatInspectorPanel logcat={dyn?.logcat} />
+                </EvidenceSection>
+
+                <EvidenceSection
+                  id="binary-analysis"
+                  title="Native binary hardening"
+                  subtitle="NX, stack canary, RELRO, RPATH"
+                  count={(data.binary_analysis ?? []).length}
+                  icon={<Cpu className="h-4 w-4" />}
+                >
+                  <BinaryAnalysisPanel data={data} />
+                </EvidenceSection>
+              </>
+            ),
+          } as AnalysisTab,
+        ]
+      : []),
   ];
 
   return (
@@ -1035,7 +1305,7 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
       <div className="mb-4">
         <BehaviorTags data={data} />
       </div>
-      <AnalysisTabs tabs={tabs} />
+      <AnalysisTabs tabs={tabs} urlParam="section" />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -14,6 +14,7 @@ import {
   Maximize2,
 } from 'lucide-react';
 import { fetchScreenshotBlob, screenshotBasename } from '../../lib/screenshots';
+import { useDialogBehavior } from '../../hooks/useDialogBehavior';
 import {
   entryFilename,
   formatScreenshotTime,
@@ -57,6 +58,12 @@ export default function EvidenceInspectionModal({
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  // Focus trap, focus restore, scroll lock and Escape. The lightbox had Escape
+  // and nothing else, so a keyboard user could tab straight out of an open
+  // modal onto the page behind it.
+  useDialogBehavior({ open: true, panelRef, onClose });
 
   const ve = entry ? visualFromEntry(entry) : null;
 
@@ -105,9 +112,9 @@ export default function EvidenceInspectionModal({
   // Keyboard navigation & controls
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      } else if (e.key === 'ArrowLeft' && index > 0) {
+      // Escape is handled by useDialogBehavior, which listens in the capture
+      // phase; only the viewer-specific shortcuts live here.
+      if (e.key === 'ArrowLeft' && index > 0) {
         onIndexChange(index - 1);
       } else if (e.key === 'ArrowRight' && index < entries.length - 1) {
         onIndexChange(index + 1);
@@ -253,14 +260,16 @@ export default function EvidenceInspectionModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 md:p-6 animate-in fade-in duration-150"
+      className="fixed inset-0 z-[100] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 md:p-6 dialog-backdrop-enter"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-label="Evidence Inspection Modal"
     >
       <div
-        className="relative bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden w-full max-w-7xl max-h-[94vh] flex flex-col lg:grid lg:grid-cols-12 lg:h-[88vh]"
+        ref={panelRef}
+        tabIndex={-1}
+        className="relative bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden w-full max-w-7xl max-h-[94vh] flex flex-col lg:grid lg:grid-cols-12 lg:h-[88vh] focus:outline-none dialog-panel-enter"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Top Floating Close Button for Mobile */}
@@ -281,7 +290,7 @@ export default function EvidenceInspectionModal({
               <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-blue-600/30 text-blue-400 border border-blue-500/40">
                 {screenshotId}
               </span>
-              <span className="text-xs text-slate-400 font-mono hidden sm:inline">
+              <span className="text-xs text-slate-500 font-mono hidden sm:inline">
                 {timestampText !== '—' ? timestampText : ''}
               </span>
               {workflow && (
@@ -359,7 +368,7 @@ export default function EvidenceInspectionModal({
             onTouchEnd={handleTouchEnd}
           >
             {loading ? (
-              <div className="flex flex-col items-center gap-2 text-slate-400 text-xs font-mono animate-pulse">
+              <div className="flex flex-col items-center gap-2 text-slate-500 text-xs font-mono animate-pulse">
                 <Maximize2 className="h-8 w-8 text-blue-500 animate-spin" />
                 <span>Loading screenshot artifact…</span>
               </div>
@@ -374,7 +383,7 @@ export default function EvidenceInspectionModal({
                 draggable={false}
               />
             ) : (
-              <div className="text-center p-6 text-slate-400 text-xs font-mono">
+              <div className="text-center p-6 text-slate-500 text-xs font-mono">
                 Screenshot artifact unresolvable or unavailable.
               </div>
             )}
@@ -434,14 +443,14 @@ export default function EvidenceInspectionModal({
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-blue-600 shrink-0" />
-                <h3 className="text-base font-bold text-slate-900 uppercase tracking-wider font-mono">
+                <h3 className="text-base font-bold text-slate-900 font-mono">
                   Evidence Inspection
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={onClose}
-                className="hidden lg:flex p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                className="hidden lg:flex p-1.5 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors"
                 aria-label="Close modal"
               >
                 <X className="h-5 w-5" />
@@ -465,7 +474,7 @@ export default function EvidenceInspectionModal({
                 )}
                 {correlationStatus && (
                   <span
-                    className={`text-xs font-semibold uppercase tracking-wider px-2 py-0.5 rounded border ${getCorrelationBadgeStyle(
+                    className={`text-xs font-semibold px-2 py-0.5 rounded border ${getCorrelationBadgeStyle(
                       correlationStatus,
                     )}`}
                   >
@@ -483,7 +492,7 @@ export default function EvidenceInspectionModal({
 
             {/* Section 1: Evidence Details Card */}
             <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 space-y-3 shadow-xs">
-              <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-700 font-mono border-b border-slate-200/80 pb-2">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 font-mono border-b border-slate-200/80 pb-2">
                 <Info className="h-4 w-4 text-blue-600" />
                 <span>Evidence Details</span>
               </div>
@@ -581,7 +590,7 @@ export default function EvidenceInspectionModal({
 
             {/* Section 2: Investigation Context Card */}
             <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-4 space-y-3 shadow-xs">
-              <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-blue-900 font-mono border-b border-blue-100 pb-2">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900 font-mono border-b border-blue-100 pb-2">
                 <ShieldAlert className="h-4 w-4 text-blue-600" />
                 <span>Investigation Context</span>
               </div>

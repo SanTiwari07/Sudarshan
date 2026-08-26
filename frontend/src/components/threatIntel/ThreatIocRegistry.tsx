@@ -55,7 +55,7 @@ export default function ThreatIocRegistry({
       <SectionHeader icon={<Database className="h-4 w-4" />} title="IOC registry" subtitle="Filtered by graph selection when active" />
       <div className="p-4 bg-slate-50 border-b border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="relative">
-          <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+          <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
           <input
             type="text"
             value={search}
@@ -68,7 +68,7 @@ export default function ThreatIocRegistry({
           />
         </div>
         <div className="flex items-center gap-2">
-          <Filter className="h-3.5 w-3.5 text-slate-400" />
+          <Filter className="h-3.5 w-3.5 text-slate-500" />
           <select
             value={severityFilter}
             onChange={(e) => {
@@ -102,7 +102,7 @@ export default function ThreatIocRegistry({
         </select>
       </div>
       {paginatedIocs.length === 0 ? (
-        <div className="p-8 text-center text-slate-400 text-xs">
+        <div className="p-8 text-center text-slate-500 text-xs">
           <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto mb-2 opacity-80" />
           No indicators matched your filters.
         </div>

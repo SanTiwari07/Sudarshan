@@ -56,7 +56,7 @@ export function SourceIndicator({ evidence }: { evidence: InvestigationEvidence 
   const { label, icon } = sourceMeta(evidence);
   return (
     <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600">
-      <span className="text-slate-400">{icon}</span>
+      <span className="text-slate-500">{icon}</span>
       {label}
     </span>
   );
@@ -69,7 +69,7 @@ export function ConfidenceIndicator({ confidence }: { confidence: number }) {
     <div className="text-right min-w-[4.75rem]">
       <div className="text-[13px] font-semibold text-slate-800 tabular-nums leading-none">{pct}%</div>
       <div className="text-[10px] text-slate-600 mt-1 leading-tight">{tier}</div>
-      <div className="text-[10px] text-slate-400 mt-0.5">Verified</div>
+      <div className="text-[10px] text-slate-500 mt-0.5">Verified</div>
     </div>
   );
 }
@@ -103,7 +103,7 @@ export function PipelineStatusChip({
         ? 'text-amber-600'
         : state === 'failed'
           ? 'text-red-600'
-          : 'text-slate-400';
+          : 'text-slate-500';
   return (
     <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600">
       {label}

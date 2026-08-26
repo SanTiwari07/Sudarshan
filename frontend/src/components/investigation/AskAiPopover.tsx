@@ -85,7 +85,7 @@ export function AskAiPopover({
         aria-expanded={open}
         aria-label={`Ask AI about ${value}`}
         title="Ask AI what this is"
-        className="inline-flex shrink-0 rounded-full p-0.5 text-slate-400 hover:text-violet-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40"
+        className="inline-flex shrink-0 rounded-full p-0.5 text-slate-500 hover:text-violet-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40"
       >
         {loading ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -106,7 +106,7 @@ export function AskAiPopover({
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="text-slate-400 hover:text-slate-700 text-xs shrink-0"
+              className="text-slate-500 hover:text-slate-700 text-xs shrink-0"
               aria-label="Close"
             >
               ✕
@@ -146,7 +146,7 @@ export function AskAiPopover({
               */}
               <p
                 className={`mt-2 pt-1.5 border-t border-slate-100 text-[10px] ${
-                  result.source === 'refused' ? 'text-amber-700' : 'text-slate-400'
+                  result.source === 'refused' ? 'text-amber-700' : 'text-slate-500'
                 }`}
               >
                 {SOURCE_LABEL[result.source] ?? 'Advisory'}

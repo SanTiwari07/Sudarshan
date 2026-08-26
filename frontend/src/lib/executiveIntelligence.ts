@@ -19,6 +19,30 @@ function splitIntoParagraphs(text: string, max = 3): string[] {
   return out.slice(0, max);
 }
 
+/**
+ * Which source actually produced the narrative on screen.
+ *
+ * `buildOverallAssessmentParagraphs` has always had a three-tier fallback, but
+ * it degraded silently: when the model failed, the reader got deterministic
+ * template prose under a heading with a Sparkles icon reading "EXECUTIVE
+ * ASSESSMENT", and had no way to tell which one they were looking at. A UI must
+ * never imply certainty - or provenance - that the underlying analysis does not
+ * support, so the tier is now reportable.
+ */
+export type NarrativeSource = 'ai' | 'stored' | 'derived';
+
+export function narrativeSource(data: FraudCardData): NarrativeSource {
+  // Mirrors buildOverallAssessmentParagraphs exactly, including its `||`
+  // precedence: a short-but-present AI narrative shadows the stored one and
+  // then fails the length gate, so the result is `derived`. Reporting a tier
+  // the renderer did not actually use would be its own provenance lie.
+  const ai = data.intelligence_report?.plain_english_narrative?.trim() ?? '';
+  const stored = data.executive_view?.plain_english_narrative?.trim() ?? '';
+  const chosen = ai || stored || '';
+  if (chosen.length <= 80) return 'derived';
+  return chosen === ai ? 'ai' : 'stored';
+}
+
 export function buildOverallAssessmentParagraphs(data: FraudCardData): string[] {
   const narrative =
     data.intelligence_report?.plain_english_narrative?.trim() ||

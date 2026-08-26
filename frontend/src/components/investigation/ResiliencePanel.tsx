@@ -163,7 +163,7 @@ function SuggestionsDrawer({
           Forensic suggestions ({suggestions.length})
         </span>
         <ChevronDown
-          className={`h-4 w-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`}
+          className={`h-4 w-4 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`}
         />
       </button>
 

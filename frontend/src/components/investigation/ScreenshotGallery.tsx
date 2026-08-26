@@ -126,7 +126,7 @@ function ScreenshotTile({
       <div className="p-2 border-t border-slate-150 space-y-0.5 bg-slate-50/20">
         <div className="flex items-center justify-between gap-2 text-[9px] text-slate-500 font-mono">
           <span>{time}</span>
-          <span className="font-bold text-blue-800 uppercase tracking-wider truncate">{stage}</span>
+          <span className="font-bold text-blue-800 truncate">{stage}</span>
         </div>
         <div className="text-[11px] font-bold text-slate-800 line-clamp-1 leading-tight">{description}</div>
       </div>
@@ -183,7 +183,7 @@ function EmptyScreenshotState({
   return (
     <div className="space-y-3">
       <div className="rounded-md border border-slate-200 bg-slate-50/40 p-3.5">
-        <p className="text-xs font-bold uppercase tracking-wider text-slate-900">{copy.title}</p>
+        <p className="text-xs font-bold text-slate-900">{copy.title}</p>
         <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">{copy.body}</p>
       </div>
       {showDiagnostics && (

@@ -11,9 +11,11 @@ import SocCard from '../ui/Card';
 import SectionHeader from '../ui/SectionHeader';
 import HelpTerm from './HelpTerm';
 import { Activity, Terminal } from 'lucide-react';
+import { useCaseLinks } from '../../hooks/useCaseLinks';
 
 export default function DynamicAnalysisSummary({ data }: { data: FraudCardData }) {
   const { openInfluenceDetail } = useInvestigationUI();
+  const links = useCaseLinks();
   const status = resolveRuntimeDynamicStatus(data);
   const frs = data.frs_breakdown;
   const dyn =
@@ -54,7 +56,7 @@ export default function DynamicAnalysisSummary({ data }: { data: FraudCardData }
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
           <div className="rounded-md border border-slate-200 bg-white p-2.5">
             <dt className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Status</dt>
-            <dd className="font-mono font-bold text-slate-900 mt-1 uppercase tracking-wider text-xs">{runtimeStatusHeadline(status)}</dd>
+            <dd className="font-mono font-bold text-slate-900 mt-1 text-xs">{runtimeStatusHeadline(status)}</dd>
           </div>
           {bfci != null && frs?.dynamic_ran && (
             <div className="rounded-md border border-slate-200 bg-white p-2.5">
@@ -80,20 +82,20 @@ export default function DynamicAnalysisSummary({ data }: { data: FraudCardData }
         <div className="flex flex-wrap gap-2">
           <a
             href="#runtime-screenshots"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-blue-800 bg-blue-50 border border-blue-200/50 rounded hover:bg-blue-100/50 transition-all"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-blue-800 bg-blue-50 border border-blue-200/50 rounded hover:bg-blue-100/50 transition-all"
           >
             View runtime evidence
           </a>
           <button
             type="button"
             onClick={() => openInfluenceDetail('dynamic')}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-slate-700 bg-white border border-slate-250 rounded hover:border-slate-350 hover:bg-slate-50 transition-all"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white border border-slate-250 rounded hover:border-slate-350 hover:bg-slate-50 transition-all"
           >
             View scoring details
           </button>
           <Link
-            to="/threat-intel"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-blue-700 transition-colors"
+            to={links.intel}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-blue-700 transition-colors"
           >
             Threat intelligence →
           </Link>

@@ -8,6 +8,7 @@ import {
 import { useInvestigationUI } from '../../context/InvestigationUIContext';
 import SocCard from '../ui/Card';
 import { AlertTriangle, Brain, Shield } from 'lucide-react';
+import { useCaseLinks } from '../../hooks/useCaseLinks';
 
 export default function InvestigationConclusionCard({
   data,
@@ -17,6 +18,7 @@ export default function InvestigationConclusionCard({
   bundle: InvestigationBundle | null;
 }) {
   const { openEvidence } = useInvestigationUI();
+  const links = useCaseLinks();
   const model = buildInvestigationConclusion(data, bundle);
 
   return (
@@ -26,26 +28,26 @@ export default function InvestigationConclusionCard({
           <Brain className="h-4 w-4" />
         </span>
         <div>
-          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-900 font-mono">Case Synopsis & Investigation Conclusion</h2>
+          <h2 className="text-xs font-bold text-slate-900 font-mono">Case Synopsis & Investigation Conclusion</h2>
         </div>
       </div>
 
       <div className="p-4 sm:p-5 space-y-5">
         <section className="border-l-2 border-slate-900 pl-3">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 font-mono">Verdict Label</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 font-mono">Verdict Label</p>
           <p className="text-base font-bold text-slate-900 mt-0.5">{model.verdictLabel}</p>
           <p className="text-xs text-slate-700 mt-1 leading-relaxed max-w-4xl">{model.headline}</p>
         </section>
 
         {model.pillars.length > 0 && (
           <section className="space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 font-mono">Pillars of Grounded Evidence</h3>
+            <h3 className="text-xs font-bold text-slate-800 font-mono">Pillars of Grounded Evidence</h3>
             <ol className="space-y-3">
               {model.pillars.map((pillar, index) => {
                 const evidenceIds = filterPillarEvidenceIds(pillar, bundle);
                 return (
                   <li key={pillar.id} className="flex gap-2.5 items-start">
-                    <span className="text-xs font-mono font-bold text-slate-400 pt-0.5 w-5 shrink-0">
+                    <span className="text-xs font-mono font-bold text-slate-500 pt-0.5 w-5 shrink-0">
                       {String(index + 1).padStart(2, '0')}.
                     </span>
                     <div className="min-w-0 flex-1">
@@ -75,7 +77,7 @@ export default function InvestigationConclusionCard({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <section className="rounded border border-slate-200 bg-white p-3.5">
-            <h3 className="text-xs font-bold text-slate-900 flex items-center gap-1.5 font-mono uppercase tracking-wider">
+            <h3 className="text-xs font-bold text-slate-900 flex items-center gap-1.5 font-mono">
               <Shield className="h-3.5 w-3.5 text-blue-700" />
               Confidence
             </h3>
@@ -85,7 +87,7 @@ export default function InvestigationConclusionCard({
 
           {model.limitations.length > 0 && (
             <section className="rounded border border-amber-200 bg-amber-50/50 p-3.5">
-              <h3 className="text-xs font-bold text-amber-950 flex items-center gap-1.5 font-mono uppercase tracking-wider">
+              <h3 className="text-xs font-bold text-amber-950 flex items-center gap-1.5 font-mono">
                 <AlertTriangle className="h-3.5 w-3.5 text-amber-700" />
                 Investigation Limitations
               </h3>
@@ -99,25 +101,25 @@ export default function InvestigationConclusionCard({
         </div>
 
         <section className="bg-white border border-slate-200 rounded p-3.5">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 font-mono mb-1">Recommended Response Strategy</h3>
+          <h3 className="text-xs font-bold text-slate-800 font-mono mb-1">Recommended Response Strategy</h3>
           <p className="text-xs text-slate-700 leading-relaxed">{model.recommendedAction}</p>
         </section>
 
         <div className="flex flex-wrap gap-4 pt-3 border-t border-slate-100 text-xs font-mono">
           <Link
-            to="/technical"
+            to={links.evidence}
             className="text-blue-700 font-bold hover:text-blue-800 hover:underline"
           >
             → Inspect Live Analysis
           </Link>
           <Link
-            to="/threat-intel"
+            to={links.intel}
             className="text-blue-700 font-bold hover:text-blue-800 hover:underline"
           >
             → Threat Intelligence
           </Link>
           <Link
-            to="/technical"
+            to={links.evidence}
             className="text-blue-700 font-bold hover:text-blue-800 hover:underline"
           >
             → Technical Evidence Registry

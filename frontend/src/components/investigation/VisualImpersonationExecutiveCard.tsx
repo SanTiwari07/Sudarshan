@@ -16,8 +16,10 @@ import {
   videTierStyles,
 } from '../../lib/videUi';
 import { AlertTriangle, Eye, LayoutTemplate, Palette, ShieldAlert, Type } from 'lucide-react';
+import { useCaseLinks } from '../../hooks/useCaseLinks';
 
 export default function VisualImpersonationExecutiveCard({ data }: { data: FraudCardData }) {
+  const links = useCaseLinks();
   const vide = resolveVideFromData(data);
   const state = getVideUiState(vide);
 
@@ -88,7 +90,7 @@ export default function VisualImpersonationExecutiveCard({ data }: { data: Fraud
               <p className="text-[11px] text-slate-500 mt-1">Evidence: {evidence.join(' · ')}</p>
             )}
             <Link
-              to="/technical"
+              to={links.evidence}
               className="inline-flex items-center gap-1 text-xs text-blue-700 font-semibold hover:underline mt-2"
             >
               View visual evidence
@@ -266,7 +268,7 @@ export default function VisualImpersonationExecutiveCard({ data }: { data: Fraud
         )}
 
         <Link
-          to="/technical"
+          to={links.evidence}
           className="inline-flex items-center gap-1 text-blue-700 font-semibold hover:underline"
         >
           View evidence

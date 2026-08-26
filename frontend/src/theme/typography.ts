@@ -63,10 +63,19 @@ export const TYPOGRAPHY = {
   linkAction:
     'font-sans text-xs font-medium text-blue-700 hover:text-blue-800 inline-flex items-center gap-1 transition-colors',
 
-  // TECHNICAL & CODE
-  code: 'font-mono text-xs font-normal text-slate-700 tabular-nums break-all select-all',
-  codeSm: 'font-mono text-[11px] font-normal text-slate-600 tabular-nums break-all select-all',
-  hash: 'font-mono text-[11px] font-normal text-slate-500 break-all select-all',
+  /*
+   * TECHNICAL & CODE
+   *
+   * These carried `select-all`, so one click selected the whole element. It
+   * reads as a convenience, but it removes partial selection - and grabbing the
+   * first twelve characters of a hash to paste into a search is something
+   * analysts do constantly. `CopyButton` already sits beside every hash and
+   * package name for whole-value copying, which is the affordance that should
+   * own that job.
+   */
+  code: 'font-mono text-xs font-normal text-slate-700 tabular-nums break-all',
+  codeSm: 'font-mono text-[11px] font-normal text-slate-600 tabular-nums break-all',
+  hash: 'font-mono text-[11px] font-normal text-slate-500 break-all',
 } as const;
 
 export type TypographyVariant = keyof typeof TYPOGRAPHY;

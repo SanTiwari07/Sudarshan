@@ -1,71 +1,30 @@
 import { Link } from 'react-router-dom';
 import type { FraudCardData } from '../App';
 import { useAnalysis } from '../context/AnalysisContext';
+import { useInvestigationUI } from '../context/InvestigationUIContext';
 import { dynamicRuntimeLabel } from '../lib/analystCopy';
 import { TYPOGRAPHY } from '../theme/typography';
-import SocCard from '../components/ui/Card';
 import CoreFindingsList from '../components/investigation/CoreFindingsList';
-import FraudRiskHero from '../components/investigation/FraudRiskHero';
+import VerdictBlock from '../components/investigation/VerdictBlock';
+import CoverageNotice from '../components/investigation/CoverageNotice';
+import CaseDetails from '../components/investigation/CaseDetails';
+import AttackStory from '../components/investigation/AttackStory';
+import InView from '../components/motion/InView';
 import CaseSummaryStrip from '../components/investigation/CaseSummaryStrip';
-import AiSummaryCard from '../components/investigation/AiSummaryCard';
+import AiExplanation from '../components/investigation/AiExplanation';
+import BankingImpact from '../components/investigation/BankingImpact';
+import RecommendedAction from '../components/investigation/RecommendedAction';
 import ExecutiveVisualEvidenceSection from '../components/investigation/ExecutiveVisualEvidenceSection';
 import VisualImpersonationExecutiveCard from '../components/investigation/VisualImpersonationExecutiveCard';
 import InvestigationConclusionCard from '../components/investigation/InvestigationConclusionCard';
 import { useRuntimeScreenshots } from '../hooks/useRuntimeScreenshots';
 import {
-  Activity,
   AlertTriangle,
   ShieldCheck,
   ShieldAlert,
   Shield,
   ChevronRight,
 } from 'lucide-react';
-
-/**
- * INCOMPLETE EXERCISE banner.
- *
- * The one banner that keeps full width, because it changes how every other
- * signal on the page reads: when the sandbox never exercised the sample, a low
- * score is a statement about the run, not about the app.
- */
-function IncompleteExerciseBanner({ data }: { data: FraudCardData }) {
-  const assertions = data.execution_assertions;
-  const incomplete =
-    data.verdict === 'INCOMPLETE_EXERCISE' || assertions?.incomplete_exercise;
-  if (!incomplete) return null;
-
-  const fired = assertions?.fired_count ?? 0;
-  const total = assertions?.total_count ?? 0;
-
-  return (
-    <SocCard rank="primary" className="border-amber-300 bg-amber-50/60">
-      <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-start gap-3">
-        <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" aria-hidden />
-        <div className="min-w-0 flex-1">
-          <p className={`${TYPOGRAPHY.h3} text-amber-950`}>
-            Incomplete exercise
-            {total > 0 && (
-              <span className={`${TYPOGRAPHY.label} ml-2 text-amber-800`}>
-                {fired}/{total} trigger conditions reached
-              </span>
-            )}
-          </p>
-          <p className={`${TYPOGRAPHY.bodySmall} text-amber-900 mt-1 max-w-prose`}>
-            The sandbox ran but never exercised this sample, so no threat behaviour could be
-            observed. <strong className="font-semibold">Absence of evidence is not evidence of
-            absence</strong> — a trojan waiting on a targeted app, an OTP or a dormancy timer
-            produces exactly this result. Confidence is halved and this run does not certify the
-            app as safe.
-          </p>
-          <Link to="/technical" className={`${TYPOGRAPHY.linkAction} mt-2`}>
-            <Activity className="h-3.5 w-3.5" aria-hidden />
-            Re-run with resilience triggers
-          </Link>
-        </div>
-      </div>
-    </SocCard>
-  );
-}
 
 type Signal = {
   key: string;
@@ -199,6 +158,7 @@ function CaseSignalsRow({ data }: { data: FraudCardData }) {
 
 export default function FraudCard({ data }: { data: FraudCardData | null }) {
   const { investigationBundle } = useAnalysis();
+  const { atLeastAnalyst } = useInvestigationUI();
   const { entries: screenshotEntries } = useRuntimeScreenshots(data?.sha256);
 
   if (!data) return null;
@@ -209,24 +169,59 @@ export default function FraudCard({ data }: { data: FraudCardData | null }) {
       : investigationBundle?.counts;
 
   return (
-    <div className="space-y-5">
-      {/* Tier 1 - the verdict, and the one qualifier that can invalidate it. */}
-      <IncompleteExerciseBanner data={data} />
-      <FraudRiskHero data={data} />
+    <div className="space-y-8">
+      {/*
+        Level 1 - the decision, and the one qualifier that can invalidate it.
+        CoverageNotice sits above the verdict deliberately: when the sandbox
+        never exercised the sample, it changes how the score below it reads.
+      */}
+      <CoverageNotice data={data} />
+      <VerdictBlock data={data} />
 
-      {/* Tier 2 - the reasons. Status first, then narrative, then findings. */}
+      {/* Level 2 - the reasons. Status first, then narrative, then findings. */}
       <CaseSignalsRow data={data} />
-      <AiSummaryCard data={data} />
+      <InView as="section">
+        <AiExplanation data={data} />
+      </InView>
+
+      {/*
+        Level 3 - the story.
+
+        This is the fraud workflow the engine has always produced, promoted out
+        of the technical view's third tab where it sat below the certificate
+        table. It is the most executive-legible artifact in the system and it
+        was the most deeply buried thing in it.
+      */}
+      <InView as="section">
+        <AttackStory data={data} screenshots={screenshotEntries} />
+      </InView>
+
       <ExecutiveVisualEvidenceSection data={data} />
       <CoreFindingsList data={data} bundle={investigationBundle} />
-      <InvestigationConclusionCard data={data} bundle={investigationBundle} />
       <VisualImpersonationExecutiveCard data={data} />
 
-      {/* Tier 3 - the evidence index. Counts are navigation, not evidence, so
-          they sit below the findings they lead into rather than above them. */}
-      {stripCounts && (
+      {/* Levels 5 and 6 - who this hurts, then the single action it implies. */}
+      <InView as="section">
+        <BankingImpact data={data} />
+      </InView>
+      <InView as="section">
+        <RecommendedAction data={data} />
+      </InView>
+
+      <InvestigationConclusionCard data={data} bundle={investigationBundle} />
+
+      {/*
+        Level 3 - reference. Counts are navigation, not evidence, so they sit
+        below the findings they lead into; identity metadata sits below both.
+
+        The evidence index is hidden at Summary depth: a bank manager reading
+        for twenty seconds does not need a row of record counts, and its
+        presence there was part of what made the page read as a dashboard.
+      */}
+      {atLeastAnalyst && stripCounts && (
         <CaseSummaryStrip riskScore={data.final_risk_score} counts={stripCounts} />
       )}
+      <CaseDetails data={data} />
     </div>
   );
 }

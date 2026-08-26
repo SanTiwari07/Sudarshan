@@ -44,7 +44,7 @@ export default function HelpTerm({ children, term, helper, className = '' }: Hel
         <span
           role="button"
           tabIndex={0}
-          className="rounded-full p-0.5 text-slate-400 hover:text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 cursor-help"
+          className="rounded-full p-0.5 text-slate-500 hover:text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 cursor-help"
           aria-label={text}
           aria-expanded={open}
           onClick={(e) => {

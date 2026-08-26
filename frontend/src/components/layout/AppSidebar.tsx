@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Shield, LogOut, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useCaseLinks } from '../../hooks/useCaseLinks';
 import {
-  ENTERPRISE_NAV_MAIN,
   ENTERPRISE_NAV_END,
   isNavActive,
   type NavItem,
@@ -25,6 +25,7 @@ const COLLAPSED_KEY = 'sudarshan.sidebar.collapsed';
  */
 export default function AppSidebar({ onLogout }: AppSidebarProps) {
   const { pathname } = useLocation();
+  const links = useCaseLinks();
   const { user: username, role } = useAuth();
 
   const [collapsed, setCollapsed] = useState<boolean>(() => {
@@ -46,13 +47,6 @@ export default function AppSidebar({ onLogout }: AppSidebarProps) {
       collapsed ? '3.5rem' : '14rem',
     );
   }, [collapsed]);
-
-  const isInvestigationRoute =
-    pathname.startsWith('/fraud-card') ||
-    pathname.startsWith('/technical') ||
-    pathname.startsWith('/threat-intel') ||
-    pathname.startsWith('/chat') ||
-    (pathname.startsWith('/history/') && pathname !== '/history');
 
   const renderNavItem = (item: NavItem) => {
     const active = isNavActive(pathname, item);
@@ -98,7 +92,7 @@ export default function AppSidebar({ onLogout }: AppSidebarProps) {
     >
       {/* Brand */}
       <div className="h-14 border-b border-slate-800 flex items-center shrink-0">
-        <Link to="/fraud-card" className="flex items-center min-w-0 flex-1 h-full focus:outline-none">
+        <Link to={links.summary} className="flex items-center min-w-0 flex-1 h-full focus:outline-none">
           <span className="w-14 h-14 flex items-center justify-center shrink-0">
             <Shield className="h-5 w-5 text-blue-500" aria-hidden />
           </span>
@@ -116,17 +110,6 @@ export default function AppSidebar({ onLogout }: AppSidebarProps) {
       </div>
 
       <nav className="flex-1 py-3 space-y-0.5 overflow-y-auto scrollbar-hidden">
-        {isInvestigationRoute && (
-          <>
-            {!collapsed && (
-              <p className="px-4 pb-1.5 text-[11px] font-medium text-slate-600">
-                Active case
-              </p>
-            )}
-            {ENTERPRISE_NAV_MAIN.map(renderNavItem)}
-            <div className="my-3 border-t border-slate-800 mx-4" />
-          </>
-        )}
         {!collapsed && (
           <p className="px-4 pb-1.5 text-[11px] font-medium text-slate-600">Workspace</p>
         )}

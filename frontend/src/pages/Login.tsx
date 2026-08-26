@@ -104,7 +104,7 @@ export default function Login() {
           <h1 className="mt-12 lg:mt-20 font-display text-3xl lg:text-4xl font-semibold tracking-[-0.03em] leading-[1.15] max-w-md">
             Android banking fraud, evidenced.
           </h1>
-          <p className="mt-4 text-[15px] text-slate-400 leading-relaxed max-w-md">
+          <p className="mt-4 text-[15px] text-slate-500 leading-relaxed max-w-md">
             Static decompilation, an instrumented sandbox and threat-intelligence
             correlation resolved into one scored, auditable case file.
           </p>
@@ -195,7 +195,7 @@ export default function Login() {
                   type="button"
                   onClick={() => setShowPw(!showPw)}
                   aria-label={showPw ? 'Hide password' : 'Show password'}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-600 transition-colors"
                 >
                   {showPw ? <EyeOff className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
                 </button>

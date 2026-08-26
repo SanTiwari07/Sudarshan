@@ -2,13 +2,22 @@ import { useState, useRef, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   Cpu, Send, Shield, User, RefreshCw, AlertTriangle, CheckCircle2,
-  HelpCircle, FileText, Lock, Eye, Check,
-  Copy, CopyCheck, Info, AlertOctagon, Terminal, Package, ArrowUpRight
+  Copy, CopyCheck, Info, AlertOctagon, Terminal, ArrowUpRight, BarChart2, HelpCircle
 } from 'lucide-react';
 import type { FraudCardData } from '../App';
 import { API_BASE, authHeaders } from '../config';
 import { useAnalysis } from '../context/AnalysisContext';
 import { useInvestigationUI } from '../context/InvestigationUIContext';
+import { buildCaseQuestions, buildChatGreeting } from '../lib/caseQuestions';
+import { TYPOGRAPHY } from '../theme/typography';
+
+const GROUP_LABEL = {
+  decision: 'Decide',
+  evidence: 'Evidence',
+  action: 'Act',
+} as const;
+import { useCaseLinks } from '../hooks/useCaseLinks';
+import type { CaseSection } from '../lib/caseRoutes';
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
 
@@ -20,80 +29,6 @@ interface Message {
   sectionsUsed?: string[];
   followUps?: string[];
   timestamp: Date;
-}
-
-const QUICK_QUESTIONS = [
-  { icon: <Shield className="h-3.5 w-3.5" />, label: "Is this APK safe?" },
-  { icon: <AlertTriangle className="h-3.5 w-3.5" />, label: "Explain the risk score" },
-  { icon: <FileText className="h-3.5 w-3.5" />, label: "Did it steal OTP messages?" },
-  { icon: <Lock className="h-3.5 w-3.5" />, label: "Did it abuse Accessibility?" },
-  { icon: <Eye className="h-3.5 w-3.5" />, label: "Which MITRE techniques apply?" },
-  { icon: <Check className="h-3.5 w-3.5" />, label: "Should I block this APK?" },
-  { icon: <FileText className="h-3.5 w-3.5" />, label: "Generate executive summary" },
-  { icon: <HelpCircle className="h-3.5 w-3.5" />, label: "Show network indicators" },
-];
-
-// ─── Component 1: PackageCard ──────────────────────────────────────────────────
-
-function PackageCard({ packageName }: { packageName: string }) {
-  return (
-    <div className="my-4 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 border border-blue-200/80 rounded-xl p-4 shadow-2xs space-y-2">
-      <div className="flex items-center gap-2 text-blue-900 font-bold text-xs">
-        <Package className="h-4 w-4 text-blue-700" />
-        <span className="uppercase tracking-wider">Investigation Loaded</span>
-      </div>
-      <div className="flex items-center gap-2 text-xs text-slate-700">
-        <span>📦 Package:</span>
-        <code className="bg-white px-2.5 py-1 rounded-md border border-blue-200 text-blue-900 font-mono font-bold text-xs shadow-2xs">
-          {packageName || 'Unknown'}
-        </code>
-      </div>
-      <p className="text-xs text-slate-600">Ready for interactive cybersecurity investigation.</p>
-    </div>
-  );
-}
-
-// ─── Component 2: RiskCard ─────────────────────────────────────────────────────
-
-function RiskCard({ score, band }: { score: number; band: string }) {
-  const numScore = Number(score) || 0;
-  const isCritical = numScore >= 75 || band.toLowerCase().includes('critical');
-  const isHigh = numScore >= 50 && !isCritical || band.toLowerCase().includes('high');
-  const isSuspicious = numScore >= 20 && !isHigh && !isCritical || band.toLowerCase().includes('suspicious');
-
-  const theme = isCritical
-    ? { border: 'border-red-300', bg: 'bg-red-50/70', badgeBg: 'bg-red-100', badgeText: 'text-red-700 border-red-300', bar: 'from-red-500 to-red-600', icon: '🔴' }
-    : isHigh
-    ? { border: 'border-orange-300', bg: 'bg-orange-50/70', badgeBg: 'bg-orange-100', badgeText: 'text-orange-700 border-orange-300', bar: 'from-orange-500 to-orange-600', icon: '🟠' }
-    : isSuspicious
-    ? { border: 'border-amber-300', bg: 'bg-amber-50/70', badgeBg: 'bg-amber-100', badgeText: 'text-amber-700 border-amber-300', bar: 'from-amber-400 to-amber-500', icon: '🟡' }
-    : { border: 'border-emerald-300', bg: 'bg-emerald-50/70', badgeBg: 'bg-emerald-100', badgeText: 'text-emerald-700 border-emerald-300', bar: 'from-emerald-500 to-emerald-600', icon: '🟢' };
-
-  return (
-    <div className={`my-4 border ${theme.border} ${theme.bg} rounded-xl p-4 shadow-2xs space-y-3`}>
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-bold uppercase tracking-wider text-slate-700">Risk Assessment</span>
-        <span className={`px-2.5 py-1 text-xs font-bold rounded-lg border shadow-2xs ${theme.badgeBg} ${theme.badgeText}`}>
-          {theme.icon} {band || 'Suspicious'}
-        </span>
-      </div>
-
-      <div className="flex items-baseline justify-between">
-        <div className="flex items-baseline gap-1">
-          <span className="text-3xl font-black text-slate-900 tracking-tight">{numScore.toFixed(1)}</span>
-          <span className="text-sm font-medium text-slate-500">/ 100</span>
-        </div>
-      </div>
-
-      {/* Animated progress bar */}
-      <div className="w-full h-2.5 bg-slate-200/80 rounded-full overflow-hidden p-0.5">
-        <div
-          className={`h-full rounded-full bg-gradient-to-r ${theme.bar} transition-all duration-700 ease-out`}
-          style={{ width: `${Math.min(100, Math.max(5, numScore))}%` }}
-        />
-      </div>
-    </div>
-  );
 }
 
 // ─── Component 3: Callout ──────────────────────────────────────────────────────
@@ -132,7 +67,7 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
   return (
     <div className="my-4 rounded-xl overflow-hidden border border-slate-800 bg-slate-900 text-slate-100 shadow-md">
       <div className="flex items-center justify-between px-4 py-2 bg-slate-950/80 border-b border-slate-800 text-[11px] font-mono text-slate-400">
-        <span className="uppercase tracking-wider flex items-center gap-1.5">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.06em] flex items-center gap-1.5">
           <Terminal className="h-3.5 w-3.5 text-blue-400" />
           {language || 'code'}
         </span>
@@ -170,7 +105,7 @@ function TableRenderer({ headers, rows }: { headers: string[]; rows: string[][] 
           <thead className="bg-slate-100/90 border-b border-slate-200">
             <tr>
               {headers.map((h, i) => (
-                <th key={i} className="px-4 py-2.5 text-left font-bold uppercase tracking-wider text-slate-700 text-[10px]">
+                <th key={i} className="px-4 py-2.5 text-left font-sans text-[11px] font-medium text-slate-500">
                   {h}
                 </th>
               ))}
@@ -366,18 +301,6 @@ function MarkdownRenderer({ content, isStreaming }: { content: string; isStreami
         lines.forEach((line, lIdx) => {
           const trimmed = line.trim();
 
-          if (trimmed.startsWith('__PACKAGE_CARD__:')) {
-            const pkg = trimmed.replace('__PACKAGE_CARD__:', '').replace('__', '');
-            elements.push(<PackageCard key={`pkg-${lIdx}`} packageName={pkg} />);
-            return;
-          }
-
-          if (trimmed.startsWith('__RISK_CARD__:')) {
-            const parts = trimmed.replace('__RISK_CARD__:', '').replace('__', '').split(':');
-            elements.push(<RiskCard key={`risk-${lIdx}`} score={parseFloat(parts[0]) || 0} band={parts[1] || 'Suspicious'} />);
-            return;
-          }
-
           if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
             flushList(`list-before-table-${lIdx}`);
             const cols = trimmed.split('|').slice(1, -1).map(c => c.trim());
@@ -432,7 +355,7 @@ function MarkdownRenderer({ content, isStreaming }: { content: string; isStreami
 
           // Headings
           if (trimmed.startsWith('# ')) {
-            elements.push(<h1 key={lIdx} className="text-xl font-black text-slate-900 mt-6 mb-3 border-b pb-2">{renderFormattedInline(trimmed.slice(2))}</h1>);
+            elements.push(<h1 key={lIdx} className="font-display text-lg font-semibold tracking-[-0.02em] text-slate-900 mt-6 mb-3 border-b border-slate-200 pb-2">{renderFormattedInline(trimmed.slice(2))}</h1>);
             return;
           }
           if (trimmed.startsWith('## ') || trimmed.startsWith('### ')) {
@@ -521,20 +444,6 @@ function renderFormattedInline(text: string): React.ReactNode {
   });
 }
 
-// ─── Component 7: RiskBadge ────────────────────────────────────────────────────
-
-function RiskBadge({ band, score }: { band: string; score: number }) {
-  const isHigh = score >= 50 || band.toLowerCase().includes('critical') || band.toLowerCase().includes('high');
-  return (
-    <div className={`px-3 py-1 rounded-xl border font-mono flex items-center gap-2 shadow-2xs ${
-      isHigh ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'
-    }`}>
-      <span className="text-[11px] font-bold uppercase tracking-wider">{band}</span>
-      <span className="text-sm font-black">{score.toFixed(1)}/100</span>
-    </div>
-  );
-}
-
 const SECTION_LABELS: Record<string, string> = {
   verdict: 'Verdict',
   risk_engine: 'Risk Engine',
@@ -555,27 +464,41 @@ const SECTION_LABELS: Record<string, string> = {
  * one wired into it, so every chip is now a link into the panel that holds the
  * underlying records.
  */
-const SECTION_ROUTES: Record<string, string> = {
-  verdict: '/fraud-card',
-  risk_engine: '/fraud-card',
-  fraud_workflow: '/technical',
-  static_findings: '/technical',
-  dynamic_findings: '/technical#dynamic-analysis',
-  threat_intelligence: '/threat-intel',
-  mitre: '/technical',
-  recommendations: '/fraud-card',
+type SectionTarget = { section: CaseSection; hash?: string };
+
+/**
+ * Where each cited evidence section can actually be inspected.
+ *
+ * These citations are the difference between an assistant bolted onto the
+ * product and one wired into it, so they resolve to the case the answer is
+ * about rather than to a case-less path that would show the reader whatever
+ * sample they happened to have loaded.
+ */
+const SECTION_TARGETS: Record<string, SectionTarget> = {
+  verdict: { section: 'summary' },
+  risk_engine: { section: 'summary' },
+  fraud_workflow: { section: 'summary', hash: 'attack-story' },
+  static_findings: { section: 'evidence', hash: 'manifest-findings' },
+  dynamic_findings: { section: 'evidence', hash: 'dynamic-analysis' },
+  threat_intelligence: { section: 'intel' },
+  mitre: { section: 'evidence', hash: 'mitre' },
+  recommendations: { section: 'summary', hash: 'recommended-action' },
 };
 
 function SectionChips({ sections }: { sections: string[] }) {
+  const links = useCaseLinks();
   if (!sections || !sections.length) return null;
   return (
     <div className="flex flex-wrap items-center gap-1.5 mt-3 pt-3 border-t border-slate-100">
-      <span className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
+      <span className="text-[11px] font-medium text-slate-500 flex items-center gap-1.5">
         <Shield className="h-3 w-3" aria-hidden /> Grounded in
       </span>
       {sections.map(s => {
         const label = SECTION_LABELS[s] || s;
-        const to = SECTION_ROUTES[s];
+        const target = SECTION_TARGETS[s];
+        const to = target
+          ? `${links[target.section]}${target.hash ? `#${target.hash}` : ''}`
+          : undefined;
         if (!to) {
           return (
             <span
@@ -651,8 +574,9 @@ function InvestigationResponseRenderer({
 
       {followUps.length > 0 && (
         <div className="mt-6 pt-4 border-t border-slate-200/80 space-y-2.5">
-          <div className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-            <HelpCircle className="h-4 w-4 text-blue-600" /> Suggested Follow-up Questions
+          <div className={`${TYPOGRAPHY.label} flex items-center gap-1.5`}>
+            <HelpCircle className="h-3.5 w-3.5 text-slate-400" aria-hidden />
+            Suggested follow-up questions
           </div>
           <div className="flex flex-wrap gap-2">
             {followUps.map((q, idx) => (
@@ -681,40 +605,28 @@ export default function InvestigationChat({ data }: { data: FraudCardData | null
 
   if (!data) return null;
 
-  const ledgerSummary = investigationBundle
-    ? `Deterministic ledger: ${investigationBundle.counts.evidenceRecords} evidence records, ` +
-      `STEI ${data.frs_breakdown?.stei?.toFixed(1) ?? '-'}, ` +
-      `Dynamic ${data.frs_breakdown?.dynamic?.toFixed(1) ?? '-'}, ` +
-      `Correlation ${data.frs_breakdown?.correlation?.toFixed(1) ?? '-'}.`
+  /*
+   * The grounding strip.
+   *
+   * This printed "STEI 46.0, Dynamic 0.0, Correlation 71.0" - three acronyms
+   * and three bare axis scores, above the fold, to a reader who has not yet
+   * asked a question. The count of records is the part that says "this is
+   * grounded"; the arithmetic belongs in the ledger it links to.
+   */
+  const evidenceCount = investigationBundle?.counts.evidenceRecords ?? 0;
+  const ledgerSummary = evidenceCount
+    ? `Grounded in ${evidenceCount} verified evidence record${evidenceCount === 1 ? '' : 's'} from this case.`
     : '';
 
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome',
       role: 'assistant',
-      content: `__PACKAGE_CARD__:${data.package_name}__
-__RISK_CARD__:${data.final_risk_score}:${data.risk_band}__
-
-### Investigation Evidence Indexed
-
-The investigation evidence for \`${data.package_name}\` has been successfully indexed.
-
-You can now ask questions about:
-
-* **Malware behaviour** & runtime hooks
-* **Risk Score explanation** & decision breakdown
-* **Permissions** & critical privilege abuse
-* **Indicators of Compromise** (IOCs) & network C2
-* **Dynamic Analysis** & screen captures
-* **Static Analysis** & decompiled findings
-* **Network activity** & mitmproxy flows
-* **Threat Intelligence** (VT, OTX, AbuseIPDB)
-* **Recommendation** & quarantine actions
-
-Everything is grounded strictly in investigation evidence.`,
+      content: buildChatGreeting(data),
       timestamp: new Date(),
     },
   ]);
+  const questions = buildCaseQuestions(data);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -899,49 +811,70 @@ Everything is grounded strictly in investigation evidence.`,
       style={{ minHeight: 'calc(100vh - var(--app-header-height) - 1.5rem)' }}
     >
 
-      {/* Top Header */}
-      <div className="flex items-center justify-between px-5 py-3.5 bg-slate-900 text-white border-b border-slate-800 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <Cpu className="h-6 w-6 text-blue-400" />
-            <div className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          </div>
-          <div>
-            <h1 className="text-sm font-bold tracking-wide">SUDARSHAN AI Investigation Assistant</h1>
-            <p className="text-[11px] text-slate-400 font-mono mt-0.5">
-              {data.package_name} · SHA256: {data.sha256.slice(0, 12)}…
-            </p>
-          </div>
+      {/*
+        The frame.
+
+        This was headed "SUDARSHAN AI Investigation Assistant" with a pulsing
+        green dot - a product banner, on a page that already sits inside one
+        case. It now names the job: ask this case a question. Identity and the
+        verdict live in the case bar above, so repeating them here only invited
+        them to disagree.
+      */}
+      <div className="flex items-center gap-3 px-5 py-3.5 bg-slate-900 text-white border-b border-slate-800 flex-shrink-0">
+        <Cpu className="h-5 w-5 text-blue-400 shrink-0" aria-hidden />
+        <div className="min-w-0">
+          <h1 className="font-display text-sm font-semibold tracking-[-0.01em]">
+            Ask SUDARSHAN about this case
+          </h1>
+          <p className="text-[11px] text-slate-500 mt-0.5 truncate">
+            Answers are drawn only from this investigation&apos;s evidence, and cite where they
+            came from.
+          </p>
         </div>
-        <RiskBadge band={data.risk_band} score={data.final_risk_score} />
       </div>
 
       {ledgerSummary && (
-        <div className="px-5 py-2 bg-amber-50 border-b border-amber-100 text-xs flex flex-wrap items-center justify-between gap-2">
-          <span className="text-amber-900">{ledgerSummary}</span>
-          <button type="button" onClick={() => openLedger('full')} className="font-semibold text-blue-700">
-            Open score ledger
+        <div className="px-5 py-2 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+          <span className={TYPOGRAPHY.caption}>{ledgerSummary}</span>
+          <button type="button" onClick={() => openLedger('full')} className={TYPOGRAPHY.linkAction}>
+            <BarChart2 className="h-3.5 w-3.5" aria-hidden />
+            How the score was calculated
           </button>
         </div>
       )}
 
-      {/* Quick Prompts Bar */}
-      {messages.length <= 1 && (
-        <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex-shrink-0">
-          <p className="text-[11px] font-bold uppercase text-slate-500 tracking-wider mb-2">Quick Investigation Prompts</p>
-          <div className="flex flex-wrap gap-2">
-            {QUICK_QUESTIONS.map(q => (
-              <button
-                key={q.label}
-                onClick={() => sendMessage(q.label)}
-                disabled={isStreaming}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg text-slate-700 font-medium hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors shadow-2xs disabled:opacity-50"
-              >
-                <span className="text-slate-400">{q.icon}</span>
-                {q.label}
-              </button>
-            ))}
-          </div>
+      {/*
+        Suggested questions, derived from this case.
+
+        Eight fixed prompts used to appear on every case - including "Which
+        MITRE techniques apply?" as an opener, and "Did it steal OTP messages?"
+        on samples with no SMS capability. A suggestion that does not apply
+        implies a finding that was never made.
+      */}
+      {messages.length <= 1 && questions.length > 0 && (
+        <div className="px-5 py-3.5 bg-slate-50 border-b border-slate-200 flex-shrink-0 space-y-2.5">
+          {(['decision', 'evidence', 'action'] as const).map((kind) => {
+            const group = questions.filter((q) => q.kind === kind);
+            if (group.length === 0) return null;
+            return (
+              <div key={kind} className="flex flex-wrap items-center gap-2">
+                <span className={`${TYPOGRAPHY.label} w-full sm:w-20 shrink-0`}>
+                  {GROUP_LABEL[kind]}
+                </span>
+                {group.map((q) => (
+                  <button
+                    key={q.text}
+                    type="button"
+                    onClick={() => sendMessage(q.text)}
+                    disabled={isStreaming}
+                    className="px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-md text-slate-700 font-medium hover:bg-blue-50 hover:border-blue-300 hover:text-blue-800 transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  >
+                    {q.text}
+                  </button>
+                ))}
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -977,7 +910,7 @@ Everything is grounded strictly in investigation evidence.`,
                 <SectionChips sections={msg.sectionsUsed} />
               )}
 
-              <span className="text-[10px] text-slate-400 font-mono px-1">
+              <span className="text-[10px] text-slate-500 font-mono px-1">
                 {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </span>
             </div>
@@ -1025,7 +958,7 @@ Everything is grounded strictly in investigation evidence.`,
           )}
         </div>
 
-        <p className="text-[10px] text-slate-400 text-center font-mono">
+        <p className="text-[10px] text-slate-500 text-center font-mono">
           RAG-Grounded Evidence Engine · AI explains, deterministic engine decides
         </p>
       </div>

@@ -208,8 +208,8 @@ function InfluenceRowItem({
 
       {row.key === 'dynamic' && !row.included && row.score > 0 && (
         <p className={`${TYPOGRAPHY.caption} text-amber-800 mt-1.5`}>
-          Observed runtime score {row.score.toFixed(1)} / 100 - excluded from the final FRS because
-          the evidence was inconclusive.
+          Runtime behaviour scored {row.score.toFixed(1)} / 100 but was excluded from the
+          risk score, because the evidence was inconclusive.
         </p>
       )}
 
@@ -262,7 +262,7 @@ export default function RiskInfluenceCard({
         <div className="mb-3">
           <p className={TYPOGRAPHY.h2}>What influenced the score</p>
           <p className={`${TYPOGRAPHY.caption} mt-0.5`}>
-            Ranked by points contributed to the final FRS.
+            Ranked by how much each raised the risk score.
           </p>
         </div>
         {body}
@@ -276,7 +276,7 @@ export default function RiskInfluenceCard({
         <SectionHeader
           icon={<BarChart2 className="h-4 w-4" />}
           title="What influenced the score"
-          subtitle="Ranked by points contributed to the final FRS."
+          subtitle="Ranked by how much each raised the risk score."
           className="flex-1 border-b-0"
         />
         <DownloadReportButton sha256={data.sha256} />

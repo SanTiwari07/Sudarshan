@@ -43,7 +43,7 @@ function ColorRow({ match }: { match: VideColorMatch }) {
   return (
     <li className="flex items-center justify-between gap-3 py-1.5 border-b border-slate-100 last:border-0">
       <Swatch hex={match.baseline} label="baseline" />
-      <span className="text-slate-400 text-[11px] shrink-0">→</span>
+      <span className="text-slate-500 text-[11px] shrink-0">→</span>
       <Swatch hex={match.suspect} label="suspect" />
       <span
         className={`text-[11px] font-medium shrink-0 ${
@@ -68,7 +68,7 @@ function AstTree({ node, depth = 0 }: { node: VideAstNode; depth?: number }) {
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            className="text-slate-400 hover:text-slate-700 text-[10px] w-3 shrink-0"
+            className="text-slate-500 hover:text-slate-700 text-[10px] w-3 shrink-0"
             aria-label={open ? 'Collapse' : 'Expand'}
           >
             {open ? '▾' : '▸'}
@@ -77,7 +77,7 @@ function AstTree({ node, depth = 0 }: { node: VideAstNode; depth?: number }) {
           <span className="w-3 shrink-0" />
         )}
         <code className="text-[11px] font-mono font-semibold text-slate-700">{node.role}</code>
-        {node.tag && <span className="text-[10px] text-slate-400">{node.tag}</span>}
+        {node.tag && <span className="text-[10px] text-slate-500">{node.tag}</span>}
         {node.text && (
           <span className="text-[10px] text-slate-500 truncate max-w-[180px]" title={node.text}>
             “{node.text}”
@@ -107,7 +107,7 @@ function Column({
   return (
     <div className="min-w-0 flex-1">
       <div className="mb-2">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-700">{title}</p>
+        <p className="text-[11px] font-bold text-slate-700">{title}</p>
         {subtitle && <p className="text-[11px] text-slate-500 truncate">{subtitle}</p>}
       </div>
       {children}
@@ -189,7 +189,7 @@ export default function VisualDiffViewer({ vide }: Props) {
           ].map((axis) => (
             <div key={axis.label} className="rounded border border-slate-200 p-2">
               <p className="text-[10px] uppercase tracking-wide text-slate-500">
-                {axis.label} <span className="text-slate-400">({axis.weight})</span>
+                {axis.label} <span className="text-slate-500">({axis.weight})</span>
               </p>
               <p className="text-sm font-bold text-slate-800 mt-0.5">{pct(axis.value)}</p>
             </div>
@@ -232,7 +232,7 @@ export default function VisualDiffViewer({ vide }: Props) {
         {/* Reproduced labels */}
         {matchedStrings.length > 0 && (
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1.5 flex items-center gap-1.5">
+            <p className="text-[11px] font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
               <TypeIcon className="h-3 w-3" /> Baseline labels reproduced ({matchedStrings.length})
             </p>
             <div className="flex flex-wrap gap-1">
@@ -251,7 +251,7 @@ export default function VisualDiffViewer({ vide }: Props) {
         {/* Ranked candidates */}
         {ranked.length > 1 && (
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1.5 flex items-center gap-1.5">
+            <p className="text-[11px] font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
               <Palette className="h-3 w-3" /> Baseline ranking
             </p>
             <table className="w-full text-[11px]">
@@ -283,7 +283,7 @@ export default function VisualDiffViewer({ vide }: Props) {
         {/* Suspect AST */}
         {vide.suspect_ast && (
           <details className="rounded border border-slate-200">
-            <summary className="cursor-pointer select-none px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+            <summary className="cursor-pointer select-none px-2.5 py-1.5 text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
               <Layers className="h-3 w-3" /> Suspect view hierarchy
               {vide.suspect_profile_summary?.ast_node_count
                 ? ` (${vide.suspect_profile_summary.ast_node_count} nodes, depth ${
@@ -302,7 +302,7 @@ export default function VisualDiffViewer({ vide }: Props) {
         {/* Advisory LLM assessment - explicitly separated from the verdict. */}
         {semantic && semantic.status === 'OK' && (
           <div className="rounded border border-sky-200 bg-sky-50/60 p-2.5">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-sky-900">
+            <p className="text-[11px] font-bold text-sky-900">
               AI design assessment
               <span className="ml-1.5 font-normal normal-case text-sky-700">
                 advisory — does not affect the verdict

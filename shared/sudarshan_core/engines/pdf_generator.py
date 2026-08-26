@@ -292,13 +292,50 @@ def build_report_data(case_data: Dict[str, Any], apk_dir: Optional[Path] = None)
 
     dynamic_ran_bool = bool(get_val(frs_breakdown, "dynamic_ran") or get_val(case_data, "dynamic_available") or (dynamic_res and bool(dynamic_res)))
     dynamic_conclusive_bool = bool(get_val(frs_breakdown, "dynamic_conclusive"))
-    
-    if dynamic_ran_bool:
-        dyn_status = "EVENTS_CAPTURED" if dynamic_conclusive_bool or dynamic_res else "COMPLETED_INCONCLUSIVE"
+
+    # ── Dynamic status ────────────────────────────────────────────────────────
+    # The sandbox publishes its own status and it is the authoritative value.
+    # This block used to synthesise a two-valued string instead, and the test
+    # for it was `bool(dynamic_res)` - a dict that a FAILED run also returns,
+    # fully populated. So every failure mode the engine distinguishes
+    # (INSTRUMENTATION_FAILED, FRIDA_ATTACH_FAILED, PID_NOT_FOUND,
+    # NO_UI_RENDERED, RUNTIME_COMPLETED_NO_EVENTS, EMULATOR_UNAVAILABLE,
+    # INSTALL_FAILED, INCONCLUSIVE) was reported as EVENTS_CAPTURED under a
+    # "CONFIRMED DYNAMIC RUN" badge. Verified against a real persisted case:
+    # org.schabi.newpipe carries INSTRUMENTATION_FAILED and rendered as a
+    # confirmed run with a received canary and a BFCI of 86.
+    #
+    # `dynamic_observed` is the flag the page builders need: it means the
+    # sandbox ran AND produced behavioural telemetry. "It ran" alone is not
+    # enough to describe a run as confirmed.
+    dyn_status = safe_str(get_val(dynamic_res, "dynamic_status"), "")
+    if not dyn_status:
+        # `dynamic_ran` gates everything: a run that did not happen cannot be
+        # conclusive, whatever `dynamic_conclusive` says. Reading conclusive
+        # first let a stale True label a sandbox that never started as
+        # EVENTS_CAPTURED.
+        if not dynamic_ran_bool:
+            dyn_status = "NOT_PERFORMED"
+        elif dynamic_conclusive_bool:
+            dyn_status = "EVENTS_CAPTURED"
+        else:
+            dyn_status = "COMPLETED_INCONCLUSIVE"
+
+    dynamic_observed_bool = dyn_status == "EVENTS_CAPTURED" and dynamic_ran_bool
+
+    if not dynamic_ran_bool or dyn_status in ("NOT_PERFORMED", "NOT_STARTED"):
+        dyn_status_enum = Status.NOT_PERFORMED
+    elif dynamic_observed_bool:
         dyn_status_enum = Status.OBSERVED
     else:
-        dyn_status = "NO_TELEMETRY_CAPTURED"
-        dyn_status_enum = Status.NOT_PERFORMED
+        # Ran, did not observe. Neither OBSERVED nor NOT_PERFORMED: the
+        # distinction is the whole point of this section.
+        dyn_status_enum = Status.NOT_OBSERVED
+
+    # Why the risk engine dropped the dynamic axis, in its own words
+    # (NO_BEHAVIOR_OBSERVED, NO_UI_RENDERED, EVASION_ONLY, ...). Computed on
+    # every case and never rendered.
+    dyn_exclusion_reason = safe_str(get_val(frs_breakdown, "dynamic_exclusion_reason"), "")
 
     bfci_total_val = safe_float(get_val(dynamic_res, "bfci", get_val(frs_breakdown, "dynamic")), 0.0)
     bfci_comps = get_val(dynamic_res, "bfci_components") or {}
@@ -307,9 +344,47 @@ def build_report_data(case_data: Dict[str, Any], apk_dir: Optional[Path] = None)
 
     sandbox_provider_val = safe_str(get_val(dynamic_res, "sandbox_provider"), "Not available")
     frida_version_val = safe_str(get_val(dynamic_res, "frida_version"), "Not available")
-    duration_val = safe_float(get_val(dynamic_res, "analysis_duration"), 0.0)
-    hooks_count_val = safe_int(get_val(dynamic_res, "total_hooks_installed"), 0)
-    events_count_val = safe_int(get_val(dynamic_res, "total_events_captured"), len(get_val(dynamic_res, "events") or []))
+
+    # The keys below were read under names the sandbox does not emit, so each
+    # rendered as its zero on every real case. Verified against the persisted
+    # cases in backend/sudarshan.db: `duration_seconds` is 300 while
+    # `analysis_duration` is absent, and `hooks_installed` is 77 while
+    # `total_hooks_installed` is absent. The old spellings are kept as
+    # fallbacks so a caller handing us a hand-built dict still works.
+    duration_val = safe_float(
+        get_val(dynamic_res, "duration_seconds", get_val(dynamic_res, "analysis_duration")),
+        0.0,
+    )
+    hooks_count_val = safe_int(
+        get_val(dynamic_res, "hooks_installed", get_val(dynamic_res, "total_hooks_installed")),
+        0,
+    )
+
+    # Behavioural events only. `raw_event_counts` spans harness bookkeeping
+    # (`harness_action`) and app telemetry as well as fraud categories, and
+    # counting those would report a run that did nothing as having produced
+    # events.
+    raw_event_counts = get_val(dynamic_res, "raw_event_counts") or {}
+    if not isinstance(raw_event_counts, dict):
+        raw_event_counts = {}
+    _HARNESS_CATEGORIES = {"harness_action", "smoke"}
+    events_count_val = safe_int(
+        get_val(dynamic_res, "total_events_captured"),
+        sum(
+            safe_int(v)
+            for k, v in raw_event_counts.items()
+            if k not in _HARNESS_CATEGORIES
+        )
+        or len(get_val(dynamic_res, "events") or []),
+    )
+
+    hook_fire_counts = get_val(dynamic_res, "hook_fire_counts") or {}
+    if not isinstance(hook_fire_counts, dict):
+        hook_fire_counts = {}
+    canary_received_val = get_val(dynamic_res, "canary_received")
+    launch_method_val = safe_str(get_val(dynamic_res, "launch_method_used"), "")
+    java_hooks_val = safe_int(get_val(dynamic_res, "java_hooks_installed"), 0)
+    native_hooks_val = safe_int(get_val(dynamic_res, "native_hooks_installed"), 0)
 
     # Classification & VIDE
     family_val = safe_str(get_val(case_data, "family_classification"), "Unknown")
@@ -339,15 +414,46 @@ def build_report_data(case_data: Dict[str, Any], apk_dir: Optional[Path] = None)
     )
     vide_tier_val = safe_str(get_val(vide_res, "visual_impersonation_tier_label"), "")
 
-    if vide_res and get_val(vide_res, "analyzed"):
+    # The engine emits `available` / `status`; `analyzed` is not a key it has
+    # ever written. The string "analyzed" occurs in this repository only on this
+    # line and in the old test fixture, which is why the whole VIDE section -
+    # meter, tier, institution, and the CIE dE2000 colour table - has never
+    # rendered for a real case. Verified: a persisted case carrying
+    # available=True, status="OK" printed "[VIDE-STATUS: NOT_AVAILABLE]".
+    vide_ok = bool(
+        get_val(vide_res, "available")
+        or get_val(vide_res, "analyzed")  # accepted for hand-built inputs
+        or safe_str(get_val(vide_res, "status")).upper() == "OK"
+    )
+    if vide_res and vide_ok:
         vide_status_val = "FIRED — visual similarity detection confirmed" if get_val(vide_res, "visual_impersonation_detected") else "CLEAN — no impersonation match"
         vide_status_enum = Status.OBSERVED
-        vide_baseline_val = safe_str(get_val(vide_res, "matched_baseline"), "None")
-        vide_similarity_val = safe_float(get_val(vide_res, "confidence"), 0.0)
-        # `confidence` is not a key the engine emits at the top level; the
-        # comparer's is the number the rest of the page is describing.
+        # `matched_baseline` is a dict - institution_id, display_name, bank and
+        # the `source` that says whether the match came from vide_compare or the
+        # weaker corpus_compare. Passing it to safe_str printed a Python dict
+        # repr into a forensic report.
+        baseline_raw = get_val(vide_res, "matched_baseline")
+        if isinstance(baseline_raw, dict):
+            baseline_name = safe_str(
+                get_val(baseline_raw, "display_name")
+                or get_val(baseline_raw, "bank")
+                or get_val(baseline_raw, "institution_id"),
+                "None",
+            )
+            baseline_source = safe_str(get_val(baseline_raw, "source"), "")
+            vide_baseline_val = (
+                f"{baseline_name} (via {baseline_source})" if baseline_source else baseline_name
+            )
+        else:
+            vide_baseline_val = safe_str(baseline_raw, "None")
+
+        # `confidence` is not a key the engine emits at the top level. The
+        # comparer's confidence is the number the rest of the page describes.
+        vide_similarity_val = safe_float(get_val(vide_res, "visual_impersonation_confidence"), 0.0)
         if not vide_similarity_val:
             vide_similarity_val = safe_float(get_val(vide_compare_res, "confidence"), 0.0)
+        if not vide_similarity_val:
+            vide_similarity_val = safe_float(get_val(vide_res, "similarity_score"), 0.0)
     else:
         vide_status_val = "NOT_AVAILABLE"
         vide_status_enum = Status.NOT_AVAILABLE
@@ -362,12 +468,59 @@ def build_report_data(case_data: Dict[str, Any], apk_dir: Optional[Path] = None)
     if threat_intel_data and get_val(threat_intel_data, "available", True):
         ti_status_val = "AVAILABLE"
         ti_status_enum = Status.CORRELATED
-        vt_malicious = safe_int(get_val(threat_intel_data, "vt_malicious_count", get_val(threat_intel_data, "positives")), 0)
-        vt_total = safe_int(get_val(threat_intel_data, "vt_total_engines", get_val(threat_intel_data, "total")), 0)
-        vt_ratio_str = f"{vt_malicious} / {vt_total}" if vt_total > 0 else "0 / 0"
+        # The correlator writes `sha256_detections` / `sha256_total`. The
+        # spellings previously read here are not keys it emits, so the detection
+        # ratio printed "0 / 0" on every case that had ever been enriched.
+        vt_malicious = safe_int(
+            get_val(
+                threat_intel_data,
+                "sha256_detections",
+                get_val(threat_intel_data, "vt_malicious_count", get_val(threat_intel_data, "positives")),
+            ),
+            0,
+        )
+        vt_total = safe_int(
+            get_val(
+                threat_intel_data,
+                "sha256_total",
+                get_val(threat_intel_data, "vt_total_engines", get_val(threat_intel_data, "total")),
+            ),
+            0,
+        )
+
+        # Three states the correlator carefully distinguishes and this line used
+        # to collapse into one: the hash is absent from VirusTotal, the hash is
+        # present and clean, or nothing was queried at all. A responder acts
+        # differently on each.
+        ioc_reputation = get_val(threat_intel_data, "ioc_reputation") or []
+        if not isinstance(ioc_reputation, list):
+            ioc_reputation = []
+        hash_in_vt = get_val(threat_intel_data, "vt_hash_in_database")
+        if vt_total > 0:
+            vt_ratio_str = f"{vt_malicious} / {vt_total}"
+        elif hash_in_vt is False:
+            vt_ratio_str = "Not in VirusTotal"
+        else:
+            vt_ratio_str = "Not available"
+
         otx_pulses = safe_int(get_val(threat_intel_data, "otx_pulse_count", len(get_val(threat_intel_data, "otx_pulses") or [])), 0)
-        abuseipdb_val = safe_float(get_val(threat_intel_data, "abuseipdb_score"), 0.0)
-        corr_family = safe_str(get_val(threat_intel_data, "known_family"), "None")
+
+        # AbuseIPDB scores are per-indicator under `ioc_reputation`; there is no
+        # top-level `abuseipdb_score`, so this always read 0. The worst score
+        # across the indicators is the one that matters for triage.
+        abuse_scores = [
+            safe_float(get_val(entry, "abuse_score"), 0.0)
+            for entry in ioc_reputation
+            if isinstance(entry, dict) and get_val(entry, "abuse_score") is not None
+        ]
+        abuseipdb_val = max(abuse_scores) if abuse_scores else safe_float(
+            get_val(threat_intel_data, "abuseipdb_score"), 0.0
+        )
+
+        corr_family = safe_str(
+            get_val(threat_intel_data, "known_family") or get_val(threat_intel_data, "vt_family"),
+            "None",
+        )
     else:
         ti_status_val = "NOT_CONFIGURED"
         ti_status_enum = Status.NOT_AVAILABLE
@@ -381,12 +534,24 @@ def build_report_data(case_data: Dict[str, Any], apk_dir: Optional[Path] = None)
     # Artifact Loading
     evidence_records_list: List[Dict[str, Any]] = []
     screenshots_list: List[Dict[str, Any]] = []
+    # Precomputed by EvidenceStore: totals by severity and by category.
+    evidence_summary: Dict[str, Any] = {}
     
     if apk_dir and apk_dir.exists():
         ev_file = apk_dir / "evidence.json"
         if ev_file.exists():
             try:
                 ev_data = json.loads(ev_file.read_text(encoding="utf-8"))
+                # EvidenceStore.flush writes
+                # {"generated_at", "package_name", "summary", "records": [...]}.
+                # Only the bare-list shape was accepted, so the Evidence Ledger
+                # - the traceability the report names as its third principle -
+                # rendered "No evidence records mapped" for every real case
+                # while the records sat on disk. report_generator.py reads the
+                # same file correctly, which is why the HTML export showed them.
+                if isinstance(ev_data, dict):
+                    evidence_summary = ev_data.get("summary") or {}
+                    ev_data = ev_data.get("records") or []
                 if isinstance(ev_data, list):
                     evidence_records_list = ev_data
             except Exception as e:
@@ -445,20 +610,83 @@ def build_report_data(case_data: Dict[str, Any], apk_dir: Optional[Path] = None)
     workflow_stages_list = get_val(workflow_obj, "stages", [])
 
     threat_scenarios_list = get_val(case_data, "threat_scenario_table", [])
-    mitre_techniques_list = get_val(case_data, "mitre_techniques", [])
 
     ai_report = get_val(case_data, "intelligence_report") or get_val(case_data, "executive_view") or {}
     plain_narrative = get_val(ai_report, "plain_english_narrative", "Not available.")
     fraud_obj = get_val(ai_report, "fraud_objective", "Not available")
     cust_impact = get_val(ai_report, "customer_impact", "Not available")
-    bank_impact = get_val(ai_report, "banking_impact", "Not available")
+    bank_impact = get_val(ai_report, "banking_impact_assessment") or get_val(ai_report, "banking_impact", "Not available")
     cert_recs = get_val(ai_report, "cert_in_recommendations", [])
     cust_adv = get_val(ai_report, "customer_advisory_draft", "Not available")
+    affected_banks_list = get_val(ai_report, "affected_banking_apps", []) or []
 
-    soc_actions_list = get_val(case_data, "soc_actions", [])
+    # ── MITRE techniques ──────────────────────────────────────────────────────
+    # `mitre_techniques` is not a key the pipeline writes - confirmed absent
+    # from all 13 persisted cases - so the MITRE table printed "No MITRE
+    # techniques mapped" unconditionally. Two real sources exist, and they are
+    # NOT equivalent: an evidence record carries a technique that was actually
+    # observed at runtime, while the intelligence report lists techniques
+    # inferred from static capability. Merging them would present a declared
+    # capability as observed behaviour, so provenance travels with each row.
+    mitre_techniques_list = get_val(case_data, "mitre_techniques", []) or []
+    if not mitre_techniques_list:
+        seen_techniques: Dict[str, Dict[str, Any]] = {}
+        for rec in evidence_records_list:
+            if not isinstance(rec, dict):
+                continue
+            tid = safe_str(get_val(rec, "mitre_technique_id"))
+            if not tid:
+                continue
+            entry = seen_techniques.setdefault(
+                tid,
+                {
+                    "id": tid,
+                    "name": safe_str(get_val(rec, "mitre_technique_name"), ""),
+                    "basis": "OBSERVED",
+                    "evidence_ids": [],
+                },
+            )
+            fid = safe_str(get_val(rec, "finding_id") or get_val(rec, "id"))
+            if fid and len(entry["evidence_ids"]) < 6:
+                entry["evidence_ids"].append(fid)
+
+        for raw in get_val(ai_report, "mitre_techniques_used", []) or []:
+            text = safe_str(raw).strip()
+            if not text:
+                continue
+            # Entries arrive as "T1411 - Input Prompt" or bare "T1411".
+            tid = text.split()[0].strip(" -:")
+            if tid in seen_techniques:
+                continue
+            name = text[len(tid):].strip(" -:") if len(text) > len(tid) else ""
+            seen_techniques[tid] = {
+                "id": tid,
+                "name": name,
+                "basis": "STATIC INFERENCE",
+                "evidence_ids": [],
+            }
+        mitre_techniques_list = list(seen_techniques.values())
+
+    # ── SOC actions ───────────────────────────────────────────────────────────
+    # Also never written by the pipeline, so this table rendered header-only on
+    # every report. The intelligence report's recommended actions and the risk
+    # engine's own recommended action are the real content.
+    soc_actions_list = get_val(case_data, "soc_actions", []) or []
+    if not soc_actions_list:
+        derived_actions: List[Dict[str, str]] = []
+        engine_action = safe_str(get_val(case_data, "recommended_action"))
+        if engine_action:
+            derived_actions.append({"action": "ENGINE VERDICT", "detail": engine_action})
+        for item in get_val(ai_report, "recommended_actions", []) or []:
+            text = safe_str(item).strip()
+            if text:
+                derived_actions.append({"action": "RECOMMENDED", "detail": text})
+        soc_actions_list = derived_actions
 
     activities_list = get_val(case_data, "activities", [])
-    services_list = get_val(case_data, "services", [])
+    # The pipeline persists this as `services_list`; `services` is the API
+    # projection's name for it and is absent from every stored case.
+    services_list = get_val(case_data, "services_list") or get_val(case_data, "services", []) or []
     receivers_list = get_val(case_data, "receivers", [])
     providers_list = get_val(case_data, "providers", [])
     cert_dict = get_val(case_data, "certificate", {})

@@ -5,6 +5,8 @@
 @layer base {
   :root {
     --app-header-height: 3rem;
+    /* Kept in sync by AppSidebar so the main column tracks the rail. */
+    --app-sidebar-width: 14rem;
     --radius-sm: 4px;
     --radius-md: 6px;
     --radius-lg: 8px;
@@ -27,50 +29,58 @@
 
   body {
     @apply antialiased text-slate-900 bg-[var(--surface-page)] min-w-0 font-sans;
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    /* cv11 = single-storey g, ss03 = disambiguated punctuation. Both make
+       package names and hashes read cleanly at 11-12px. */
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss03";
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Numerals must never reflow as a value ticks. */
+  .tabular-nums, table, input, .font-mono {
+    font-variant-numeric: tabular-nums;
   }
 }
 
 @layer utilities {
-  /* Centralized Typography System Utilities */
+  /* Mirrors theme/typography.ts - keep the two in step. */
   .typo-display {
-    @apply font-mono text-5xl sm:text-6xl font-extrabold tracking-tight text-slate-900 tabular-nums leading-none;
+    @apply font-display text-5xl sm:text-6xl font-semibold tracking-[-0.045em] text-slate-900 tabular-nums leading-none;
   }
   .typo-h1 {
-    @apply font-sans text-xl sm:text-2xl font-bold tracking-tight text-slate-900 leading-snug;
+    @apply font-display text-lg sm:text-xl font-semibold tracking-[-0.02em] text-slate-900 leading-snug;
   }
   .typo-h2 {
-    @apply font-sans text-lg sm:text-xl font-semibold tracking-tight text-slate-900 leading-snug;
+    @apply font-display text-base sm:text-lg font-semibold tracking-[-0.018em] text-slate-900 leading-snug;
   }
   .typo-h3 {
-    @apply font-sans text-sm sm:text-base font-semibold tracking-tight text-slate-900 leading-snug;
+    @apply font-display text-sm font-semibold tracking-[-0.01em] text-slate-900 leading-snug;
   }
   .typo-card-title {
-    @apply font-sans text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center gap-1.5;
+    @apply font-display text-[13px] font-semibold tracking-[-0.01em] text-slate-900 flex items-center gap-2;
   }
   .typo-section-title {
-    @apply font-sans text-xs font-bold uppercase tracking-widest text-slate-800 flex items-center gap-2;
+    @apply font-display text-[13px] font-semibold tracking-[-0.01em] text-slate-900 flex items-center gap-2;
   }
   .typo-body {
-    @apply font-sans text-sm font-normal text-slate-800 leading-relaxed;
+    @apply font-sans text-[13px] font-normal text-slate-700 leading-relaxed;
   }
   .typo-body-sm {
-    @apply font-sans text-xs font-normal text-slate-600 leading-normal;
+    @apply font-sans text-xs font-normal text-slate-600 leading-relaxed;
   }
   .typo-label {
-    @apply font-sans text-[11px] font-semibold uppercase tracking-wider text-slate-500 shrink-0;
+    @apply font-sans text-[11px] font-medium text-slate-500 shrink-0;
   }
   .typo-caption {
     @apply font-sans text-[11px] font-normal text-slate-500 leading-normal;
   }
   .typo-badge {
-    @apply font-sans text-[11px] font-bold uppercase tracking-wider inline-flex items-center px-2 py-0.5 rounded border shadow-2xs;
+    @apply font-sans text-[10px] font-semibold uppercase tracking-[0.06em] inline-flex items-center px-1.5 py-0.5 rounded border;
   }
   .typo-button {
-    @apply font-sans text-xs font-semibold uppercase tracking-wider inline-flex items-center justify-center gap-2 rounded-md shadow-xs transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-60;
+    @apply font-sans text-[13px] font-medium inline-flex items-center justify-center gap-2 rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 disabled:opacity-50;
   }
   .typo-code {
-    @apply font-mono text-xs font-medium text-slate-800 tabular-nums break-all select-all;
+    @apply font-mono text-xs font-normal text-slate-700 tabular-nums break-all select-all;
   }
 }
 
@@ -102,7 +112,7 @@
   }
 
   .soc-table thead th {
-    @apply px-2.5 py-2 text-left text-[11px] font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap bg-surface-secondary;
+    @apply px-2.5 py-2 text-left text-[11px] font-medium text-slate-500 whitespace-nowrap bg-surface-secondary;
   }
 
   .soc-table tbody tr {
@@ -123,7 +133,7 @@
   }
 
   .soc-dark-header {
-    @apply border-b border-slate-800 bg-slate-950 px-3 py-2 flex items-center justify-between text-xs font-bold tracking-wider uppercase text-slate-400;
+    @apply border-b border-slate-800 bg-slate-950 px-3 py-2 flex items-center justify-between text-xs font-medium text-slate-400;
   }
 
   /* Ultra-sharp minimal Card Container (Apple Simplicity) */
@@ -136,7 +146,7 @@
   }
 
   .soc-card-title {
-    @apply text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5;
+    @apply font-display text-[13px] font-semibold tracking-[-0.01em] text-slate-900 flex items-center gap-2;
   }
 
   /* Evidence Sections */
@@ -149,7 +159,7 @@
   }
 
   .evidence-section__title {
-    @apply text-xs font-bold text-slate-800 uppercase tracking-widest flex items-center gap-2;
+    @apply font-display text-[13px] font-semibold tracking-[-0.01em] text-slate-900 flex items-center gap-2;
   }
 
   .evidence-section__desc {

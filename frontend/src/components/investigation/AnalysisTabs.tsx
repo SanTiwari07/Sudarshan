@@ -62,23 +62,27 @@ export function AnalysisTabs({ tabs, initialTabId }: AnalysisTabsProps) {
               aria-controls={`panel-${tab.id}`}
               onClick={() => setActiveId(tab.id)}
               className={[
-                'px-4 py-2.5 text-sm font-medium rounded-t-md',
+                'px-4 py-2.5 text-left rounded-t-md',
                 'border-b-2 -mb-px transition-colors',
                 selected
-                  ? 'border-b-sky-600 text-sky-700 bg-sky-50/60'
-                  : 'border-b-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50',
+                  ? 'border-b-blue-600 text-slate-900'
+                  : 'border-b-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50',
               ].join(' ')}
             >
-              <span className="flex items-center gap-2">
+              <span className="flex items-center gap-2 font-display text-[13px] font-semibold tracking-[-0.01em]">
                 {tab.label}
                 {typeof tab.count === 'number' && tab.count > 0 && (
-                  <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-slate-200 text-slate-700">
+                  <span
+                    className={`text-[11px] font-medium tabular-nums px-1.5 py-0.5 rounded ${
+                      selected ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-500'
+                    }`}
+                  >
                     {tab.count}
                   </span>
                 )}
               </span>
               {tab.hint && (
-                <span className="block text-[11px] font-normal text-slate-400">
+                <span className="block text-[11px] font-normal text-slate-400 mt-0.5">
                   {tab.hint}
                 </span>
               )}

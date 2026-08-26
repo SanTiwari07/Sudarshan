@@ -18,6 +18,10 @@ export default {
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        // Display face for headings and score numerals. Inter Tight's narrower
+        // sidebearings let a heading sit at the same optical weight as body
+        // copy without shouting, which is what the all-caps headings were doing.
+        display: ['Inter Tight', 'Inter', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
       },
     },

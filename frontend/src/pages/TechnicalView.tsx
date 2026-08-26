@@ -37,9 +37,17 @@ import AskAiPopover from '../components/investigation/AskAiPopover';
  * collapsing is the opposite mistake: a two-row table costs nothing to show,
  * and hiding it behind a click makes small findings easy to miss entirely.
  */
-const COLLAPSE_ABOVE_ROWS = 5;
+const COLLAPSE_ABOVE_ROWS = 0;
 
-/** Start open only when the table is small enough to read at a glance. */
+/**
+ * Start collapsed whenever there is anything to collapse.
+ *
+ * These are lookup tables - permissions, exported components, trackers, raw
+ * strings. They are the answer to a question the analyst has already decided
+ * to ask, and rendering them all expanded is what made the tab read as a wall.
+ * The section header still carries the row count, so nothing is hidden, only
+ * deferred. An empty table stays open so its "nothing found" state is visible.
+ */
 function useRowAccordion(rowCount: number) {
   return useState(rowCount <= COLLAPSE_ABOVE_ROWS);
 }
@@ -937,27 +945,15 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
       id: 'summary',
       label: 'Summary',
       hint: 'what should I do?',
+      count: investigationBundle?.counts.evidenceRecords,
       content: (
         <>
           <ActivitySummary data={data} />
+          <ExplainabilityEngine data={data} />
           <EvidenceRegistrySection
             data={data}
             bundle={investigationBundle}
             loading={loading}
-          />
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-stretch">
-            <div className="xl:col-span-4 min-w-0">
-              <ExplainabilityEngine data={data} />
-            </div>
-            <div className="xl:col-span-8 min-w-0">
-              <APKMetadata data={data} />
-            </div>
-          </div>
-          <VisualImpersonationPanel data={data} />
-          {data.vide && <VisualDiffViewer vide={data.vide} />}
-          <ResiliencePanel
-            sessionId={data.sha256}
-            packageName={data.package_name}
           />
         </>
       ),
@@ -969,6 +965,7 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
       count: (data.manifest_findings ?? []).length,
       content: (
         <>
+          <APKMetadata data={data} />
           <div className="analyst-grid-2">
             <PermissionTable data={data} />
             <CertificatePanel certificate={data.certificate} />
@@ -993,6 +990,9 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
             <ScreenshotGallery data={data} bundle={investigationBundle} />
           </div>
           {data.vide && <OverlayEvidenceViewer vide={data.vide} />}
+          <VisualImpersonationPanel data={data} />
+          {data.vide && <VisualDiffViewer vide={data.vide} />}
+          <ResiliencePanel sessionId={data.sha256} packageName={data.package_name} />
           <MitreMatrix data={data} />
           <DangerousAPITable data={data} />
           <CodeFindingsPanel data={data} />

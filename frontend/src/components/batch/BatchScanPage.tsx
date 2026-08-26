@@ -14,6 +14,7 @@ import { SocCard } from '../ui/Card';
 import BatchProgressBar from './BatchProgressBar';
 import BatchJobRow from './BatchJobRow';
 import BatchHistory from './BatchHistory';
+import BatchFleetSummary from './BatchFleetSummary';
 import { useBatchProgress } from './useBatchProgress';
 import { API_BASE, authHeaders } from '../../config';
 import { TYPOGRAPHY } from '../../theme/typography';
@@ -179,6 +180,9 @@ export default function BatchScanPage() {
 
   return (
     <div className="w-full min-w-0 space-y-4">
+      {/* The scale claim, before the queue that backs it up. */}
+      <BatchFleetSummary />
+
       {/* Navigation Tabs */}
         <div className="flex border-b border-slate-200 justify-between items-center">
           <div className="flex space-x-2">
@@ -196,7 +200,7 @@ export default function BatchScanPage() {
               }`}
             >
               <Layers className="w-4 h-4" />
-              <span>Enterprise Batch Scan</span>
+              <span>Batch scan</span>
             </button>
             <button
               onClick={() => setActiveTab('history')}
@@ -207,7 +211,7 @@ export default function BatchScanPage() {
               }`}
             >
               <History className="w-4 h-4" />
-              <span>Batch History</span>
+              <span>History</span>
             </button>
           </div>
 

@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Cpu, Send, Shield, User, RefreshCw, AlertTriangle, CheckCircle2,
   HelpCircle, FileText, Lock, Eye, Check,
-  Copy, CopyCheck, Info, AlertOctagon, Terminal, Package
+  Copy, CopyCheck, Info, AlertOctagon, Terminal, Package, ArrowUpRight
 } from 'lucide-react';
 import type { FraudCardData } from '../App';
 import { API_BASE, authHeaders } from '../config';
@@ -546,18 +546,58 @@ const SECTION_LABELS: Record<string, string> = {
   recommendations: 'Recommended Actions',
 };
 
+/**
+ * Where each evidence section can actually be inspected.
+ *
+ * The chips already named the sections the answer was drawn from, but as inert
+ * text - which asks the reader to take the grounding on trust. A citation you
+ * can open is the difference between an assistant bolted onto the product and
+ * one wired into it, so every chip is now a link into the panel that holds the
+ * underlying records.
+ */
+const SECTION_ROUTES: Record<string, string> = {
+  verdict: '/fraud-card',
+  risk_engine: '/fraud-card',
+  fraud_workflow: '/technical',
+  static_findings: '/technical',
+  dynamic_findings: '/technical#dynamic-analysis',
+  threat_intelligence: '/threat-intel',
+  mitre: '/technical',
+  recommendations: '/fraud-card',
+};
+
 function SectionChips({ sections }: { sections: string[] }) {
   if (!sections || !sections.length) return null;
   return (
-    <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-slate-100">
-      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider flex items-center gap-1">
-        <Shield className="h-3 w-3 text-slate-400" /> Evidence Used:
+    <div className="flex flex-wrap items-center gap-1.5 mt-3 pt-3 border-t border-slate-100">
+      <span className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
+        <Shield className="h-3 w-3" aria-hidden /> Grounded in
       </span>
-      {sections.map(s => (
-        <span key={s} className="text-[10px] px-2.5 py-0.5 bg-slate-100 border border-slate-200/80 rounded-full text-slate-700 font-mono font-medium shadow-2xs">
-          {SECTION_LABELS[s] || s}
-        </span>
-      ))}
+      {sections.map(s => {
+        const label = SECTION_LABELS[s] || s;
+        const to = SECTION_ROUTES[s];
+        if (!to) {
+          return (
+            <span
+              key={s}
+              className="text-[11px] px-2 py-0.5 bg-slate-100 border border-slate-200 rounded text-slate-600"
+            >
+              {label}
+            </span>
+          );
+        }
+        return (
+          <Link
+            key={s}
+            to={to}
+            title={`Open ${label} evidence`}
+            className="text-[11px] px-2 py-0.5 bg-white border border-slate-200 rounded text-slate-600 hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50/50 transition-colors inline-flex items-center gap-1"
+          >
+            {label}
+            <ArrowUpRight className="h-3 w-3" aria-hidden />
+          </Link>
+        );
+      })}
     </div>
   );
 }

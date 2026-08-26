@@ -12,6 +12,7 @@ import OperationalRecommendationCard from '../components/threatIntel/Operational
 import ThreatEvidenceExplorer from '../components/threatIntel/ThreatEvidenceExplorer';
 import ThreatIocRegistry from '../components/threatIntel/ThreatIocRegistry';
 import ThreatIntelPageShell from '../components/threatIntel/ThreatIntelPageShell';
+import AnalysisTabs, { type AnalysisTab } from '../components/investigation/AnalysisTabs';
 import { INTEL } from '../components/threatIntel/intelTokens';
 import { TYPOGRAPHY } from '../theme/typography';
 import {
@@ -30,6 +31,76 @@ function ThreatIntelSkeleton() {
       <div className="h-48 bg-slate-200 rounded-xl" />
       <div className="h-64 bg-slate-200 rounded-xl" />
     </div>
+  );
+}
+
+/**
+ * The reference half of the threat-intelligence page.
+ *
+ * Threat DNA, source coverage, the IOC registry and the evidence explorer are
+ * all "show me the underlying records" panels. Stacked, they tripled the
+ * page's height and buried the recommendation above them; tabbed, they cost
+ * one screen and the analyst picks the record type they actually want.
+ */
+function SupportingIntelligence({
+  dna,
+  intel,
+  data,
+  bundle,
+  explorer,
+}: {
+  dna: ReturnType<typeof buildThreatDna>;
+  intel: NonNullable<ReturnType<typeof useIntelPayload>['api']>;
+  data: FraudCardData;
+  bundle: ReturnType<typeof useAnalysis>['investigationBundle'];
+  explorer: ReturnType<typeof collectEvidenceExplorerItems>;
+}) {
+  const tabs: AnalysisTab[] = [];
+
+  if (dna.length > 0) {
+    tabs.push({
+      id: 'dna',
+      label: 'Threat DNA',
+      hint: 'what traits does it share?',
+      count: dna.length,
+      content: <ThreatDnaPanel traits={dna} />,
+    });
+  }
+
+  tabs.push({
+    id: 'sources',
+    label: 'Sources',
+    hint: 'who corroborated this?',
+    content: <IntelligenceSourcesPanel intel={intel} data={data} bundle={bundle} />,
+  });
+
+  if (intel.iocs.length > 0) {
+    tabs.push({
+      id: 'iocs',
+      label: 'Indicators',
+      hint: 'what should I block?',
+      count: intel.iocs.length,
+      content: <ThreatIocRegistry iocs={intel.iocs} />,
+    });
+  }
+
+  if (explorer.length > 0) {
+    tabs.push({
+      id: 'evidence',
+      label: 'Evidence',
+      hint: 'what is it based on?',
+      count: explorer.length,
+      content: <ThreatEvidenceExplorer groups={explorer} />,
+    });
+  }
+
+  if (tabs.length === 0) return null;
+
+  return (
+    <section aria-label="Supporting intelligence">
+      <h3 className={`${TYPOGRAPHY.h2} mb-3`}>Supporting intelligence</h3>
+      <AnalysisTabs tabs={tabs} />
+    </section>
   );
 }
 
@@ -95,6 +166,7 @@ export default function ThreatIntelView({ data }: { data: FraudCardData | null }
         </SocCard>
       ) : intel && derived ? (
         <div className={INTEL.sectionGap}>
+          {/* Tier 1 - the assessment. */}
           <AIIntelligenceOverview
             data={data}
             intel={intel}
@@ -103,17 +175,24 @@ export default function ThreatIntelView({ data }: { data: FraudCardData | null }
             actions={derived.actions}
           />
 
-          <ThreatDnaPanel traits={derived.dna} />
-
+          {/* Tier 2 - the story, then the action it implies. */}
           <AttackChainFlow stages={derived.chain} data={data} />
-
-          <IntelligenceSourcesPanel intel={intel} data={data} bundle={investigationBundle} />
 
           <OperationalRecommendationCard data={data} intel={intel} actions={derived.actions} />
 
-          {intel.iocs.length > 0 && <ThreatIocRegistry iocs={intel.iocs} />}
-
-          {derived.explorer.length > 0 && <ThreatEvidenceExplorer groups={derived.explorer} />}
+          {/*
+            Tier 3 - four lookup panels that used to stack full-width below the
+            recommendation, so the page ended in 2000px of tables nobody scrolled
+            to. They answer different questions about the same case, which makes
+            them tabs rather than sections.
+          */}
+          <SupportingIntelligence
+            dna={derived.dna}
+            intel={intel}
+            data={data}
+            bundle={investigationBundle}
+            explorer={derived.explorer}
+          />
         </div>
       ) : null}
     </ThreatIntelPageShell>

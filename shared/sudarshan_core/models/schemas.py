@@ -171,6 +171,11 @@ class DynamicAnalysisResult(BaseModel):
     clicked_nodes: List[str] = Field(default_factory=list)
     anti_analysis_events: List[Dict[str, Any]] = Field(default_factory=list)
     resilience_actions: List[Dict[str, Any]] = Field(default_factory=list)
+    # Before/after result of the autonomous anti-evasion sequence, or None when
+    # it did not run. Optional rather than an empty dict: "not attempted" and
+    # "attempted, nothing moved" are different findings and the UI renders them
+    # differently.
+    anti_evasion: Optional[Dict[str, Any]] = None
     yara_matches: List[str] = Field(default_factory=list)
     bfci: float = 0.0
     bfci_components: Dict[str, float] = Field(default_factory=dict)

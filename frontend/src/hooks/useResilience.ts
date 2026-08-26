@@ -7,7 +7,10 @@ import {
   listPersonas,
   openEventStream,
   restoreCheckpoint,
+  runAntiEvasion,
   seedPersona,
+  type AntiEvasionProgress,
+  type AntiEvasionResult,
   type CheckpointInfo,
   type ExecutionAssertions,
   type PersonaSummary,
@@ -18,16 +21,82 @@ import {
 /** Polling cadence when the WebSocket cannot be established. */
 const FALLBACK_POLL_MS = 8000;
 
+/** A step of the anti-evasion sequence, as the live stream describes it. */
+export interface AntiEvasionStepState {
+  key: string;
+  label: string;
+  description: string;
+  status: 'pending' | 'running' | 'done' | 'failed';
+  detail: string;
+}
+
 export interface ResilienceState {
   assertions: ExecutionAssertions | null;
   suggestions: Suggestion[];
   checkpoint: CheckpointInfo | null;
   personas: PersonaSummary[];
   events: ResilienceEvent[];
+  antiEvasion: AntiEvasionResult | null;
+  antiEvasionSteps: AntiEvasionStepState[];
   loading: boolean;
   busy: string | null;
   error: string | null;
   live: boolean;
+}
+
+/**
+ * Fold one progress frame into the step list.
+ *
+ * The backend announces the whole plan up front and then reports each step, so
+ * the panel can show the remaining work as pending instead of revealing steps
+ * one at a time - an analyst watching a live sandbox should know how much of
+ * the sequence is left.
+ */
+function applyProgress(
+  steps: AntiEvasionStepState[],
+  progress: AntiEvasionProgress,
+): AntiEvasionStepState[] {
+  if (progress.phase === 'started') {
+    return (progress.steps ?? []).map((s) => ({
+      key: s.key,
+      label: s.label,
+      description: s.description,
+      status: 'pending' as const,
+      detail: '',
+    }));
+  }
+  if (!progress.key) return steps;
+
+  const known = steps.some((s) => s.key === progress.key);
+  const next = known
+    ? steps
+    : [
+        ...steps,
+        {
+          key: progress.key,
+          label: progress.label ?? progress.key,
+          description: progress.description ?? '',
+          status: 'pending' as const,
+          detail: '',
+        },
+      ];
+
+  return next.map((s) =>
+    s.key === progress.key
+      ? {
+          ...s,
+          label: progress.label ?? s.label,
+          description: progress.description ?? s.description,
+          status:
+            progress.phase === 'running'
+              ? ('running' as const)
+              : progress.ok
+                ? ('done' as const)
+                : ('failed' as const),
+          detail: progress.detail ?? s.detail,
+        }
+      : s,
+  );
 }
 
 /**
@@ -44,6 +113,8 @@ export function useResilience(sessionId: string | undefined, packageName = '') {
     checkpoint: null,
     personas: [],
     events: [],
+    antiEvasion: null,
+    antiEvasionSteps: [],
     loading: true,
     busy: null,
     error: null,
@@ -97,7 +168,18 @@ export function useResilience(sessionId: string | undefined, packageName = '') {
       if (poller) return;
       poller = setInterval(() => {
         void fetchRecentEvents(sessionId)
-          .then((r) => patch({ events: r.events }))
+          .then((r) => {
+            // The replay buffer is chronological, so the progress frames are
+            // replayed in order: without a socket the step list updates once
+            // per poll instead of live, rather than not at all.
+            const steps = r.events
+              .filter((e) => e.event === 'ANTI_EVASION_STEP')
+              .reduce<AntiEvasionStepState[]>(
+                (acc, e) => applyProgress(acc, e.payload as unknown as AntiEvasionProgress),
+                [],
+              );
+            patch({ events: r.events, antiEvasionSteps: steps });
+          })
           .catch(() => undefined);
       }, FALLBACK_POLL_MS);
     };
@@ -123,6 +205,17 @@ export function useResilience(sessionId: string | undefined, packageName = '') {
             event.event === 'EXECUTION_ASSERTION_UPDATED'
               ? (event.payload as unknown as ExecutionAssertions)
               : prev.assertions,
+          antiEvasionSteps:
+            event.event === 'ANTI_EVASION_STEP'
+              ? applyProgress(
+                  prev.antiEvasionSteps,
+                  event.payload as unknown as AntiEvasionProgress,
+                )
+              : prev.antiEvasionSteps,
+          antiEvasion:
+            event.event === 'ANTI_EVASION_COMPLETE'
+              ? (event.payload as unknown as AntiEvasionResult)
+              : prev.antiEvasion,
         }));
       } catch {
         /* ignore malformed frames */
@@ -166,9 +259,22 @@ export function useResilience(sessionId: string | undefined, packageName = '') {
     refresh,
     restore: () =>
       run('restore', () => restoreCheckpoint(sessionId ?? '', packageName)),
+    // Still exported: the single-control endpoints remain part of the analyst
+    // API, and a caller that wants only half the sequence can reach them.
     warp: (hours: number, forceJobs = true) =>
       run('warp', () => applyTimeWarp(sessionId ?? '', hours, forceJobs, packageName)),
     seed: (personaId: string) =>
       run('seed', () => seedPersona(sessionId ?? '', personaId)),
+    antiEvade: (personaId = 'default_retail_user') => {
+      // The previous verdict is cleared before the sequence starts: leaving a
+      // stale delta card on screen while a new sequence runs would show an
+      // analyst a result that does not belong to what they are watching.
+      patch({ antiEvasion: null, antiEvasionSteps: [] });
+      return run('anti-evasion', async () => {
+        const result = await runAntiEvasion(sessionId ?? '', packageName, personaId);
+        patch({ antiEvasion: result });
+        return result;
+      });
+    },
   };
 }

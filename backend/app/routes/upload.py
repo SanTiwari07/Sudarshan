@@ -154,6 +154,7 @@ def _build_dynamic_analysis_model(dynamic_result: Optional[Dict]) -> Optional[Dy
         clicked_nodes=list(dynamic_result.get("clicked_nodes", [])),
         anti_analysis_events=dynamic_result.get("anti_analysis_events", []),
         resilience_actions=dynamic_result.get("resilience_actions", []),
+        anti_evasion=dynamic_result.get("anti_evasion"),
         yara_matches=dynamic_result.get("yara_matches", []),
         bfci=float(dynamic_result.get("bfci", 0.0) or 0.0),
         bfci_components=dynamic_result.get("bfci_components", {}) or {},
@@ -429,39 +430,14 @@ async def _enrich_engine_result(
     result["manifest_findings"] = _coerce_manifest_findings(result.get("manifest_findings"))
     result["dangerous_perms"] = _coerce_dangerous_permissions(result.get("dangerous_perms"))
 
-    # Compute resilience_actions if dynamic_result is present
+    # What the sandbox did TO the device, for the fraud-card banner. Derived
+    # from the recorded anti-evasion sequence, not inferred from the sample's
+    # own telemetry - see services/resilience_summary.
     if result.get("dynamic_result") and isinstance(result["dynamic_result"], dict):
-        res_actions = []
+        from app.services.resilience_summary import build_resilience_actions
+
         dyn = result["dynamic_result"]
-        
-        # Check if time-warp hooks fired
-        anti_events = dyn.get("anti_analysis_events", [])
-        time_events = [e for e in anti_events if 'time' in str(e).lower() or 'alarm' in str(e).lower()]
-        if time_events:
-            res_actions.append({
-                "type": "time_warp",
-                "title": "Time-Warping",
-                "result_summary": f"Fast-forwarded time (+24h) and intercepted dormant time-delayed payloads ({len(time_events)} events forced)."
-            })
-            
-        # Check if persona seeding was used (contacts/SMS accessed)
-        api_calls = dyn.get("api_calls", [])
-        if any("content://contacts" in str(a).lower() or "content://sms" in str(a).lower() for a in api_calls):
-            res_actions.append({
-                "type": "persona_seeding",
-                "title": "Persona Seeding",
-                "result_summary": "Injected synthetic contacts and SMS history to successfully bypass sterile environment checks."
-            })
-            
-        # Check if permissions were auto-granted
-        if flags_dict.get("has_system_alert_window") or flags_dict.get("has_accessibility_abuse"):
-            res_actions.append({
-                "type": "permission_grants",
-                "title": "Permission Grants",
-                "result_summary": "Auto-granted high-risk privileges (Accessibility/Overlay) to force execution of malicious payloads."
-            })
-            
-        dyn["resilience_actions"] = res_actions
+        dyn["resilience_actions"] = build_resilience_actions(dyn, flags_dict)
         result["dynamic_result"] = dyn
 
     # Family classification - the engine reports one, but only the gateway has

@@ -38,6 +38,12 @@ router = APIRouter()
 _recent_events: List[Dict[str, Any]] = []       # ring buffer, max 500 events
 _MAX_RECENT_EVENTS = 500
 _hook_registry: Dict[str, Dict[str, Any]] = {}  # hook_name → {installed, fired, errors}
+
+# Monotonic per-category event totals. Deliberately NOT derived from
+# _recent_events: that buffer is a ring, so counting it undercounts as soon as
+# it wraps, and the anti-evasion delta ("did this metric move between two
+# instants?") would silently report a drop where events were merely evicted.
+_category_totals: Dict[str, int] = {}
 _pipeline_metrics: Dict[str, Any] = {
     "events_total": 0,
     "events_per_sec": 0.0,
@@ -59,6 +65,10 @@ def record_event(event: Dict[str, Any]) -> None:
 
     _pipeline_metrics["events_total"] += 1
     _pipeline_metrics["last_event_ts"] = time.time()
+
+    category = str(event.get("category") or "").strip().lower()
+    if category:
+        _category_totals[category] = _category_totals.get(category, 0) + 1
 
     # Rolling events/sec calculation (1-minute window)
     now = time.time()
@@ -82,6 +92,42 @@ def record_hook(name: str, fired: bool = False, error: bool = False) -> None:
     if error:
         _hook_registry[name]["errors"] += 1
         _pipeline_metrics["hook_errors_total"] += 1
+
+
+def hook_telemetry_snapshot(package_name: str = "") -> Dict[str, Any]:
+    """
+    Live hook-telemetry counts, for a before/after behaviour comparison.
+
+    ``attached`` is the load-bearing field. It is True only when a tracker
+    reports Frida actually running against the device, because the counts are
+    otherwise indistinguishable between "the sample did nothing" and "nothing
+    was watching the sample" - and the anti-evasion verdict must never confuse
+    those two. When a package is named, attachment is judged from that
+    package's tracker alone.
+
+    ``concurrent_sessions`` is reported because the telemetry buffer is
+    process-wide: hook events carry no session id, so a second analysis running
+    at the same time contributes to these counts, and a caller drawing
+    conclusions from a delta needs to know that.
+    """
+    trackers = list(_ACTIVE_TRACKERS.values())
+    live = [t for t in trackers if t.frida_running or t.attached]
+    if package_name:
+        matching = [
+            t for t in live
+            if t.package_name == package_name or t.case_id == package_name
+        ]
+        attached = bool(matching)
+    else:
+        attached = bool(live)
+
+    return {
+        "attached": attached,
+        "source": "in-process Frida hook telemetry",
+        "counts": dict(_category_totals),
+        "concurrent_sessions": len(live),
+        "events_total": _pipeline_metrics["events_total"],
+    }
 
 
 # ─── Helper: load evidence.json from artifact directory ──────────────────────

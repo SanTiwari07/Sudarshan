@@ -82,7 +82,12 @@ def test_supporting_constants_are_calibrated_to_the_new_threshold():
     assert MIN_STRING_EVIDENCE == 0.02
     assert MIN_STRUCTURE_EVIDENCE == 0.10
     assert MIN_SHAPE_EVIDENCE == 0.15
-    assert ATTRIBUTION_MARGIN == 0.05
+    # Raised from 0.05 when attribution moved onto discriminative evidence
+    # only. The old value was forced down by the corpus's shared axes: every
+    # candidate collected an identical 0.40 from the template strings, which
+    # compressed all margins toward zero. With the constant gone the spread on
+    # the reference APKs is 0.26-0.79, so the guard is meaningful again.
+    assert ATTRIBUTION_MARGIN == 0.15
 
 
 # ──────────────────────── what fires and what does not ──────────────────────

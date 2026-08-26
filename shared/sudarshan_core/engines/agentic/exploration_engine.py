@@ -93,6 +93,66 @@ class StopReason(str, Enum):
     FATAL_ERROR = "FATAL_ERROR"
 
 
+class BranchStatus(str, Enum):
+    """Why a target-app branch stopped being worked."""
+
+    LIVE = "LIVE"
+    COMPLETED = "COMPLETED"
+    #: The branch left the sample and could not be resumed - the sample sent the
+    #: victim to Settings, to an installer, or to another application.
+    BLOCKED_EXTERNAL = "BLOCKED_EXTERNAL"
+    #: A field would not accept the value the victim offered, twice.
+    BLOCKED_INPUT = "BLOCKED_INPUT"
+    #: The same screen sequence repeated; the branch was abandoned rather than
+    #: allowed to spin.
+    BLOCKED_LOOP = "BLOCKED_LOOP"
+
+
+class BoundaryReason(str, Enum):
+    """
+    What sent the victim outside the sample.
+
+    Recorded rather than acted on: the run's job at a boundary is to say what
+    the sample asked for and stop that branch, not to go and do it.
+    """
+
+    ACCESSIBILITY_REQUEST = "ACCESSIBILITY_REQUEST"
+    INSTALL_SOURCE_REQUEST = "INSTALL_SOURCE_REQUEST"
+    VPN_REQUEST = "VPN_REQUEST"
+    PACKAGE_INSTALL = "PACKAGE_INSTALL"
+    SETTINGS = "SETTINGS"
+    EXTERNAL_APP = "EXTERNAL_APP"
+    UNKNOWN = "UNKNOWN"
+
+
+class DynamicStatus(str, Enum):
+    """
+    The outcome of a dynamic run, as something other than a boolean.
+
+    `dynamic = True/False` cannot express the case this whole design exists for:
+    a sample explored eight screens deep and then sent the victim into
+    Accessibility Settings. That is a PARTIAL run with real evidence in it, and
+    collapsing it to False loses the evidence while collapsing it to True
+    overstates the coverage. Neither may be read as "safe" - see §P31; scoring
+    is the risk engine's job and it consumes this as one input among many.
+    """
+
+    #: The graph was exhausted inside the sample: every discovered action was
+    #: resolved and no branch was left blocked.
+    COMPLETE = "DYNAMIC_COMPLETE"
+    #: Real depth was reached, but at least one branch ended at a boundary, a
+    #: loop or a field that would not take input.
+    PARTIAL = "DYNAMIC_PARTIAL"
+    #: The sample ran and was observed, but the victim never got past its first
+    #: screen - no depth, or every branch blocked.
+    INCOMPLETE = "DYNAMIC_INCOMPLETE"
+    #: The sample launched and was instrumented, and did nothing observable.
+    NO_BEHAVIOR = "DYNAMIC_NO_BEHAVIOR"
+    #: The sandbox or Frida never came up, so absence of evidence here is
+    #: absence of OBSERVATION and carries no information about the sample.
+    INSTRUMENTATION_FAILED = "DYNAMIC_INSTRUMENTATION_FAILED"
+
+
 # ─── Application profile (evolving understanding) ───────────────────────────────
 
 @dataclass
@@ -309,6 +369,19 @@ class ExplorationState:
     runtime_event_ids: List[str] = field(default_factory=list)
     evidence_ids: List[str] = field(default_factory=list)
     scroll_positions_explored: Dict[str, Set[str]] = field(default_factory=dict)
+    #: How many target-app screens deep this state sits, counted from the screen
+    #: the launcher opened (depth 0). The primary success metric of a run: a
+    #: sample that was launched and no more scores 0, and only screens the
+    #: victim actually reached INSIDE the sample can raise it.
+    #:
+    #: Boundary and external states never carry a meaningful depth - answering a
+    #: permission dialog is a prerequisite, not progress into the application -
+    #: so they inherit their parent's value and are excluded from
+    #: `max_target_app_depth`.
+    depth: int = 0
+    #: Why this branch stopped, when it did: "" while live, otherwise one of
+    #: BranchStatus. Read by the coverage metrics and by the dynamic status.
+    branch_status: str = ""
 
     def unexplored_actions(self) -> List[ActionItem]:
         return [a for a in self.actionable_elements if not a.resolved]
@@ -541,6 +614,30 @@ def compute_composite_state_signature(
     # fields and may legitimately be ABOUT an error.
     has_input = any(_is_input_node(n) for n in ui_nodes)
 
+    # Floating labels: the caption a Material-style field renders over itself,
+    # which SHRINKS AND RISES the moment the field is filled.
+    #
+    # Excluding the typed value from identity was not enough on its own. The
+    # label is a separate, non-input node, so it kept its geometry bucket - and
+    # a measured e-challan form moved its "Full Name*" caption from 231x50 to
+    # 194x42 on the first keystroke. That forked the form into a fresh state
+    # whose fields were all unexplored again, so the walk re-filled field one
+    # on every visit and never reached fields three and four or the submit
+    # button. Five states, one form, nothing completed.
+    #
+    # Identified by text rather than by class: a floating label is recognisable
+    # precisely because it repeats the hint of a field on the same screen. Only
+    # its GEOMETRY is dropped - the text still counts, so a caption that
+    # genuinely changes is still a new screen.
+    _floating_labels = set()
+    for n in ui_nodes:
+        if not _is_input_node(n):
+            continue
+        for attr in ("hint", "field_label", "desc"):
+            value = (getattr(n, attr, "") or "").strip().lower()
+            if value:
+                _floating_labels.add(value)
+
     for n in ui_nodes:
         # An inline validation message is the app reacting to a field's
         # CONTENT, and content is already excluded from identity below. Left
@@ -574,6 +671,14 @@ def compute_composite_state_signature(
             if any(c in cls.lower() for c in _CONTAINER_CLASSES)
             else _bounds_bucket(getattr(n, "bounds", "") or "")
         )
+        # A caption repeating a field's hint is that field's floating label; its
+        # size tracks whether the field is filled, not what the screen is.
+        if (
+            geom
+            and not is_input
+            and text.strip().lower() in _floating_labels
+        ):
+            geom = ""
 
         if is_input:
             # A field's VALUE is not part of what the screen is. Bucketing on
@@ -1289,6 +1394,30 @@ class ExplorationGraph:
         self.webviews_explored: int = 0
         self.permissions_observed: int = 0
         self.branches_blocked: int = 0
+        # ── Target-app depth and boundary bookkeeping (§P2, §P16, §P24) ──────
+        #: Depth of the target state the walk is currently standing on, so a
+        #: state discovered next can be numbered relative to it. Boundary
+        #: screens do not move it: they are a prerequisite, not progress.
+        self._current_depth: int = 0
+        #: One record per departure from the sample, each naming what the sample
+        #: asked for and where the branch stopped. Never acted on.
+        self.boundary_events: List[Dict[str, Any]] = []
+        #: Cycle signatures already reported, so an A->B->A->B oscillation
+        #: produces one LOOP_DETECTED record rather than one per iteration.
+        self._loops_seen: Set[str] = set()
+        self.loop_events: List[Dict[str, Any]] = []
+        #: Frida/runtime events the Smart Investigator saw while the victim was
+        #: walking. Fed by AgenticExplorer, which owns the event stream; the
+        #: graph only reports it so that one metrics dict describes the run.
+        self.runtime_events_observed: int = 0
+        #: Forms whose every input was filled and which were then committed.
+        self._forms_completed: Set[str] = set()
+        #: Packages the SAMPLE ITSELF put in front of the victim - a payload it
+        #: installed, or a second application it launched to render its own UI.
+        #: Owned by this investigation, so their screens are TARGET_APP and get
+        #: a real action inventory. Fed by AgenticExplorer, which is the only
+        #: component that can observe the hand-off as it happens.
+        self.companion_packages: Set[str] = set()
 
     def _next_state_id(self) -> str:
         self._state_counter += 1
@@ -1333,6 +1462,164 @@ class ExplorationGraph:
         )
         if spent >= ExplorationBudget.MAX_BOUNDARY_ACTIONS:
             self._boundary_return_required = True
+
+    # ── Loop detection (§P20) ────────────────────────────────────────────────
+
+    #: Longest cycle looked for. A -> B -> A is 2; a three-screen carousel that
+    #: returns to its start is 4. Beyond that a repeat is more likely to be
+    #: legitimate re-traversal on the way to somewhere new than a stuck walk,
+    #: and MAX_REPEATED_STATE_VISITS already bounds that case.
+    _MAX_CYCLE_LENGTH: int = 4
+
+    def _detect_loop(self, state_id: str, elapsed_ts: str = "") -> bool:
+        """
+        Whether the walk is going round in a circle, reported once per cycle.
+
+        Looks for a cycle repeated twice at the tail of the visit history -
+        A,B,A,B or A,B,C,A,B,C - which is what an oscillation between two
+        screens actually looks like in the log. Detection is a RECORD and a
+        signal, not a control-flow change: the walk continues, and the existing
+        repeated-visit and backtracking machinery is what moves it elsewhere.
+        Aborting here instead would end a run on a screen that legitimately
+        recurs, such as a dashboard returned to between branches.
+        """
+        history = list(self._visit_history)
+        for span in range(2, self._MAX_CYCLE_LENGTH + 1):
+            if len(history) < span * 2:
+                continue
+            recent, previous = history[-span:], history[-span * 2:-span]
+            if recent != previous:
+                continue
+            # A single screen re-observed is not a cycle; that is a static
+            # screen, and MAX_REPEATED_STATE_VISITS owns it.
+            if len(set(recent)) < 2:
+                continue
+            # Rotated to start at the smallest state id, so A->B and B->A are
+            # recognised as the same oscillation. Without this an A/B ping-pong
+            # reports a fresh LOOP_DETECTED on every alternate observation and
+            # the metric counts iterations rather than loops.
+            pivot = recent.index(min(recent))
+            signature = "->".join(recent[pivot:] + recent[:pivot])
+            if signature in self._loops_seen:
+                return True
+            self._loops_seen.add(signature)
+            state = self._lookup_state(state_id)
+            record = {
+                "type": "LOOP_DETECTED",
+                "timestamp": elapsed_ts,
+                "target_package": self.package_name,
+                "cycle": list(recent),
+                "cycle_length": span,
+                "state_id": state_id,
+                "depth": getattr(state, "depth", 0) if state else 0,
+                "activity": getattr(state, "activity_name", "") if state else "",
+            }
+            self.loop_events.append(record)
+            logger.info(
+                "[DAE][LOOP] cycle=%s length=%d state=%s - recorded; "
+                "backtracking to an unexplored branch",
+                signature, span, state_id,
+            )
+            return True
+        return False
+
+    # ── External boundary (§P2, §P4, §P5, §P24) ──────────────────────────────
+
+    def _boundary_reason(
+        self, semantic_type: str, ownership: str, activity: str, visible: str
+    ) -> str:
+        """
+        Name what the sample asked for, from what was observed.
+
+        Deliberately conservative: an unrecognised Settings page is reported as
+        SETTINGS rather than guessed at. §P27 is explicit that events must not
+        be fabricated, and "the sample opened Settings" is the whole of what we
+        actually saw.
+        """
+        blob = f"{activity} {visible}".lower()
+        if semantic_type == "ACCESSIBILITY_DIALOG" or (
+            "accessibility" in blob
+        ):
+            return BoundaryReason.ACCESSIBILITY_REQUEST.value
+        if "unknown" in blob and ("install" in blob or "source" in blob):
+            return BoundaryReason.INSTALL_SOURCE_REQUEST.value
+        if "manage_unknown_app_sources" in blob or "manageappexternalsources" in blob:
+            return BoundaryReason.INSTALL_SOURCE_REQUEST.value
+        if semantic_type == "VPN_REQUEST":
+            return BoundaryReason.VPN_REQUEST.value
+        if semantic_type in (
+            "PACKAGE_INSTALLER", "EXTERNAL_APK",
+        ):
+            return BoundaryReason.PACKAGE_INSTALL.value
+        if ownership == "SYSTEM_SETTINGS":
+            return BoundaryReason.SETTINGS.value
+        if ownership == "EXTERNAL_APP":
+            return BoundaryReason.EXTERNAL_APP.value
+        return BoundaryReason.UNKNOWN.value
+
+    def _record_boundary_event(
+        self,
+        *,
+        foreground_package: str,
+        activity: str,
+        semantic_type: str,
+        ownership: str,
+        visible: str,
+        elapsed_ts: str,
+        external_state_id: str = "",
+        screenshot_ref: str = "",
+    ) -> Dict[str, Any]:
+        """
+        Record EXTERNAL_BOUNDARY_REACHED and stop the branch that got here.
+
+        The branch the victim was on is marked BLOCKED_EXTERNAL rather than
+        failed: everything it collected before the departure stays in the graph
+        (§P22 / §P25), and the scheduler is free to pick up any other target-app
+        branch that still has unexplored actions.
+        """
+        previous = self._lookup_state(self._current_state_id)
+        # The last target-app screen, not the boundary screen - "which screen of
+        # the sample sent the victim here" is the question an analyst asks.
+        previous_target = (
+            previous.state_id
+            if previous is not None and previous.ownership == "TARGET_APP"
+            else self._root_state_id
+        )
+        reason = self._boundary_reason(semantic_type, ownership, activity, visible)
+        event = {
+            "type": "EXTERNAL_BOUNDARY_REACHED",
+            "timestamp": elapsed_ts,
+            "target_package": self.package_name,
+            "foreground_package": foreground_package,
+            "activity": activity,
+            "screen_type": semantic_type,
+            "ownership": ownership,
+            "previous_target_state": previous_target,
+            "last_action": (
+                getattr(previous, "entry_action", "") if previous else ""
+            ),
+            "depth": getattr(previous, "depth", 0) if previous else 0,
+            "reason": reason,
+            "screenshot_ref": screenshot_ref,
+            "external_state_id": external_state_id,
+            "branch_status": BranchStatus.BLOCKED_EXTERNAL.value,
+        }
+        self.boundary_events.append(event)
+
+        blocked = self._lookup_state(previous_target)
+        if blocked is not None and not blocked.branch_status:
+            blocked.branch_status = BranchStatus.BLOCKED_EXTERNAL.value
+            self.branches_blocked += 1
+
+        logger.info(
+            "[DAE][BOUNDARY] target=%s foreground=%s activity=%s reason=%s",
+            self.package_name, foreground_package, activity, reason,
+        )
+        logger.info("[DAE][BOUNDARY] action=STOP_BRANCH from=%s", previous_target)
+        logger.info(
+            "[DAE][BRANCH] status=%s", BranchStatus.BLOCKED_EXTERNAL.value,
+        )
+        return event
 
     def _return_to_target_action(self) -> Dict[str, Any]:
         """
@@ -1443,6 +1730,24 @@ class ExplorationGraph:
                     input_type=getattr(n, "input_type", "") or "",
                 )
                 input_index += 1
+                # §P34: what the field was judged to be, how sure, and on what
+                # evidence. Deliberately does NOT log the value that will go
+                # into it - §P28 asks the record to carry the field TYPE and the
+                # value SOURCE rather than the value itself, and this line is
+                # the field half of that pair (the value half is emitted by the
+                # input verifier as [DAE][INPUT]).
+                logger.info(
+                    "[DAE][FIELD] type=%s confidence=%.2f source=%s legacy=%s "
+                    "numeric=%s length=%s",
+                    field_classification.field_type.value,
+                    float(getattr(field_classification, "confidence", 0.0) or 0.0),
+                    getattr(field_classification, "source", "") or "unknown",
+                    field_kind,
+                    field_constraints.numeric_only,
+                    field_constraints.exact_length
+                    or field_constraints.max_length
+                    or "-",
+                )
                 # An input's label must name the FIELD, never its contents.
                 # Deriving it from `text` meant the label changed the moment the
                 # agent typed, which changed ActionItem.signature(), which made
@@ -1642,8 +1947,25 @@ class ExplorationGraph:
             from sudarshan_core.engines.agentic.screenshot_policy import (
                 resolve_screen_ownership,
             )
-            ow = resolve_screen_ownership(fg, self.package_name, activity, semantic_type)
+            ow = resolve_screen_ownership(
+                fg, self.package_name, activity, semantic_type,
+                companion_packages=self.companion_packages,
+            )
             ownership = ow.value
+
+        # A companion is the sample's own surface whatever the CALLER resolved.
+        # Normalised here rather than trusted from the caller because adoption
+        # can happen after that caller classified the same observation: on the
+        # iteration a hand-off is first seen, the screen was classified
+        # EXTERNAL_APP microseconds before the package became a companion, and
+        # leaving it that way would file the payload's first screen - usually
+        # its most interesting one - outside the target graph.
+        if fg in self.companion_packages and ownership in _SYSTEM_OWNERSHIP:
+            logger.info(
+                "[DAE][TARGET] companion=%s ownership=%s -> TARGET_APP",
+                fg, ownership,
+            )
+            ownership = "TARGET_APP"
 
         # HOME_LAUNCHER: record transition, do NOT add to target graph
         if ownership == "HOME_LAUNCHER" or semantic_type == ScreenType.HOME_LAUNCHER:
@@ -1675,7 +1997,11 @@ class ExplorationGraph:
         # EXTERNAL_APP / SYSTEM boundary: keep installer/VPN/permission
         # dialogs in the explorable graph (they have OK/Install/Allow).
         # Unrelated third-party apps stay in the external graph.
-        if ownership in _SYSTEM_OWNERSHIP and fg != self.package_name:
+        if (
+            ownership in _SYSTEM_OWNERSHIP
+            and fg != self.package_name
+            and fg not in self.companion_packages
+        ):
             interactive = (
                 ownership in _INTERACTIVE_BOUNDARY_OWNERSHIP
                 or semantic_type in _INTERACTIVE_BOUNDARY_TYPES
@@ -1732,7 +2058,9 @@ class ExplorationGraph:
                     fg, ownership, semantic_type,
                     ExplorationBudget.MAX_BOUNDARY_ACTIONS,
                 )
-        elif fg == self.package_name and self._boundary_package:
+        elif (
+            fg == self.package_name or fg in self.companion_packages
+        ) and self._boundary_package:
             # Back on the sample: the excursion is over.
             logger.info(
                 "[ExplorationGraph] BOUNDARY_RETURN_TO_TARGET package=%s "
@@ -1760,6 +2088,12 @@ class ExplorationGraph:
             state.visit_count += 1
             self._current_state_id = existing_id
             self._visit_history.append(existing_id)
+            # Returning to a known screen puts the walk back at that screen's
+            # depth, so anything discovered from here is numbered relative to
+            # where it was actually reached from rather than to the deepest
+            # point the run has ever seen.
+            self._current_depth = state.depth
+            self._detect_loop(existing_id, elapsed_ts)
             # Merge new actions not yet in inventory
             existing_by_sig = {
                 a.signature(): a for a in state.actionable_elements
@@ -1826,6 +2160,22 @@ class ExplorationGraph:
                 foreground_package=fg,
             )
 
+        # ── Target-app depth (§P16) ──────────────────────────────────────────
+        # A newly discovered screen of the SAMPLE sits one deeper than the
+        # screen it was reached from. A boundary screen admitted into this
+        # graph - a permission dialog, an installer sheet - does NOT: answering
+        # a prompt is a prerequisite the victim has to clear, not progress into
+        # the application, and counting it would let a sample inflate the run's
+        # headline metric just by asking for permissions.
+        resolved_ownership = ownership or "TARGET_APP"
+        is_target_screen = resolved_ownership == "TARGET_APP"
+        if not self.states:
+            depth = 0                      # the screen the launcher opened
+        elif is_target_screen:
+            depth = self._current_depth + 1
+        else:
+            depth = self._current_depth
+
         state = ExplorationState(
             state_id=state_id,
             screen_hash=screen_hash,
@@ -1835,17 +2185,25 @@ class ExplorationGraph:
             foreground_package=fg,
             visible_text_summary=visible,
             semantic_type=semantic_type,
-            ownership=ownership or "TARGET_APP",
+            ownership=resolved_ownership,
             actionable_elements=actions,
             scrollable_regions=scrollable,
             timestamp=elapsed_ts,
-            parent_state_id=parent_state_id,
+            parent_state_id=parent_state_id or self._current_state_id,
             entry_action=entry_action,
             is_webview=bool(getattr(obs, "is_webview", False)),
+            depth=depth,
         )
+        if is_target_screen and depth > self._current_depth:
+            logger.info(
+                "[DAE][DEPTH] previous=%d current=%d new_target_state=true "
+                "state=%s activity=%s",
+                self._current_depth, depth, state_id, activity,
+            )
+        self._current_depth = depth
         self.states[state_id] = state
         # First target-app screen recorded is the task root (see _at_target_root).
-        if not self._root_state_id and (state.ownership or "TARGET_APP") == "TARGET_APP":
+        if not self._root_state_id and is_target_screen:
             self._root_state_id = state_id
         self._current_state_id = state_id
         self._visit_history.append(state_id)
@@ -2176,8 +2534,62 @@ class ExplorationGraph:
                 self._scroll_depth[owner_id] = (
                     self._scroll_depth.get(owner_id, 0) + 1
                 )
+            # ── Form completion (§P26) ───────────────────────────────────────
+            # A form counts as COMPLETED when its commit control was pressed
+            # and every input on the screen had already been filled. Both
+            # halves matter: pressing Submit on an empty form is not a
+            # completed form, and filling every box without ever committing is
+            # not one either. Counted once per screen.
+            if (
+                success
+                and owner_id not in self._forms_completed
+                and any(a.action_type == "input" for a in state.actionable_elements)
+                and _form_is_filled(state)
+            ):
+                committed = next(
+                    (a for a in state.actionable_elements
+                     if a.action_id == action_id or a.label == target_description),
+                    None,
+                )
+                # A commit is either a recognised submit VERB ("Login",
+                # "Continue", "Verify") or, on a form whose every box is
+                # already filled, a click on an affirmative control. The verb
+                # list alone under-counted: a real e-challan form commits with
+                # "Get Details", which is not a submit word in any language
+                # list but carries semantic_role=ACCEPT and is unambiguously
+                # the button that submits the form. The `_form_is_filled`
+                # guard above is what makes the second rule safe - an
+                # affirmative click on a HALF-filled form is not a completion.
+                _committed_by_role = (
+                    committed is not None
+                    and committed.action_type == "click"
+                    and getattr(committed, "semantic_role", "") in (
+                        "ACCEPT", "SUBMIT", "PROGRESS",
+                    )
+                )
+                if committed is not None and (
+                    _is_form_commit_action(committed) or _committed_by_role
+                ):
+                    self._forms_completed.add(owner_id)
+                    logger.info(
+                        "[DAE][FORM] state=%s status=COMPLETED commit='%s' "
+                        "fields=%d",
+                        owner_id, committed.label,
+                        sum(1 for a in state.actionable_elements
+                            if a.action_type == "input"),
+                    )
+
             if not state.unexplored_actions():
                 state.explored = True
+                # Read defensively, as elsewhere in this class: the graph
+                # legitimately holds states built by fixtures and by other
+                # subsystems, which need not carry every field. Book-keeping
+                # must never be able to abort a run.
+                if not getattr(state, "branch_status", ""):
+                    try:
+                        state.branch_status = BranchStatus.COMPLETED.value
+                    except AttributeError:
+                        pass
                 logger.debug(
                     "[ExplorationGraph] State '%s' fully explored", owner_id,
                 )
@@ -2213,6 +2625,36 @@ class ExplorationGraph:
         return None
 
     def _pending_state_id(self) -> Optional[str]:
+        """
+        The next state worth travelling to: the DEEPEST one with work left.
+
+        Insertion order used to decide this, which returned the shallowest
+        pending state and quietly made the whole walk breadth-first. The effect
+        compounds: every time a branch dead-ended the scheduler sent the agent
+        back to the launch screen, so the run kept re-exploring the top of the
+        app and the deep screens - which is where a fraud journey actually is -
+        were reached late or never. §P13 asks for depth-first, and this is the
+        one place the ordering was decided.
+
+        Ties are broken by discovery order, newest first, so the branch the
+        walk was most recently on is resumed rather than an equally deep one it
+        left long ago.
+        """
+        candidates = [
+            state for sid, state in self.states.items()
+            if not sid.startswith("PLACEHOLDER-")
+            and (state.ownership or "TARGET_APP") == "TARGET_APP"
+            and state.unexplored_actions()
+        ]
+        if candidates:
+            deepest = max(
+                candidates,
+                key=lambda s: (s.depth, self._discovery_order(s.state_id)),
+            )
+            return deepest.state_id
+        # Boundary screens admitted to the target graph - a permission dialog,
+        # an installer sheet. Ranked below every target screen on purpose:
+        # answering a prompt is a prerequisite, not a way further into the app.
         for sid, state in self.states.items():
             if sid.startswith("PLACEHOLDER-"):
                 continue
@@ -2222,6 +2664,13 @@ class ExplorationGraph:
             if state.unexplored_actions():
                 return sid
         return None
+
+    def _discovery_order(self, state_id: str) -> int:
+        """Position of a state in discovery order; -1 when unknown."""
+        try:
+            return list(self.states).index(state_id)
+        except ValueError:
+            return -1
 
     def get_next_action(
         self,
@@ -2270,6 +2719,20 @@ class ExplorationGraph:
             sid, state.semantic_type,
         )
         logger.info("[Explorer] Actionable elements found: %d", len(unexplored))
+        # §P34: where the walk stands in the sample, and how much of the sample
+        # is still unexplored. Together these are the two numbers that say
+        # whether a run is making progress INTO the app or circling its surface.
+        logger.info(
+            "[DAE][TARGET] package=%s state=%s depth=%d",
+            self.package_name, state.ownership or "TARGET_APP", state.depth,
+        )
+        logger.info(
+            "[DAE][EXPLORE] unexplored_target_actions=%d",
+            sum(
+                len(s.unexplored_actions()) for s in self.states.values()
+                if (s.ownership or "TARGET_APP") == "TARGET_APP"
+            ),
+        )
 
         ranked = ActionPrioritizer.rank_actions(
             unexplored, self.profile, state.semantic_type,
@@ -2841,6 +3304,22 @@ class ExplorationGraph:
 
     def _backtrack_action(self, memory: Any = None) -> Optional[Dict[str, Any]]:
         """Press back to explore remaining branches."""
+        # §P19: backtracking is a way of moving around INSIDE the sample. From
+        # a system surface, back is not a traversal of the exploration graph -
+        # it is one step through somebody else's navigation stack, and a run
+        # that presses it repeatedly is the Settings-recovery loop §P24
+        # forbids. The boundary return path owns that case and relaunches the
+        # sample outright.
+        current = self._lookup_state(self._current_state_id)
+        if current is not None and (current.ownership or "TARGET_APP") != "TARGET_APP":
+            logger.info(
+                "[DAE][BACKTRACK] refused state=%s ownership=%s - back from a "
+                "system surface is not graph traversal; boundary return owns "
+                "this case",
+                current.state_id, current.ownership,
+            )
+            self._boundary_return_required = True
+            return None
         if self._at_target_root():
             logger.info(
                 "[Explorer] At target root %s - not backtracking (back would "
@@ -2938,7 +3417,69 @@ class ExplorationGraph:
         if actions_discovered > 0:
             coverage_pct = round(actions_explored / actions_discovered * 100, 1)
 
+        # ── Target-app figures (§P26) ────────────────────────────────────────
+        # Kept strictly separate from the totals above, which fold in external
+        # and boundary screens. "How deep did the victim get INSIDE the sample"
+        # is the run's headline metric, and a permission dialog answered on the
+        # way must not be able to raise it.
+        target_states = [
+            s for s in self.states.values()
+            if not s.state_id.startswith("PLACEHOLDER-")
+            and (s.ownership or "TARGET_APP") == "TARGET_APP"
+        ]
+        max_depth = max((s.depth for s in target_states), default=0)
+        target_actions_executed = sum(
+            sum(1 for a in s.actionable_elements if a.executed)
+            for s in target_states
+        )
+        # A branch is a distinct path through the app: a leaf of the traversal
+        # tree, plus every branch that was stopped at a boundary. Counting
+        # leaves rather than nodes is what makes "9 branches" mean nine
+        # journeys rather than nine screens.
+        #
+        # Leaves are NOT required to be finished. A run whose budget expires
+        # part-way down its deepest path still followed that path, and
+        # requiring exhaustion here reported 0 branches for a walk that had
+        # visibly worked eight states. Whether a branch finished is the
+        # separate `completed_branches` figure below.
+        parents = {
+            s.parent_state_id for s in target_states if s.parent_state_id
+        }
+        leaf_states = [s for s in target_states if s.state_id not in parents]
+        completed_branches = [
+            s for s in target_states
+            if getattr(s, "branch_status", "") == BranchStatus.COMPLETED.value
+        ]
+        target_permissions = sum(
+            1 for s in self.states.values()
+            if s.semantic_type == "SYSTEM_PERMISSION"
+        )
+
         return {
+            "max_target_app_depth": max_depth,
+            "target_app_states_explored": len(target_states),
+            "target_app_branches_explored": (
+                len(leaf_states) + self.branches_blocked
+            ),
+            "target_app_actions_executed": target_actions_executed,
+            "target_app_forms_completed": len(self._forms_completed),
+            "target_app_permissions_handled": target_permissions,
+            "external_boundaries_reached": len(self.boundary_events),
+            "blocked_branches": self.branches_blocked,
+            "completed_branches": len(completed_branches),
+            "loop_events": len(self.loop_events),
+            "runtime_events": max(
+                self.runtime_events_observed,
+                sum(e.runtime_event_count for e in self.edges),
+            ),
+            "target_app_depth_definition": (
+                "screens of the target package traversed from the launched "
+                "screen (depth 0); boundary and external screens excluded"
+            ),
+            "target_app_branch_definition": (
+                "leaves of the target-app traversal tree (distinct paths "
+                "followed), plus branches stopped at an external boundary"
+            ),
             "states_discovered": states_discovered,
             "states_explored": states_explored,
             "states_blocked": self.branches_blocked,
@@ -3092,6 +3633,19 @@ class ExplorationGraph:
                 return state
 
         ext_id = f"EXT-{len(self.external_states) + 1:03d}"
+        # The departure is recorded BEFORE the external state is filed, so the
+        # event can still name the target-app screen the victim was standing on
+        # when the sample sent them away.
+        self._record_boundary_event(
+            foreground_package=fg,
+            activity=activity,
+            semantic_type=semantic_type,
+            ownership=ownership,
+            visible=visible,
+            elapsed_ts=elapsed_ts,
+            external_state_id=ext_id,
+            screenshot_ref=str(getattr(obs, "screenshot_path", "") or ""),
+        )
         state = ExplorationState(
             state_id=ext_id,
             screen_hash=screen_hash,
@@ -3151,7 +3705,60 @@ class ExplorationGraph:
             "home_screenshots": self._home_screenshot_count,
             "crash_events": list(self._crash_events),
             "transition_events": list(self._transition_events),
+            "boundary_events": list(self.boundary_events),
+            "loop_events": list(self.loop_events),
+            "dynamic_status": self.dynamic_status().value,
         }
+
+    def dynamic_status(self, instrumentation_ok: bool = True) -> DynamicStatus:
+        """
+        What this run actually achieved, as a status rather than a boolean.
+
+        Derived only from what was observed. In particular an INCOMPLETE or
+        PARTIAL run is NOT a statement that the sample is safe (§P31): it says
+        the victim did not get all the way in, which is a fact about the
+        exploration and not about the application. The risk engine reads this
+        alongside the evidence and applies its own floors.
+        """
+        # Anything the walk saw is evidence that it was watching: a departure to
+        # the launcher, a boundary screen, a transition. Only a run that saw
+        # NOTHING can honestly say the absence of findings is the absence of
+        # observation.
+        observed_anything = bool(
+            self.states
+            or self.external_states
+            or self._transition_events
+            or self._home_observation_count
+        )
+        if not instrumentation_ok and not observed_anything:
+            return DynamicStatus.INSTRUMENTATION_FAILED
+
+        cov = self.coverage_metrics()
+        depth = cov["max_target_app_depth"]
+        target_states = cov["target_app_states_explored"]
+        blocked = cov["blocked_branches"]
+
+        if target_states == 0:
+            # Launched, watched, and it never put a screen of its own in front
+            # of the victim. Measured on a sample that backgrounds itself
+            # immediately: six relaunches all landed back on the launcher.
+            # That is self-hiding, which is a finding about the sample - so it
+            # is reported as an INCOMPLETE exploration rather than as a failure
+            # of the harness, which would read as "we learned nothing".
+            if observed_anything:
+                return DynamicStatus.INCOMPLETE
+            return DynamicStatus.INSTRUMENTATION_FAILED
+        # The sample ran and rendered exactly one screen with nothing on it to
+        # press. That is an observation about the sample, not a failed run.
+        if depth == 0 and target_states == 1 and not cov[
+            "actionable_elements_discovered"
+        ]:
+            return DynamicStatus.NO_BEHAVIOR
+        if depth == 0:
+            return DynamicStatus.INCOMPLETE
+        if blocked or cov["actionable_elements_unresolved"] or self.loop_events:
+            return DynamicStatus.PARTIAL
+        return DynamicStatus.COMPLETE
 
     def to_mermaid(self) -> str:
         if not self.states:

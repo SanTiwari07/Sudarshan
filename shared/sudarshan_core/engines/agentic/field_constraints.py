@@ -241,11 +241,71 @@ def _fit(value: str, c: FieldConstraints, rng: random.Random) -> str:
     return value
 
 
+def _profile_value(
+    constraints: FieldConstraints, profile: Any
+) -> Optional[str]:
+    """
+    The Dumb Victim's own value for this field, or None if it has no opinion.
+
+    Only the person-shaped types are answered here - a name, an email, an
+    address, a login secret. Instrument numbers (card, IFSC, account) and
+    one-shot codes stay randomised below: they are not part of an identity, a
+    fixed card number across every run would be a fingerprint of the analyser,
+    and the profile deliberately does not claim to own them.
+
+    A profile value that cannot satisfy the field's measured constraints is
+    REFUSED rather than mangled. Padding "Pune" out to a declared 8-character
+    minimum produces "Punexqvz", which is neither the profile's city nor a
+    plausible one; falling through to the generator gives a value built for
+    that shape in the first place.
+    """
+    p = profile
+    ft = constraints.field_type
+
+    candidate: Optional[str] = {
+        FieldType.FULL_NAME:     p.full_name,
+        FieldType.FIRST_NAME:    p.first_name,
+        FieldType.LAST_NAME:     p.last_name,
+        FieldType.EMAIL:         p.email,
+        FieldType.PHONE:         p.phone,
+        FieldType.MOBILE:        p.phone,
+        FieldType.USERNAME:      p.username,
+        FieldType.USER_ID:       p.user_id,
+        FieldType.LOGIN_ID:      p.user_id,
+        FieldType.PASSWORD:      p.password,
+        FieldType.PIN:           p.pin,
+        FieldType.MPIN:          p.mpin,
+        FieldType.OTP:           p.otp,
+        FieldType.EMAIL_OTP:     p.otp,
+        FieldType.ADDRESS:       p.address,
+        FieldType.CITY:          p.city,
+        FieldType.STATE:         p.state,
+        FieldType.POSTAL_CODE:   p.pincode,
+        FieldType.DATE_OF_BIRTH: p.date_of_birth,
+    }.get(ft)
+
+    if not candidate:
+        return None
+
+    # A numeric-only box cannot take "Sanskar Test User", and an identifier the
+    # app renders on a digit keypad would silently drop every letter.
+    if constraints.numeric_only and not candidate.isdigit():
+        return None
+    if constraints.exact_length is not None and len(candidate) != constraints.exact_length:
+        return None
+    if constraints.max_length is not None and len(candidate) > constraints.max_length:
+        return None
+    if constraints.min_length is not None and len(candidate) < constraints.min_length:
+        return None
+    return candidate
+
+
 def generate_value(
     constraints: FieldConstraints,
     *,
     seed_token: str = "",
     rng: Optional[random.Random] = None,
+    profile: Any = None,
 ) -> str:
     """
     A synthetic value that fits `constraints`.
@@ -255,13 +315,27 @@ def generate_value(
     takes to fill that form - a username and the email built from it have to
     agree, and a retry has to be able to re-enter what it entered before.
 
+    `profile` is a
+    :class:`~sudarshan_core.engines.agentic.victim_profile.SyntheticVictimProfile`
+    - the coherent citizen the vault is presenting - and supplies the fields it
+    owns. Passed for the FIRST identity a run offers, which is the one that has
+    to look like a person to a validator; None once the vault has rotated,
+    where the point is to present a *different* identity and reusing the
+    profile would defeat that.
+
     Nothing here produces a value that could authenticate against a real
-    service: identifiers are namespaced to the analysis domain, card numbers
-    use a non-transactable test BIN, and every digit run is random.
+    service: identifiers are namespaced to a reserved-TLD analysis domain, card
+    numbers use a non-transactable test BIN, and every digit run outside the
+    profile is random.
     """
     r = rng or random
     ft = constraints.field_type
     token = seed_token or "".join(r.choice(string.ascii_lowercase) for _ in range(6))
+
+    if profile is not None:
+        chosen = _profile_value(constraints, profile)
+        if chosen is not None:
+            return chosen
 
     exact = constraints.exact_length
 

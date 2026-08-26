@@ -1349,10 +1349,37 @@ function initHooks() {
         registerHook('Retrofit.OkHttpCall.execute');
       } catch (e) { reportHookError('Retrofit.OkHttpCall.execute', e.message); }
 
+      // ── WebView instance registry ──────────────────────────────────────────
+      //
+      // A WebView's JS runs in Chromium's own process-internal stack, so a page
+      // that submits with fetch() or XHR touches NO Java networking API. Every
+      // Java-side hook below is blind to it. Measured on an e-challan sample
+      // whose entire journey is an HTML form: 69 hooks installed, the victim
+      // filled and submitted the form, and not one network event fired.
+      //
+      // The only vantage point that sees those requests is inside the page, so
+      // the instances have to be reachable to inject into. Held here as they
+      // are seen; capped, because a retained reference keeps the view alive.
+      var sdsnWebViews = [];
+      var sdsnSeen = {};
+      var SDSN_MAX_WEBVIEWS = 8;
+
+      function rememberWebView(wv) {
+        try {
+          if (!wv) return;
+          var h = wv.hashCode();
+          if (sdsnSeen[h]) return;
+          if (sdsnWebViews.length >= SDSN_MAX_WEBVIEWS) return;
+          sdsnSeen[h] = 1;
+          sdsnWebViews.push(Java.retain(wv));
+        } catch (e) { /* a view we cannot hold is one we cannot inject into */ }
+      }
+
       // WebView - loading C2 URLs, evaluating injected JS
       try {
         var WebView = Java.use('android.webkit.WebView');
         WebView.loadUrl.overload('java.lang.String').implementation = function (url) {
+          rememberWebView(this);
           emit('network', {
             hook: 'WebView.loadUrl',
             class_name: 'android.webkit.WebView',
@@ -1386,6 +1413,7 @@ function initHooks() {
           'java.lang.String',
           'java.lang.String'
         ).implementation = function (baseUrl, data, mime, encoding, historyUrl) {
+          rememberWebView(this);
           var preview = data ? data.substring(0, 500) : '';
           emit('network', {
             hook: 'WebView.loadDataWithBaseURL',

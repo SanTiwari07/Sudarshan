@@ -60,6 +60,41 @@ function Import-EnvFile {
     }
 }
 
+function Find-Docker {
+    # 1. Already on PATH
+    $d = Get-Command docker -ErrorAction SilentlyContinue
+    if ($d) { return $d.Source }
+
+    # 2. User-local Docker Desktop install (default when installed without admin)
+    $candidates = @(
+        "$env:LOCALAPPDATA\Programs\DockerDesktop\resources\bin\docker.exe",
+        "$env:LOCALAPPDATA\Docker\resources\bin\docker.exe"
+    )
+    foreach ($c in $candidates) {
+        if (Test-Path $c) {
+            # Add the folder to the process PATH so docker compose also works
+            $binDir = Split-Path $c -Parent
+            $env:PATH = "$binDir;$env:PATH"
+            return $c
+        }
+    }
+
+    # 3. System-wide Docker Desktop install
+    $sysCandidates = @(
+        "$env:ProgramFiles\Docker\Docker\resources\bin\docker.exe",
+        "C:\Program Files\Docker\Docker\resources\bin\docker.exe"
+    )
+    foreach ($c in $sysCandidates) {
+        if (Test-Path $c) {
+            $binDir = Split-Path $c -Parent
+            $env:PATH = "$binDir;$env:PATH"
+            return $c
+        }
+    }
+
+    return $null
+}
+
 function Find-Python {
     $storeStub = [System.IO.Path]::Combine(
         $env:LOCALAPPDATA, "Microsoft", "WindowsApps")
@@ -247,13 +282,14 @@ if ($SkipSandbox) {
 
 # -- Step 6: Docker preflight --------------------------------------------------
 Write-Step 6 7 "Checking Docker..."
-$dockerCmd = Get-Command docker -ErrorAction SilentlyContinue
-if (-not $dockerCmd) {
+$dockerExe = Find-Docker
+if (-not $dockerExe) {
     Write-Fail "docker not found. Install Docker Desktop and re-run."
     exit 1
 }
+Write-Info "Docker CLI: $dockerExe"
 
-$dockerInfo = & docker info 2>&1 | Out-String
+$dockerInfo = & $dockerExe info 2>&1 | Out-String
 if ($LASTEXITCODE -ne 0 -or $dockerInfo -match "error during connect|Cannot connect|Is the docker daemon running") {
     Write-Fail "Docker daemon is not running. Start Docker Desktop, wait until it is ready, then re-run."
     exit 1
@@ -280,7 +316,7 @@ Write-Host ""
 
 if ($Detach) {
     Write-Info "Mode: detached (docker compose up -d --build)"
-    & docker compose up -d --build
+    & $dockerExe compose up -d --build
     if ($LASTEXITCODE -ne 0) {
         Write-Fail "docker compose failed (exit $LASTEXITCODE). Try: docker compose logs"
         exit $LASTEXITCODE
@@ -296,7 +332,7 @@ if ($Detach) {
     Write-Info "Waiting for analysis-engine before running the in-container preflight..."
     $engineUp = $false
     foreach ($attempt in 1..30) {
-        $state = & docker compose ps --status running --services 2>$null
+        $state = & $dockerExe compose ps --status running --services 2>$null
         if ($state -and ($state -split "\r?\n") -contains "analysis-engine") {
             $engineUp = $true
             break
@@ -308,7 +344,7 @@ if ($Detach) {
         Write-Warn "analysis-engine did not reach running state -- skipping in-container preflight"
         Write-Info "Run it later with: docker compose exec analysis-engine python -m sudarshan_core.preflight"
     } else {
-        & docker compose exec -T analysis-engine python -m sudarshan_core.preflight
+        & $dockerExe compose exec -T analysis-engine python -m sudarshan_core.preflight
         if ($LASTEXITCODE -ne 0) {
             Write-Warn "In-container preflight found blocking issues -- dynamic analysis will not produce runtime evidence until they are fixed"
         } else {
@@ -327,5 +363,5 @@ if ($Detach) {
 
 Write-Host "Press Ctrl+C to stop all services." -ForegroundColor DarkGray
 Write-Host ""
-& docker compose up --build
+& $dockerExe compose up --build
 exit $LASTEXITCODE

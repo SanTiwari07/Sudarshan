@@ -263,6 +263,19 @@ except Exception:  # pragma: no cover - keep the sandbox importable
 APP_OPEN_SETTLE_SECONDS: float = float(os.getenv("SUDARSHAN_APP_OPEN_SETTLE", "8.0"))
 APP_SETTLE_POLL_SECONDS: float = float(os.getenv("SUDARSHAN_APP_SETTLE_POLL", "0.5"))
 
+# ── Autonomous anti-evasion ───────────────────────────────────────────────────
+# The time-warp / persona sequence runs at the end of exploration, while the
+# process is still alive and the hooks are still installed. That timing is the
+# whole point: run it after the session and the counters it compares belong to a
+# process that no longer exists, so the only reachable verdict is "not
+# observed". Costs ~15s of a 300s run; set SUDARSHAN_ANTI_EVASION=0 to skip it.
+ANTI_EVASION_ENABLED: bool = os.getenv("SUDARSHAN_ANTI_EVASION", "1").strip().lower() not in (
+    "0", "false", "no", "off",
+)
+ANTI_EVASION_OBSERVE_SECONDS: float = float(
+    os.getenv("SUDARSHAN_ANTI_EVASION_OBSERVE", "8.0")
+)
+
 # ── Launch stability constants ─────────────────────────────────────────────────
 # Total time budget given to each launch step to produce a stable process.
 # A cold emulator start can take 4-8 s; 12 s gives comfortable headroom.
@@ -1893,10 +1906,40 @@ class FridaSession:
         # foreground window. Downstream this becomes dynamic_status
         # NO_UI_RENDERED so a UI-less run is never scored as observed behaviour.
         self.ui_render_failed: bool = False
+        # ── Companion packages (launch hand-off) ─────────────────────────────
+        #
+        # A loader renders nothing itself: it starts, launches a SECOND package
+        # to draw the user-facing journey, and idles. Measured on an e-challan
+        # sample - `START cmp=<other>/.MainActivity from uid <sample>` 211ms
+        # after its own MainActivity - where the four-field form the victim
+        # sees belongs entirely to the other package.
+        #
+        # Two things broke because nothing here knew about that:
+        #   · Frida attached to the target PID only, so every hook lived in the
+        #     idle loader and the process doing the work was uninstrumented.
+        #     Runtime evidence was empty for a reason that had nothing to do
+        #     with the sample's behaviour.
+        #   · the first_activity/first_window milestones were stamped only when
+        #     the foreground window mentioned the TARGET package, so an app that
+        #     had plainly rendered a form was recorded as never rendering UI,
+        #     and risk_engine excluded the dynamic axis as NO_UI_RENDERED.
+        #
+        # Both are answered from one detection, here, because attach happens
+        # after the hand-off has already completed.
+        self.companion_packages: List[str] = []
+        self._companion_sessions: Dict[str, Any] = {}
+        self._companion_scripts: Dict[str, Any] = {}
+        #: package -> third-party? Asked of the device once per package.
+        self._third_party_cache: Dict[str, bool] = {}
         # True when the package was still alive after `am force-stop` at the end
         # of the session - a persistence signal (watchdog service, restart
         # receiver), surfaced in the result rather than swallowed.
         self.survived_force_stop: bool = False
+        # Before/after result of the autonomous anti-evasion sequence, run at
+        # the end of exploration while the hooks are still live. None when the
+        # sequence was disabled or could not run - never an empty result, which
+        # would read as "measured, and nothing happened".
+        self.anti_evasion_result: Optional[Dict[str, Any]] = None
         # True when lifecycle screenshots were taken while another package owned
         # the foreground (typically the launcher home screen).
         self.foreground_mismatch: bool = False
@@ -1925,6 +1968,12 @@ class FridaSession:
         self._stable_pid: Optional[int] = None
 
         # ── Wave 1: Evidence Store ─────────────────────────────────────────────
+        # The case this session belongs to - the content sha256 on a real run,
+        # which is also the id the investigation UI keys its panels on. It was
+        # previously forwarded to the evidence store and then forgotten, so
+        # nothing else in the session could say which case it was analysing.
+        self.case_id: str = case_id
+
         if EvidenceStore is not None:
             self.evidence_store = EvidenceStore(
                 event_bus=self.event_bus,
@@ -1955,6 +2004,195 @@ class FridaSession:
             # but we can initialize the manager later or pass a dummy path for now.
             # Actually, let's just initialize them in run_frida_analysis where we have apk_dir.
             pass
+
+    # ── Companion packages (launch hand-off) ─────────────────────────────────
+
+    def _is_third_party(self, package: str) -> bool:
+        """
+        Whether `package` was installed onto this device rather than shipped
+        with the image.
+
+        Asked of the device instead of matched against a denylist, because a
+        denylist of "packages that are not payloads" cannot be written - the
+        payload's package name is unknown and frequently random. The launcher,
+        Settings and Chrome are system packages on every image we run, so this
+        one question excludes them all without naming any.
+
+        A failed query answers False: an unreadable device narrows what we are
+        willing to instrument rather than widening it.
+        """
+        cached = self._third_party_cache.get(package)
+        if cached is not None:
+            return cached
+        ok, out = _adb(
+            "-s", self.device_serial, "shell", "pm list packages -3", timeout=20,
+        )
+        answer = bool(ok and f"package:{package}" in (out or ""))
+        self._third_party_cache[package] = answer
+        return answer
+
+    def _foreground_package(self, window_dump: Optional[str] = None) -> str:
+        """
+        The package owning the foreground window, or "" if unreadable.
+
+        `window_dump` of None means "read it yourself"; an empty STRING means
+        the caller already read it and got nothing. The two are different facts
+        - "not asked" versus "asked and the device said nothing" - and
+        collapsing them would turn a failed adb call into a fresh query whose
+        answer describes a later moment than the one being judged.
+        """
+        dump = window_dump
+        if dump is None:
+            _ok, dump = _adb(
+                "-s", self.device_serial, "shell",
+                "dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'",
+                timeout=15,
+            )
+        if not dump:
+            return ""
+        match = re.search(r"([A-Za-z][\w.]+)/[\w.$]+", dump)
+        return match.group(1) if match else ""
+
+    def _detect_companion(self, window_dump: Optional[str] = None) -> Optional[str]:
+        """
+        A package the SAMPLE launched to render its own journey, if there is one.
+
+        Three conditions, each removing a specific way this could go wrong:
+
+        1. The foreground is not the target and not a system surface. A
+           launcher or a Settings screen is not a payload.
+        2. It is a third-party package - installed onto the device, like the
+           sample itself.
+        3. The sample's own process is still alive behind it. A sample that
+           died and left something else on screen did not hand off to it.
+
+        Deliberately NOT conditioned on any name, label or hash: the loader and
+        its payload are unknown packages, and the whole point is to recognise
+        the RELATIONSHIP from what the device reports.
+        """
+        foreground = self._foreground_package(window_dump)
+        if not foreground or foreground == self.package_name:
+            return None
+        if foreground in self.companion_packages:
+            return foreground
+        # Imported here rather than at module scope: screenshot_policy owns
+        # these sets, and this module is imported by tooling that must not pull
+        # the agentic package in.
+        from sudarshan_core.engines.agentic.screenshot_policy import (
+            INSTALLER_PACKAGES,
+            LAUNCHER_PACKAGES,
+            SETTINGS_PACKAGES,
+            SYSTEM_UI_PACKAGES,
+            VPN_DIALOG_PACKAGES,
+        )
+
+        if foreground in LAUNCHER_PACKAGES or foreground in SYSTEM_UI_PACKAGES:
+            return None
+        if foreground in INSTALLER_PACKAGES or foreground in SETTINGS_PACKAGES:
+            return None
+        if foreground in VPN_DIALOG_PACKAGES:
+            return None
+        if not self._is_third_party(foreground):
+            return None
+        if not self._resolve_pid():
+            logger.info(
+                "[Frida] HANDOFF rejected: %s is in front but %s is no longer "
+                "running, so the sample did not hand off to it",
+                foreground, self.package_name,
+            )
+            return None
+        return foreground
+
+    def _companion_message_handler(self, package: str):
+        """
+        Route a companion's hook events into the same collection as the target's.
+
+        The source package is stamped onto every event so the report can say
+        WHICH process a behaviour came from. Evidence from a payload is still
+        evidence about this investigation, but attributing it to the loader
+        would be a fabrication.
+        """
+        def _handler(message: Dict, data: Any) -> None:
+            try:
+                if message.get("type") == "send":
+                    payload = message.get("payload")
+                    if isinstance(payload, dict):
+                        event = payload.get("payload")
+                        target = event if isinstance(event, dict) else payload
+                        target.setdefault("source_package", package)
+                        target.setdefault("companion_of", self.package_name)
+            except Exception:
+                # Provenance is a nicety; losing it must never lose the event.
+                pass
+            self._on_message(message, data)
+        return _handler
+
+    def _attach_companion(self, device: Any, package: str, script_source: str) -> bool:
+        """
+        Instrument a companion package with the same agent as the target.
+
+        Failure is logged and returns False rather than raising: a run that
+        cannot instrument the payload is a WORSE run, but it is still a run,
+        and the target's own session must survive the attempt.
+        """
+        if package in self._companion_sessions:
+            return True
+        ok, out = _adb("-s", self.device_serial, "shell", "pidof", package, timeout=10)
+        pid = next(
+            (int(t) for t in (out or "").split() if t.isdigit()), None,
+        ) if ok else None
+        if pid is None:
+            logger.warning(
+                "[Frida] Companion %s has no running process - not instrumented",
+                package,
+            )
+            return False
+        try:
+            session = device.attach(pid)
+            script = session.create_script(script_source)
+            script.on("message", self._companion_message_handler(package))
+            script.load()
+        except Exception as exc:                      # noqa: BLE001
+            logger.warning(
+                "[Frida] Could not instrument companion %s (pid=%d): %s: %s - "
+                "the payload's behaviour will NOT be observed, so silence from "
+                "it is absence of observation, not absence of behaviour.",
+                package, pid, type(exc).__name__, exc,
+            )
+            return False
+
+        self._companion_sessions[package] = session
+        self._companion_scripts[package] = script
+        if package not in self.companion_packages:
+            self.companion_packages.append(package)
+        logger.info(
+            "[Frida] COMPANION_INSTRUMENTED parent=%s companion=%s pid=%d - "
+            "the package rendering the journey is now hooked",
+            self.package_name, package, pid,
+        )
+        if self.event_bus:
+            try:
+                self.event_bus.publish({
+                    "type": "event",
+                    "category": "multi_stage",
+                    "severity": "MEDIUM",
+                    "data": {
+                        # Named for what was observed - a foreground hand-off
+                        # while the sample stayed alive - not for an API we did
+                        # not hook.
+                        "hook": "activity.launch_handoff",
+                        "description": (
+                            f"{self.package_name} launched {package}, which "
+                            f"renders the user-facing journey; {package} has "
+                            f"been instrumented as part of this investigation"
+                        ),
+                        "package": self.package_name,
+                        "child_package": package,
+                    },
+                })
+            except Exception:
+                pass
+        return True
 
     def _on_message(self, message: Dict, data: Any) -> None:
         """Handle messages sent from the Frida JS script."""
@@ -2280,6 +2518,76 @@ class FridaSession:
             logger.warning(
                 f"[Frida] Lifecycle screenshot '{label}' failed "
                 f"({type(exc).__name__}: {exc}) - continuing."
+            )
+
+    def _hook_telemetry_snapshot(self) -> Dict[str, Any]:
+        """
+        Per-session hook counts for the anti-evasion delta.
+
+        Read straight off this session's own ``collected_events`` rather than
+        any process-wide buffer, so the counts belong to *this* sample and
+        nothing else running on the host can contribute to the delta.
+
+        ``attached`` is False unless the Java bridge really came up. Hooks that
+        were never installed cannot fire, and reporting their absence as "zero
+        SMS reads" would turn an instrumentation failure into a finding about
+        the sample.
+        """
+        attached = bool(
+            self.canary_received
+            and self.java_hooks_installed > 0
+            and not self.java_bridge_failed
+        )
+        return {
+            "attached": attached,
+            "source": f"live Frida session ({self.hooks_installed_count} hooks installed)",
+            "counts": {cat: len(events) for cat, events in self.collected_events.items()},
+        }
+
+    def _run_anti_evasion_sequence(self) -> None:
+        """
+        Time-warp and persona-seed the device, and measure what changed.
+
+        Runs at the end of exploration and before the app is closed, which is
+        the only window where the measurement is meaningful: the process is
+        alive, the hooks are installed and counting, and anything the sample
+        does in reaction lands in this session's own event buckets.
+
+        Never raises. A sandbox control failing is a degraded run, not a failed
+        analysis, and the sample's telemetry so far is still worth reporting.
+        """
+        from sudarshan_core.engines.anti_evasion import AntiEvasionOrchestrator
+
+        logger.info(
+            "[Frida] ANTI-EVASION: time warp + synthetic persona on %s",
+            self.device_serial,
+        )
+        try:
+            orchestrator = AntiEvasionOrchestrator(
+                self.device_serial,
+                self.package_name,
+                telemetry_probe=self._hook_telemetry_snapshot,
+            )
+            result = orchestrator.run_sequence(
+                observation_seconds=ANTI_EVASION_OBSERVE_SECONDS,
+                session_id=self.case_id or self.package_name,
+                restore=True,
+            )
+            self.anti_evasion_result = result.to_dict()
+            logger.info(
+                "[Frida] ANTI-EVASION: %s (%s)",
+                result.verdict,
+                ", ".join(result.triggered_keys) or "no threat-class delta",
+            )
+            # The screen after the sequence is evidence in its own right: a
+            # dormancy-broken sample often has an overlay up by now, and the
+            # final lifecycle screenshot is taken after the app is closed.
+            self._capture_screenshot("90_after_anti_evasion", "lifecycle")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "[Frida] ANTI-EVASION: sequence failed (%s: %s) - continuing",
+                type(exc).__name__,
+                exc,
             )
 
     def _close_app(self) -> None:
@@ -2962,9 +3270,30 @@ class FridaSession:
                 "dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'",
                 timeout=15,
             )
-            if _win and self.package_name in _win:
+            # A hand-off is detected ONCE, here, and answers two questions that
+            # used to be decided separately and inconsistently: which processes
+            # to instrument, and whether the app rendered anything.
+            _companion = self._detect_companion(_win if _ok_w else None)
+            if _companion and _companion not in self.companion_packages:
+                self.companion_packages.append(_companion)
+                logger.info(
+                    "[Frida] LAUNCH_HANDOFF parent=%s companion=%s - the "
+                    "foreground belongs to a third-party package the sample "
+                    "launched while it is still running",
+                    self.package_name, _companion,
+                )
+            # "Did this app render a screen?" must be answered about the app as
+            # the USER experiences it. A loader whose payload is drawing a form
+            # has rendered a screen; recording otherwise made risk_engine
+            # exclude the dynamic axis as NO_UI_RENDERED for an app that was
+            # visibly on screen, and the report then said "the app never
+            # rendered a screen in the sandbox" underneath a screenshot of its
+            # form.
+            if _win and (self.package_name in _win or _companion):
                 self.launch_timeline["first_activity"]  = time.monotonic()
                 self.launch_timeline["first_window"]    = time.monotonic()
+                if _companion:
+                    self.launch_timeline["first_window_package"] = _companion
 
             # Record first_ui_dump milestone
             _ok_u, _ = _adb(
@@ -3063,6 +3392,19 @@ class FridaSession:
             self._script.on("message", self._on_message)
             self._script.load()
 
+            # ── Instrument the package that actually draws the journey ────────
+            # The target's own session stays primary and is never replaced. A
+            # companion gets the SAME agent script, so accessibility, SMS,
+            # overlay, network and banking hooks are present in the process
+            # doing the work rather than only in the loader that idles behind
+            # it. Re-detected here as well as before attach because a slow
+            # hand-off may only have completed during the attach retries.
+            for _pkg in list(self.companion_packages):
+                self._attach_companion(device, _pkg, script_source)
+            _late = self._detect_companion()
+            if _late and _late not in self._companion_sessions:
+                self._attach_companion(device, _late, script_source)
+
             if is_spawned:
                 logger.info(f"[Frida] Resuming spawned process {pid} AFTER script load...")
                 device.resume(pid)
@@ -3112,6 +3454,19 @@ class FridaSession:
                 f"{self.package_name} to finish starting..."
             )
             self._wait_for_app_settled(APP_OPEN_SETTLE_SECONDS)
+            # Last sweep before exploration begins. A hand-off that waits on a
+            # splash screen or a network round-trip only lands once the app has
+            # settled, and instrumenting it here still precedes every action the
+            # victim takes - which is where the behaviour worth observing is.
+            _settled_companion = self._detect_companion()
+            if _settled_companion and _settled_companion not in self._companion_sessions:
+                if _settled_companion not in self.companion_packages:
+                    self.companion_packages.append(_settled_companion)
+                self._attach_companion(device, _settled_companion, script_source)
+                if self.launch_timeline.get("first_activity") is None:
+                    self.launch_timeline["first_activity"] = time.monotonic()
+                    self.launch_timeline["first_window"] = time.monotonic()
+                    self.launch_timeline["first_window_package"] = _settled_companion
             self._capture_screenshot("01_app_opened", "lifecycle")
 
             logger.info(f"[Frida] ANALYSE: monitoring {self.package_name} for {duration_seconds}s...")
@@ -3145,6 +3500,20 @@ class FridaSession:
                     # app requested.
                     pregranted_permissions=self.pregranted_permissions,
                 )
+                # Hand the explorer what the sandbox already established. The
+                # hand-off completes milliseconds after launch, so by the time
+                # the explorer starts its own "before any victim action" test
+                # may no longer be the right question - and it should not have
+                # to rediscover a fact the sandbox needed first anyway.
+                for _companion in self.companion_packages:
+                    explorer.adopt_companion_package(
+                        _companion,
+                        evidence=(
+                            "detected by the sandbox at attach time: foreground "
+                            f"belonged to {_companion} while {self.package_name} "
+                            "was still running"
+                        ),
+                    )
                 self.explorer_used = "agentic"
                 logger.info("[Frida] AgenticExplorer selected.")
                 self.dae.transition(DAEStage.START_EXPLORER, "AgenticExplorer")
@@ -3257,6 +3626,13 @@ class FridaSession:
                         f" - artifacts may be incomplete"
                     )
 
+            # ── ANTI-EVASION: defeat dormancy, then measure the reaction ──────
+            # After exploration (the sample has had its chance under normal
+            # conditions) and before the app is closed (the hooks must still be
+            # live for the delta to mean anything).
+            if ANTI_EVASION_ENABLED and not self._stop_event.is_set():
+                self._run_anti_evasion_sequence()
+
             # ── CLOSE: final screen, then stop the app ────────────────────────
             # Capture BEFORE stopping: the last screen is often the most
             # interesting one (an overlay left up, a phishing form mid-fill),
@@ -3301,12 +3677,25 @@ class FridaSession:
                         exc_info=True,
                     )
 
+            # Companions first: they were attached last, and a failure to tear
+            # one down must not prevent the target's own session from closing.
+            for _pkg, _cs in list(getattr(self, "_companion_scripts", {}).items()):
+                try:
+                    _cs.unload()
+                except Exception:
+                    pass
+            for _pkg, _cse in list(getattr(self, "_companion_sessions", {}).items()):
+                try:
+                    _cse.detach()
+                except Exception:
+                    pass
+
             if getattr(self, '_script', None):
                 try:
                     self._script.unload()
                 except Exception:
                     pass
-                    
+
             if getattr(self, '_session', None):
                 try:
                     self._session.detach()
@@ -4038,6 +4427,14 @@ async def _run_device_session(
         "available": True,
         "engine": "frida",
         "dynamic_status": dynamic_status,
+        # Packages the sample launched to render its own journey, and which
+        # were instrumented alongside it. Reported so an analyst reading a
+        # behaviour attributed to this case can see WHICH process produced it.
+        "companion_packages": list(getattr(session, "companion_packages", [])),
+        "instrumented_packages": (
+            [session.package_name]
+            + list(getattr(session, "_companion_sessions", {}).keys())
+        ),
         "canary_received": session.canary_received,
         "package_name": package_name,
         "device": device_serial,
@@ -4091,6 +4488,16 @@ async def _run_device_session(
         "login_outcome": (session.reports or {}).get("login_outcome", "not_attempted"),
         # Package still alive after force-stop at session end.
         "survived_force_stop": session.survived_force_stop,
+
+        # Autonomous anti-evasion: what the time warp and the synthetic persona
+        # changed in this session's own hook counts. None when the sequence did
+        # not run - the UI must be able to tell "not attempted" from "attempted
+        # and nothing moved".
+        "anti_evasion": session.anti_evasion_result,
+
+        # Permissions the harness granted before launch. Reported so the UI can
+        # say how many, instead of asserting that grants happened at all.
+        "pregranted_permissions": list(session.pregranted_permissions),
         # Real activities observed during the session, derived from the
         # agentic explorer's visited-screen memory. If no explorer ran, or
         # if the memory contains no activity data, this is an empty list - # never [package_name], which was a fabricated placeholder that

@@ -28,7 +28,11 @@ def test_sbi_like_profile_triggers_vide_f001():
     assert vide["visual_impersonation_detected"] is True
     assert vide["vide_compare"]["detected"] is True
     assert vide["vide_compare"]["rule_id"] == "VIDE-F001"
-    assert vide["vide_compare"]["institution_id"] == "demo_sbi_yono"
+    # SBI is registered twice when a corpus checkout is present - as the lab
+    # profile and as BASE-01-SBI - and either is the right answer to "which
+    # bank". Asserting one id makes the test depend on whether the corpus
+    # happens to be checked out rather than on the attribution.
+    assert vide["vide_compare"]["institution_id"] in ("demo_sbi_yono", "BASE-01-SBI")
 
     risk = calculate_risk_score(StaticAnalysisFlags(), vide_result=vide)
     assert risk["risk_band"] != "Critical"

@@ -19,7 +19,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -353,15 +353,26 @@ def resolve_screen_ownership(
     target_package: str,
     activity: str = "",
     semantic_type: str = "",
+    companion_packages: "FrozenSet[str] | set | None" = None,
 ) -> ScreenOwnership:
     """
     Determine screen ownership using package/activity context.
 
     Package information takes priority over UI appearance classification.
+
+    `companion_packages` are packages the SAMPLE ITSELF put in front of the
+    victim - a payload it installed, or a second application it launched to
+    render its own UI. They are owned by this investigation and resolve to
+    TARGET_APP, because otherwise every screen of the payload is EXTERNAL_APP,
+    which routes it to the external graph with an empty action inventory and
+    makes the payload permanently unexplorable. Measured on a loader whose
+    entire UI lives in a second package: the run reported "the app never
+    rendered a screen" while a form sat on the emulator waiting for input.
     """
     fg = (foreground_package or "").strip()
     target = (target_package or "").strip()
     act_lower = (activity or "").lower()
+    companions = companion_packages or frozenset()
 
   # Crash / ANR signals
     if any(m in act_lower for m in CRASH_ACTIVITY_MARKERS):
@@ -379,7 +390,9 @@ def resolve_screen_ownership(
         # Target app IS the launcher (launcher-replacement malware)
         return ScreenOwnership.TARGET_APP
 
-    if target and fg == target:
+    # A companion is checked alongside the target itself, and BEFORE the system
+    # frozensets below, so that a payload is never mistaken for a boundary.
+    if target and (fg == target or fg in companions):
         if semantic_type == "WEBVIEW":
             return ScreenOwnership.WEBVIEW
         return ScreenOwnership.TARGET_APP

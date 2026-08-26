@@ -15,6 +15,7 @@ import EvidenceRegistrySection from '../components/investigation/EvidenceRegistr
 import ScreenshotGallery from '../components/investigation/ScreenshotGallery';
 import DynamicAnalysisSummary from '../components/investigation/DynamicAnalysisSummary';
 import ResiliencePanel from '../components/investigation/ResiliencePanel';
+import type { AntiEvasionResult } from '../lib/resilience';
 import HelpTerm from '../components/investigation/HelpTerm';
 import {
   resolveRuntimeDynamicStatus,
@@ -958,6 +959,14 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
           <ResiliencePanel
             sessionId={data.sha256}
             packageName={data.package_name}
+            antiEvasion={
+              // The stored case keeps the raw dynamic result; the API response
+              // model exposes the same field. Either is the run that happened
+              // while the sample was live, so prefer whichever this view has.
+              (data.dynamic_result?.anti_evasion ??
+                data.dynamic_analysis?.anti_evasion ??
+                null) as AntiEvasionResult | null
+            }
           />
         </>
       ),

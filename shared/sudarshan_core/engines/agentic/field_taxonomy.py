@@ -86,6 +86,16 @@ class FieldType(str, Enum):
     FIRST_NAME = "FIRST_NAME"
     LAST_NAME = "LAST_NAME"
 
+    # ── Relatives ───────────────────────────────────────────────────────────
+    # Indian KYC and challan/RTO forms ask for a parent's name alongside the
+    # applicant's. Without their own types both collapsed into FULL_NAME, and
+    # because the vault caches a value per (type, length) the parent box then
+    # received the IDENTICAL string as the applicant box - a form that names
+    # the same person as themselves and their own mother, which is exactly the
+    # cross-field check a validator catches.
+    MOTHER_NAME = "MOTHER_NAME"
+    FATHER_NAME = "FATHER_NAME"
+
     # ── Demographics ────────────────────────────────────────────────────────
     DATE_OF_BIRTH = "DATE_OF_BIRTH"
     ADDRESS = "ADDRESS"
@@ -174,6 +184,8 @@ _LEGACY_KIND: Dict[FieldType, str] = {
     FieldType.FIRST_NAME: "name",
     FieldType.LAST_NAME: "name",
     FieldType.BENEFICIARY_NAME: "name",
+    FieldType.MOTHER_NAME: "name",
+    FieldType.FATHER_NAME: "name",
 
     FieldType.DATE_OF_BIRTH: "text",
     FieldType.ADDRESS: "address",

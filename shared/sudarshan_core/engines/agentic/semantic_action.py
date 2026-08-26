@@ -230,6 +230,53 @@ def is_rejection_role(role: SemanticRole) -> bool:
     return role in {SemanticRole.DECLINE, SemanticRole.CANCEL, SemanticRole.DISABLE, SemanticRole.CLOSE}
 
 
+#: Controls that END the process under analysis rather than navigating within
+#: it. These are the system's own words, not the app's: Android renders them on
+#: the ANR ("<app> isn't responding") and crash ("<app> keeps stopping")
+#: dialogs, and on the Settings App-info page.
+_SAMPLE_TERMINATING_LABELS: Tuple[re.Pattern[str], ...] = tuple(
+    re.compile(p, re.I) for p in (
+        r"\bclose app\b",
+        r"\bforce ?stop\b",
+        r"\bforce close\b",
+        r"\buninstall\b",
+        r"\bclear (data|storage|cache)\b",
+        r"\bapp info\b",
+        r"\bquit\b",
+    )
+)
+
+#: The ANR dialog's keep-alive control. Pressing it is how an analysis survives
+#: an app that is merely slow - which, on an emulator running a Frida agent
+#: that has just deoptimized the boot image, is the common case.
+_ANR_WAIT_LABELS: Tuple[re.Pattern[str], ...] = tuple(
+    re.compile(p, re.I) for p in (r"^\s*wait\s*$", r"\bwait\b")
+)
+
+
+def terminates_sample(label: str) -> bool:
+    """
+    Whether tapping this control would kill the app being analysed.
+
+    The explorer must never choose one. "Close app" on an ANR dialog scores
+    like any other low-value control - it is a CANCEL, worth -20 - so once the
+    dialog's other options had been tried it was the highest-ranked action left
+    and got clicked. That ends the process under analysis: the remaining
+    exploration budget is spent on a dead app, every runtime hook goes silent,
+    and the run reports no behaviour for a sample that was mid-form.
+
+    Matched on the label alone because these strings come from the Android
+    framework, not from the sample, so they are stable across apps and are not
+    attacker-controlled in the cases that matter.
+    """
+    return _match_any((label or "").strip(), _SAMPLE_TERMINATING_LABELS)
+
+
+def is_anr_wait_control(label: str) -> bool:
+    """Whether this control is the ANR dialog's "keep waiting" option."""
+    return _match_any((label or "").strip(), _ANR_WAIT_LABELS)
+
+
 def acceptance_priority_boost(role: SemanticRole) -> int:
     """Deterministic priority adjustment for simulated unsuspecting user."""
     if role == SemanticRole.ACCEPT:

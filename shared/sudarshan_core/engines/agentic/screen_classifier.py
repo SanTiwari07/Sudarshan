@@ -407,6 +407,49 @@ def classify_screen(
     return ScreenClassification(ScreenType.UNKNOWN, "LOW", ["default_fallback"])
 
 
+#: The framework's own wording on the ANR and crash dialogs. Android phrases
+#: these as "<label> isn't responding", "<label> keeps stopping" and
+#: "<label> has stopped"; the label is app-controlled, the rest is not.
+_CRASH_DIALOG_RE = re.compile(
+    r"(isn'?t responding|is not responding|keeps stopping|has stopped"
+    r"|stopped working|closed unexpectedly)",
+    re.I,
+)
+
+#: The dialog's buttons. Required alongside the message so that an app merely
+#: DISPLAYING the words - an error page reading "the server is not responding"
+#: - is not mistaken for the system dialog.
+_CRASH_DIALOG_BUTTON_RE = re.compile(r"\b(close app|wait|open app again)\b", re.I)
+
+
+def _screen_text(ui_nodes: List[Any], raw_xml: str = "") -> str:
+    """Every visible string on the screen, for text-level classification."""
+    parts: List[str] = []
+    for node in ui_nodes or []:
+        for attr in ("text", "desc", "content_desc"):
+            value = getattr(node, attr, "") or ""
+            if value:
+                parts.append(str(value))
+    if not parts and raw_xml:
+        return raw_xml
+    return " ".join(parts)
+
+
+def _is_anr_or_crash_dialog(ui_nodes: List[Any], raw_xml: str = "") -> bool:
+    """
+    Whether the screen is the system's "app isn't responding / keeps stopping"
+    dialog.
+
+    Both the message AND one of its buttons must be present. Either alone is
+    too weak: apps display "not responding" in their own error copy, and "Wait"
+    is an ordinary word.
+    """
+    blob = _screen_text(ui_nodes, raw_xml)
+    if not blob:
+        return False
+    return bool(_CRASH_DIALOG_RE.search(blob) and _CRASH_DIALOG_BUTTON_RE.search(blob))
+
+
 def classify_screen_with_ownership(
     activity_name: str,
     ui_nodes: List[Any],
@@ -438,6 +481,34 @@ def classify_screen_with_ownership(
         fg = activity_name.split("/", 1)[0]
 
     act_lower = activity_name.lower()
+
+    # ── ANR / crash dialog, detected from what is on screen ─────────────────
+    #
+    # Ownership resolution reads the ACTIVITY name, and CRASH_ACTIVITY_MARKERS
+    # are activity names ("anractivity", "erroractivity"). Modern Android does
+    # not use them for the ANR dialog: it draws "<app> isn't responding" over
+    # the app's own activity, so the foreground package is still the target and
+    # not one marker matches.
+    #
+    # Measured consequence: the dialog was admitted as an ordinary explorable
+    # state and the walk spent 51 iterations on it - the whole remaining
+    # budget - because its only controls are "Close app" (blocked, it would
+    # kill the sample) and "Wait" (which changes nothing observable).
+    #
+    # The dialog's TEXT is the reliable signal, and it is framework text rather
+    # than anything the sample controls.
+    if _is_anr_or_crash_dialog(ui_nodes, raw_xml):
+        stopped = _CRASH_DIALOG_RE.search(_screen_text(ui_nodes, raw_xml))
+        is_crash = bool(stopped and "responding" not in stopped.group(0).lower())
+        return ScreenClassification(
+            ScreenType.CRASH_STATE if is_crash else ScreenType.APP_NOT_RESPONDING,
+            "HIGH",
+            ["system_crash_dialog_text"],
+            ownership=(
+                ScreenOwnership.CRASH_STATE.value if is_crash
+                else ScreenOwnership.APP_NOT_RESPONDING.value
+            ),
+        )
 
     # Package-first ownership resolution
     ownership = resolve_screen_ownership(

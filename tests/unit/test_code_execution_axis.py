@@ -59,14 +59,24 @@ UBIQUITOUS_HOOKS = (
 )
 
 
+#: The bundle is GENERATED, so its string quoting belongs to the compiler and
+#: has changed between frida-compile versions - the committed bundle used
+#: single quotes, a rebuild emits double. Accepting either keeps this asserting
+#: what the agent EMITS rather than how the bundler happened to format it.
+_Q = r"['\"]"
+
+
 def _category_of(hook: str, text: str) -> str:
-    idx = text.index(f"hook: '{hook}'")
-    head = text[:idx]
-    emitted = re.findall(r"emit\('([a-z_]+)'", head)
-    category = re.findall(r"category: '([a-z_]+)'", head)
+    match = re.search(rf"hook: {_Q}{re.escape(hook)}{_Q}", text)
+    assert match is not None, f"'{hook}' does not appear in the agent at all"
+    head = text[: match.start()]
+    emitted = re.findall(rf"emit\({_Q}([a-z_]+){_Q}", head)
+    category = re.findall(rf"category: {_Q}([a-z_]+){_Q}", head)
     # The native hooks use a raw send() with an explicit category field.
-    if category and (not emitted or head.rindex(f"category: '{category[-1]}'")
-                     > head.rindex(f"emit('{emitted[-1]}'")):
+    if category and (
+        not emitted
+        or head.rfind(category[-1]) > head.rfind("emit(")
+    ):
         return category[-1]
     return emitted[-1]
 

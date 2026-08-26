@@ -881,6 +881,19 @@ def _is_form_commit_action(item: "ActionItem") -> bool:
         return False
     return bool(_FORM_COMMIT_RE.search(label))
 
+def _terminates_sample(label: str) -> bool:
+    """
+    Whether tapping this control would end the app under analysis.
+
+    Thin wrapper so the definition lives in one place (`semantic_action`) and
+    the import stays lazy, matching how this module reaches the rest of the
+    agentic package.
+    """
+    from sudarshan_core.engines.agentic.semantic_action import terminates_sample
+
+    return terminates_sample(label)
+
+
 def _form_is_filled(state: "ExplorationState") -> bool:
     """
     Whether this screen holds a form whose every field has been filled.
@@ -2920,6 +2933,19 @@ class ExplorationGraph:
         for action in ranked:
             tool = "click_text"
             target = action.label
+            # Never tap a control that ends the process under analysis. This is
+            # a hard block rather than a score penalty because a penalty only
+            # postpones it: "Close app" on an ANR dialog was reached once the
+            # dialog's other controls were exhausted, and killing the sample
+            # mid-form silences every hook for the rest of the budget.
+            if _terminates_sample(target):
+                action.blocked = True
+                logger.info(
+                    "[VSE] state=%s BLOCKED terminating control %r - tapping it "
+                    "would end the app under analysis",
+                    sid, (target or "")[:60],
+                )
+                continue
             if action.action_type == "input":
                 tool = "type_text"
             elif action.action_type == "check":

@@ -266,6 +266,8 @@ def _profile_value(
         FieldType.FULL_NAME:     p.full_name,
         FieldType.FIRST_NAME:    p.first_name,
         FieldType.LAST_NAME:     p.last_name,
+        FieldType.MOTHER_NAME:   p.mother_name,
+        FieldType.FATHER_NAME:   p.father_name,
         FieldType.EMAIL:         p.email,
         FieldType.PHONE:         p.phone,
         FieldType.MOBILE:        p.phone,
@@ -407,6 +409,13 @@ def generate_value(
         return _fit(token[:5].title() or "Tester", constraints, r)
     if ft is FieldType.BENEFICIARY_NAME:
         return _fit(f"Beneficiary {token[:3].title()}", constraints, r)
+    # Distinct from FULL_NAME on purpose: these share a cache key shape with
+    # it, and a form naming the applicant as their own parent fails the
+    # cross-field check the question exists to make.
+    if ft is FieldType.MOTHER_NAME:
+        return _fit(f"Sunita {token[:4].title()}", constraints, r)
+    if ft is FieldType.FATHER_NAME:
+        return _fit(f"Ramesh {token[:4].title()}", constraints, r)
 
     # ── Demographics ────────────────────────────────────────────────────────
     if ft is FieldType.DATE_OF_BIRTH:

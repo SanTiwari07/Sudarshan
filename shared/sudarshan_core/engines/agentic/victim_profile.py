@@ -85,6 +85,17 @@ _ENV_PREFIX = "SUDARSHAN_VICTIM_"
 #: consistent - the PIN code really does belong to that city - because an app
 #: that validates a PIN against a city is exactly the kind of form the old
 #: random values could never get past.
+#: Given names for the synthetic citizen's parents. Kept separate from
+#: :data:`_ROSTER` and combined with the roster surname, so a parent's name is
+#: always a DIFFERENT person from the applicant while still belonging to the
+#: same family - which is what a form cross-checking the two expects to see.
+_MOTHER_GIVEN_NAMES: Tuple[str, ...] = (
+    "Sunita", "Lata", "Kavita", "Meera", "Shobha", "Anjali", "Rekha", "Nirmala",
+)
+_FATHER_GIVEN_NAMES: Tuple[str, ...] = (
+    "Ramesh", "Suresh", "Mahesh", "Prakash", "Dinesh", "Ashok", "Vijay", "Sanjay",
+)
+
 _ROSTER: Tuple[Tuple[str, str, str, str, str, str], ...] = (
     ("Sanskar", "Deshmukh", "Pune",      "Maharashtra",   "411001", "MG Road"),
     ("Aarav",   "Sharma",   "Jaipur",    "Rajasthan",     "302001", "Station Road"),
@@ -113,6 +124,13 @@ class SyntheticVictimProfile:
     first_name: str = "Sanskar"
     last_name: str = "Deshmukh"
     full_name: str = "Sanskar Deshmukh"
+
+    # ── Relatives ───────────────────────────────────────────────────────────
+    # A KYC or challan form that asks for a parent's name is cross-checking the
+    # identity, so these have to be DIFFERENT from full_name and consistent
+    # with it: same surname, distinct given name.
+    mother_name: str = "Sunita Deshmukh"
+    father_name: str = "Ramesh Deshmukh"
 
     # ── Identity ────────────────────────────────────────────────────────────
     user_id: str = "sanskar_deshmukh_001"
@@ -228,10 +246,17 @@ def build_victim_profile(
         house = str(r.randint(1, 99))
 
     handle = f"{first.lower()}.{last.lower()}{salt[:2]}"
+    # Derived from the salt rather than drawn independently, so a deterministic
+    # run reproduces the parents too and one salt describes the whole family.
+    _salt_n = int(salt) if salt.isdigit() else 0
+    mother = f"{_MOTHER_GIVEN_NAMES[_salt_n % len(_MOTHER_GIVEN_NAMES)]} {last}"
+    father = f"{_FATHER_GIVEN_NAMES[_salt_n % len(_FATHER_GIVEN_NAMES)]} {last}"
     built = SyntheticVictimProfile(
         first_name=first,
         last_name=last,
         full_name=f"{first} {last}",
+        mother_name=mother,
+        father_name=father,
         user_id=f"{first.lower()}_{last.lower()}_{salt}",
         username=handle,
         email=f"{handle}@{_EMAIL_DOMAIN}",

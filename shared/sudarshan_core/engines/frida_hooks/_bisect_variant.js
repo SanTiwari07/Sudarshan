@@ -480,6 +480,7 @@ function initHooks() {
         return;
       }
       send({ type: 'diag', msg: 'java_gate_passed', ts: Date.now() });
+      send({type:'diag',msg:'BISECT_stop'}); return;
 
       // ── Deoptimize ART for hook reliability ──────────────────────────────────
       // Without this, ART may inline virtual dispatch, making method hooks unreachable.
@@ -556,59 +557,60 @@ function initHooks() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
       try {
-        // The framework BASE class is deliberately NOT hooked.
-        //
-        // Replacing android.accessibilityservice.AccessibilityService
-        // .onAccessibilityEvent routes the whole process's accessibility
-        // delivery through a Frida trampoline, and on API 37 that breaks the
-        // accessibility pipeline outright: UiAutomation can no longer obtain a
-        // root node, so `uiautomator dump` answers
-        // "ERROR: null root node returned by UiTestAutomationBridge" forever.
-        //
-        // Bisected against the live e-challan payload, 16 dumps over 40s:
-        //
-        //   no agent .................... first readable 3.6s, 16/16
-        //   full agent (81 hooks) ....... NEVER readable,      0/16
-        //   full agent minus THIS hook .. first readable 2.4s, 16/16
-        //
-        // The explorer sees the screen through that same dump, so this one
-        // hook was making every UI-driven objective impossible: 0 screens
-        // observed, no form found, no field filled, and the ANR dialogs that
-        // followed were the app being unable to answer accessibility requests.
-        //
-        // Nothing is lost analytically. A trojan does not instantiate the
-        // abstract framework class - it ships its OWN AccessibilityService
-        // subclass, and that subclass is what the scan below hooks. BFCI
-        // scores the `accessibility` CATEGORY rather than a hook name, so a
-        // subclass hit contributes exactly as the base hook did.
+        var AccessibilityService = Java.use('android.accessibilityservice.AccessibilityService');
+        AccessibilityService.onAccessibilityEvent.implementation = function (event) {
+          var eventType = -1;
+          var pkgName = null;
+          try { eventType = event.getEventType(); } catch (e) {}
+          try { var pn = event.getPackageName(); pkgName = pn ? pn.toString() : null; } catch (e) {}
+          emit('accessibility', {
+            hook: 'AccessibilityService.onAccessibilityEvent',
+            class_name: 'android.accessibilityservice.AccessibilityService',
+            severity: 'CRITICAL',
+            event_type: eventType,
+            package: pkgName,
+            description: 'App is monitoring screen content via Accessibility API (ATS pattern)',
+          });
+          // Accessibility events carry the package of the app being observed.
+          // This is the working replacement for getRunningTasks(), which is
+          // restricted on API 22+ - and it is exactly how an ATS trojan knows a
+          // banking app came to the foreground.
+          _noteForegroundPackage(pkgName, 'AccessibilityService.onAccessibilityEvent');
+          return this.onAccessibilityEvent(event);
+        };
+        registerHook('AccessibilityService.onAccessibilityEvent');
 
-        // Hook the sample's OWN AccessibilityService subclasses. With the
-        // framework base class left alone (above), this is where the whole
-        // accessibility signal now comes from.
+        // Dynamic subclass hook for malware custom AccessibilityService subclasses
         //
-        // Two things were wrong with how this used to run:
+        // This scan USED TO call Java.use() on every loaded class that was not
+        // android.*/java.*/dalvik.*. On a WebView banking app that is thousands
+        // of classes, and Java.use() is not a lookup - it loads the class and
+        // builds a full JS wrapper for it, holding ART locks while it does.
         //
-        // 1. It was deferred with `setTimeout`, which never fires in this
-        //    agent - the same dead-timer problem documented on the WebView
-        //    drain. So it did not run AT ALL, and the "dynamic subclass" cover
-        //    it was supposed to provide never existed. It now runs inline.
+        // Measured on the e-challan payload, API 37, by bisecting the agent:
+        // with this block enabled `uiautomator dump` returned
+        // "ERROR: null root node returned by UiTestAutomationBridge" on 5 of 5
+        // attempts and the app ANR'd repeatedly; with it disabled - and all 81
+        // other hooks still installed - 5 of 5 dumps succeeded at the same
+        // 2.3s as an uninstrumented app. The explorer had been observing
+        // ZERO screens on this sample as a direct result, so no form was ever
+        // found, filled or submitted.
         //
-        // 2. It called Java.use() on every loaded class that was not
-        //    android.*/java.*/dalvik.*. On a WebView banking app that is
-        //    thousands of classes, and Java.use() is not a lookup - it loads
-        //    the class and builds a full JS wrapper, holding ART locks while
-        //    it does. Running that inline without bounds would trade one stall
-        //    for another, so it is bounded twice:
+        // The capability is kept, because a custom AccessibilityService
+        // subclass is the heaviest BFCI signal there is (weight 0.35). It is
+        // just no longer bought at the price of the whole run:
         //
-        //      · only classes under the SAMPLE's own package prefix, which is
-        //        where a trojan puts its service;
-        //      · a hard cap on how many classes may be wrapped.
+        //   · only classes belonging to the SAMPLE are wrapped. Malware puts
+        //     its service in its own package; the framework's own subclasses
+        //     are already covered by the base-class hook installed above.
+        //   · a hard cap on how many classes may be wrapped, so an app that
+        //     ships an enormous package tree still cannot stall the process.
         //
         // Both bounds are on the Java.use() call, not on the enumeration -
         // walking the class NAMES is cheap, wrapping them is not.
         try {
-          {
-            {
+          setTimeout(function () {
+            Java.perform(function () {
               try {
                 var pkg = runtimeContext.package_name || '';
                 // "com.example.app" -> "com.example." so sibling packages the
@@ -649,13 +651,6 @@ function initHooks() {
                               package: pkgName,
                               description: 'Accessibility event handled by custom service subclass: ' + className,
                             });
-                            // Accessibility events carry the package of the app
-                            // being observed - the working replacement for
-                            // getRunningTasks(), restricted since API 22, and
-                            // exactly how an ATS trojan knows a banking app came
-                            // to the foreground. Moved here from the framework
-                            // base-class hook that had to be removed.
-                            _noteForegroundPackage(pkgName, className + '.onAccessibilityEvent');
                             return this.onAccessibilityEvent(event);
                           };
                           registerHook(className + '.onAccessibilityEvent');
@@ -675,10 +670,10 @@ function initHooks() {
                   }
                 });
               } catch (e) {}
-            }
-          }
+            });
+          }, 1000);
         } catch (e) {}
-      } catch (e) { reportHookError('AccessibilityService.subclass_scan', e.message); }
+      } catch (e) { reportHookError('AccessibilityService.onAccessibilityEvent', e.message); }
 
       try {
         var AccessibilityNodeInfo = Java.use('android.view.accessibility.AccessibilityNodeInfo');

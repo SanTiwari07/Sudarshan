@@ -34,11 +34,18 @@ _HOOKS = _ROOT / "shared" / "sudarshan_core" / "engines" / "frida_hooks"
 UBIQUITOUS = "AccessibilityManager.sendAccessibilityEvent"
 
 
+#: The bundle is GENERATED, so its string quoting belongs to the compiler and
+#: has changed between frida-compile versions. Accepting either quote keeps
+#: this asserting what the agent EMITS rather than how it is formatted.
+_Q = r"['\"]"
+
+
 def _emit_category_for(hook: str, text: str) -> str:
     """The category the agent emits `hook` under."""
-    idx = text.index(f"hook: '{hook}'")
-    before = text[:idx]
-    return re.findall(r"emit\('([a-z_]+)'", before)[-1]
+    match = re.search(rf"hook: {_Q}{re.escape(hook)}{_Q}", text)
+    assert match is not None, f"'{hook}' does not appear in the agent at all"
+    before = text[: match.start()]
+    return re.findall(rf"emit\({_Q}([a-z_]+){_Q}", before)[-1]
 
 
 def test_the_ubiquitous_hook_is_not_in_a_scored_category():

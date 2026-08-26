@@ -194,6 +194,22 @@ CRASH_RECOVERY_MAX_SECONDS: float = float(
 MAX_CONSECUTIVE_CRASHES: int = int(
     os.getenv("SUDARSHAN_MAX_CONSECUTIVE_CRASHES", "3")
 )
+# An ANR whose process is still alive is not a crash, and must not spend the
+# crash budget at the same rate.
+#
+# Attaching Frida and installing ~70 hooks runs on the app's main thread, so the
+# app misses the window-focus event and Android reports
+# "Input dispatching timed out ... Waited 5002ms for FocusEvent(hasFocus=true)".
+# Measured on the e-challan payload: the dialog appears once per attach, "Wait"
+# clears it, and the app then behaves normally. Counting each one as a crash
+# retired the 3-crash budget before the walk had taken an action - exploration
+# stopped at 2 actions on 0 screens with the form never reached.
+#
+# A separate, larger budget: a genuinely wedged app still terminates the run,
+# but a startup stall the walk can wait out no longer does.
+MAX_SURVIVABLE_ANRS: int = int(
+    os.getenv("SUDARSHAN_MAX_SURVIVABLE_ANRS", "8")
+)
 
 # ─── In-content settle delay ──────────────────────────────────────────────────
 # wait_for_idle() uses `dumpsys window | grep mCurrentFocus` to detect when the
@@ -541,6 +557,47 @@ class AgenticExplorer:
         # the main process; the sample's :remote services are not the target.
         match = re.search(r"\d+", out)
         return int(match.group(0)) if match else 0
+
+    async def _target_process_is_alive(self) -> bool:
+        """
+        Whether the sample (or a package it handed the journey to) is still up.
+
+        This is what separates an ANR from a crash. Android puts the same style
+        of dialog over both, but a process that is merely stalled can be waited
+        out and explored afterwards, while one that has died cannot. Asked over
+        the sandbox provider's adb, like every other device question here.
+        """
+        loop = asyncio.get_running_loop()
+
+        def _alive() -> bool:
+            if self._resolve_target_pid():
+                return True
+            # The companion is the app the victim is actually looking at, so an
+            # ANR over IT is still a survivable stall for this investigation.
+            companions = getattr(
+                getattr(self, "exploration", None), "companion_packages", None,
+            ) or []
+            for package in companions:
+                try:
+                    from sudarshan_core.sandbox import get_sandbox_provider
+
+                    provider = get_sandbox_provider()
+                    args = ["-s", self.device_serial] if self.device_serial else []
+                    ok, out = provider.adb(
+                        *args, "shell", "pidof", package, timeout=10,
+                    )
+                except Exception:  # noqa: BLE001
+                    continue
+                if ok and isinstance(out, str) and re.search(r"\d+", out):
+                    return True
+            return False
+
+        try:
+            return await loop.run_in_executor(None, _alive)
+        except Exception:  # noqa: BLE001
+            # Unknown means "do not escalate": treat it as survivable and let
+            # the ordinary budget end the run if the app really is gone.
+            return True
 
     def _check_target_pid(self) -> None:
         """
@@ -1565,6 +1622,53 @@ class AgenticExplorer:
                 transition_event="APP_CRASH",
             )
 
+        # An ANR is not a crash: the process is alive and merely slow, which on
+        # an emulator that has just deoptimized the boot image for Frida is the
+        # ordinary case. "Wait" keeps it alive and often lets the screen the
+        # walk was mid-way through finish rendering, whereas relaunching throws
+        # away whatever had already been filled in. Tried first, once, and only
+        # when the dialog actually offers it; relaunch remains the fallback.
+        if classification.screen_type == ScreenType.APP_NOT_RESPONDING:
+            from sudarshan_core.engines.agentic.semantic_action import (
+                is_anr_wait_control,
+            )
+
+            wait_label = next(
+                (
+                    (getattr(n, "text", "") or getattr(n, "desc", "") or "").strip()
+                    for n in (obs.ui_nodes or [])
+                    if is_anr_wait_control(
+                        getattr(n, "text", "") or getattr(n, "desc", "") or ""
+                    )
+                ),
+                "",
+            )
+            if wait_label:
+                logger.info(
+                    "[AgenticExplorer] ANR dialog: pressing %r to keep the "
+                    "sample alive rather than relaunching it", wait_label,
+                )
+                try:
+                    await self.executor.execute({
+                        "tool": "click_text", "text": wait_label,
+                    })
+                    await self.executor.wait_for_idle(
+                        timeout=CRASH_RECOVERY_TIMEOUT_SECONDS,
+                    )
+                    # The dialog does not always go away the instant "Wait" is
+                    # pressed - the app is, after all, still stalled. Observing
+                    # immediately re-reads the same dialog and books a second
+                    # ANR for the same event, which is how a single startup
+                    # stall used to retire the whole budget. Give it a bounded
+                    # chance to clear before handing back.
+                    await asyncio.sleep(CRASH_RECOVERY_BASE_SECONDS)
+                    return
+                except Exception as exc:
+                    logger.debug(
+                        "[AgenticExplorer] ANR wait-press failed, "
+                        "falling through to relaunch: %s", exc,
+                    )
+
         component = self._launch_component()
         if component:
             try:
@@ -1846,6 +1950,7 @@ class AgenticExplorer:
         last_action_failed    = False
         last_screen_hash      = ""
         consecutive_crashes   = 0
+        survivable_anrs       = 0
         out_of_scope_streak   = 0
         # Whether the previous iteration was outside the sample. Distinct from
         # the streak, which the recovery path resets: this survives long enough
@@ -2340,10 +2445,29 @@ class AgenticExplorer:
                     ScreenType.CRASH_STATE, ScreenType.APP_NOT_RESPONDING,
                 ):
                     await self._handle_crash_state(obs, classification, actions_taken)
-                    consecutive_crashes += 1
-                    if consecutive_crashes >= MAX_CONSECUTIVE_CRASHES:
-                        self._stop_reason = StopReason.APPLICATION_CRASH_LOOP
-                        break
+                    # An ANR whose process is still running is a stall, not a
+                    # death, and gets its own larger budget - see
+                    # MAX_SURVIVABLE_ANRS. A crash, or an ANR the app did not
+                    # survive, still spends the crash budget.
+                    survivable_anr = (
+                        classification.screen_type == ScreenType.APP_NOT_RESPONDING
+                        and await self._target_process_is_alive()
+                    )
+                    if survivable_anr:
+                        survivable_anrs += 1
+                        logger.info(
+                            "[AgenticExplorer] ANR %d/%d - process still alive, "
+                            "not counting it against the crash budget",
+                            survivable_anrs, MAX_SURVIVABLE_ANRS,
+                        )
+                        if survivable_anrs >= MAX_SURVIVABLE_ANRS:
+                            self._stop_reason = StopReason.APPLICATION_CRASH_LOOP
+                            break
+                    else:
+                        consecutive_crashes += 1
+                        if consecutive_crashes >= MAX_CONSECUTIVE_CRASHES:
+                            self._stop_reason = StopReason.APPLICATION_CRASH_LOOP
+                            break
                     actions_taken += 1
                     continue
 

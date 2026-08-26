@@ -258,3 +258,217 @@ def test_companion_events_are_stamped_with_their_source_package(session):
     )
     assert seen["payload"]["source_package"] == PAYLOAD
     assert seen["payload"]["companion_of"] == TARGET
+
+
+# ─── L0, the launch gate ─────────────────────────────────────────────────────
+#
+# A hand-off is a launch that SUCCEEDED. Judging it on "did the target own the
+# window" reported a running, on-screen app as a failed launch, and the caller
+# then walked its whole ladder of launch strategies - six attempts at ~12-19s
+# each - re-launching an app that was already up. Measured on the e-challan
+# sample: ~90s of a 300s window spent before exploration began.
+
+def test_the_launch_gate_accepts_a_hand_off_as_a_rendered_launch(session, monkeypatch):
+    from sudarshan_core.engines import frida_sandbox
+
+    monkeypatch.setattr(
+        frida_sandbox, "_adb", lambda *a, **k: (True, _win(PAYLOAD)),
+    )
+    rendered, owner = frida_sandbox._poll_until_package_owns_window(
+        "emulator-5554", TARGET,
+        total_timeout=1.0,
+        accept_handoff=session._detect_companion,
+    )
+    assert rendered is True
+    assert owner == PAYLOAD
+
+
+def test_the_launch_gate_still_reports_a_target_that_never_renders(monkeypatch):
+    """
+    The gate must keep failing for the case it exists to catch: a process that
+    is alive but never inflates an Activity.
+    """
+    from sudarshan_core.engines import frida_sandbox
+
+    monkeypatch.setattr(
+        frida_sandbox, "_adb",
+        lambda *a, **k: (True, _win("com.google.android.apps.nexuslauncher")),
+    )
+    rendered, owner = frida_sandbox._poll_until_package_owns_window(
+        "emulator-5554", TARGET, total_timeout=1.0, accept_handoff=lambda dump: None,
+    )
+    assert rendered is False
+    assert owner == ""
+
+
+def test_the_launch_gate_names_the_target_when_the_target_renders(monkeypatch):
+    from sudarshan_core.engines import frida_sandbox
+
+    monkeypatch.setattr(
+        frida_sandbox, "_adb", lambda *a, **k: (True, _win(TARGET)),
+    )
+    rendered, owner = frida_sandbox._poll_until_package_owns_window(
+        "emulator-5554", TARGET, total_timeout=1.0,
+    )
+    assert (rendered, owner) == (True, TARGET)
+
+
+def test_a_failing_hand_off_probe_does_not_fail_the_launch_gate(monkeypatch):
+    """A probe that raises must not decide the launch; the gate keeps waiting."""
+    from sudarshan_core.engines import frida_sandbox
+
+    def _boom(_dump):
+        raise RuntimeError("adb went away")
+
+    monkeypatch.setattr(
+        frida_sandbox, "_adb", lambda *a, **k: (True, _win(PAYLOAD)),
+    )
+    rendered, owner = frida_sandbox._poll_until_package_owns_window(
+        "emulator-5554", TARGET, total_timeout=0.6, accept_handoff=_boom,
+    )
+    assert (rendered, owner) == (False, "")
+
+
+# ─── The timeline must survive its own metadata ──────────────────────────────
+
+def test_a_package_name_in_the_timeline_does_not_destroy_the_run():
+    """
+    `launch_timeline` is typed as a map of monotonic floats, but it is a plain
+    dict several code paths write to - and the hand-off path stored a package
+    NAME in it. `_timeline_to_seconds` then raised
+    `TypeError: unsupported operand type(s) for -: 'str' and 'float'` AFTER a
+    complete dynamic run, which surfaced as a 500 from the analysis engine, a
+    fail-closed 503 at the gateway, and a case reporting that dynamic analysis
+    had never been performed.
+
+    A malformed telemetry entry must cost that entry, never the telemetry.
+    """
+    from sudarshan_core.engines.frida_sandbox import _timeline_to_seconds
+
+    out = _timeline_to_seconds({
+        "apk_install": 100.0,
+        "first_window": 103.5,
+        "frida_attach": None,
+        "first_window_package": "com.payload.sample",
+    })
+    assert out["first_window"] == 3.5
+    assert out["frida_attach"] is None
+    assert out["first_window_package"] == "com.payload.sample"
+
+
+def test_the_timeline_is_still_offset_from_install_when_it_can_be():
+    from sudarshan_core.engines.frida_sandbox import _timeline_to_seconds
+
+    out = _timeline_to_seconds({"apk_install": 10.0, "first_pid": 12.25})
+    assert out["first_pid"] == 2.25
+
+
+def test_a_non_numeric_install_base_does_not_raise():
+    from sudarshan_core.engines.frida_sandbox import _timeline_to_seconds
+
+    out = _timeline_to_seconds({"apk_install": "n/a", "first_pid": 12.25})
+    assert out["first_pid"] == 12.25
+    assert out["apk_install"] == "n/a"
+
+
+def test_the_hand_off_package_is_reported_off_the_timeline(session):
+    """
+    The package that drew the screen is real evidence and is still reported -
+    it just travels as its own attribute instead of inside a map of floats.
+    """
+    assert session.first_window_package == ""
+    session.first_window_package = PAYLOAD
+    assert session.first_window_package == PAYLOAD
+
+
+# ─── A crash of OURS is not a crash of the app's ─────────────────────────────
+#
+# Measured on the e-challan payload, API 37: an intermittent SIGSEGV on ART's
+# "Jit thread pool" inside art::HBasicBlockBuilder::Build() / JitCompile - the
+# JIT racing the hooks being installed into methods it is concurrently
+# compiling. The same sample launches cleanly uninstrumented and survives the
+# identical agent on a repeat attempt. Unhandled, it ended the whole dynamic
+# run and the case reported no runtime evidence at all.
+#
+# The retry is deliberately narrow: an app that throws must still stop the
+# ladder on the first attempt, or a genuinely broken sample spends the window
+# being relaunched.
+
+def _report(**kwargs):
+    from sudarshan_core.engines.frida_sandbox import CrashReport
+
+    return CrashReport(**kwargs)
+
+
+def test_an_art_jit_segv_is_recognised_as_our_race():
+    from sudarshan_core.engines.frida_sandbox import _crash_is_instrumentation_race
+
+    assert _crash_is_instrumentation_race(_report(
+        native_stacktrace=(
+            "signal 11 (SIGSEGV), code 1 (SEGV_MAPERR)\n"
+            "  #00 pc 2bddbb /apex/com.android.art/lib64/libart.so "
+            "(art::HBasicBlockBuilder::Build()+331)"
+        ),
+    )) is True
+
+
+@pytest.mark.parametrize("marker", [
+    "art::jit::JitCompiler::CompileMethod",
+    "art::OptimizingCompiler::TryCompile",
+    "art::HGraphBuilder::BuildGraph",
+    "name: Jit thread pool",
+])
+def test_every_jit_frame_shape_is_recognised(marker):
+    from sudarshan_core.engines.frida_sandbox import _crash_is_instrumentation_race
+
+    assert _crash_is_instrumentation_race(_report(native_stacktrace=marker)) is True
+
+
+def test_an_app_exception_is_never_retried():
+    """
+    A sample that throws is a sample that crashed. Retrying it would spend the
+    analysis window relaunching an app that cannot run.
+    """
+    from sudarshan_core.engines.frida_sandbox import _crash_is_instrumentation_race
+
+    assert _crash_is_instrumentation_race(_report(
+        exception_type="java.lang.NullPointerException",
+        java_stacktrace="at com.sample.Main.onCreate(Main.java:42)",
+    )) is False
+
+
+def test_a_java_exception_wins_even_beside_a_jit_frame():
+    """
+    Both present means the app threw. The Java side is the authoritative
+    explanation and must not be overridden by an incidental native frame.
+    """
+    from sudarshan_core.engines.frida_sandbox import _crash_is_instrumentation_race
+
+    assert _crash_is_instrumentation_race(_report(
+        exception_type="java.lang.IllegalStateException",
+        native_stacktrace="art::jit::JitCompiler::CompileMethod",
+    )) is False
+
+
+@pytest.mark.parametrize("report_kwargs", [
+    {},
+    {"native_stacktrace": ""},
+    {"native_stacktrace": "#00 libc.so (abort+164)"},
+])
+def test_an_unrelated_or_absent_crash_is_not_retried(report_kwargs):
+    from sudarshan_core.engines.frida_sandbox import _crash_is_instrumentation_race
+
+    assert _crash_is_instrumentation_race(_report(**report_kwargs)) is False
+
+
+def test_no_report_at_all_is_not_retried():
+    from sudarshan_core.engines.frida_sandbox import _crash_is_instrumentation_race
+
+    assert _crash_is_instrumentation_race(None) is False
+
+
+def test_the_retry_budget_is_bounded_and_configurable():
+    from sudarshan_core.engines import frida_sandbox
+
+    assert 1 <= frida_sandbox.MAX_INSTRUMENTATION_RACE_RETRIES <= 5
+    assert frida_sandbox.INSTRUMENTATION_RACE_BACKOFF_SECONDS > 0

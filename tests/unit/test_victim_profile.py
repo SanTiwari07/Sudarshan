@@ -230,7 +230,12 @@ _ECHALLAN_FORM = [
     ("After getting challan details you can further go for online payment",
      "Full Name*", "fullName", FieldType.FULL_NAME),
     ("Full Name*",     "Mobile Number*", "mb",  FieldType.MOBILE),
-    ("Mobile Number*", "Mother Name*",   "mt",  FieldType.FULL_NAME),
+    # MOTHER_NAME, not FULL_NAME: the parent-name patterns now lead the person
+    # family, so this box no longer collapses into the applicant's own name
+    # (and no longer receives the identical value). The point of the row is
+    # unchanged - the field's own hint beats the neighbouring "Mobile Number*"
+    # caption - and is now made more sharply.
+    ("Mobile Number*", "Mother Name*",   "mt",  FieldType.MOTHER_NAME),
     ("Mobile Number*", "Date Of Birth*", "dob", FieldType.DATE_OF_BIRTH),
 ]
 
@@ -339,3 +344,105 @@ def test_no_plaintext_sensitive_values_escape_redaction():
     secrets = all_secret_values()
     for key in ("password", "otp", "email", "phone", "username"):
         assert vault.values[key] in secrets, key
+
+
+# ─── Parent names ────────────────────────────────────────────────────────────
+#
+# Indian KYC and challan/RTO forms ask for a parent's name next to the
+# applicant's. Both contain the word "name", so before MOTHER_NAME/FATHER_NAME
+# existed the parent box classified as FULL_NAME - and because the vault caches
+# one value per (type, length) it then received the IDENTICAL string as the
+# applicant box. A form naming the applicant as their own mother fails exactly
+# the cross-field check the question exists to make.
+
+@pytest.mark.parametrize("hint,expected", [
+    ("Mother Name*",       FieldType.MOTHER_NAME),
+    ("Mother's Name",      FieldType.MOTHER_NAME),
+    ("Mothers Name",       FieldType.MOTHER_NAME),
+    ("MOTHER NAME",        FieldType.MOTHER_NAME),
+    ("Mother's Full Name", FieldType.MOTHER_NAME),
+    ("Father Name",        FieldType.FATHER_NAME),
+    ("Father's Name",      FieldType.FATHER_NAME),
+    ("Parent's Name",      FieldType.FATHER_NAME),
+    ("Guardian's Name",    FieldType.FATHER_NAME),
+])
+def test_a_parent_name_field_is_classified_as_a_parent_name(hint, expected):
+    from sudarshan_core.engines.agentic.credentials import resolve_field_classification
+
+    result = resolve_field_classification(
+        field_label="", hint=hint, resource_id="", content_desc="",
+        class_name="android.widget.EditText", text="", input_type="",
+        is_password=False, index=1, screen_type="",
+    )
+    assert result.field_type is expected
+
+
+def test_a_maiden_name_question_stays_a_security_answer():
+    """
+    "Mother's maiden name" is knowledge-based auth, not a demographic field.
+    The parent patterns must not swallow it - SECURITY_ANSWER leads them.
+    """
+    from sudarshan_core.engines.agentic.credentials import resolve_field_classification
+
+    result = resolve_field_classification(
+        field_label="", hint="Mother's maiden name", resource_id="",
+        content_desc="", class_name="android.widget.EditText", text="",
+        input_type="", is_password=False, index=1, screen_type="",
+    )
+    assert result.field_type is FieldType.SECURITY_ANSWER
+
+
+def test_the_applicant_is_not_named_as_their_own_parent():
+    """The whole point: three name boxes on one form get three names."""
+    p = build_victim_profile()
+    assert p.mother_name != p.full_name
+    assert p.father_name != p.full_name
+    assert p.mother_name != p.father_name
+
+
+def test_a_parent_shares_the_family_surname():
+    """
+    Different person, same family. A parent's name that shares no surname with
+    the applicant is as suspicious to a validator as an identical one.
+    """
+    p = build_victim_profile()
+    assert p.mother_name.endswith(p.last_name)
+    assert p.father_name.endswith(p.last_name)
+
+
+def test_the_echallan_form_receives_four_distinct_values():
+    """
+    End to end over the live form's four fields: classify each, then draw its
+    value from ONE vault, and assert the form is internally coherent.
+    """
+    from sudarshan_core.engines.agentic.credentials import (
+        CredentialVault,
+        resolve_field_classification,
+    )
+    from sudarshan_core.engines.agentic.field_constraints import extract_constraints
+
+    vault = CredentialVault()
+    filled = {}
+    for hint, rid in [
+        ("Full Name*", "fullName"), ("Mobile Number*", "mb"),
+        ("Mother Name*", "mt"), ("Date Of Birth*", "dob"),
+    ]:
+        c = resolve_field_classification(
+            field_label="", hint=hint, resource_id=rid, content_desc="",
+            class_name="android.widget.EditText", text="", input_type="",
+            is_password=False, index=0, screen_type="",
+        )
+        constraints = extract_constraints(
+            field_type=c.field_type, field_label="", hint=hint, resource_id=rid,
+            content_desc="", class_name="android.widget.EditText", text="",
+            is_password=False, max_length=None, input_type="",
+        )
+        filled[c.field_type] = vault.value_for_field(constraints)
+
+    assert set(filled) == {
+        FieldType.FULL_NAME, FieldType.MOBILE,
+        FieldType.MOTHER_NAME, FieldType.DATE_OF_BIRTH,
+    }
+    assert filled[FieldType.FULL_NAME] != filled[FieldType.MOTHER_NAME]
+    assert filled[FieldType.MOBILE].isdigit()
+    assert len(filled[FieldType.MOBILE]) == 10

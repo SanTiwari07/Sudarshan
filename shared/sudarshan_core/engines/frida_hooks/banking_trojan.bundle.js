@@ -1,5 +1,5 @@
 📦
-527953 /banking_trojan.js
+530982 /banking_trojan.js
 ✄
 var __defProp = Object.defineProperty;
 var __export = (target, all) => {
@@ -13496,6 +13496,7 @@ var frida_java_bridge_default = runtime;
 
 // banking_trojan.js
 var JAVA_BRIDGE_SOURCE = "none";
+var DEOPT_BOOT_IMAGE_FORCED = false;
 var Java = function resolveJavaBridge() {
   try {
     var mod = frida_java_bridge_default;
@@ -13610,6 +13611,7 @@ var OVERLAY_WINDOW_TYPES = [
 var overlayViewKeys = {};
 var overlayViewCount = 0;
 var MAX_TRACKED_OVERLAY_VIEWS = 256;
+var ACCESSIBILITY_SUBCLASS_SCAN_LIMIT = 300;
 function viewKey(view) {
   try {
     return view === null ? null : String(view.hashCode());
@@ -13726,6 +13728,23 @@ setInterval(function() {
     hook_errors: runtimeContext.hook_errors
   });
 }, 3e3);
+var sdsnWebViewCount = 0;
+rpc.exports = {
+  // Collect whatever the in-page shims have queued since the last call, and
+  // re-inject into any WebView that has navigated. Returns the number of
+  // WebViews currently held so the caller can tell "nothing happened" from
+  // "there was nothing to look at".
+  // Reports how many WebViews are currently instrumented. Deliberately does
+  // NOT drive the drain: an rpc call arrives on a thread that is not attached
+  // to the VM, and Java.choose from such a thread HANGS rather than failing -
+  // measured, and it wedges the caller for the rest of the run. The drain is
+  // triggered from inside a hook instead, where the thread is already a Java
+  // thread. This export exists so the host can distinguish "the page made no
+  // requests" from "there was no page to watch".
+  webviewCount: function() {
+    return sdsnWebViewCount;
+  }
+};
 initHooks();
 function initHooks() {
   if (!Java || !Java.available) {
@@ -13755,9 +13774,10 @@ function initHooks() {
         return;
       }
       send({ type: "diag", msg: "java_gate_passed", ts: Date.now() });
+      var sdkLevel = 0;
       try {
         var BuildVersion = Java.use("android.os.Build$VERSION");
-        var sdkLevel = BuildVersion.SDK_INT ? BuildVersion.SDK_INT.value : 0;
+        sdkLevel = BuildVersion.SDK_INT ? BuildVersion.SDK_INT.value : 0;
         if (sdkLevel > 0 && sdkLevel < 34) {
           Java.deoptimizeEverything();
           send({ type: "diag", msg: "deoptimizeEverything_success", ts: Date.now() });
@@ -13768,8 +13788,19 @@ function initHooks() {
         send({ type: "diag", msg: "deoptimizeEverything_failed", error: e.message });
       }
       try {
-        Java.deoptimizeBootImage();
-        send({ type: "diag", msg: "deoptimizeBootImage_success", ts: Date.now() });
+        var forceDeopt = DEOPT_BOOT_IMAGE_FORCED;
+        if (forceDeopt || sdkLevel > 0 && sdkLevel < 34) {
+          Java.deoptimizeBootImage();
+          send({ type: "diag", msg: "deoptimizeBootImage_success", ts: Date.now() });
+        } else {
+          send({
+            type: "diag",
+            msg: "deoptimizeBootImage_skipped_api34_plus",
+            sdk_int: sdkLevel,
+            reason: "stalls the device past the ANR watchdog on API 34+",
+            ts: Date.now()
+          });
+        }
       } catch (e) {
         send({ type: "diag", msg: "deoptimizeBootImage_skipped", error: e.message });
       }
@@ -13779,9 +13810,9 @@ function initHooks() {
             var ActivityThread = Java.use("android.app.ActivityThread");
             var app = ActivityThread.currentApplication();
             if (app) {
-              var pkg = app.getPackageName().toString();
-              runtimeContext.package_name = pkg;
-              send({ type: "diag", msg: "package_detected", package: pkg });
+              var pkg2 = app.getPackageName().toString();
+              runtimeContext.package_name = pkg2;
+              send({ type: "diag", msg: "package_detected", package: pkg2 });
             }
           } catch (e) {
           }
@@ -13789,80 +13820,72 @@ function initHooks() {
       } catch (e) {
       }
       try {
-        var AccessibilityService = Java.use("android.accessibilityservice.AccessibilityService");
-        AccessibilityService.onAccessibilityEvent.implementation = function(event) {
-          var eventType = -1;
-          var pkgName = null;
-          try {
-            eventType = event.getEventType();
-          } catch (e) {
-          }
-          try {
-            var pn = event.getPackageName();
-            pkgName = pn ? pn.toString() : null;
-          } catch (e) {
-          }
-          emit("accessibility", {
-            hook: "AccessibilityService.onAccessibilityEvent",
-            class_name: "android.accessibilityservice.AccessibilityService",
-            severity: "CRITICAL",
-            event_type: eventType,
-            package: pkgName,
-            description: "App is monitoring screen content via Accessibility API (ATS pattern)"
-          });
-          _noteForegroundPackage(pkgName, "AccessibilityService.onAccessibilityEvent");
-          return this.onAccessibilityEvent(event);
-        };
-        registerHook("AccessibilityService.onAccessibilityEvent");
         try {
-          setTimeout(function() {
-            Java.perform(function() {
+          {
+            {
               try {
+                var pkg = runtimeContext.package_name || "";
+                var prefix = "";
+                var parts = pkg.split(".");
+                if (parts.length >= 2) prefix = parts[0] + "." + parts[1] + ".";
+                var wrapped = 0;
                 Java.enumerateLoadedClasses({
                   onMatch: function(className) {
-                    if (className && className.indexOf("android.") === -1 && className.indexOf("java.") === -1 && className.indexOf("dalvik.") === -1 && className.indexOf("$") === -1) {
-                      try {
-                        var targetCls = Java.use(className);
-                        if (targetCls && targetCls.onAccessibilityEvent) {
-                          targetCls.onAccessibilityEvent.implementation = function(event) {
-                            var eventType = -1;
-                            var pkgName = null;
-                            try {
-                              eventType = event.getEventType();
-                            } catch (e) {
-                            }
-                            try {
-                              var pn = event.getPackageName();
-                              pkgName = pn ? pn.toString() : null;
-                            } catch (e) {
-                            }
-                            emit("accessibility", {
-                              hook: className + ".onAccessibilityEvent",
-                              class_name: className,
-                              severity: "CRITICAL",
-                              event_type: eventType,
-                              package: pkgName,
-                              description: "Accessibility event handled by custom service subclass: " + className
-                            });
-                            return this.onAccessibilityEvent(event);
-                          };
-                          registerHook(className + ".onAccessibilityEvent");
-                        }
-                      } catch (e) {
+                    if (wrapped >= ACCESSIBILITY_SUBCLASS_SCAN_LIMIT) return;
+                    if (!className || className.indexOf("$") !== -1) return;
+                    var mine = prefix ? className.indexOf(prefix) === 0 : /accessibilit/i.test(className);
+                    if (!mine) return;
+                    if (className.indexOf("android.") === 0 || className.indexOf("java.") === 0 || className.indexOf("dalvik.") === 0) return;
+                    try {
+                      wrapped++;
+                      var targetCls = Java.use(className);
+                      if (targetCls && targetCls.onAccessibilityEvent) {
+                        targetCls.onAccessibilityEvent.implementation = function(event) {
+                          var eventType = -1;
+                          var pkgName = null;
+                          try {
+                            eventType = event.getEventType();
+                          } catch (e) {
+                          }
+                          try {
+                            var pn = event.getPackageName();
+                            pkgName = pn ? pn.toString() : null;
+                          } catch (e) {
+                          }
+                          emit("accessibility", {
+                            hook: className + ".onAccessibilityEvent",
+                            class_name: className,
+                            severity: "CRITICAL",
+                            event_type: eventType,
+                            package: pkgName,
+                            description: "Accessibility event handled by custom service subclass: " + className
+                          });
+                          _noteForegroundPackage(pkgName, className + ".onAccessibilityEvent");
+                          return this.onAccessibilityEvent(event);
+                        };
+                        registerHook(className + ".onAccessibilityEvent");
                       }
+                    } catch (e) {
                     }
                   },
                   onComplete: function() {
+                    send({
+                      type: "diag",
+                      msg: "accessibility_subclass_scan",
+                      prefix: prefix || "(none - name heuristic used)",
+                      classes_wrapped: wrapped,
+                      limit: ACCESSIBILITY_SUBCLASS_SCAN_LIMIT
+                    });
                   }
                 });
               } catch (e) {
               }
-            });
-          }, 1e3);
+            }
+          }
         } catch (e) {
         }
       } catch (e) {
-        reportHookError("AccessibilityService.onAccessibilityEvent", e.message);
+        reportHookError("AccessibilityService.subclass_scan", e.message);
       }
       try {
         var AccessibilityNodeInfo = Java.use("android.view.accessibility.AccessibilityNodeInfo");
@@ -13985,16 +14008,16 @@ function initHooks() {
           "java.util.ArrayList",
           "java.util.ArrayList",
           "java.util.ArrayList"
-        ).implementation = function(dest, sc, parts, sentIntents, deliveryIntents) {
+        ).implementation = function(dest, sc, parts2, sentIntents, deliveryIntents) {
           emit("sms", {
             hook: "SmsManager.sendMultipartTextMessage",
             class_name: "android.telephony.SmsManager",
             severity: "CRITICAL",
             destination: dest ? dest.toString() : null,
-            parts_count: parts ? parts.size() : 0,
+            parts_count: parts2 ? parts2.size() : 0,
             description: "App sent multipart SMS (split OTP/C2 command relay)"
           });
-          return this.sendMultipartTextMessage(dest, sc, parts, sentIntents, deliveryIntents);
+          return this.sendMultipartTextMessage(dest, sc, parts2, sentIntents, deliveryIntents);
         };
         registerHook("SmsManager.sendMultipartTextMessage");
       } catch (e) {
@@ -14185,17 +14208,17 @@ function initHooks() {
       try {
         var NLS = Java.use("android.service.notification.NotificationListenerService");
         NLS.onNotificationPosted.overload("android.service.notification.StatusBarNotification").implementation = function(sbn) {
-          var pkg = null;
+          var pkg2 = null;
           try {
-            pkg = sbn.getPackageName();
+            pkg2 = sbn.getPackageName();
           } catch (e2) {
           }
           emit("notification", {
             hook: "NotificationListenerService.onNotificationPosted",
             class_name: "android.service.notification.NotificationListenerService",
             severity: "HIGH",
-            notification_package: pkg ? pkg.toString() : null,
-            description: "App intercepted notification (OTP/2FA notification theft): " + (pkg ? pkg.toString() : "unknown")
+            notification_package: pkg2 ? pkg2.toString() : null,
+            description: "App intercepted notification (OTP/2FA notification theft): " + (pkg2 ? pkg2.toString() : "unknown")
           });
           return this.onNotificationPosted(sbn);
         };
@@ -14238,16 +14261,16 @@ function initHooks() {
       } catch (e) {
         reportHookError("Activity.onResume", e.message);
       }
-      function _noteForegroundPackage(pkg, hookName) {
-        if (!pkg) return;
-        runtimeContext.foreground_app = pkg;
-        if (BANKING_PACKAGES.indexOf(pkg) !== -1) {
+      function _noteForegroundPackage(pkg2, hookName) {
+        if (!pkg2) return;
+        runtimeContext.foreground_app = pkg2;
+        if (BANKING_PACKAGES.indexOf(pkg2) !== -1) {
           emit("banking", {
             hook: hookName,
             class_name: "foreground-detection",
             severity: "HIGH",
-            target_package: pkg,
-            description: "App observed a banking application in the foreground: " + pkg
+            target_package: pkg2,
+            description: "App observed a banking application in the foreground: " + pkg2
           });
         }
       }
@@ -14598,7 +14621,7 @@ function initHooks() {
       var sdsnWebViews = [];
       var sdsnSeen = {};
       var SDSN_MAX_WEBVIEWS = 8;
-      function rememberWebView(wv) {
+      function rememberWebView(wv, deferHooksTo) {
         try {
           if (!wv) return;
           var h = wv.hashCode();
@@ -14606,7 +14629,37 @@ function initHooks() {
           if (sdsnWebViews.length >= SDSN_MAX_WEBVIEWS) return;
           sdsnSeen[h] = 1;
           sdsnWebViews.push(Java.retain(wv));
+          sdsnWebViewCount = sdsnWebViews.length;
+          if (deferHooksTo) deferHooksTo.push(wv.$className);
+          else sdsnHookTouchFor(wv.$className);
         } catch (e) {
+        }
+      }
+      var sdsnTouchHooked = {};
+      function sdsnHookTouchFor(className) {
+        if (!className || sdsnTouchHooked[className]) return;
+        sdsnTouchHooked[className] = 1;
+        try {
+          var Cls = Java.use(className);
+          if (!Cls.onTouchEvent) return;
+          Cls.onTouchEvent.overload("android.view.MotionEvent").implementation = function(ev) {
+            var result = this.onTouchEvent(ev);
+            try {
+              if (ev && ev.getAction() === 1 && SdsnDrainCallback) {
+                sdsnDrainNow();
+              }
+            } catch (e) {
+            }
+            return result;
+          };
+          send({ type: "diag", msg: "webview_touch_hooked", cls: className });
+        } catch (e) {
+          send({
+            type: "diag",
+            msg: "webview_touch_hook_failed",
+            cls: className,
+            error: e.message
+          });
         }
       }
       try {
@@ -14736,6 +14789,7 @@ function initHooks() {
         'catch(e){return "[]";}};',
         'return "[]";})()'
       ].join("");
+      var sdsnDrainDiag = 0;
       function sdsnHandleDrain(raw) {
         if (!raw) return;
         var records = null;
@@ -14743,7 +14797,25 @@ function initHooks() {
           var once = JSON.parse(raw);
           records = typeof once === "string" ? JSON.parse(once) : once;
         } catch (e) {
+          if (sdsnDrainDiag < 3) {
+            sdsnDrainDiag++;
+            send({
+              type: "diag",
+              msg: "webview_drain_unparsed",
+              error: e.message,
+              raw: String(raw).substring(0, 200)
+            });
+          }
           return;
+        }
+        if (sdsnDrainDiag < 3 && raw !== '"[]"') {
+          sdsnDrainDiag++;
+          send({
+            type: "diag",
+            msg: "webview_drain",
+            raw: String(raw).substring(0, 200),
+            parsed: records ? records.length : -1
+          });
         }
         if (!records || !records.length) return;
         for (var i = 0; i < records.length; i++) {
@@ -14782,37 +14854,40 @@ function initHooks() {
         send({ type: "diag", msg: "webview_js_drain_unavailable", error: e.message });
         reportHookError("WebView.js.drain_channel", e.message);
       }
-      function sdsnPumpWebViews() {
-        if (!sdsnWebViews.length || !SdsnDrainCallback) return;
-        Java.scheduleOnMainThread(function() {
-          for (var i = 0; i < sdsnWebViews.length; i++) {
-            try {
-              sdsnWebViews[i].evaluateJavascript(SDSN_SHIM, SdsnDrainCallback.$new());
-            } catch (e) {
+      var sdsnEvalFailureReported = false;
+      function sdsnDrainNow() {
+        for (var i = 0; i < sdsnWebViews.length; i++) {
+          try {
+            sdsnWebViews[i].evaluateJavascript(SDSN_SHIM, SdsnDrainCallback.$new());
+          } catch (e) {
+            if (!sdsnEvalFailureReported) {
+              sdsnEvalFailureReported = true;
+              send({ type: "diag", msg: "webview_eval_failed", error: e.message });
             }
           }
-        });
+        }
       }
       function sdsnSweepForWebViews() {
+        var pendingClasses = [];
         try {
           Java.choose("android.webkit.WebView", {
             onMatch: function(instance) {
-              rememberWebView(instance);
+              rememberWebView(instance, pendingClasses);
             },
             onComplete: function() {
             }
           });
         } catch (e) {
+          send({ type: "diag", msg: "webview_sweep_failed", error: e.message });
+          return;
         }
+        for (var i = 0; i < pendingClasses.length; i++) {
+          sdsnHookTouchFor(pendingClasses[i]);
+        }
+        send({ type: "diag", msg: "webview_sweep", held: sdsnWebViews.length });
       }
       try {
         sdsnSweepForWebViews();
-        var sdsnPollCount = 0;
-        setInterval(function() {
-          sdsnPollCount++;
-          if (sdsnPollCount % 5 === 0) sdsnSweepForWebViews();
-          sdsnPumpWebViews();
-        }, 2500);
         registerHook("WebView.js.network_interception");
       } catch (e) {
         reportHookError("WebView.js.network_interception", e.message);

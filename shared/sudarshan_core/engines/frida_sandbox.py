@@ -292,6 +292,51 @@ LAUNCH_UI_RENDER_SECONDS: float = float(os.getenv("SUDARSHAN_LAUNCH_UI_RENDER", 
 # Polling interval for the PID stability loop.
 LAUNCH_PID_POLL_SECONDS: float = 0.25
 
+# How many times to relaunch after a crash that is OURS rather than the app's.
+# See _crash_is_instrumentation_race: an ART JIT thread that SIGSEGVs while
+# hooks are being installed into methods it is concurrently compiling is a race,
+# and the same sample launches cleanly on a retry.
+MAX_INSTRUMENTATION_RACE_RETRIES: int = int(
+    os.getenv("SUDARSHAN_MAX_INSTRUMENTATION_RACE_RETRIES", "2")
+)
+# Let the process table and ART settle before trying again. Retrying instantly
+# tends to reproduce the same race.
+INSTRUMENTATION_RACE_BACKOFF_SECONDS: float = float(
+    os.getenv("SUDARSHAN_INSTRUMENTATION_RACE_BACKOFF", "3.0")
+)
+
+#: Frames that identify ART's JIT compiler. A SIGSEGV on one of these threads,
+#: with no Java exception, is the compiler tripping over instrumented methods -
+#: not the sample crashing.
+_ART_JIT_CRASH_MARKERS: Tuple[str, ...] = (
+    "art::jit::",
+    "JitCompile",
+    "OptimizingCompiler",
+    "HBasicBlockBuilder",
+    "HGraphBuilder",
+    "Jit thread pool",
+)
+
+
+def _crash_is_instrumentation_race(report: Optional["CrashReport"]) -> bool:
+    """
+    Whether this crash was caused by instrumenting the app rather than by the app.
+
+    True only for a NATIVE crash inside ART's JIT compiler with no Java
+    exception attached. A sample that throws is a sample that crashed, and must
+    still stop the launch ladder on the first attempt - retrying it would spend
+    the analysis window relaunching an app that cannot run.
+    """
+    if report is None:
+        return False
+    # A Java stacktrace means the app itself failed. Not ours, not retryable.
+    if getattr(report, "exception_type", None) or getattr(report, "java_stacktrace", None):
+        return False
+    native = getattr(report, "native_stacktrace", None) or ""
+    if not native:
+        return False
+    return any(marker in native for marker in _ART_JIT_CRASH_MARKERS)
+
 # One lock per device serial. See run_frida_analysis for why.
 _DEVICE_LOCKS: Dict[str, "asyncio.Lock"] = {}
 
@@ -413,17 +458,76 @@ def _make_launch_timeline() -> LaunchTimeline:
     }
 
 
+#: The one agent constant the host is allowed to set, and the exact token it is
+#: written as in the compiled bundle. Kept to a single BOOLEAN on purpose: this
+#: is a string substitution into a script that runs inside the sample's process,
+#: so the only safe value space is one that cannot express anything but true or
+#: false. Nothing app-controlled reaches it - the value comes from an operator
+#: environment variable and is re-rendered from a Python bool, never
+#: interpolated.
+_AGENT_DEOPT_TOKEN = "var DEOPT_BOOT_IMAGE_FORCED = false;"
+
+
+def _apply_agent_config(script_source: str) -> str:
+    """
+    Render host-side agent configuration into the compiled bundle.
+
+    Only `SUDARSHAN_DEOPT_BOOT_IMAGE` is honoured, and only as a boolean. See
+    the agent's own comment for why boot-image deoptimization is off by default
+    on API 34+: it stalls the device past Android's ANR watchdog, so the system
+    kills the walk before the sample has rendered anything to observe.
+    """
+    raw = (os.getenv("SUDARSHAN_DEOPT_BOOT_IMAGE") or "").strip().lower()
+    forced = raw in {"1", "true", "yes", "on"}
+    if not forced:
+        return script_source
+    if _AGENT_DEOPT_TOKEN not in script_source:
+        logger.warning(
+            "[Frida] SUDARSHAN_DEOPT_BOOT_IMAGE is set but the agent bundle has "
+            "no configuration slot - rebuild banking_trojan.bundle.js"
+        )
+        return script_source
+    logger.info(
+        "[Frida] Boot-image deoptimization FORCED on by "
+        "SUDARSHAN_DEOPT_BOOT_IMAGE - expect a multi-second device stall after "
+        "attach, and ANR dialogs over the sample on API 34+"
+    )
+    return script_source.replace(
+        _AGENT_DEOPT_TOKEN, "var DEOPT_BOOT_IMAGE_FORCED = true;", 1,
+    )
+
+
 def _timeline_to_seconds(tl: LaunchTimeline) -> Dict[str, Optional[float]]:
     """
     Convert monotonic timestamps to seconds-since-apk-install offsets so the
     report is human-readable. Timestamps before apk_install (shouldn't happen)
     are kept as absolute monotonic values.
+
+    Non-numeric entries are passed through untouched rather than subtracted.
+    The timeline is typed ``Dict[str, Optional[float]]``, but it is a plain
+    dict that several code paths write to, and one of them stored a package
+    NAME in it (``first_window_package``) on the launch-hand-off path. This
+    function then raised ``TypeError: unsupported operand type(s) for -: 'str'
+    and 'float'`` - after a complete, successful dynamic run - which surfaced
+    as a 500 from the analysis engine, a fail-closed 503 at the gateway, and a
+    case whose report said dynamic analysis was never performed.
+
+    A malformed telemetry ENTRY must never destroy the telemetry, so the loop
+    is total: anything that cannot be expressed as an offset survives as
+    itself. `base` is likewise only used when it is numeric.
     """
     base = tl.get("apk_install")
+    if not isinstance(base, (int, float)) or isinstance(base, bool):
+        base = None
     out: Dict[str, Optional[float]] = {}
     for k, v in tl.items():
         if v is None:
             out[k] = None
+        elif isinstance(v, bool) or not isinstance(v, (int, float)):
+            # Metadata rather than a milestone (e.g. the package that owned
+            # the first window). Keep it - it is real evidence - but do not
+            # pretend it is a duration.
+            out[k] = v
         elif base is not None:
             out[k] = round(v - base, 3)
         else:
@@ -1221,9 +1325,10 @@ def _poll_until_package_owns_window(
     *,
     total_timeout: float = LAUNCH_UI_RENDER_SECONDS,
     poll_interval: float = 0.5,
-) -> bool:
+    accept_handoff: Optional["callable"] = None,
+) -> Tuple[bool, str]:
     """
-    Wait for *package_name* to own the foreground window.
+    Wait for *package_name*, or a package it handed off to, to own the window.
 
     A stable PID proves the process exists; it does not prove the app launched.
     Android will happily keep a process alive that never inflates an Activity -
@@ -1232,7 +1337,19 @@ def _poll_until_package_owns_window(
     (accessibility, overlay, credential capture) is unreachable, so the run
     yields no behaviour and the sample looks dormant.
 
-    Returns True as soon as dumpsys reports the package in the focused window.
+    `accept_handoff` is called with the current dumpsys text and returns the
+    package the sample handed the journey to, or None. It exists because a
+    LOADER is a launch that succeeded: the target starts, immediately starts a
+    second package that draws the UI, and stays alive behind it. Judging that
+    on "did the TARGET own the window" reports a perfectly good launch as a
+    failure, and the caller then walks its entire ladder of launch strategies -
+    six attempts, ~12-19s each - re-launching an app that was already running
+    and on screen. That burned ~90s of a 300s analysis window before
+    exploration began, on every loader-style sample.
+
+    Returns (rendered, package_that_owns_the_window). The second element is ""
+    when nothing rendered, and names the companion on a hand-off so the caller
+    can record which package drew the screen.
     """
     deadline = time.monotonic() + total_timeout
     while time.monotonic() < deadline:
@@ -1242,9 +1359,19 @@ def _poll_until_package_owns_window(
             timeout=10,
         )
         if ok and out and package_name in out:
-            return True
+            return True, package_name
+        if ok and out and accept_handoff is not None:
+            try:
+                companion = accept_handoff(out)
+            except Exception as exc:                       # noqa: BLE001
+                # A hand-off probe that fails must not fail the launch gate;
+                # fall through and keep waiting for the target itself.
+                logger.debug("[Frida] hand-off probe failed: %s", exc)
+                companion = None
+            if companion:
+                return True, companion
         time.sleep(poll_interval)
-    return False
+    return False, ""
 
 
 def _collect_crash_diagnostics(
@@ -1927,6 +2054,11 @@ class FridaSession:
         # Both are answered from one detection, here, because attach happens
         # after the hand-off has already completed.
         self.companion_packages: List[str] = []
+        #: The package that actually owned the first window, when that was NOT
+        #: the target. Kept here rather than in `launch_timeline`, which is a
+        #: map of monotonic floats - putting a package name in it crashed
+        #: `_timeline_to_seconds` and threw away the whole run.
+        self.first_window_package: str = ""
         self._companion_sessions: Dict[str, Any] = {}
         self._companion_scripts: Dict[str, Any] = {}
         #: package -> third-party? Asked of the device once per package.
@@ -2193,6 +2325,32 @@ class FridaSession:
             except Exception:
                 pass
         return True
+
+    # ── Host-driven WebView drain ────────────────────────────────────────────
+
+    def _webview_instrumentation_summary(self) -> Dict[str, int]:
+        """
+        How many WebViews each agent is injecting into.
+
+        Read so the report can distinguish "the page made no requests" from
+        "there was no page to watch" - opposite claims that a bare zero renders
+        identically. Never drives the drain: an rpc call arrives on a thread
+        that is not attached to the VM, and Java.choose from there hangs rather
+        than failing. The drain is triggered inside the agent, on the UI thread,
+        by the victim's own touches.
+        """
+        summary: Dict[str, int] = {}
+        scripts = [(self.package_name, getattr(self, "_script", None))]
+        scripts += list(getattr(self, "_companion_scripts", {}).items())
+        for label, script in scripts:
+            if script is None:
+                continue
+            try:
+                exports = getattr(script, "exports_sync", None) or script.exports
+                summary[label] = int(exports.webview_count())
+            except Exception as exc:                  # noqa: BLE001
+                logger.debug("[Frida] webview_count unavailable for %s: %s", label, exc)
+        return summary
 
     def _on_message(self, message: Dict, data: Any) -> None:
         """Handle messages sent from the Frida JS script."""
@@ -2676,7 +2834,7 @@ class FridaSession:
             logger.error(f"Frida hooks script not found: {_HOOKS_SCRIPT}")
             return False
 
-        script_source = _HOOKS_SCRIPT.read_text(encoding="utf-8")
+        script_source = _apply_agent_config(_HOOKS_SCRIPT.read_text(encoding="utf-8"))
 
         try:
             logger.info(f"[Frida] Connecting to device {self.device_serial}")
@@ -2868,9 +3026,23 @@ class FridaSession:
                     # a resolved-launcher or monkey start often renders where a
                     # bare intent did not.
                     if _launcher_activity_expected:
-                        if _poll_until_package_owns_window(
+                        _rendered, _owner = _poll_until_package_owns_window(
                             self.device_serial, self.package_name,
-                        ):
+                            accept_handoff=self._detect_companion,
+                        )
+                        if _rendered:
+                            if _owner and _owner != self.package_name:
+                                # The launch worked; the sample just is not the
+                                # thing drawing. Record it and stop laddering.
+                                if _owner not in self.companion_packages:
+                                    self.companion_packages.append(_owner)
+                                self.first_window_package = _owner
+                                logger.info(
+                                    "[Frida] Launch step '%s' produced stable PID %d "
+                                    "and a LAUNCH HAND-OFF: %s is drawing while %s "
+                                    "stays alive behind it - accepting as launched",
+                                    step_label, pid, _owner, self.package_name,
+                                )
                             return True
                         logger.warning(
                             "[Frida] Launch step '%s' produced PID %d but %s never "
@@ -3202,6 +3374,64 @@ class FridaSession:
                         "as a fallback.", _ui_less_pid, _ui_less_step or "ui_less_pid",
                     )
 
+            # ── Retry a crash that is ours, not the app's ─────────────────────
+            #
+            # `_crash_on_step` deliberately short-circuits the rest of the
+            # ladder: an app that dies on every launch should not be started
+            # eight times. But not every crash is the app's fault.
+            #
+            # Measured on the e-challan payload, API 37: an intermittent SIGSEGV
+            # in ART's JIT compiler thread -
+            #     art::HBasicBlockBuilder::Build()
+            #     art::OptimizingCompiler::JitCompile(...)
+            #     "Jit thread pool"
+            # - which is the JIT racing the hooks being installed into methods
+            # it is concurrently compiling. The same sample launches cleanly
+            # without instrumentation, and survives the identical agent on a
+            # repeat attempt; it is a race, not a defect. Left unhandled it
+            # ended the whole dynamic run and the case reported no runtime
+            # evidence at all.
+            #
+            # Only this signature is retried. A Java exception is the app's own
+            # crash and still stops the ladder immediately, which is what keeps
+            # a genuinely broken sample from burning the budget.
+            def _relaunch_after_race():
+                component = _resolve_launcher_activity(
+                    self.device_serial, self.package_name
+                ) or self.main_activity
+                if component:
+                    import shlex as _shlex
+                    _am_start_w(_shlex.quote(component))
+                else:
+                    _launch_main_launcher_intent(
+                        self.device_serial, self.package_name
+                    )
+
+            _race_retries = 0
+            while (
+                not launched
+                and _crash_on_step
+                and _race_retries < MAX_INSTRUMENTATION_RACE_RETRIES
+                and _crash_is_instrumentation_race(self.crash_report)
+            ):
+                _race_retries += 1
+                logger.warning(
+                    "[Frida] Crash during %s looks like an ART/JIT race with "
+                    "instrumentation, not an app defect - retrying launch (%d/%d)",
+                    _crash_on_step, _race_retries,
+                    MAX_INSTRUMENTATION_RACE_RETRIES,
+                )
+                self.dae.metrics["instrumentation_race_retries"] = _race_retries
+                _force_stop_package(self.device_serial, self.package_name)
+                time.sleep(INSTRUMENTATION_RACE_BACKOFF_SECONDS)
+                self.crash_report = None
+                self.last_error = ""
+                _crash_on_step = None
+                if _try_launch_step("instrumentation_race_retry", _relaunch_after_race):
+                    launched = True
+                elif self.crash_report is not None:
+                    _crash_on_step = "instrumentation_race_retry"
+
             # ── Gate: did any step succeed? ───────────────────────────────────
             if not launched:
                 if _crash_on_step:
@@ -3293,7 +3523,7 @@ class FridaSession:
                 self.launch_timeline["first_activity"]  = time.monotonic()
                 self.launch_timeline["first_window"]    = time.monotonic()
                 if _companion:
-                    self.launch_timeline["first_window_package"] = _companion
+                    self.first_window_package = _companion
 
             # Record first_ui_dump milestone
             _ok_u, _ = _adb(
@@ -3405,6 +3635,7 @@ class FridaSession:
             if _late and _late not in self._companion_sessions:
                 self._attach_companion(device, _late, script_source)
 
+
             if is_spawned:
                 logger.info(f"[Frida] Resuming spawned process {pid} AFTER script load...")
                 device.resume(pid)
@@ -3466,7 +3697,7 @@ class FridaSession:
                 if self.launch_timeline.get("first_activity") is None:
                     self.launch_timeline["first_activity"] = time.monotonic()
                     self.launch_timeline["first_window"] = time.monotonic()
-                    self.launch_timeline["first_window_package"] = _settled_companion
+                    self.first_window_package = _settled_companion
             self._capture_screenshot("01_app_opened", "lifecycle")
 
             logger.info(f"[Frida] ANALYSE: monitoring {self.package_name} for {duration_seconds}s...")
@@ -4431,6 +4662,9 @@ async def _run_device_session(
         # were instrumented alongside it. Reported so an analyst reading a
         # behaviour attributed to this case can see WHICH process produced it.
         "companion_packages": list(getattr(session, "companion_packages", [])),
+        # Which package drew the screen the victim actually saw. Empty when the
+        # target rendered its own UI; set when a loader handed the journey off.
+        "first_window_package": getattr(session, "first_window_package", "") or "",
         "instrumented_packages": (
             [session.package_name]
             + list(getattr(session, "_companion_sessions", {}).keys())

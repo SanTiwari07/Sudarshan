@@ -176,6 +176,11 @@ _PATTERNS: List[tuple] = [
     (FieldType.REFERENCE_NUMBER, r"(reference\s*(no|number|id)|\bref\s*(no|number)\b|transaction\s*id|\butr\b)", 0.9),
 
     # ── Person ─────────────────────────────────────────────────────────────
+    # Parent names lead the person family: every one of these also contains
+    # "name", so the generic FULL_NAME pattern below would swallow them and
+    # the box would be filled with the applicant's own name.
+    (FieldType.MOTHER_NAME,   r"(mother'?s?\s*(name|full\s*name)|\bmaa\s*(ka\s*)?naam\b|mother'?s?\s*/\s*guardian)", 0.95),
+    (FieldType.FATHER_NAME,   r"(father'?s?\s*(name|full\s*name)|\bpita\s*(ka\s*)?naam\b|father'?s?\s*/\s*guardian|parent'?s?\s*name|guardian'?s?\s*name)", 0.95),
     (FieldType.FIRST_NAME,    r"(first\s*name|given\s*name|fore\s*name)", 0.94),
     (FieldType.LAST_NAME,     r"(last\s*name|sur\s*name|surname|family\s*name)", 0.94),
     (FieldType.DATE_OF_BIRTH, r"(date\s*of\s*birth|\bdob\b|birth\s*date|\bd\.?o\.?b\b)", 0.95),

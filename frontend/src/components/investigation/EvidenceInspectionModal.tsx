@@ -22,6 +22,19 @@ import {
 } from '../../lib/screenshotManifest';
 import { visualFromEntry } from '../../lib/visualEvidence';
 
+/**
+ * Shown under "Why it matters" when nothing corroborated this frame.
+ *
+ * The backend supplies its own sentence for this case; this only covers a
+ * record written before it did. Either way it must be a statement about the
+ * RUNTIME evidence - repeating the visual observation here is what made the
+ * panel print the same paragraph twice.
+ */
+const NO_CORROBORATION_NOTE =
+  'No runtime hook fired while this screen was displayed. The frame is retained ' +
+  'as a visual record of the state the application presented and was reviewed ' +
+  'for unauthorized overlays and credential-entry indicators.';
+
 interface EvidenceInspectionModalProps {
   sha256: string;
   entries: ScreenshotManifestEntry[];
@@ -174,8 +187,23 @@ export default function EvidenceInspectionModal({
   const correlationStatus = ve?.correlation_status || entry.correlation_status || null;
   const workflow = ve?.workflow_stage_label || entry.workflow_stage_label || entry.stage || null;
   const captureReason = entry.reason || entry.capture_trigger || ve?.capture_trigger || null;
-  const observation = ve?.investigative_claim || entry.investigative_claim || entry.visual_observation || screenshotDescription(entry);
-  const visualObservation = entry.visual_observation || (captureReason && ve?.investigative_claim ? ve.investigative_claim : observation);
+  // Three distinct questions, three distinct fields. They used to collapse
+  // into one: `visualObservation` fell back to the investigative claim, and
+  // "Why it matters" fell back to `visualObservation`, so an uncorroborated
+  // frame printed "insufficient corroborating runtime evidence..." twice and
+  // said nothing about the picture either time.
+  //
+  //   Visual observation - what is on the screen (from the UI hierarchy
+  //                        captured with the frame, or vision captioning).
+  //   Investigative claim - what the frame is offered as evidence of.
+  //   Why it matters      - whether runtime activity corroborated it.
+  const visualObservation =
+    entry.visual_observation ||
+    ve?.visual_observation ||
+    ve?.screen_summary ||
+    entry.screen_summary ||
+    screenshotDescription(entry);
+  const investigativeClaim = ve?.investigative_claim || entry.investigative_claim || null;
   const runtimeObservation = entry.runtime_observation || (
     ve?.linked_evidence_ids && ve.linked_evidence_ids.length > 0
       ? `Linked runtime evidence: ${ve.linked_evidence_ids.join(', ')}`
@@ -192,7 +220,8 @@ export default function EvidenceInspectionModal({
       ? evidenceIds.join(', ')
       : null
   );
-  const corroboration = (entry as any).corroboration_summary || null;
+  const corroboration =
+    (entry as any).corroboration_summary || ve?.corroboration_summary || null;
   const analystNote = (entry as any).analyst_note || null;
   const mitreTech = (entry as any).mitre_technique || (entry as any).mitre || null;
   const confidenceVal = (entry as any).phish_confidence
@@ -337,7 +366,7 @@ export default function EvidenceInspectionModal({
             ) : src ? (
               <img
                 src={src}
-                alt={observation}
+                alt={visualObservation}
                 className="max-h-full max-w-full object-contain rounded-lg shadow-2xl transition-transform duration-100 ease-out border border-slate-800/80"
                 style={{
                   transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`,
@@ -444,8 +473,11 @@ export default function EvidenceInspectionModal({
                   </span>
                 )}
               </div>
+              {/* The headline says what the analyst is looking at. It used to
+                  lead with the investigative claim, which on an uncorroborated
+                  frame is the same generic sentence on every screenshot. */}
               <p className="text-sm text-slate-800 font-medium leading-relaxed pt-1">
-                {observation}
+                {visualObservation}
               </p>
             </div>
 
@@ -562,6 +594,15 @@ export default function EvidenceInspectionModal({
                   </p>
                 </div>
 
+                {investigativeClaim && investigativeClaim !== visualObservation && (
+                  <div>
+                    <span className="text-blue-900/70 font-semibold block text-[11px]">Investigative claim</span>
+                    <p className="text-slate-800 leading-relaxed mt-0.5">
+                      {investigativeClaim}
+                    </p>
+                  </div>
+                )}
+
                 {runtimeObservation && (
                   <div>
                     <span className="text-blue-900/70 font-semibold block text-[11px]">Runtime observation</span>
@@ -574,7 +615,7 @@ export default function EvidenceInspectionModal({
                 <div>
                   <span className="text-blue-900/70 font-semibold block text-[11px]">Why it matters</span>
                   <p className="text-slate-800 leading-relaxed mt-0.5">
-                    {corroboration || visualObservation}
+                    {corroboration || NO_CORROBORATION_NOTE}
                   </p>
                 </div>
 

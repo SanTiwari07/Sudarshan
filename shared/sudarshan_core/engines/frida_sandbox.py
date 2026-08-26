@@ -866,6 +866,29 @@ def _get_foreground_component(device: str) -> str:
     return "unknown"
 
 
+def _dump_ui_xml(device: str) -> str:
+    """
+    Read the current UI hierarchy, or "" if it cannot be read.
+
+    Used only by the lifecycle captures, which take the two frames an analyst
+    always sees - the opened app and the final screen - and previously carried
+    no record of what was on them beyond "Lifecycle capture - 01_app_opened".
+    Two extra shell round trips, twice per run, buys those two frames a real
+    description. Best-effort throughout: an unreadable hierarchy costs a
+    sentence, never the screenshot.
+    """
+    remote = "/data/local/tmp/sudarshan_lifecycle_ui.xml"
+    ok, _ = _adb("-s", device, "shell", f"uiautomator dump {remote}", timeout=25)
+    if not ok:
+        return ""
+    ok_cat, xml = _adb("-s", device, "shell", f"cat {remote}", timeout=15)
+    _adb("-s", device, "shell", f"rm -f {remote}", timeout=5)
+    if not ok_cat or not xml:
+        return ""
+    match = re.search(r"(<\?xml.*)", xml, re.DOTALL)
+    return match.group(1) if match else ""
+
+
 def _foreground_package(device: str) -> str:
     comp = _get_foreground_component(device)
     if "/" in comp:
@@ -2179,6 +2202,38 @@ class FridaSession:
         )
         return False
 
+    def _describe_lifecycle_screen(self, activity: str) -> Optional[Any]:
+        """
+        Read the screen behind a lifecycle frame, or None if it cannot be read.
+
+        Best-effort in every step: a failed dump, an unparsable hierarchy or a
+        classifier that cannot name the screen each degrade the sentence rather
+        than costing the screenshot.
+        """
+        try:
+            ui_xml = _dump_ui_xml(self.device_serial)
+            from sudarshan_core.engines.agentic.ui_observation import (
+                _widgets_from_xml,
+                describe_screen,
+            )
+            widgets = _widgets_from_xml(ui_xml) if ui_xml else []
+            screen_type = ""
+            if widgets:
+                from sudarshan_core.engines.agentic.screen_classifier import (
+                    classify_screen,
+                )
+                screen_type = classify_screen(
+                    activity, widgets, ui_xml, self.package_name,
+                ).screen_type
+            return describe_screen(
+                activity=activity,
+                ui_xml=ui_xml,
+                screen_type=screen_type,
+            )
+        except Exception as exc:
+            logger.debug("[Frida] Lifecycle screen description failed: %s", exc)
+            return None
+
     def _capture_screenshot(self, label: str, category: str) -> None:
         """
         Take a lifecycle screenshot, if a ScreenshotManager is attached.
@@ -2204,9 +2259,20 @@ class FridaSession:
                     fg_pkg,
                     self.package_name,
                 )
+            # The hierarchy behind the frame, so the manifest can say what the
+            # screen SHOWS rather than only that a lifecycle capture happened.
+            #
+            # The classification is resolved HERE and handed over as a finished
+            # observation rather than passed to capture() as `semantic_type`.
+            # That parameter also feeds the ScreenshotPolicy's ownership
+            # resolution, and a lifecycle frame must be captured on the strength
+            # of being a lifecycle frame - not become suppressible because the
+            # classifier read the final screen as a launcher.
+            observation = self._describe_lifecycle_screen(activity)
             ref = self.screenshot_manager.capture(
                 label=label, category=category, source="lifecycle",
                 reason="LIFECYCLE", force=True, activity=activity,
+                screen_observation=observation,
             )
             if ref:
                 logger.info(f"[Frida] Screenshot captured: {label}")

@@ -663,6 +663,30 @@ _SUBMIT_RE = re.compile(
     re.IGNORECASE,
 )
 
+#: Screens that exist to have a form completed on them. On one of these the
+#: fields and the button that commits them are not merely interesting, they are
+#: the ONLY way past the screen: everything else on a login page is a detour
+#: (Forgot Password, Register, a language picker, a help link), and the walk
+#: taking one of those detours is how a run ends with three screenshots of the
+#: same login form.
+#:
+#: "LOGIN" is listed alongside "BANK_LOGIN" so a caller using the generic name
+#: gets the same treatment; the classifier only emits the latter today.
+AUTH_FORM_SCREEN_TYPES: frozenset = frozenset({
+    "BANK_LOGIN", "LOGIN", "OTP_SCREEN", "DATA_ENTRY_FORM",
+})
+
+#: Weight added to a field on an authentication or data-entry screen. Sized to
+#: clear the ~55-60 that "settings"/"help"-shaped captions score, so a plain
+#: unlabelled text box still outranks a link that leads off the form.
+_AUTH_INPUT_BOOST: int = 45
+
+#: Weight added to the control that commits such a form. Larger than the input
+#: boost because ordering only reaches it once the fields are filled - see
+#: get_next_action, which holds commit controls behind pending inputs and then
+#: promotes them.
+_AUTH_SUBMIT_BOOST: int = 70
+
 
 def _is_submit_label(label: str) -> bool:
     """Whether this caption reads like a form-submit control."""
@@ -751,6 +775,26 @@ def _is_form_commit_action(item: "ActionItem") -> bool:
     if not label or "?" in label:
         return False
     return bool(_FORM_COMMIT_RE.search(label))
+
+def _form_is_filled(state: "ExplorationState") -> bool:
+    """
+    Whether this screen holds a form whose every field has been filled.
+
+    "Filled" is `resolved`, not `verified`: a masked password box exposes
+    neither its text nor its length, so demanding proof of population would
+    leave every login form permanently incomplete and the submit control
+    permanently held back. A field that was typed into and could not be
+    re-read counts as done - the same judgement record_action already makes
+    when it resolves the action.
+
+    False for a screen with no inputs at all, so a plain page of buttons is not
+    mistaken for a completed form.
+    """
+    inputs = [a for a in state.actionable_elements if a.action_type == "input"]
+    if not inputs:
+        return False
+    return all(a.resolved for a in inputs)
+
 
 #: Tie-breaking nudge for the affirmative option in a two-way decision dialog.
 #: Deliberately small: score_action() has already ranked on the security
@@ -960,6 +1004,26 @@ class ActionPrioritizer:
             score -= 20  # deprioritize but don't exclude
         if _is_unlabeled_action(action):
             score -= 35
+
+        # ── Authentication and data-entry forms ──────────────────────────────
+        # On a login / OTP / registration screen the way forward is: fill the
+        # fields, then press the button that commits them. Nothing else on the
+        # screen advances the run. Without this the generic keyword table ranked
+        # "Forgot MPIN" and a help link above both, and a measured session spent
+        # its whole budget circling one login form.
+        #
+        # Ordering in get_next_action still decides WHICH of the two comes
+        # first; this decides that both outrank the detours around them.
+        if semantic_type in AUTH_FORM_SCREEN_TYPES:
+            if action.action_type == "input":
+                score += _AUTH_INPUT_BOOST
+            elif _is_form_commit_action(action):
+                score += _AUTH_SUBMIT_BOOST
+            elif _text_matches(label_lower, _AUTH_KEYWORDS):
+                # A control that names the credential without committing it -
+                # "Login with PIN", "Use password instead". Worth reaching, but
+                # never ahead of the form actually on screen.
+                score += 20
 
         # ── Victim policy ────────────────────────────────────────────────────
         # The scoring above answers "what is worth exploring". This answers
@@ -2279,6 +2343,30 @@ class ExplorationGraph:
                 [a.label for a in pending_inputs],
             )
             ranked = pending_inputs + rest + held
+        elif _form_is_filled(state):
+            # ── The form is complete: commit it NOW ───────────────────────────
+            # The mirror image of the rule above, and the half that was
+            # missing. Once every field is filled the hold is released, but
+            # release only put the button back into plain priority order -
+            # where on a login screen it competes with "Forgot Password",
+            # "Register" and a language picker, all of which score comparably.
+            # A measured run filled both boxes and then spent its remaining
+            # actions on the links around the button it had just made
+            # pressable, so the credentials were never submitted and the app
+            # was reported as never leaving its login screen.
+            #
+            # A filled form has exactly one thing left to do.
+            commits = [a for a in ranked if _is_form_commit_action(a)]
+            if commits:
+                logger.info(
+                    "[Explorer] FORM_COMPLETE state=%s - all %d input(s) "
+                    "filled, promoting commit control(s): %s",
+                    sid,
+                    sum(1 for a in state.actionable_elements
+                        if a.action_type == "input"),
+                    [a.label for a in commits],
+                )
+                ranked = commits + [a for a in ranked if a not in commits]
 
         # ── Fair scheduling: clicks must not starve scroll ────────────────────
         # rank_actions puts clicks above scroll and the loop below returns the

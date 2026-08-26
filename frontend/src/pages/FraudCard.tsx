@@ -2,12 +2,11 @@ import { Link } from 'react-router-dom';
 import type { FraudCardData } from '../App';
 import { useAnalysis } from '../context/AnalysisContext';
 import { useInvestigationUI } from '../context/InvestigationUIContext';
-import { dynamicRuntimeLabel } from '../lib/analystCopy';
+import { useCaseLinks } from '../hooks/useCaseLinks';
+import type { CaseRoutes } from '../lib/caseRoutes';
 import { TYPOGRAPHY } from '../theme/typography';
 import CoreFindingsList from '../components/investigation/CoreFindingsList';
 import VerdictBlock from '../components/investigation/VerdictBlock';
-import CoverageNotice from '../components/investigation/CoverageNotice';
-import CaseDetails from '../components/investigation/CaseDetails';
 import AttackStory from '../components/investigation/AttackStory';
 import InView from '../components/motion/InView';
 import CaseSummaryStrip from '../components/investigation/CaseSummaryStrip';
@@ -19,10 +18,8 @@ import VisualImpersonationExecutiveCard from '../components/investigation/Visual
 import InvestigationConclusionCard from '../components/investigation/InvestigationConclusionCard';
 import { useRuntimeScreenshots } from '../hooks/useRuntimeScreenshots';
 import {
-  AlertTriangle,
   ShieldCheck,
   ShieldAlert,
-  Shield,
   ChevronRight,
 } from 'lucide-react';
 
@@ -46,32 +43,29 @@ type Signal = {
  * proves it. So they render as one row of tiles, and the page gets its
  * hierarchy back.
  */
-function buildSignals(data: FraudCardData): Signal[] {
+function buildSignals(data: FraudCardData, links: CaseRoutes): Signal[] {
   const signals: Signal[] = [];
   const frs = data.frs_breakdown;
 
-  if (frs?.dynamic_ran) {
-    signals.push(
-      frs.dynamic_conclusive
-        ? {
-            key: 'runtime',
-            icon: ShieldCheck,
-            tone: 'positive',
-            title: 'Runtime confirmed',
-            detail: 'Behaviour was observed and scored in the sandbox.',
-            to: '/technical',
-            cta: 'Inspect live analysis',
-          }
-        : {
-            key: 'runtime',
-            icon: AlertTriangle,
-            tone: 'caution',
-            title: 'Runtime limited',
-            detail: `${dynamicRuntimeLabel(data)}. No runtime evidence raised the score.`,
-            to: '/technical',
-            cta: 'Inspect live analysis',
-          },
-    );
+  /*
+   * A stage of the analysis that did not produce a result is not a case signal.
+   *
+   * "Runtime limited - runtime inconclusive, no runtime evidence raised the
+   * score" was the fourth place on this page saying the same thing, after the
+   * verdict headline, the band-override note and the Runtime behaviour axis
+   * directly above it, which states the same fact and links to the same place.
+   * Only a runtime run that actually produced scored evidence is a signal.
+   */
+  if (frs?.dynamic_ran && frs.dynamic_conclusive) {
+    signals.push({
+      key: 'runtime',
+      icon: ShieldCheck,
+      tone: 'positive',
+      title: 'Runtime confirmed',
+      detail: 'Behaviour was observed and scored in the sandbox.',
+      to: links.evidence,
+      cta: 'Inspect live analysis',
+    });
   }
 
   const actions = data.dynamic_analysis?.resilience_actions;
@@ -82,36 +76,13 @@ function buildSignals(data: FraudCardData): Signal[] {
       tone: 'neutral',
       title: `${actions.length} evasion ${actions.length === 1 ? 'case' : 'cases'} defeated`,
       detail: actions.map((a) => a.title).join(' · '),
-      to: '/technical',
+      to: links.evidence,
       cta: 'View resilience controls',
-    });
-  }
-
-  const corr = frs?.correlation ?? 0;
-  const family = data.family_classification;
-  if (corr >= 20 || (family && family !== 'Unknown')) {
-    signals.push({
-      key: 'intel',
-      icon: Shield,
-      tone: family && family !== 'Unknown' ? 'caution' : 'neutral',
-      title: family && family !== 'Unknown' ? `Matches ${family}` : 'External correlation',
-      detail:
-        corr >= 20
-          ? `Threat-intelligence axis scored ${corr.toFixed(0)}/100.`
-          : 'External threat correlation contributed to this case.',
-      to: '/threat-intel',
-      cta: 'View threat intelligence',
     });
   }
 
   return signals;
 }
-
-const SIGNAL_TONE: Record<Signal['tone'], string> = {
-  positive: 'border-l-emerald-500',
-  caution: 'border-l-amber-500',
-  neutral: 'border-l-slate-300',
-};
 
 const SIGNAL_ICON: Record<Signal['tone'], string> = {
   positive: 'text-emerald-600',
@@ -120,7 +91,8 @@ const SIGNAL_ICON: Record<Signal['tone'], string> = {
 };
 
 function CaseSignalsRow({ data }: { data: FraudCardData }) {
-  const signals = buildSignals(data);
+  const links = useCaseLinks();
+  const signals = buildSignals(data, links);
   if (signals.length === 0) return null;
 
   return (
@@ -132,9 +104,7 @@ function CaseSignalsRow({ data }: { data: FraudCardData }) {
             <Link
               key={signal.key}
               to={signal.to}
-              className={`group flex flex-col gap-1.5 bg-white border border-slate-200 border-l-2 ${
-                SIGNAL_TONE[signal.tone]
-              } rounded-md px-3.5 py-3 hover:border-slate-300 hover:shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500`}
+              className="group flex flex-col gap-1.5 bg-white border border-slate-200 rounded-md px-3.5 py-3 hover:border-slate-300 hover:shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               <span className="flex items-center gap-2">
                 <Icon className={`h-3.5 w-3.5 shrink-0 ${SIGNAL_ICON[signal.tone]}`} aria-hidden />
@@ -171,11 +141,14 @@ export default function FraudCard({ data }: { data: FraudCardData | null }) {
   return (
     <div className="space-y-8">
       {/*
-        Level 1 - the decision, and the one qualifier that can invalidate it.
-        CoverageNotice sits above the verdict deliberately: when the sandbox
-        never exercised the sample, it changes how the score below it reads.
+        Level 1 - the decision, with its qualifier attached.
+
+        Coverage used to render as a separate banner here. On a partial run it
+        said the same sentence the verdict's own override note says, so the
+        reader met the statement twice before reaching the score and a third
+        time in the excluded-axis note. It now sits inside VerdictBlock, once,
+        with the trigger-condition detail behind "Why?".
       */}
-      <CoverageNotice data={data} />
       <VerdictBlock data={data} />
 
       {/* Level 2 - the reasons. Status first, then narrative, then findings. */}
@@ -221,7 +194,6 @@ export default function FraudCard({ data }: { data: FraudCardData | null }) {
       {atLeastAnalyst && stripCounts && (
         <CaseSummaryStrip riskScore={data.final_risk_score} counts={stripCounts} />
       )}
-      <CaseDetails data={data} />
     </div>
   );
 }

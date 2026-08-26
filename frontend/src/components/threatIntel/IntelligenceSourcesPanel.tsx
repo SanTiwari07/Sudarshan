@@ -209,7 +209,7 @@ export default function IntelligenceSourcesPanel({
               <div className="flex items-center justify-between gap-2">
                 <span className={TYPOGRAPHY.h3}>{s.name}</span>
                 <span
-                  className={`text-[10px] font-semibold uppercase tracking-[0.06em] px-2 py-0.5 rounded border shrink-0 ${
+                  className={`text-[12px] font-semibold uppercase tracking-[0.06em] px-2 py-0.5 rounded border shrink-0 ${
                     STATE_BADGE[s.state]
                   }`}
                 >

@@ -62,7 +62,7 @@ export default function AnalystNotesPanel({ sha256 }: { sha256: string }) {
         <StickyNote className="h-4 w-4 text-blue-400" />
         Analyst notes
         {savedNotes.length > 0 && (
-          <span className="w-5 h-5 rounded-full bg-blue-600 text-[10px] flex items-center justify-center">
+          <span className="w-5 h-5 rounded-full bg-blue-600 text-[12px] flex items-center justify-center">
             {savedNotes.length}
           </span>
         )}

@@ -10,7 +10,6 @@ import { TYPOGRAPHY } from '../../theme/typography';
 import SocCard from '../ui/Card';
 import SectionHeader from '../ui/SectionHeader';
 import HelpTerm from './HelpTerm';
-import DownloadReportButton from './DownloadReportButton';
 import { BarChart2, ChevronRight } from 'lucide-react';
 
 type InfluenceRow = {
@@ -175,14 +174,28 @@ function InfluenceRowItem({
       type="button"
       onClick={onOpen}
       aria-label={`View ${row.label.toLowerCase()} details`}
-      className="w-full text-left rounded-md border border-slate-200 bg-white p-3.5 cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
+      className={`flex h-full w-full cursor-pointer flex-col rounded-md border p-3.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
+        row.included
+          ? 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/30'
+          : // Recessed rather than alarmed: it belongs in the account of the
+            // score, but it did not move it.
+            'border-slate-200 bg-slate-50/70 hover:border-slate-300 hover:bg-slate-50'
+      }`}
     >
-      <div className="flex items-baseline justify-between gap-2">
-        <span className={TYPOGRAPHY.h3}>
+      {/*
+        Fixed-height header row.
+
+        One card carries a "+3.7 pts" numeral and another a "NOT INCLUDED"
+        badge, and the two set different line boxes - so the meters underneath
+        them started at different heights across a row whose entire purpose is
+        side-by-side comparison.
+      */}
+      <div className="flex min-h-[1.75rem] items-center justify-between gap-2">
+        <span className={row.included ? TYPOGRAPHY.h3 : `${TYPOGRAPHY.h3} text-slate-600`}>
           <HelpTerm term={row.term}>{row.label}</HelpTerm>
         </span>
         {row.included ? (
-          <span className="font-display text-base font-semibold text-slate-900 tabular-nums tracking-[-0.02em] shrink-0">
+          <span className="font-sans text-base font-semibold text-slate-900 tabular-nums tracking-[-0.02em] shrink-0">
             {row.contribution >= 0.05 ? `+${row.contribution.toFixed(1)}` : '0'}
             <span className={`${TYPOGRAPHY.label} ml-1`}>pts</span>
           </span>
@@ -207,13 +220,12 @@ function InfluenceRowItem({
       <p className={`${TYPOGRAPHY.bodySmall} mt-2.5`}>{row.summary}</p>
 
       {row.key === 'dynamic' && !row.included && row.score > 0 && (
-        <p className={`${TYPOGRAPHY.caption} text-amber-800 mt-1.5`}>
-          Runtime behaviour scored {row.score.toFixed(1)} / 100 but was excluded from the
-          risk score, because the evidence was inconclusive.
+        <p className={`${TYPOGRAPHY.caption} mt-1.5`}>
+          Observed {row.score.toFixed(1)} / 100, not counted toward the final score.
         </p>
       )}
 
-      <span className={`${TYPOGRAPHY.linkAction} mt-2.5`}>
+      <span className={`${TYPOGRAPHY.linkAction} mt-auto pt-2.5`}>
         View details
         <ChevronRight className="h-3.5 w-3.5" aria-hidden />
       </span>
@@ -229,26 +241,58 @@ export default function RiskInfluenceCard({
   embedded?: boolean;
 }) {
   const { openInfluenceDetail, openLedger } = useInvestigationUI();
-  const rows = buildRows(data);
-  if (rows.length === 0) return null;
+  const allRows = buildRows(data);
 
+  /*
+   * Every axis, always - including one that contributed nothing.
+   *
+   * These were briefly filtered to the axes that moved the score, on the
+   * reasoning that "Runtime behaviour - NOT INCLUDED" was another telling of a
+   * coverage caveat the verdict already carries. That was the wrong cut. This
+   * card is an account of how a three-axis score was reached, and an account
+   * that silently omits an axis is not a shorter account, it is an incomplete
+   * one: the reader cannot tell whether runtime was clean, absent, or never
+   * asked. It also left a hole in the row.
+   *
+   * The repetition the summary reader did not need was the alarm - the amber
+   * block and the duplicate "Runtime limited" tile. Those are gone. The axis
+   * stays, stated plainly.
+   */
+  const rows = allRows;
+  if (rows.length === 0) return null;
   const max = Math.max(...rows.map((r) => r.contribution), 0);
 
+  /*
+   * Side by side, not stacked.
+   *
+   * These three axes exist to be compared, and comparison is what a vertical
+   * stack in a narrow column makes hardest - the bars never share a baseline
+   * and the eye has to hold each value while it travels. Across a row they read
+   * against each other directly.
+   */
   const body = (
-    <div className={embedded ? 'space-y-2.5' : 'p-4 space-y-2.5'}>
-      {rows.map((row) => (
-        <InfluenceRowItem
-          key={row.key}
-          row={row}
-          max={max}
-          onOpen={() => openInfluenceDetail(row.axis)}
-        />
-      ))}
+    <div className={embedded ? 'space-y-3' : 'p-4 space-y-3'}>
+      <div
+        className={
+          embedded
+            ? 'space-y-2.5'
+            : 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 items-stretch'
+        }
+      >
+        {rows.map((row) => (
+          <InfluenceRowItem
+            key={row.key}
+            row={row}
+            max={max}
+            onOpen={() => openInfluenceDetail(row.axis)}
+          />
+        ))}
+      </div>
       {!embedded && (
         <button
           type="button"
           onClick={() => openLedger('full')}
-          className={`${TYPOGRAPHY.button} w-full text-blue-700 py-2 border border-blue-200 hover:bg-blue-50`}
+          className={`${TYPOGRAPHY.buttonSm} text-blue-700 px-3 py-2 border border-blue-200 hover:bg-blue-50`}
         >
           View score breakdown
         </button>
@@ -272,15 +316,15 @@ export default function RiskInfluenceCard({
 
   return (
     <SocCard>
-      <div className="flex items-center justify-between gap-3 pr-3">
-        <SectionHeader
-          icon={<BarChart2 className="h-4 w-4" />}
-          title="What influenced the score"
-          subtitle="Ranked by how much each raised the risk score."
-          className="flex-1 border-b-0"
-        />
-        <DownloadReportButton sha256={data.sha256} />
-      </div>
+      {/* No download button here: the verdict block directly above owns the
+          one primary action, and two of them side by side made the page look
+          like it was offering two different reports. */}
+      <SectionHeader
+        icon={<BarChart2 className="h-4 w-4" />}
+        title="What influenced the score"
+        subtitle="Ranked by how much each raised the risk score."
+        className="border-b-0"
+      />
       {body}
     </SocCard>
   );

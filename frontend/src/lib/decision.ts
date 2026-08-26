@@ -45,6 +45,8 @@ export type Decision = {
   rescan: string;
   badgeClass: string;
   containerClass: string;
+  /** Solid fill for the hero's accent rail. */
+  accentClass: string;
   /**
    * True when the analysis did not earn the right to a conclusion. The UI must
    * not render any positive-affirmation surface (green, "safe", "no threats
@@ -92,22 +94,27 @@ const STYLE = {
   block: {
     badgeClass: 'bg-red-600 text-white',
     containerClass: 'border-red-300 bg-red-50/80 text-red-950',
+    accentClass: 'bg-red-600',
   },
   escalate: {
     badgeClass: 'bg-orange-600 text-white',
     containerClass: 'border-orange-300 bg-orange-50/80 text-orange-950',
+    accentClass: 'bg-orange-500',
   },
   review: {
     badgeClass: 'bg-amber-500 text-slate-950',
     containerClass: 'border-amber-300 bg-amber-50/80 text-amber-950',
+    accentClass: 'bg-amber-500',
   },
   caution: {
     badgeClass: 'bg-blue-600 text-white',
     containerClass: 'border-blue-300 bg-blue-50/80 text-blue-950',
+    accentClass: 'bg-blue-600',
   },
   allow: {
     badgeClass: 'bg-emerald-600 text-white',
     containerClass: 'border-emerald-300 bg-emerald-50/80 text-emerald-950',
+    accentClass: 'bg-emerald-600',
   },
   /**
    * Slate, deliberately. An inconclusive result is the absence of a conclusion
@@ -117,6 +124,7 @@ const STYLE = {
   inconclusive: {
     badgeClass: 'bg-slate-600 text-white',
     containerClass: 'border-slate-300 bg-slate-50 text-slate-900',
+    accentClass: 'bg-slate-500',
   },
 } as const;
 
@@ -134,7 +142,7 @@ export function getDecision(data: FraudCardData): Decision {
       a && a.total_count > 0 ? ` Only ${a.fired_count} of ${a.total_count} trigger conditions were reached.` : '';
     return {
       action: 'INCONCLUSIVE',
-      headline: 'INCONCLUSIVE - DO NOT TREAT AS SAFE',
+      headline: 'Inconclusive — do not treat as safe',
       rationale:
         'The analysis did not exercise all expected behaviour, so the absence of ' +
         'malicious activity is unexplained rather than exonerating.' +
@@ -151,7 +159,7 @@ export function getDecision(data: FraudCardData): Decision {
   if (band === 'critical' || (band === 'unknown' && score >= 80)) {
     return {
       action: 'BLOCK',
-      headline: 'BLOCK AND ISOLATE',
+      headline: 'Block and isolate',
       rationale:
         engineAction ||
         `Critical risk (${score}/100) with verified dangerous capability. Installing this ` +
@@ -167,7 +175,7 @@ export function getDecision(data: FraudCardData): Decision {
   if (band === 'high' || (band === 'unknown' && score >= 60)) {
     return {
       action: 'ESCALATE',
-      headline: 'ESCALATE TO SOC AND QUARANTINE',
+      headline: 'Escalate to the SOC and quarantine',
       rationale:
         engineAction ||
         `High risk (${score}/100) with multiple active threat indicators. Manual analyst ` +
@@ -182,7 +190,7 @@ export function getDecision(data: FraudCardData): Decision {
   if (band === 'suspicious' || (band === 'unknown' && score >= 35)) {
     return {
       action: 'REVIEW',
-      headline: 'REVIEW BEFORE INSTALLING',
+      headline: 'Review before installing',
       rationale:
         engineAction ||
         `Potentially harmful behaviour was detected (${score}/100). An analyst should verify ` +
@@ -200,7 +208,7 @@ export function getDecision(data: FraudCardData): Decision {
   if (dynamicWasInconclusive(data)) {
     return {
       action: 'ALLOW WITH CAUTION',
-      headline: 'NO THREAT OBSERVED - COVERAGE INCOMPLETE',
+      headline: 'No threat observed — coverage incomplete',
       rationale:
         `No malicious behaviour was scored (${score}/100), but runtime analysis was ` +
         'not conclusive, so this result describes what was observed rather than what the ' +
@@ -218,7 +226,7 @@ export function getDecision(data: FraudCardData): Decision {
   if (hasCapability || score >= 10) {
     return {
       action: 'ALLOW WITH CAUTION',
-      headline: 'MONITOR - APPROVED WITH CAUTION',
+      headline: 'Monitor — approved with caution',
       rationale:
         engineAction ||
         `Low aggregate risk (${score}/100), but the application holds capabilities that ` +
@@ -232,7 +240,7 @@ export function getDecision(data: FraudCardData): Decision {
 
   return {
     action: 'ALLOW',
-    headline: 'NO SIGNIFICANT THREAT DETECTED',
+    headline: 'No significant threat detected',
     rationale:
       engineAction ||
       `No significant malicious behaviour was identified during the available analysis (${score}/100).`,

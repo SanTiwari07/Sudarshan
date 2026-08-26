@@ -82,7 +82,7 @@ export function SecondaryApkPanel({ data }: { data: FraudCardData }) {
                 {p.filename || p.device_path || 'unnamed.apk'}
               </span>
               <span
-                className={`text-[11px] font-semibold px-2 py-0.5 rounded ${
+                className={`text-[13px] font-semibold px-2 py-0.5 rounded ${
                   STATUS_STYLE[p.status ?? ''] ?? 'bg-slate-100 text-slate-700'
                 }`}
               >
@@ -162,7 +162,7 @@ export function SecondaryApkPanel({ data }: { data: FraudCardData }) {
             {p.notes && p.notes.length > 0 && (
               <ul className="mt-2 space-y-0.5">
                 {p.notes.map((note, n) => (
-                  <li key={n} className="text-[11px] text-slate-500">
+                  <li key={n} className="text-[13px] text-slate-500">
                     &middot; {note}
                   </li>
                 ))}

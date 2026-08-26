@@ -294,7 +294,7 @@ export default function EvidenceInspectionModal({
                 {timestampText !== '—' ? timestampText : ''}
               </span>
               {workflow && (
-                <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 hidden md:inline">
+                <span className="text-[12px] font-mono uppercase px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 hidden md:inline">
                   {workflow}
                 </span>
               )}
@@ -317,7 +317,7 @@ export default function EvidenceInspectionModal({
               >
                 <ZoomOut className="h-4 w-4" />
               </button>
-              <span className="text-[11px] font-mono text-slate-300 w-10 text-center hidden sm:inline">
+              <span className="text-[13px] font-mono text-slate-300 w-10 text-center hidden sm:inline">
                 {Math.round(zoom * 100)}%
               </span>
               <button
@@ -422,7 +422,7 @@ export default function EvidenceInspectionModal({
                     key={itemSid + idx}
                     type="button"
                     onClick={() => onIndexChange(idx)}
-                    className={`shrink-0 flex items-center gap-2 px-2.5 py-1.5 rounded-md border text-[11px] font-mono transition-all ${
+                    className={`shrink-0 flex items-center gap-2 px-2.5 py-1.5 rounded-md border text-[13px] font-mono transition-all ${
                       isActive
                         ? 'bg-blue-600/20 border-blue-500 text-blue-300 font-bold'
                         : 'bg-slate-800/60 border-slate-700/60 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
@@ -500,12 +500,12 @@ export default function EvidenceInspectionModal({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 {evidenceIds && evidenceIds.length > 0 && (
                   <div>
-                    <span className="text-slate-500 block text-[11px] font-medium">Evidence ID</span>
+                    <span className="text-slate-500 block text-[13px] font-medium">Evidence ID</span>
                     <div className="flex flex-wrap gap-1 mt-0.5">
                       {evidenceIds.map((eid) => (
                         <span
                           key={eid}
-                          className="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200"
+                          className="font-mono text-[13px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200"
                         >
                           {eid}
                         </span>
@@ -516,8 +516,8 @@ export default function EvidenceInspectionModal({
 
                 {timestampText && timestampText !== '—' && (
                   <div>
-                    <span className="text-slate-500 block text-[11px] font-medium">Captured Time</span>
-                    <span className="text-slate-800 font-mono text-[11px] flex items-center gap-1 mt-0.5">
+                    <span className="text-slate-500 block text-[13px] font-medium">Captured Time</span>
+                    <span className="text-slate-800 font-mono text-[13px] flex items-center gap-1 mt-0.5">
                       <Clock className="h-3 w-3 text-slate-500" />
                       {timestampText}
                     </span>
@@ -526,8 +526,8 @@ export default function EvidenceInspectionModal({
 
                 {captureReason && (
                   <div>
-                    <span className="text-slate-500 block text-[11px] font-medium">Capture Reason</span>
-                    <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-slate-200/80 text-slate-800 inline-block mt-0.5">
+                    <span className="text-slate-500 block text-[13px] font-medium">Capture Reason</span>
+                    <span className="font-mono text-[13px] px-2 py-0.5 rounded bg-slate-200/80 text-slate-800 inline-block mt-0.5">
                       {captureReason}
                     </span>
                   </div>
@@ -535,43 +535,43 @@ export default function EvidenceInspectionModal({
 
                 {entry.state_id && (
                   <div>
-                    <span className="text-slate-500 block text-[11px] font-medium">State ID</span>
-                    <span className="font-mono text-[11px] text-slate-800 mt-0.5">{entry.state_id}</span>
+                    <span className="text-slate-500 block text-[13px] font-medium">State ID</span>
+                    <span className="font-mono text-[13px] text-slate-800 mt-0.5">{entry.state_id}</span>
                   </div>
                 )}
 
                 {entry.action_id && (
                   <div>
-                    <span className="text-slate-500 block text-[11px] font-medium">Action ID</span>
-                    <span className="font-mono text-[11px] text-slate-800 mt-0.5">{entry.action_id}</span>
+                    <span className="text-slate-500 block text-[13px] font-medium">Action ID</span>
+                    <span className="font-mono text-[13px] text-slate-800 mt-0.5">{entry.action_id}</span>
                   </div>
                 )}
 
                 {entry.evidence_moment_id && (
                   <div>
-                    <span className="text-slate-500 block text-[11px] font-medium">Evidence Moment</span>
-                    <span className="font-mono text-[11px] text-slate-800 mt-0.5">{entry.evidence_moment_id}</span>
+                    <span className="text-slate-500 block text-[13px] font-medium">Evidence Moment</span>
+                    <span className="font-mono text-[13px] text-slate-800 mt-0.5">{entry.evidence_moment_id}</span>
                   </div>
                 )}
 
                 {entry.foreground_package && (
                   <div>
-                    <span className="text-slate-500 block text-[11px] font-medium">Foreground Package</span>
-                    <span className="font-mono text-[11px] text-slate-800 mt-0.5 break-all">{entry.foreground_package}</span>
+                    <span className="text-slate-500 block text-[13px] font-medium">Foreground Package</span>
+                    <span className="font-mono text-[13px] text-slate-800 mt-0.5 break-all">{entry.foreground_package}</span>
                   </div>
                 )}
 
                 {entry.activity && (
                   <div>
-                    <span className="text-slate-500 block text-[11px] font-medium">Activity</span>
-                    <span className="font-mono text-[11px] text-slate-800 mt-0.5 break-all">{entry.activity}</span>
+                    <span className="text-slate-500 block text-[13px] font-medium">Activity</span>
+                    <span className="font-mono text-[13px] text-slate-800 mt-0.5 break-all">{entry.activity}</span>
                   </div>
                 )}
 
                 {workflow && (
                   <div>
-                    <span className="text-slate-500 block text-[11px] font-medium">Workflow</span>
-                    <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-slate-200/80 text-slate-800 inline-block mt-0.5">
+                    <span className="text-slate-500 block text-[13px] font-medium">Workflow</span>
+                    <span className="font-mono text-[13px] px-2 py-0.5 rounded bg-slate-200/80 text-slate-800 inline-block mt-0.5">
                       {workflow}
                     </span>
                   </div>
@@ -579,8 +579,8 @@ export default function EvidenceInspectionModal({
 
                 {confidenceVal && (
                   <div>
-                    <span className="text-slate-500 block text-[11px] font-medium">Confidence Level</span>
-                    <span className="font-mono text-[11px] font-semibold text-slate-800 inline-block mt-0.5">
+                    <span className="text-slate-500 block text-[13px] font-medium">Confidence Level</span>
+                    <span className="font-mono text-[13px] font-semibold text-slate-800 inline-block mt-0.5">
                       {confidenceVal}
                     </span>
                   </div>
@@ -597,7 +597,7 @@ export default function EvidenceInspectionModal({
 
               <div className="space-y-2.5 text-xs">
                 <div>
-                  <span className="text-blue-900/70 font-semibold block text-[11px]">Visual observation</span>
+                  <span className="text-blue-900/70 font-semibold block text-[13px]">Visual observation</span>
                   <p className="text-slate-800 leading-relaxed mt-0.5">
                     {visualObservation}
                   </p>
@@ -605,7 +605,7 @@ export default function EvidenceInspectionModal({
 
                 {investigativeClaim && investigativeClaim !== visualObservation && (
                   <div>
-                    <span className="text-blue-900/70 font-semibold block text-[11px]">Investigative claim</span>
+                    <span className="text-blue-900/70 font-semibold block text-[13px]">Investigative claim</span>
                     <p className="text-slate-800 leading-relaxed mt-0.5">
                       {investigativeClaim}
                     </p>
@@ -614,15 +614,15 @@ export default function EvidenceInspectionModal({
 
                 {runtimeObservation && (
                   <div>
-                    <span className="text-blue-900/70 font-semibold block text-[11px]">Runtime observation</span>
-                    <p className="text-slate-800 leading-relaxed mt-0.5 font-mono text-[11px]">
+                    <span className="text-blue-900/70 font-semibold block text-[13px]">Runtime observation</span>
+                    <p className="text-slate-800 leading-relaxed mt-0.5 font-mono text-[13px]">
                       {runtimeObservation}
                     </p>
                   </div>
                 )}
 
                 <div>
-                  <span className="text-blue-900/70 font-semibold block text-[11px]">Why it matters</span>
+                  <span className="text-blue-900/70 font-semibold block text-[13px]">Why it matters</span>
                   <p className="text-slate-800 leading-relaxed mt-0.5">
                     {corroboration || NO_CORROBORATION_NOTE}
                   </p>
@@ -630,12 +630,12 @@ export default function EvidenceInspectionModal({
 
                 {findingKeys && findingKeys.length > 0 && (
                   <div>
-                    <span className="text-blue-900/70 font-semibold block text-[11px]">Associated Finding(s)</span>
+                    <span className="text-blue-900/70 font-semibold block text-[13px]">Associated Finding(s)</span>
                     <div className="flex flex-wrap gap-1.5 mt-1">
                       {findingKeys.map((fk) => (
                         <span
                           key={fk}
-                          className="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200"
+                          className="font-mono text-[13px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200"
                         >
                           {fk}
                         </span>
@@ -646,8 +646,8 @@ export default function EvidenceInspectionModal({
 
                 {trigger && (
                   <div>
-                    <span className="text-blue-900/70 font-semibold block text-[11px]">Supporting Runtime Event</span>
-                    <p className="font-mono text-[11px] text-slate-800 bg-white/80 p-2 rounded border border-blue-100 mt-0.5">
+                    <span className="text-blue-900/70 font-semibold block text-[13px]">Supporting Runtime Event</span>
+                    <p className="font-mono text-[13px] text-slate-800 bg-white/80 p-2 rounded border border-blue-100 mt-0.5">
                       {trigger}
                     </p>
                   </div>
@@ -655,8 +655,8 @@ export default function EvidenceInspectionModal({
 
                 {mitreTech && (
                   <div>
-                    <span className="text-blue-900/70 font-semibold block text-[11px]">MITRE ATT&CK Technique</span>
-                    <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-slate-900 text-white inline-block mt-0.5">
+                    <span className="text-blue-900/70 font-semibold block text-[13px]">MITRE ATT&CK Technique</span>
+                    <span className="font-mono text-[13px] font-bold px-2 py-0.5 rounded bg-slate-900 text-white inline-block mt-0.5">
                       {mitreTech}
                     </span>
                   </div>
@@ -664,7 +664,7 @@ export default function EvidenceInspectionModal({
 
                 {analystNote && (
                   <div>
-                    <span className="text-blue-900/70 font-semibold block text-[11px]">Analyst Interpretation</span>
+                    <span className="text-blue-900/70 font-semibold block text-[13px]">Analyst Interpretation</span>
                     <p className="text-slate-800 italic bg-white p-2.5 rounded border border-blue-200/60 mt-0.5 leading-relaxed">
                       "{analystNote}"
                     </p>

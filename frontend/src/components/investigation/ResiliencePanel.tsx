@@ -236,7 +236,7 @@ function AppliedChangesBlock({ applied }: { applied: AntiEvasionApplied }) {
 
   return (
     <div className="mb-2 rounded-md border border-slate-200 bg-white/70 px-3 py-2">
-      <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+      <p className="text-[13px] font-bold uppercase tracking-wide text-slate-500">
         Applied to the device
       </p>
 
@@ -272,7 +272,7 @@ function AppliedChangesBlock({ applied }: { applied: AntiEvasionApplied }) {
       )}
 
       {held.length > 0 && (
-        <p className="mt-0.5 pl-[18px] text-[11px] text-slate-500">
+        <p className="mt-0.5 pl-[18px] text-[13px] text-slate-500">
           {writtenNow.length > 0
             ? `${writtenNow
                 .map((row) => `+${row.written} ${SEEDED_LABEL[row.key] ?? row.key}`)
@@ -333,7 +333,7 @@ function AntiEvasionVerdictCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3">
             <p className="text-xs font-bold tracking-wide">{style.title}</p>
-            <span className="text-[11px] font-medium opacity-70">
+            <span className="text-[13px] font-medium opacity-70">
               {fromRun ? 'measured during the analysis run' : 'measured just now'}
             </span>
           </div>
@@ -351,7 +351,7 @@ function AntiEvasionVerdictCard({
               <span
                 key={d.key}
                 title={`${d.label} — ${d.meaning}`}
-                className={`inline-flex items-baseline gap-1.5 rounded border px-2 py-1 text-[11px] ${
+                className={`inline-flex items-baseline gap-1.5 rounded border px-2 py-1 text-[13px] ${
                   moved && d.threat_class
                     ? 'border-red-400 bg-white/70 font-semibold text-red-800'
                     : 'border-current/20 bg-white/50'
@@ -368,7 +368,7 @@ function AntiEvasionVerdictCard({
         </div>
       )}
 
-      <p className="mt-2 text-[11px] leading-relaxed opacity-75">
+      <p className="mt-2 text-[13px] leading-relaxed opacity-75">
         {stepsRun}/{result.steps.length} step(s) accepted · {result.duration_seconds.toFixed(1)}s ·{' '}
         {result.device_serial}
         {result.package_name ? ` · ${result.package_name}` : ''}
@@ -382,7 +382,7 @@ function AntiEvasionVerdictCard({
       </p>
 
       {result.errors.length > 0 && (
-        <p className="mt-1 text-[11px] leading-relaxed opacity-80">
+        <p className="mt-1 text-[13px] leading-relaxed opacity-80">
           {result.errors.slice(0, 2).join(' ')}
         </p>
       )}

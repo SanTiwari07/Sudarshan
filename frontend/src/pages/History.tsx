@@ -171,7 +171,7 @@ export default function History() {
               type="button"
               onClick={() => setFilter(b.value)}
               aria-pressed={filter === b.value}
-              className={`px-3 py-2 text-[13px] font-medium border-r border-slate-200 last:border-r-0 transition-colors ${
+              className={`px-3 py-2 text-[15px] font-medium border-r border-slate-200 last:border-r-0 transition-colors ${
                 filter === b.value
                   ? 'bg-slate-900 text-white'
                   : 'text-slate-600 hover:bg-slate-50'
@@ -253,7 +253,7 @@ export default function History() {
                       <Badge label={c.risk_band || 'Safe'} variant="risk" />
                     </td>
                     <td className="px-4 py-2.5 text-right">
-                      <span className="font-display text-sm font-semibold text-slate-900 tabular-nums tracking-[-0.02em]">
+                      <span className="font-sans text-sm font-semibold text-slate-900 tabular-nums tracking-[-0.02em]">
                         {formatScore(c.final_risk_score)}
                       </span>
                     </td>

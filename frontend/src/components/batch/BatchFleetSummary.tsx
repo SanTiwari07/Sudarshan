@@ -78,14 +78,14 @@ export default function BatchFleetSummary() {
     >
       {TILES.map((tile) => (
         <div key={tile.key} className="flex-1 px-5 py-4">
-          <p className={`font-display text-3xl font-semibold tabular-nums tracking-[-0.03em] leading-none ${tile.tone}`}>
+          <p className={`font-sans text-3xl font-semibold tabular-nums tracking-[-0.03em] leading-none ${tile.tone}`}>
             {totals[tile.key]}
           </p>
           <p className={`${TYPOGRAPHY.label} mt-1.5`}>{tile.label}</p>
         </div>
       ))}
       <div className="flex-1 px-5 py-4">
-        <p className="font-display text-3xl font-semibold tabular-nums tracking-[-0.03em] leading-none text-slate-400">
+        <p className="font-sans text-3xl font-semibold tabular-nums tracking-[-0.03em] leading-none text-slate-400">
           {totals.batches}
         </p>
         <p className={`${TYPOGRAPHY.label} mt-1.5`}>

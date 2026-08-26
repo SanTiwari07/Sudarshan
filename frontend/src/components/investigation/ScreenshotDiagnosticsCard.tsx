@@ -74,7 +74,7 @@ export default function ScreenshotDiagnosticsCard({
               {uxState === 'CAPTURE_FAILED' ? 'View runtime diagnostics' : reason}
             </p>
             {!compact && (
-              <p className="text-[11px] text-slate-500 mt-1 leading-snug">
+              <p className="text-[13px] text-slate-500 mt-1 leading-snug">
                 Visual sandbox captures were not available for this run. Metadata below reflects the dynamic analysis
                 session.
               </p>
@@ -83,7 +83,7 @@ export default function ScreenshotDiagnosticsCard({
 
           {!compact && (
             <>
-              <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-1 text-[10px]">
+              <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-1 text-[12px]">
             <div>
               <dt className="text-slate-500 uppercase tracking-wide">Expected</dt>
               <dd className="font-mono font-semibold text-slate-800">{expected}</dd>
@@ -110,8 +110,8 @@ export default function ScreenshotDiagnosticsCard({
           </dl>
 
           <div>
-            <p className="text-[10px] font-bold uppercase text-slate-500 mb-1">Possible causes</p>
-            <ul className="text-[10px] text-slate-600 columns-1 sm:columns-2 gap-x-4 leading-relaxed">
+            <p className="text-[12px] font-bold uppercase text-slate-500 mb-1">Possible causes</p>
+            <ul className="text-[12px] text-slate-600 columns-1 sm:columns-2 gap-x-4 leading-relaxed">
               {POSSIBLE_CAUSES.map((c) => (
                 <li key={c} className="break-inside-avoid">
                   · {c}
@@ -125,14 +125,14 @@ export default function ScreenshotDiagnosticsCard({
           <div className="flex flex-wrap gap-2 pt-1">
             <Link
               to="/"
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-semibold text-white bg-blue-700 rounded-md hover:bg-blue-800"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[12px] font-semibold text-white bg-blue-700 rounded-md hover:bg-blue-800"
             >
               <RefreshCw className="h-3 w-3" />
               Retry Dynamic Analysis
             </Link>
             <Link
               to="/"
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-md hover:border-blue-300"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[12px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-md hover:border-blue-300"
               title="Re-run full pipeline including capture"
             >
               <Camera className="h-3 w-3" />
@@ -140,14 +140,14 @@ export default function ScreenshotDiagnosticsCard({
             </Link>
             <Link
               to={links.evidence}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-md hover:border-blue-300"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[12px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-md hover:border-blue-300"
             >
               <ScrollText className="h-3 w-3" />
               Runtime Logs
             </Link>
             <a
               href="#evidence-timeline"
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-md hover:border-blue-300"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[12px] font-semibold text-slate-700 bg-white border border-slate-200 rounded-md hover:border-blue-300"
             >
               <GitBranch className="h-3 w-3" />
               Timeline
@@ -155,7 +155,7 @@ export default function ScreenshotDiagnosticsCard({
           </div>
 
           {runtime?.warnings && runtime.warnings.length > 0 && (
-            <p className="text-[10px] text-amber-800 bg-amber-50 border border-amber-100 rounded px-2 py-1 flex gap-1">
+            <p className="text-[12px] text-amber-800 bg-amber-50 border border-amber-100 rounded px-2 py-1 flex gap-1">
               <Terminal className="h-3 w-3 shrink-0 mt-0.5" />
               {runtime.warnings[0]}
             </p>

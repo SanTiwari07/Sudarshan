@@ -138,7 +138,7 @@ function StageRow({
                   {stage.hookNames.map((h) => (
                     <code
                       key={h}
-                      className="px-1.5 py-0.5 rounded border border-slate-200 bg-white font-mono text-[11px] text-slate-700"
+                      className="px-1.5 py-0.5 rounded border border-slate-200 bg-white font-mono text-[13px] text-slate-700"
                     >
                       {h}
                     </code>
@@ -156,7 +156,7 @@ function StageRow({
                       key={id}
                       type="button"
                       onClick={() => openEvidence(id)}
-                      className="font-mono text-[10px] px-2 py-0.5 rounded border border-blue-100 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
+                      className="font-mono text-[12px] px-2 py-0.5 rounded border border-blue-100 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
                     >
                       {id}
                     </button>

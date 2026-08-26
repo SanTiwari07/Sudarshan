@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Shield, LogOut, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -16,17 +16,33 @@ type AppSidebarProps = {
 const COLLAPSED_KEY = 'sudarshan.sidebar.collapsed';
 
 /**
- * The rail used to be 48px wide with every label hidden until the pointer
- * entered a 12px transparent strip on the screen edge. That is a trick, not
- * navigation: labels appeared and vanished under the cursor, the whole rail
- * animated its width on every pass, and anyone driving with a trackpad or a
- * projector had to hunt for the trigger zone. Labels are now always visible,
- * and collapsing is an explicit, remembered choice.
+ * Collapsing is an explicit, remembered choice; hovering a collapsed rail
+ * previews it.
+ *
+ * An earlier version of this component expanded on hover and was removed for
+ * three specific reasons, all of them fair. This reintroduces the behaviour
+ * without reintroducing the failures:
+ *
+ *  - The trigger was a 12px transparent strip at the screen edge, which is a
+ *    thing to hunt for. The trigger is now the rail itself: 56px of visible,
+ *    always-present target.
+ *  - The rail animated its width on every pointer pass, dragging the whole page
+ *    with it. The hover preview is an overlay - it floats above the content and
+ *    the layout never reflows, so a pointer crossing the edge costs nothing.
+ *  - Labels appeared and vanished under the cursor. Leaving now waits 240ms, so
+ *    crossing the rail on the way somewhere else does not flash it open, and
+ *    re-entering within that window cancels the close.
+ *
+ * Hover only previews. It never changes the remembered state, and it does
+ * nothing at all when the rail is already expanded or when the pointer is a
+ * touch device.
  */
 export default function AppSidebar({ onLogout }: AppSidebarProps) {
   const { pathname } = useLocation();
   const links = useCaseLinks();
   const { user: username, role } = useAuth();
+  const [peek, setPeek] = useState(false);
+  const closeTimer = useRef<number | null>(null);
 
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
@@ -35,6 +51,36 @@ export default function AppSidebar({ onLogout }: AppSidebarProps) {
       return false;
     }
   });
+
+  /*
+   * Hover intent. A pointer that merely crosses the rail should not open it, so
+   * closing is delayed and re-entry cancels the pending close.
+   */
+  const openPeek = () => {
+    if (!collapsed) return;
+    // Fine pointers only: on touch, "hover" fires on tap and would fight the
+    // link the user is actually trying to press.
+    if (!window.matchMedia?.('(hover: hover) and (pointer: fine)').matches) return;
+    if (closeTimer.current) {
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+    setPeek(true);
+  };
+
+  const closePeek = () => {
+    if (closeTimer.current) window.clearTimeout(closeTimer.current);
+    closeTimer.current = window.setTimeout(() => setPeek(false), 240);
+  };
+
+  useEffect(() => () => {
+    if (closeTimer.current) window.clearTimeout(closeTimer.current);
+  }, []);
+
+  // An expanded rail has nothing to preview.
+  useEffect(() => {
+    if (!collapsed) setPeek(false);
+  }, [collapsed]);
 
   useEffect(() => {
     try {
@@ -48,6 +94,8 @@ export default function AppSidebar({ onLogout }: AppSidebarProps) {
     );
   }, [collapsed]);
 
+  const expanded = !collapsed || peek;
+
   const renderNavItem = (item: NavItem) => {
     const active = isNavActive(pathname, item);
     const Icon = item.icon;
@@ -57,7 +105,7 @@ export default function AppSidebar({ onLogout }: AppSidebarProps) {
         key={`${item.to}-${item.label}`}
         to={item.to}
         aria-current={active ? 'page' : undefined}
-        title={collapsed ? item.label : undefined}
+        title={expanded ? undefined : item.label}
         className={`group relative flex items-center h-9 mx-2 rounded-md transition-colors select-none ${
           active
             ? 'bg-slate-800 text-white'
@@ -74,8 +122,8 @@ export default function AppSidebar({ onLogout }: AppSidebarProps) {
         <span className="w-10 h-9 flex items-center justify-center shrink-0">
           <Icon className="h-4 w-4" aria-hidden />
         </span>
-        {!collapsed && (
-          <span className="text-[13px] font-medium tracking-[-0.01em] whitespace-nowrap pr-3 truncate">
+        {expanded && (
+          <span className="text-[15px] font-medium tracking-[-0.01em] whitespace-nowrap pr-3 truncate">
             {item.label}
           </span>
         )}
@@ -85,9 +133,13 @@ export default function AppSidebar({ onLogout }: AppSidebarProps) {
 
   return (
     <aside
+      onMouseEnter={openPeek}
+      onMouseLeave={closePeek}
+      onFocusCapture={openPeek}
+      onBlurCapture={closePeek}
       className={`fixed top-0 left-0 bottom-0 z-[60] bg-slate-950 text-slate-100 border-r border-slate-800 flex flex-col transition-[width] duration-200 ease-out overflow-x-hidden ${
-        collapsed ? 'w-14' : 'w-56'
-      }`}
+        expanded ? 'w-56' : 'w-14'
+      } ${peek ? 'shadow-2xl shadow-slate-950/50' : ''}`}
       aria-label="Primary navigation"
     >
       {/* Brand */}
@@ -96,12 +148,12 @@ export default function AppSidebar({ onLogout }: AppSidebarProps) {
           <span className="w-14 h-14 flex items-center justify-center shrink-0">
             <Shield className="h-5 w-5 text-blue-500" aria-hidden />
           </span>
-          {!collapsed && (
+          {expanded && (
             <span className="min-w-0">
-              <span className="font-display font-semibold text-sm tracking-[-0.01em] block leading-none text-white">
+              <span className="font-sans font-semibold text-sm tracking-[-0.01em] block leading-none text-white">
                 Sudarshan
               </span>
-              <span className="text-[11px] text-slate-500 leading-none mt-1 block">
+              <span className="text-[13px] text-slate-500 leading-none mt-1 block">
                 Fraud intelligence
               </span>
             </span>
@@ -110,8 +162,8 @@ export default function AppSidebar({ onLogout }: AppSidebarProps) {
       </div>
 
       <nav className="flex-1 py-3 space-y-0.5 overflow-y-auto scrollbar-hidden">
-        {!collapsed && (
-          <p className="px-4 pb-1.5 text-[11px] font-medium text-slate-600">Workspace</p>
+        {expanded && (
+          <p className="px-4 pb-1.5 text-[13px] font-medium text-slate-600">Workspace</p>
         )}
         {ENTERPRISE_NAV_END.map(renderNavItem)}
       </nav>
@@ -124,18 +176,18 @@ export default function AppSidebar({ onLogout }: AppSidebarProps) {
         >
           <span className="w-14 h-10 flex items-center justify-center shrink-0">
             <span className="relative flex items-center justify-center">
-              <span className="h-6 w-6 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-200 text-[11px] font-semibold">
+              <span className="h-6 w-6 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-200 text-[13px] font-semibold">
                 {username?.[0]?.toUpperCase() || 'A'}
               </span>
               <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-slate-950" />
             </span>
           </span>
-          {!collapsed && (
+          {expanded && (
             <span className="min-w-0 flex-1 pr-3">
-              <span className="block text-[13px] font-medium text-slate-200 truncate leading-tight">
+              <span className="block text-[15px] font-medium text-slate-200 truncate leading-tight">
                 {username || 'Analyst'}
               </span>
-              <span className="block text-[11px] text-slate-500 truncate leading-tight">
+              <span className="block text-[13px] text-slate-500 truncate leading-tight">
                 {role || 'SOC Analyst'}
               </span>
             </span>
@@ -151,7 +203,7 @@ export default function AppSidebar({ onLogout }: AppSidebarProps) {
           <span className="w-14 h-9 flex items-center justify-center shrink-0">
             <LogOut className="h-4 w-4" aria-hidden />
           </span>
-          {!collapsed && <span className="text-[13px] font-medium pr-3">Sign out</span>}
+          {expanded && <span className="text-[15px] font-medium pr-3">Sign out</span>}
         </button>
 
         <button
@@ -168,7 +220,13 @@ export default function AppSidebar({ onLogout }: AppSidebarProps) {
               <PanelLeftClose className="h-4 w-4" aria-hidden />
             )}
           </span>
-          {!collapsed && <span className="text-[13px] font-medium pr-3">Collapse</span>}
+          {expanded && (
+            <span className="text-[15px] font-medium pr-3">
+              {/* During a peek the rail reads expanded but is still collapsed, so
+                  the label has to name the action, not the current state. */}
+              {collapsed ? 'Expand' : 'Collapse'}
+            </span>
+          )}
         </button>
       </div>
     </aside>

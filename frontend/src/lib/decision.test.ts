@@ -90,7 +90,7 @@ describe('getDecision - the false ALLOW regression', () => {
   it('maps a plain Suspicious band to REVIEW, never to ALLOW', () => {
     const d = getDecision(caseOf({ risk_band: 'Suspicious', final_risk_score: 8 }));
     expect(d.action).toBe('REVIEW');
-    expect(d.headline).toBe('REVIEW BEFORE INSTALLING');
+    expect(d.headline).toBe('Review before installing');
   });
 
   it('treats every safety floor as disqualifying, whatever the score', () => {
@@ -132,7 +132,7 @@ describe('getDecision - the ordinary bands', () => {
   it('maps Critical to BLOCK', () => {
     const d = getDecision(caseOf({ risk_band: 'Critical', final_risk_score: 94 }));
     expect(d.action).toBe('BLOCK');
-    expect(d.headline).toBe('BLOCK AND ISOLATE');
+    expect(d.headline).toBe('Block and isolate');
     expect(d.inconclusive).toBe(false);
   });
 

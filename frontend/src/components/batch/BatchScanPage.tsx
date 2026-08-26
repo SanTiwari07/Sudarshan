@@ -305,7 +305,7 @@ export default function BatchScanPage() {
                         <Loader2 className="w-5 h-5 animate-spin" />
                       </div>
                       <div>
-                        <span className="text-[10px] font-bold text-blue-800 uppercase tracking-wider block font-mono">
+                        <span className="text-[12px] font-bold text-blue-800 uppercase tracking-wider block font-mono">
                           Currently Scanning
                         </span>
                         <span className="text-sm font-bold text-slate-900 font-mono truncate max-w-md block" title={currentScanningJob.filename}>
@@ -346,7 +346,7 @@ export default function BatchScanPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider font-mono bg-surface-secondary">
+                    <tr className="border-b border-slate-200 text-[13px] font-bold text-slate-500 uppercase tracking-wider font-mono bg-surface-secondary">
                       <th className="py-3 px-4">APK File</th>
                       <th className="py-3 px-4">Status</th>
                       <th className="py-3 px-4">Risk</th>
@@ -411,7 +411,7 @@ export default function BatchScanPage() {
               <p className="text-xs text-slate-500 mt-1">
                 or <span className="text-blue-600 font-semibold underline">browse from your computer</span>
               </p>
-              <p className="text-[11px] text-slate-400 mt-3 font-mono">
+              <p className="text-[13px] text-slate-400 mt-3 font-mono">
                 Supports 2 to 50 .apk files per batch • Up to 200MB each
               </p>
             </div>

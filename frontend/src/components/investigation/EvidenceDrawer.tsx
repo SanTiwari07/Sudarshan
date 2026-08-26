@@ -217,7 +217,7 @@ export default function EvidenceDrawer({
               )}
 
               <CollapsibleBlock title="Technical details">
-                <dl className="grid grid-cols-1 gap-2 text-[12px]">
+                <dl className="grid grid-cols-1 gap-2 text-[14px]">
                   <div>
                     <dt className={TYPOGRAPHY.caption}>Finding ID</dt>
                     <dd className={TYPOGRAPHY.codeSm}>{evidence.id}</dd>

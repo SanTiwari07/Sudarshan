@@ -53,7 +53,7 @@ const DRIVER_ICONS: Record<RiskDriver['iconKey'], typeof ShieldAlert> = {
 
 function VerifiedBadge() {
   return (
-    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+    <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
       <BadgeCheck className="h-3 w-3" />
       Verified
     </span>
@@ -62,7 +62,7 @@ function VerifiedBadge() {
 
 function SourceBadge({ label }: { label: string }) {
   return (
-    <span className="text-[10px] font-medium text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md">
+    <span className="text-[12px] font-medium text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md">
       {label}
     </span>
   );
@@ -89,7 +89,7 @@ function RiskDriverCard({ driver, onEvidence }: { driver: RiskDriver; onEvidence
               <span className="text-lg font-semibold text-amber-700 tabular-nums">+{driver.points}</span>
               <h3 className="text-sm font-bold text-slate-900">{driver.title}</h3>
             </div>
-            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${impactClass}`}>
+            <span className={`text-[12px] font-bold uppercase px-2 py-0.5 rounded border ${impactClass}`}>
               {driver.impact}
             </span>
           </div>
@@ -103,7 +103,7 @@ function RiskDriverCard({ driver, onEvidence }: { driver: RiskDriver; onEvidence
               <button
                 type="button"
                 onClick={() => onEvidence(driver.evidenceId!)}
-                className="text-[10px] font-semibold text-blue-700 hover:underline"
+                className="text-[12px] font-semibold text-blue-700 hover:underline"
               >
                 View evidence
               </button>
@@ -158,14 +158,14 @@ function MathematicalAccordion({
                 .map(([k, v]) => `${k} ${(v * 100).toFixed(0)}%`)
                 .join(' · ')}
             </p>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
+            <p className="text-[13px] text-slate-500 leading-relaxed">
               FRS combines STEI (static), dynamic sandbox, threat correlation, and banking impact using deterministic
               weights. STEI sub-axes (CT, BT, PR, OB, IR) roll up before FRS weighting.
             </p>
           </div>
           <div className="max-h-64 overflow-y-auto space-y-2">
             {lines.map((line) => (
-              <div key={line.id} className="border border-slate-200 rounded-lg p-2.5 text-[11px] bg-white">
+              <div key={line.id} className="border border-slate-200 rounded-lg p-2.5 text-[13px] bg-white">
                 <div className="font-semibold text-slate-800">{line.label}</div>
                 <div className="text-slate-600 mt-0.5 font-mono leading-relaxed">{line.detail}</div>
                 {line.contributionLabel && (
@@ -217,7 +217,7 @@ export default function ScoreLedgerSlideOver({
       subtitle="Calculated from verified static analysis, runtime behaviour, threat intelligence and deterministic risk models."
       headerExtra={
         <div className="flex items-center gap-2.5 mt-3">
-          <span className={`font-display text-2xl font-semibold tabular-nums ${riskStyle.text}`}>
+          <span className={`font-sans text-2xl font-semibold tabular-nums ${riskStyle.text}`}>
             {score}
             <span className={`${TYPOGRAPHY.displaySub} ml-1`}>/ 100</span>
           </span>

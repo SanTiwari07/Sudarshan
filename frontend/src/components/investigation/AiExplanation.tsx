@@ -60,7 +60,7 @@ function Block({ label, children }: { label: string; children: React.ReactNode }
   return (
     <div className="space-y-1">
       <h3 className={TYPOGRAPHY.label}>{label}</h3>
-      <p className={`${TYPOGRAPHY.body} max-w-[68ch]`}>{children}</p>
+      <p className={`${TYPOGRAPHY.body} max-w-[64ch]`}>{children}</p>
     </div>
   );
 }
@@ -110,14 +110,22 @@ export default function AiExplanation({ data }: { data: FraudCardData }) {
         )}
       </header>
 
-      <div className="px-5 py-4 space-y-4">
+      {/*
+        Two columns from `lg` up.
+        
+        Each block caps its measure at 68 characters, which is right for
+        reading and wrong for a full-width card: four stacked blocks left the
+        right half of the card empty down its whole height. Pairing them fills
+        the card without lengthening the line.
+      */}
+      <div className="px-5 py-5 grid grid-cols-1 lg:grid-cols-2 gap-x-10 gap-y-5">
         <Block label="What we found">{whatWeFound}</Block>
         <Block label="What it means">{whatItMeans}</Block>
         <Block label="Why it matters">{whyItMatters}</Block>
         <Block label="What to do">{decision.rationale}</Block>
 
         {intel?.analysis_note && (
-          <p className={`${TYPOGRAPHY.caption} max-w-[68ch]`}>{intel.analysis_note}</p>
+          <p className={`${TYPOGRAPHY.caption} lg:col-span-2`}>{intel.analysis_note}</p>
         )}
       </div>
 

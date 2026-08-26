@@ -68,7 +68,7 @@ export default function StaticEvidenceDetail({ data }: { data: FraudCardData }) 
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm font-semibold text-slate-900">{eng.name}</span>
                 <span
-                  className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${
+                  className={`text-[12px] font-bold uppercase px-2 py-0.5 rounded border ${
                     eng.status === 'available'
                       ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                       : 'bg-white text-slate-500 border-slate-200'
@@ -123,7 +123,7 @@ export default function StaticEvidenceDetail({ data }: { data: FraudCardData }) 
       {view.hasVide && view.videSummary && (
         <DetailSection title="Visual impersonation (VIDE)">
           <p className="text-xs text-slate-700 leading-relaxed">{view.videSummary}</p>
-          <p className="text-[11px] text-slate-500 mt-2">
+          <p className="text-[13px] text-slate-500 mt-2">
             VIDE is deterministic and separate from VirusTotal / OTX / AbuseIPDB. Lab baselines are not production bank
             data.
           </p>

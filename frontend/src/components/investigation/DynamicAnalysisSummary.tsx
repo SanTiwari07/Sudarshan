@@ -55,24 +55,24 @@ export default function DynamicAnalysisSummary({ data }: { data: FraudCardData }
 
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
           <div className="rounded-md border border-slate-200 bg-white p-2.5">
-            <dt className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Status</dt>
+            <dt className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Status</dt>
             <dd className="font-mono font-bold text-slate-900 mt-1 text-xs">{runtimeStatusHeadline(status)}</dd>
           </div>
           {bfci != null && frs?.dynamic_ran && (
             <div className="rounded-md border border-slate-200 bg-white p-2.5">
-              <dt className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+              <dt className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
                 <HelpTerm term="BFCI">Observed runtime score</HelpTerm>
               </dt>
               <dd className="font-mono font-bold text-slate-900 mt-1">{bfci.toFixed(1)} / 100</dd>
             </div>
           )}
           <div className="rounded-md border border-slate-200 bg-white p-2.5 sm:col-span-2">
-            <dt className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Contribution to final FRS</dt>
+            <dt className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Contribution to final FRS</dt>
             <dd className="font-semibold text-slate-900 mt-1 text-xs">
               {included && contribution != null ? `${contribution.toFixed(2)} points` : 'Not included'}
             </dd>
             {exclusionReason && (
-              <p className="text-[11px] text-amber-850 mt-1.5 leading-normal">
+              <p className="text-[13px] text-amber-850 mt-1.5 leading-normal">
                 <HelpTerm term="Axis Excluded">Why excluded?</HelpTerm> {exclusionReason}
               </p>
             )}
@@ -102,7 +102,7 @@ export default function DynamicAnalysisSummary({ data }: { data: FraudCardData }
         </div>
 
         {status === 'RUNNING' && (
-          <p className="text-[11px] text-slate-500 flex items-center gap-1.5 font-mono">
+          <p className="text-[13px] text-slate-500 flex items-center gap-1.5 font-mono">
             <Terminal className="h-3.5 w-3.5 text-blue-600 animate-pulse" />
             Sandbox still running - refresh to update runtime evidence.
           </p>

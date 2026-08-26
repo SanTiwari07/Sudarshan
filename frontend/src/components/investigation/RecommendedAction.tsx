@@ -86,7 +86,7 @@ export default function RecommendedAction({ data }: { data: FraudCardData }) {
 
       <div className={`rounded-lg border p-5 space-y-4 ${decision.containerClass}`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="font-display text-xl font-semibold tracking-[-0.02em] text-slate-900">
+          <p className="font-sans text-xl font-semibold tracking-[-0.02em] text-slate-900">
             {decision.headline}
           </p>
           <span className={`${TYPOGRAPHY.badgePill} ${decision.badgeClass} border-transparent`}>

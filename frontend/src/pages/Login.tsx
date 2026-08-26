@@ -96,15 +96,15 @@ export default function Login() {
         <div>
           <div className="flex items-center gap-2.5">
             <Shield className="h-5 w-5 text-blue-500" aria-hidden />
-            <span className="font-display text-base font-semibold tracking-[-0.01em]">
+            <span className="font-sans text-base font-semibold tracking-[-0.01em]">
               Sudarshan
             </span>
           </div>
 
-          <h1 className="mt-12 lg:mt-20 font-display text-3xl lg:text-4xl font-semibold tracking-[-0.03em] leading-[1.15] max-w-md">
+          <h1 className="mt-12 lg:mt-20 font-sans text-3xl lg:text-4xl font-semibold tracking-[-0.03em] leading-[1.15] max-w-md">
             Android banking fraud, evidenced.
           </h1>
-          <p className="mt-4 text-[15px] text-slate-500 leading-relaxed max-w-md">
+          <p className="mt-4 text-[17px] text-slate-500 leading-relaxed max-w-md">
             Static decompilation, an instrumented sandbox and threat-intelligence
             correlation resolved into one scored, auditable case file.
           </p>
@@ -116,8 +116,8 @@ export default function Login() {
               { term: 'Batch mode', detail: 'Portfolio-scale intake' },
             ].map((item) => (
               <div key={item.term}>
-                <dt className="text-[11px] font-medium text-slate-500">{item.term}</dt>
-                <dd className="mt-1 text-[13px] font-medium text-slate-200 leading-snug">
+                <dt className="text-[13px] font-medium text-slate-500">{item.term}</dt>
+                <dd className="mt-1 text-[15px] font-medium text-slate-200 leading-snug">
                   {item.detail}
                 </dd>
               </div>
@@ -125,7 +125,7 @@ export default function Login() {
           </dl>
         </div>
 
-        <p className="mt-12 text-[11px] text-slate-600">
+        <p className="mt-12 text-[13px] text-slate-600">
           Bank of India — Cyber Security Operations
         </p>
       </div>

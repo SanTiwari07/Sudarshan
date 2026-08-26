@@ -126,7 +126,7 @@ export default function EvidenceSection({
           <span className="flex items-center gap-2.5 shrink-0">
             {hasCount && (
               <span
-                className={`text-[11px] font-medium tabular-nums px-1.5 py-0.5 rounded ${
+                className={`text-[13px] font-medium tabular-nums px-1.5 py-0.5 rounded ${
                   empty ? 'bg-slate-50 text-slate-500' : 'bg-slate-100 text-slate-700'
                 }`}
               >

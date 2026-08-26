@@ -67,7 +67,13 @@ export default function ThreatDnaPanel({ traits }: { traits: DnaTrait[] }) {
         subtitle="Banking-relevant behaviours seen in static and runtime evidence"
       />
       <IntelCardBody>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+        {/*
+          Three across on a wide console.
+
+          At two columns each meter was ~850px of track, so a behaviour that
+          was never observed rendered as an empty bar the width of a paragraph.
+        */}
+        <div className="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2 xl:grid-cols-3">
           {BEHAVIOUR_ORDER.map((behaviour) => {
             const trait = resolveTrait(traits, behaviour.aliases);
             const percent = trait?.percent ?? 0;

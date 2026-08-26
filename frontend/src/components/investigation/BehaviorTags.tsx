@@ -146,13 +146,13 @@ export function BehaviorTags({
           key={tag.label}
           title={tag.title}
           data-basis={tag.basis}
-          className={`text-[11px] font-mono px-2 py-0.5 rounded border ${BASIS_STYLE[tag.basis]}`}
+          className={`text-[13px] font-mono px-2 py-0.5 rounded border ${BASIS_STYLE[tag.basis]}`}
         >
           {tag.label}
         </span>
       ))}
       {hidden > 0 && (
-        <span className="text-[11px] text-slate-500">+{hidden} more</span>
+        <span className="text-[13px] text-slate-500">+{hidden} more</span>
       )}
     </div>
   );

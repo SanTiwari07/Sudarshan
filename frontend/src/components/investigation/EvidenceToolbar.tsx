@@ -11,28 +11,28 @@ const FILTERS: { id: EvidenceFilter; label: string }[] = [
 ];
 
 export default function EvidenceToolbar({
-  total,
   search,
   onSearchChange,
   filter,
   onFilterChange,
 }: {
-  total: number;
   search: string;
   onSearchChange: (v: string) => void;
   filter: EvidenceFilter;
   onFilterChange: (v: EvidenceFilter) => void;
 }) {
   return (
-    <div className="p-3 border-b border-slate-200 bg-white">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
-        <div>
-          <h2 className="text-xs font-bold text-slate-900">Evidence Registry</h2>
-          <p className="text-[11px] text-slate-500 mt-0.5">
-            {total} verified finding{total === 1 ? '' : 's'} · Static, runtime, and threat correlation evidence
-          </p>
-        </div>
-      </div>
+    /*
+     * No title here.
+     *
+     * The section wrapping this toolbar already renders "Evidence registry"
+     * with its subtitle and its record count. Repeating both twenty pixels
+     * below produced the same heading twice in a row with two different
+     * counts of the same thing - the clearest tell that nobody had read the
+     * page top to bottom. The toolbar is controls only; the section owns the
+     * heading.
+     */
+    <div className="px-4 py-3 border-b border-slate-200 bg-white">
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         {/* Filter Tabs */}
         <div className="flex flex-wrap items-center gap-1 border-b border-slate-200 w-full sm:w-auto pb-1 sm:pb-0">
@@ -43,9 +43,9 @@ export default function EvidenceToolbar({
                 key={f.id}
                 type="button"
                 onClick={() => onFilterChange(f.id)}
-                className={`px-3 py-1.5 text-xs font-bold transition-all border-b-2 -mb-[1px] ${
+                className={`px-3 py-1.5 text-[15px] font-medium transition-colors border-b-2 -mb-[1px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${
                   active
-                    ? 'border-blue-600 text-blue-700 font-bold'
+                    ? 'border-blue-600 text-blue-700 font-semibold'
                     : 'border-transparent text-slate-500 hover:text-slate-900'
                 }`}
               >
@@ -63,7 +63,7 @@ export default function EvidenceToolbar({
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search findings…"
-            className="w-full pl-8 pr-3 py-1 text-xs rounded-md border border-slate-200 bg-white text-slate-800 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full pl-8 pr-3 py-1.5 text-[15px] rounded-md border border-slate-200 bg-white text-slate-800 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
             aria-label="Search findings"
           />
         </div>

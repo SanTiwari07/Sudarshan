@@ -1,14 +1,22 @@
 import { useEffect } from 'react';
-import { Navigate, useParams } from 'react-router-dom';
+import { Navigate, useLocation, useParams } from 'react-router-dom';
 import { LoadingSpinner } from '../ui/Skeleton';
 import { useAnalysis } from '../../context/AnalysisContext';
 import { InvestigationUIProvider } from '../../context/InvestigationUIContext';
 import CaseBar from './CaseBar';
 import InvestigationDrawers from './InvestigationDrawers';
 import AnalystNotesPanel from './AnalystNotesPanel';
+import { activeCaseSection } from '../../lib/caseRoutes';
 
-function InvestigationChrome({ children }: { children: React.ReactNode }) {
+function InvestigationChrome({
+  children,
+  contentClassName,
+}: {
+  children: React.ReactNode;
+  contentClassName: string;
+}) {
   const { sha256: routeSha } = useParams<{ sha256?: string }>();
+  const section = activeCaseSection(useLocation().pathname);
   const { analysisResult, investigationBundle, loading, activeSha256, loadCaseByHash, runtimeEvidenceRaw } =
     useAnalysis();
 
@@ -39,9 +47,15 @@ function InvestigationChrome({ children }: { children: React.ReactNode }) {
         investigation rather than leaving it. The summary route keeps it too:
         this is thin sticky navigation, not a second hero competing with
         VerdictBlock for the same job.
+
+        It sits outside the per-section width wrapper. Inside it, the bar
+        inherited whatever measure that section wanted - 1280px of centred
+        prose on Case, 1920px of tables on Evidence - so the one piece of
+        chrome that is meant to be identical everywhere visibly moved and
+        resized as you changed tabs.
       */}
       <CaseBar data={analysisResult} />
-      {children}
+      <div className={contentClassName}>{children}</div>
       {bundle && (
         <InvestigationDrawers
           data={analysisResult}
@@ -49,7 +63,14 @@ function InvestigationChrome({ children }: { children: React.ReactNode }) {
           rawRuntime={runtimeEvidenceRaw}
         />
       )}
-      <AnalystNotesPanel sha256={analysisResult.sha256} />
+      {/*
+        Not on Ask.
+
+        The notes launcher is a floating button in the bottom-right corner,
+        which on the assistant page lands on top of the composer - a second
+        place to type about the case, overlapping the first.
+      */}
+      {section !== 'ask' && <AnalystNotesPanel sha256={analysisResult.sha256} />}
     </>
   );
 }
@@ -63,9 +84,7 @@ export default function InvestigationShell({
 }) {
   return (
     <InvestigationUIProvider>
-      <div className={className}>
-        <InvestigationChrome>{children}</InvestigationChrome>
-      </div>
+      <InvestigationChrome contentClassName={className}>{children}</InvestigationChrome>
     </InvestigationUIProvider>
   );
 }

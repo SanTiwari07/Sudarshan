@@ -34,7 +34,7 @@ export default function InvestigationConclusionCard({
 
       <div className="p-4 sm:p-5 space-y-5">
         <section className="border-l-2 border-slate-900 pl-3">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 font-mono">Verdict Label</p>
+          <p className="text-[12px] font-bold uppercase tracking-widest text-slate-500 font-mono">Verdict Label</p>
           <p className="text-base font-bold text-slate-900 mt-0.5">{model.verdictLabel}</p>
           <p className="text-xs text-slate-700 mt-1 leading-relaxed max-w-4xl">{model.headline}</p>
         </section>
@@ -60,7 +60,7 @@ export default function InvestigationConclusionCard({
                               key={id}
                               type="button"
                               onClick={() => openEvidence(id)}
-                              className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-100 hover:bg-blue-100/80 transition-colors"
+                              className="text-[12px] font-mono font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-100 hover:bg-blue-100/80 transition-colors"
                             >
                               {id}
                             </button>
@@ -82,7 +82,7 @@ export default function InvestigationConclusionCard({
               Confidence
             </h3>
             <p className="text-xs font-bold text-slate-800 mt-1.5">{model.confidenceLabel}</p>
-            <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">{model.confidenceDetail}</p>
+            <p className="text-[13px] text-slate-600 mt-1 leading-relaxed">{model.confidenceDetail}</p>
           </section>
 
           {model.limitations.length > 0 && (
@@ -91,7 +91,7 @@ export default function InvestigationConclusionCard({
                 <AlertTriangle className="h-3.5 w-3.5 text-amber-700" />
                 Investigation Limitations
               </h3>
-              <ul className="mt-1.5 space-y-1 text-[11px] text-amber-900/90 list-disc pl-4 leading-relaxed">
+              <ul className="mt-1.5 space-y-1 text-[13px] text-amber-900/90 list-disc pl-4 leading-relaxed">
                 {model.limitations.map((line) => (
                   <li key={line}>{line}</li>
                 ))}

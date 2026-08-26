@@ -72,7 +72,6 @@ function SupportingIntelligence({
     tabs.push({
       id: 'dna',
       label: 'Threat DNA',
-      hint: 'what traits does it share?',
       count: dna.length,
       content: <ThreatDnaPanel traits={dna} />,
     });
@@ -81,7 +80,6 @@ function SupportingIntelligence({
   tabs.push({
     id: 'sources',
     label: 'Sources',
-    hint: 'who corroborated this?',
     content: <IntelligenceSourcesPanel intel={intel} data={data} bundle={bundle} />,
   });
 
@@ -89,7 +87,6 @@ function SupportingIntelligence({
     tabs.push({
       id: 'iocs',
       label: 'Indicators',
-      hint: 'what should I block?',
       count: intel.iocs.length,
       content: <ThreatIocRegistry iocs={intel.iocs} />,
     });
@@ -107,7 +104,6 @@ function SupportingIntelligence({
   tabs.push({
     id: 'attribution',
     label: 'Attribution',
-    hint: 'have we seen it before?',
     content: (
       <div className="space-y-4">
         <CampaignAttributionPanel data={data} intel={intel} />
@@ -120,7 +116,6 @@ function SupportingIntelligence({
   tabs.push({
     id: 'confidence',
     label: 'Confidence',
-    hint: 'how much of this is corroborated?',
     content: <EvidenceConfidenceMeter sources={confidenceSources} overall={overallConf} />,
   });
 
@@ -128,7 +123,6 @@ function SupportingIntelligence({
     tabs.push({
       id: 'evidence',
       label: 'Evidence',
-      hint: 'what is it based on?',
       count: explorer.length,
       content: <ThreatEvidenceExplorer groups={explorer} />,
     });

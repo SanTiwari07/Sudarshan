@@ -46,7 +46,7 @@ export default function ThreatIocRegistry({
     };
     const cls = map[severity] || 'bg-slate-100 text-slate-700 border-slate-200';
     return (
-      <span className={`px-2 py-0.5 text-[10px] font-bold rounded border ${cls}`}>{severity.toUpperCase()}</span>
+      <span className={`px-2 py-0.5 text-[12px] font-bold rounded border ${cls}`}>{severity.toUpperCase()}</span>
     );
   };
 
@@ -109,7 +109,7 @@ export default function ThreatIocRegistry({
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left text-slate-600">
-            <thead className="sticky top-0 z-10 bg-slate-100 text-slate-700 uppercase font-semibold text-[10px] tracking-wider border-b border-slate-200 shadow-sm">
+            <thead className="sticky top-0 z-10 bg-slate-100 text-slate-700 uppercase font-semibold text-[12px] tracking-wider border-b border-slate-200 shadow-sm">
               <tr>
                 <th className="px-4 py-2.5">Indicator</th>
                 <th className="px-4 py-2.5">Type</th>
@@ -130,7 +130,7 @@ export default function ThreatIocRegistry({
                     </div>
                   </td>
                   <td className="px-4 py-2.5">
-                    <span className="px-2 py-0.5 text-[10px] bg-slate-100 border border-slate-200 rounded">{ioc.type}</span>
+                    <span className="px-2 py-0.5 text-[12px] bg-slate-100 border border-slate-200 rounded">{ioc.type}</span>
                   </td>
                   <td className="px-4 py-2.5">{severityBadge(ioc.severity)}</td>
                   <td className="px-4 py-2.5 text-slate-500">{ioc.source}</td>

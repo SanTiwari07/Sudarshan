@@ -78,7 +78,7 @@ export default function UploadPage({ onAnalysisComplete }: UploadPageProps) {
                 type="button"
                 onClick={() => setMode(m)}
                 aria-pressed={mode === m}
-                className={`px-4 py-1.5 rounded text-[13px] font-medium transition-colors cursor-pointer ${
+                className={`px-4 py-1.5 rounded text-[15px] font-medium transition-colors cursor-pointer ${
                   mode === m
                     ? 'bg-white text-slate-900 shadow-xs'
                     : 'text-slate-500 hover:text-slate-800'
@@ -158,7 +158,7 @@ export default function UploadPage({ onAnalysisComplete }: UploadPageProps) {
             <p className="text-xs font-mono text-slate-500 mt-0.5 mb-3 break-all max-w-md">Case: {file?.name}</p>
             
             <div className="mt-4 py-3 px-5 rounded-xl bg-white border border-blue-100 shadow-2xs max-w-lg w-full text-left">
-              <p className="text-[10px] font-bold text-blue-800 uppercase tracking-wider mb-1 font-mono">Current Stage</p>
+              <p className="text-[12px] font-bold text-blue-800 uppercase tracking-wider mb-1 font-mono">Current Stage</p>
               <p className="text-sm font-bold text-slate-900">{pipelineUi?.title || 'Processing'}</p>
               {pipelineUi?.description && (
                 <p className="text-xs text-slate-500 mt-1 line-clamp-2">{pipelineUi.description}</p>

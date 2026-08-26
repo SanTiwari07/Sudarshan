@@ -107,7 +107,6 @@ export default function FindingsRegistryTable({
     <>
       {embedded && (
         <EvidenceToolbar
-          total={bundle.evidenceRecords.length}
           search={search}
           onSearchChange={setSearch}
           filter={filter}

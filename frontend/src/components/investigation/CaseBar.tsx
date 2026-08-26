@@ -63,7 +63,7 @@ function DepthSwitch() {
               aria-checked={d === depth}
               title={DEPTH_LABELS[d].hint}
               onClick={() => setDepth(d)}
-              className={`relative px-2.5 py-1 rounded text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+              className={`relative px-2.5 py-1 rounded text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                 d === depth ? 'text-slate-900' : 'text-slate-500 hover:text-slate-900'
               }`}
             >
@@ -88,7 +88,7 @@ function CaseTabs({ sha256 }: { sha256: string }) {
   const active = activeCaseSection(pathname) ?? 'summary';
 
   return (
-    <nav aria-label="Case sections" className="flex items-center gap-0.5 min-w-0 overflow-x-auto">
+    <nav aria-label="Case sections" className="flex items-center gap-0.5 min-w-0 overflow-x-auto scrollbar-hidden">
       <AnimatedBackground value={active} className="rounded-md bg-slate-900">
         {CASE_SECTIONS.map((section) => (
           <Link
@@ -97,7 +97,7 @@ function CaseTabs({ sha256 }: { sha256: string }) {
             aria-current={section === active ? 'page' : undefined}
             to={caseSectionPath(sha256, section)}
             title={SECTION_LABELS[section].hint}
-            className={`relative px-3 py-1.5 rounded-md whitespace-nowrap font-display text-[13px] font-semibold tracking-[-0.01em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+            className={`relative px-3 py-1.5 rounded-md whitespace-nowrap font-sans text-[15px] font-semibold tracking-[-0.01em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
               section === active ? 'text-white' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -114,8 +114,21 @@ export function CaseBar({ data }: { data: FraudCardData }) {
   const token = caseSeverity(data.risk_band, inconclusive);
   const Icon = token.icon;
 
+  /*
+   * Pinned to the true top of the page, and opaque.
+   *
+   * Two separate defects produced one symptom. `bg-white/95 backdrop-blur` let
+   * the page read through the bar, and `top-0` did not put it at the top: a
+   * sticky element is inset by its scroll container's padding, so inside
+   * `.analyst-main`'s `p-4` the bar parked 16px down and the verdict headline
+   * scrolled through the strip above it.
+   *
+   * The negative `top` cancels that padding, and the matching negative margin
+   * and padding keep the bar's own content where it was while its background
+   * covers all the way to the edge.
+   */
   return (
-    <div className="sticky top-0 z-30 -mx-4 px-4 py-2.5 mb-6 bg-white/95 backdrop-blur border-b border-slate-200">
+    <div className="sticky -top-3 z-40 -mx-4 -mt-3 border-b border-slate-200 bg-white px-4 pb-2.5 pt-3 mb-6 shadow-[0_1px_3px_rgba(15,23,42,0.06)] sm:-top-4 sm:-mt-4 sm:pt-4">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5">
         {/* Identity */}
         <Link
@@ -123,7 +136,7 @@ export function CaseBar({ data }: { data: FraudCardData }) {
           className="flex items-baseline gap-2 min-w-0 group"
           title="Back to case summary"
         >
-          <span className="font-display text-sm font-semibold text-slate-900 truncate group-hover:text-blue-700">
+          <span className="font-sans text-sm font-semibold text-slate-900 truncate group-hover:text-blue-700">
             {data.app_name || data.package_name || 'Unknown package'}
           </span>
           <span className={`${TYPOGRAPHY.hash} shrink-0`}>{data.sha256?.slice(0, 12)}</span>
@@ -131,7 +144,7 @@ export function CaseBar({ data }: { data: FraudCardData }) {
 
         {/* Verdict, always on screen */}
         <div className="flex items-center gap-2 shrink-0">
-          <span className="font-display text-lg font-semibold tabular-nums text-slate-900">
+          <span className="font-sans text-lg font-semibold tabular-nums text-slate-900">
             {formatScore(data.final_risk_score)}
           </span>
           <span className={TYPOGRAPHY.label}>/ 100</span>

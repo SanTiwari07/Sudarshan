@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Terminal, Cpu, Search, Lock, Code, Package,
@@ -29,7 +29,6 @@ import { useInvestigationUI } from '../context/InvestigationUIContext';
 import EvidenceSection from '../components/ui/EvidenceSection';
 import AnalysisTabs, { type AnalysisTab } from '../components/investigation/AnalysisTabs';
 import ActivitySummary from '../components/investigation/ActivitySummary';
-import BehaviorTags from '../components/investigation/BehaviorTags';
 import RelationsGraph from '../components/investigation/RelationsGraph';
 import SecondaryApkPanel from '../components/investigation/SecondaryApkPanel';
 import MitreMatrix from '../components/investigation/MitreMatrix';
@@ -58,31 +57,103 @@ function useRowAccordion(_rowCount: number) {
 
 // ─── Explainability Engine ────────────────────────────────────────────────────────
 
-function ExplainabilityEngine({ data }: { data: FraudCardData }) {
-  const isMalicious = data.family_classification !== 'Unknown';
+/**
+ * One titled group inside the overview.
+ *
+ * The overview had no headings at all: a chip row, then a grid of numbers,
+ * then a card, then a table, each in its own box at the same visual weight and
+ * with nothing saying what any of them was for. That is what made the page read
+ * as generated - the reader has to infer the structure, so there isn't one.
+ *
+ * The heading sits *outside* the panel rather than in another bordered header,
+ * which is what stops this becoming a fourth nested box. The numbered eyebrow
+ * is load-bearing: these three groups are a sequence (what we saw → what we
+ * concluded → what backs it up), so numbering them tells the reader where the
+ * conclusion came from rather than just decorating the column.
+ */
+function OverviewGroup({
+  eyebrow,
+  title,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  children: ReactNode;
+}) {
   return (
-    <SocCard className="h-full flex flex-col">
+    <section className="space-y-3">
+      <div className="space-y-1">
+        <p className="font-sans text-[13px] font-semibold uppercase tracking-[0.08em] text-blue-700">
+          {eyebrow}
+        </p>
+        <h2 className={`${TYPOGRAPHY.h2} text-[22px]`}>{title}</h2>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * What the rules engine called this sample, and on what grounds.
+ *
+ * Previously a card containing two bordered grey boxes, each containing a
+ * third bordered box - three nested surfaces to deliver two short strings, and
+ * no relationship shown between them. Worse, the two could contradict each
+ * other in silence: a classification of `trojan.rewardsteal` sat directly
+ * above "No specific family signature matched", and the reader was left to
+ * work out which one to believe.
+ *
+ * They are one fact, so they read as one sentence: the label, then the grounds
+ * for it. When no rule matched, that is said plainly instead of being printed
+ * as a second finding of equal weight.
+ */
+function ExplainabilityEngine({ data }: { data: FraudCardData }) {
+  const family = data.family_classification;
+  const isNamed = Boolean(family) && family !== 'Unknown';
+  const rule = data.technical_view.matched_rule?.trim();
+
+  // The engine writes prose here when nothing fired, so a rule that names no
+  // rule is the "unmatched" case however it happens to be worded.
+  const matched = Boolean(rule) && !/^no\b/i.test(rule ?? '');
+
+  return (
+    <SocCard rank="standard">
       <SectionHeader
         icon={<Cpu className="h-4 w-4" />}
-        title="Explainability Engine"
-        subtitle="Classification output from the rules engine"
+        title="Classification"
       />
-      <div className="p-3 space-y-3 flex-1 flex flex-col justify-between">
-        <div className="border border-slate-200 bg-slate-50/50 p-2.5 rounded-md">
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Classification result</p>
-          <div className="flex items-center gap-2">
-            <span className={`inline-block h-2 w-2 rounded-full ${isMalicious ? 'bg-red-500 animate-pulse' : 'bg-slate-400'}`} />
-            <p className={`text-base font-bold tracking-tight ${isMalicious ? 'text-red-700' : 'text-slate-800'}`}>
-              {data.family_classification}
-            </p>
-          </div>
+      <div className="px-5 py-4 space-y-3">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <span
+            className={`text-xl font-semibold tracking-[-0.01em] ${
+              isNamed ? 'text-slate-900' : 'text-slate-500'
+            }`}
+          >
+            {isNamed ? family : 'No family assigned'}
+          </span>
+          <span
+            className={`${TYPOGRAPHY.badge} ${
+              matched
+                ? 'border-slate-300 bg-slate-100 text-slate-700'
+                : 'border-amber-300 bg-amber-50 text-amber-800'
+            }`}
+          >
+            {matched ? 'Rule matched' : 'No rule matched'}
+          </span>
         </div>
-        <div className="border border-slate-200 bg-slate-50/50 p-2.5 rounded-md min-w-0 flex-1 flex flex-col justify-between">
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Matched rule</p>
-          <p className="font-mono text-xs text-slate-800 bg-white border border-slate-200 p-2.5 rounded-md leading-normal break-all overflow-y-auto max-h-32 scrollbar-hidden">
-            {data.technical_view.matched_rule}
+
+        {!matched && (
+          <p className={TYPOGRAPHY.bodySmall}>
+            No signature fired, so this label is a provisional grouping, not an
+            attribution.
           </p>
-        </div>
+        )}
+
+        {matched && (
+          <p className="font-mono text-[15px] text-slate-700 bg-slate-50 border border-slate-200 rounded-md px-3 py-2 leading-relaxed break-words">
+            {rule}
+          </p>
+        )}
       </div>
     </SocCard>
   );
@@ -115,7 +186,7 @@ function APKMetadata({ data }: { data: FraudCardData }) {
             key={r.label}
             className="grid grid-cols-1 sm:grid-cols-[minmax(9rem,28%)_1fr] gap-x-4 gap-y-0.5 py-1.5 border-b border-slate-150 last:border-0 hover:bg-slate-50/50 rounded px-1.5 -mx-1.5 transition-colors duration-100 items-center"
           >
-            <span className="text-[11px] font-bold text-slate-500">{r.label}</span>
+            <span className="text-[13px] font-bold text-slate-500">{r.label}</span>
             <div className="flex items-center gap-1.5 min-w-0">
               <span
                 className={`text-xs min-w-0 ${r.mono ? 'font-mono' : ''} ${r.highlight ? 'text-red-700 font-semibold' : 'text-slate-800'} ${r.truncate ? 'truncate' : 'break-all'}`}
@@ -172,7 +243,7 @@ function PermissionTable({ data }: { data: FraudCardData }) {
                   <td className="break-all">{p}</td>
                   <td className="text-right">
                     {isFired ? (
-                      <span className="inline-flex px-1.5 py-0.5 text-[9px] font-bold bg-red-100 text-red-800 rounded border border-red-200/50 whitespace-nowrap">
+                      <span className="inline-flex px-1.5 py-0.5 text-[11px] font-bold bg-red-100 text-red-800 rounded border border-red-200/50 whitespace-nowrap">
                         CRITICAL
                       </span>
                     ) : (
@@ -220,7 +291,7 @@ function DangerousAPITable({ data }: { data: FraudCardData }) {
                     </span>
                   </td>
                   <td className="text-right">
-                    <span className="inline-flex px-1.5 py-0.5 text-[9px] font-bold bg-red-100 text-red-800 rounded border border-red-200/50 whitespace-nowrap">
+                    <span className="inline-flex px-1.5 py-0.5 text-[11px] font-bold bg-red-100 text-red-800 rounded border border-red-200/50 whitespace-nowrap">
                       DANGEROUS HOOK
                     </span>
                   </td>
@@ -294,14 +365,14 @@ function DecompilationPanel({ data }: { data: FraudCardData }) {
       <div className="p-3 space-y-2.5 font-mono text-xs">
         {jadx?.fraud_class_hits?.length > 0 && (
           <div className="p-2.5 bg-red-50/50 border border-red-200 rounded-md">
-            <span className="font-bold text-red-800 uppercase tracking-wider text-[10px]">JADX Fraud Classes Found:</span>
+            <span className="font-bold text-red-800 uppercase tracking-wider text-[12px]">JADX Fraud Classes Found:</span>
             <div className="mt-1 text-red-900 text-xs break-all leading-relaxed">{jadx.fraud_class_hits.join(', ')}</div>
           </div>
         )}
         {apktool?.decoded_manifest_xml && (
           <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-md text-slate-700">
-            <span className="font-bold text-slate-800 uppercase tracking-wider text-[10px]">Decoded Manifest Excerpt:</span>
-            <pre className="mt-1 text-[11px] text-slate-600 overflow-x-auto whitespace-pre-wrap font-mono leading-normal bg-white p-2 border border-slate-150 rounded">
+            <span className="font-bold text-slate-800 uppercase tracking-wider text-[12px]">Decoded Manifest Excerpt:</span>
+            <pre className="mt-1 text-[13px] text-slate-600 overflow-x-auto whitespace-pre-wrap font-mono leading-normal bg-white p-2 border border-slate-150 rounded">
               {apktool.decoded_manifest_xml.slice(0, 300)}...
             </pre>
           </div>
@@ -367,7 +438,7 @@ function LogcatInspectorPanel({ logcat }: { logcat?: string }) {
   return (
     <SocCard>
       <SectionHeader icon={<Terminal className="h-4 w-4" />} title="Logcat System Diagnostics" subtitle="Monospace Android System Log Inspector" />
-      <div className="p-3 bg-slate-950 font-mono text-[11px] text-emerald-400 max-h-60 overflow-y-auto scrollbar-hidden rounded-b-md whitespace-pre-wrap leading-normal border-t border-slate-800">
+      <div className="p-3 bg-slate-950 font-mono text-[13px] text-emerald-400 max-h-60 overflow-y-auto scrollbar-hidden rounded-b-md whitespace-pre-wrap leading-normal border-t border-slate-800">
         {logcat}
       </div>
     </SocCard>
@@ -396,9 +467,9 @@ function DynamicAnalysisPanel({ data }: { data: FraudCardData }) {
       <div className="p-3 border-b border-slate-200 bg-slate-50/40">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-2.5">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold text-slate-500">Runtime status:</span>
+            <span className="text-[13px] font-bold text-slate-500">Runtime status:</span>
             <span
-              className={`px-1.5 py-0.5 text-[10px] font-bold rounded border font-mono uppercase ${
+              className={`px-1.5 py-0.5 text-[12px] font-bold rounded border font-mono uppercase ${
                 isOk
                   ? 'bg-emerald-50 text-emerald-800 border-emerald-200/50'
                   : 'bg-amber-50 text-amber-800 border-amber-200/50'
@@ -407,7 +478,7 @@ function DynamicAnalysisPanel({ data }: { data: FraudCardData }) {
               {headline}
             </span>
           </div>
-          <div className="flex items-center gap-2 text-[11px] font-mono text-slate-600">
+          <div className="flex items-center gap-2 text-[13px] font-mono text-slate-600">
             <span>
               Engine: <strong className="text-slate-800">{dyn.engine || 'frida'}</strong>
             </span>
@@ -421,7 +492,7 @@ function DynamicAnalysisPanel({ data }: { data: FraudCardData }) {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
           {data.frs_breakdown?.dynamic_ran && (
             <div className="p-2 bg-white rounded border border-slate-200">
-              <span className="text-slate-500 block text-[9px] uppercase font-bold tracking-wider">
+              <span className="text-slate-500 block text-[11px] uppercase font-bold tracking-wider">
                 <HelpTerm term="BFCI">Observed BFCI</HelpTerm>
               </span>
               <span className="font-mono font-bold text-slate-800 text-sm">
@@ -430,13 +501,13 @@ function DynamicAnalysisPanel({ data }: { data: FraudCardData }) {
             </div>
           )}
           <div className="p-2 bg-white rounded border border-slate-200">
-            <span className="text-slate-500 block text-[9px] uppercase font-bold tracking-wider">Raw events</span>
+            <span className="text-slate-500 block text-[11px] uppercase font-bold tracking-wider">Raw events</span>
             <span className="font-mono font-bold text-slate-800 text-sm">
               {dyn.evidence_record_count || (dyn.api_calls || []).length}
             </span>
           </div>
           <div className="p-2 bg-white rounded border border-slate-200">
-            <span className="text-slate-500 block text-[9px] uppercase font-bold tracking-wider">Hook errors</span>
+            <span className="text-slate-500 block text-[11px] uppercase font-bold tracking-wider">Hook errors</span>
             <span className="font-mono font-bold text-slate-800 text-sm">{(dyn.hook_errors || []).length}</span>
           </div>
         </div>
@@ -518,7 +589,7 @@ function ManifestFindingsPanel({ data }: { data: FraudCardData }) {
             <div className="flex items-center gap-1">
               {['all', 'high', 'warning', 'info'].map(s => (
                 <button key={s} onClick={() => setSev(s)}
-                  className={`px-2 py-0.5 text-[9px] font-bold uppercase rounded border transition-all ${sev === s ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>
+                  className={`px-2 py-0.5 text-[11px] font-bold uppercase rounded border transition-all ${sev === s ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>
                   {s}{s !== 'all' && sevCounts[s] ? ` (${sevCounts[s]})` : ''}
                 </button>
               ))}
@@ -528,11 +599,11 @@ function ManifestFindingsPanel({ data }: { data: FraudCardData }) {
             {visible.map((f, i) => (
               <div key={i} className="p-3 hover:bg-slate-50/50 transition-colors">
                 <div className="flex items-start gap-2.5">
-                  <span className={`mt-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded border flex-shrink-0 ${sevColor(f.severity)}`}>{f.severity?.toUpperCase()}</span>
+                  <span className={`mt-0.5 px-1.5 py-0.5 text-[11px] font-bold rounded border flex-shrink-0 ${sevColor(f.severity)}`}>{f.severity?.toUpperCase()}</span>
                   <div className="min-w-0">
                     <p className="text-xs font-bold text-slate-800 leading-tight">{f.title}</p>
-                    {f.component && <p className="text-[10px] font-mono text-slate-500 truncate mt-0.5">{f.component}</p>}
-                    {f.description && <p className="text-[10px] text-slate-500 mt-1 leading-normal">{f.description}</p>}
+                    {f.component && <p className="text-[12px] font-mono text-slate-500 truncate mt-0.5">{f.component}</p>}
+                    {f.description && <p className="text-[12px] text-slate-500 mt-1 leading-normal">{f.description}</p>}
                   </div>
                 </div>
               </div>
@@ -602,7 +673,7 @@ function CodeFindingsPanel({ data }: { data: FraudCardData }) {
             <div className="flex gap-1">
               {CODE_CATEGORIES.map(c => (
                 <button key={c.id} onClick={() => setCat(c.id)}
-                  className={`px-2 py-0.5 text-[9px] font-bold rounded border transition-all ${cat === c.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>
+                  className={`px-2 py-0.5 text-[11px] font-bold rounded border transition-all ${cat === c.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>
                   {c.label}
                 </button>
               ))}
@@ -610,7 +681,7 @@ function CodeFindingsPanel({ data }: { data: FraudCardData }) {
             <div className="flex gap-1 ml-auto">
               {['all', 'high', 'warning', 'info'].map(s => (
                 <button key={s} onClick={() => setSev(s)}
-                  className={`px-1.5 py-0.5 text-[9px] font-bold rounded border transition-all ${sev === s ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50'}`}>
+                  className={`px-1.5 py-0.5 text-[11px] font-bold rounded border transition-all ${sev === s ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50'}`}>
                   {s}
                 </button>
               ))}
@@ -621,19 +692,19 @@ function CodeFindingsPanel({ data }: { data: FraudCardData }) {
               <div key={i} className="p-3 hover:bg-slate-50/50 transition-colors">
                 <div className="flex items-start justify-between gap-2.5 mb-1.5">
                   <p className="text-xs font-bold text-slate-800 leading-tight">{f.title}</p>
-                  <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded border flex-shrink-0 ${sevColor(f.severity)}`}>{f.severity?.toUpperCase()}</span>
+                  <span className={`px-1.5 py-0.5 text-[11px] font-bold rounded border flex-shrink-0 ${sevColor(f.severity)}`}>{f.severity?.toUpperCase()}</span>
                 </div>
-                {f.description && <p className="text-[10px] text-slate-500 mb-2 leading-relaxed">{f.description}</p>}
+                {f.description && <p className="text-[12px] text-slate-500 mb-2 leading-relaxed">{f.description}</p>}
                 <div className="flex flex-wrap gap-1.5">
-                  {(f as any).rule_id && <code className="text-[9px] bg-slate-100 text-slate-600 border border-slate-200 px-1.5 py-0.5 rounded font-mono">{(f as any).rule_id}</code>}
-                  {(f as any).masvs && <span className="text-[9px] bg-purple-50 text-purple-700 border border-purple-200/50 px-1.5 py-0.5 rounded font-mono">MASVS: {(f as any).masvs}</span>}
-                  {(f as any).cwe && <span className="text-[9px] bg-orange-50 text-orange-700 border border-orange-200/50 px-1.5 py-0.5 rounded font-mono">{(f as any).cwe}</span>}
-                  {(f as any).owasp && <span className="text-[9px] bg-green-50 text-green-700 border border-green-200/50 px-1.5 py-0.5 rounded font-mono">{(f as any).owasp}</span>}
+                  {(f as any).rule_id && <code className="text-[11px] bg-slate-100 text-slate-600 border border-slate-200 px-1.5 py-0.5 rounded font-mono">{(f as any).rule_id}</code>}
+                  {(f as any).masvs && <span className="text-[11px] bg-purple-50 text-purple-700 border border-purple-200/50 px-1.5 py-0.5 rounded font-mono">MASVS: {(f as any).masvs}</span>}
+                  {(f as any).cwe && <span className="text-[11px] bg-orange-50 text-orange-700 border border-orange-200/50 px-1.5 py-0.5 rounded font-mono">{(f as any).cwe}</span>}
+                  {(f as any).owasp && <span className="text-[11px] bg-green-50 text-green-700 border border-green-200/50 px-1.5 py-0.5 rounded font-mono">{(f as any).owasp}</span>}
                 </div>
                 {f.files?.length > 0 && (
                   <div className="mt-2 space-y-0.5 border-t border-slate-100 pt-1.5">
                     {f.files.slice(0, 3).map((file, fi) => (
-                      <p key={fi} className="text-[9px] font-mono text-slate-500 truncate">{file}</p>
+                      <p key={fi} className="text-[11px] font-mono text-slate-500 truncate">{file}</p>
                     ))}
                   </div>
                 )}
@@ -702,7 +773,7 @@ function ExportedComponentsPanel({ data }: { data: FraudCardData }) {
                 {visible.map((row, i) => (
                   <tr key={i}>
                     <td>
-                      <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded border ${row.color}`}>{row.type}</span>
+                      <span className={`px-1.5 py-0.5 text-[11px] font-bold rounded border ${row.color}`}>{row.type}</span>
                     </td>
                     <td className="break-all text-slate-800 text-xs">{row.name}</td>
                     <td className="text-right">
@@ -859,7 +930,7 @@ function TrackersPanel({ data }: { data: FraudCardData }) {
               {t.categories.length > 0 && (
                 <div className="flex gap-1">
                   {t.categories.slice(0, 2).map((c, ci) => (
-                    <span key={ci} className={`px-1.5 py-0.2 text-[9px] font-bold rounded border uppercase ${catColor([c])}`}>{c}</span>
+                    <span key={ci} className={`px-1.5 py-0.2 text-[11px] font-bold rounded border uppercase ${catColor([c])}`}>{c}</span>
                   ))}
                 </div>
               )}
@@ -916,7 +987,7 @@ function SecretsPanel({ data }: { data: FraudCardData }) {
                 {display.map((s, i) => (
                   <tr key={i}>
                     <td>
-                      <span className="px-1 py-0.5 text-[9px] font-bold bg-red-100 text-red-800 border border-red-200/50 rounded uppercase whitespace-nowrap">SECRET</span>
+                      <span className="px-1 py-0.5 text-[11px] font-bold bg-red-100 text-red-800 border border-red-200/50 rounded uppercase whitespace-nowrap">SECRET</span>
                     </td>
                     <td className="break-all text-xs text-slate-700">
                       <span className="inline-flex items-start gap-1">
@@ -978,30 +1049,52 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
     {
       id: 'overview',
       label: 'Overview',
-      hint: 'what should I look at?',
       count: investigationBundle?.counts.evidenceRecords,
       anchors: ['evidence-registry'],
       content: (
         <>
-          <ActivitySummary data={data} />
-          <ExplainabilityEngine data={data} />
-          <EvidenceSection
-            id="evidence-registry"
-            title="Evidence registry"
-            subtitle="Every verified record behind this case"
-            count={investigationBundle?.counts.evidenceRecords}
-            icon={<Database className="h-4 w-4" />}
-            defaultOpen
+          {/*
+           * Three questions in reading order: how much did we find, what did we
+           * call it, and where is each record. Every group carries a plain
+           * heading, because the previous shape opened straight into a grid of
+           * numbers with no statement of what they counted - fine for the
+           * analyst who built it, opaque to the manager reading the verdict.
+           */}
+          <OverviewGroup
+            eyebrow="Step 1"
+            title="What this analysis recorded"
           >
-            <EvidenceRegistrySection data={data} bundle={investigationBundle} loading={loading} />
-          </EvidenceSection>
+            <ActivitySummary data={data} counts={investigationBundle?.counts} />
+          </OverviewGroup>
+
+          <OverviewGroup
+            eyebrow="Step 2"
+            title="What the engine concluded"
+          >
+            <ExplainabilityEngine data={data} />
+          </OverviewGroup>
+
+          <OverviewGroup
+            eyebrow="Step 3"
+            title="The evidence behind the verdict"
+          >
+            <EvidenceSection
+              id="evidence-registry"
+              title="Evidence registry"
+              subtitle="Static, runtime and threat-correlation records"
+              count={investigationBundle?.counts.evidenceRecords}
+              icon={<Database className="h-4 w-4" />}
+              defaultOpen
+            >
+              <EvidenceRegistrySection data={data} bundle={investigationBundle} loading={loading} />
+            </EvidenceSection>
+          </OverviewGroup>
         </>
       ),
     },
     {
       id: 'static',
       label: 'Static',
-      hint: 'what is in the file?',
       count: (data.manifest_findings ?? []).length + (data.code_findings ?? []).length,
       anchors: [
         'permissions',
@@ -1100,7 +1193,6 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
     {
       id: 'dynamic',
       label: 'Runtime',
-      hint: 'what did it do when it ran?',
       count: investigationBundle?.counts.runtimeBehaviors,
       anchors: ['dynamic-analysis', 'mitre', 'dangerous-apis', 'resilience'],
       content: (
@@ -1159,7 +1251,6 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
     {
       id: 'visual',
       label: 'Visual',
-      hint: 'what did it show the user?',
       count: screenshotEntries.length,
       anchors: ['screenshots', 'impersonation', 'overlay-payloads'],
       content: (
@@ -1202,7 +1293,6 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
     {
       id: 'network',
       label: 'Network',
-      hint: 'what did it talk to?',
       count: (data.hardcoded_urls_ips ?? []).length,
       anchors: [
         'network-capture',
@@ -1274,7 +1364,6 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
           {
             id: 'raw',
             label: 'Raw',
-            hint: 'show me everything',
             anchors: ['logcat', 'frida-events', 'binary-analysis'],
             content: (
               <>
@@ -1312,11 +1401,15 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
       : []),
   ];
 
+  /*
+   * The behaviour-tag chip row used to sit above the tabs. It restated three
+   * static flags that the Static tab already lists in full, in monospace, at
+   * the very top of the reading order - so the first thing on the page was
+   * also the least specific thing on it, and it pushed the tabs down without
+   * telling the reader anything they could act on.
+   */
   return (
     <div className="technical-view">
-      <div className="mb-4">
-        <BehaviorTags data={data} />
-      </div>
       <AnalysisTabs tabs={tabs} urlParam="section" />
     </div>
   );

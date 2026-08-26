@@ -28,8 +28,6 @@ import { useSearchParams } from 'react-router-dom';
 export interface AnalysisTab {
   id: string;
   label: string;
-  /** Shown under the label - what question this tab answers. */
-  hint?: string;
   /** Optional count badge, e.g. number of findings in this tab. */
   count?: number;
   /** Section anchors this tab owns, so a `#hash` can select it. */
@@ -124,7 +122,7 @@ export function AnalysisTabs({ tabs, initialTabId, urlParam }: AnalysisTabsProps
          * tabs at 375px, which turns a one-line control into a third of the
          * viewport before any content is reached.
          */
-        className="flex gap-1 border-b border-slate-200 mb-4 overflow-x-auto scrollbar-hidden snap-x snap-mandatory"
+        className="flex gap-2 mb-5 overflow-x-auto scrollbar-hidden snap-x snap-mandatory pb-1"
       >
         {available.map((tab, index) => {
           const selected = tab.id === active.id;
@@ -139,31 +137,25 @@ export function AnalysisTabs({ tabs, initialTabId, urlParam }: AnalysisTabsProps
               onKeyDown={(e) => onTabKeyDown(e, index)}
               onClick={() => selectTab(tab.id)}
               className={[
-                'px-4 py-2.5 text-left rounded-t-md shrink-0 snap-start',
-                'border-b-2 -mb-px transition-colors',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500',
+                'px-5 py-3 text-left rounded-lg shrink-0 snap-start border transition-colors',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-blue-600',
                 selected
-                  ? 'border-b-blue-600 text-slate-900'
-                  : 'border-b-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-50',
+                  ? 'border-blue-700 bg-blue-700 text-white shadow-sm'
+                  : 'border-slate-300 bg-white text-slate-700 hover:border-slate-500 hover:text-slate-900',
               ].join(' ')}
             >
-              <span className="flex items-center gap-2 font-display text-[13px] font-semibold tracking-[-0.01em]">
+              <span className="flex items-center gap-2 font-sans text-[17px] font-semibold tracking-[-0.01em]">
                 {tab.label}
                 {typeof tab.count === 'number' && tab.count > 0 && (
                   <span
-                    className={`text-[11px] font-medium tabular-nums px-1.5 py-0.5 rounded ${
-                      selected ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'
+                    className={`text-[14px] font-semibold tabular-nums px-2 py-0.5 rounded ${
+                      selected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-800'
                     }`}
                   >
                     {tab.count}
                   </span>
                 )}
               </span>
-              {tab.hint && (
-                <span className="block text-[11px] font-normal text-slate-500 mt-0.5">
-                  {tab.hint}
-                </span>
-              )}
             </button>
           );
         })}

@@ -76,7 +76,7 @@ export default function ScoreInfluenceDetailDrawer({
       subtitle={
         <span className="block space-y-0.5">
           <span className={`block ${TYPOGRAPHY.codeSm}`}>{headerScore}</span>
-          <span className="block text-[11px] font-medium text-blue-800">{headerInfluence}</span>
+          <span className="block text-[13px] font-medium text-blue-800">{headerInfluence}</span>
           <span className={`block ${TYPOGRAPHY.caption} pt-1`}>{tagline}</span>
         </span>
       }

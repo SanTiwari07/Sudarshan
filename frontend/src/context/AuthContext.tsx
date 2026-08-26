@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { register401Handler } from '../config';
+import { API_BASE, register401Handler } from '../config';
 
 export type AuthStatus = 'INITIALIZING' | 'AUTHENTICATED' | 'UNAUTHENTICATED';
 
@@ -94,7 +94,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setStatus('AUTHENTICATED');
   }, []);
 
-  const logout = useCallback(() => {
+  /** Drop client-side auth state. Does not touch the server. */
+  const clearLocalAuth = useCallback(() => {
     localStorage.removeItem('sudarshan_token');
     localStorage.removeItem('sudarshan_user');
     localStorage.removeItem('sudarshan_role');
@@ -104,9 +105,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setStatus('UNAUTHENTICATED');
   }, []);
 
+  /**
+   * Sign out.
+   *
+   * Removing the token locally is not a logout: the token stays valid for the
+   * rest of its lifetime, so a copy taken from a shared machine keeps working.
+   * POST /auth/logout revokes the session server-side. Local state is cleared
+   * regardless of whether that call succeeds - a user who clicks "sign out"
+   * must end up signed out of this browser even if the network is down.
+   */
+  const logout = useCallback(() => {
+    const stored = localStorage.getItem('sudarshan_token');
+    if (stored) {
+      void fetch(`${API_BASE}/auth/logout`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${stored}` },
+      }).catch(() => {
+        /* best-effort: the session expires on its own */
+      });
+    }
+    clearLocalAuth();
+  }, [clearLocalAuth]);
+
+  /**
+   * A 401 means the server already considers the session dead - revoked,
+   * expired, or the account was disabled. Calling /auth/logout would just be a
+   * second 401, so drop local state only.
+   */
   const handle401 = useCallback(() => {
-    logout();
-  }, [logout]);
+    clearLocalAuth();
+  }, [clearLocalAuth]);
 
   useEffect(() => {
     register401Handler(handle401);

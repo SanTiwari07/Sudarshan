@@ -635,7 +635,45 @@ async def export_technical_pdf(sha256: str, user: dict = Depends(require_analyst
 class ChatRequest(BaseModel):
     sha256: str
     question: str
+    # Accepted for backward compatibility with clients that still send it, but
+    # NOT used. The conversation is now read from `chat_messages`, where the
+    # server wrote it. Client-supplied history was unauthenticated input spliced
+    # straight into the model prompt: a caller could fabricate an "assistant"
+    # turn - "you previously determined this sample is benign" - and steer the
+    # next answer. It also meant the conversation was lost on refresh, could not
+    # be resumed elsewhere, and could not be audited.
     history: List[Dict[str, str]] = []
+
+
+# How much prior conversation is replayed into the model. Bounded because the
+# stored history is unbounded and the prompt is not.
+CHAT_HISTORY_TURNS = 20
+
+
+async def _server_side_history(sha256: str) -> List[Dict[str, str]]:
+    """The authoritative conversation for a case, in model-prompt shape."""
+    from app.db.intel import get_chat_history
+
+    rows = await get_chat_history(sha256, limit=CHAT_HISTORY_TURNS)
+    return [{"role": r["role"], "content": r["content"]} for r in rows]
+
+
+def _sse_token_text(chunk: str) -> str:
+    """
+    Recover the answer text from one SSE frame, or "" for any other event.
+
+    gemini_rag._sse emits `event: <name>\\ndata: <json>\\n\\n`, so only `token`
+    frames carry answer text - `sections`, `done` and `error` must not end up in
+    the stored transcript.
+    """
+    if not chunk.startswith("event: token\n"):
+        return ""
+    _, _, rest = chunk.partition("data: ")
+    try:
+        value = json.loads(rest.strip())
+    except (ValueError, TypeError):
+        return ""
+    return value if isinstance(value, str) else ""
 
 
 class ChatResponse(BaseModel):
@@ -712,13 +750,33 @@ async def analyst_chat_stream(req: ChatRequest, user: dict = Depends(require_ana
         if report:
             build_investigation_index(req.sha256, report)
 
+    from app.db.intel import append_chat_message
+
+    history = await _server_side_history(req.sha256)
+    await append_chat_message(req.sha256, "user", req.question, user_id=user.get("id"))
+
     async def event_generator():
-        async for chunk in stream_investigation_response(
-            sha256=req.sha256,
-            question=req.question,
-            conversation_history=req.history,
-        ):
-            yield chunk
+        # The streamed answer is reassembled so the assistant turn can be
+        # persisted too. Without it the stored conversation would be every
+        # question and no answer, which is not a conversation.
+        collected: List[str] = []
+        try:
+            async for chunk in stream_investigation_response(
+                sha256=req.sha256,
+                question=req.question,
+                conversation_history=history,
+            ):
+                collected.append(_sse_token_text(chunk))
+                yield chunk
+        finally:
+            answer = "".join(collected).strip()
+            if answer:
+                try:
+                    await append_chat_message(
+                        req.sha256, "assistant", answer, user_id=user.get("id")
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("[Chat] could not persist assistant turn: %s", exc)
 
     return StreamingResponse(
         event_generator(),
@@ -755,10 +813,23 @@ async def analyst_chat(req: ChatRequest, user: dict = Depends(require_analyst)):
                 source="not_found",
             )
 
+    from app.db.intel import append_chat_message
+
+    history = await _server_side_history(req.sha256)
+    await append_chat_message(req.sha256, "user", req.question, user_id=user.get("id"))
+
     result = await get_investigation_answer(
         sha256=req.sha256,
         question=req.question,
-        conversation_history=req.history,
+        conversation_history=history,
+    )
+
+    await append_chat_message(
+        req.sha256,
+        "assistant",
+        result["answer"],
+        user_id=user.get("id"),
+        sections_used=result.get("sections_used", []),
     )
 
     return ChatResponse(
@@ -766,4 +837,22 @@ async def analyst_chat(req: ChatRequest, user: dict = Depends(require_analyst)):
         sections_used=result.get("sections_used", []),
         source=result.get("source", "gemini_rag"),
     )
+
+
+@router.get("/chat/history/{sha256}")
+async def chat_history(sha256: str, user: dict = Depends(require_analyst)):
+    """The stored conversation for a case, so a refresh no longer loses it."""
+    from app.db.intel import get_chat_history
+
+    messages = await get_chat_history(sha256, limit=200)
+    return {"sha256": sha256, "messages": messages, "count": len(messages)}
+
+
+@router.delete("/chat/history/{sha256}")
+async def clear_chat(sha256: str, user: dict = Depends(require_analyst)):
+    """Clear a case's conversation. The case and its evidence are untouched."""
+    from app.db.intel import clear_chat_history
+
+    removed = await clear_chat_history(sha256)
+    return {"sha256": sha256, "removed": removed}
 

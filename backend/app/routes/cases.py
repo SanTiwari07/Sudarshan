@@ -13,13 +13,20 @@ Endpoints:
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from app.auth.auth import require_analyst
+from app.auth.auth import require_analyst, require_soc_lead
 from app.case_access import assert_case_visible, list_scope_analyst_id
-from app.db.database import get_case, list_cases, count_cases, add_case_note, get_case_notes, save_case
+from app.db.database import (
+    ANALYST_VERDICTS, CASE_STATUSES, add_case_note, assign_case, count_cases,
+    get_case, get_case_notes, get_user_by_id, list_cases, save_case,
+    set_case_status, set_case_verdict,
+)
+from app.db.intel import iocs_for_case, shared_indicators
 from app.evidence_loader import load_evidence_records
+from app.services import audit_service
+from app.services.audit_service import Action
 from app.services.case_intel_enrichment import enrich_case_threat_intel
 
 logger = logging.getLogger(__name__)
@@ -40,11 +47,185 @@ async def list_case_notes_endpoint(sha256: str, user: dict = Depends(require_ana
 
 
 @router.post("/{sha256}/notes")
-async def add_case_note_endpoint(sha256: str, req: NoteCreateRequest, user: dict = Depends(require_analyst)):
+async def add_case_note_endpoint(
+    sha256: str,
+    req: NoteCreateRequest,
+    request: Request,
+    user: dict = Depends(require_analyst),
+):
     """Add a new analyst note for a case."""
     author = req.author or user.get("username", "SOC Analyst")
     note = await add_case_note(sha256, req.text, author)
+    await audit_service.record(
+        Action.CASE_NOTE_ADDED,
+        actor=user,
+        target_type="case",
+        target_id=sha256,
+        detail={"note_id": note.get("id"), "author": author},
+        request=request,
+    )
     return note
+
+
+# ─── Lifecycle ────────────────────────────────────────────────────────────────
+
+class StatusChangeRequest(BaseModel):
+    status: str = Field(..., description=f"One of {list(CASE_STATUSES)}")
+
+
+class VerdictRequest(BaseModel):
+    verdict: str = Field(..., description=f"One of {list(ANALYST_VERDICTS)}")
+    reason: str = Field(..., min_length=3, max_length=2000)
+
+
+class AssignRequest(BaseModel):
+    assigned_to: Optional[int] = Field(None, description="User id, or null to unassign")
+
+
+@router.patch("/{sha256}/status")
+async def change_case_status(
+    sha256: str,
+    req: StatusChangeRequest,
+    request: Request,
+    user: dict = Depends(require_analyst),
+):
+    """Move a case through OPEN → IN_REVIEW → CLOSED / FALSE_POSITIVE."""
+    existing = await get_case(sha256)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Case not found")
+    assert_case_visible(user, existing)
+
+    if req.status not in CASE_STATUSES:
+        raise HTTPException(
+            status_code=400, detail=f"status must be one of {list(CASE_STATUSES)}"
+        )
+
+    previous = existing.get("status") or "OPEN"
+    await set_case_status(sha256, req.status)
+    await audit_service.record(
+        Action.CASE_STATUS_CHANGED,
+        actor=user,
+        target_type="case",
+        target_id=sha256,
+        detail={"from": previous, "to": req.status},
+        request=request,
+    )
+    return {"sha256": sha256, "status": req.status, "previous_status": previous}
+
+
+@router.patch("/{sha256}/verdict")
+async def change_case_verdict(
+    sha256: str,
+    req: VerdictRequest,
+    request: Request,
+    user: dict = Depends(require_soc_lead),
+):
+    """
+    Record the analyst's verdict.
+
+    Restricted to soc_lead and above: overriding the engine is a judgement call
+    with reporting consequences, and it must be attributable.
+
+    The engine's own output is untouched. The response returns both so the
+    disagreement is visible rather than silently resolved in the analyst's
+    favour.
+    """
+    existing = await get_case(sha256)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Case not found")
+    assert_case_visible(user, existing)
+
+    if req.verdict not in ANALYST_VERDICTS:
+        raise HTTPException(
+            status_code=400, detail=f"verdict must be one of {list(ANALYST_VERDICTS)}"
+        )
+
+    previous = existing.get("analyst_verdict")
+    await set_case_verdict(sha256, req.verdict, req.reason, user["id"])
+    await audit_service.record(
+        Action.CASE_VERDICT_CHANGED,
+        actor=user,
+        target_type="case",
+        target_id=sha256,
+        detail={
+            "from": previous,
+            "to": req.verdict,
+            "reason": req.reason,
+            # Recorded so an auditor can see what the analyst was overruling.
+            "engine_risk_band": existing.get("risk_band"),
+            "engine_final_risk_score": existing.get("final_risk_score"),
+        },
+        request=request,
+    )
+    return {
+        "sha256": sha256,
+        "analyst_verdict": req.verdict,
+        "verdict_reason": req.reason,
+        "verdict_set_by": user["username"],
+        "engine_verdict": {
+            "final_risk_score": existing.get("final_risk_score"),
+            "risk_band": existing.get("risk_band"),
+            "family_classification": existing.get("family_classification"),
+            "confidence": existing.get("confidence"),
+        },
+    }
+
+
+@router.patch("/{sha256}/assign")
+async def assign_case_endpoint(
+    sha256: str,
+    req: AssignRequest,
+    request: Request,
+    user: dict = Depends(require_soc_lead),
+):
+    """Assign a case to an analyst, or pass null to unassign."""
+    existing = await get_case(sha256)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    assignee_name = None
+    if req.assigned_to is not None:
+        assignee = await get_user_by_id(req.assigned_to)
+        if not assignee:
+            raise HTTPException(status_code=404, detail="Assignee not found")
+        assignee_name = assignee["username"]
+
+    await assign_case(sha256, req.assigned_to)
+    await audit_service.record(
+        Action.CASE_ASSIGNED,
+        actor=user,
+        target_type="case",
+        target_id=sha256,
+        detail={"assigned_to": req.assigned_to, "assignee_username": assignee_name},
+        request=request,
+    )
+    return {"sha256": sha256, "assigned_to": req.assigned_to, "username": assignee_name}
+
+
+# ─── IOC pivot ────────────────────────────────────────────────────────────────
+
+@router.get("/{sha256}/iocs")
+async def case_iocs_endpoint(sha256: str, user: dict = Depends(require_analyst)):
+    """
+    Indicators extracted from this case, plus which of them appear elsewhere.
+
+    `shared_with` is the query that the JSON blob could not answer: the same C2
+    domain seen on another sample is the strongest campaign signal the platform
+    has.
+    """
+    existing = await get_case(sha256)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Case not found")
+    assert_case_visible(user, existing)
+
+    iocs = await iocs_for_case(sha256)
+    shared = await shared_indicators(sha256)
+    return {
+        "sha256": sha256,
+        "iocs": iocs,
+        "count": len(iocs),
+        "shared_with_other_cases": shared,
+    }
 
 
 @router.get("/{sha256}/evidence")
@@ -99,6 +280,13 @@ class CaseDetail(CaseSummary):
     base_score: Optional[float] = None
     ai_confidence_multiplier: Optional[float] = None
     recommended_action: Optional[str] = None
+    # `risk_band` in the ordinary case, INCOMPLETE_EXERCISE when the sandbox ran
+    # but never reached any of the sample's trigger conditions. Restoring a case
+    # from history without these dropped the one signal that stops a low score
+    # from reading as a clean bill of health.
+    verdict: Optional[str] = None
+    execution_assertions: Optional[Dict[str, Any]] = None
+    incomplete_exercise: bool = False
     frs_breakdown: Optional[Dict[str, Any]] = None
     risk_explanation: Optional[Dict[str, Any]] = None
     threat_scenario_table: Optional[List[Dict[str, Any]]] = None
@@ -173,6 +361,12 @@ def _case_detail_from_row(row: Dict[str, Any]) -> CaseDetail:
         base_score=row.get("base_score"),
         ai_confidence_multiplier=row.get("ai_confidence_multiplier"),
         recommended_action=row.get("recommended_action"),
+        verdict=row.get("verdict") or row.get("risk_band"),
+        execution_assertions=row.get("execution_assertions"),
+        incomplete_exercise=bool(
+            row.get("incomplete_exercise")
+            or (row.get("execution_assertions") or {}).get("incomplete_exercise")
+        ),
         frs_breakdown=frs_breakdown,
         risk_explanation=row.get("risk_explanation"),
         threat_scenario_table=row.get("threat_scenario_table"),
@@ -223,12 +417,20 @@ def _case_detail_from_row(row: Dict[str, Any]) -> CaseDetail:
 async def list_all_cases(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    q: Optional[str] = Query(default=None, max_length=200, description="Match sha256, package, app name or family"),
+    band: Optional[str] = Query(default=None, max_length=40, description="Exact risk band, or 'all'"),
     user: dict = Depends(require_analyst),
 ):
-    """Return paginated case history (scoped to analyst_id for role=analyst)."""
+    """
+    Return paginated case history (scoped to analyst_id for role=analyst).
+
+    `q` and `band` are applied in SQL rather than by the client: the page only
+    ever holds one page of rows, so a client-side filter silently searched
+    1/N of the registry.
+    """
     scope_id = list_scope_analyst_id(user)
-    total = await count_cases(analyst_id=scope_id)
-    rows = await list_cases(limit=limit, offset=offset, analyst_id=scope_id)
+    total = await count_cases(analyst_id=scope_id, q=q, band=band)
+    rows = await list_cases(limit=limit, offset=offset, analyst_id=scope_id, q=q, band=band)
 
     cases = [
         CaseSummary(
@@ -254,6 +456,7 @@ async def list_all_cases(
 @router.get("/{sha256}")
 async def get_case_detail(
     sha256: str,
+    request: Request,
     user: dict = Depends(require_analyst),
 ):
     """Retrieve a single past analysis by its SHA256 hash."""
@@ -264,6 +467,16 @@ async def get_case_detail(
             detail=f"Case not found for SHA256 {sha256}. Analyze the APK first.",
         )
     assert_case_visible(user, row)
+
+    # Who opened which case is a reportable fact in a fraud investigation.
+    await audit_service.record(
+        Action.CASE_VIEWED,
+        actor=user,
+        target_type="case",
+        target_id=sha256,
+        detail={"package_name": row.get("package_name")},
+        request=request,
+    )
 
     prior_tc = row.get("threat_correlation") or {}
     prior_frs = row.get("frs_breakdown")
@@ -304,5 +517,19 @@ async def get_case_detail(
             row["dynamic_result"] = dyn
             if "dynamic_analysis" in row:
                 row["dynamic_analysis"] = dyn
+
+    # Normalise the verdict contract so a restored case carries the same three
+    # keys as a fresh /analyze response. Cases persisted before the Execution
+    # Assertion Matrix existed have no assertions: they report verdict=risk_band
+    # and execution_assertions=None, which the UI must render as "coverage not
+    # assessed". Rebuilding a matrix after the fact would fabricate a forensic
+    # record, so we deliberately do not.
+    assertions = row.get("execution_assertions") or None
+    row["execution_assertions"] = assertions
+    row["verdict"] = row.get("verdict") or row.get("risk_band")
+    row["incomplete_exercise"] = bool(
+        row.get("incomplete_exercise")
+        or (assertions or {}).get("incomplete_exercise")
+    )
 
     return row

@@ -14,13 +14,41 @@ import logging
 import os
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
 import aiosqlite
 
+from app.db.paths import ensure_parent, resolve_db_path
+
 logger = logging.getLogger(__name__)
 
-DB_PATH = os.getenv("SUDARSHAN_DB_PATH", "sudarshan.db")
+# The path resolved at import time. Kept as a module attribute because the test
+# suite overrides persistence with `monkeypatch.setattr(db, "DB_PATH", ...)`,
+# and that contract predates this module.
+#
+# `_active_db_path()` - not this constant - is what connections actually use.
+DB_PATH = str(resolve_db_path())
+_IMPORT_TIME_DB_PATH = DB_PATH
+
+
+def _active_db_path() -> str:
+    """
+    The database file this process should open, right now.
+
+    Two override styles both have to keep working:
+
+      monkeypatch.setattr(db, "DB_PATH", p)   → the attribute diverges from the
+                                                import-time value, so it wins.
+      monkeypatch.setenv("SUDARSHAN_DB_PATH") → the attribute is untouched, so
+                                                we re-resolve from the env.
+
+    Re-resolving on every call also means a path set after import (Compose, a
+    CLI flag, a fixture) is honoured instead of being frozen at import.
+    """
+    if DB_PATH != _IMPORT_TIME_DB_PATH:
+        return DB_PATH
+    return str(resolve_db_path())
 
 # ─── DDL ─────────────────────────────────────────────────────────────────────
 
@@ -214,11 +242,19 @@ async def _connect() -> AsyncIterator[aiosqlite.Connection]:
       foreign_keys=ON   without this the cases.analyst_id REFERENCES clause is
                         silently unenforced
     """
-    async with aiosqlite.connect(DB_PATH) as db:
+    path = _active_db_path()
+    ensure_parent(Path(path))
+    async with aiosqlite.connect(path) as db:
         await db.execute("PRAGMA journal_mode=WAL;")
         await db.execute("PRAGMA busy_timeout=5000;")
         await db.execute("PRAGMA foreign_keys=ON;")
         yield db
+
+
+# Public alias. New persistence modules (security.py, intel.py) import this
+# rather than reaching for the underscore-prefixed name, so that the pragma
+# setup above stays the single place a connection is configured.
+connect = _connect
 
 
 # ─── Additive migrations ──────────────────────────────────────────────────────
@@ -227,26 +263,30 @@ async def _connect() -> AsyncIterator[aiosqlite.Connection]:
 # a column - a schema change would silently not apply to any database that
 # already existed, and the first INSERT naming the new column would fail.
 #
-# This handles the only migration shape SQLite makes safe and idempotent:
-# ALTER TABLE ... ADD COLUMN. Anything beyond that (type changes, constraints,
-# backfills) needs a real migration tool; this is not a substitute for one, it
-# is the minimum that stops additive changes from breaking existing installs.
-_MIGRATIONS: tuple = (
-    ("cases", "raw_result", "ALTER TABLE cases ADD COLUMN raw_result TEXT"),
-)
+# The mechanism now lives in app.db.migrations, which keeps the same additive,
+# no-framework approach and adds a `schema_migrations` ledger, ordering, and
+# visible failure. `cases.raw_result` - the only migration this tuple used to
+# carry - is version 0001 there, guarded by the same column-existence check, so
+# a database that already has the column records the version and moves on.
 
 
-async def _apply_migrations(db: aiosqlite.Connection) -> None:
-    for table, column, stmt in _MIGRATIONS:
-        async with db.execute(f"PRAGMA table_info({table})") as cur:
-            cols = {row[1] for row in await cur.fetchall()}
-        if column not in cols:
-            await db.execute(stmt)
-            logger.info(f"[DB] Migration applied: {table}.{column} added")
+async def init_db() -> Dict[str, Any]:
+    """
+    Create every table and index if absent, then run pending migrations.
 
+    Order matters: CREATE first, migrate second. On a fresh database the CREATE
+    statements build the base shape and the migrations then add the columns they
+    own; on an existing one the CREATEs are no-ops and the migrations do the
+    work. Columns introduced after a table's first release (users.is_active,
+    cases.status, ...) are declared *only* in app.db.migrations, so there is one
+    source of truth for them rather than two that can drift.
 
-async def init_db() -> None:
-    """Create all tables and indexes if they don't exist, then migrate."""
+    Returns a diagnostics dict for the startup banner.
+    """
+    from app.db import intel, security
+    from app.db.migrations import migration_status, run_migrations
+
+    path = _active_db_path()
     async with _connect() as db:
         await db.execute(_CREATE_USERS)
         await db.execute(_CREATE_CASES)
@@ -257,11 +297,36 @@ async def init_db() -> None:
         await db.execute(_CREATE_DISCOVERY_CANDIDATES)
         await db.execute(_CREATE_ANALYSIS_BATCHES)
         await db.execute(_CREATE_ANALYSIS_BATCH_JOBS)
+        await security.create_tables(db)
+        await intel.create_tables(db)
+        await db.commit()
+
+        # Migrations before indexes: an index can reference a column that a
+        # migration is about to add, and on a pre-existing table the CREATE
+        # above was a no-op that did not add it.
+        applied = await run_migrations(db)
+
         for stmt in _CREATE_INDEXES:
             await db.execute(stmt)
-        await _apply_migrations(db)
+        await security.create_indexes(db)
+        await intel.create_indexes(db)
         await db.commit()
-    logger.info(f"[DB] Initialized SQLite at {DB_PATH} (WAL, FK enforced, indexed)")
+
+        status = await migration_status(db)
+
+    logger.info(
+        "[DB] Initialized SQLite at %s (WAL, FK enforced, indexed); "
+        "migrations %d/%d applied%s",
+        path, len(status["applied"]), status["total"],
+        f" (+{len(applied)} this boot)" if applied else "",
+    )
+    if status["unknown"]:
+        logger.warning(
+            "[DB] Ledger contains %d migration(s) this build does not know about "
+            "(%s). The database was probably written by a newer deployment.",
+            len(status["unknown"]), ", ".join(status["unknown"]),
+        )
+    return {"path": path, "migrations": status, "applied_this_boot": applied}
 
 
 
@@ -320,6 +385,103 @@ async def save_case(sha256: str, result: Dict[str, Any], analyst_id: Optional[in
         await db.commit()
     logger.info(f"[DB] Case saved: {sha256[:12]}… family={result.get('family_classification')}")
 
+    await _sync_case_iocs(sha256, result)
+
+
+async def _sync_case_iocs(sha256: str, result: Dict[str, Any]) -> None:
+    """
+    Mirror the result's indicators into the queryable `case_iocs` table.
+
+    Runs on every save, which is safe because the upsert is idempotent -
+    re-saving a case refreshes `last_seen` and leaves `first_seen` alone.
+    save_case is also called after threat-intel re-enrichment on case open, and
+    that is exactly when newly-resolved indicators should be picked up.
+
+    Never raises: `raw_result` is the forensic record and it is already durably
+    written by this point. Losing the searchable index is a degraded search, not
+    a lost case.
+    """
+    try:
+        from app.db.intel import upsert_case_iocs
+        from app.services.ioc_extraction import extract_iocs
+
+        iocs = extract_iocs(result)
+        if iocs:
+            await upsert_case_iocs(sha256, iocs)
+            logger.debug("[DB] Indexed %d indicator(s) for %s…", len(iocs), sha256[:12])
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "[DB] IOC indexing failed for %s… (%s); the case itself is saved and "
+            "raw_result still holds every indicator.",
+            sha256[:12], exc,
+        )
+
+
+# ─── Case lifecycle ──────────────────────────────────────────────────────────
+#
+# The analyst's judgement is stored in its OWN columns, never over the engine's.
+# `final_risk_score`, `risk_band`, `frs_breakdown` (which carries STEI),
+# `confidence` and everything inside `raw_result` are the deterministic output
+# of the pipeline and are the evidence a case rests on; overwriting them with a
+# human decision would destroy the record of what the system actually measured.
+#
+# So an analyst who marks a CRITICAL/94 sample as a false positive produces:
+#     final_risk_score = 94.0        risk_band = CRITICAL      (engine, unchanged)
+#     analyst_verdict  = FALSE_POSITIVE
+#     verdict_reason   = "Known internal test APK"
+# and both halves stay readable and attributable.
+
+CASE_STATUSES = ("OPEN", "IN_REVIEW", "CLOSED", "FALSE_POSITIVE")
+ANALYST_VERDICTS = ("CONFIRMED_MALICIOUS", "SUSPICIOUS", "BENIGN", "FALSE_POSITIVE", "INCONCLUSIVE")
+
+
+async def set_case_status(
+    sha256: str,
+    status: str,
+    closed: bool = False,
+) -> bool:
+    """Move a case through its lifecycle. Returns False if the case is unknown."""
+    if status not in CASE_STATUSES:
+        raise ValueError(f"status must be one of {CASE_STATUSES}")
+
+    now = datetime.now(timezone.utc).isoformat()
+    async with _connect() as db:
+        cur = await db.execute(
+            "UPDATE cases SET status = ?, closed_at = ? WHERE sha256 = ?",
+            (status, now if (closed or status in ("CLOSED", "FALSE_POSITIVE")) else None, sha256),
+        )
+        await db.commit()
+        return cur.rowcount > 0
+
+
+async def set_case_verdict(
+    sha256: str,
+    verdict: str,
+    reason: str,
+    set_by: int,
+) -> bool:
+    """Record an analyst verdict alongside - never instead of - the engine's."""
+    if verdict not in ANALYST_VERDICTS:
+        raise ValueError(f"verdict must be one of {ANALYST_VERDICTS}")
+
+    async with _connect() as db:
+        cur = await db.execute(
+            "UPDATE cases SET analyst_verdict = ?, verdict_reason = ?, "
+            "verdict_set_by = ?, verdict_set_at = ? WHERE sha256 = ?",
+            (verdict, reason, set_by, datetime.now(timezone.utc).isoformat(), sha256),
+        )
+        await db.commit()
+        return cur.rowcount > 0
+
+
+async def assign_case(sha256: str, assignee_id: Optional[int]) -> bool:
+    async with _connect() as db:
+        cur = await db.execute(
+            "UPDATE cases SET assigned_to = ? WHERE sha256 = ?", (assignee_id, sha256)
+        )
+        await db.commit()
+        return cur.rowcount > 0
+
 
 async def get_case(sha256: str) -> Optional[Dict[str, Any]]:
     """Retrieve a single case by SHA256 (exact or prefix)."""
@@ -332,31 +494,71 @@ async def get_case(sha256: str) -> Optional[Dict[str, Any]]:
     return _row_to_case(dict(row))
 
 
-async def list_cases(limit: int = 50, offset: int = 0, analyst_id: Optional[int] = None) -> List[Dict[str, Any]]:
+def _case_filter_sql(
+    analyst_id: Optional[int],
+    q: Optional[str],
+    band: Optional[str],
+) -> tuple[str, list]:
+    """
+    Build the shared WHERE clause for the case registry.
+
+    The history page used to filter the fifteen rows it had already fetched,
+    so searching for a package that existed on page four returned "no cases
+    found". Search and band filtering have to happen where the rows are, which
+    is here; `list_cases` and `count_cases` share this so the pagination
+    footer can never disagree with the table above it.
+    """
+    clauses: list[str] = []
+    params: list = []
+
+    if analyst_id is not None:
+        clauses.append("analyst_id = ?")
+        params.append(analyst_id)
+
+    if q:
+        needle = f"%{q.strip().lower()}%"
+        clauses.append(
+            "(LOWER(sha256) LIKE ?"
+            " OR LOWER(COALESCE(package_name, '')) LIKE ?"
+            " OR LOWER(COALESCE(app_name, '')) LIKE ?"
+            " OR LOWER(COALESCE(family_classification, '')) LIKE ?)"
+        )
+        params.extend([needle] * 4)
+
+    if band and band.lower() != "all":
+        clauses.append("LOWER(COALESCE(risk_band, '')) = ?")
+        params.append(band.strip().lower())
+
+    where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+    return where, params
+
+
+async def list_cases(
+    limit: int = 50,
+    offset: int = 0,
+    analyst_id: Optional[int] = None,
+    q: Optional[str] = None,
+    band: Optional[str] = None,
+) -> List[Dict[str, Any]]:
     """Return paginated list of cases, newest first."""
+    where, params = _case_filter_sql(analyst_id, q, band)
     async with _connect() as db:
         db.row_factory = aiosqlite.Row
-        if analyst_id is not None:
-            sql = "SELECT * FROM cases WHERE analyst_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?"
-            params = (analyst_id, limit, offset)
-        else:
-            sql = "SELECT * FROM cases ORDER BY created_at DESC LIMIT ? OFFSET ?"
-            params = (limit, offset)
-        async with db.execute(sql, params) as cur:
+        sql = f"SELECT * FROM cases{where} ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        async with db.execute(sql, (*params, limit, offset)) as cur:
             rows = await cur.fetchall()
     return [_row_to_case(dict(r)) for r in rows]
 
 
-async def count_cases(analyst_id: Optional[int] = None) -> int:
+async def count_cases(
+    analyst_id: Optional[int] = None,
+    q: Optional[str] = None,
+    band: Optional[str] = None,
+) -> int:
+    where, params = _case_filter_sql(analyst_id, q, band)
     async with _connect() as db:
-        if analyst_id is not None:
-            async with db.execute(
-                "SELECT COUNT(*) FROM cases WHERE analyst_id = ?", (analyst_id,)
-            ) as cur:
-                row = await cur.fetchone()
-        else:
-            async with db.execute("SELECT COUNT(*) FROM cases") as cur:
-                row = await cur.fetchone()
+        async with db.execute(f"SELECT COUNT(*) FROM cases{where}", params) as cur:
+            row = await cur.fetchone()
     return row[0] if row else 0
 
 
@@ -395,12 +597,30 @@ def _row_to_case(row: Dict) -> Dict[str, Any]:
     row["has_reflection"] = bool(row.get("has_reflection"))
 
     if not raw:
-        return row
+        return _with_lifecycle_defaults(row)
 
     merged = dict(raw)
     # Summary columns win: they are the indexed, queryable truth.
     merged.update({k: v for k, v in row.items() if v is not None})
-    return merged
+    return _with_lifecycle_defaults(merged)
+
+
+# Lifecycle columns are NULL until an analyst acts, and the merge above drops
+# NULLs so that an unset column cannot blank a value carried in raw_result.
+# These fields never appear in raw_result - the engine does not produce them -
+# so there is nothing to protect, and dropping them instead makes a caller
+# guess whether a missing key means "unset" or "not supported". Always present,
+# explicitly null.
+_LIFECYCLE_FIELDS = (
+    "status", "assigned_to", "closed_at",
+    "analyst_verdict", "verdict_reason", "verdict_set_by", "verdict_set_at",
+)
+
+
+def _with_lifecycle_defaults(case: Dict[str, Any]) -> Dict[str, Any]:
+    for field in _LIFECYCLE_FIELDS:
+        case.setdefault(field, "OPEN" if field == "status" else None)
+    return case
 
 
 # ─── IOC Cache ────────────────────────────────────────────────────────────────
@@ -487,6 +707,55 @@ async def update_user_role(user_id: int, role: str) -> None:
     async with _connect() as db:
         await db.execute("UPDATE users SET role=? WHERE id=?", (role, user_id))
         await db.commit()
+
+
+async def set_user_active(user_id: int, is_active: bool) -> None:
+    """
+    Enable or disable an account.
+
+    Disabling stops future logins and is checked on every authenticated request,
+    but it does not by itself invalidate tokens already issued - the caller must
+    also revoke the user's sessions. app.auth.auth.set_user_active_state does
+    both.
+    """
+    async with _connect() as db:
+        await db.execute(
+            "UPDATE users SET is_active=? WHERE id=?", (1 if is_active else 0, user_id)
+        )
+        await db.commit()
+
+
+async def touch_last_login(user_id: int) -> None:
+    async with _connect() as db:
+        await db.execute(
+            "UPDATE users SET last_login_at=? WHERE id=?",
+            (datetime.now(timezone.utc).isoformat(), user_id),
+        )
+        await db.commit()
+
+
+async def set_password(user_id: int, hashed_pw: str, must_change: bool = False) -> None:
+    """Replace a password hash and stamp when it changed."""
+    async with _connect() as db:
+        await db.execute(
+            "UPDATE users SET hashed_pw=?, password_changed_at=?, must_change_password=? "
+            "WHERE id=?",
+            (hashed_pw, datetime.now(timezone.utc).isoformat(),
+             1 if must_change else 0, user_id),
+        )
+        await db.commit()
+
+
+async def list_users(limit: int = 200, offset: int = 0) -> List[Dict[str, Any]]:
+    """Admin user listing. Never returns hashed_pw."""
+    async with _connect() as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT id, username, role, created_at, is_active, last_login_at "
+            "FROM users ORDER BY id ASC LIMIT ? OFFSET ?",
+            (limit, offset),
+        ) as cur:
+            return [dict(r) for r in await cur.fetchall()]
 
 
 async def username_exists(username: str) -> bool:

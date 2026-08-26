@@ -39,7 +39,7 @@ export default function ThreatSimilarityPanel({ items }: { items: FamilySimilari
                 <span className="font-bold text-slate-800">
                   {item.family}
                   {item.isAssigned && (
-                    <span className="ml-2 text-[10px] font-semibold text-blue-700 uppercase">Assigned</span>
+                    <span className="ml-2 text-[12px] font-semibold text-blue-700 uppercase">Assigned</span>
                   )}
                 </span>
                 <span className="font-mono font-bold text-blue-800 tabular-nums">{item.percent}%</span>
@@ -49,7 +49,7 @@ export default function ThreatSimilarityPanel({ items }: { items: FamilySimilari
               </div>
               <ul className="mt-2 space-y-0.5">
                 {item.reasons.map((r) => (
-                  <li key={r} className="text-[10px] text-slate-600 font-mono">
+                  <li key={r} className="text-[12px] text-slate-600 font-mono">
                     {r}
                   </li>
                 ))}

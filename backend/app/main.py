@@ -12,6 +12,8 @@ load_dotenv(dotenv_path=_env_path)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from app.middleware.export_ledger import ExportLedgerMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
@@ -19,6 +21,7 @@ from app.rate_limit import limiter
 
 from app.routes import (
     upload, report, intelligence, screenshots, discovery, baselines, resilience, batch,
+    audit,
 )
 from app.routes.runtime_api import router as runtime_router
 from app.routes.cases import router as cases_router
@@ -27,6 +30,10 @@ from app.db.database import init_db
 from app.workers.analysis_queue import start_workers, stop_workers
 from app.workers.batch_worker import start_batch_worker, stop_batch_worker
 from app.workers.baseline_refresh import start_baseline_refresh, stop_baseline_refresh
+from app.workers.retention import start_retention_worker, stop_retention_worker
+from app.routes.runtime_api import (
+    start_runtime_event_flusher, stop_runtime_event_flusher,
+)
 from app.auth.auth import hash_password, username_exists, create_user
 
 # ─── Structured Logging Configuration ────────────────────────────────────────
@@ -79,9 +86,15 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ALLOW_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+    # DELETE is needed by /chat/history/{sha256}; without it the browser
+    # preflight fails and clearing a conversation looks like a network error.
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
+
+# Records every report/IOC/rule export. Added after CORS so it wraps the
+# handlers rather than the CORS layer.
+app.add_middleware(ExportLedgerMiddleware)
 
 # ─── Routers ─────────────────────────────────────────────────────────────────
 
@@ -96,6 +109,7 @@ app.include_router(screenshots.router,   prefix="/api/v1",         tags=["Screen
 app.include_router(baselines.router,     prefix="/api/v1",         tags=["VIDE Baselines"])
 app.include_router(resilience.router,    prefix="/api/v1",         tags=["Investigation Resilience"])
 app.include_router(runtime_router,       prefix="/api",            tags=["Runtime Telemetry"])
+app.include_router(audit.router,         prefix="/api/v1",         tags=["Audit"])
 
 
 # ─── Startup / Shutdown ───────────────────────────────────────────────────────
@@ -107,9 +121,43 @@ async def startup():
 
     validate_backend_production_config()
     validate_production_environment()
-    # 1. Initialize SQLite tables
-    await init_db()
-    logger.info("[Startup] Database initialized")
+
+    # 1. Initialize SQLite tables.
+    #
+    # The resolved path is logged explicitly. It used to be a *relative*
+    # "sudarshan.db", which produced three unrelated database files depending on
+    # each process's working directory and, under docker-compose.hardened.yml
+    # (read_only rootfs, dev bind-mount removed), resolved to /app/sudarshan.db
+    # on an unwritable filesystem - so the container could not start at all and
+    # the message did not say which path had failed.
+    from app.db.paths import ENV_DB_PATH, resolution_reason
+
+    try:
+        db_info = await init_db()
+    except OSError as exc:
+        logger.critical(
+            "[Startup] Cannot open the database (%s). %s",
+            exc, resolution_reason(),
+        )
+        raise
+
+    logger.info(
+        "[Startup] Database ready at %s  (%s)", db_info["path"], resolution_reason()
+    )
+    logger.info(
+        "[Startup] Schema: %d/%d migrations applied%s",
+        len(db_info["migrations"]["applied"]),
+        db_info["migrations"]["total"],
+        f"; applied now: {', '.join(db_info['applied_this_boot'])}"
+        if db_info["applied_this_boot"] else "",
+    )
+    if not os.getenv(ENV_DB_PATH, "").strip():
+        logger.warning(
+            "[Startup] %s is not set, so the database path depends on the working "
+            "directory. Set it explicitly (Compose sets /app/data/sudarshan.db) so "
+            "the same file is used no matter how the process is launched.",
+            ENV_DB_PATH,
+        )
 
     # 2. Seed the admin user if none exists.
     #    No hardcoded default password: a known credential in a public repo is a
@@ -185,12 +233,25 @@ async def startup():
     await start_batch_worker()
     logger.info("[Startup] Enterprise batch scan worker started")
 
+    # 8. Start the durable runtime-event indexer. The ring buffer in
+    #    runtime_api is a live view only; this batches its contents into
+    #    runtime_events so a dynamic run can be reviewed after a restart.
+    await start_runtime_event_flusher()
+
+    # 9. Start the retention sweeper. Expires operational state only - the
+    #    audit trail, cases, notes and analysis history are never touched.
+    #    See app.workers.retention for the policy and its justification.
+    await start_retention_worker()
+
 
 @app.on_event("shutdown")
 async def shutdown():
     await stop_batch_worker()
     await stop_baseline_refresh()
     await stop_workers()
+    await stop_retention_worker()
+    # Last, so the final drain can still write what the workers just produced.
+    await stop_runtime_event_flusher()
     logger.info("[Shutdown] Analysis workers stopped")
 
 

@@ -1,9 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { ChevronDown, ChevronRight, X } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { FraudCardData } from '../../App';
 import { findEvidenceById } from '../../hooks/useInvestigationModel';
 import type { InvestigationBundle } from '../../types/investigation';
 import { useInvestigationUI } from '../../context/InvestigationUIContext';
+import DrawerShell from '../ui/DrawerShell';
 import { fetchScreenshotBlob } from '../../lib/screenshots';
 import { TYPOGRAPHY } from '../../theme/typography';
 import {
@@ -44,7 +45,7 @@ function CollapsibleBlock({
         onClick={() => setOpen((v) => !v)}
         className={`flex items-center gap-1.5 text-left ${TYPOGRAPHY.buttonSm} text-slate-800 hover:text-slate-900`}
       >
-        {open ? <ChevronDown className="h-3.5 w-3.5 text-slate-400" /> : <ChevronRight className="h-3.5 w-3.5 text-slate-400" />}
+        {open ? <ChevronDown className="h-3.5 w-3.5 text-slate-500" /> : <ChevronRight className="h-3.5 w-3.5 text-slate-500" />}
         {title}
       </button>
       {open && <div className="mt-2">{children}</div>}
@@ -59,7 +60,7 @@ export default function EvidenceDrawer({
   data: FraudCardData;
   bundle: InvestigationBundle;
 }) {
-  const { drawerEvidenceId, closeEvidence } = useInvestigationUI();
+  const { drawerEvidenceId, closeEvidence, canGoBack } = useInvestigationUI();
   const { screenshotManifestEntries } = useAnalysis();
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [thumb, setThumb] = useState<string | null>(null);
@@ -86,15 +87,6 @@ export default function EvidenceDrawer({
     };
   }, [evidence?.screenshotRef, data.sha256]);
 
-  useEffect(() => {
-    if (!drawerEvidenceId) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeEvidence();
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [drawerEvidenceId, closeEvidence]);
-
   if (!drawerEvidenceId) return null;
 
   const explanation = evidence ? buildFindingExplanation(evidence, data) : null;
@@ -107,52 +99,42 @@ export default function EvidenceDrawer({
 
   return (
     <>
-      {/* z-[60]: must sit above ScoreInfluenceDetailDrawer (z-[55]) when opened from axis detail */}
-      <div className="fixed inset-0 z-[60] flex justify-end" role="dialog" aria-modal="true">
-        <div className="absolute inset-0 bg-slate-900/40" onClick={closeEvidence} aria-hidden />
-        <div className="relative w-full max-w-md sm:max-w-lg bg-white h-full shadow-2xl border-l border-slate-200 flex flex-col min-w-0">
-          <div className="px-5 py-4 border-b border-slate-200 shrink-0">
-            <div className="flex justify-between items-start gap-3">
-              <div className="min-w-0">
-                <h2 className={TYPOGRAPHY.label}>Evidence</h2>
-                <p className={`${TYPOGRAPHY.codeSm} text-slate-600 mt-1`}>{drawerEvidenceId}</p>
-              </div>
-              <button
-                type="button"
-                onClick={closeEvidence}
-                className="p-1.5 rounded-md hover:bg-slate-100 shrink-0"
-                aria-label="Close evidence panel"
-              >
-                <X className="h-4 w-4 text-slate-600" />
-              </button>
-            </div>
-
-            {evidence && explanation && headline && (
-              <div className="mt-4 space-y-3">
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                  <SeverityIndicator severity={evidence.severity} />
-                  <span className="text-slate-300" aria-hidden>|</span>
-                  <div>
-                    <span className={`${TYPOGRAPHY.h2} tabular-nums leading-none`}>
-                      {evidence.confidence}%
-                    </span>
-                    <p className={`${TYPOGRAPHY.caption} font-medium mt-0.5`}>{explanation.confidenceTierLabel}</p>
-                    <p className={TYPOGRAPHY.caption}>Verified evidence</p>
-                  </div>
-                  <span className={`${TYPOGRAPHY.label} ml-auto sm:ml-0`}>
-                    {sourceLabel}
-                  </span>
-                </div>
+      <DrawerShell
+        open
+        onClose={closeEvidence}
+        onBack={canGoBack ? closeEvidence : undefined}
+        title="Evidence"
+        subtitle={<span className={TYPOGRAPHY.codeSm}>{drawerEvidenceId}</span>}
+        labelledById="evidence-drawer-title"
+        headerExtra={
+          evidence && explanation && headline ? (
+            <div className="mt-4 space-y-3">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <SeverityIndicator severity={evidence.severity} />
+                <span className="text-slate-300" aria-hidden>|</span>
                 <div>
-                  <p className={`${TYPOGRAPHY.h3} leading-snug`}>{headline.title}</p>
-                  {headline.subtitle && <p className={`${TYPOGRAPHY.bodySmall} mt-1`}>{headline.subtitle}</p>}
+                  <span className={`${TYPOGRAPHY.h2} tabular-nums leading-none`}>
+                    {evidence.confidence}%
+                  </span>
+                  <p className={`${TYPOGRAPHY.caption} font-medium mt-0.5`}>
+                    {explanation.confidenceTierLabel}
+                  </p>
+                  <p className={TYPOGRAPHY.caption}>Verified evidence</p>
                 </div>
+                <span className={`${TYPOGRAPHY.label} ml-auto sm:ml-0`}>{sourceLabel}</span>
               </div>
-            )}
-          </div>
-
+              <div>
+                <p className={`${TYPOGRAPHY.h3} leading-snug`}>{headline.title}</p>
+                {headline.subtitle && (
+                  <p className={`${TYPOGRAPHY.bodySmall} mt-1`}>{headline.subtitle}</p>
+                )}
+              </div>
+            </div>
+          ) : null
+        }
+      >
           {evidence && explanation ? (
-            <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-4 space-y-0 min-h-0">
+            <div className="space-y-0 min-w-0">
               <ExplainSection title="What was found">{explanation.whatWasFound}</ExplainSection>
               <ExplainSection title="Why does this matter?">{explanation.whyItMatters}</ExplainSection>
               <ExplainSection title="How serious is it?">{explanation.severityExplanation}</ExplainSection>
@@ -171,9 +153,9 @@ export default function EvidenceDrawer({
                       className={`flex items-center gap-1.5 ${TYPOGRAPHY.buttonSm} text-slate-800 hover:text-slate-900`}
                     >
                       {artifactsOpen ? (
-                        <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+                        <ChevronDown className="h-3.5 w-3.5 text-slate-500" />
                       ) : (
-                        <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
+                        <ChevronRight className="h-3.5 w-3.5 text-slate-500" />
                       )}
                       View affected artifacts ({artifacts.length})
                     </button>
@@ -235,7 +217,7 @@ export default function EvidenceDrawer({
               )}
 
               <CollapsibleBlock title="Technical details">
-                <dl className="grid grid-cols-1 gap-2 text-[12px]">
+                <dl className="grid grid-cols-1 gap-2 text-[14px]">
                   <div>
                     <dt className={TYPOGRAPHY.caption}>Finding ID</dt>
                     <dd className={TYPOGRAPHY.codeSm}>{evidence.id}</dd>
@@ -309,12 +291,11 @@ export default function EvidenceDrawer({
               </p>
             </div>
           ) : (
-            <div className={`p-5 ${TYPOGRAPHY.bodySmall}`}>
+            <div className={TYPOGRAPHY.bodySmall}>
               No structured record for this ID. Check ledger lines or related findings in the registry.
             </div>
           )}
-        </div>
-      </div>
+      </DrawerShell>
       {lightbox && evidence && (
         <ScreenshotLightbox
           sha256={data.sha256}

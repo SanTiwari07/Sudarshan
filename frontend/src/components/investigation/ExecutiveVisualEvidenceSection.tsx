@@ -19,7 +19,7 @@ export default function ExecutiveVisualEvidenceSection({ data }: { data: FraudCa
         <div className="flex items-center justify-between border-b border-slate-200 pb-3">
           <div className="flex items-center gap-2">
             <Camera className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
-            <h3 className="text-sm sm:text-base font-extrabold uppercase tracking-wider text-slate-900 font-mono">
+            <h3 className="text-sm sm:text-base font-extrabold text-slate-900 font-mono">
               Visual Evidence
             </h3>
           </div>

@@ -257,13 +257,12 @@ class TestPDFExportAPI:
         os.environ["JWT_SECRET_KEY"] = "test-secret-key-1234567890-super-secret-sudarshan"
         from app.main import app
         from app.routes.report import cache_report
-        from app.auth.auth import create_access_token
+        from auth_helpers import auth_headers_sync
 
         cache_report(sample_case_data["sha256"], sample_case_data)
-        
+
         client = TestClient(app)
-        valid_token = create_access_token(1, "testanalyst", "analyst")
-        headers = {"Authorization": f"Bearer {valid_token}"}
+        headers = auth_headers_sync("testanalyst", "analyst")
 
         response = client.get(f"/api/v1/report/pdf/{sample_case_data['sha256']}", headers=headers)
         assert response.status_code == 200

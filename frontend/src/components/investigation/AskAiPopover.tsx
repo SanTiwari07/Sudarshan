@@ -85,7 +85,7 @@ export function AskAiPopover({
         aria-expanded={open}
         aria-label={`Ask AI about ${value}`}
         title="Ask AI what this is"
-        className="inline-flex shrink-0 rounded-full p-0.5 text-slate-400 hover:text-violet-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40"
+        className="inline-flex shrink-0 rounded-full p-0.5 text-slate-500 hover:text-violet-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40"
       >
         {loading ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -100,13 +100,13 @@ export function AskAiPopover({
           className="absolute left-0 top-6 z-40 w-80 rounded-md border border-slate-200 bg-white shadow-lg p-3"
         >
           <div className="flex items-start justify-between gap-2 mb-1.5">
-            <span className="font-mono text-[11px] text-slate-500 break-all">
+            <span className="font-mono text-[13px] text-slate-500 break-all">
               {value.length > 80 ? `${value.slice(0, 78)}…` : value}
             </span>
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="text-slate-400 hover:text-slate-700 text-xs shrink-0"
+              className="text-slate-500 hover:text-slate-700 text-xs shrink-0"
               aria-label="Close"
             >
               ✕
@@ -120,10 +120,10 @@ export function AskAiPopover({
             <>
               {result.decoded && (
                 <div className="mb-2">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  <div className="text-[12px] font-bold uppercase tracking-wider text-slate-500">
                     Decoded ({result.encoding})
                   </div>
-                  <code className="block text-[11px] bg-slate-50 border border-slate-200 rounded p-1.5 break-all text-slate-800">
+                  <code className="block text-[13px] bg-slate-50 border border-slate-200 rounded p-1.5 break-all text-slate-800">
                     {result.decoded}
                   </code>
                 </div>
@@ -134,7 +134,7 @@ export function AskAiPopover({
               </p>
 
               {result.notes?.map((note, i) => (
-                <p key={i} className="mt-1 text-[10px] text-slate-500">
+                <p key={i} className="mt-1 text-[12px] text-slate-500">
                   · {note}
                 </p>
               ))}
@@ -145,8 +145,8 @@ export function AskAiPopover({
                 separate from the tables around it.
               */}
               <p
-                className={`mt-2 pt-1.5 border-t border-slate-100 text-[10px] ${
-                  result.source === 'refused' ? 'text-amber-700' : 'text-slate-400'
+                className={`mt-2 pt-1.5 border-t border-slate-100 text-[12px] ${
+                  result.source === 'refused' ? 'text-amber-700' : 'text-slate-500'
                 }`}
               >
                 {SOURCE_LABEL[result.source] ?? 'Advisory'}

@@ -5,11 +5,11 @@ export const INTEL = {
   cardBody: 'p-6',
   cardBodyCompact: 'p-4',
   headerPx: 'px-6 py-4',
-  caption: 'text-[11px] leading-snug text-slate-500',
+  caption: 'text-[13px] leading-snug text-slate-500',
   meta: 'text-xs text-slate-600',
   title: 'text-sm font-semibold text-slate-800 tracking-tight',
   subtitle: 'text-xs text-slate-500 mt-0.5',
-  eyebrow: 'text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500',
+  eyebrow: 'text-[13px] font-semibold uppercase tracking-[0.14em] text-slate-500',
 } as const;
 
 /** Sudarshan BOI theme - align with FraudCard / CaseHeader (blue-700, slate surfaces) */

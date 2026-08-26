@@ -153,19 +153,19 @@ export default function UrlDiscoveryArea({ onAnalyzeCandidate, disabled }: UrlDi
           <div className="flex items-center justify-between mb-2.5">
             <h3 className="text-xs font-semibold text-slate-900 uppercase tracking-wider">Discovery Progress</h3>
             {isBusy ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-800">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2 py-0.5 text-[13px] font-medium text-blue-800">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 Scanning
               </span>
             ) : sessionStatus.status === 'completed' ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-800">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2 py-0.5 text-[13px] font-medium text-green-800">
                 <CheckCircle2 className="h-3 w-3" />
                 Completed
               </span>
             ) : null}
           </div>
 
-          <div className="space-y-1 bg-slate-900 rounded-md p-3 font-mono text-[11px] text-slate-300 h-32 overflow-y-auto">
+          <div className="space-y-1 bg-slate-900 rounded-md p-3 font-mono text-[13px] text-slate-300 h-32 overflow-y-auto">
             {sessionStatus.progress_logs.map((log, i) => (
               <div key={i}>{log}</div>
             ))}
@@ -196,16 +196,16 @@ export default function UrlDiscoveryArea({ onAnalyzeCandidate, disabled }: UrlDi
                   <p className="font-mono text-xs font-medium text-slate-900">
                     {c.filename || c.package_id || 'Unknown Candidate'}
                   </p>
-                  <div className="mt-0.5 flex items-center gap-2.5 text-[11px] text-slate-500">
+                  <div className="mt-0.5 flex items-center gap-2.5 text-[13px] text-slate-500">
                     <span>Source: {c.source_type}</span>
                     {c.size && <span>{(c.size / 1024 / 1024).toFixed(2)} MB</span>}
                   </div>
                   {c.sha256 && (
-                    <p className="mt-0.5 text-[10px] font-mono text-slate-400 max-w-[200px] truncate sm:max-w-none">
+                    <p className="mt-0.5 text-[12px] font-mono text-slate-400 max-w-[200px] truncate sm:max-w-none">
                       {c.sha256}
                     </p>
                   )}
-                  {c.error && <p className="mt-0.5 text-[11px] text-red-600">{c.error}</p>}
+                  {c.error && <p className="mt-0.5 text-[13px] text-red-600">{c.error}</p>}
                 </div>
               </div>
 

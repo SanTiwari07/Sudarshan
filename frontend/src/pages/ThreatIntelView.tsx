@@ -1,25 +1,31 @@
 import { useMemo } from 'react';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { AlertTriangle, ArrowRight, RefreshCw } from 'lucide-react';
 import type { FraudCardData } from '../App';
 import { useAnalysis } from '../context/AnalysisContext';
 import { useIntelPayload } from '../hooks/useIntelPayload';
 import SocCard from '../components/ui/Card';
 import AIIntelligenceOverview from '../components/threatIntel/AIIntelligenceOverview';
 import ThreatDnaPanel from '../components/threatIntel/ThreatDnaPanel';
-import AttackChainFlow from '../components/threatIntel/AttackChainFlow';
 import IntelligenceSourcesPanel from '../components/threatIntel/IntelligenceSourcesPanel';
 import OperationalRecommendationCard from '../components/threatIntel/OperationalRecommendationCard';
 import ThreatEvidenceExplorer from '../components/threatIntel/ThreatEvidenceExplorer';
 import ThreatIocRegistry from '../components/threatIntel/ThreatIocRegistry';
+import CampaignAttributionPanel from '../components/threatIntel/CampaignAttributionPanel';
+import ThreatSimilarityPanel from '../components/threatIntel/ThreatSimilarityPanel';
+import HistoricalCasesPanel from '../components/threatIntel/HistoricalCasesPanel';
+import EvidenceConfidenceMeter from '../components/threatIntel/EvidenceConfidenceMeter';
 import ThreatIntelPageShell from '../components/threatIntel/ThreatIntelPageShell';
+import AnalysisTabs, { type AnalysisTab } from '../components/investigation/AnalysisTabs';
 import { INTEL } from '../components/threatIntel/intelTokens';
 import { TYPOGRAPHY } from '../theme/typography';
+import { caseSectionPath } from '../lib/caseRoutes';
 import {
   buildThreatDna,
-  buildAttackChain,
   buildConfidenceSources,
   evidenceConfidenceOverall,
   buildAnalystActions,
+  buildFamilySimilarity,
   collectEvidenceExplorerItems,
 } from '../lib/threatIntelModel';
 
@@ -30,6 +36,105 @@ function ThreatIntelSkeleton() {
       <div className="h-48 bg-slate-200 rounded-xl" />
       <div className="h-64 bg-slate-200 rounded-xl" />
     </div>
+  );
+}
+
+/**
+ * The reference half of the threat-intelligence page.
+ *
+ * Threat DNA, source coverage, the IOC registry and the evidence explorer are
+ * all "show me the underlying records" panels. Stacked, they tripled the
+ * page's height and buried the recommendation above them; tabbed, they cost
+ * one screen and the analyst picks the record type they actually want.
+ */
+function SupportingIntelligence({
+  dna,
+  intel,
+  data,
+  bundle,
+  explorer,
+  similarity,
+  confidenceSources,
+  overallConf,
+}: {
+  dna: ReturnType<typeof buildThreatDna>;
+  intel: NonNullable<ReturnType<typeof useIntelPayload>['api']>;
+  data: FraudCardData;
+  bundle: ReturnType<typeof useAnalysis>['investigationBundle'];
+  explorer: ReturnType<typeof collectEvidenceExplorerItems>;
+  similarity: ReturnType<typeof buildFamilySimilarity>;
+  confidenceSources: ReturnType<typeof buildConfidenceSources>;
+  overallConf: number;
+}) {
+  const tabs: AnalysisTab[] = [];
+
+  if (dna.length > 0) {
+    tabs.push({
+      id: 'dna',
+      label: 'Threat DNA',
+      count: dna.length,
+      content: <ThreatDnaPanel traits={dna} />,
+    });
+  }
+
+  tabs.push({
+    id: 'sources',
+    label: 'Sources',
+    content: <IntelligenceSourcesPanel intel={intel} data={data} bundle={bundle} />,
+  });
+
+  if (intel.iocs.length > 0) {
+    tabs.push({
+      id: 'iocs',
+      label: 'Indicators',
+      count: intel.iocs.length,
+      content: <ThreatIocRegistry iocs={intel.iocs} />,
+    });
+  }
+
+  /*
+   * Attribution: the question this page exists to answer.
+   *
+   * These four panels were built and then left unreachable - no route, no
+   * import, nothing rendering them. They answer "have we seen this before",
+   * which is precisely what an intelligence view is for, while the page was
+   * instead spending its space re-stating the verdict the case bar already
+   * carries.
+   */
+  tabs.push({
+    id: 'attribution',
+    label: 'Attribution',
+    content: (
+      <div className="space-y-4">
+        <CampaignAttributionPanel data={data} intel={intel} />
+        {similarity.length > 0 && <ThreatSimilarityPanel items={similarity} />}
+        <HistoricalCasesPanel data={data} />
+      </div>
+    ),
+  });
+
+  tabs.push({
+    id: 'confidence',
+    label: 'Confidence',
+    content: <EvidenceConfidenceMeter sources={confidenceSources} overall={overallConf} />,
+  });
+
+  if (explorer.length > 0) {
+    tabs.push({
+      id: 'evidence',
+      label: 'Evidence',
+      count: explorer.length,
+      content: <ThreatEvidenceExplorer groups={explorer} />,
+    });
+  }
+
+  if (tabs.length === 0) return null;
+
+  return (
+    <section aria-label="Supporting intelligence">
+      <h3 className={`${TYPOGRAPHY.h2} mb-3`}>Supporting intelligence</h3>
+      <AnalysisTabs tabs={tabs} />
+    </section>
   );
 }
 
@@ -53,7 +158,8 @@ export default function ThreatIntelView({ data }: { data: FraudCardData | null }
 
     return {
       dna: buildThreatDna(data, investigationBundle),
-      chain: buildAttackChain(data, investigationBundle),
+      confidenceSources,
+      similarity: buildFamilySimilarity(data, intel.malware_family || data.family_classification),
       overallConf,
       actions: buildAnalystActions(data, intel),
       explorer: collectEvidenceExplorerItems(investigationBundle, data, intel),
@@ -95,6 +201,7 @@ export default function ThreatIntelView({ data }: { data: FraudCardData | null }
         </SocCard>
       ) : intel && derived ? (
         <div className={INTEL.sectionGap}>
+          {/* Tier 1 - the assessment. */}
           <AIIntelligenceOverview
             data={data}
             intel={intel}
@@ -103,17 +210,42 @@ export default function ThreatIntelView({ data }: { data: FraudCardData | null }
             actions={derived.actions}
           />
 
-          <ThreatDnaPanel traits={derived.dna} />
+          {/*
+            Tier 2 - the action this intelligence implies.
 
-          <AttackChainFlow stages={derived.chain} data={data} />
-
-          <IntelligenceSourcesPanel intel={intel} data={data} bundle={investigationBundle} />
+            The attack chain used to render here as well, from the same
+            fraud_workflow the case summary reconstructs. Two renderers of one
+            dataset can only ever agree by luck, so this points at the one that
+            leads the case rather than shipping a rival copy.
+          */}
+          {data.fraud_workflow?.fraud_sequence_detected && (
+            <Link
+              to={`${caseSectionPath(data.sha256, 'summary')}#attack-story`}
+              className={`${TYPOGRAPHY.linkAction} text-sm`}
+            >
+              View the reconstructed attack chain
+              <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+            </Link>
+          )}
 
           <OperationalRecommendationCard data={data} intel={intel} actions={derived.actions} />
 
-          {intel.iocs.length > 0 && <ThreatIocRegistry iocs={intel.iocs} />}
-
-          {derived.explorer.length > 0 && <ThreatEvidenceExplorer groups={derived.explorer} />}
+          {/*
+            Tier 3 - four lookup panels that used to stack full-width below the
+            recommendation, so the page ended in 2000px of tables nobody scrolled
+            to. They answer different questions about the same case, which makes
+            them tabs rather than sections.
+          */}
+          <SupportingIntelligence
+            dna={derived.dna}
+            intel={intel}
+            data={data}
+            bundle={investigationBundle}
+            explorer={derived.explorer}
+            similarity={derived.similarity}
+            confidenceSources={derived.confidenceSources}
+            overallConf={derived.overallConf}
+          />
         </div>
       ) : null}
     </ThreatIntelPageShell>

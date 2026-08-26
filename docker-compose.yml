@@ -67,6 +67,13 @@ services:
       - ABUSEIPDB_API_KEY=${ABUSEIPDB_API_KEY}
       - ANALYSIS_TIMEOUT_SECONDS=1200
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set in .env}
+      # Explicit, absolute, and on a named volume. Left unset it resolved
+      # against the process CWD, which produced three unrelated sudarshan.db
+      # files (backend/, repo root, analysis-engine/) and, under the hardened
+      # overlay - read_only rootfs, dev bind-mount removed - pointed at
+      # /app/sudarshan.db on an unwritable filesystem, so the container could
+      # not start.
+      - SUDARSHAN_DB_PATH=${SUDARSHAN_DB_PATH:-/app/data/sudarshan.db}
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
     volumes:
@@ -74,6 +81,18 @@ services:
       - ./shared:/opt/sudarshan-core
       - ./.env:/app/.env:ro
       - uploads:/app/uploads
+      # The database lives on its own volume, not inside the source bind-mount,
+      # so it survives `docker compose down`, image rebuilds, and the hardened
+      # overlay removing ./backend:/app.
+      #
+      # Existing installs keep data in backend/sudarshan.db. That file is NOT
+      # picked up automatically - a silent switch would make 13 cases vanish
+      # from the UI. Move it once, deliberately:
+      #     docker compose run --rm backend \
+      #       python /opt/sudarshan-scripts/db_admin.py adopt /app/sudarshan.db
+      # or from the host, with SUDARSHAN_DB_PATH pointed at the volume.
+      - dbdata:/app/data
+      - ./scripts:/opt/sudarshan-scripts:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -222,3 +241,4 @@ services:
 volumes:
   uploads:         # Shared volume for zero-copy file sharing between backend & engine
   mitmproxy_har:   # Shared volume: mitmproxy writes HAR, engine reads it
+  dbdata:          # Authoritative application database. Back up with scripts/db_admin.py backup

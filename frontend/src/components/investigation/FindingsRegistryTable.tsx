@@ -37,7 +37,7 @@ function WhyMattersCell({ evidence }: { evidence: InvestigationEvidence }) {
   return (
     <p
       className={`${TYPOGRAPHY.bodySmall} break-words break-all ${
-        generic ? 'text-slate-400' : 'text-slate-600'
+        generic ? 'text-slate-500' : 'text-slate-600'
       }`}
     >
       {text}
@@ -48,7 +48,7 @@ function WhyMattersCell({ evidence }: { evidence: InvestigationEvidence }) {
 function FindingCell({ row }: { row: InvestigationEvidence }) {
   return (
     <div className="min-w-0 space-y-0.5">
-      <p className={`${TYPOGRAPHY.codeSm} text-slate-400 leading-none`}>{row.id}</p>
+      <p className={`${TYPOGRAPHY.codeSm} text-slate-500 leading-none`}>{row.id}</p>
       <p className={`${TYPOGRAPHY.bodySmall} font-bold text-slate-900 leading-snug break-words break-all`}>{row.title}</p>
     </div>
   );
@@ -107,7 +107,6 @@ export default function FindingsRegistryTable({
     <>
       {embedded && (
         <EvidenceToolbar
-          total={bundle.evidenceRecords.length}
           search={search}
           onSearchChange={setSearch}
           filter={filter}

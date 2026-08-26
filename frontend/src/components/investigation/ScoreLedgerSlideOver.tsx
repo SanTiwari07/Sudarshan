@@ -16,7 +16,6 @@ import {
   MessageSquare,
   PieChart,
   ShieldAlert,
-  X,
 } from 'lucide-react';
 import type { FraudCardData } from '../../App';
 import type { InvestigationBundle } from '../../types/investigation';
@@ -36,7 +35,10 @@ import {
   getAxesUsed,
 } from '../../lib/scoreLedger';
 import { useInvestigationUI } from '../../context/InvestigationUIContext';
+import DrawerShell from '../ui/DrawerShell';
+import { TYPOGRAPHY } from '../../theme/typography';
 import { exportLedgerCSV } from '../../utils/derive';
+import { useCaseLinks } from '../../hooks/useCaseLinks';
 
 const DRIVER_ICONS: Record<RiskDriver['iconKey'], typeof ShieldAlert> = {
   shield: ShieldAlert,
@@ -51,7 +53,7 @@ const DRIVER_ICONS: Record<RiskDriver['iconKey'], typeof ShieldAlert> = {
 
 function VerifiedBadge() {
   return (
-    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+    <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
       <BadgeCheck className="h-3 w-3" />
       Verified
     </span>
@@ -60,7 +62,7 @@ function VerifiedBadge() {
 
 function SourceBadge({ label }: { label: string }) {
   return (
-    <span className="text-[10px] font-medium text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md">
+    <span className="text-[12px] font-medium text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md">
       {label}
     </span>
   );
@@ -84,10 +86,10 @@ function RiskDriverCard({ driver, onEvidence }: { driver: RiskDriver; onEvidence
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="text-lg font-black text-amber-700 tabular-nums">+{driver.points}</span>
+              <span className="text-lg font-semibold text-amber-700 tabular-nums">+{driver.points}</span>
               <h3 className="text-sm font-bold text-slate-900">{driver.title}</h3>
             </div>
-            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${impactClass}`}>
+            <span className={`text-[12px] font-bold uppercase px-2 py-0.5 rounded border ${impactClass}`}>
               {driver.impact}
             </span>
           </div>
@@ -101,7 +103,7 @@ function RiskDriverCard({ driver, onEvidence }: { driver: RiskDriver; onEvidence
               <button
                 type="button"
                 onClick={() => onEvidence(driver.evidenceId!)}
-                className="text-[10px] font-semibold text-blue-700 hover:underline"
+                className="text-[12px] font-semibold text-blue-700 hover:underline"
               >
                 View evidence
               </button>
@@ -156,14 +158,14 @@ function MathematicalAccordion({
                 .map(([k, v]) => `${k} ${(v * 100).toFixed(0)}%`)
                 .join(' · ')}
             </p>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
+            <p className="text-[13px] text-slate-500 leading-relaxed">
               FRS combines STEI (static), dynamic sandbox, threat correlation, and banking impact using deterministic
               weights. STEI sub-axes (CT, BT, PR, OB, IR) roll up before FRS weighting.
             </p>
           </div>
           <div className="max-h-64 overflow-y-auto space-y-2">
             {lines.map((line) => (
-              <div key={line.id} className="border border-slate-200 rounded-lg p-2.5 text-[11px] bg-white">
+              <div key={line.id} className="border border-slate-200 rounded-lg p-2.5 text-[13px] bg-white">
                 <div className="font-semibold text-slate-800">{line.label}</div>
                 <div className="text-slate-600 mt-0.5 font-mono leading-relaxed">{line.detail}</div>
                 {line.contributionLabel && (
@@ -192,7 +194,8 @@ export default function ScoreLedgerSlideOver({
   data: FraudCardData;
   bundle: InvestigationBundle;
 }) {
-  const { ledgerOpen, ledgerScope, closeLedger, openEvidence } = useInvestigationUI();
+  const { ledgerOpen, ledgerScope, closeLedger, openEvidence, canGoBack } = useInvestigationUI();
+  const links = useCaseLinks();
   if (!ledgerOpen) return null;
 
   const score = Math.round(data.final_risk_score);
@@ -205,41 +208,24 @@ export default function ScoreLedgerSlideOver({
   const chatQuery = `Explain why this APK received a Fraud Risk Score of ${score}.`;
 
   return (
-    <div className="fixed inset-0 z-[60] flex justify-end">
-      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]" onClick={closeLedger} aria-hidden />
-      <div
-        className="relative w-full max-w-xl sm:max-w-2xl bg-white h-full shadow-2xl border-l border-slate-200 flex flex-col"
-        role="dialog"
-        aria-label="Score breakdown"
-      >
-        <div className="px-5 sm:px-6 py-5 border-b border-slate-200 flex items-start justify-between gap-4 shrink-0 bg-white">
-          <div className="min-w-0 flex gap-3">
-            <div className="p-2 rounded-xl bg-blue-50 text-blue-700 border border-blue-100 shrink-0">
-              <ShieldAlert className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-base font-bold text-slate-900">Why this APK scored {score}/100</h2>
-              <p className="text-xs text-slate-500 mt-1 leading-relaxed max-w-md">
-                Fraud Risk Score is calculated from verified static analysis, runtime behaviour, threat intelligence and
-                deterministic risk models.
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-col items-end gap-2 shrink-0">
-            <button type="button" onClick={closeLedger} className="p-1.5 rounded-lg hover:bg-slate-100">
-              <X className="h-4 w-4 text-slate-600" />
-            </button>
-            <div className="text-right">
-              <div className={`text-2xl font-black tabular-nums ${riskStyle.text}`}>
-                {score}
-                <span className="text-sm text-slate-400 font-medium"> / 100</span>
-              </div>
-              <Badge label={riskBandPlainEnglish(data.risk_band)} variant="risk" />
-            </div>
-          </div>
+    <DrawerShell
+      open
+      onClose={closeLedger}
+      onBack={canGoBack ? closeLedger : undefined}
+      title={`Why this APK scored ${score}/100`}
+      labelledById="score-ledger-title"
+      subtitle="Calculated from verified static analysis, runtime behaviour, threat intelligence and deterministic risk models."
+      headerExtra={
+        <div className="flex items-center gap-2.5 mt-3">
+          <span className={`font-sans text-2xl font-semibold tabular-nums ${riskStyle.text}`}>
+            {score}
+            <span className={`${TYPOGRAPHY.displaySub} ml-1`}>/ 100</span>
+          </span>
+          <Badge label={riskBandPlainEnglish(data.risk_band)} variant="risk" />
         </div>
-
-        <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-6 space-y-8">
+      }
+    >
+      <div className="space-y-8">
           <section className="space-y-3">
             <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
               <Info className="h-4 w-4 text-blue-600" />
@@ -283,8 +269,8 @@ export default function ScoreLedgerSlideOver({
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-bold text-slate-900">Final Fraud Risk Score</span>
                   <div className="text-right">
-                    <span className={`text-xl font-black tabular-nums ${riskStyle.text}`}>{score}</span>
-                    <span className="text-xs text-slate-400"> / 100</span>
+                    <span className={`text-xl font-semibold tabular-nums ${riskStyle.text}`}>{score}</span>
+                    <span className="text-xs text-slate-500"> / 100</span>
                     <div className="mt-1">
                       <Badge label={riskBandPlainEnglish(data.risk_band)} variant="risk" />
                     </div>
@@ -326,7 +312,7 @@ export default function ScoreLedgerSlideOver({
                 </p>
               </div>
               <Link
-                to={`/chat?q=${encodeURIComponent(chatQuery)}`}
+                to={`${links.ask}?q=${encodeURIComponent(chatQuery)}`}
                 onClick={closeLedger}
                 className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-semibold text-white bg-blue-700 rounded-lg hover:bg-blue-800 transition-colors shrink-0"
               >
@@ -336,8 +322,7 @@ export default function ScoreLedgerSlideOver({
           </section>
 
           <MathematicalAccordion data={data} bundle={bundle} ledgerScope={ledgerScope} />
-        </div>
       </div>
-    </div>
+    </DrawerShell>
   );
 }

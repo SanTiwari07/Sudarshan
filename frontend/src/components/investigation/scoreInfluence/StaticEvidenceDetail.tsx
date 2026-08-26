@@ -36,7 +36,7 @@ export default function StaticEvidenceDetail({ data }: { data: FraudCardData }) 
                     className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-blue-50/40"
                   >
                     <span className="text-sm font-semibold text-slate-900">{f.title}</span>
-                    <ChevronDown className={`h-4 w-4 text-slate-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`h-4 w-4 text-slate-500 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
                   </button>
                   {open && (
                     <div className="px-3 pb-3 space-y-2 text-xs border-t border-slate-100">
@@ -68,7 +68,7 @@ export default function StaticEvidenceDetail({ data }: { data: FraudCardData }) 
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm font-semibold text-slate-900">{eng.name}</span>
                 <span
-                  className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${
+                  className={`text-[12px] font-bold uppercase px-2 py-0.5 rounded border ${
                     eng.status === 'available'
                       ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                       : 'bg-white text-slate-500 border-slate-200'
@@ -95,7 +95,7 @@ export default function StaticEvidenceDetail({ data }: { data: FraudCardData }) 
           {steiAxisRows(view.steiAxes).map((row) => (
             <div key={row.key} className="flex items-center justify-between gap-2 text-xs">
               <span className="text-slate-700">
-                {row.label} <span className="text-slate-400">({row.weight})</span>
+                {row.label} <span className="text-slate-500">({row.weight})</span>
               </span>
               <span className="font-mono font-bold text-slate-900 tabular-nums">{row.value.toFixed(1)}</span>
             </div>
@@ -123,7 +123,7 @@ export default function StaticEvidenceDetail({ data }: { data: FraudCardData }) 
       {view.hasVide && view.videSummary && (
         <DetailSection title="Visual impersonation (VIDE)">
           <p className="text-xs text-slate-700 leading-relaxed">{view.videSummary}</p>
-          <p className="text-[11px] text-slate-500 mt-2">
+          <p className="text-[13px] text-slate-500 mt-2">
             VIDE is deterministic and separate from VirusTotal / OTX / AbuseIPDB. Lab baselines are not production bank
             data.
           </p>

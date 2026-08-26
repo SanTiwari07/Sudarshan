@@ -158,7 +158,7 @@ export function MitreMatrix({ data }: { data: FraudCardData }) {
             <div key={group.tactic} className="w-44 shrink-0">
               <div
                 className={[
-                  'text-[10px] font-bold uppercase tracking-wider px-2 py-1.5 rounded-t',
+                  'text-[12px] font-bold uppercase tracking-wider px-2 py-1.5 rounded-t',
                   group.tactic === 'Other'
                     ? 'bg-slate-100 text-slate-500'
                     : 'bg-slate-800 text-white',
@@ -179,10 +179,10 @@ export function MitreMatrix({ data }: { data: FraudCardData }) {
                     className="block border border-slate-200 rounded px-2 py-1.5 bg-white hover:border-slate-400 hover:bg-slate-50 transition-colors"
                     title={`${entry.id} — ${entry.label}`}
                   >
-                    <div className="font-mono text-[10px] text-sky-700">
+                    <div className="font-mono text-[12px] text-sky-700">
                       {entry.id}
                     </div>
-                    <div className="text-[11px] text-slate-700 leading-tight line-clamp-2">
+                    <div className="text-[13px] text-slate-700 leading-tight line-clamp-2">
                       {entry.label}
                     </div>
                   </a>

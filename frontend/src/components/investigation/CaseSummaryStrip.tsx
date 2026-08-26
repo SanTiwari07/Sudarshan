@@ -3,6 +3,7 @@ import type { InvestigationCounts } from '../../types/investigation';
 import { useInvestigationUI } from '../../context/InvestigationUIContext';
 import { securityFindingsTotal } from '../../lib/analystCopy';
 import { TYPOGRAPHY } from '../../theme/typography';
+import { useCaseLinks } from '../../hooks/useCaseLinks';
 import {
   Camera,
   ArrowRight,
@@ -89,6 +90,7 @@ export default function CaseSummaryStrip({
 }) {
   const navigate = useNavigate();
   const { openLedger } = useInvestigationUI();
+  const links = useCaseLinks();
   const findings = securityFindingsTotal(counts);
 
   const totalSignals = findings + counts.iocMatches + counts.mitreTechniques + counts.evidenceRecords + counts.screenshots;
@@ -196,7 +198,7 @@ export default function CaseSummaryStrip({
               Sandbox
             </span>
           }
-          onClick={() => navigate('/technical')}
+          onClick={() => navigate(links.evidence)}
         />
       </div>
     </div>

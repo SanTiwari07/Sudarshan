@@ -3,26 +3,27 @@ import { AlertTriangle, Loader2, Sparkles } from 'lucide-react';
 import { SocCard } from '../ui/Card';
 import UrlDiscoveryArea from '../discovery/UrlDiscoveryArea';
 import UploadDropZone from './UploadDropZone';
-import StageCard from './StageCard';
+import PipelineStepper, { type PipelineStage } from './PipelineStepper';
 import CompletionScreen from './progress/CompletionScreen';
 import { useAnalysisSession } from './useAnalysisSession';
 import type { FraudCardData } from '../../App';
 import { getToken } from '../../pages/Login';
 import { API_BASE } from '../../config';
 import type { StageStatus } from './pipelineStages';
+import { TYPOGRAPHY } from '../../theme/typography';
 
 type UploadPageProps = {
   onAnalysisComplete: (data: FraudCardData) => void;
 };
 
-const PIPELINE_OVERVIEW = [
-  { title: 'Static Intelligence', description: 'Manifest, MobSF, certificates, and code findings', icon: 'static' as const },
-  { title: 'Dynamic Intelligence', description: 'Emulator sandbox with Frida runtime hooks', icon: 'dynamic' as const },
-  { title: 'Threat Correlation', description: 'VT, OTX, and banking fraud family mapping', icon: 'threat' as const },
-  { title: 'Risk Engine', description: 'STEI, BFCI, and FRS deterministic scoring', icon: 'risk' as const },
-  { title: 'AI Investigation', description: 'Executive narrative and SOC recommendations', icon: 'ai' as const },
-  { title: 'Report Generation', description: 'Fraud card, technical view, and export artifacts', icon: 'report' as const },
-];
+const PIPELINE_OVERVIEW: readonly PipelineStage[] = [
+  { title: 'Static', description: 'Manifest, certificates, code findings', icon: 'static' },
+  { title: 'Dynamic', description: 'Emulator sandbox with Frida hooks', icon: 'dynamic' },
+  { title: 'Correlation', description: 'VirusTotal, OTX, family mapping', icon: 'threat' },
+  { title: 'Risk engine', description: 'STEI, BFCI and FRS scoring', icon: 'risk' },
+  { title: 'Investigation', description: 'Narrative and recommendations', icon: 'ai' },
+  { title: 'Report', description: 'Fraud card and export artifacts', icon: 'report' },
+] as const;
 
 export default function UploadPage({ onAnalysisComplete }: UploadPageProps) {
   const [mode, setMode] = useState<'apk' | 'url'>('apk');
@@ -66,27 +67,26 @@ export default function UploadPage({ onAnalysisComplete }: UploadPageProps) {
     <div className="upload-fade-in w-full min-w-0 space-y-4">
       <SocCard className="p-6 sm:p-8 lg:p-10 border-slate-200/80 shadow-sm">
         {phase === 'idle' && (
-          <div className="flex border-b border-slate-200 mb-6 overflow-x-auto scrollbar-hide">
-            <button
-              onClick={() => setMode('apk')}
-              className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 cursor-pointer ${
-                mode === 'apk'
-                  ? 'border-blue-600 text-blue-700 bg-blue-50/60'
-                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-              }`}
-            >
-              Upload APK
-            </button>
-            <button
-              onClick={() => setMode('url')}
-              className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 cursor-pointer ${
-                mode === 'url'
-                  ? 'border-blue-600 text-blue-700 bg-blue-50/60'
-                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-              }`}
-            >
-              Website URL
-            </button>
+          <div
+            role="group"
+            aria-label="Analysis source"
+            className="inline-flex rounded-md border border-slate-300 bg-slate-50 p-0.5 mb-6"
+          >
+            {(['apk', 'url'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMode(m)}
+                aria-pressed={mode === m}
+                className={`px-4 py-1.5 rounded text-[15px] font-medium transition-colors cursor-pointer ${
+                  mode === m
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                {m === 'apk' ? 'Upload APK' : 'Website URL'}
+              </button>
+            ))}
           </div>
         )}
 
@@ -158,7 +158,7 @@ export default function UploadPage({ onAnalysisComplete }: UploadPageProps) {
             <p className="text-xs font-mono text-slate-500 mt-0.5 mb-3 break-all max-w-md">Case: {file?.name}</p>
             
             <div className="mt-4 py-3 px-5 rounded-xl bg-white border border-blue-100 shadow-2xs max-w-lg w-full text-left">
-              <p className="text-[10px] font-bold text-blue-800 uppercase tracking-wider mb-1 font-mono">Current Stage</p>
+              <p className="text-[12px] font-bold text-blue-800 uppercase tracking-wider mb-1 font-mono">Current Stage</p>
               <p className="text-sm font-bold text-slate-900">{pipelineUi?.title || 'Processing'}</p>
               {pipelineUi?.description && (
                 <p className="text-xs text-slate-500 mt-1 line-clamp-2">{pipelineUi.description}</p>
@@ -169,35 +169,16 @@ export default function UploadPage({ onAnalysisComplete }: UploadPageProps) {
           </div>
         ) : null}
 
-        <section className="mt-8 sm:mt-10 pt-8 border-t border-slate-100" aria-labelledby="pipeline-overview-heading">
-          <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1.5 sm:gap-2 mb-4 sm:mb-5">
-            <div>
-              <h2
-                id="pipeline-overview-heading"
-                className="text-sm sm:text-base font-extrabold uppercase tracking-wider text-slate-900 font-mono"
-              >
-                Pipeline Overview
-              </h2>
-              <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-                Multi-stage forensic and ML telemetry executed automatically upon APK intake.
-              </p>
-            </div>
-            <span className="text-xs font-mono font-medium text-slate-400">
-              6 Automated Stages
-            </span>
+        <section className="mt-8 pt-6 border-t border-slate-100" aria-labelledby="pipeline-overview-heading">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 mb-5">
+            <h2 id="pipeline-overview-heading" className={TYPOGRAPHY.h3}>
+              Analysis pipeline
+            </h2>
+            <p className={TYPOGRAPHY.caption}>
+              Six stages, run automatically on intake
+            </p>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 sm:gap-4.5">
-            {PIPELINE_OVERVIEW.map((p, index) => (
-              <StageCard
-                key={p.title}
-                title={p.title}
-                description={p.description}
-                icon={p.icon}
-                status={getCardStatus(index)}
-                overview
-              />
-            ))}
-          </div>
+          <PipelineStepper stages={PIPELINE_OVERVIEW} statusOf={getCardStatus} />
         </section>
 
         {phase === 'error' && error && (
@@ -224,10 +205,10 @@ export default function UploadPage({ onAnalysisComplete }: UploadPageProps) {
             type="button"
             disabled={!file || isBusy}
             onClick={() => void startAnalysis()}
-            className={`mt-8 w-full h-16 flex justify-center items-center gap-2.5 rounded-2xl text-sm sm:text-base font-extrabold uppercase tracking-wider text-white bg-blue-700 shadow-md hover:bg-blue-800 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none disabled:cursor-not-allowed transition-all duration-200 cursor-pointer`}
+            className={`${TYPOGRAPHY.button} mt-6 w-full h-12 text-white bg-blue-700 shadow-sm hover:bg-blue-800 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none`}
           >
-            <Sparkles className="h-5 w-5" />
-            Analyze Application
+            <Sparkles className="h-4 w-4" aria-hidden />
+            Analyse application
           </button>
         )}
       </SocCard>

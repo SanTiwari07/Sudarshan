@@ -74,10 +74,21 @@ function useRowAccordion(_rowCount: number) {
 function OverviewGroup({
   eyebrow,
   title,
+  blurb,
   children,
 }: {
   eyebrow: string;
   title: string;
+  /**
+   * One sentence, in plain language, saying what the panel below is.
+   *
+   * Optional so a group with a self-evident heading can omit it - but the
+   * overview groups all set it deliberately. A heading alone tells an analyst
+   * who already knows the product what a panel is; it tells a bank manager
+   * reading a verdict nothing. This is the line that makes the page work for
+   * both readers, so it is content, not decoration.
+   */
+  blurb?: string;
   children: ReactNode;
 }) {
   return (
@@ -87,6 +98,7 @@ function OverviewGroup({
           {eyebrow}
         </p>
         <h2 className={`${TYPOGRAPHY.h2} text-[22px]`}>{title}</h2>
+        {blurb && <p className={`${TYPOGRAPHY.helper} max-w-[68ch]`}>{blurb}</p>}
       </div>
       {children}
     </section>
@@ -1063,6 +1075,7 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
           <OverviewGroup
             eyebrow="Step 1"
             title="What this analysis recorded"
+            blurb="Counts taken directly from the run. Click any number to jump to the records behind it."
           >
             <ActivitySummary data={data} counts={investigationBundle?.counts} />
           </OverviewGroup>
@@ -1070,6 +1083,7 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
           <OverviewGroup
             eyebrow="Step 2"
             title="What the engine concluded"
+            blurb="A deterministic rules engine assigns the label. No AI output contributes to it."
           >
             <ExplainabilityEngine data={data} />
           </OverviewGroup>
@@ -1077,6 +1091,7 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
           <OverviewGroup
             eyebrow="Step 3"
             title="The evidence behind the verdict"
+            blurb="Every record is individually traceable. Filter by source, or search the finding text."
           >
             <EvidenceSection
               id="evidence-registry"

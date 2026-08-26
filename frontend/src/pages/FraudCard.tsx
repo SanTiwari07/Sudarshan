@@ -1,180 +1,134 @@
 import { Link } from 'react-router-dom';
 import type { FraudCardData } from '../App';
 import { useAnalysis } from '../context/AnalysisContext';
-import { dynamicRuntimeLabel } from '../lib/analystCopy';
-import SocCard from '../components/ui/Card';
-import HelpTerm from '../components/investigation/HelpTerm';
+import { useInvestigationUI } from '../context/InvestigationUIContext';
+import { useCaseLinks } from '../hooks/useCaseLinks';
+import type { CaseRoutes } from '../lib/caseRoutes';
+import { TYPOGRAPHY } from '../theme/typography';
 import CoreFindingsList from '../components/investigation/CoreFindingsList';
-import FraudRiskHero from '../components/investigation/FraudRiskHero';
+import VerdictBlock from '../components/investigation/VerdictBlock';
+import AttackStory from '../components/investigation/AttackStory';
+import InView from '../components/motion/InView';
 import CaseSummaryStrip from '../components/investigation/CaseSummaryStrip';
-import AiSummaryCard from '../components/investigation/AiSummaryCard';
+import AiExplanation from '../components/investigation/AiExplanation';
+import BankingImpact from '../components/investigation/BankingImpact';
+import RecommendedAction from '../components/investigation/RecommendedAction';
 import ExecutiveVisualEvidenceSection from '../components/investigation/ExecutiveVisualEvidenceSection';
 import VisualImpersonationExecutiveCard from '../components/investigation/VisualImpersonationExecutiveCard';
 import InvestigationConclusionCard from '../components/investigation/InvestigationConclusionCard';
 import { useRuntimeScreenshots } from '../hooks/useRuntimeScreenshots';
-import { Activity, AlertTriangle, Shield, ShieldAlert, Clock, UserPlus, Unlock } from 'lucide-react';
+import {
+  ShieldCheck,
+  ShieldAlert,
+  ChevronRight,
+} from 'lucide-react';
+
+type Signal = {
+  key: string;
+  icon: React.ElementType;
+  tone: 'positive' | 'caution' | 'neutral';
+  title: string;
+  detail: string;
+  to: string;
+  cta: string;
+};
 
 /**
- * INCOMPLETE EXERCISE badge.
+ * Case signals.
  *
- * Sits above every other executive signal because it changes how all of them
- * read: when the sandbox never exercised the sample, a low score is a
- * statement about the run, not about the app.
+ * These were four full-width banners stacked one under another — runtime
+ * limitation, sandbox resilience, visual impersonation, threat intel — each
+ * shouting at exactly the same volume as the verdict above them. They are all
+ * the same kind of thing: a one-line status with a link to the page that
+ * proves it. So they render as one row of tiles, and the page gets its
+ * hierarchy back.
  */
-function IncompleteExerciseBanner({ data }: { data: FraudCardData }) {
-  const assertions = data.execution_assertions;
-  const incomplete =
-    data.verdict === 'INCOMPLETE_EXERCISE' || assertions?.incomplete_exercise;
-  if (!incomplete) return null;
-
-  const fired = assertions?.fired_count ?? 0;
-  const total = assertions?.total_count ?? 0;
-
-  return (
-    <SocCard className="border-amber-300 bg-amber-50/70">
-      <div className="px-4 py-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400 bg-amber-100 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-amber-900">
-            <AlertTriangle className="h-3.5 w-3.5" />
-            Incomplete exercise
-          </span>
-          {total > 0 && (
-            <span className="text-xs font-medium text-amber-900">
-              {fired}/{total} fraud trigger conditions reached
-            </span>
-          )}
-        </div>
-        <p className="mt-2 text-xs leading-relaxed text-amber-900/90">
-          The sandbox ran but never exercised this sample: no trigger condition was
-          reached and no threat behaviour was observed.{' '}
-          <strong>Absence of evidence is not evidence of absence</strong> — a banking
-          trojan waiting on a targeted app, an OTP, an accessibility grant or a
-          dormancy timer produces exactly this result. Reported confidence is
-          halved and this run does not certify the app as safe.
-        </p>
-        <Link
-          to="/technical"
-          className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-blue-800 hover:underline"
-        >
-          <Activity className="h-3.5 w-3.5" />
-          Open resilience controls to re-run with triggers →
-        </Link>
-      </div>
-    </SocCard>
-  );
-}
-
-function RuntimeLimitationBanner({ data }: { data: FraudCardData }) {
+function buildSignals(data: FraudCardData, links: CaseRoutes): Signal[] {
+  const signals: Signal[] = [];
   const frs = data.frs_breakdown;
-  if (!frs?.dynamic_ran) return null;
-  if (frs.dynamic_conclusive) {
-    return (
-      <SocCard className="border-emerald-100 bg-emerald-50/40">
-        <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-emerald-900">
-            <HelpTerm term="Runtime Behaviour Confirmed">Runtime behaviour confirmed</HelpTerm> in the sandbox.
-          </p>
-          <Link to="/technical" className="text-xs font-semibold text-emerald-800 hover:underline">
-            Inspect live analysis →
-          </Link>
-        </div>
-      </SocCard>
-    );
+
+  /*
+   * A stage of the analysis that did not produce a result is not a case signal.
+   *
+   * "Runtime limited - runtime inconclusive, no runtime evidence raised the
+   * score" was the fourth place on this page saying the same thing, after the
+   * verdict headline, the band-override note and the Runtime behaviour axis
+   * directly above it, which states the same fact and links to the same place.
+   * Only a runtime run that actually produced scored evidence is a signal.
+   */
+  if (frs?.dynamic_ran && frs.dynamic_conclusive) {
+    signals.push({
+      key: 'runtime',
+      icon: ShieldCheck,
+      tone: 'positive',
+      title: 'Runtime confirmed',
+      detail: 'Behaviour was observed and scored in the sandbox.',
+      to: links.evidence,
+      cta: 'Inspect live analysis',
+    });
   }
 
-  return (
-    <SocCard className="border-amber-200/80 bg-amber-50/50">
-      <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-amber-950">Runtime limitation</p>
-          <p className="text-xs text-amber-900/90 mt-1">
-            {dynamicRuntimeLabel(data)}. No runtime evidence was used to increase the final score.
-          </p>
-        </div>
-        <Link
-          to="/technical"
-          className="inline-flex items-center gap-1 text-xs font-semibold text-blue-800 hover:underline"
-        >
-          <Activity className="h-3.5 w-3.5" />
-          Inspect live analysis →
-        </Link>
-      </div>
-    </SocCard>
-  );
-}
-
-function ThreatIntelTeaser({ data }: { data: FraudCardData }) {
-  const corr = data.frs_breakdown?.correlation ?? 0;
-  const family = data.family_classification;
-  if (corr < 20 && (!family || family === 'Unknown')) return null;
-
-  return (
-    <SocCard>
-      <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-start gap-2">
-          <Shield className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
-          <div>
-            <p className="text-sm font-semibold text-slate-900">Threat intelligence</p>
-            <p className="text-xs text-slate-600 mt-0.5">
-              {family && family !== 'Unknown'
-                ? `Campaign correlation: ${family}.`
-                : 'External threat correlation contributed to this case.'}
-              {corr >= 20 ? ` Correlation axis score ${corr.toFixed(0)}/100.` : ''}
-            </p>
-          </div>
-        </div>
-        <Link to="/threat-intel" className="text-xs font-semibold text-blue-700 hover:underline">
-          View threat intelligence →
-        </Link>
-      </div>
-    </SocCard>
-  );
-}
-
-function ResilienceOverviewBanner({ data }: { data: FraudCardData }) {
   const actions = data.dynamic_analysis?.resilience_actions;
-  
-  if (!data.dynamic_available || !actions || actions.length === 0) return null;
+  if (data.dynamic_available && actions && actions.length > 0) {
+    signals.push({
+      key: 'resilience',
+      icon: ShieldAlert,
+      tone: 'neutral',
+      title: `${actions.length} evasion ${actions.length === 1 ? 'case' : 'cases'} defeated`,
+      detail: actions.map((a) => a.title).join(' · '),
+      to: links.evidence,
+      cta: 'View resilience controls',
+    });
+  }
 
-  const ICONS: Record<string, React.ElementType> = {
-    'time_warp': Clock,
-    'persona_seeding': UserPlus,
-    'permission_grants': Unlock,
-  };
+  return signals;
+}
+
+const SIGNAL_ICON: Record<Signal['tone'], string> = {
+  positive: 'text-emerald-600',
+  caution: 'text-amber-600',
+  neutral: 'text-slate-500',
+};
+
+function CaseSignalsRow({ data }: { data: FraudCardData }) {
+  const links = useCaseLinks();
+  const signals = buildSignals(data, links);
+  if (signals.length === 0) return null;
 
   return (
-    <SocCard className="border-indigo-200/80 bg-indigo-50/50">
-      <div className="px-4 py-4">
-        <div className="mb-4">
-          <p className="text-sm font-semibold text-indigo-950 flex items-center gap-1.5">
-            <ShieldAlert className="h-4 w-4 text-indigo-600" />
-            Advanced Sandbox Resilience Applied
-          </p>
-          <p className="text-xs text-indigo-900/90 mt-1">
-            Successfully handled {actions.length} evasion edge {actions.length === 1 ? 'case' : 'cases'} during analysis to expose hidden malicious behavior.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {actions.map((action, i) => {
-            const Icon = ICONS[action.type] || ShieldAlert;
-            return (
-              <div key={i} className="bg-white rounded-md border border-indigo-100/50 p-3 shadow-xs flex flex-col">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <Icon className="h-4 w-4 text-indigo-500 shrink-0" />
-                  <p className="text-sm font-semibold text-slate-800 line-clamp-1">{action.title}</p>
-                </div>
-                <p className="text-xs text-slate-600 grow">{action.result_summary}</p>
-              </div>
-            );
-          })}
-        </div>
+    <section aria-label="Case signals">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {signals.map((signal) => {
+          const Icon = signal.icon;
+          return (
+            <Link
+              key={signal.key}
+              to={signal.to}
+              className="group flex flex-col gap-1.5 bg-white border border-slate-200 rounded-md px-3.5 py-3 hover:border-slate-300 hover:shadow-[0_1px_3px_rgba(15,23,42,0.06)] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              <span className="flex items-center gap-2">
+                <Icon className={`h-3.5 w-3.5 shrink-0 ${SIGNAL_ICON[signal.tone]}`} aria-hidden />
+                <span className={TYPOGRAPHY.h3}>{signal.title}</span>
+              </span>
+              <span className={`${TYPOGRAPHY.bodySmall} line-clamp-2`}>{signal.detail}</span>
+              <span className={`${TYPOGRAPHY.linkAction} mt-auto pt-1`}>
+                {signal.cta}
+                <ChevronRight
+                  className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
+                  aria-hidden
+                />
+              </span>
+            </Link>
+          );
+        })}
       </div>
-    </SocCard>
+    </section>
   );
 }
 
 export default function FraudCard({ data }: { data: FraudCardData | null }) {
   const { investigationBundle } = useAnalysis();
+  const { atLeastAnalyst } = useInvestigationUI();
   const { entries: screenshotEntries } = useRuntimeScreenshots(data?.sha256);
 
   if (!data) return null;
@@ -185,35 +139,61 @@ export default function FraudCard({ data }: { data: FraudCardData | null }) {
       : investigationBundle?.counts;
 
   return (
-    <div className="space-y-6 sm:space-y-8">
-      {/* 0. Verdict qualifier - changes how everything below reads. */}
-      <IncompleteExerciseBanner data={data} />
+    <div className="space-y-8">
+      {/*
+        Level 1 - the decision, with its qualifier attached.
 
-      {/* 1. EXECUTIVE RISK ASSESSMENT & SCORE INFLUENCERS */}
-      <FraudRiskHero data={data} />
+        Coverage used to render as a separate banner here. On a partial run it
+        said the same sentence the verdict's own override note says, so the
+        reader met the statement twice before reaching the score and a third
+        time in the excluded-axis note. It now sits inside VerdictBlock, once,
+        with the trigger-condition detail behind "Why?".
+      */}
+      <VerdictBlock data={data} />
 
-      <ResilienceOverviewBanner data={data} />
+      {/* Level 2 - the reasons. Status first, then narrative, then findings. */}
+      <CaseSignalsRow data={data} />
+      <InView as="section">
+        <AiExplanation data={data} />
+      </InView>
 
-      {/* 2. EVIDENCE & RISK SIGNALS (Independent section below top area) */}
-      {stripCounts && (
+      {/*
+        Level 3 - the story.
+
+        This is the fraud workflow the engine has always produced, promoted out
+        of the technical view's third tab where it sat below the certificate
+        table. It is the most executive-legible artifact in the system and it
+        was the most deeply buried thing in it.
+      */}
+      <InView as="section">
+        <AttackStory data={data} screenshots={screenshotEntries} />
+      </InView>
+
+      <ExecutiveVisualEvidenceSection data={data} />
+      <CoreFindingsList data={data} bundle={investigationBundle} />
+      <VisualImpersonationExecutiveCard data={data} />
+
+      {/* Levels 5 and 6 - who this hurts, then the single action it implies. */}
+      <InView as="section">
+        <BankingImpact data={data} />
+      </InView>
+      <InView as="section">
+        <RecommendedAction data={data} />
+      </InView>
+
+      <InvestigationConclusionCard data={data} bundle={investigationBundle} />
+
+      {/*
+        Level 3 - reference. Counts are navigation, not evidence, so they sit
+        below the findings they lead into; identity metadata sits below both.
+
+        The evidence index is hidden at Summary depth: a bank manager reading
+        for twenty seconds does not need a row of record counts, and its
+        presence there was part of what made the page read as a dashboard.
+      */}
+      {atLeastAnalyst && stripCounts && (
         <CaseSummaryStrip riskScore={data.final_risk_score} counts={stripCounts} />
       )}
-
-      {/* 3. FULL-WIDTH AI SUMMARY */}
-      <AiSummaryCard data={data} />
-
-      {/* 3. Full-Width Visual Evidence Section */}
-      <ExecutiveVisualEvidenceSection data={data} />
-
-      <RuntimeLimitationBanner data={data} />
-
-      {/* 3. Technical Findings */}
-      <CoreFindingsList data={data} bundle={investigationBundle} />
-
-      {/* 4. Intelligence */}
-      <InvestigationConclusionCard data={data} bundle={investigationBundle} />
-      <VisualImpersonationExecutiveCard data={data} />
-      <ThreatIntelTeaser data={data} />
     </div>
   );
 }

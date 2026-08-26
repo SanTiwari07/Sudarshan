@@ -53,8 +53,8 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('SUDARSHAN')).toBeInTheDocument();
-      expect(screen.getByText('Bank of India - Cyber Security Operations')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /^sign in$/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /^sign in$/i })).toBeInTheDocument();
     });
 
     expect(screen.queryByText(/Upload APK/i)).not.toBeInTheDocument();
@@ -101,7 +101,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('BANKING THREAT INTELLIGENCE PLATFORM')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument();
     });
   });
 
@@ -139,7 +139,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     });
 
     expect(localStorage.getItem('sudarshan_token')).toBeNull();
-    expect(screen.getByText('Bank of India - Cyber Security Operations')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /^sign in$/i })).toBeInTheDocument();
   });
 
   // ---------------------------------------------------------------------------
@@ -153,7 +153,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Bank of India - Cyber Security Operations')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /^sign in$/i })).toBeInTheDocument();
     });
 
     expect(screen.queryByText(/Select APK file or drop here/i)).not.toBeInTheDocument();
@@ -170,7 +170,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Bank of India - Cyber Security Operations')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /^sign in$/i })).toBeInTheDocument();
     });
   });
 
@@ -185,7 +185,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Bank of India - Cyber Security Operations')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /^sign in$/i })).toBeInTheDocument();
     });
   });
 
@@ -200,7 +200,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Bank of India - Cyber Security Operations')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /^sign in$/i })).toBeInTheDocument();
     });
   });
 
@@ -215,7 +215,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Bank of India - Cyber Security Operations')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /^sign in$/i })).toBeInTheDocument();
     });
   });
 
@@ -231,7 +231,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Bank of India - Cyber Security Operations')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /^sign in$/i })).toBeInTheDocument();
     });
   });
 
@@ -305,7 +305,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('ENTERPRISE SOC')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument();
     });
   });
 
@@ -324,9 +324,9 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('BANKING THREAT INTELLIGENCE PLATFORM')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument();
     });
-    expect(screen.queryByText('Bank of India - Cyber Security Operations')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /^sign in$/i })).not.toBeInTheDocument();
   });
 
   // ---------------------------------------------------------------------------
@@ -344,7 +344,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('BANKING THREAT INTELLIGENCE PLATFORM')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument();
     });
 
     unmount();
@@ -356,7 +356,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('BANKING THREAT INTELLIGENCE PLATFORM')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument();
     });
   });
 
@@ -374,15 +374,15 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Logout/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument();
     });
 
-    const logoutBtn = screen.getByRole('button', { name: /Logout/i });
+    const logoutBtn = screen.getByRole('button', { name: /sign out/i });
     fireEvent.click(logoutBtn);
 
     await waitFor(() => {
       expect(localStorage.getItem('sudarshan_token')).toBeNull();
-      expect(screen.getByText('Bank of India - Cyber Security Operations')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /^sign in$/i })).toBeInTheDocument();
     });
   });
 
@@ -399,13 +399,13 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Logout/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /Logout/i }));
+    fireEvent.click(screen.getByRole('button', { name: /sign out/i }));
 
     await waitFor(() => {
-      expect(screen.getByText('Bank of India - Cyber Security Operations')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /^sign in$/i })).toBeInTheDocument();
     });
 
     unmount();
@@ -417,7 +417,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Bank of India - Cyber Security Operations')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /^sign in$/i })).toBeInTheDocument();
     });
   });
 
@@ -436,7 +436,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
 
     await waitFor(() => {
       expect(localStorage.getItem('sudarshan_token')).toBeNull();
-      expect(screen.getByText('Bank of India - Cyber Security Operations')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /^sign in$/i })).toBeInTheDocument();
     });
   });
 
@@ -450,14 +450,14 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('BANKING THREAT INTELLIGENCE PLATFORM')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument();
     });
 
     handle401Response();
 
     await waitFor(() => {
       expect(localStorage.getItem('sudarshan_token')).toBeNull();
-      expect(screen.getByText('Bank of India - Cyber Security Operations')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /^sign in$/i })).toBeInTheDocument();
     });
   });
 
@@ -474,7 +474,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     );
 
     expect(container.querySelector('aside')).toBeNull();
-    expect(screen.queryByText('BANKING THREAT INTELLIGENCE PLATFORM')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /sign out/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/Select APK file or drop here/i)).not.toBeInTheDocument();
   });
 
@@ -491,7 +491,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('BANKING THREAT INTELLIGENCE PLATFORM')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument();
     });
   });
 
@@ -508,7 +508,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('BANKING THREAT INTELLIGENCE PLATFORM')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument();
     });
   });
 
@@ -523,7 +523,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Bank of India - Cyber Security Operations')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /^sign in$/i })).toBeInTheDocument();
     });
     expect(container.querySelector('aside')).toBeNull();
 
@@ -556,13 +556,13 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Logout/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /Logout/i }));
+    fireEvent.click(screen.getByRole('button', { name: /sign out/i }));
 
     await waitFor(() => {
-      expect(screen.getByText('Bank of India - Cyber Security Operations')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /^sign in$/i })).toBeInTheDocument();
     });
 
     unmount();
@@ -574,7 +574,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Bank of India - Cyber Security Operations')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /^sign in$/i })).toBeInTheDocument();
     });
   });
 });

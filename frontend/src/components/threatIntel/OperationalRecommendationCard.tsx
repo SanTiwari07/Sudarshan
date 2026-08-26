@@ -4,6 +4,7 @@ import type { AnalystAction, IntelApiPayload } from '../../lib/threatIntelModel'
 import SocCard from '../ui/Card';
 import SectionHeader from '../ui/SectionHeader';
 import { INTEL } from './intelTokens';
+import { TYPOGRAPHY } from '../../theme/typography';
 
 function normalizeActionLabel(raw: string): string {
   const lower = raw.toLowerCase();
@@ -13,6 +14,27 @@ function normalizeActionLabel(raw: string): string {
   if (/ioc|domain|url|indicator/.test(lower)) return 'Recommend IOC Blocking';
   if (/monitor|watch/.test(lower)) return 'Monitor';
   return raw;
+}
+
+/**
+ * One row per distinct action.
+ *
+ * The engine emits an action per source, so "Monitor" arrived twice - once
+ * from the risk engine, once from the intelligence report - and rendered as
+ * two identical rows with different justifications. Same instruction, so it
+ * is one row carrying both reasons.
+ */
+function mergeActions(actions: AnalystAction[]): { label: string; reasons: string[] }[] {
+  const merged = new Map<string, { label: string; reasons: string[] }>();
+  for (const action of actions) {
+    const label = normalizeActionLabel(action.label);
+    const entry = merged.get(label) ?? { label, reasons: [] };
+    if (action.evidenceRef && !entry.reasons.includes(action.evidenceRef)) {
+      entry.reasons.push(action.evidenceRef);
+    }
+    merged.set(label, entry);
+  }
+  return [...merged.values()];
 }
 
 function buildRecommendationParagraph(
@@ -73,29 +95,49 @@ export default function OperationalRecommendationCard({
     'Manual Review';
   const action = normalizeActionLabel(raw);
   const paragraph = buildRecommendationParagraph(action, data, intel, actions);
+  /*
+   * The primary action is stated in the pill above; repeating it as the first
+   * row of "also do this" was the third mention of the same word on one card.
+   */
+  const supporting = mergeActions(actions).filter((a) => a.label !== action);
 
   return (
-    <SocCard className="border-slate-200 shadow-sm">
+    <SocCard rank="primary" className="rounded-lg">
       <SectionHeader
         icon={<Compass className="h-4 w-4" />}
-        title="Operational Recommendation"
+        title="Operational recommendation"
         subtitle="What to do next, based on correlated evidence"
       />
-      <div className="px-5 sm:px-6 pb-6 pt-2 space-y-4">
-        <div className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
-          <span className="text-xs font-semibold text-blue-900">{action}</span>
+      {/*
+        Verdict left, supporting actions right.
+
+        The card used to be a single narrow column of 11px lines against a
+        two-thirds-empty card. The two halves are separate questions - "what do
+        I do" and "what else follows" - so they sit side by side and the card
+        stops being mostly margin.
+      */}
+      <div className="grid grid-cols-1 gap-6 px-5 py-5 sm:px-6 lg:grid-cols-[minmax(0,58ch)_minmax(260px,1fr)] lg:gap-10">
+        <div className="min-w-0 space-y-3">
+          <span className="inline-flex items-center rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-[15px] font-semibold text-blue-900">
+            {action}
+          </span>
+          <p className={TYPOGRAPHY.bodySmall}>{paragraph}</p>
         </div>
-        <p className={`${INTEL.meta} leading-relaxed max-w-3xl text-slate-700`}>{paragraph}</p>
-        {actions.length > 1 && (
-          <ul className="space-y-2 pt-2 border-t border-slate-100">
-            {actions.slice(0, 4).map((a) => (
-              <li key={`${a.label}-${a.evidenceRef}`} className="text-[11px] text-slate-600">
-                <span className="font-semibold text-slate-800">{normalizeActionLabel(a.label)}</span>
-                <span className="text-slate-400 mx-1"> - </span>
-                {a.evidenceRef}
-              </li>
-            ))}
-          </ul>
+
+        {supporting.length > 0 && (
+          <div>
+            <p className={`${INTEL.eyebrow} mb-2`}>Supporting actions</p>
+            <ul className="divide-y divide-slate-200 rounded-md border border-slate-200 bg-slate-50/60">
+              {supporting.slice(0, 4).map((a) => (
+                <li key={a.label} className="px-3.5 py-2.5">
+                  <p className="font-sans text-[15px] font-semibold leading-snug text-slate-900">{a.label}</p>
+                  {a.reasons.length > 0 && (
+                    <p className={`${TYPOGRAPHY.caption} mt-0.5`}>{a.reasons.join(' · ')}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </div>
     </SocCard>

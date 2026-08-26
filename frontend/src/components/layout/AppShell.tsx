@@ -22,7 +22,10 @@ export default function AppShell({ children }: AppShellProps) {
     <div className="h-screen min-h-screen flex flex-col bg-surface-page min-w-0 relative overflow-hidden">
       <AppSidebar onLogout={logout} />
       <AppHeader isAuthed={isAuthed} onLogout={logout} />
-      <main className="flex-1 w-full min-w-0 flex flex-col analyst-main pl-14 overflow-y-auto">
+      <main
+        className="flex-1 w-full min-w-0 flex flex-col analyst-main overflow-y-auto transition-[padding] duration-200 ease-out"
+        style={{ paddingLeft: 'calc(var(--app-sidebar-width) + 0.75rem)' }}
+      >
         {children}
       </main>
     </div>

@@ -1,9 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
 import {
-  LayoutDashboard,
-  Terminal,
-  MessageSquare,
-  Globe,
   Database,
   UploadCloud,
   Layers,
@@ -20,32 +16,25 @@ export type NavItem = {
   disabled?: boolean;
 };
 
-/** Legacy drawer list - kept for any deep links; primary nav is AppHeader bar. */
-export const NAV_ITEMS: NavItem[] = [
-  { to: '/', label: 'Upload & analyze', shortLabel: 'Upload', icon: UploadCloud, matchPrefix: '/' },
-  { to: '/batch', label: 'Enterprise batch scan', shortLabel: 'Batch Scan', icon: Layers, matchPrefix: '/batch' },
-  { to: '/fraud-card', label: 'Fraud analyst intelligence', shortLabel: 'Fraud card', icon: LayoutDashboard },
-  { to: '/technical', label: 'SOC / technical view', shortLabel: 'Technical', icon: Terminal },
-  { to: '/chat', label: 'AI investigation assistant', shortLabel: 'AI assistant', icon: MessageSquare },
-  { to: '/threat-intel', label: 'Threat intelligence', shortLabel: 'Threat intel', icon: Globe },
-  { to: '/history', label: 'Case history registry', shortLabel: 'History', icon: Database, matchPrefix: '/history' },
-];
-
-export const ENTERPRISE_NAV_MAIN: NavItem[] = [
-  { to: '/fraud-card', label: 'Executive Fraud Card', shortLabel: 'Executive', icon: LayoutDashboard },
-  { to: '/technical', label: 'Technical SOC View', shortLabel: 'Technical', icon: Terminal },
-  { to: '/threat-intel', label: 'Threat Intelligence', shortLabel: 'Intel', icon: Globe },
-  { to: '/chat', label: 'AI Assistant', shortLabel: 'AI Assistant', icon: MessageSquare },
-];
-
-/** Right cluster: Cases, Batch Scan, then Upload APK (adjacent to notifications). */
+/**
+ * Workspace navigation.
+ *
+ * The four investigation views used to live here too, as an "Active case"
+ * group: Executive, Technical, Intel, AI Assistant. They now live in the case
+ * bar at `/case/:sha256`, named after the question each answers rather than
+ * after the job title of whoever is expected to read it.
+ *
+ * Keeping both would have meant two menus to the same four destinations,
+ * disagreeing about what to call them - which is the ambiguity this
+ * reorganisation exists to remove.
+ */
 export const ENTERPRISE_NAV_END: NavItem[] = [
   { to: '/history', label: 'Cases', shortLabel: 'Cases', icon: Database, matchPrefix: '/history' },
   { to: '/batch', label: 'Batch Scan', shortLabel: 'Batch Scan', icon: Layers, matchPrefix: '/batch' },
   { to: '/', label: 'Upload APK', shortLabel: 'Upload', icon: UploadCloud, matchPrefix: '/' },
 ];
 
-export const ENTERPRISE_NAV: NavItem[] = [...ENTERPRISE_NAV_MAIN, ...ENTERPRISE_NAV_END];
+export const ENTERPRISE_NAV: NavItem[] = [...ENTERPRISE_NAV_END];
 
 export function isNavActive(pathname: string, item: NavItem): boolean {
   if (item.disabled) return false;

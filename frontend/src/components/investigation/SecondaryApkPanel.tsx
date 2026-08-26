@@ -51,7 +51,7 @@ export function SecondaryApkPanel({ data }: { data: FraudCardData }) {
         <div className="px-4 py-6 text-sm text-slate-500">
           No secondary APK was observed during this run.
           {!data.dynamic_available && (
-            <span className="block mt-1 text-slate-400">
+            <span className="block mt-1 text-slate-500">
               Dynamic analysis did not run for this sample, so a dropper
               could not have been observed either way.
             </span>
@@ -82,7 +82,7 @@ export function SecondaryApkPanel({ data }: { data: FraudCardData }) {
                 {p.filename || p.device_path || 'unnamed.apk'}
               </span>
               <span
-                className={`text-[11px] font-semibold px-2 py-0.5 rounded ${
+                className={`text-[13px] font-semibold px-2 py-0.5 rounded ${
                   STATUS_STYLE[p.status ?? ''] ?? 'bg-slate-100 text-slate-700'
                 }`}
               >
@@ -117,7 +117,7 @@ export function SecondaryApkPanel({ data }: { data: FraudCardData }) {
               ) : (
                 <div className="flex gap-2 sm:col-span-2">
                   <dt className="text-slate-500 shrink-0">SHA-256</dt>
-                  <dd className="text-slate-400">
+                  <dd className="text-slate-500">
                     not preserved &mdash; artifact was not retrievable
                   </dd>
                 </div>
@@ -162,7 +162,7 @@ export function SecondaryApkPanel({ data }: { data: FraudCardData }) {
             {p.notes && p.notes.length > 0 && (
               <ul className="mt-2 space-y-0.5">
                 {p.notes.map((note, n) => (
-                  <li key={n} className="text-[11px] text-slate-500">
+                  <li key={n} className="text-[13px] text-slate-500">
                     &middot; {note}
                   </li>
                 ))}

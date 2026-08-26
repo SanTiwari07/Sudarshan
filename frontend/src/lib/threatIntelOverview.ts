@@ -18,12 +18,21 @@ function assignedFamily(data: FraudCardData, intel: IntelApiPayload): string | n
   return f;
 }
 
-export function buildThreatIntelExecutiveNarrative(
+/**
+ * The briefing as discrete sentences.
+ *
+ * The joined string below reads as one 900-character block on screen, which is
+ * how the intel page ended up with a wall of prose no analyst finishes. The
+ * sentences were always structured - assessment, static, runtime, correlation,
+ * method, action, confidence - so the UI now gets them separately and can set
+ * them as a lead plus short paragraphs.
+ */
+export function buildThreatIntelExecutiveSentences(
   data: FraudCardData,
   intel: IntelApiPayload,
   bundle: InvestigationBundle | null,
   overallConf: number,
-): string {
+): string[] {
   const sentences: string[] = [];
   const family = assignedFamily(data, intel);
   const frs = data.frs_breakdown;
@@ -118,7 +127,16 @@ export function buildThreatIntelExecutiveNarrative(
     `Overall confidence in this assessment is ${qual} because ${sourceCount} independent evidence source${sourceCount === 1 ? '' : 's'} support the same conclusion.`,
   );
 
-  return sentences.slice(0, 8).join(' ');
+  return sentences.slice(0, 8);
+}
+
+export function buildThreatIntelExecutiveNarrative(
+  data: FraudCardData,
+  intel: IntelApiPayload,
+  bundle: InvestigationBundle | null,
+  overallConf: number,
+): string {
+  return buildThreatIntelExecutiveSentences(data, intel, bundle, overallConf).join(' ');
 }
 
 export function buildWhatWasDiscovered(

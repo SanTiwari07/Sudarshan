@@ -14,7 +14,7 @@ export function FlowSteps({ steps }: { steps: string[] }) {
     <ol className="space-y-2 text-xs text-slate-700">
       {steps.map((step, i) => (
         <li key={step} className="flex gap-2">
-          <span className="text-slate-400 font-mono shrink-0">{i < steps.length - 1 ? '↓' : '•'}</span>
+          <span className="text-slate-500 font-mono shrink-0">{i < steps.length - 1 ? '↓' : '•'}</span>
           <span className={i === steps.length - 1 ? 'font-semibold text-slate-900' : ''}>{step}</span>
         </li>
       ))}
@@ -63,7 +63,7 @@ export function FrsAxisTransparencyTable({
 
 export function MonoBlock({ children }: { children: string }) {
   return (
-    <code className="block text-[11px] font-mono bg-white border border-slate-200 rounded px-2 py-1.5 break-all text-slate-800">
+    <code className="block text-[13px] font-mono bg-white border border-slate-200 rounded px-2 py-1.5 break-all text-slate-800">
       {children}
     </code>
   );

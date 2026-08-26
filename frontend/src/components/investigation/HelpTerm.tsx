@@ -44,7 +44,7 @@ export default function HelpTerm({ children, term, helper, className = '' }: Hel
         <span
           role="button"
           tabIndex={0}
-          className="rounded-full p-0.5 text-slate-400 hover:text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 cursor-help"
+          className="rounded-full p-0.5 text-slate-500 hover:text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 cursor-help"
           aria-label={text}
           aria-expanded={open}
           onClick={(e) => {
@@ -64,7 +64,7 @@ export default function HelpTerm({ children, term, helper, className = '' }: Hel
         </span>
         <span
           role="tooltip"
-          className={`pointer-events-none absolute left-0 top-full z-[60] mt-1.5 w-56 px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 text-[11px] leading-snug shadow-md transition-opacity ${
+          className={`pointer-events-none absolute left-0 top-full z-[60] mt-1.5 w-56 px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 text-[13px] leading-snug shadow-md transition-opacity ${
             open ? 'opacity-100' : 'opacity-0 group-hover/help:opacity-100 group-focus-within/help:opacity-100'
           }`}
         >

@@ -46,6 +46,21 @@ function mapCaseDetailToFraudCard(caseDetail: Record<string, unknown>): FraudCar
           'Monitor application',
       ),
     ),
+    /**
+     * The verdict and its supporting assertion matrix.
+     *
+     * These were absent from this mapper, so every case restored from history
+     * lost the one signal that stops a low score from reading as a clean bill
+     * of health. A case the engine refused to certify came back looking
+     * certified.
+     *
+     * `verdict` falls back to `risk_band` for cases persisted before the
+     * Execution Assertion Matrix existed; `execution_assertions` stays
+     * undefined for those, which the UI renders as "coverage not assessed"
+     * rather than inventing a matrix after the fact.
+     */
+    verdict: String(caseDetail.verdict || caseDetail.risk_band || 'Safe'),
+    execution_assertions: caseDetail.execution_assertions as FraudCardData['execution_assertions'],
     frs_breakdown: caseDetail.frs_breakdown as FraudCardData['frs_breakdown'],
     risk_explanation: caseDetail.risk_explanation as FraudCardData['risk_explanation'],
     threat_scenario_table: (caseDetail.threat_scenario_table as FraudCardData['threat_scenario_table']) || [],

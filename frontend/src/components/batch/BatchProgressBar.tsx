@@ -131,7 +131,7 @@ export default function BatchProgressBar({
         <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-50/70 border border-emerald-100">
           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
           <div className="min-w-0">
-            <div className="text-[10px] font-semibold text-emerald-800 uppercase tracking-wider">
+            <div className="text-[12px] font-semibold text-emerald-800 uppercase tracking-wider">
               Completed
             </div>
             <div className="text-sm font-bold font-mono text-emerald-950">
@@ -143,7 +143,7 @@ export default function BatchProgressBar({
         <div className="flex items-center gap-2 p-2 rounded-lg bg-blue-50/70 border border-blue-100">
           <Loader2 className={`w-4 h-4 text-blue-600 shrink-0 ${activeScanning > 0 ? 'animate-spin' : ''}`} />
           <div className="min-w-0">
-            <div className="text-[10px] font-semibold text-blue-800 uppercase tracking-wider">
+            <div className="text-[12px] font-semibold text-blue-800 uppercase tracking-wider">
               Scanning
             </div>
             <div className="text-sm font-bold font-mono text-blue-950">
@@ -155,7 +155,7 @@ export default function BatchProgressBar({
         <div className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 border border-slate-200">
           <Clock className="w-4 h-4 text-slate-500 shrink-0" />
           <div className="min-w-0">
-            <div className="text-[10px] font-semibold text-slate-600 uppercase tracking-wider">
+            <div className="text-[12px] font-semibold text-slate-600 uppercase tracking-wider">
               Queued
             </div>
             <div className="text-sm font-bold font-mono text-slate-800">
@@ -167,7 +167,7 @@ export default function BatchProgressBar({
         <div className="flex items-center gap-2 p-2 rounded-lg bg-red-50/70 border border-red-100">
           <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
           <div className="min-w-0">
-            <div className="text-[10px] font-semibold text-red-800 uppercase tracking-wider">
+            <div className="text-[12px] font-semibold text-red-800 uppercase tracking-wider">
               Failed
             </div>
             <div className="text-sm font-bold font-mono text-red-950">
@@ -179,7 +179,7 @@ export default function BatchProgressBar({
         <div className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 border border-slate-200 col-span-2 sm:col-span-1">
           <XCircle className="w-4 h-4 text-slate-500 shrink-0" />
           <div className="min-w-0">
-            <div className="text-[10px] font-semibold text-slate-600 uppercase tracking-wider">
+            <div className="text-[12px] font-semibold text-slate-600 uppercase tracking-wider">
               Cancelled
             </div>
             <div className="text-sm font-bold font-mono text-slate-800">

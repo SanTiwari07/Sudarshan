@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
+import { useCaseLinks } from '../../../hooks/useCaseLinks';
 
 type CompletionScreenProps = {
   fileName: string;
@@ -13,13 +14,14 @@ export default function CompletionScreen({
   autoNavigateMs = 2800,
 }: CompletionScreenProps) {
   const navigate = useNavigate();
+  const links = useCaseLinks();
 
   useEffect(() => {
     const t = window.setTimeout(() => {
-      navigate('/fraud-card', { replace: true });
+      navigate(links.summary, { replace: true });
     }, autoNavigateMs);
     return () => clearTimeout(t);
-  }, [navigate, autoNavigateMs]);
+  }, [navigate, autoNavigateMs, links.summary]);
 
   return (
     <div className="upload-fade-in w-full flex justify-center px-4 py-16 sm:py-24">
@@ -35,7 +37,7 @@ export default function CompletionScreen({
         </p>
         <button
           type="button"
-          onClick={() => navigate('/fraud-card', { replace: true })}
+          onClick={() => navigate(links.summary, { replace: true })}
           className="mt-4 inline-flex items-center justify-center px-5 py-2.5 rounded-lg bg-blue-700 text-white text-sm font-medium hover:bg-blue-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
         >
           Open investigation

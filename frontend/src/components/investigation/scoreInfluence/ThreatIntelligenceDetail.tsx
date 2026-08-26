@@ -23,7 +23,7 @@ function ProviderStatusBadge({ status }: { status: ProviderUiStatus }) {
           ? 'bg-blue-50 text-blue-800 border-blue-200'
           : 'bg-slate-50 text-slate-700 border-slate-200';
   return (
-    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${cls}`}>{label}</span>
+    <span className={`text-[12px] font-bold uppercase px-2 py-0.5 rounded border ${cls}`}>{label}</span>
   );
 }
 

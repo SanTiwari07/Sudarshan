@@ -124,7 +124,7 @@ export default function BatchHistory() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider font-mono bg-surface-secondary">
+                <tr className="border-b border-slate-200 text-[13px] font-bold text-slate-500 uppercase tracking-wider font-mono bg-surface-secondary">
                   <th className="py-3 px-4">Batch ID</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4">Date & Time</th>
@@ -146,14 +146,14 @@ export default function BatchHistory() {
                     <td className="py-3.5 px-4 whitespace-nowrap">
                       {getStatusPill(batch.status)}
                     </td>
-                    <td className="py-3.5 px-4 text-slate-500 text-[11px] whitespace-nowrap">
+                    <td className="py-3.5 px-4 text-slate-500 text-[13px] whitespace-nowrap">
                       {fmtDate(batch.created_at)}
                     </td>
                     <td className="py-3.5 px-4 whitespace-nowrap">
                       <span className="font-semibold text-slate-800">
                         {batch.total_jobs} APK{batch.total_jobs === 1 ? '' : 's'}
                       </span>
-                      <span className="text-slate-400 text-[11px] ml-1.5">
+                      <span className="text-slate-400 text-[13px] ml-1.5">
                         ({batch.completed_jobs} done{batch.failed_jobs > 0 ? `, ${batch.failed_jobs} failed` : ''})
                       </span>
                     </td>
@@ -171,7 +171,7 @@ export default function BatchHistory() {
                             style={{ width: `${batch.progress_pct}%` }}
                           />
                         </div>
-                        <span className="text-[11px] text-slate-600 font-semibold w-10 text-right">
+                        <span className="text-[13px] text-slate-600 font-semibold w-10 text-right">
                           {batch.progress_pct}%
                         </span>
                       </div>

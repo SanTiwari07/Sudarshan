@@ -191,13 +191,23 @@ class TestPDFGeneratorUnit:
         assert report_data.risk_band.value.upper() in page1_text
 
     def test_build_pdf_report_zero_dynamic(self, sample_case_data):
+        """
+        A run that never happened must say so, in the engine's own vocabulary.
+
+        This previously asserted "NO_TELEMETRY_CAPTURED", a string the report
+        synthesised for itself. The sandbox publishes `dynamic_status` and the
+        report now renders that value verbatim, so the assertion tracks the
+        engine's vocabulary instead of a name only the PDF ever used.
+        """
         sample_case_data["dynamic_result"] = None
         sample_case_data["frs_breakdown"]["dynamic_ran"] = False
         pdf_bytes = build_pdf_report(sample_case_data)
         reader = PdfReader(io.BytesIO(pdf_bytes))
         full_text = " ".join([page.extract_text() for page in reader.pages])
 
-        assert "[DYNAMIC-STATUS: NO_TELEMETRY_CAPTURED]" in full_text or "NO_TELEMETRY_CAPTURED" in full_text
+        assert "NOT_PERFORMED" in full_text
+        # And it must NOT claim the sandbox confirmed anything.
+        assert "CONFIRMED DYNAMIC RUN" not in full_text
 
     def test_vide_unavailable_and_clean_handling(self, sample_case_data):
         # VIDE not analyzed
@@ -257,13 +267,12 @@ class TestPDFExportAPI:
         os.environ["JWT_SECRET_KEY"] = "test-secret-key-1234567890-super-secret-sudarshan"
         from app.main import app
         from app.routes.report import cache_report
-        from app.auth.auth import create_access_token
+        from auth_helpers import auth_headers_sync
 
         cache_report(sample_case_data["sha256"], sample_case_data)
-        
+
         client = TestClient(app)
-        valid_token = create_access_token(1, "testanalyst", "analyst")
-        headers = {"Authorization": f"Bearer {valid_token}"}
+        headers = auth_headers_sync("testanalyst", "analyst")
 
         response = client.get(f"/api/v1/report/pdf/{sample_case_data['sha256']}", headers=headers)
         assert response.status_code == 200

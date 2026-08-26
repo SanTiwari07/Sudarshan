@@ -1,14 +1,26 @@
 import { useState, useRef, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
-  Cpu, Send, Shield, User, RefreshCw, AlertTriangle, CheckCircle2,
-  HelpCircle, FileText, Lock, Eye, Check,
-  Copy, CopyCheck, Info, AlertOctagon, Terminal, Package
+  Send, Shield, RefreshCw, AlertTriangle, CheckCircle2,
+  Copy, CopyCheck, Info, AlertOctagon, Terminal, ArrowUpRight, BarChart2, HelpCircle
 } from 'lucide-react';
 import type { FraudCardData } from '../App';
 import { API_BASE, authHeaders } from '../config';
 import { useAnalysis } from '../context/AnalysisContext';
 import { useInvestigationUI } from '../context/InvestigationUIContext';
+import { buildCaseQuestions, buildChatGreeting } from '../lib/caseQuestions';
+import { TYPOGRAPHY } from '../theme/typography';
+
+/** How long a stream may go silent before the client calls the answer finished. */
+const IDLE_TIMEOUT_MS = 15_000;
+
+const GROUP_LABEL = {
+  decision: 'Decide',
+  evidence: 'Evidence',
+  action: 'Act',
+} as const;
+import { useCaseLinks } from '../hooks/useCaseLinks';
+import type { CaseSection } from '../lib/caseRoutes';
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
 
@@ -20,80 +32,6 @@ interface Message {
   sectionsUsed?: string[];
   followUps?: string[];
   timestamp: Date;
-}
-
-const QUICK_QUESTIONS = [
-  { icon: <Shield className="h-3.5 w-3.5" />, label: "Is this APK safe?" },
-  { icon: <AlertTriangle className="h-3.5 w-3.5" />, label: "Explain the risk score" },
-  { icon: <FileText className="h-3.5 w-3.5" />, label: "Did it steal OTP messages?" },
-  { icon: <Lock className="h-3.5 w-3.5" />, label: "Did it abuse Accessibility?" },
-  { icon: <Eye className="h-3.5 w-3.5" />, label: "Which MITRE techniques apply?" },
-  { icon: <Check className="h-3.5 w-3.5" />, label: "Should I block this APK?" },
-  { icon: <FileText className="h-3.5 w-3.5" />, label: "Generate executive summary" },
-  { icon: <HelpCircle className="h-3.5 w-3.5" />, label: "Show network indicators" },
-];
-
-// ─── Component 1: PackageCard ──────────────────────────────────────────────────
-
-function PackageCard({ packageName }: { packageName: string }) {
-  return (
-    <div className="my-4 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 border border-blue-200/80 rounded-xl p-4 shadow-2xs space-y-2">
-      <div className="flex items-center gap-2 text-blue-900 font-bold text-xs">
-        <Package className="h-4 w-4 text-blue-700" />
-        <span className="uppercase tracking-wider">Investigation Loaded</span>
-      </div>
-      <div className="flex items-center gap-2 text-xs text-slate-700">
-        <span>📦 Package:</span>
-        <code className="bg-white px-2.5 py-1 rounded-md border border-blue-200 text-blue-900 font-mono font-bold text-xs shadow-2xs">
-          {packageName || 'Unknown'}
-        </code>
-      </div>
-      <p className="text-xs text-slate-600">Ready for interactive cybersecurity investigation.</p>
-    </div>
-  );
-}
-
-// ─── Component 2: RiskCard ─────────────────────────────────────────────────────
-
-function RiskCard({ score, band }: { score: number; band: string }) {
-  const numScore = Number(score) || 0;
-  const isCritical = numScore >= 75 || band.toLowerCase().includes('critical');
-  const isHigh = numScore >= 50 && !isCritical || band.toLowerCase().includes('high');
-  const isSuspicious = numScore >= 20 && !isHigh && !isCritical || band.toLowerCase().includes('suspicious');
-
-  const theme = isCritical
-    ? { border: 'border-red-300', bg: 'bg-red-50/70', badgeBg: 'bg-red-100', badgeText: 'text-red-700 border-red-300', bar: 'from-red-500 to-red-600', icon: '🔴' }
-    : isHigh
-    ? { border: 'border-orange-300', bg: 'bg-orange-50/70', badgeBg: 'bg-orange-100', badgeText: 'text-orange-700 border-orange-300', bar: 'from-orange-500 to-orange-600', icon: '🟠' }
-    : isSuspicious
-    ? { border: 'border-amber-300', bg: 'bg-amber-50/70', badgeBg: 'bg-amber-100', badgeText: 'text-amber-700 border-amber-300', bar: 'from-amber-400 to-amber-500', icon: '🟡' }
-    : { border: 'border-emerald-300', bg: 'bg-emerald-50/70', badgeBg: 'bg-emerald-100', badgeText: 'text-emerald-700 border-emerald-300', bar: 'from-emerald-500 to-emerald-600', icon: '🟢' };
-
-  return (
-    <div className={`my-4 border ${theme.border} ${theme.bg} rounded-xl p-4 shadow-2xs space-y-3`}>
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-bold uppercase tracking-wider text-slate-700">Risk Assessment</span>
-        <span className={`px-2.5 py-1 text-xs font-bold rounded-lg border shadow-2xs ${theme.badgeBg} ${theme.badgeText}`}>
-          {theme.icon} {band || 'Suspicious'}
-        </span>
-      </div>
-
-      <div className="flex items-baseline justify-between">
-        <div className="flex items-baseline gap-1">
-          <span className="text-3xl font-black text-slate-900 tracking-tight">{numScore.toFixed(1)}</span>
-          <span className="text-sm font-medium text-slate-500">/ 100</span>
-        </div>
-      </div>
-
-      {/* Animated progress bar */}
-      <div className="w-full h-2.5 bg-slate-200/80 rounded-full overflow-hidden p-0.5">
-        <div
-          className={`h-full rounded-full bg-gradient-to-r ${theme.bar} transition-all duration-700 ease-out`}
-          style={{ width: `${Math.min(100, Math.max(5, numScore))}%` }}
-        />
-      </div>
-    </div>
-  );
 }
 
 // ─── Component 3: Callout ──────────────────────────────────────────────────────
@@ -131,8 +69,8 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
 
   return (
     <div className="my-4 rounded-xl overflow-hidden border border-slate-800 bg-slate-900 text-slate-100 shadow-md">
-      <div className="flex items-center justify-between px-4 py-2 bg-slate-950/80 border-b border-slate-800 text-[11px] font-mono text-slate-400">
-        <span className="uppercase tracking-wider flex items-center gap-1.5">
+      <div className="flex items-center justify-between px-4 py-2 bg-slate-950/80 border-b border-slate-800 text-[13px] font-mono text-slate-400">
+        <span className="text-[12px] font-semibold uppercase tracking-[0.06em] flex items-center gap-1.5">
           <Terminal className="h-3.5 w-3.5 text-blue-400" />
           {language || 'code'}
         </span>
@@ -170,7 +108,7 @@ function TableRenderer({ headers, rows }: { headers: string[]; rows: string[][] 
           <thead className="bg-slate-100/90 border-b border-slate-200">
             <tr>
               {headers.map((h, i) => (
-                <th key={i} className="px-4 py-2.5 text-left font-bold uppercase tracking-wider text-slate-700 text-[10px]">
+                <th key={i} className="px-4 py-2.5 text-left font-sans text-[13px] font-medium text-slate-500">
                   {h}
                 </th>
               ))}
@@ -182,7 +120,7 @@ function TableRenderer({ headers, rows }: { headers: string[]; rows: string[][] 
                 {row.map((cell, cIdx) => (
                   <td key={cIdx} className="px-4 py-2.5 text-slate-800 whitespace-nowrap">
                     {cell.startsWith('`') && cell.endsWith('`') ? (
-                      <code className="bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-purple-700 font-mono text-[11px]">
+                      <code className="bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-purple-700 font-mono text-[13px]">
                         {cell.slice(1, -1)}
                       </code>
                     ) : (
@@ -325,7 +263,7 @@ function MarkdownRenderer({ content, isStreaming }: { content: string; isStreami
   const blocks = formattedContent.split(/(```[\s\S]*?```)/g);
 
   return (
-    <div className="space-y-4 text-slate-800 text-[15px] leading-[1.85] font-sans w-full min-w-0">
+    <div className="w-full min-w-0 space-y-4 font-sans text-[16px] leading-[1.75] text-slate-800">
       {blocks.map((block, bIdx) => {
         if (block.startsWith('```') && block.endsWith('```')) {
           const match = block.match(/^```(\w+)?\n([\s\S]*?)```$/);
@@ -365,18 +303,6 @@ function MarkdownRenderer({ content, isStreaming }: { content: string; isStreami
 
         lines.forEach((line, lIdx) => {
           const trimmed = line.trim();
-
-          if (trimmed.startsWith('__PACKAGE_CARD__:')) {
-            const pkg = trimmed.replace('__PACKAGE_CARD__:', '').replace('__', '');
-            elements.push(<PackageCard key={`pkg-${lIdx}`} packageName={pkg} />);
-            return;
-          }
-
-          if (trimmed.startsWith('__RISK_CARD__:')) {
-            const parts = trimmed.replace('__RISK_CARD__:', '').replace('__', '').split(':');
-            elements.push(<RiskCard key={`risk-${lIdx}`} score={parseFloat(parts[0]) || 0} band={parts[1] || 'Suspicious'} />);
-            return;
-          }
 
           if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
             flushList(`list-before-table-${lIdx}`);
@@ -432,7 +358,7 @@ function MarkdownRenderer({ content, isStreaming }: { content: string; isStreami
 
           // Headings
           if (trimmed.startsWith('# ')) {
-            elements.push(<h1 key={lIdx} className="text-xl font-black text-slate-900 mt-6 mb-3 border-b pb-2">{renderFormattedInline(trimmed.slice(2))}</h1>);
+            elements.push(<h1 key={lIdx} className="font-sans text-xl font-semibold tracking-[-0.02em] text-slate-900 mt-6 mb-3 border-b border-slate-200 pb-2">{renderFormattedInline(trimmed.slice(2))}</h1>);
             return;
           }
           if (trimmed.startsWith('## ') || trimmed.startsWith('### ')) {
@@ -443,7 +369,7 @@ function MarkdownRenderer({ content, isStreaming }: { content: string; isStreami
             elements.push(
               <div
                 key={lIdx}
-                className={`mt-6 mb-3.5 px-4 py-2.5 rounded-xl border flex items-center gap-2.5 font-bold text-sm shadow-2xs ${
+                className={`mt-6 mb-3.5 px-4 py-2.5 rounded-xl border flex items-center gap-2.5 font-bold text-[15px] shadow-2xs ${
                   isDirectAnswer
                     ? 'bg-blue-50/90 border-blue-200 text-blue-900'
                     : isAction
@@ -521,20 +447,6 @@ function renderFormattedInline(text: string): React.ReactNode {
   });
 }
 
-// ─── Component 7: RiskBadge ────────────────────────────────────────────────────
-
-function RiskBadge({ band, score }: { band: string; score: number }) {
-  const isHigh = score >= 50 || band.toLowerCase().includes('critical') || band.toLowerCase().includes('high');
-  return (
-    <div className={`px-3 py-1 rounded-xl border font-mono flex items-center gap-2 shadow-2xs ${
-      isHigh ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'
-    }`}>
-      <span className="text-[11px] font-bold uppercase tracking-wider">{band}</span>
-      <span className="text-sm font-black">{score.toFixed(1)}/100</span>
-    </div>
-  );
-}
-
 const SECTION_LABELS: Record<string, string> = {
   verdict: 'Verdict',
   risk_engine: 'Risk Engine',
@@ -546,18 +458,72 @@ const SECTION_LABELS: Record<string, string> = {
   recommendations: 'Recommended Actions',
 };
 
+/**
+ * Where each evidence section can actually be inspected.
+ *
+ * The chips already named the sections the answer was drawn from, but as inert
+ * text - which asks the reader to take the grounding on trust. A citation you
+ * can open is the difference between an assistant bolted onto the product and
+ * one wired into it, so every chip is now a link into the panel that holds the
+ * underlying records.
+ */
+type SectionTarget = { section: CaseSection; hash?: string };
+
+/**
+ * Where each cited evidence section can actually be inspected.
+ *
+ * These citations are the difference between an assistant bolted onto the
+ * product and one wired into it, so they resolve to the case the answer is
+ * about rather than to a case-less path that would show the reader whatever
+ * sample they happened to have loaded.
+ */
+const SECTION_TARGETS: Record<string, SectionTarget> = {
+  verdict: { section: 'summary' },
+  risk_engine: { section: 'summary' },
+  fraud_workflow: { section: 'summary', hash: 'attack-story' },
+  static_findings: { section: 'evidence', hash: 'manifest-findings' },
+  dynamic_findings: { section: 'evidence', hash: 'dynamic-analysis' },
+  threat_intelligence: { section: 'intel' },
+  mitre: { section: 'evidence', hash: 'mitre' },
+  recommendations: { section: 'summary', hash: 'recommended-action' },
+};
+
 function SectionChips({ sections }: { sections: string[] }) {
+  const links = useCaseLinks();
   if (!sections || !sections.length) return null;
   return (
-    <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-slate-100">
-      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider flex items-center gap-1">
-        <Shield className="h-3 w-3 text-slate-400" /> Evidence Used:
+    <div className="flex flex-wrap items-center gap-1.5 mt-3 pt-3 border-t border-slate-100">
+      <span className="text-[13px] font-medium text-slate-500 flex items-center gap-1.5">
+        <Shield className="h-3 w-3" aria-hidden /> Grounded in
       </span>
-      {sections.map(s => (
-        <span key={s} className="text-[10px] px-2.5 py-0.5 bg-slate-100 border border-slate-200/80 rounded-full text-slate-700 font-mono font-medium shadow-2xs">
-          {SECTION_LABELS[s] || s}
-        </span>
-      ))}
+      {sections.map(s => {
+        const label = SECTION_LABELS[s] || s;
+        const target = SECTION_TARGETS[s];
+        const to = target
+          ? `${links[target.section]}${target.hash ? `#${target.hash}` : ''}`
+          : undefined;
+        if (!to) {
+          return (
+            <span
+              key={s}
+              className="text-[13px] px-2 py-0.5 bg-slate-100 border border-slate-200 rounded text-slate-600"
+            >
+              {label}
+            </span>
+          );
+        }
+        return (
+          <Link
+            key={s}
+            to={to}
+            title={`Open ${label} evidence`}
+            className="text-[13px] px-2 py-0.5 bg-white border border-slate-200 rounded text-slate-600 hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50/50 transition-colors inline-flex items-center gap-1"
+          >
+            {label}
+            <ArrowUpRight className="h-3 w-3" aria-hidden />
+          </Link>
+        );
+      })}
     </div>
   );
 }
@@ -611,8 +577,9 @@ function InvestigationResponseRenderer({
 
       {followUps.length > 0 && (
         <div className="mt-6 pt-4 border-t border-slate-200/80 space-y-2.5">
-          <div className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-            <HelpCircle className="h-4 w-4 text-blue-600" /> Suggested Follow-up Questions
+          <div className={`${TYPOGRAPHY.label} flex items-center gap-1.5`}>
+            <HelpCircle className="h-3.5 w-3.5 text-slate-400" aria-hidden />
+            Suggested follow-up questions
           </div>
           <div className="flex flex-wrap gap-2">
             {followUps.map((q, idx) => (
@@ -620,9 +587,8 @@ function InvestigationResponseRenderer({
                 key={idx}
                 onClick={() => onSendMessage(q)}
                 disabled={isStreaming}
-                className="text-xs bg-white border border-slate-200 hover:border-blue-400 hover:bg-blue-50/80 text-slate-800 font-medium px-3.5 py-2 rounded-xl transition-all text-left shadow-2xs disabled:opacity-50 flex items-center gap-1.5"
+                className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-left font-sans text-[13px] font-medium text-slate-700 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-800 disabled:opacity-50"
               >
-                <span className="text-blue-600 font-bold">•</span>
                 <span>{q}</span>
               </button>
             ))}
@@ -641,40 +607,28 @@ export default function InvestigationChat({ data }: { data: FraudCardData | null
 
   if (!data) return null;
 
-  const ledgerSummary = investigationBundle
-    ? `Deterministic ledger: ${investigationBundle.counts.evidenceRecords} evidence records, ` +
-      `STEI ${data.frs_breakdown?.stei?.toFixed(1) ?? '-'}, ` +
-      `Dynamic ${data.frs_breakdown?.dynamic?.toFixed(1) ?? '-'}, ` +
-      `Correlation ${data.frs_breakdown?.correlation?.toFixed(1) ?? '-'}.`
+  /*
+   * The grounding strip.
+   *
+   * This printed "STEI 46.0, Dynamic 0.0, Correlation 71.0" - three acronyms
+   * and three bare axis scores, above the fold, to a reader who has not yet
+   * asked a question. The count of records is the part that says "this is
+   * grounded"; the arithmetic belongs in the ledger it links to.
+   */
+  const evidenceCount = investigationBundle?.counts.evidenceRecords ?? 0;
+  const ledgerSummary = evidenceCount
+    ? `Grounded in ${evidenceCount} verified evidence record${evidenceCount === 1 ? '' : 's'} from this case.`
     : '';
 
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome',
       role: 'assistant',
-      content: `__PACKAGE_CARD__:${data.package_name}__
-__RISK_CARD__:${data.final_risk_score}:${data.risk_band}__
-
-### Investigation Evidence Indexed
-
-The investigation evidence for \`${data.package_name}\` has been successfully indexed.
-
-You can now ask questions about:
-
-* **Malware behaviour** & runtime hooks
-* **Risk Score explanation** & decision breakdown
-* **Permissions** & critical privilege abuse
-* **Indicators of Compromise** (IOCs) & network C2
-* **Dynamic Analysis** & screen captures
-* **Static Analysis** & decompiled findings
-* **Network activity** & mitmproxy flows
-* **Threat Intelligence** (VT, OTX, AbuseIPDB)
-* **Recommendation** & quarantine actions
-
-Everything is grounded strictly in investigation evidence.`,
+      content: buildChatGreeting(data),
       timestamp: new Date(),
     },
   ]);
+  const questions = buildCaseQuestions(data);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -752,10 +706,41 @@ Everything is grounded strictly in investigation evidence.`,
 
       if (!reader) throw new Error('No readable stream');
 
+      /*
+       * The stream ends when the server says it ends.
+       *
+       * The loop used to run until the socket closed, and `break` on [DONE]
+       * only left the inner per-line loop. A server that holds the connection
+       * open after the last token - keep-alive, a slow write in the persist
+       * step - left `isStreaming` true forever, which locked the composer: the
+       * answer was on screen and the analyst could not ask the next question.
+       * A `done` event, or [DONE], now ends the read for real.
+       */
+      /*
+       * A read that never returns is not a conversation.
+       *
+       * The backend persists the assistant turn in a `finally` after the last
+       * token, so the socket can stay open well past the answer. If that write
+       * stalls, `read()` never settles and the composer stays locked behind a
+       * spinner over a finished answer. Silence this long ends the read.
+       */
+      const readWithIdleGuard = () =>
+        new Promise<ReadableStreamReadResult<Uint8Array>>((resolve, reject) => {
+          const timer = window.setTimeout(
+            () => resolve({ done: true, value: undefined }),
+            IDLE_TIMEOUT_MS
+          );
+          reader
+            .read()
+            .then(resolve, reject)
+            .finally(() => window.clearTimeout(timer));
+        });
+
+      let streamDone = false;
       let buffer = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      while (!streamDone) {
+        const { done, value } = await readWithIdleGuard();
+        if (done || !value) break;
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
@@ -766,12 +751,18 @@ Everything is grounded strictly in investigation evidence.`,
 
           if (line.startsWith('event: ')) {
             currentEvent = line.slice(7).trim();
+            if (currentEvent === 'done' || currentEvent === 'end') {
+              streamDone = true;
+            }
             continue;
           }
 
           if (line.startsWith('data: ')) {
             const rawData = line.slice(6);
-            if (rawData.trim() === '[DONE]') break;
+            if (rawData.trim() === '[DONE]') {
+              streamDone = true;
+              break;
+            }
 
             let dataStr = rawData;
             try {
@@ -806,6 +797,8 @@ Everything is grounded strictly in investigation evidence.`,
                     : m
                 )
               );
+            } else if (currentEvent === 'done' || currentEvent === 'end') {
+              // Terminator payload, not answer text.
             } else {
               accumulated += dataStr;
               setMessages(prev =>
@@ -819,6 +812,22 @@ Everything is grounded strictly in investigation evidence.`,
           }
         }
       }
+
+      /*
+       * The answer is finished the moment the server says it is.
+       *
+       * `await reader.cancel()` was the second half of the same bug: the done
+       * event arrived, the loop exited, and then the teardown await hung on a
+       * socket the backend had not closed yet - so the state that unlocks the
+       * composer never ran. Release the UI first, tear the socket down after,
+       * and do not wait on it.
+       */
+      setIsStreaming(false);
+      setMessages(prev =>
+        prev.map(m => (m.id === assistantId ? { ...m, streaming: false } : m))
+      );
+      void reader.cancel().catch(() => {});
+      controller.abort();
     } catch (err: any) {
       if (err.name !== 'AbortError') {
         setMessages(prev =>
@@ -853,141 +862,176 @@ Everything is grounded strictly in investigation evidence.`,
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot URL prefill only
   }, [searchParams, setSearchParams]);
 
+  /*
+   * One scroll region, and it is the transcript.
+   *
+   * The frame carried `minHeight: calc(100vh - header - 1.5rem)` while sitting
+   * inside a case page that already spends height on the case bar, so the card
+   * was taller than the space it had: the page scrolled, and the message list
+   * scrolled inside it. Two scrollbars for one conversation. The frame now
+   * takes exactly the height its flex parent gives it and only the transcript
+   * moves.
+   */
   return (
-    <div
-      className="flex flex-col flex-1 min-h-0 bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden"
-      style={{ minHeight: 'calc(100vh - var(--app-header-height) - 1.5rem)' }}
-    >
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
+      {/*
+        One context strip.
 
-      {/* Top Header */}
-      <div className="flex items-center justify-between px-5 py-3.5 bg-slate-900 text-white border-b border-slate-800 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <Cpu className="h-6 w-6 text-blue-400" />
-            <div className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          </div>
-          <div>
-            <h1 className="text-sm font-bold tracking-wide">SUDARSHAN AI Investigation Assistant</h1>
-            <p className="text-[11px] text-slate-400 font-mono mt-0.5">
-              {data.package_name} · SHA256: {data.sha256.slice(0, 12)}…
-            </p>
-          </div>
-        </div>
-        <RiskBadge band={data.risk_band} score={data.final_risk_score} />
+        A dark slate banner announced "Ask SUDARSHAN about this case" directly
+        under a case bar whose active tab already reads "Ask SUDARSHAN", and a
+        second strip below it carried the grounding count. Both said where the
+        answers come from; one line does.
+      */}
+      {/* The visible heading is the case bar's active tab; keep one for readers. */}
+      <h1 className="sr-only">Ask SUDARSHAN about this case</h1>
+
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-slate-200 bg-slate-50/70 px-5 py-2.5">
+        <p className={TYPOGRAPHY.caption}>
+          {ledgerSummary
+            ? `Answers cite this case's evidence only. ${ledgerSummary}`
+            : "Answers cite this case's evidence only."}
+        </p>
+        {ledgerSummary && (
+          <button type="button" onClick={() => openLedger('full')} className={TYPOGRAPHY.linkAction}>
+            <BarChart2 className="h-3.5 w-3.5" aria-hidden />
+            How the score was calculated
+          </button>
+        )}
       </div>
 
-      {ledgerSummary && (
-        <div className="px-5 py-2 bg-amber-50 border-b border-amber-100 text-xs flex flex-wrap items-center justify-between gap-2">
-          <span className="text-amber-900">{ledgerSummary}</span>
-          <button type="button" onClick={() => openLedger('full')} className="font-semibold text-blue-700">
-            Open score ledger
-          </button>
-        </div>
-      )}
+      {/*
+        The transcript uses the width it is given.
 
-      {/* Quick Prompts Bar */}
-      {messages.length <= 1 && (
-        <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex-shrink-0">
-          <p className="text-[11px] font-bold uppercase text-slate-500 tracking-wider mb-2">Quick Investigation Prompts</p>
-          <div className="flex flex-wrap gap-2">
-            {QUICK_QUESTIONS.map(q => (
-              <button
-                key={q.label}
-                onClick={() => sendMessage(q.label)}
-                disabled={isStreaming}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg text-slate-700 font-medium hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-colors shadow-2xs disabled:opacity-50"
-              >
-                <span className="text-slate-400">{q.icon}</span>
-                {q.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Chat Messages */}
-      <div className="flex-1 overflow-y-auto px-5 py-6 space-y-6 min-h-0 bg-slate-50/40">
-        {messages.map(msg => (
-          <div key={msg.id} className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-
-            {/* Avatar */}
-            <div className={`flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center shadow-2xs ${
-              msg.role === 'user'
-                ? 'bg-blue-700 text-white'
-                : 'bg-slate-900 text-blue-400 border border-slate-800'
-            }`}>
-              {msg.role === 'user' ? <User className="h-4 w-4" /> : <Shield className="h-4 w-4" />}
-            </div>
-
-            {/* Message Box */}
-            <div className={`flex flex-col gap-1.5 ${msg.role === 'user' ? 'items-end' : 'items-start'} w-full max-w-4xl`}>
-              <div className={`rounded-2xl ${
-                msg.role === 'user'
-                  ? 'bg-blue-700 text-white px-5 py-3.5 shadow-sm max-w-2xl text-xs font-medium leading-relaxed'
-                  : 'bg-white border border-slate-200/90 p-5 shadow-sm text-slate-800 w-full'
-              }`}>
-                {msg.role === 'assistant' ? (
-                  <InvestigationResponseRenderer content={msg.content} isStreaming={msg.streaming} onSendMessage={sendMessage} />
-                ) : (
-                  <p className="text-xs font-medium leading-relaxed">{msg.content}</p>
-                )}
+        `max-w-3xl` on a full-width case page left a band of empty white down
+        both sides wider than some of the answers, and evidence tables wrapped
+        inside a column narrower than the page they sat on. The reading column
+        is now `max-w-5xl`: wide enough for a table, still short enough a line
+        of prose does not run away from the eye.
+      */}
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6 sm:px-8">
+        <div className="mx-auto max-w-5xl space-y-7">
+          {messages.map((msg) => (
+            <div key={msg.id} className={msg.role === 'user' ? 'flex flex-col items-end' : ''}>
+              <div className="mb-1.5 flex items-baseline gap-2">
+                <span className="font-sans text-xs font-semibold tracking-[-0.01em] text-slate-500">
+                  {msg.role === 'user' ? 'You' : 'SUDARSHAN'}
+                </span>
+                <span className="font-sans text-xs text-slate-400 tabular-nums">
+                  {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
               </div>
 
-              {msg.sectionsUsed && msg.sectionsUsed.length > 0 && (
-                <SectionChips sections={msg.sectionsUsed} />
-              )}
+              {/*
+                The assistant answers on the page, not inside a chat bubble.
 
-              <span className="text-[10px] text-slate-400 font-mono px-1">
-                {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </span>
+                Its replies carry tables, callouts and evidence chips - a
+                rounded speech balloon around an evidence table is a costume.
+                The reader's own questions stay in a bubble, because they are
+                short and want to be scannable down the right edge.
+              */}
+              {msg.role === 'assistant' ? (
+                <div className="min-w-0">
+                  <InvestigationResponseRenderer
+                    content={msg.content}
+                    isStreaming={msg.streaming}
+                    onSendMessage={sendMessage}
+                  />
+                  {msg.sectionsUsed && msg.sectionsUsed.length > 0 && (
+                    <SectionChips sections={msg.sectionsUsed} />
+                  )}
+                </div>
+              ) : (
+                <p className="max-w-[80%] rounded-2xl rounded-br-md bg-blue-700 px-4 py-2.5 font-sans text-[16px] leading-relaxed text-white">
+                  {msg.content}
+                </p>
+              )}
             </div>
-          </div>
-        ))}
-        <div ref={bottomRef} />
+          ))}
+
+          {/*
+            Suggested questions, derived from this case, and inside the
+            transcript rather than pinned above it: they are the opening move of
+            the conversation, and as a fixed band they cost the message list a
+            third of its height on every case.
+          */}
+          {messages.length <= 1 && questions.length > 0 && (
+            <div className="space-y-2.5 border-t border-slate-200 pt-5">
+              {(['decision', 'evidence', 'action'] as const).map((kind) => {
+                const group = questions.filter((q) => q.kind === kind);
+                if (group.length === 0) return null;
+                return (
+                  <div key={kind} className="flex flex-wrap items-center gap-2">
+                    <span className={`${TYPOGRAPHY.label} w-full sm:w-16 shrink-0`}>
+                      {GROUP_LABEL[kind]}
+                    </span>
+                    {group.map((q) => (
+                      <button
+                        key={q.text}
+                        type="button"
+                        onClick={() => sendMessage(q.text)}
+                        disabled={isStreaming}
+                        className="rounded-md border border-slate-200 bg-white px-3 py-1.5 font-sans text-[13px] font-medium text-slate-700 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-800 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                      >
+                        {q.text}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div ref={bottomRef} />
+        </div>
       </div>
 
-      {/* Input Footer */}
-      <div className="px-5 py-3.5 bg-white border-t border-slate-200 flex-shrink-0 space-y-2">
-        <div className="flex gap-2.5 items-center">
+      {/*
+        The composer stays open.
+
+        It used to disable the field while an answer streamed, so an analyst
+        who had already read the verdict had to wait on the cursor before
+        typing the next question - and if the stream never closed cleanly, they
+        waited forever. The field is always live; only the send is held back
+        while a reply is in flight, and the stop button is right there.
+      */}
+      <div className="shrink-0 border-t border-slate-200 bg-white px-6 py-4 sm:px-8">
+        <div className="mx-auto flex max-w-5xl items-center gap-2.5 rounded-2xl border border-slate-200 bg-slate-50 px-2 py-1.5 transition-colors focus-within:border-blue-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500/30">
           <input
             ref={inputRef}
             type="text"
             value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => {
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 sendMessage(input);
               }
             }}
-            placeholder="Ask about this investigation... (e.g. Did it steal OTP messages?)"
-            disabled={isStreaming}
-            className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 transition-all"
+            placeholder={isStreaming ? 'Type your next question...' : 'Ask about this investigation...'}
+            className="min-w-0 flex-1 border-0 bg-transparent px-3 py-2 font-sans text-[16px] leading-relaxed text-slate-900 placeholder-slate-400 focus:outline-none"
           />
 
           {isStreaming ? (
             <button
+              type="button"
               onClick={handleStop}
-              className="p-2.5 rounded-xl bg-red-600 text-white hover:bg-red-700 transition-colors shadow-2xs"
+              className="shrink-0 rounded-xl bg-slate-900 p-2.5 text-white transition-colors hover:bg-slate-800"
               title="Stop generating"
             >
               <RefreshCw className="h-4 w-4 animate-spin" />
             </button>
           ) : (
             <button
+              type="button"
               onClick={() => sendMessage(input)}
               disabled={!input.trim()}
-              className="p-2.5 rounded-xl bg-blue-700 text-white hover:bg-blue-800 transition-colors disabled:opacity-40 shadow-2xs"
+              className="shrink-0 rounded-xl bg-blue-700 p-2.5 text-white transition-colors hover:bg-blue-800 disabled:opacity-40"
               title="Send question"
             >
               <Send className="h-4 w-4" />
             </button>
           )}
         </div>
-
-        <p className="text-[10px] text-slate-400 text-center font-mono">
-          RAG-Grounded Evidence Engine · AI explains, deterministic engine decides
-        </p>
       </div>
     </div>
   );

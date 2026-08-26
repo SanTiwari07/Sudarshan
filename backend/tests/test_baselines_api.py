@@ -204,11 +204,10 @@ async def test_refresh_is_admin_only():
 @pytest.mark.anyio
 async def test_admin_can_list_and_refresh():
     from httpx import ASGITransport, AsyncClient
-    from app.auth.auth import create_access_token
     from app.main import app
+    from auth_helpers import auth_headers
 
-    token = create_access_token(1, "admin", "admin")
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = await auth_headers("admin", "admin")
     transport = ASGITransport(app=app)
 
     async with AsyncClient(transport=transport, base_url="http://test") as ac:

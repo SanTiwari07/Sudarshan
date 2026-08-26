@@ -5,38 +5,57 @@ import type { AnalystAction, IntelApiPayload } from '../../lib/threatIntelModel'
 import {
   buildEvidenceSourceChips,
   buildRecommendedActionBullets,
-  buildThreatIntelExecutiveNarrative,
+  buildThreatIntelExecutiveSentences,
   buildWhatWasDiscovered,
   buildWhySudarshanConcluded,
   qualitativeConfidence,
 } from '../../lib/threatIntelOverview';
-import { BadgeCheck, BrainCircuit, ClipboardCheck, ShieldAlert, Sparkles } from 'lucide-react';
+import { SearchX, BadgeCheck, BrainCircuit, Check, ClipboardCheck, ShieldAlert, Sparkles } from 'lucide-react';
+import { isInconclusive } from '../../lib/decision';
+import SocCard from '../ui/Card';
+import { TYPOGRAPHY } from '../../theme/typography';
+import { INTEL } from './intelTokens';
 
-function InsightBlock({
-  icon,
-  title,
-  items,
-}: {
-  icon: ReactNode;
-  title: string;
-  items: string[];
-}) {
+function Bullet({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-xl border border-slate-200/70 bg-white/80 p-5 sm:p-6 transition-shadow duration-200 hover:shadow-md hover:border-blue-200/50">
-      <div className="flex items-center gap-2.5 mb-4">
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-50 text-blue-700 border border-slate-100">
+    <li className="flex gap-2.5">
+      <span className="mt-[0.5em] h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600/60" aria-hidden />
+      <span className={TYPOGRAPHY.bodySmall}>{children}</span>
+    </li>
+  );
+}
+
+/**
+ * A briefing column.
+ *
+ * These were three bordered, shadowed, hover-lifting cards nested inside an
+ * already-bordered card, which puts two frames around every sentence. They are
+ * columns of one panel and now read as columns: shared surface, hairline
+ * between them, and a literal " - " glyph per line replaced by a real marker.
+ */
+function InsightColumn({ icon, title, items }: { icon: ReactNode; title: string; items: string[] }) {
+  return (
+    <div className="px-5 py-5 sm:px-6 sm:py-6">
+      <div className="mb-3.5 flex items-center gap-2.5">
+        <span className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-blue-700">
           {icon}
         </span>
-        <h3 className="text-sm font-semibold text-slate-900 tracking-tight">{title}</h3>
+        <h3 className={TYPOGRAPHY.h3}>{title}</h3>
       </div>
-      <ul className="space-y-2.5">
+      <ul className="space-y-2">
         {items.map((item) => (
-          <li key={item} className="text-sm text-slate-600 leading-relaxed pl-0 flex gap-2">
-            <span className="text-slate-300 select-none" aria-hidden> - </span>
-            <span>{item}</span>
-          </li>
+          <Bullet key={item}>{item}</Bullet>
         ))}
       </ul>
+    </div>
+  );
+}
+
+function SnapshotRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="px-4 py-3">
+      <dt className={INTEL.eyebrow}>{label}</dt>
+      <dd className="mt-1">{children}</dd>
     </div>
   );
 }
@@ -54,12 +73,14 @@ export default function AIIntelligenceOverview({
   evidenceConfidence: number;
   actions: AnalystAction[];
 }) {
-  const narrative = buildThreatIntelExecutiveNarrative(data, intel, bundle, evidenceConfidence);
+  const inconclusive = isInconclusive(data);
+  const narrative = buildThreatIntelExecutiveSentences(data, intel, bundle, evidenceConfidence).join(' ');
   const discovered = buildWhatWasDiscovered(data, intel);
   const why = buildWhySudarshanConcluded(data, intel, bundle);
   const recommended = buildRecommendedActionBullets(data, intel, actions);
-  const chips = buildEvidenceSourceChips(data, intel, bundle);
+  const chips = buildEvidenceSourceChips(data, intel, bundle).filter((c) => c.active);
   const confLabel = qualitativeConfidence(evidenceConfidence);
+  const confPercent = Math.max(0, Math.min(100, Math.round(evidenceConfidence)));
   const frs = data.frs_breakdown;
   const family =
     intel.malware_family && intel.malware_family !== 'Unknown'
@@ -74,115 +95,123 @@ export default function AIIntelligenceOverview({
       : 'Not run';
 
   return (
-    <section
-      className="rounded-2xl border border-blue-200/50 bg-gradient-to-br from-white via-white to-blue-50/40 shadow-sm overflow-hidden transition-shadow duration-200 hover:shadow-md"
-      aria-labelledby="ai-intel-overview-title"
-    >
-      <div className="px-5 sm:px-8 pt-6 sm:pt-8 pb-4">
-        <div className="flex items-start gap-3 min-w-0">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 border border-blue-100">
-            <Sparkles className="h-5 w-5" aria-hidden />
+    <SocCard rank="primary" className="rounded-lg">
+      <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 border-b border-slate-200 bg-slate-50/70 px-5 py-4 sm:px-6">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-blue-100 bg-blue-50 text-blue-700">
+            <Sparkles className="h-4 w-4" aria-hidden />
           </span>
           <div className="min-w-0">
-            <h2 id="ai-intel-overview-title" className="text-xl sm:text-2xl font-semibold text-slate-900 tracking-tight">
-              AI Intelligence Overview
+            <p className={INTEL.eyebrow}>AI briefing</p>
+            <h2 id="ai-intel-overview-title" className={`${TYPOGRAPHY.h2} mt-0.5`}>
+              Intelligence overview
             </h2>
-            <p className="text-sm text-slate-500 mt-1 leading-relaxed">
-              Analyst-style briefing synthesized from verified pipeline outputs.
-            </p>
+            <p className={`${TYPOGRAPHY.caption} mt-1`}>Synthesized from verified pipeline outputs.</p>
           </div>
         </div>
-      </div>
 
-      <div className="px-5 sm:px-8 pb-6 sm:pb-8 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(220px,280px)] gap-6 lg:gap-8 items-start">
-        <p className="text-base sm:text-[1.05rem] text-slate-700 leading-[1.75] min-w-0">
-          {narrative}
-        </p>
-
-        <aside
-          className="rounded-xl border border-slate-200/80 bg-white/90 shadow-sm p-4 sm:p-5 space-y-4 lg:sticky lg:top-4"
-          aria-label="Briefing snapshot"
-        >
-          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-800 text-xs font-semibold w-full justify-center sm:justify-start">
+        {/*
+          This badge was unconditional - every case, however inconclusive its
+          run, was crowned "Evidence verified" in green. It now reports what
+          the analysis actually earned.
+        */}
+        {inconclusive ? (
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+            <SearchX className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            Coverage incomplete
+          </span>
+        ) : (
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
             <BadgeCheck className="h-3.5 w-3.5 shrink-0" aria-hidden />
             Evidence verified
           </span>
+        )}
+      </header>
 
-          <dl className="space-y-3 text-sm">
-            <div>
-              <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                Evidence confidence
-              </dt>
-              <dd className="mt-0.5 font-semibold text-slate-900">
-                {Math.round(evidenceConfidence)}%
-                <span className="text-slate-500 font-normal"> · {confLabel}</span>
-              </dd>
+      {/*
+        Prose beside a snapshot rail left most of a wide console blank: the
+        assessment is capped at a readable measure, the rail held ninety
+        pixels of tiles, and the rest of the card was white. The snapshot is a
+        band across the full width instead - which is how it already read -
+        and the briefing runs beneath it as one block of prose. The evidence
+        sources join the band; they were a separate footer strip, a third
+        place to look for one line of provenance.
+      */}
+      <section aria-labelledby="ai-intel-overview-title" className="px-5 py-6 sm:px-6">
+        <dl
+          className={`grid grid-cols-1 divide-y divide-slate-200 rounded-md border border-slate-200 bg-slate-50/60 sm:grid-cols-2 sm:divide-y-0 ${
+            family ? 'lg:grid-cols-4' : 'lg:grid-cols-3'
+          } [&>div]:border-slate-200 sm:[&>div]:border-b sm:[&>div+div]:border-l lg:[&>div]:border-b-0`}
+        >
+          <SnapshotRow label="Evidence confidence">
+            <div className="flex items-baseline gap-1.5">
+              <span className="font-sans text-2xl font-semibold leading-none tracking-[-0.02em] text-slate-900 tabular-nums">
+                {confPercent}%
+              </span>
+              <span className={TYPOGRAPHY.caption}>{confLabel}</span>
             </div>
-            <div>
-              <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                Risk verdict
-              </dt>
-              <dd className="mt-0.5 font-semibold text-slate-900">
-                {data.risk_band}
-                <span className="text-slate-500 font-normal"> · FRS {data.final_risk_score.toFixed(1)}</span>
-              </dd>
+            <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-slate-200">
+              <div className="h-full rounded-full bg-blue-600" style={{ width: `${confPercent}%` }} />
             </div>
-            {family && (
-              <div>
-                <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  Malware family
-                </dt>
-                <dd className="mt-0.5 font-medium text-slate-800 leading-snug">{family}</dd>
+          </SnapshotRow>
+          {family && (
+            <SnapshotRow label="Malware family">
+              <span className="font-mono text-[15px] leading-snug text-slate-800 break-all">{family}</span>
+            </SnapshotRow>
+          )}
+          <SnapshotRow label="Runtime behaviour">
+            <span className="font-sans text-[15px] leading-snug text-slate-700">{runtimeLabel}</span>
+          </SnapshotRow>
+          <SnapshotRow label="Evidence sources">
+            {chips.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {chips.map((chip) => (
+                  <span
+                    key={chip.id}
+                    className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700"
+                  >
+                    <Check className="h-3 w-3 shrink-0 text-emerald-600" aria-hidden />
+                    {chip.label}
+                  </span>
+                ))}
               </div>
+            ) : (
+              <span className={TYPOGRAPHY.caption}>None recorded</span>
             )}
-            <div>
-              <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                Runtime behaviour
-              </dt>
-              <dd className="mt-0.5 text-slate-700 leading-snug">{runtimeLabel}</dd>
-            </div>
-          </dl>
-        </aside>
-      </div>
+          </SnapshotRow>
+        </dl>
 
-      <div className="border-t border-slate-200/80 mx-5 sm:mx-8" />
+        {/*
+          One paragraph, not a lead plus balanced columns. The briefing was
+          split across two or three newspaper columns to fill the card, but a
+          reader has no reason to expect the assessment to continue in a
+          second column - it read as three separate findings rather than one
+          continuous one. It is a single block of prose again, set a step up
+          from body copy because it is the conclusion of the page.
+        */}
+        <p className="mt-6 font-sans text-[17px] font-normal leading-[1.75] tracking-[-0.003em] text-slate-800">
+          {narrative}
+        </p>
+      </section>
 
-      <div className="px-5 sm:px-8 py-8 grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
-        <InsightBlock
+      <div className="grid grid-cols-1 divide-y divide-slate-200 border-t border-slate-200 lg:grid-cols-3 lg:divide-x lg:divide-y-0">
+        <InsightColumn
           icon={<ShieldAlert className="h-4 w-4" aria-hidden />}
           title="What was discovered"
           items={discovered}
         />
-        <InsightBlock
+        <InsightColumn
           icon={<BrainCircuit className="h-4 w-4" aria-hidden />}
-          title="Why Sudarshan reached this conclusion"
+          title="Why Sudarshan concluded this"
           items={why}
         />
-        <InsightBlock
+        <InsightColumn
           icon={<ClipboardCheck className="h-4 w-4" aria-hidden />}
           title="Recommended analyst action"
           items={recommended}
         />
       </div>
 
-      <div className="border-t border-slate-200/80 bg-slate-50/50 px-5 sm:px-8 py-5 sm:py-6">
-        <p className="text-xs font-semibold text-slate-500 tracking-wide mb-3">Evidence sources used</p>
-        <div className="flex flex-wrap gap-2">
-          {chips
-            .filter((c) => c.active)
-            .map((chip) => (
-              <span
-                key={chip.id}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-white border border-slate-200 text-slate-700 shadow-sm"
-              >
-                <span className="text-emerald-600" aria-hidden>
-                  ✓
-                </span>
-                {chip.label}
-              </span>
-            ))}
-        </div>
-      </div>
-    </section>
+    </SocCard>
   );
 }

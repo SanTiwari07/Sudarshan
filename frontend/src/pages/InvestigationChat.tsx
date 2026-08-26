@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
-  Cpu, Send, Shield, User, RefreshCw, AlertTriangle, CheckCircle2,
+  Send, Shield, RefreshCw, AlertTriangle, CheckCircle2,
   Copy, CopyCheck, Info, AlertOctagon, Terminal, ArrowUpRight, BarChart2, HelpCircle
 } from 'lucide-react';
 import type { FraudCardData } from '../App';
@@ -10,6 +10,9 @@ import { useAnalysis } from '../context/AnalysisContext';
 import { useInvestigationUI } from '../context/InvestigationUIContext';
 import { buildCaseQuestions, buildChatGreeting } from '../lib/caseQuestions';
 import { TYPOGRAPHY } from '../theme/typography';
+
+/** How long a stream may go silent before the client calls the answer finished. */
+const IDLE_TIMEOUT_MS = 15_000;
 
 const GROUP_LABEL = {
   decision: 'Decide',
@@ -66,8 +69,8 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
 
   return (
     <div className="my-4 rounded-xl overflow-hidden border border-slate-800 bg-slate-900 text-slate-100 shadow-md">
-      <div className="flex items-center justify-between px-4 py-2 bg-slate-950/80 border-b border-slate-800 text-[11px] font-mono text-slate-400">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.06em] flex items-center gap-1.5">
+      <div className="flex items-center justify-between px-4 py-2 bg-slate-950/80 border-b border-slate-800 text-[13px] font-mono text-slate-400">
+        <span className="text-[12px] font-semibold uppercase tracking-[0.06em] flex items-center gap-1.5">
           <Terminal className="h-3.5 w-3.5 text-blue-400" />
           {language || 'code'}
         </span>
@@ -105,7 +108,7 @@ function TableRenderer({ headers, rows }: { headers: string[]; rows: string[][] 
           <thead className="bg-slate-100/90 border-b border-slate-200">
             <tr>
               {headers.map((h, i) => (
-                <th key={i} className="px-4 py-2.5 text-left font-sans text-[11px] font-medium text-slate-500">
+                <th key={i} className="px-4 py-2.5 text-left font-sans text-[13px] font-medium text-slate-500">
                   {h}
                 </th>
               ))}
@@ -117,7 +120,7 @@ function TableRenderer({ headers, rows }: { headers: string[]; rows: string[][] 
                 {row.map((cell, cIdx) => (
                   <td key={cIdx} className="px-4 py-2.5 text-slate-800 whitespace-nowrap">
                     {cell.startsWith('`') && cell.endsWith('`') ? (
-                      <code className="bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-purple-700 font-mono text-[11px]">
+                      <code className="bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-purple-700 font-mono text-[13px]">
                         {cell.slice(1, -1)}
                       </code>
                     ) : (
@@ -260,7 +263,7 @@ function MarkdownRenderer({ content, isStreaming }: { content: string; isStreami
   const blocks = formattedContent.split(/(```[\s\S]*?```)/g);
 
   return (
-    <div className="space-y-4 text-slate-800 text-[15px] leading-[1.85] font-sans w-full min-w-0">
+    <div className="w-full min-w-0 space-y-4 font-sans text-[16px] leading-[1.75] text-slate-800">
       {blocks.map((block, bIdx) => {
         if (block.startsWith('```') && block.endsWith('```')) {
           const match = block.match(/^```(\w+)?\n([\s\S]*?)```$/);
@@ -355,7 +358,7 @@ function MarkdownRenderer({ content, isStreaming }: { content: string; isStreami
 
           // Headings
           if (trimmed.startsWith('# ')) {
-            elements.push(<h1 key={lIdx} className="font-display text-lg font-semibold tracking-[-0.02em] text-slate-900 mt-6 mb-3 border-b border-slate-200 pb-2">{renderFormattedInline(trimmed.slice(2))}</h1>);
+            elements.push(<h1 key={lIdx} className="font-sans text-xl font-semibold tracking-[-0.02em] text-slate-900 mt-6 mb-3 border-b border-slate-200 pb-2">{renderFormattedInline(trimmed.slice(2))}</h1>);
             return;
           }
           if (trimmed.startsWith('## ') || trimmed.startsWith('### ')) {
@@ -366,7 +369,7 @@ function MarkdownRenderer({ content, isStreaming }: { content: string; isStreami
             elements.push(
               <div
                 key={lIdx}
-                className={`mt-6 mb-3.5 px-4 py-2.5 rounded-xl border flex items-center gap-2.5 font-bold text-sm shadow-2xs ${
+                className={`mt-6 mb-3.5 px-4 py-2.5 rounded-xl border flex items-center gap-2.5 font-bold text-[15px] shadow-2xs ${
                   isDirectAnswer
                     ? 'bg-blue-50/90 border-blue-200 text-blue-900'
                     : isAction
@@ -490,7 +493,7 @@ function SectionChips({ sections }: { sections: string[] }) {
   if (!sections || !sections.length) return null;
   return (
     <div className="flex flex-wrap items-center gap-1.5 mt-3 pt-3 border-t border-slate-100">
-      <span className="text-[11px] font-medium text-slate-500 flex items-center gap-1.5">
+      <span className="text-[13px] font-medium text-slate-500 flex items-center gap-1.5">
         <Shield className="h-3 w-3" aria-hidden /> Grounded in
       </span>
       {sections.map(s => {
@@ -503,7 +506,7 @@ function SectionChips({ sections }: { sections: string[] }) {
           return (
             <span
               key={s}
-              className="text-[11px] px-2 py-0.5 bg-slate-100 border border-slate-200 rounded text-slate-600"
+              className="text-[13px] px-2 py-0.5 bg-slate-100 border border-slate-200 rounded text-slate-600"
             >
               {label}
             </span>
@@ -514,7 +517,7 @@ function SectionChips({ sections }: { sections: string[] }) {
             key={s}
             to={to}
             title={`Open ${label} evidence`}
-            className="text-[11px] px-2 py-0.5 bg-white border border-slate-200 rounded text-slate-600 hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50/50 transition-colors inline-flex items-center gap-1"
+            className="text-[13px] px-2 py-0.5 bg-white border border-slate-200 rounded text-slate-600 hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50/50 transition-colors inline-flex items-center gap-1"
           >
             {label}
             <ArrowUpRight className="h-3 w-3" aria-hidden />
@@ -584,9 +587,8 @@ function InvestigationResponseRenderer({
                 key={idx}
                 onClick={() => onSendMessage(q)}
                 disabled={isStreaming}
-                className="text-xs bg-white border border-slate-200 hover:border-blue-400 hover:bg-blue-50/80 text-slate-800 font-medium px-3.5 py-2 rounded-xl transition-all text-left shadow-2xs disabled:opacity-50 flex items-center gap-1.5"
+                className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-left font-sans text-[13px] font-medium text-slate-700 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-800 disabled:opacity-50"
               >
-                <span className="text-blue-600 font-bold">•</span>
                 <span>{q}</span>
               </button>
             ))}
@@ -704,10 +706,41 @@ export default function InvestigationChat({ data }: { data: FraudCardData | null
 
       if (!reader) throw new Error('No readable stream');
 
+      /*
+       * The stream ends when the server says it ends.
+       *
+       * The loop used to run until the socket closed, and `break` on [DONE]
+       * only left the inner per-line loop. A server that holds the connection
+       * open after the last token - keep-alive, a slow write in the persist
+       * step - left `isStreaming` true forever, which locked the composer: the
+       * answer was on screen and the analyst could not ask the next question.
+       * A `done` event, or [DONE], now ends the read for real.
+       */
+      /*
+       * A read that never returns is not a conversation.
+       *
+       * The backend persists the assistant turn in a `finally` after the last
+       * token, so the socket can stay open well past the answer. If that write
+       * stalls, `read()` never settles and the composer stays locked behind a
+       * spinner over a finished answer. Silence this long ends the read.
+       */
+      const readWithIdleGuard = () =>
+        new Promise<ReadableStreamReadResult<Uint8Array>>((resolve, reject) => {
+          const timer = window.setTimeout(
+            () => resolve({ done: true, value: undefined }),
+            IDLE_TIMEOUT_MS
+          );
+          reader
+            .read()
+            .then(resolve, reject)
+            .finally(() => window.clearTimeout(timer));
+        });
+
+      let streamDone = false;
       let buffer = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      while (!streamDone) {
+        const { done, value } = await readWithIdleGuard();
+        if (done || !value) break;
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
@@ -718,12 +751,18 @@ export default function InvestigationChat({ data }: { data: FraudCardData | null
 
           if (line.startsWith('event: ')) {
             currentEvent = line.slice(7).trim();
+            if (currentEvent === 'done' || currentEvent === 'end') {
+              streamDone = true;
+            }
             continue;
           }
 
           if (line.startsWith('data: ')) {
             const rawData = line.slice(6);
-            if (rawData.trim() === '[DONE]') break;
+            if (rawData.trim() === '[DONE]') {
+              streamDone = true;
+              break;
+            }
 
             let dataStr = rawData;
             try {
@@ -758,6 +797,8 @@ export default function InvestigationChat({ data }: { data: FraudCardData | null
                     : m
                 )
               );
+            } else if (currentEvent === 'done' || currentEvent === 'end') {
+              // Terminator payload, not answer text.
             } else {
               accumulated += dataStr;
               setMessages(prev =>
@@ -771,6 +812,22 @@ export default function InvestigationChat({ data }: { data: FraudCardData | null
           }
         }
       }
+
+      /*
+       * The answer is finished the moment the server says it is.
+       *
+       * `await reader.cancel()` was the second half of the same bug: the done
+       * event arrived, the loop exited, and then the teardown await hung on a
+       * socket the backend had not closed yet - so the state that unlocks the
+       * composer never ran. Release the UI first, tear the socket down after,
+       * and do not wait on it.
+       */
+      setIsStreaming(false);
+      setMessages(prev =>
+        prev.map(m => (m.id === assistantId ? { ...m, streaming: false } : m))
+      );
+      void reader.cancel().catch(() => {});
+      controller.abort();
     } catch (err: any) {
       if (err.name !== 'AbortError') {
         setMessages(prev =>
@@ -805,162 +862,176 @@ export default function InvestigationChat({ data }: { data: FraudCardData | null
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot URL prefill only
   }, [searchParams, setSearchParams]);
 
+  /*
+   * One scroll region, and it is the transcript.
+   *
+   * The frame carried `minHeight: calc(100vh - header - 1.5rem)` while sitting
+   * inside a case page that already spends height on the case bar, so the card
+   * was taller than the space it had: the page scrolled, and the message list
+   * scrolled inside it. Two scrollbars for one conversation. The frame now
+   * takes exactly the height its flex parent gives it and only the transcript
+   * moves.
+   */
   return (
-    <div
-      className="flex flex-col flex-1 min-h-0 bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden"
-      style={{ minHeight: 'calc(100vh - var(--app-header-height) - 1.5rem)' }}
-    >
-
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
       {/*
-        The frame.
+        One context strip.
 
-        This was headed "SUDARSHAN AI Investigation Assistant" with a pulsing
-        green dot - a product banner, on a page that already sits inside one
-        case. It now names the job: ask this case a question. Identity and the
-        verdict live in the case bar above, so repeating them here only invited
-        them to disagree.
+        A dark slate banner announced "Ask SUDARSHAN about this case" directly
+        under a case bar whose active tab already reads "Ask SUDARSHAN", and a
+        second strip below it carried the grounding count. Both said where the
+        answers come from; one line does.
       */}
-      <div className="flex items-center gap-3 px-5 py-3.5 bg-slate-900 text-white border-b border-slate-800 flex-shrink-0">
-        <Cpu className="h-5 w-5 text-blue-400 shrink-0" aria-hidden />
-        <div className="min-w-0">
-          <h1 className="font-display text-sm font-semibold tracking-[-0.01em]">
-            Ask SUDARSHAN about this case
-          </h1>
-          <p className="text-[11px] text-slate-500 mt-0.5 truncate">
-            Answers are drawn only from this investigation&apos;s evidence, and cite where they
-            came from.
-          </p>
-        </div>
-      </div>
+      {/* The visible heading is the case bar's active tab; keep one for readers. */}
+      <h1 className="sr-only">Ask SUDARSHAN about this case</h1>
 
-      {ledgerSummary && (
-        <div className="px-5 py-2 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
-          <span className={TYPOGRAPHY.caption}>{ledgerSummary}</span>
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-slate-200 bg-slate-50/70 px-5 py-2.5">
+        <p className={TYPOGRAPHY.caption}>
+          {ledgerSummary
+            ? `Answers cite this case's evidence only. ${ledgerSummary}`
+            : "Answers cite this case's evidence only."}
+        </p>
+        {ledgerSummary && (
           <button type="button" onClick={() => openLedger('full')} className={TYPOGRAPHY.linkAction}>
             <BarChart2 className="h-3.5 w-3.5" aria-hidden />
             How the score was calculated
           </button>
-        </div>
-      )}
-
-      {/*
-        Suggested questions, derived from this case.
-
-        Eight fixed prompts used to appear on every case - including "Which
-        MITRE techniques apply?" as an opener, and "Did it steal OTP messages?"
-        on samples with no SMS capability. A suggestion that does not apply
-        implies a finding that was never made.
-      */}
-      {messages.length <= 1 && questions.length > 0 && (
-        <div className="px-5 py-3.5 bg-slate-50 border-b border-slate-200 flex-shrink-0 space-y-2.5">
-          {(['decision', 'evidence', 'action'] as const).map((kind) => {
-            const group = questions.filter((q) => q.kind === kind);
-            if (group.length === 0) return null;
-            return (
-              <div key={kind} className="flex flex-wrap items-center gap-2">
-                <span className={`${TYPOGRAPHY.label} w-full sm:w-20 shrink-0`}>
-                  {GROUP_LABEL[kind]}
-                </span>
-                {group.map((q) => (
-                  <button
-                    key={q.text}
-                    type="button"
-                    onClick={() => sendMessage(q.text)}
-                    disabled={isStreaming}
-                    className="px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-md text-slate-700 font-medium hover:bg-blue-50 hover:border-blue-300 hover:text-blue-800 transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                  >
-                    {q.text}
-                  </button>
-                ))}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Chat Messages */}
-      <div className="flex-1 overflow-y-auto px-5 py-6 space-y-6 min-h-0 bg-slate-50/40">
-        {messages.map(msg => (
-          <div key={msg.id} className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-
-            {/* Avatar */}
-            <div className={`flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center shadow-2xs ${
-              msg.role === 'user'
-                ? 'bg-blue-700 text-white'
-                : 'bg-slate-900 text-blue-400 border border-slate-800'
-            }`}>
-              {msg.role === 'user' ? <User className="h-4 w-4" /> : <Shield className="h-4 w-4" />}
-            </div>
-
-            {/* Message Box */}
-            <div className={`flex flex-col gap-1.5 ${msg.role === 'user' ? 'items-end' : 'items-start'} w-full max-w-4xl`}>
-              <div className={`rounded-2xl ${
-                msg.role === 'user'
-                  ? 'bg-blue-700 text-white px-5 py-3.5 shadow-sm max-w-2xl text-xs font-medium leading-relaxed'
-                  : 'bg-white border border-slate-200/90 p-5 shadow-sm text-slate-800 w-full'
-              }`}>
-                {msg.role === 'assistant' ? (
-                  <InvestigationResponseRenderer content={msg.content} isStreaming={msg.streaming} onSendMessage={sendMessage} />
-                ) : (
-                  <p className="text-xs font-medium leading-relaxed">{msg.content}</p>
-                )}
-              </div>
-
-              {msg.sectionsUsed && msg.sectionsUsed.length > 0 && (
-                <SectionChips sections={msg.sectionsUsed} />
-              )}
-
-              <span className="text-[10px] text-slate-500 font-mono px-1">
-                {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            </div>
-          </div>
-        ))}
-        <div ref={bottomRef} />
+        )}
       </div>
 
-      {/* Input Footer */}
-      <div className="px-5 py-3.5 bg-white border-t border-slate-200 flex-shrink-0 space-y-2">
-        <div className="flex gap-2.5 items-center">
+      {/*
+        The transcript uses the width it is given.
+
+        `max-w-3xl` on a full-width case page left a band of empty white down
+        both sides wider than some of the answers, and evidence tables wrapped
+        inside a column narrower than the page they sat on. The reading column
+        is now `max-w-5xl`: wide enough for a table, still short enough a line
+        of prose does not run away from the eye.
+      */}
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6 sm:px-8">
+        <div className="mx-auto max-w-5xl space-y-7">
+          {messages.map((msg) => (
+            <div key={msg.id} className={msg.role === 'user' ? 'flex flex-col items-end' : ''}>
+              <div className="mb-1.5 flex items-baseline gap-2">
+                <span className="font-sans text-xs font-semibold tracking-[-0.01em] text-slate-500">
+                  {msg.role === 'user' ? 'You' : 'SUDARSHAN'}
+                </span>
+                <span className="font-sans text-xs text-slate-400 tabular-nums">
+                  {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+
+              {/*
+                The assistant answers on the page, not inside a chat bubble.
+
+                Its replies carry tables, callouts and evidence chips - a
+                rounded speech balloon around an evidence table is a costume.
+                The reader's own questions stay in a bubble, because they are
+                short and want to be scannable down the right edge.
+              */}
+              {msg.role === 'assistant' ? (
+                <div className="min-w-0">
+                  <InvestigationResponseRenderer
+                    content={msg.content}
+                    isStreaming={msg.streaming}
+                    onSendMessage={sendMessage}
+                  />
+                  {msg.sectionsUsed && msg.sectionsUsed.length > 0 && (
+                    <SectionChips sections={msg.sectionsUsed} />
+                  )}
+                </div>
+              ) : (
+                <p className="max-w-[80%] rounded-2xl rounded-br-md bg-blue-700 px-4 py-2.5 font-sans text-[16px] leading-relaxed text-white">
+                  {msg.content}
+                </p>
+              )}
+            </div>
+          ))}
+
+          {/*
+            Suggested questions, derived from this case, and inside the
+            transcript rather than pinned above it: they are the opening move of
+            the conversation, and as a fixed band they cost the message list a
+            third of its height on every case.
+          */}
+          {messages.length <= 1 && questions.length > 0 && (
+            <div className="space-y-2.5 border-t border-slate-200 pt-5">
+              {(['decision', 'evidence', 'action'] as const).map((kind) => {
+                const group = questions.filter((q) => q.kind === kind);
+                if (group.length === 0) return null;
+                return (
+                  <div key={kind} className="flex flex-wrap items-center gap-2">
+                    <span className={`${TYPOGRAPHY.label} w-full sm:w-16 shrink-0`}>
+                      {GROUP_LABEL[kind]}
+                    </span>
+                    {group.map((q) => (
+                      <button
+                        key={q.text}
+                        type="button"
+                        onClick={() => sendMessage(q.text)}
+                        disabled={isStreaming}
+                        className="rounded-md border border-slate-200 bg-white px-3 py-1.5 font-sans text-[13px] font-medium text-slate-700 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-800 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                      >
+                        {q.text}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div ref={bottomRef} />
+        </div>
+      </div>
+
+      {/*
+        The composer stays open.
+
+        It used to disable the field while an answer streamed, so an analyst
+        who had already read the verdict had to wait on the cursor before
+        typing the next question - and if the stream never closed cleanly, they
+        waited forever. The field is always live; only the send is held back
+        while a reply is in flight, and the stop button is right there.
+      */}
+      <div className="shrink-0 border-t border-slate-200 bg-white px-6 py-4 sm:px-8">
+        <div className="mx-auto flex max-w-5xl items-center gap-2.5 rounded-2xl border border-slate-200 bg-slate-50 px-2 py-1.5 transition-colors focus-within:border-blue-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500/30">
           <input
             ref={inputRef}
             type="text"
             value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => {
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 sendMessage(input);
               }
             }}
-            placeholder="Ask about this investigation... (e.g. Did it steal OTP messages?)"
-            disabled={isStreaming}
-            className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 transition-all"
+            placeholder={isStreaming ? 'Type your next question...' : 'Ask about this investigation...'}
+            className="min-w-0 flex-1 border-0 bg-transparent px-3 py-2 font-sans text-[16px] leading-relaxed text-slate-900 placeholder-slate-400 focus:outline-none"
           />
 
           {isStreaming ? (
             <button
+              type="button"
               onClick={handleStop}
-              className="p-2.5 rounded-xl bg-red-600 text-white hover:bg-red-700 transition-colors shadow-2xs"
+              className="shrink-0 rounded-xl bg-slate-900 p-2.5 text-white transition-colors hover:bg-slate-800"
               title="Stop generating"
             >
               <RefreshCw className="h-4 w-4 animate-spin" />
             </button>
           ) : (
             <button
+              type="button"
               onClick={() => sendMessage(input)}
               disabled={!input.trim()}
-              className="p-2.5 rounded-xl bg-blue-700 text-white hover:bg-blue-800 transition-colors disabled:opacity-40 shadow-2xs"
+              className="shrink-0 rounded-xl bg-blue-700 p-2.5 text-white transition-colors hover:bg-blue-800 disabled:opacity-40"
               title="Send question"
             >
               <Send className="h-4 w-4" />
             </button>
           )}
         </div>
-
-        <p className="text-[10px] text-slate-500 text-center font-mono">
-          RAG-Grounded Evidence Engine · AI explains, deterministic engine decides
-        </p>
       </div>
     </div>
   );

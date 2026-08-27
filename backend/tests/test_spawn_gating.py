@@ -756,3 +756,177 @@ def test_every_failure_path_leaves_gating_off():
         f"{body_returns} failure returns but only {disables} gating disables - "
         "some path hands back to the ladder with gating still on"
     )
+
+
+# ── a failed launch must not discard what was observed ───────────────────────
+
+
+def test_events_captured_before_a_crash_survive_the_failure_path():
+    """
+    A launch failure used to discard session.collected_events, so a sample that
+    WAS instrumented and then died reported the same as one never instrumented:
+    nothing.
+
+    Measured on com.sina.weibo: the agent loaded before the first instruction,
+    the process lived 1.1s and crashed in Application.onCreate. onCreate is
+    exactly where a sample that cannot survive startup does its work, and every
+    hook that fired in that second was thrown away.
+    """
+    from sudarshan_core.engines.frida_sandbox import calculate_bfci
+
+    collected = {
+        "accessibility": [{"hook": "AccessibilityNodeInfo.getText"}],
+        "sms": [{"hook": "SmsManager.sendTextMessage"}],
+        "harness_action": [{"hook": "Build.<static fields>"}],
+    }
+    bfci, components, evidence = calculate_bfci(collected)
+    assert bfci > 0.0, "fraud events observed before the crash must score"
+
+    observed = sum(
+        len(v) for k, v in collected.items() if k != "harness_action"
+    )
+    assert observed == 2
+
+
+def test_a_crash_run_with_real_behaviour_is_still_scoreable():
+    """
+    dynamic_exclusion_reason checks observed behaviour BEFORE the status, so a
+    crash-on-launch run that genuinely saw fraud behaviour is scored on what it
+    saw rather than written off by how it ended.
+    """
+    from sudarshan_core.engines.risk_engine import dynamic_exclusion_reason
+
+    d = {
+        "available": True,
+        "runtime_attempted": True,
+        "engine": "frida",
+        "dynamic_status": "INSTRUMENTATION_FAILED",
+        "bfci": 55.0,
+        "api_calls": ["AccessibilityNodeInfo.getText", "SmsManager.sendTextMessage"],
+        "frida_events": {"accessibility": [{"hook": "AccessibilityNodeInfo.getText"}]},
+    }
+    assert dynamic_exclusion_reason(d) is None, (
+        "a crashed run that observed real behaviour must still be scoreable"
+    )
+
+
+# ── a crash report must name OUR crash ───────────────────────────────────────
+
+
+def _parse_fatal(error_lines, package_name):
+    """Mirror of the FATAL EXCEPTION block parse in _collect_crash_diagnostics."""
+    import re
+
+    exc_type = exc_msg = None
+    in_block = ours = False
+    for line in error_lines:
+        if "FATAL EXCEPTION" in line:
+            in_block, ours = True, False
+            continue
+        if not in_block:
+            continue
+        if "Process:" in line:
+            ours = package_name in line
+            continue
+        m = re.search(r"([A-Za-z][\w.]*Exception[^\n]*)", line)
+        if m and ours and not exc_type:
+            s = m.group(1).strip()
+            exc_type, exc_msg = (s.split(":", 1) + [None])[:2] if ":" in s else (s, None)
+            in_block = False
+        elif m:
+            in_block = False
+    return (exc_type or "").strip(), (exc_msg or "").strip()
+
+
+def test_another_apps_crash_is_not_attributed_to_the_sample():
+    """
+    logcat is device-wide. The parser used to scan every error line for any
+    "AndroidRuntime ... Exception" with no ownership check, so background noise
+    became the sample's cause of death - measured, com.sina.weibo and
+    com.tjmonh.android both reported an identical
+    "java.lang.RuntimeException: Bad file descriptor" with no stacktrace.
+
+    It also disabled recovery: _crash_is_instrumentation_race returns False as
+    soon as exception_type is set, so a borrowed exception silently switched
+    off the ART/JIT race retry.
+    """
+    lines = [
+        "E/AndroidRuntime(999): FATAL EXCEPTION: main",
+        "E/AndroidRuntime(999): Process: com.someone.else, PID: 999",
+        "E/AndroidRuntime(999): java.lang.RuntimeException: Bad file descriptor",
+    ]
+    assert _parse_fatal(lines, "com.test.bankbot") == ("", "")
+
+
+def test_our_own_crash_is_still_captured():
+    lines = [
+        "E/AndroidRuntime(123): FATAL EXCEPTION: main",
+        "E/AndroidRuntime(123): Process: com.test.bankbot, PID: 123",
+        "E/AndroidRuntime(123): java.lang.IllegalStateException: boom",
+    ]
+    assert _parse_fatal(lines, "com.test.bankbot") == (
+        "java.lang.IllegalStateException", "boom",
+    )
+
+
+def test_a_foreign_block_does_not_shadow_ours():
+    """Somebody else crashing first must not hide the sample's own crash."""
+    lines = [
+        "E/AndroidRuntime(999): FATAL EXCEPTION: main",
+        "E/AndroidRuntime(999): Process: com.someone.else, PID: 999",
+        "E/AndroidRuntime(999): java.lang.RuntimeException: Bad file descriptor",
+        "E/AndroidRuntime(123): FATAL EXCEPTION: main",
+        "E/AndroidRuntime(123): Process: com.test.bankbot, PID: 123",
+        "E/AndroidRuntime(123): java.lang.SecurityException: denied",
+    ]
+    assert _parse_fatal(lines, "com.test.bankbot") == (
+        "java.lang.SecurityException", "denied",
+    )
+
+
+# ── teardown must never hang the run ─────────────────────────────────────────
+
+
+def test_a_hanging_teardown_call_is_abandoned_not_waited_on():
+    """
+    frida's Python API has no timeout: unload()/detach() wait for a reply from
+    an agent that, after a transport failure, is already gone.
+
+    Measured on Hook (com.half.powder): the session died with
+    "TransportError: timeout was reached" and the run produced no further
+    output for over ten minutes. The device lock is held for the whole session,
+    so that one dead transport stalled every queued sample behind it.
+
+    try/except cannot catch a hang, so each call is bounded and abandoned.
+    """
+    import threading as _t
+    from concurrent.futures import ThreadPoolExecutor
+    from concurrent.futures import TimeoutError as _TE
+
+    from sudarshan_core.engines.frida_sandbox import FRIDA_TEARDOWN_TIMEOUT_SECONDS
+
+    assert FRIDA_TEARDOWN_TIMEOUT_SECONDS > 0
+
+    block = _t.Event()
+
+    def _hangs():
+        block.wait(60)
+
+    def _bounded(fn, timeout):
+        pool = ThreadPoolExecutor(max_workers=1)
+        try:
+            pool.submit(fn).result(timeout=timeout)
+            return "returned"
+        except _TE:
+            return "abandoned"
+        finally:
+            pool.shutdown(wait=False)
+
+    started = time.monotonic()
+    try:
+        assert _bounded(_hangs, 0.5) == "abandoned"
+        elapsed = time.monotonic() - started
+    finally:
+        block.set()
+
+    assert elapsed < 5, f"teardown was not bounded: {elapsed:.1f}s"

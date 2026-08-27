@@ -71,18 +71,24 @@ INITIAL_EXPLORATION_BUDGET_SECONDS: int = _env_int(
 #: -> Install this app? -> Update), every step of which is real progress. A
 #: 150s starting budget ran for over six minutes.
 #:
-#: Sized instead against the operational constraint: a whole scan inside 3-4
-#: minutes. Static costs ~25s, launch ~30-50s (spawn attempt plus ladder) and
-#: teardown ~40s, so exploration has to fit in roughly two minutes for the
-#: total to land where it needs to. One 60s extension on top of the starting
-#: budget is enough for a walk that is genuinely mid-login at the deadline,
-#: without letting steady progress run indefinitely.
+#: Sized instead against the operational constraint: a whole scan inside five
+#: minutes. The exact budget equation is measured below.
 #:
 #: Raise MAX_EXPLORATION_BUDGET_SECONDS when a sample needs a longer walk and
 #: the wall-clock is not the binding constraint.
 MAX_EXPLORATION_BUDGET_SECONDS: int = _env_int(
     "MAX_EXPLORATION_BUDGET_SECONDS",
-    max(INITIAL_EXPLORATION_BUDGET_SECONDS + 60, 180),
+    # Measured end-to-end, the wall-clock of a whole scan is
+    #     total ~= exploration ceiling + ~118s
+    # made of ~10s static (stages run in parallel), ~20s launch now that the
+    # spawn path lands in about a second, a ~68s tail after the analysis wait
+    # (explorer join grace, the anti-evasion time-warp sequence, artifact and
+    # screenshot flush) and ~20s of final reporting.
+    #
+    # Anubis at a 210s ceiling took 336s, which is that equation exactly. A
+    # +30s extension over a 130s budget gives a 160s ceiling and a ~278s scan,
+    # inside the 5-minute operational limit with margin.
+    max(INITIAL_EXPLORATION_BUDGET_SECONDS + 30, 150),
 )
 
 ADAPTIVE_EXPLORATION_ENABLED: bool = (

@@ -21,6 +21,30 @@ happen either, and a "benign" verdict cannot be drawn from it.
 Assertions are derived from observed telemetry only. Nothing here is a bank
 list or a package allowlist: the packages a sample targets come from that
 sample's own manifest and DEX references, resolved during static intake.
+
+Relationship to goal coverage
+-----------------------------
+This module and :mod:`~sudarshan_core.engines.dynamic_coverage` answer two
+different questions and must not be merged.
+
+Here: *did the run reach any of the sample's own fraud TRIGGER conditions?*
+Six conditions, and ``incomplete_exercise`` requires that NONE of them fired
+AND that zero threat events were observed. It is the safety floor against a
+completely silent run, and it is deliberately conservative - an unexercised run
+must never be readable as a clean bill of health.
+
+There: *how much of the fifteen-goal INVESTIGATION PLAN was exercised, and did
+the run produce trustworthy evidence?* That is coverage and validity, and a run
+can legitimately have 60% coverage, be valid, and still be an incomplete
+exercise - if the nine goals it confirmed happened not to include any trigger
+condition.
+
+An unreached individual GOAL therefore has no effect here whatsoever, and never
+did: ``incomplete_exercise`` reads trigger conditions and threat events, not the
+goal graph. What changed alongside this note is only that such a goal is now
+recorded as NOT_REACHED instead of being left PENDING, and that the run around
+it reports PARTIAL instead of having no vocabulary for itself. The safety floor
+is untouched, and deliberately so.
 """
 
 from __future__ import annotations

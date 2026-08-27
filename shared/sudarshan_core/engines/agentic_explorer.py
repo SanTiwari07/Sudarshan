@@ -198,6 +198,17 @@ MAX_PERMISSION_SCREEN_ATTEMPTS: int = int(
     os.getenv("SUDARSHAN_MAX_PERMISSION_SCREEN_ATTEMPTS", "3")
 )
 
+#: Recorded on the Login Flow goal when the app has explicitly refused the
+#: synthetic credentials.
+#:
+#: This is a STOPPING condition, not a failure to report: an app that shows
+#: "Invalid credentials" has answered the question, and no further synthetic
+#: identity will be accepted. Retrying only spends budget the other
+#: investigation branches need - accessibility abuse, overlay draw, SMS
+#: interception, WebView phishing, dynamic code loading, C2 traffic - which is
+#: what the run is actually here to observe.
+AUTH_FLOW_REJECTED: str = "AUTH_FLOW_REJECTED"
+
 #: The smallest slice worth starting a goal with. A goal begun with two seconds
 #: left produces one half-verified action and a misleading FAILED; refusing it
 #: and recording TIMEOUT is the honest outcome.
@@ -3658,6 +3669,41 @@ class AgenticExplorer:
                             post_obs, post_state, post_classification,
                             reason=ScreenshotReason.LOGIN.value,
                             label="authenticated_session",
+                        )
+                    elif self.auth.is_terminal:
+                        # ── The app has answered, so stop asking ─────────────
+                        #
+                        # An explicit "invalid credentials" settles the
+                        # question: no further synthetic identity will be
+                        # accepted, and retrying only spends budget the other
+                        # investigation branches need. The purpose of filling a
+                        # login form during analysis is to get PAST it and
+                        # observe what the sample does next - accessibility
+                        # abuse, overlay draw, SMS interception, C2 traffic -
+                        # not to succeed at authenticating.
+                        #
+                        # The goal is resolved as PARTIAL rather than FAILED
+                        # whenever the form was actually filled and submitted:
+                        # that is verified progress, and it stays in the record
+                        # even though the credentials were refused.
+                        self.goals.record_progress_signal(
+                            "Login Flow", "credentials_submitted",
+                        )
+                        self.goals.resolve_goal(
+                            "Login Flow", reason=AUTH_FLOW_REJECTED,
+                        )
+                        logger.info(
+                            "[DYNAMIC][GOAL] goal=Login Flow status=%s "
+                            "reason=%s auth_state=%s - moving to another "
+                            "investigation branch",
+                            (self.goals.get_goal_by_name("Login Flow").status.value
+                             if self.goals.get_goal_by_name("Login Flow") else "?"),
+                            AUTH_FLOW_REJECTED, self.auth.state.value,
+                        )
+                        self.audit_log.record_system_event(
+                            "auth_flow_rejected",
+                            f"auth_state={self.auth.state.value} "
+                            f"attempts={self.exploration.login_attempts}",
                         )
 
                 pipeline_log("POST_ACTION_OBSERVE", state_id=post_state.state_id)

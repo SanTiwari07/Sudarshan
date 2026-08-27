@@ -1411,6 +1411,47 @@ def _foreground_package(device: str) -> str:
     return ""
 
 
+#: `am start` output that means the component can never start, however long we
+#: wait for it.
+#:
+#: Android answers immediately and definitively here - "Activity class {...}
+#: does not exist" - and the ladder was ignoring that answer and then waiting
+#: the full stability timeout for a process that could not appear.
+#:
+#: Measured on a packed sample whose manifest declares a launcher class the APK
+#: does not contain (a common packer artifact, and the same reason frida.spawn
+#: reports "unable to find a front-door activity"): three ladder steps each
+#: burned 12s waiting on a component Android had already rejected, delaying the
+#: Frida attach by ~36s. The sample had self-terminated by the time the agent
+#: landed, and the run reported INSTRUMENTED_TOO_LATE - which was true, and
+#: avoidable.
+_ACTIVITY_REJECTED_MARKERS = (
+    "does not exist",
+    "error type 3",
+    "unable to resolve intent",
+    "no activities found to run",
+    "permission denial",
+    "activity not started, unable to resolve",
+)
+
+
+def _activity_start_was_rejected(output: str) -> str:
+    """
+    The reason `am start` refused, or "" when it did not refuse.
+
+    Only DEFINITIVE refusals count. A start that succeeds and whose process
+    then dies is a crash, and must keep its full diagnostic path - this is
+    strictly about not waiting for something Android said would never happen.
+    """
+    text = (output or "").strip().lower()
+    if not text:
+        return ""
+    for marker in _ACTIVITY_REJECTED_MARKERS:
+        if marker in text:
+            return marker
+    return ""
+
+
 def _launch_failure_is_process_crash(reason: str) -> bool:
     """True only when a PID existed and died - not when launch intent never started."""
     r = (reason or "").lower()
@@ -2528,6 +2569,11 @@ class FridaSession:
         #: about WHICH code execution was seen.
         self.behavior_summary: Dict[str, int] = {}
         self.normalized_event_count: int = 0
+        #: Raw output of the most recent launch command. Retained because
+        #: `adb` exits zero even when Android refuses to start a
+        #: component, so the exit code cannot tell a launch from a
+        #: rejection - see _activity_start_was_rejected.
+        self._last_launch_output: str = ""
         # True when lifecycle screenshots were taken while another package owned
         # the foreground (typically the launcher home screen).
         self.foreground_mismatch: bool = False
@@ -4233,12 +4279,22 @@ class FridaSession:
             _launcher_activity_expected = bool(self.main_activity)
 
             def _am_start_w(activity_component: str) -> bool:
-                """Issue am start -W for an explicit component. Returns adb success."""
-                ok, _ = _adb(
+                """
+                Issue am start -W for an explicit component. Returns adb success.
+
+                The OUTPUT is retained on the session, not discarded: `adb`
+                exits zero even when Android refuses the component, so the exit
+                code alone cannot distinguish "started" from "Activity class
+                does not exist". _try_launch_step reads it to avoid waiting a
+                full stability timeout for a process Android has already said
+                will never appear.
+                """
+                ok, out = _adb(
                     "-s", self.device_serial, "shell",
                     f"am start -W -n {activity_component}",
                     timeout=20,
                 )
+                self._last_launch_output = out or ""
                 return ok
 
             def _try_launch_step(
@@ -4256,7 +4312,27 @@ class FridaSession:
                 _launch_intent_ts = time.monotonic()
                 self.launch_timeline["launch_intent"] = _launch_intent_ts
 
+                self._last_launch_output = ""
                 launch_fn()
+
+                # Android already answered. Waiting the full stability timeout
+                # for a component it has refused to start delays the Frida
+                # attach by that timeout per dead step, and on a packed sample
+                # whose declared launcher is absent from the APK that is every
+                # step in the early ladder. The sample gets on with whatever it
+                # was going to do while we wait for a process that cannot exist.
+                _rejected = _activity_start_was_rejected(
+                    getattr(self, "_last_launch_output", "")
+                )
+                if _rejected:
+                    logger.info(
+                        "[Frida] Launch step '%s' was refused by Android (%s) - "
+                        "skipping the stability wait and trying the next "
+                        "strategy immediately",
+                        step_label, _rejected,
+                    )
+                    self._last_launch_reason = f"activity_rejected:{_rejected}"
+                    return False
 
                 stable, pid, reason = _poll_pid_until_stable(
                     self.device_serial, self.package_name,
@@ -6309,8 +6385,45 @@ async def _run_device_session(
             for bucket, events in session.collected_events.items()
             if bucket not in _HARNESS_EVENT_BUCKETS
         )
+        # ── Reconcile whatever the run DID collect before it died ────────────
+        #
+        # A session whose transport dies mid-run - which is what a sample
+        # killing its own process while hooked looks like from this side - had
+        # its events dropped on the floor, because the explorer never reached
+        # its own finalisation. Those events are real observations of the
+        # sample and the most diagnostic thing such a run produces.
+        #
+        # A fresh tracker is used rather than the explorer's, because on this
+        # path the explorer may never have run at all. It is reconciliation
+        # over the collected set, which is exactly what the success path does.
+        _fail_goal_coverage = (session.reports or {}).get("goal_coverage") or {}
+        try:
+            from sudarshan_core.engines.agentic.goal_tracker import GoalTracker
+
+            _fail_tracker = GoalTracker()
+            _fail_summary = _fail_tracker.reconcile(
+                normalized=normalize_collected_events(session.collected_events)
+            )
+            _fail_tracker.finalize(reason="instrumentation_failed")
+            if _fail_summary.get("goals_changed"):
+                logger.info(
+                    "[Frida] Failure-path reconciliation recovered %d goal(s) "
+                    "from %d event(s) collected before the session died: %s",
+                    len(_fail_summary["goals_changed"]),
+                    _fail_summary.get("events_considered", 0),
+                    ", ".join(_fail_summary["goals_changed"]),
+                )
+                _fail_goal_coverage = _fail_tracker.coverage_report()
+                base_result["behaviors_observed"] = _fail_summary.get(
+                    "behaviors_observed", {}
+                )
+        except Exception as exc:                        # noqa: BLE001
+            logger.warning(
+                "[Frida] Failure-path goal reconciliation skipped: %s", exc,
+            )
+
         base_result["dynamic_coverage"] = build_dynamic_coverage(
-            (session.reports or {}).get("goal_coverage") or {},
+            _fail_goal_coverage,
             sandbox_available=True,
             instrumentation_ok=False,
             evidence_event_count=_fail_events,

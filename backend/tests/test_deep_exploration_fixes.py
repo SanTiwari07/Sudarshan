@@ -797,8 +797,15 @@ class TestRetryBudget(unittest.TestCase):
         self.assertIsNotNone(retry)
         self.assertEqual(retry["tool"], "click_text")
         self.assertNotIn("_geometry_trusted", retry)
+        # Same rung, renamed. The label now says how the element was resolved
+        # ("by text or content-description") rather than what preceded this
+        # attempt, because two names for one rung made the strategy list
+        # unable to answer what it is for - which resolutions are already
+        # spent. The behaviour this test guards is asserted above and is
+        # unchanged: coordinates are what is in doubt after a trusted-geometry
+        # tap, so the escalation re-resolves from the hierarchy.
         self.assertEqual(
-            retry["_pipeline_debug"]["retry_strategy"], "text_after_geometry")
+            retry["_pipeline_debug"]["retry_strategy"], "text_or_content_desc")
 
     def test_retry_ladder_unchanged_without_trusted_geometry(self):
         d = ActionDispatcher()

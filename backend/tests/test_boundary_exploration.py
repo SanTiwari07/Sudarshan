@@ -325,8 +325,15 @@ class TestRetryPayloadTextOnlyFallback(unittest.TestCase):
         self.assertIsNotNone(retry)
         self.assertEqual(retry.get("tool"), "click_text")
         self.assertEqual(retry.get("text"), "INSTALL")
+        # The strategy label now names HOW the element was resolved rather than
+        # what happened before this rung. `text_semantic_retry` and
+        # `text_after_geometry` were two names for the same rung reached by two
+        # routes, which made the label useless for answering the question it
+        # exists to answer: which resolutions has this action already tried?
+        # The behaviour asserted above - click_text, text preserved - is
+        # unchanged.
         self.assertEqual(retry.get("_pipeline_debug", {}).get("retry_strategy"),
-                         "text_semantic_retry")
+                         "text_or_content_desc")
 
     def test_no_coords_no_text_returns_none(self):
         """T11b: retry_payload with no x/y and no text -> None (RETRY_UNAVAILABLE)."""

@@ -114,12 +114,29 @@ class ActionStrategy(str, Enum):
 #: The ladder, in order. `retry_payload` walks this list and skips any rung it
 #: has no data for, so an action with only text does not burn attempts on
 #: resource-id and node rungs that could never be built.
+#:
+#: The ordering is not "most reliable first", it is "most likely to be NEW
+#: first", and the difference matters because of what attempt 1 already was.
+#: The first dispatch of a labelled control is `click_text` (see
+#: ExecutableAction.to_executor_payload), which dumps the hierarchy and matches
+#: on text. So:
+#:
+#:   * RESOURCE_ID and NODE come first - they are strictly more specific than
+#:     the text match that just failed, and they survive a re-layout;
+#:   * the geometry rungs come next, because they are a genuinely different
+#:     hypothesis from the text lookup;
+#:   * TEXT sits AFTER them. Putting it first made the first escalation repeat
+#:     attempt 1 exactly, which is the defect the whole ladder exists to fix -
+#:     it is retained because a fresh dump can find a control that was mid
+#:     transition a moment ago, but it is not the first thing to try;
+#:   * VISION and the obstructed nudge are last: both are guesses, and a guess
+#:     that taps the wrong control is worse than an attempt that fails cleanly.
 ACTION_LADDER: Tuple[str, ...] = (
     ActionStrategy.RESOURCE_ID.value,
     ActionStrategy.NODE.value,
-    ActionStrategy.TEXT.value,
     ActionStrategy.BOUNDS_CENTER.value,
     ActionStrategy.NORMALIZED_COORDS.value,
+    ActionStrategy.TEXT.value,
     ActionStrategy.VISION.value,
     ActionStrategy.NEARBY_COORD.value,
 )
@@ -498,15 +515,16 @@ class ActionDispatcher:
         """
         The next rung of the deterministic action ladder, or None when spent.
 
-        The ladder, in order of how much identity it trusts:
+        The ladder, ordered most-likely-to-be-NEW first (see ACTION_LADDER for
+        why that is not the same as most-reliable-first):
 
-          1. ``resource_id``          - the element's own id
-          2. ``uiautomator_node``     - the parsed accessibility node
-          3. ``text_or_content_desc`` - text / content-description lookup
-          4. ``bounds_center``        - centre of the reported bounds
-          5. ``normalized_coordinates`` - fraction-of-screen, re-mapped live
-          6. ``vision_coordinate``    - the visual grounder's point
-          7. ``nearby_coordinate``    - the same control, aimed off-centre
+          1. ``resource_id``            - the element's own id
+          2. ``uiautomator_node``       - the parsed accessibility node
+          3. ``bounds_center``          - centre of the reported bounds
+          4. ``normalized_coordinates`` - fraction-of-screen, re-mapped live
+          5. ``text_or_content_desc``   - text / content-description lookup
+          6. ``vision_coordinate``      - the visual grounder's point
+          7. ``nearby_coordinate``      - the same control, aimed off-centre
 
         Rungs the action has no data for are SKIPPED rather than spent, so an
         element with only text does not burn its whole budget on resource-id

@@ -1237,7 +1237,29 @@ def _build_executive_conclusion(r: Dict) -> str:
     corr_available = bool(_get(_get(r, "threat_correlation") or {}, "available"))
     incomplete = bool(_get(r, "incomplete_exercise"))
 
-    if dyn_ran and dyn_conclusive:
+    # ── Say what the dynamic run actually achieved ───────────────────────────
+    #
+    # The three branches below could only describe a run as conclusive,
+    # inconclusive or absent, so a run that confirmed nine of fifteen
+    # investigation goals and captured 47 events was written up in the same
+    # sentence as one that captured none: "returned no conclusive telemetry".
+    #
+    # The coverage block carries its own narrative, computed once in
+    # dynamic_coverage so the HTML, the PDF and the JSON cannot drift apart, and
+    # so no report can claim all fraud stages executed when they did not. It is
+    # used when present; the original three branches remain for a stored case
+    # from before it existed.
+    dyn_coverage = _get(frs_bd, "dynamic_coverage") or {}
+    coverage_narrative = _get(dyn_coverage, "coverage_narrative") or ""
+    if not coverage_narrative:
+        coverage_narrative = _get(_get(r, "dynamic_result") or {}, "dynamic_coverage")
+        coverage_narrative = (
+            _get(coverage_narrative or {}, "narrative") if coverage_narrative else ""
+        )
+
+    if coverage_narrative:
+        scope = f"Static decomposition completed. {coverage_narrative}"
+    elif dyn_ran and dyn_conclusive:
         scope = ("Static decomposition and instrumented execution both completed; "
                  "runtime telemetry was conclusive.")
     elif dyn_ran:
@@ -1247,6 +1269,13 @@ def _build_executive_conclusion(r: Dict) -> str:
     else:
         scope = ("Static decomposition completed. The sandbox did not execute this "
                  "sample, so this determination rests on static evidence alone.")
+
+    # Limitations are stated, not implied. An analyst reading a partial result
+    # has to be able to see WHICH parts of the investigation did not happen,
+    # rather than inferring it from a percentage.
+    limitations = _get(dyn_coverage, "limitations") or []
+    if limitations:
+        scope += " Limitations: " + "; ".join(str(x) for x in limitations[:4]) + "."
 
     scope += (" External threat-intelligence correlation was available."
               if corr_available else

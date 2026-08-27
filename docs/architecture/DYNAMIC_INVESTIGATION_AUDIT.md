@@ -64,7 +64,7 @@ investigation am I in", so:
 upload.py / main.py
       └─> run_frida_analysis(apk_path, package_name)          ← static findings stop here
               └─> FridaSandbox.run()
-                    ├─ install → verify → resolve activity → launch ladder (7 steps)
+                    ├─ install → verify → resolve activity → launch ladder (5 steps)
                     ├─ attach Frida → canary → 66 hooks
                     ├─ RuntimeEventBus ──> EvidenceStore ──> evidence.json
                     │                 └──> AntiAnalysisDetector

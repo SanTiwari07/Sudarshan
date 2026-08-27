@@ -108,7 +108,7 @@ SUDARSHAN closes that gap. It is an analyst-facing platform, not a scanner: a su
 | Exact PID resolution and stability check before attach | [`engines/frida_sandbox.py`](shared/sudarshan_core/engines/frida_sandbox.py) |
 | Explicit 16-state DAE pipeline with logged transitions | [`engines/dae_pipeline.py`](shared/sudarshan_core/engines/dae_pipeline.py) |
 | Five-level perception pipeline (UI XML → activity → Frida events → logcat → screenshot) | [`agentic/perception.py`](shared/sudarshan_core/engines/agentic/perception.py) |
-| Semantic screen classification with package-ownership context | [`agentic/screen_classifier.py`](shared/sudarshan_core/engines/agentic/screen_classifier.py) |
+| Semantic screen classification — 21 screen types with package-ownership context | [`agentic/screen_classifier.py`](shared/sudarshan_core/engines/agentic/screen_classifier.py) |
 | Screen-hash state graph, transition DAG, loop detection | [`agentic/screen_graph.py`](shared/sudarshan_core/engines/agentic/screen_graph.py) |
 | Canonical action dispatch and post-action verification | [`agentic/action_dispatch.py`](shared/sudarshan_core/engines/agentic/action_dispatch.py), [`action_verifier.py`](shared/sudarshan_core/engines/agentic/action_verifier.py) |
 | Synthetic victim profile and persona seeding | [`agentic/victim_profile.py`](shared/sudarshan_core/engines/agentic/victim_profile.py), [`engines/persona.py`](shared/sudarshan_core/engines/persona.py) |
@@ -312,7 +312,7 @@ The dynamic engine is the part of the platform most sensitive to environment, an
 - Frida 16 is not an option here: it cannot link on 16 KB page-size devices.
 - **ART deoptimization** is performed before hooks are installed so that AOT-compiled framework methods are interceptable.
 - **Exact PID attachment.** The controller resolves the process id and requires a stability window before attaching, rather than attaching to a name and racing the launch.
-- **Launch ladder.** Launcher intent → explicit `am start` → `monkey`, with headless fallbacks; each rung is recorded as a DAE transition.
+- **Launch ladder.** A five-step ladder — launcher intent, explicit `am start`, and further fallbacks including `monkey` — with the rung that succeeded recorded as `launch_method_used` (`"failed"` when all five did). When every strategy produces a process but none produces a foreground window, the run is marked `NO_UI_RENDERED` so a UI-less run is never scored as observed behaviour.
 
 ### Pipeline states
 
@@ -338,6 +338,8 @@ flowchart LR
     V -->|"no-op or loop"| R["Remediate<br/>recover form, back out, retry"]
     R --> P
 ```
+
+Exploration is driven against a **15-stage fraud goal graph** (`agentic/goal_tracker.py`): launch, permission grant, accessibility abuse, overlay, login flow, SMS/OTP interception, banking app detection, network/C2, persistence, dynamic code loading, reflection, deep links, broadcast receivers, exported components and background services. Each goal declares which Frida event categories signal it, which hook names confirm it, and which earlier stages must complete first — so a goal can be reported `UNSUPPORTED` when no instrument could confirm it, rather than silently `FAILED`.
 
 Screenshot capture (perception level 5) is deliberately conditional — it fires only when the XML is empty or unparseable, no clickable nodes exist, the labelled-node fraction is below threshold, the activity is a known WebView/browser class, or the previous action failed for lack of UI understanding.
 
@@ -422,12 +424,14 @@ Categories collected as evidence but deliberately unscored: `dangerous_apis`, `f
 
 ### Risk bands
 
-| Band | Final score |
+| Band | Condition on the final score |
 | :--- | :--- |
-| Safe | ≤ 30 |
-| Suspicious | 31 – 60 |
-| High Risk | 61 – 89 |
-| Critical | ≥ 90 |
+| Safe | `<= 30` |
+| Suspicious | `> 30` and `<= 60` |
+| High Risk | `> 60` and `<= 89` |
+| Critical | `> 89` |
+
+The comparisons are inclusive upper bounds on the unrounded score, so 89.5 is `Critical`.
 
 ### Escalation rules
 
@@ -469,7 +473,7 @@ Each floor raises a `Safe` band to `Suspicious`. None of them assert that the sa
 | Modes | `failover`, `primary_only`, `fallback_only`, `unconfigured` — resolved at load time |
 | Identical keys | A fallback identical to primary is dropped; the manager will not "fail over to itself" |
 | Retries | `GEMINI_MAX_RETRIES` (default 3) with exponential backoff from `GEMINI_RETRY_BASE_SECONDS` (default 0.5 s) |
-| Circuit breaker | Per-slot `CLOSED` / `OPEN`; a failing slot opens for `GEMINI_PRIMARY_COOLDOWN_SECONDS` (default 60 s), then probes |
+| Circuit breaker | Per-slot state machine: `AVAILABLE` → `OPEN` on failure for `GEMINI_PRIMARY_COOLDOWN_SECONDS` (default 60 s) → `DEGRADED` while probing → `AVAILABLE` on success |
 | All slots open | Raises `GeminiAllProvidersFailed`; callers fall back to deterministic output |
 | Model compatibility | Gemini 3.x thinking knobs are stripped automatically when failing over to a 2.5 model |
 | Token budget | `SUDARSHAN_AGENT_MAX_OUTPUT_TOKENS` (default 2048) — a thinking model spends part of the budget before emitting JSON, so 512 truncates planner actions |
@@ -621,7 +625,7 @@ The Android guest is treated as fully compromised after every session — it req
 | Database | Case and job store | SQLite via `aiosqlite` (no ORM), WAL mode |
 | Threat intelligence | External correlation | VirusTotal, AlienVault OTX, AbuseIPDB |
 | AI | Model access | `google-genai`, Gemini 3.x Flash primary / Gemini 2.5 Flash fallback |
-| Visual detection | VIDE | Layout AST comparison, CIE76 ΔE colour matching, `rapidfuzz` string axis |
+| Visual detection | VIDE | Layout AST comparison, CIEDE2000 ΔE colour matching, `rapidfuzz` string axis |
 | Reporting | Document generation | ReportLab, `stix2`, Pillow, `pytesseract` |
 | Containerisation | Orchestration | Docker Compose, seccomp profile, hardened overlay |
 | Testing | Python | pytest (async via `asyncio.run`, not `pytest-asyncio`) |
@@ -1091,8 +1095,8 @@ Summarised here; each entry is expanded with impact and workaround in [docs/KNOW
 - **AI provider limits.** Quota exhaustion opens the circuit for the cooldown window. Thinking models consume part of the output budget before emitting JSON. With no key, exploration degrades to the deterministic planner.
 - **Threat-intel rate limits.** VirusTotal free tier is 4 requests/minute. A 24-hour SQLite IOC cache absorbs repeats; unknown-to-VirusTotal indicators are re-queried.
 - **Packed and native-only samples.** Commercial packers and logic held entirely in `.so` libraries produce stub Java decompilation. The analyser flags concealment and entropy and defers to runtime hooks.
-- **YARA ships with no rules.** The scanner is wired in but has an empty rule set and logs that it is disabled.
-- **VIDE baselines are lab-scope.** A small demonstration baseline set, with an intentionally unprovisioned, fail-closed signer registry.
+- **YARA is runtime-scoped and small.** Eight rules across two files in `engines/yara_rules/`, deliberately aimed at decrypted in-memory strings rather than the packed APK — on the labelled corpus, conventional static string rules flagged the clean apps and missed the trojans. `yara-python` is a soft dependency; without it the scanner logs that it is disabled and matches are simply absent.
+- **VIDE baselines are lab-scope.** Ten demonstration baselines ship in `shared/sudarshan_core/data/ui_baselines/`; the wider banking baseline corpus lives outside the repository and is resolved through `BANKING_BASELINE_CORPUS_DIR`. Without it, attribution tests skip rather than fail. The signer registry lists twelve banking packages with intentionally empty fingerprint allowlists, which is a fail-closed state: an unprovisioned package has its identity claim rejected, not trusted.
 - **Single node.** One SQLite file and an in-process queue. Horizontal scale needs Postgres and an external broker.
 
 ---

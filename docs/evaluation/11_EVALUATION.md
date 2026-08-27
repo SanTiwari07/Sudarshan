@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document outlines the evaluation methodology, verification protocols, test suite architecture, and audit scorecards for the **SUDARSHAN** platform. It documents how the system asserts mathematical determinism, prompt injection resilience, pipeline robustness, and accuracy across **920 automated unit, integration, and replay tests** (measured 2026-08-16; 525 of them enforced by CI).
+This document outlines the evaluation methodology, verification protocols, test suite architecture, and audit scorecards for the **SUDARSHAN** platform. It documents how the system asserts mathematical determinism, prompt injection resilience, pipeline robustness, and accuracy across **2,622 automated unit, integration and replay tests** (measured 2026-08-27). There is no CI workflow in this repository, so the suite is developer-run.
 
 ---
 
@@ -18,7 +18,7 @@ The evaluation framework is responsible for:
 
 ## High-Level Overview
 
-Sudarshan enforces a rigorous quality gate prior to deployment. The automated test suite consists of **920 collected pytest test cases** (measured 2026-08-16; only 525 are enforced by CI) located in [`tests/`](../../tests/) and [`backend/tests/`](../../backend/tests/).
+Sudarshan enforces a rigorous quality gate prior to deployment. The automated test suite consists of **2,622 collected pytest test cases** (measured 2026-08-27, no collection errors) located in [`tests/`](../../tests/) and [`backend/tests/`](../../backend/tests/): 1,813 in `tests/unit`, 12 in `tests/integration` and 797 in `backend/tests`.
 
 ```text
 [ Test Suite Execution (pytest) ]
@@ -180,7 +180,7 @@ Live sandbox corpus runs (not part of default `pytest` collection): see [`VALIDA
 
 ## API Reference
 
-Run the automated test suite locally (**920 tests collected**; CI runs only the 525 under `backend/tests/`):
+Run the automated test suite locally (**2,622 tests collected**, 2026-08-27). Nothing runs it for you - the repository has no CI workflow:
 
 ```powershell
 $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests
@@ -197,7 +197,7 @@ $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytes
 
 | Evaluation Category | Status | Details |
 | :--- | :--- | :--- |
-| **Total Test Suite** | **Implemented** | **920** pytest cases across `tests/` and `backend/tests/`. **525 are enforced by CI** - `ci.yml` runs pytest with `working-directory: backend`, so `tests/unit/` and `tests/integration/` (including every `test_vide_*.py`) are collected locally but never gated. One collection error: `test_pdf_generator.py` requires `pypdf`, which is not a declared dependency. |
+| **Total Test Suite** | **Implemented** | **2,622** pytest cases across `tests/` and `backend/tests/`, measured 2026-08-27 with no collection errors. **Nothing enforces them automatically** - there is no `.github/` directory and no CI workflow. The only git-side gate is `.githooks/pre-push`, which checks commit attribution, not tests. |
 | **Sandbox Containment Tests** | **Implemented** | `tests/unit/test_sandbox_containment.py`, `test_adb_policy_bypass.py`, `test_blocker_fixes.py`; `backend/tests/test_gateway_dynamic_blocker.py`. |
 | **Determinism Baselines** | **Implemented** | Pinned benchmark cases passing in `test_determinism_replay.py`. |
 | **Sanitizer Tests** | **Implemented** | Prompt injection tests passing in `test_prompt_injection.py`. |

@@ -1,35 +1,64 @@
-# SUDARSHAN - Current State Report (August 2026 Audit)
+# Current state
 
-## Executive Summary
-This document reflects the true runtime state of the SUDARSHAN active codebase. Extensive multi-agent auditing has verified the behavior of all components, confirming significant deviations from legacy documentation. The system operates with a **Project Health Score of 7.75 / 10**.
+Snapshot of what works, what is constrained, and what is absent.
 
-## 12-Point Project Health Score
-1. **Code/Architecture Consistency:** 7/10 (Several significant architectural drifts from documentation).
-2. **Test Coverage:** 9/10 (653 robust tests, highly extensive).
-3. **Test Reliability:** 9/10 (Only 11 failures primarily clustered around a single type error).
-4. **Static Analysis Engine:** 10/10 (Highly robust, parallel, and fault-tolerant).
-5. **Dynamic Analysis Sandbox:** 9/10 (7-step ladder and containment policies are fantastic).
-6. **AI & RAG Reliability:** 10/10 (Sanitizer successfully neuters prompt injection, Agentic Explorer is highly resilient).
-7. **Database & Persistence:** 9/10 (Fast and efficient `aiosqlite` implementation, but undocumented).
-8. **Threat Intelligence Integrations:** 4/10 (Severe cache bypass bugs and infinite loops).
-9. **Reporting Pipeline:** 6/10 (PDF exports completely broken by a simple TypeError, but HTML/STIX works).
-10. **Security & Access Control:** 6/10 (Contains unmitigated SSRF and IDOR vulnerabilities).
-11. **Frontend & UX:** 9/10 (Robust state management, minimal bugs).
-12. **Documentation Accuracy:** 5/10 (Extensive documentation drift detected).
+Original report **2026-08-14**. Re-verified against the active codebase on **2026-08-27**.
 
-## Component Status Matrix
-| Component | Status | Discovered Bugs | Architectural Drift | Test Coverage |
-| :--- | :--- | :--- | :--- | :--- |
-| **Frontend UI** | Healthy | 401 Expiry bug in deep links | Analyst Notes implemented | Excellent |
-| **Backend API** | Healthy | 18 undocumented endpoints | `get_screen_size` ignoring mock params | 97.8% |
-| **Database** | Healthy | N/A | **High**: Uses raw `aiosqlite` instead of SQLAlchemy | Excellent |
-| **Analysis Engine** | Healthy | N/A | **Medium**: Parallel static execution, not sequential gating | 100% |
-| **Risk Engine** | Healthy | N/A | **Low**: Base score is calculated but not rendered in UI | 100% |
-| **Dynamic / Frida** | Healthy | N/A | **Medium**: Removed fuzzer, paths moved, 7-step launcher | 100% |
-| **Agentic Explorer** | Healthy | N/A | **Medium**: 15 stages implemented, not 11 | 100% |
-| **Threat Intel** | **Critical** | 404 Cache Bypass, AbuseIPDB Infinite Loop | **High**: VT fallback removed, OTX Hash uncached | Missing |
-| **Report Gen** | **Critical** | TypeError 500 crash on PDF generation | N/A | 100% (except PDF) |
-| **Security/Infra** | **Critical** | SSRF TOCTOU (DNS Rebinding), IDOR in Telemetry, Auth Bypass in Dev | N/A | Excellent |
+> The original version of this document carried a "Project Health Score of 7.75 / 10" and a twelve-point breakdown of numeric component scores. Those numbers had no method behind them and nothing regenerated them, so they have been removed rather than carried forward. What follows is limited to statements that can be checked against the repository.
 
-## Source of Truth
-The ACTIVE CODEBASE is the ultimate source of truth. Documentation updates reflect actual runtime behavior verified via standalone validation scripts.
+Maintained views: [docs/FEATURE_STATUS.md](docs/FEATURE_STATUS.md) · [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) · [BUGS_AND_IMPROVEMENTS.md](BUGS_AND_IMPROVEMENTS.md)
+
+---
+
+## Verified facts
+
+| Property | Value | How to check |
+| :--- | :--- | :--- |
+| Backend app version | 2.1.0 | `backend/app/main.py` |
+| Analysis engine app version | 2.3.0 | `analysis-engine/app/main.py` |
+| Backend route decorators | 81 | `grep -c` over `backend/app/routes/` and `backend/app/auth/auth.py` |
+| Analysis engine routes | 6 | `analysis-engine/app/main.py` |
+| Tests collected | 2,622 | `PYTHONPATH="backend:shared" JWT_SECRET_KEY=t pytest tests/ backend/tests --collect-only` (2026-08-27, no collection errors) |
+| CI workflows | none | No `.github/` directory exists |
+| Persistence | SQLite via `aiosqlite`, WAL, no ORM | `backend/app/db/` |
+| Frida | 17.16.4 pinned host and guest | both `requirements.txt`, both Dockerfiles |
+| Decompilers | APKTool 2.10.0, JADX 1.5.1 | `analysis-engine/Dockerfile` |
+| Fraud goal graph | 15 stages | `shared/sudarshan_core/engines/agentic/goal_tracker.py` |
+| Launch ladder | 5 steps | `shared/sudarshan_core/engines/frida_sandbox.py` |
+| YARA rules | 8 across 2 files | `shared/sudarshan_core/engines/yara_rules/` |
+| VIDE lab baselines | 10 | `shared/sudarshan_core/data/ui_baselines/` |
+| Signer registry entries | 12 packages, empty allowlists (fail-closed) | `shared/sudarshan_core/data/bank_signer_registry.json` |
+| Corpus detection result | 8/8 flagged, 0/9 false positives, static-only | `docs/evaluation/corpus_static_validation.json`, measured 2026-08-15 at commit `ce30610` |
+
+---
+
+## Component state
+
+| Component | State | Notes |
+| :--- | :--- | :--- |
+| Frontend | Working | React 18 SPA; case-addressed routes with legacy redirects. The bundled image runs the Vite dev server, not a production build |
+| Backend gateway | Working | 81 routes, all documented in [docs/api/ENDPOINTS.md](docs/api/ENDPOINTS.md). Earlier reports called 18 of them undocumented; that is resolved |
+| Database | Working | Direct async SQL, on a dedicated `dbdata` volume so it survives `docker compose down` and the hardened overlay |
+| Analysis engine | Working | Concurrent static stages bounded by a semaphore; every optional stage degrades rather than failing the request. Job state is in-process and not durable |
+| Risk engine | Working | Deterministic. Axis exclusion and renormalisation, four safety floors, VIDE escalation. A determinism replay test asserts identical evidence yields an identical verdict |
+| Dynamic sandbox | Working, environment-dependent | Requires a rooted host-side emulator with matching frida-server. Degrades to static-only when unreachable, and says so in the verdict |
+| Agentic explorer | Working | 15-stage goal graph. Falls back to a deterministic planner without a Gemini key |
+| Threat intelligence | Constrained | Correlation works; caching is incomplete — OTX hash lookups bypass the cache and 404s are not negatively cached. See [BUGS_AND_IMPROVEMENTS.md](BUGS_AND_IMPROVEMENTS.md) §1.2 and §1.3 |
+| Reporting | Working | PDF, HTML, STIX 2.1, IOC CSV/TXT, YARA, Suricata, Snort, MITRE JSON. The PDF `TypeError` reported in the original audit is fixed |
+| Security and infrastructure | Working, with a documented fail-open | Containment policy, ADB choke point, hardened overlay. Internal service auth is fail-open outside `SUDARSHAN_ENV=production` |
+| Test suite | Large, unenforced | 2,622 tests, no CI. Nothing prevents a regression from being pushed |
+
+---
+
+## What is absent
+
+- **Continuous integration.** No workflow, no automated gate.
+- **Horizontal scale.** One SQLite file and an in-process queue.
+- **A production frontend build.** `npm run build` works; nothing serves the output.
+- **Durable job state in the analysis engine.** In-process dict with TTL eviction, pinned to one worker for that reason.
+- **Negative caching for threat intelligence.** Unknown indicators are re-queried on every run.
+- **Discriminative VIDE baseline fingerprints.** All ten shipped baselines carry identical fingerprints and colliding palettes, so attribution rests on the bank name alone.
+
+---
+
+The active codebase is the source of truth. Where this document and the code disagree, the code is correct.

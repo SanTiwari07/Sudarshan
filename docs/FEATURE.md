@@ -768,16 +768,17 @@ LLMs are highly prone to prompt injection and hallucination. Therefore, Sudarsha
 
 ## 29. VALIDATION & TESTING
 
-The platform maintains a robust (though currently fragmented) testing footprint:
-*   **Collected**: **920 tests** across `tests/` and `backend/tests/` (measured 2026-08-16 with
-    `pytest tests/ backend/tests --collect-only`).
-*   **Enforced by CI**: **525**. `.github/workflows/ci.yml` runs pytest with
-    `working-directory: backend`, so it executes `backend/tests/` only — everything in
-    `tests/unit/` and `tests/integration/` is collected locally but never gated on. That is
-    configuration drift, not coverage, and it is recorded here rather than averaged away.
-*   **Not collected at all**: `backend/tests/test_pdf_generator.py` (15 tests) fails to import
-    because `pypdf` is in neither requirements file, so it has never run in CI. Three of its
-    tests fail when the dependency is installed.
+The platform maintains a large but entirely developer-run testing footprint:
+*   **Collected**: **2,622 tests** across `tests/` and `backend/tests/` (measured 2026-08-27 with
+    `pytest tests/ backend/tests --collect-only`, no collection errors): 1,813 in `tests/unit`,
+    12 in `tests/integration` and 797 in `backend/tests`.
+*   **Enforced automatically**: **none**. There is no `.github/` directory and no CI workflow in
+    this repository. The only git-side gate is `.githooks/pre-push`, which checks commit
+    attribution rather than running tests. Earlier revisions of this document described a
+    `ci.yml` gating 525 tests; that file does not exist.
+*   **Collection prerequisites**: `PYTHONPATH` must include both `backend` and `shared`, and the
+    interpreter needs `requests` and a working `bcrypt` backend for `passlib`. A single import
+    error during collection aborts the entire session.
 *   **Validations**:
     *   Auth Flow Route Guards
     *   JWT Session management

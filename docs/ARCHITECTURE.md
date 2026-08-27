@@ -6,7 +6,7 @@ Version:             2.1.0
 Last Revision:       2026-08-08
 Repository Scope:    SanTiwari07/Sudarshan (C:/Projects/Sudarshan)
 Target Audience:     Enterprise Security Engineers, SOC Analysts, System Architects
-Verification Status: 920 tests collected, of which 525 are enforced by CI (measured 2026-08-16; see docs/FEATURE.md §29 for the gap)
+Verification Status: 2,622 tests collected across tests/ and backend/tests (measured 2026-08-27). No CI workflow exists in this repository; the suite is developer-run.
 ```
 
 ---
@@ -74,7 +74,7 @@ graph TD
     subgraph External Devices & Network Sidecars
         ADB["ADB TCP Bridge<br/>(Genymotion VM IP:5555 or AVD serial)"]
         AVD["Android 13 AVD<br/>(frida-server 17.16.4)"]
-        PROXY["mitmproxy Sidecar<br/>(Port 8080 / HAR Parser)"]
+        PROXY["mitmproxy sidecar<br/>127.0.0.1:8085 host, :8080 container<br/>HAR parser"]
         MOBSF["MobSF Static Engine<br/>(Port 8008 / mobsf_client.py)"]
     end
 
@@ -235,7 +235,7 @@ graph TD
 - **Fail-Loud Canary**: Synthesizes a `canary` event on injection. If no canary is received, `dynamic_status` is marked `INSTRUMENTATION_FAILED`, triggering the **Static Fallback Risk Engine**.
 
 ### mitmproxy Sidecar Integration ([`network_capture.py`](../shared/sudarshan_core/engines/network_capture.py))
-Intercepts transparent HTTPS traffic via Docker sidecar (`mitmproxy:8080`), parses HAR dump files (`dump.har`), and merges decrypted HTTP headers, status codes, and body sizes with Frida socket/OkHttp hooks.
+Intercepts HTTPS traffic through the mitmproxy sidecar, which listens on container port 8080 and is published to the host on loopback only at `127.0.0.1:${MITMPROXY_PORT:-8085}`. It writes `dump.har` to a shared volume that the analysis engine reads read-only, and the parsed headers, status codes and body sizes are merged with the Frida socket and OkHttp hook evidence.
 
 ### Agentic UI Explorer ([`agentic_explorer.py`](../shared/sudarshan_core/engines/agentic_explorer.py))
 An autonomous UI navigation engine guided by an LLM planner and a 15-stage fraud goal DAG ([`goal_tracker.py`](../shared/sudarshan_core/engines/agentic/goal_tracker.py)). Operates with screen-hash loop detection, coordinate bounds validation, and deterministic fallback actions.
@@ -305,7 +305,7 @@ Related gateway routes (same `/api/v1` prefix): `POST /analyze/async`, `GET /sta
 
 ## 12. Storage, Security & Isolation Architecture
 
-- **Guest sandbox**: Target APKs execute on the Android guest (Genymotion or AVD). Treat the guest as compromised after each session. HTTPS capture uses the `mitmproxy` sidecar (`127.0.0.1:8080` in base `docker-compose.yml`).
+- **Guest sandbox**: Target APKs execute on the Android guest (Genymotion or AVD). Treat the guest as compromised after each session. HTTPS capture uses the `mitmproxy` sidecar, published to loopback only at `127.0.0.1:${MITMPROXY_PORT:-8085}` in the base `docker-compose.yml`.
 - **Control-plane containment** ([`shared/sudarshan_core/security/sandbox_containment.py`](../shared/sudarshan_core/security/sandbox_containment.py)): Validates `ADB_HOST` (rejects `host.docker.internal` for Genymotion), blocks high-risk ADB subcommands (`tcpip`, `kill-server`, …) via [`adb_gateway.run_adb`](../shared/sudarshan_core/security/adb_gateway.py), and forces loopback Frida listen (`FRIDA_LISTEN_HOST=127.0.0.1`). Strict mode: `SANDBOX_CONTAINMENT_STRICT=true` or `SUDARSHAN_ENV=production`.
 - **Analysis delegation**: Dynamic analysis runs in `analysis-engine` (resource limits, `no-new-privileges`). If the engine is unreachable, the gateway returns **503** unless `SUDARSHAN_ALLOW_GATEWAY_DYNAMIC=true` (dev-only; blocked in strict production config). See [`backend/app/routes/upload.py`](../backend/app/routes/upload.py).
 - **Engine authentication**: `analysis-engine` middleware requires `ANALYSIS_ENGINE_INTERNAL_TOKEN` (header via [`internal_auth.py`](../shared/sudarshan_core/security/internal_auth.py)) when `SUDARSHAN_ENV=production`; backend startup calls `validate_backend_production_config()`.

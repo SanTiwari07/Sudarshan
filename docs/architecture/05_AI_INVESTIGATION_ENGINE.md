@@ -45,7 +45,7 @@ graph TD
 
     C1 & C2 & C3 & C4 & C5 & C6 --> INDEX["InvestigationRAG (In-Memory Vector Store)"]
 
-    USER_Q["Analyst Chat Query (POST /api/v1/cases/{sha256}/chat)"] --> SANITIZE["Input Sanitizer (sanitizer.py)"]
+    USER_Q["Analyst chat query<br/>POST /api/v1/chat/stream"] --> SANITIZE["Input sanitizer (sanitizer.py)"]
     SANITIZE --> COSINE["Cosine Similarity Search & Context Assembly"]
     INDEX --> COSINE
     COSINE --> PROMPT["Grounded System & User Prompt"]

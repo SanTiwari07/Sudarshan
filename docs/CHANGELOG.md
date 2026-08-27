@@ -2,6 +2,42 @@
 
 All notable changes to this project are documented in this file.
 
+> This file is the **documentation-scoped** changelog. The repository changelog
+> is [`../CHANGELOG.md`](../CHANGELOG.md).
+
+## 2026-08-27
+
+### Documentation synchronization pass
+
+Documentation-only. No application source, test, configuration or dependency
+file was changed.
+
+- **Rebuilt from the code**: `api/ENDPOINTS.md` (81 backend route decorators plus
+  the engine's six), `FEATURE_STATUS.md`, `KNOWN_LIMITATIONS.md`,
+  `CODEBASE_MAP.md`, `HOW_TO_RUN.md`, `CONTRIBUTING.md`, `FEATURE_AUDIT.md`,
+  `BOI_DEMO_CREDENTIALS.md`, `README.md` (portal) and the root `README.md`.
+- **Removed endpoints that do not exist**: the `/api/v1/intel/*` group,
+  `DELETE /api/v1/cases/{sha256}`, `POST /api/v1/cases/{sha256}/chat`,
+  `/api/v1/auth/registration-policy`, `/report/{sha256}/json`,
+  `POST /api/events`, and the engine's `/analyze-path` and `/job/{job_id}`.
+  Report export paths were also inverted throughout - the format precedes the
+  hash.
+- **Corrected metrics**: 2,622 tests collected (was 920); no CI workflow exists
+  (documents described a `ci.yml` gating 525); BFCI v2 has seven categories with
+  a x1.25 sequence multiplier (was six with `+15`); VIDE colour matching is
+  CIEDE2000 (was CIE76); 21 screen types (was 17); a five-step launch ladder
+  (was seven); eight YARA rules (documented as none); twelve signer-registry
+  packages and ten VIDE baselines (documented as three each); mitmproxy on
+  `127.0.0.1:8085` (was 8080); `FRIDA_ANALYSIS_DURATION` 240 s.
+- **Fixed 149 absolute filesystem links** across 13 files.
+- **Removed** the unmethodised "Project Health Score" from `CURRENT_STATE.md`
+  and all emoji from the documentation tree.
+- **Recorded eight code issues** found during the audit without changing the
+  code - see `KNOWN_LIMITATIONS.md` §7 and `../BUGS_AND_IMPROVEMENTS.md`.
+
+Full pass record: [`DOCUMENTATION_AUDIT_REPORT.md`](DOCUMENTATION_AUDIT_REPORT.md).
+
+
 ## 2026-08-24
 
 ### Added

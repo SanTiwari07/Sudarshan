@@ -2,6 +2,66 @@
 
 All notable changes to this project are documented in this file.
 
+## 2026-08-27
+
+### Documentation - full synchronization against the codebase
+
+A documentation-only pass. No application source, test, configuration,
+Dockerfile, Compose file, script, dependency manifest or `.env` file was
+changed.
+
+The audit found drift in three categories, in ascending order of how much it
+mattered.
+
+**Numbers that had stopped being true.** The suite is **2,622 tests collected**
+(2026-08-27, no collection errors), not 920. BFCI v2 carries **seven** weighted
+categories, not six - `code_execution` was added at 0.10 and the original six
+scaled by 0.90 - and its sequence bonus is a **x1.25 multiplier**, not `+15`
+points. The VIDE colour axis is **CIEDE2000**, not CIE76. The screen classifier
+recognises 21 types, not 17. The launch ladder has five steps, not seven. The
+YARA scanner ships eight rules; it was documented as having none.
+
+**Routes that did not exist.** `api/ENDPOINTS.md` described `/api/v1/intel/*`,
+`DELETE /api/v1/cases/{sha256}`, `POST /api/v1/cases/{sha256}/chat`,
+`/api/v1/auth/registration-policy`, `/report/{sha256}/json`, `POST /api/events`
+and the engine's `/analyze-path` and `/job/{job_id}`. None are registered
+anywhere in the codebase. It also had the report export paths inverted -
+`/report/pdf/{sha256}`, not `/report/{sha256}/pdf` - and described login as an
+OAuth2 form when it takes a JSON body. The document was rebuilt from the 81
+route decorators the backend actually registers plus the engine's six.
+
+**A quality gate that was never there.** Several documents described
+`.github/workflows/ci.yml` enforcing a subset of the suite. There is no
+`.github/` directory in this repository and no CI workflow. The only automated
+git-side gate is `.githooks/pre-push`, which checks commit attribution rather
+than running tests. An enforced gate that does not exist is worse than an
+absent one, because it stops anyone from adding it.
+
+Also in this pass:
+
+- **Component READMEs created** for `backend/`, `analysis-engine/`, `shared/`,
+  `frontend/`, `scripts/` and `tests/`, each scoped to its own directory.
+- **Root `README.md` and `docs/README.md` rewritten** around what the code does,
+  using the project brand mark from `frontend/public/brand/`.
+- **149 absolute filesystem links** (`file:///d:/Projects/Sudarshan%20BOI/...`)
+  across 13 files replaced with repository-relative paths.
+- **Invented metrics removed**: `CURRENT_STATE.md` carried a "Project Health
+  Score of 7.75 / 10" with twelve component sub-scores that had no method behind
+  them and nothing to regenerate them.
+- **Eight code issues documented rather than fixed**, since this pass was
+  documentation-only: the `technical-pdf` route's declared response class does
+  not match what it returns; `ANALYSIS_TIMEOUT_SECONDS` has two different
+  defaults; `demo_seed.py` falls back to hardcoded passwords; `_otx_check_hash`
+  bypasses the IOC cache; AbuseIPDB is never marked queried when a case has no
+  IPs, so re-correlation never stops; `SSRFSafeAsyncClient` re-resolves the
+  hostname after checking it; runtime telemetry authenticates but does not scope
+  to the requesting analyst; `ScreenshotManager` can reissue an ID and reuse a
+  device path. Each is recorded in `BUGS_AND_IMPROVEMENTS.md` with severity and
+  remediation.
+
+Full pass record: `docs/DOCUMENTATION_AUDIT_REPORT.md`.
+
+
 ## 2026-08-26
 
 ### Changed - VIDE attribution rebuilt on multi-tier discriminative matching

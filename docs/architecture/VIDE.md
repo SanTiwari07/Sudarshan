@@ -48,7 +48,7 @@ graph TD
     MERGED_PROFILE & BASELINES --> COMPARE["VIDE Comparator Engine (compare.py)"]
     COMPARE --> S_JACCARD["String & Keyword Jaccard (40% Weight)"]
     COMPARE --> S_TREE["View-Tree Structural AST Similarity (35% Weight)"]
-    COMPARE --> S_COLOR["Delta-E CIE76 Brand Color Overlap (25% Weight)"]
+    COMPARE --> S_COLOR["CIEDE2000 ΔE Brand Color Overlap (25% Weight)"]
 
     S_JACCARD & S_TREE & S_COLOR --> CONF["VIDE Impersonation Confidence Score (0.0 - 1.0)"]
     
@@ -70,7 +70,7 @@ $$\text{Confidence} = 0.40 \times S_{\text{strings}} + 0.35 \times S_{\text{tree
 
 * **String & Keyword Jaccard ($S_{\text{strings}}$, 40%)**: Compares UI labels, buttons, and brand keywords against the official baseline vocabulary using fuzzy matching.
 * **View-Tree Structural AST ($S_{\text{tree}}$, 35%)**: Compares the hierarchical arrangement of inputs, buttons, and containers (`ast_builders.py`).
-* **Delta-E CIE76 Brand Color Overlap ($S_{\text{color}}$, 25%)**: Computes Euclidean color distance in CIE $L^*a^*b^*$ space between extracted hex colors and official brand palettes (`color_match.py`).
+* **CIEDE2000 ΔE Brand Color Overlap ($S_{\text{color}}$, 25%)**: Computes Euclidean color distance in CIE $L^*a^*b^*$ space between extracted hex colors and official brand palettes (`color_match.py`).
 * **Detection Threshold**: A clone is flagged (`VIDE-F001`) when $\text{Confidence} \ge 0.20$ **and** at least one *discriminating* axis carries evidence ($S_{\text{strings}} \ge 0.02$ or $S_{\text{colour}} \ge 0.10$).
 * **Structure is never sufficient.** $S_{\text{tree}}$ is worth 0.35 of the confidence score, so at a 0.20 threshold any app with a login-shaped layout would clear the bar on structure alone - a device settings screen scored 0.21 against the SBI baseline during calibration. Every banking app shares that skeleton, so it establishes *shape* and cannot establish *identity*. $S_{\text{tree}} \ge 0.10$ is reported as corroboration only.
 * **String axis strictness**: short alphabetic tokens are credential names, not

@@ -34,7 +34,7 @@ Do not cite **[CLAIMED]** items as fact. Several are recorded here precisely bec
 > AI may **not** decide malware verdicts.
 > Only deterministic evidence contributes to risk scoring.
 
-**[VERIFIED]** This invariant currently holds at the scoring layer. Identical recorded evidence produces a byte-identical verdict, and LLM-authored fields merged into the dynamic payload do not move the score. Verified across **920 tests collected** (`pytest tests/ backend/tests --collect-only`, 2026-08-16).
+**[VERIFIED]** This invariant currently holds at the scoring layer. Identical recorded evidence produces a byte-identical verdict, and LLM-authored fields merged into the dynamic payload do not move the score. Verified across **2,622 tests collected** (`pytest tests/ backend/tests --collect-only`, 2026-08-27).
 
 ---
 
@@ -43,14 +43,14 @@ Do not cite **[CLAIMED]** items as fact. Several are recorded here precisely bec
 | Layer | Technology |
 |---|---|
 | Frontend | React 18, TypeScript, Vite 5 (Port 5173, Polling file-watcher mode) |
-| Gateway Backend | Python 3.12/3.13, FastAPI, Uvicorn (Port 8000) |
+| Gateway backend | Python 3.11 (`python:3.11-slim`), FastAPI, Uvicorn (port 8000) |
 | Analysis Engine | Containerized Python 3.12 + Java 17 + Ubuntu 24.04 (Internal Port 8001) |
 | Shared Core | `sudarshan_core` python package mounted as `/opt/sudarshan-core` |
 | Persistence | SQLite (`sudarshan.db`), aiosqlite (raw SQL — no ORM), 24h IOC reputation cache |
 | Auth | JWT Bearer, passlib/bcrypt |
 | Static analysis | Androguard, MobSF (Port 8008), `apk_repair.py` AXML recovery, APKTool 2.10.0, JADX 1.5.1 |
 | Dynamic analysis | Frida 17.16.4 + frida-tools, Java bridge sub-probes, ADB via **SandboxProvider** (`ADB_HOST` / `DEVICE_SERIAL`; Genymotion default, Android Studio optional) |
-| Network Proxy | mitmproxy sidecar (`127.0.0.1:8080:8080`), HAR ingest |
+| Network proxy | mitmproxy sidecar, published loopback-only at `127.0.0.1:${MITMPROXY_PORT:-8085}` to container `8080`; HAR ingest |
 
 | Threat intel | VirusTotal, AlienVault OTX, AbuseIPDB (24h TTL SQLite cached correlation) |
 | LLM | Google Gemini via `google-genai` (default `gemini-2.5-flash`, overridable via `GEMINI_MODEL`) |
@@ -63,7 +63,8 @@ Do not cite **[CLAIMED]** items as fact. Several are recorded here precisely bec
 ```text
 Sudarshan BOI/
 ├── start.ps1                       One-command bootstrapper (ADB → frida-server → docker compose)
-├── docker-compose.yml              frontend:5173, backend:8000, analysis-engine:8001, mobsf:8008, mitmproxy:8080
+├── docker-compose.yml              frontend:5173, backend:8000, analysis-engine:8001 (unpublished),
+│                                   mobsf:127.0.0.1:8008, mitmproxy:127.0.0.1:8085
 ├── shared/
 │   ├── pyproject.toml              Shared library metadata
 │   └── sudarshan_core/             Core shared library (mounted to /opt/sudarshan-core)
@@ -90,7 +91,7 @@ Sudarshan BOI/
 │           └── android_studio.py   Optional Android Studio AVD provider
 ├── validate_dynamic_pipeline.py    Dynamic APK corpus validation CLI (live sandbox)
 ├── backend/
-│   ├── Dockerfile                  Python 3.12 gateway container definition
+│   ├── Dockerfile                  python:3.11-slim gateway container definition
 │   ├── requirements.txt            Gateway dependencies
 │   ├── app/
 │   │   ├── main.py                 FastAPI Gateway entrypoint & lifecycle hooks
@@ -135,20 +136,27 @@ STEI = 0.60·CT + 0.20·BT + 0.10·PR + 0.05·OB + 0.05·IR
 | OB | 0.05 | Obfuscation | DexClassLoader + reflection + entropy |
 | IR | 0.05 | Infrastructure Risk | 10 points per hardcoded URL/IP; cap 100 |
 
-### 4.2 BFCI - Behavioral Fraud Confidence Index
+### 4.2 BFCI v2 - Behavioural Fraud Confidence Index
+
+Seven weighted categories summing to 1.0, each scored logarithmically against its event cap:
 
 ```text
-BFCI = 0.35·A + 0.25·S + 0.20·O + 0.10·B + 0.05·N + 0.05·P
+component_c = min(ln(1 + N_c) / ln(1 + cap_c), 1) x 100
+BFCI        = min(100, sum(W_c x component_c) x S)
+S           = 1.25 when a fraud sequence completes inside 30 s, else 1.0
 ```
 
-| Component | Weight | Signal |
-|---|---:|---|
-| A - Accessibility abuse | 0.35 | Screen scraping, tap injection |
-| S - SMS interception | 0.25 | OTP theft |
-| O - Overlay attack | 0.20 | Phishing overlays |
-| B - Banking interaction | 0.10 | Target enumeration |
-| N - Network C2 | 0.05 | Command-and-control traffic |
-| P - Persistence | 0.05 | Device admin, boot persistence |
+| Component | Weight | Cap | Signal |
+|---|---:|---:|---|
+| Accessibility abuse | 0.315 | 3 | Screen scraping, tap injection |
+| SMS interception | 0.225 | 2 | OTP theft |
+| Overlay attack | 0.180 | 2 | Phishing overlays |
+| Banking interaction | 0.090 | 3 | Target enumeration |
+| Network C2 | 0.045 | 10 | Command-and-control traffic |
+| Persistence | 0.045 | 2 | Device admin, boot persistence |
+| Code execution | 0.100 | 2 | Shell execution, dynamic DEX loading, writing an APK to storage |
+
+`code_execution` carries 0.10; the six original categories are scaled by 0.90 so their relative ordering stays exactly as validated against the labelled corpus. `dangerous_apis`, `files_accessed`, `anti_analysis`, `device_fingerprint`, `app_telemetry` and `notification` are collected as evidence and deliberately never scored.
 
 ### 4.3 FRS - Fraud Risk Score
 
@@ -173,7 +181,7 @@ static / inconclusive dynamic: dynamic axis excluded; correlation excluded when 
 
 ## 5. Verification & Test Suite
 
-**[VERIFIED]** **920 tests collected** (`pytest tests/ backend/tests --collect-only`, 2026-08-16); **525** of them are enforced by CI. One collection error: `test_pdf_generator.py` needs `pypdf`, which is not a declared dependency.
+**[VERIFIED]** **2,622 tests collected** (`pytest tests/ backend/tests --collect-only`, 2026-08-27) with no collection errors. There is no CI workflow in this repository, so nothing enforces the suite automatically.
 
 Execution command:
 ```powershell

@@ -831,56 +831,23 @@ class ToolExecutor:
         # exactly the case where blind typing would have gone somewhere wrong -
         # so the ADB path below runs only when the channel is absent, and the
         # verifier still checks what actually landed in the field.
-        is_date = field_type == "DATE_OF_BIRTH" or "date" in field_hint.lower() or "dob" in field_hint.lower()
-
         if self._channel.available:
             resource_id = (action.get("resource_id") or "").strip()
             wrote = False
-            
-            if is_date:
-                logger.info("[ToolExecutor] Handling date field with DatePicker logic")
-                # Tap the field to open DatePicker dialog
-                await asyncio.to_thread(self._channel.click_xy, x, y)
-                await asyncio.sleep(_paced(1.5))
-                
-                # Switch DatePicker to text input mode by tapping its "edit" toggle icon
-                # Try standard Android ID first
-                toggled = await asyncio.to_thread(self._channel.click_node, resourceId="android:id/toggle_mode")
-                if not toggled:
-                    # Try Material Components ID
-                    toggled = await asyncio.to_thread(
-                        self._channel.click_node, 
-                        resourceIdMatches=".*:id/mtrl_picker_header_toggle"
-                    )
-                await asyncio.sleep(_paced(1.0))
-                
-                # Set the text. The toggle sets focus to the internal EditText of the DatePicker.
-                wrote = await asyncio.to_thread(self._channel.set_text_focused, actual_value)
-                
-                # Tap OK to accept the date
-                ok_clicked = await asyncio.to_thread(self._channel.click_node, resourceId="android:id/button1")
-                if not ok_clicked:
-                    await asyncio.to_thread(
-                        self._channel.click_node,
-                        resourceIdMatches=".*:id/confirm_button"
-                    )
-                await asyncio.sleep(_paced(1.0))
-            else:
-                # A resourceId names the field regardless of what is focused or
-                # what moved on screen since the observation - the strongest
-                # selector available. Focus is the fallback for the many samples
-                # whose fields carry no id.
-                if resource_id:
-                    wrote = await asyncio.to_thread(
-                        self._channel.set_text_node, actual_value,
-                        resourceId=resource_id,
-                    )
-                if not wrote and await asyncio.to_thread(self._channel.click_xy, x, y):
-                    await asyncio.sleep(_paced(0.3))
-                    wrote = await asyncio.to_thread(
-                        self._channel.set_text_focused, actual_value
-                    )
-            
+            # A resourceId names the field regardless of what is focused or
+            # what moved on screen since the observation - the strongest
+            # selector available. Focus is the fallback for the many samples
+            # whose fields carry no id.
+            if resource_id:
+                wrote = await asyncio.to_thread(
+                    self._channel.set_text_node, actual_value,
+                    resourceId=resource_id,
+                )
+            if not wrote and await asyncio.to_thread(self._channel.click_xy, x, y):
+                await asyncio.sleep(_paced(0.3))
+                wrote = await asyncio.to_thread(
+                    self._channel.set_text_focused, actual_value
+                )
             if wrote:
                 keyboard_data: Dict[str, Any] = {}
                 dismiss = action.get("dismiss_keyboard")

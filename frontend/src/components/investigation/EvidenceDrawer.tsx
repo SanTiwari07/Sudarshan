@@ -113,12 +113,23 @@ export default function EvidenceDrawer({
                 <SeverityIndicator severity={evidence.severity} />
                 <span className="text-slate-300" aria-hidden>|</span>
                 <div>
-                  <span className={`${TYPOGRAPHY.h2} tabular-nums leading-none`}>
-                    {evidence.confidence}%
-                  </span>
-                  <p className={`${TYPOGRAPHY.caption} font-medium mt-0.5`}>
-                    {explanation.confidenceTierLabel}
-                  </p>
+                  {/* Only the engines that publish a confidence get a figure
+                      here. A record without one shows that it has none rather
+                      than a filled-in percentage. */}
+                  {evidence.confidence != null ? (
+                    <>
+                      <span className={`${TYPOGRAPHY.h2} tabular-nums leading-none`}>
+                        {evidence.confidence}%
+                      </span>
+                      <p className={`${TYPOGRAPHY.caption} font-medium mt-0.5`}>
+                        {explanation.confidenceTierLabel}
+                      </p>
+                    </>
+                  ) : (
+                    <p className={`${TYPOGRAPHY.caption} font-medium`}>
+                      No confidence reported
+                    </p>
+                  )}
                   <p className={TYPOGRAPHY.caption}>Verified evidence</p>
                 </div>
                 <span className={`${TYPOGRAPHY.label} ml-auto sm:ml-0`}>{sourceLabel}</span>
@@ -232,7 +243,9 @@ export default function EvidenceDrawer({
                   </div>
                   <div>
                     <dt className={TYPOGRAPHY.caption}>Confidence</dt>
-                    <dd className={`${TYPOGRAPHY.bodySmall} tabular-nums`}>{evidence.confidence}%</dd>
+                    <dd className={`${TYPOGRAPHY.bodySmall} tabular-nums`}>
+                      {evidence.confidence != null ? `${evidence.confidence}%` : 'Not reported'}
+                    </dd>
                   </div>
                   <div>
                     <dt className={TYPOGRAPHY.caption}>Severity (raw)</dt>
@@ -286,9 +299,11 @@ export default function EvidenceDrawer({
                 )}
               </CollapsibleBlock>
 
-              <p className={`${TYPOGRAPHY.caption} pt-4 border-t border-slate-100 mt-4`}>
-                {explanation.confidenceTierExplanation}
-              </p>
+              {explanation.confidenceTierExplanation && (
+                <p className={`${TYPOGRAPHY.caption} pt-4 border-t border-slate-100 mt-4`}>
+                  {explanation.confidenceTierExplanation}
+                </p>
+              )}
             </div>
           ) : (
             <div className={TYPOGRAPHY.bodySmall}>

@@ -475,7 +475,10 @@ export function buildDetailedRiskFactors(data: FraudCardData): DetailedRiskFacto
       detected: `High-confidence correlation with known ${data.family_classification} samples.`,
       capability: 'Known banking trojan capability set matching threat intelligence signatures.',
       whyItMatters: 'Associated with active banking fraud campaigns targeting mobile financial applications.',
-      evidence: `Threat intel correlation confidence ${data.threat_correlation?.correlation_confidence ?? 85}%.`,
+      evidence:
+        data.threat_correlation?.correlation_confidence != null
+          ? `Threat intel correlation confidence ${data.threat_correlation.correlation_confidence}%.`
+          : 'Threat intel correlation reported no confidence figure for this family match.',
     });
   }
 

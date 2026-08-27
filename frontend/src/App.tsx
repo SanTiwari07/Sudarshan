@@ -89,6 +89,13 @@ export type FRSBreakdown = {
   };
   axes_used?: Record<string, number>;
   axes_excluded?: string[];
+  /**
+   * STEI axes the engine dropped because a concealed payload made them blind,
+   * and the renormalised weights the surviving axes were scored at. Optional so
+   * cases stored before these fields were declared still parse.
+   */
+  stei_axes_excluded?: string[];
+  stei_weights_used?: Record<string, number>;
   concealed_payload?: boolean;
   /**
    * The four safety floors. The engine raises the band above the raw score when

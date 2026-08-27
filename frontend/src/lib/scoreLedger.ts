@@ -2,13 +2,41 @@ import type { FraudCardData } from '../App';
 import type { LedgerLine, LedgerScope } from '../types/investigation';
 import { axisDisplayName } from './evidenceParser';
 
-const STEI_WEIGHTS: Record<string, number> = {
+/**
+ * Nominal STEI axis weights, used only when a case predates the engine
+ * publishing the weights it actually scored at.
+ *
+ * The engine drops axes that a concealed payload made blind and renormalises
+ * the rest, so these are the RIGHT weights only for a fully visible sample.
+ * Reading them unconditionally understated every surviving axis on exactly the
+ * samples the exclusion rule exists to catch - the ledger said "CT 0.60" for a
+ * run where CT had been removed from the denominator entirely.
+ */
+const NOMINAL_STEI_WEIGHTS: Record<string, number> = {
   ct: 0.6,
   bt: 0.2,
   pr: 0.1,
   ob: 0.05,
   ir: 0.05,
 };
+
+const STEI_AXES = ['ct', 'bt', 'pr', 'ob', 'ir'] as const;
+
+/**
+ * The weight each STEI axis actually carried, from the engine when it published
+ * them. The fallback reproduces the engine's own rule - drop the excluded axes,
+ * renormalise the remainder - rather than inventing a split of its own.
+ */
+export function getSteiWeights(data: FraudCardData): Record<string, number> {
+  const published = data.frs_breakdown?.stei_weights_used;
+  if (published && Object.keys(published).length > 0) return published;
+
+  const excluded = new Set(data.frs_breakdown?.stei_axes_excluded ?? []);
+  const scored = STEI_AXES.filter((a) => !excluded.has(a));
+  const total = scored.reduce((sum, a) => sum + NOMINAL_STEI_WEIGHTS[a], 0);
+  if (!scored.length || total <= 0) return { ...NOMINAL_STEI_WEIGHTS };
+  return Object.fromEntries(scored.map((a) => [a, NOMINAL_STEI_WEIGHTS[a] / total]));
+}
 
 const DEFAULT_FRS_WEIGHTS: Record<string, number> = {
   stei: 0.25,
@@ -47,21 +75,27 @@ export function buildLedgerLines(data: FraudCardData): LedgerLine[] {
   if (!frs) return lines;
 
   const axesUsed = getAxesUsed(data);
+  const steiWeights = getSteiWeights(data);
+  const steiExcluded = new Set(frs.stei_axes_excluded ?? []);
   const expl = data.risk_explanation;
   const steiAxes = frs.stei_axes || { ct: 0, bt: 0, pr: 0, ob: 0, ir: 0 };
 
-  (['ct', 'bt', 'pr', 'ob', 'ir'] as const).forEach((axis) => {
+  STEI_AXES.forEach((axis) => {
     const axisScore = steiAxes[axis] ?? 0;
-    const steiContrib = axisScore * (STEI_WEIGHTS[axis] ?? 0);
+    const weight = steiWeights[axis] ?? 0;
+    const isExcluded = steiExcluded.has(axis);
+    const steiContrib = isExcluded ? 0 : axisScore * weight;
     const axisLines = expl?.stei_evidence_by_axis?.[axis] || [];
     lines.push({
       id: `LEDGER-STEI-${axis}`,
       component: 'stei',
       axis,
       label: axisDisplayName(axis),
-      detail: `${axisScore.toFixed(1)} axis score → ${steiContrib.toFixed(1)} toward STEI`,
-      contribution: steiContrib,
-      contributionLabel: `+${steiContrib.toFixed(1)} STEI`,
+      detail: isExcluded
+        ? 'Axis excluded - the payload is concealed, so this axis could not be measured. It was dropped from the STEI denominator rather than scored as zero.'
+        : `${axisScore.toFixed(1)} axis score × ${weight.toFixed(3)} weight → ${steiContrib.toFixed(1)} toward STEI`,
+      contribution: isExcluded ? undefined : steiContrib,
+      contributionLabel: isExcluded ? 'EXCLUDED' : `+${steiContrib.toFixed(1)} STEI`,
       evidenceIds: [],
     });
     axisLines.forEach((line, i) => {

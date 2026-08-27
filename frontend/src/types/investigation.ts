@@ -20,7 +20,13 @@ export type InvestigationEvidence = {
   id: string;
   title: string;
   severity: string;
-  confidence: number;
+  /**
+   * Percent confidence as reported by the engine that produced the record.
+   * Optional: manifest and code findings carry no confidence of their own, and
+   * the UI previously filled that gap with per-call literals (90, 88, 95...)
+   * that rendered as measured percentages. Absent is the honest value.
+   */
+  confidence?: number;
   category: 'static' | 'runtime' | 'intel' | 'score' | 'scenario';
   sourceEngine: string;
   timestampMs?: number;

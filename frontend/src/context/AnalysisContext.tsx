@@ -38,7 +38,10 @@ function mapCaseDetailToFraudCard(caseDetail: Record<string, unknown>): FraudCar
     ai_confidence_multiplier: Number(caseDetail.ai_confidence_multiplier ?? 1),
     final_risk_score: Number(caseDetail.final_risk_score ?? 0),
     risk_band: String(caseDetail.risk_band || 'Safe'),
-    confidence: Number(caseDetail.confidence ?? 70),
+    // The engine always publishes a confidence. Defaulting a missing one to 70
+    // presented an unmeasured case as moderately-confident; 0 says nothing was
+    // reported, which is what the downstream labels should react to.
+    confidence: Number(caseDetail.confidence ?? 0),
     recommended_action: normalizeRecommendedAction(
       String(
         caseDetail.recommended_action ||

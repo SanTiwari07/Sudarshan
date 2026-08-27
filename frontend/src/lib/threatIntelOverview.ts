@@ -1,7 +1,7 @@
 import type { FraudCardData } from '../App';
 import type { InvestigationBundle } from '../types/investigation';
 import type { IntelApiPayload, AnalystAction } from './threatIntelModel';
-import { buildThreatDna, campaignStatus } from './threatIntelModel';
+import { buildThreatDna, campaignStatus, dnaTraitDetected } from './threatIntelModel';
 import { riskRecommendedAction } from './analystCopy';
 
 export type QualitativeConfidence = 'High' | 'Moderate' | 'Limited';
@@ -150,7 +150,7 @@ export function buildWhatWasDiscovered(
   if (family) items.push(`${family} behavioural similarities`);
   if (data.has_accessibility_abuse) items.push('Accessibility abuse detected');
   const cred = dna.find((t) => t.label === 'Credential Theft');
-  if (cred && cred.percent >= 50) items.push('Credential harvesting behaviour');
+  if (dnaTraitDetected(cred)) items.push('Credential harvesting behaviour');
   if (data.has_system_alert_window) items.push('Overlay / fake login surface capability');
   if (data.has_sms_read_write) items.push('SMS interception risk');
   if (data.targets_indian_banks) items.push('Banking-target indicators');

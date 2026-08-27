@@ -78,7 +78,6 @@ function syntheticFromAxis(
       title: line.split(':')[0]?.trim() || 'Risk engine signal',
       source: 'Risk Engine',
       category: 'static' as const,
-      confidence: 95,
       rawDescription: line,
       interpretation: line,
     }));
@@ -97,7 +96,6 @@ function manifestCodeRows(
       title: f.title,
       source: 'Android Manifest',
       category: 'static',
-      confidence: 90,
       rawDescription: f.description,
       interpretation: f.description || f.title,
     });
@@ -110,7 +108,6 @@ function manifestCodeRows(
       title: f.title,
       source: 'Static Engine',
       category: 'static',
-      confidence: 88,
       rawDescription: f.description,
       interpretation: f.description || f.title,
     });
@@ -140,7 +137,7 @@ function rawRuntimeRows(
       title: String(r.description || r.api || r.category || 'Runtime behavior'),
       source: 'Frida',
       category: 'dynamic',
-      confidence: 100,
+      confidence: typeof r.confidence === 'number' ? r.confidence : undefined,
       timestampMs: typeof r.timestamp_ms === 'number' ? r.timestamp_ms : undefined,
       rawDescription: String(r.human_description || r.description || ''),
       interpretation: String(r.human_description || r.description || r.api || 'Runtime instrumentation observed this behavior.'),
@@ -246,7 +243,6 @@ export function mapFindingEvidence(
         title: 'BIND_ACCESSIBILITY_SERVICE declared',
         source: 'Android Manifest',
         category: 'static',
-        confidence: 95,
         rawDescription: 'BIND_ACCESSIBILITY_SERVICE declared',
         interpretation: 'The application requests the Android accessibility service capability.',
       });
@@ -263,7 +259,6 @@ export function mapFindingEvidence(
         title: 'SYSTEM_ALERT_WINDOW capability',
         source: 'Android Manifest',
         category: 'static',
-        confidence: 90,
         rawDescription: 'SYSTEM_ALERT_WINDOW capability',
         interpretation: 'The application can draw overlay windows above other apps.',
       });
@@ -280,7 +275,6 @@ export function mapFindingEvidence(
         title: 'SMS read/receive permissions',
         source: 'Android Manifest',
         category: 'static',
-        confidence: 95,
         rawDescription: 'READ/RECEIVE SMS permissions',
         interpretation: 'The application can access SMS message content.',
       });
@@ -297,8 +291,7 @@ export function mapFindingEvidence(
           title: api,
           source: 'Static API scan',
           category: 'static',
-          confidence: 87,
-          rawDescription: `${api} usage detected`,
+            rawDescription: `${api} usage detected`,
           interpretation: `Static analysis identified ${api} - can load bytecode after installation.`,
         });
       });
@@ -314,7 +307,6 @@ export function mapFindingEvidence(
         title: `String entropy score ${(data.obfuscation_score ?? 0).toFixed(2)}`,
         source: 'Static Engine',
         category: 'static',
-        confidence: 85,
         rawDescription: `Obfuscation score ${data.obfuscation_score}`,
         interpretation: 'Elevated string entropy suggests obfuscated or encrypted string pools.',
       });
@@ -325,7 +317,6 @@ export function mapFindingEvidence(
         title: 'Java reflection APIs detected',
         source: 'Static Engine',
         category: 'static',
-        confidence: 88,
         rawDescription: 'Class.forName / getDeclaredMethod / invoke patterns',
         interpretation: 'Reflection can hide call targets from static analysis.',
       });
@@ -342,7 +333,6 @@ export function mapFindingEvidence(
         title: 'Indian banking package targeting',
         source: 'Static Engine',
         category: 'static',
-        confidence: 90,
         rawDescription: 'targets_indian_banks flag set',
         interpretation: 'Static analysis matched known Indian banking application identifiers.',
       });
@@ -353,7 +343,6 @@ export function mapFindingEvidence(
         title: app,
         source: 'Threat Intelligence',
         category: 'static',
-        confidence: 88,
         rawDescription: app,
         interpretation: 'Intelligence report lists this banking application as affected or targeted.',
       });
@@ -367,8 +356,7 @@ export function mapFindingEvidence(
           title: s.slice(0, 80),
           source: 'Static strings',
           category: 'static',
-          confidence: 75,
-          rawDescription: s,
+            rawDescription: s,
           interpretation: 'Suspicious string reference associated with financial applications.',
         });
       });
@@ -382,7 +370,6 @@ export function mapFindingEvidence(
         title: url.slice(0, 100),
         source: 'Static Engine',
         category: 'static',
-        confidence: 80,
         rawDescription: url,
         interpretation: 'Hardcoded network indicator embedded in the application.',
       });
@@ -394,7 +381,6 @@ export function mapFindingEvidence(
         title: ioc.indicator,
         source: 'Threat Intelligence',
         category: 'static',
-        confidence: 70,
         rawDescription: `${ioc.type}: ${ioc.reputation}`,
         interpretation: `IOC reputation: ${ioc.reputation} (${ioc.source}).`,
       });
@@ -410,8 +396,7 @@ export function mapFindingEvidence(
           title: p.split('.').pop() || p,
           source: 'Android Manifest',
           category: 'static',
-          confidence: 85,
-          rawDescription: p,
+            rawDescription: p,
           interpretation: 'Dangerous permission associated with persistence or elevated control.',
         });
       });
@@ -440,7 +425,6 @@ export function mapFindingEvidence(
         title: line.slice(0, 80),
         source: 'VIDE',
         category: 'static',
-        confidence: 90,
         rawDescription: line,
         interpretation: line,
       });
@@ -451,7 +435,6 @@ export function mapFindingEvidence(
         title: 'Signer impersonation signal',
         source: 'VIDE',
         category: 'static',
-        confidence: 92,
         rawDescription: (vide.signer_impersonation.evidence_lines || []).join('; '),
         interpretation: 'Signer certificate similarity to a protected banking application was detected.',
       });

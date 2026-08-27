@@ -1,8 +1,7 @@
 import { ScanEye } from 'lucide-react';
-import type { DnaTrait } from '../../lib/threatIntelModel';
+import type { DnaObservation, DnaTrait } from '../../lib/threatIntelModel';
 import { IntelCard, IntelCardBody, IntelSectionHeader } from './IntelCard';
 import { INTEL } from './intelTokens';
-import { ProgressBar } from '../ui/primitives';
 
 const BEHAVIOUR_ORDER: {
   key: string;
@@ -48,30 +47,40 @@ const BEHAVIOUR_ORDER: {
   },
 ];
 
-function confidenceLabel(percent: number): string {
-  if (percent >= 70) return 'High confidence';
-  if (percent >= 35) return 'Medium confidence';
-  if (percent > 0) return 'Low confidence';
-  return 'Not observed';
+/*
+ * How the behaviour was established, not how strongly.
+ *
+ * This row used to carry a percentage and a meter. The percentages were
+ * literals picked per branch in buildThreatDna - 72% credential theft, 81%
+ * overlay - so a categorical fact (the permission is declared) reached the
+ * analyst as a measurement nobody took. The four states below are what the
+ * evidence actually distinguishes, and they keep the same four-step scale the
+ * meter used, so the wording and the colour still cannot disagree.
+ */
+function observationLabel(observation: DnaObservation): string {
+  switch (observation) {
+    case 'runtime_observed':
+      return 'Observed at runtime';
+    case 'statically_declared':
+      return 'Declared in package';
+    case 'inferred':
+      return 'Indirect signal';
+    default:
+      return 'Not observed';
+  }
 }
 
-/*
- * The meter is coloured by what it reads, not decorated.
- *
- * Every bar drew in the same blue-500-to-blue-700 gradient regardless of the
- * value behind it, so "Low confidence" and "High confidence" were the same
- * colour and only the length differed - and a gradient on a 6px track is a
- * texture nobody can resolve anyway. Worse, blue is this product's action
- * colour: a blue bar beside a label reads as something to press.
- *
- * These four steps match confidenceLabel exactly, so the words and the colour
- * can never disagree.
- */
-function confidenceBar(percent: number): string {
-  if (percent >= 70) return 'bg-slate-800';
-  if (percent >= 35) return 'bg-slate-600';
-  if (percent > 0) return 'bg-slate-400';
-  return 'bg-transparent';
+function observationDot(observation: DnaObservation): string {
+  switch (observation) {
+    case 'runtime_observed':
+      return 'bg-slate-800';
+    case 'statically_declared':
+      return 'bg-slate-600';
+    case 'inferred':
+      return 'bg-slate-400';
+    default:
+      return 'bg-transparent ring-1 ring-inset ring-slate-300';
+  }
 }
 
 function resolveTrait(traits: DnaTrait[], aliases: string[]): DnaTrait | undefined {
@@ -87,16 +96,13 @@ export default function ThreatDnaPanel({ traits }: { traits: DnaTrait[] }) {
         subtitle="Banking-relevant behaviours seen in static and runtime evidence"
       />
       <IntelCardBody>
-        {/*
-          Three across on a wide console.
-
-          At two columns each meter was ~850px of track, so a behaviour that
-          was never observed rendered as an empty bar the width of a paragraph.
-        */}
+        {/* Three across on a wide console, so a run with few observed
+            behaviours does not stretch each row across the full width. */}
         <div className="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2 xl:grid-cols-3">
           {BEHAVIOUR_ORDER.map((behaviour) => {
             const trait = resolveTrait(traits, behaviour.aliases);
-            const percent = trait?.percent ?? 0;
+            const observation: DnaObservation = trait?.observation ?? 'not_observed';
+            const detected = observation !== 'not_observed';
             const detail = trait?.rationale
               ? trait.rationale.replace(/BIND_ACCESSIBILITY_SERVICE|SYSTEM_ALERT_WINDOW/gi, (m) =>
                   m.includes('ACCESSIBILITY') ? 'accessibility service' : 'overlay permission',
@@ -112,15 +118,18 @@ export default function ThreatDnaPanel({ traits }: { traits: DnaTrait[] }) {
                     </div>
                     <p className={`${INTEL.caption} mt-0.5`}>{behaviour.explanation}</p>
                   </div>
-                  <span className={`${INTEL.caption} shrink-0 font-medium ${percent > 0 ? 'text-slate-700' : 'text-slate-400'}`}>
-                    {confidenceLabel(percent)}
+                  <span
+                    className={`${INTEL.caption} flex shrink-0 items-center gap-1.5 font-medium ${
+                      detected ? 'text-slate-700' : 'text-slate-400'
+                    }`}
+                  >
+                    <span
+                      aria-hidden
+                      className={`h-1.5 w-1.5 rounded-full ${observationDot(observation)}`}
+                    />
+                    {observationLabel(observation)}
                   </span>
                 </div>
-                <ProgressBar
-                  percent={percent}
-                  fill={confidenceBar(percent)}
-                  label={`${behaviour.label}: ${confidenceLabel(percent)}`}
-                />
                 <p className={`${INTEL.caption} leading-relaxed`}>{detail}</p>
               </div>
             );

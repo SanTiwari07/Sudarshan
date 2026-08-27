@@ -2834,19 +2834,37 @@ class ExplorationGraph:
         filled = [a for a in all_inputs if a.resolved]
         unfilled.sort(key=lambda a: getattr(a, "fill_attempts", 0))
         pending_inputs = unfilled + filled
-        if pending_inputs:
+        # The hold is gated on `unfilled`, NOT on `pending_inputs`.
+        #
+        # `pending_inputs` keeps the already-filled fields so a form cleared by
+        # a validation error is re-entered, which is right - but it is therefore
+        # non-empty on ANY screen that has an input at all. Gating the hold on
+        # it made `ranked = pending_inputs + rest + held` unconditional: the
+        # commit control was pushed behind every field on every pass, and the
+        # `elif _form_is_filled(state)` branch below - the half that actually
+        # presses the button - became unreachable on exactly the screens it was
+        # written for.
+        #
+        # Measured on the Anubis payload's four-field Challan Details form
+        # (Full Name / Mobile Number / Mother Name / Date Of Birth, button
+        # "Get Details"): the button was re-DISCOVERED on every observation -
+        # ACT-176, ACT-248, ACT-332, ACT-416, ACT-512, ACT-608 across STATE-010
+        # to STATE-015 - and never once SELECTED. Each type_text minted a new
+        # state whose inputs were unexplored again, so the walk re-filled the
+        # same four boxes until the budget ran out. The form was completed
+        # repeatedly and submitted never.
+        if unfilled:
             held = [a for a in ranked if _is_form_commit_action(a)]
             rest = [
                 a for a in ranked
                 if a.action_type != "input" and not _is_form_commit_action(a)
             ]
-            if unfilled:
-                logger.info(
-                    "[Explorer] FORM_ORDER state=%s - %d unfilled before %d "
-                    "already-filled: %s",
-                    sid, len(unfilled), len(filled),
-                    [a.label for a in unfilled],
-                )
+            logger.info(
+                "[Explorer] FORM_ORDER state=%s - %d unfilled before %d "
+                "already-filled: %s",
+                sid, len(unfilled), len(filled),
+                [a.label for a in unfilled],
+            )
             logger.info(
                 "[Explorer] FORM_FILL_FIRST state=%s - %d input(s) before "
                 "%d commit control(s): %s",

@@ -43,12 +43,43 @@ export type IntelApiPayload = {
   ai_summary: string;
 };
 
+/**
+ * How a fraud behaviour was established, in descending strength.
+ *
+ * This replaced a `percent` field whose values were literals chosen per branch
+ * (95 / 72 / 55 / 8 for credential theft, 92 / 81 / 60 / 0 for overlay, and so
+ * on). The booleans behind them are real, but nothing measures "72% credential
+ * theft" - the panel rendered invented precision as a confidence meter. The
+ * four states below are exactly what the underlying signals can support.
+ */
+export type DnaObservation =
+  | 'runtime_observed'
+  | 'statically_declared'
+  | 'inferred'
+  | 'not_observed';
+
 export type DnaTrait = {
   label: string;
-  percent: number;
+  observation: DnaObservation;
   evidenceIds: string[];
   rationale: string;
 };
+
+const DNA_OBSERVATION_RANK: Record<DnaObservation, number> = {
+  runtime_observed: 3,
+  statically_declared: 2,
+  inferred: 1,
+  not_observed: 0,
+};
+
+export function dnaObservationRank(observation: DnaObservation): number {
+  return DNA_OBSERVATION_RANK[observation];
+}
+
+/** True when any signal at all backed the behaviour. */
+export function dnaTraitDetected(trait: DnaTrait | undefined): boolean {
+  return trait != null && trait.observation !== 'not_observed';
+}
 
 export type AttackStage = {
   id: string;
@@ -83,7 +114,8 @@ export type ConfidenceSource = {
 export type MitreCard = {
   technique: string;
   techniqueId?: string;
-  confidence: number;
+  /** Absent when no evidence record backing the technique reported one. */
+  confidence?: number;
   evidence: string;
   source: string;
   evidenceIds: string[];
@@ -242,8 +274,12 @@ export function buildConfidenceSources(
   intel: IntelApiPayload,
   bundle: InvestigationBundle | null,
 ): ConfidenceSource[] {
-  const staticPct =
-    (data.manifest_findings?.length || 0) + (data.code_findings?.length || 0) > 0 ? 100 : 50;
+  // The static engine publishes finding counts, not a confidence figure. The
+  // old `hasFindings ? 100 : 50` invented one and fed it into the overall
+  // average, so a run with a single manifest finding claimed 100% static
+  // confidence. Report the counts, and leave the percentage absent.
+  const staticFindingCount =
+    (data.manifest_findings?.length || 0) + (data.code_findings?.length || 0);
   const intelActive = intel.sources_status.filter((s) => s.status === 'active').length;
   const intelMax = intel.sources_status.length || 3;
   const intelPct = intelMax ? Math.round((intelActive / intelMax) * 100) : null;
@@ -254,16 +290,23 @@ export function buildConfidenceSources(
   const dynamicPct = data.dynamic_available
     ? Math.min(100, 40 + runtimeCount * 8)
     : null;
-  const classPct =
-    data.family_classification !== 'Unknown' || intel.malware_family !== 'Unknown'
-      ? Math.round(data.confidence || intel.confidence || 0) || 85
-      : Math.min(40, Math.round(data.confidence || 0));
+  // `|| 85` filled in a confidence for any case that matched a family but
+  // carried no confidence of its own - a fabricated figure standing in for a
+  // missing one. Absent is the honest value.
+  const familyKnown =
+    data.family_classification !== 'Unknown' || intel.malware_family !== 'Unknown';
+  const reportedConfidence = Math.round(data.confidence || intel.confidence || 0);
+  const classPct = familyKnown
+    ? reportedConfidence > 0
+      ? reportedConfidence
+      : null
+    : Math.min(40, Math.round(data.confidence || 0));
 
   return [
     {
       label: 'Static Analysis',
-      percent: staticPct,
-      status: staticPct >= 80 ? 'ok' : 'partial',
+      percent: null,
+      status: staticFindingCount > 0 ? 'ok' : 'unavailable',
       detail: `${data.manifest_findings?.length || 0} manifest + ${data.code_findings?.length || 0} code findings`,
     },
     {
@@ -287,7 +330,7 @@ export function buildConfidenceSources(
     {
       label: 'Malware Classification',
       percent: classPct,
-      status: classPct >= 70 ? 'ok' : 'partial',
+      status: classPct == null ? 'unavailable' : classPct >= 70 ? 'ok' : 'partial',
       detail:
         data.family_classification !== 'Unknown'
           ? `Family: ${data.family_classification}`
@@ -313,25 +356,37 @@ export function buildThreatDna(data: FraudCardData, bundle: InvestigationBundle 
   const traits: DnaTrait[] = [
     {
       label: 'Credential Theft',
-      percent: credHit || data.has_accessibility_abuse ? (credHit ? 95 : 72) : data.targets_indian_banks ? 55 : 8,
+      observation: credHit
+        ? 'statically_declared'
+        : data.has_accessibility_abuse || data.targets_indian_banks
+          ? 'inferred'
+          : 'not_observed',
       evidenceIds: credHit ? ['SCEN-0'] : data.has_accessibility_abuse ? ['STAT-A11Y'] : [],
       rationale: credHit
         ? 'Threat scenario or code finding references credential capture'
         : data.has_accessibility_abuse
           ? 'Accessibility abuse enables credential harvesting'
-          : 'No direct credential theft evidence',
+          : data.targets_indian_banks
+            ? 'Banking targeting without a direct credential-capture finding'
+            : 'No direct credential theft evidence',
     },
     {
       label: 'Overlay Attack',
-      percent: data.has_system_alert_window ? (runtimeOverlay ? 92 : 81) : runtimeOverlay ? 60 : 0,
+      observation: runtimeOverlay
+        ? 'runtime_observed'
+        : data.has_system_alert_window
+          ? 'statically_declared'
+          : 'not_observed',
       evidenceIds: data.has_system_alert_window ? ['STAT-OVERLAY'] : [],
-      rationale: data.has_system_alert_window
-        ? 'SYSTEM_ALERT_WINDOW declared'
-        : 'Overlay capability not observed',
+      rationale: runtimeOverlay
+        ? 'Overlay behaviour seen in runtime evidence'
+        : data.has_system_alert_window
+          ? 'SYSTEM_ALERT_WINDOW declared'
+          : 'Overlay capability not observed',
     },
     {
       label: 'Accessibility Abuse',
-      percent: data.has_accessibility_abuse ? 95 : 0,
+      observation: data.has_accessibility_abuse ? 'statically_declared' : 'not_observed',
       evidenceIds: data.has_accessibility_abuse ? ['STAT-A11Y'] : [],
       rationale: data.has_accessibility_abuse
         ? 'BIND_ACCESSIBILITY_SERVICE / abuse flag'
@@ -339,13 +394,25 @@ export function buildThreatDna(data: FraudCardData, bundle: InvestigationBundle 
     },
     {
       label: 'SMS Interception',
-      percent: data.has_sms_read_write ? (runtimeSms ? 94 : 90) : runtimeSms ? 50 : 0,
+      observation: runtimeSms
+        ? 'runtime_observed'
+        : data.has_sms_read_write
+          ? 'statically_declared'
+          : 'not_observed',
       evidenceIds: data.has_sms_read_write ? ['STAT-SMS'] : [],
-      rationale: data.has_sms_read_write ? 'SMS permissions present' : 'No SMS permission evidence',
+      rationale: runtimeSms
+        ? 'SMS or OTP access seen in runtime evidence'
+        : data.has_sms_read_write
+          ? 'SMS permissions present'
+          : 'No SMS permission evidence',
     },
     {
       label: 'UPI / Wallet Fraud',
-      percent: upiHit ? 83 : data.targets_indian_banks ? 45 : 0,
+      observation: upiHit
+        ? 'statically_declared'
+        : data.targets_indian_banks
+          ? 'inferred'
+          : 'not_observed',
       evidenceIds: [],
       rationale: upiHit
         ? 'UPI/wallet strings or packages in corpus'
@@ -355,7 +422,7 @@ export function buildThreatDna(data: FraudCardData, bundle: InvestigationBundle 
     },
     {
       label: 'Persistence',
-      percent: persistHit ? 48 : 12,
+      observation: persistHit ? 'statically_declared' : 'not_observed',
       evidenceIds: [],
       rationale: persistHit
         ? `${data.services?.length || 0} services / ${data.receivers?.length || 0} receivers`
@@ -363,25 +430,35 @@ export function buildThreatDna(data: FraudCardData, bundle: InvestigationBundle 
     },
     {
       label: 'Spyware Behaviour',
-      percent: spywareHit ? 35 : 18,
+      observation: spywareHit ? 'statically_declared' : 'not_observed',
       evidenceIds: [],
       rationale: spywareHit ? 'Sensitive permissions in manifest' : 'No spyware-class permissions flagged',
     },
     {
       label: 'Ransomware',
-      percent: ransomHit ? 40 : 0,
+      observation: ransomHit ? 'statically_declared' : 'not_observed',
       evidenceIds: [],
       rationale: ransomHit ? 'Encryption/ransom strings in code findings' : 'No ransomware indicators',
     },
     {
       label: 'Remote Access',
-      percent: ratHit ? 45 : data.has_reflection ? 27 : 0,
+      observation: ratHit
+        ? 'statically_declared'
+        : data.has_reflection
+          ? 'inferred'
+          : 'not_observed',
       evidenceIds: [],
-      rationale: ratHit ? 'Runtime.exec / ProcessBuilder APIs fired' : 'No remote execution APIs matched',
+      rationale: ratHit
+        ? 'Runtime.exec / ProcessBuilder APIs fired'
+        : data.has_reflection
+          ? 'Reflection present, but no direct remote-execution API matched'
+          : 'No remote execution APIs matched',
     },
   ];
 
-  return traits.sort((a, b) => b.percent - a.percent);
+  return traits.sort(
+    (a, b) => dnaObservationRank(b.observation) - dnaObservationRank(a.observation),
+  );
 }
 
 export function buildAttackChain(data: FraudCardData, bundle: InvestigationBundle | null): AttackStage[] {
@@ -538,7 +615,7 @@ export function buildMitreCards(data: FraudCardData, bundle: InvestigationBundle
       return {
         technique: t,
         techniqueId: ev?.mitreId,
-        confidence: ev?.confidence ?? 75,
+        confidence: ev?.confidence,
         evidence: ev?.description || data.risk_explanation?.evidence_lines?.[i] || 'Mapped from intelligence report',
         source: ev?.sourceEngine || 'Intelligence Report',
         evidenceIds: ev ? [ev.id] : [],

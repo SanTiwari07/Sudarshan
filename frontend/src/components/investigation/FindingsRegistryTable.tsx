@@ -71,7 +71,11 @@ function FindingRowMobile({
       <div className="mt-1.5 flex flex-wrap items-center gap-3">
         <SeverityIndicator severity={row.severity} />
         <SourceIndicator evidence={row} />
-        <span className={`${TYPOGRAPHY.codeSm} font-semibold text-slate-700 tabular-nums`}>{row.confidence}%</span>
+        {row.confidence != null && (
+          <span className={`${TYPOGRAPHY.codeSm} font-semibold text-slate-700 tabular-nums`}>
+            {row.confidence}%
+          </span>
+        )}
       </div>
       <div className="mt-1">
         <WhyMattersCell evidence={row} />

@@ -98,16 +98,17 @@ function runtimeNote(data: FraudCardData, basis: EvidenceBasis): string | null {
   return 'Detection is based on static evidence.';
 }
 
-function aggregateConfidence(evidence: MappedEvidenceItem[], data: FraudCardData, findingId: TechnicalFindingId): number | null {
-  if (evidence.length === 0) {
-    const map: Partial<Record<TechnicalFindingId, () => number | null>> = {
-      accessibility_abuse: () => (data.has_accessibility_abuse ? 95 : null),
-      overlay_capability: () => (data.has_system_alert_window ? 90 : null),
-      sms_otp_interception: () => (data.has_sms_read_write ? 95 : null),
-    };
-    return map[findingId]?.() ?? scenarioConfidence(data, /./) ?? null;
-  }
-  const avg = evidence.reduce((s, e) => s + (e.confidence ?? 85), 0) / evidence.length;
+function aggregateConfidence(evidence: MappedEvidenceItem[], data: FraudCardData): number | null {
+  // A capability flag is a yes/no fact from the manifest; it carries no
+  // confidence of its own. The threat-scenario table is the only static source
+  // that publishes one, so that is the only place a percentage may come from.
+  if (evidence.length === 0) return scenarioConfidence(data, /./) ?? null;
+  // Average only over the items whose producing engine actually reported a
+  // confidence. Substituting a literal for the rest turned an unmeasured row
+  // into a measured-looking one and dragged the aggregate toward that literal.
+  const scored = evidence.filter((e) => typeof e.confidence === 'number');
+  if (!scored.length) return null;
+  const avg = scored.reduce((s, e) => s + (e.confidence as number), 0) / scored.length;
   return Math.round(avg);
 }
 
@@ -156,6 +157,6 @@ export function buildTechnicalFindingViewModel(
       runtimeNote: runtimeNote(data, basis),
     },
     evidence,
-    confidencePercent: aggregateConfidence(evidence, data, findingId),
+    confidencePercent: aggregateConfidence(evidence, data),
   };
 }

@@ -288,6 +288,11 @@ def _calculate_stei(
             "They are excluded rather than scored as zero."
         )
     axes["excluded"] = excluded
+    # The renormalised weight each axis actually carried. The frontend ledger
+    # reconstructs per-axis contributions from these; without them it has to
+    # assume the nominal 0.60/0.20/0.10/0.05/0.05 split, which is wrong for
+    # every sample where a blind axis was dropped and the rest renormalised.
+    axes["weights_used"] = {k: round(w / total_weight, 4) for k, w in scored.items()}
     return stei, axes, all_evidence, by_axis
 
 
@@ -832,6 +837,14 @@ _INCONCLUSIVE_STATUSES = frozenset({
     "EMULATOR_UNAVAILABLE",
     "INSTALL_FAILED",
     "TIMEOUT",
+    # The 30-minute wall clock arrived. Listed here so a run that hit it with
+    # NOTHING observed is excluded rather than scored as a clean zero.
+    #
+    # A run that hit it WITH evidence is unaffected: dynamic_exclusion_reason
+    # consults _dynamic_behavior_is_conclusive BEFORE it looks at the status, so
+    # observed behaviour outranks the label - which is the whole §P16 rule that
+    # a timeout with meaningful evidence is scored on that evidence.
+    "TIME_BUDGET_EXHAUSTED",
     "FAILED",
 })
 
@@ -1005,6 +1018,66 @@ def dynamic_exclusion_reason(dynamic: Optional[Dict]) -> Optional[str]:
         return status or "FAILED"
 
     return "NO_BEHAVIOR_OBSERVED"
+
+
+def _dynamic_coverage_block(dynamic: Optional[Dict]) -> Dict[str, Any]:
+    """
+    Coverage and validity metadata for the FRS breakdown.
+
+    Read from the dynamic result's own `dynamic_coverage` block when it has one
+    (every run produced by the current sandbox does), and reconstructed
+    conservatively when serving a STORED case from before the block existed -
+    an old payload must not suddenly report zero coverage, which would read as
+    a regression in the sample rather than in the record.
+
+    Nothing here is scored. The score comes from BFCI, computed from observed
+    events; this is what the score TRAVELS WITH, so a partial run can never be
+    reported as though it were a complete one.
+    """
+    if not isinstance(dynamic, dict):
+        return {
+            "dynamic_status": "SKIPPED",
+            "dynamic_valid": False,
+            "dynamic_complete": False,
+            "dynamic_coverage_ratio": 0.0,
+            "goals_total": 0,
+            "goals_successful": 0,
+            "coverage_known": False,
+            "limitations": [],
+        }
+
+    block = dynamic.get("dynamic_coverage")
+    if isinstance(block, dict) and block:
+        return {
+            "dynamic_status": block.get("dynamic_status", ""),
+            "dynamic_valid": bool(block.get("dynamic_valid")),
+            "dynamic_complete": bool(block.get("dynamic_complete")),
+            "dynamic_coverage_ratio": float(block.get("coverage_ratio") or 0.0),
+            "goals_total": int(block.get("goals_total") or 0),
+            "goals_successful": int(block.get("goals_successful") or 0),
+            "goals_partial": int(block.get("goals_partial") or 0),
+            "goals_failed": int(block.get("goals_failed") or 0),
+            "goals_skipped": int(block.get("goals_skipped") or 0),
+            "goals_not_reached": int(block.get("goals_not_reached") or 0),
+            "coverage_known": True,
+            "timeout_reason": block.get("timeout_reason"),
+            "limitations": list(block.get("limitations") or []),
+            "coverage_narrative": block.get("narrative", ""),
+        }
+
+    # Legacy payload. `coverage_known` False is the load-bearing field: it tells
+    # the report to say "coverage was not recorded for this run" rather than to
+    # print a zero that would read as "nothing was covered".
+    return {
+        "dynamic_status": str(dynamic.get("dynamic_status") or ""),
+        "dynamic_valid": bool(_dynamic_run_was_conclusive(dynamic)),
+        "dynamic_complete": False,
+        "dynamic_coverage_ratio": 0.0,
+        "goals_total": 0,
+        "goals_successful": 0,
+        "coverage_known": False,
+        "limitations": [],
+    }
 
 
 def _dynamic_run_was_conclusive(dynamic: Optional[Dict]) -> bool:
@@ -1294,6 +1367,26 @@ def calculate_risk_score(
     # anything to reason about.
     dynamic_conclusive = dynamic_available and _dynamic_run_was_conclusive(dynamic_result)
 
+    # ── Coverage is not validity, and neither is completeness ────────────────
+    #
+    # Four separate questions were previously collapsed into one boolean, which
+    # is why a partial run could not be distinguished from a failed one in the
+    # report:
+    #
+    #   dynamic_available   Was the dynamic infrastructure there at all?
+    #   dynamic_valid       Did we obtain trustworthy dynamic evidence?
+    #   dynamic_complete    Were all planned investigation goals completed?
+    #   dynamic_coverage    How much of the plan was exercised?
+    #
+    # These are REPORTED, not scored. `dynamic_conclusive` above still decides
+    # whether the axis is included, and it is still derived from observed
+    # evidence rather than from goal completion - so a run with 60% coverage
+    # whose observed events clear the threshold is scored exactly as it always
+    # was, and one with 100% coverage and no events is still excluded. What
+    # changes is that the analyst can now see which of the two they are looking
+    # at instead of both reading as "inconclusive".
+    dynamic_coverage_block = _dynamic_coverage_block(dynamic_result)
+
     axes = [("stei", 0.25, stei, True)]
     axes.append(("dynamic", 0.35, dynamic_score, dynamic_conclusive))
     axes.append(("correlation", 0.20, correlation_score, correlation_available))
@@ -1576,6 +1669,30 @@ def calculate_risk_score(
             "concealed_payload": bool(flags_dict.get("has_concealed_payload")),
             "dynamic_ran": dynamic_available,
             "dynamic_conclusive": dynamic_conclusive,
+
+            # ── Coverage and validity, reported alongside the score ──────────
+            # `dynamic_conclusive` above decides whether the axis is SCORED and
+            # is unchanged: it reads observed evidence, never goal completion.
+            # These four say what kind of run produced that score, so a partial
+            # run cannot silently read as a complete one:
+            #
+            #   COMPLETE                use the dynamic score normally
+            #   PARTIAL                 score the observed evidence, and say so
+            #   TIME_BUDGET_EXHAUSTED   score the observed evidence when there
+            #                           is any; otherwise treat as no behaviour
+            #   NO_BEHAVIOR_OBSERVED    do not pretend evidence exists; the
+            #                           static/evasion floors stay in force
+            #   INSTRUMENTATION_FAILED  exclude the axis and renormalise
+            #   SKIPPED                 exclude the axis
+            #
+            # All six of those outcomes are already produced by the existing
+            # exclusion logic. What is added here is the LABEL, so the report
+            # and the UI stop rendering "partial with evidence" and "we never
+            # got to look" identically.
+            "dynamic_status": dynamic_coverage_block.get("dynamic_status", ""),
+            "dynamic_valid": dynamic_coverage_block.get("dynamic_valid", False),
+            "dynamic_complete": dynamic_coverage_block.get("dynamic_complete", False),
+            "dynamic_coverage": dynamic_coverage_block,
             "verdict_floored_for_visibility": visibility_floored,
             "verdict_floored_for_evasion": evasion_floored,
             "verdict_floored_for_static_evidence": static_evidence_floored,
@@ -1598,6 +1715,9 @@ def calculate_risk_score(
             # and the rest renormalised, not scored as a zero. An unexplained
             # number is the same defect as a wrong one.
             "stei_axes_excluded": list(stei_axes.get("excluded") or []),
+            # Renormalised per-axis STEI weights, so the score ledger shows the
+            # arithmetic that was actually performed rather than a nominal one.
+            "stei_weights_used": dict(stei_axes.get("weights_used") or {}),
         },
 
         # Threat scenario correlation table

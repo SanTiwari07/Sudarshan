@@ -162,6 +162,31 @@ def _rand(n: int, alphabet: str = string.ascii_lowercase + string.digits) -> str
     return "".join(random.choice(alphabet) for _ in range(n))
 
 
+#: The legacy thirteen `field_hint` kinds, filled from the deterministic Test
+#: Input Profile. Kept in this module rather than in `input_profile` because it
+#: is a mapping onto the LEGACY vocabulary, which is a fact about this file's
+#: wire format and not about the profile itself.
+#:
+#: `host` and `port` stay on loopback: the point of a debug/preferences screen
+#: is to exercise the field, not to repoint the sample at something it was not
+#: already talking to.
+_DETERMINISTIC_LEGACY_VALUES: Dict[str, str] = {
+    "username": "demo_user",
+    "password": "DemoPass123!",
+    "email":    "analyst.test@sudarshan.invalid",
+    "phone":    "5550100000",
+    "otp":      "123456",
+    "amount":   "100",
+    "account":  "000000000000",
+    "name":     "Sudarshan Demo User",
+    "address":  "1 Analysis Lane",
+    "search":   "demo_query",
+    "host":     "127.0.0.1",
+    "port":     "8080",
+    "text":     "demo_input",
+}
+
+
 @dataclass
 class CredentialVault:
     """
@@ -195,6 +220,20 @@ class CredentialVault:
     def regenerate(self) -> None:
         """New identity. Called on each fresh login attempt."""
         self.attempt += 1
+        # Under the deterministic Test Input Profile there is no rotation to
+        # perform: the whole point of that mode is that a re-run replays byte
+        # for byte, and a second identity would defeat it. The legacy dict is
+        # filled from the fixed table and returned unchanged on every call.
+        from sudarshan_core.engines.agentic.input_profile import (
+            deterministic_profile_enabled,
+        )
+        if deterministic_profile_enabled():
+            self.seed_token = "demo"
+            self.typed_values = {}
+            self.profile = None
+            self.values = dict(_DETERMINISTIC_LEGACY_VALUES)
+            _ISSUED.update(v for v in self.values.values() if v)
+            return
         suffix = _rand(6)
         digits = "".join(random.choice(string.digits) for _ in range(6))
         self.seed_token = suffix
@@ -273,6 +312,10 @@ class CredentialVault:
         agree.
         """
         from sudarshan_core.engines.agentic.field_constraints import generate_value
+        from sudarshan_core.engines.agentic.input_profile import (
+            deterministic_profile_enabled,
+            test_input_for,
+        )
 
         key = (
             f"{constraints.field_type.value}"
@@ -282,6 +325,28 @@ class CredentialVault:
         cached = self.typed_values.get(key)
         if cached is not None:
             return cached
+
+        # ── Deterministic Test Input Profile ─────────────────────────────────
+        # Opt-in (SUDARSHAN_TEST_INPUT_PROFILE=deterministic). When on, every
+        # field gets the same obviously-synthetic value on every run, so a
+        # forensic re-run replays byte for byte and a screenshot of a filled
+        # form is legible as harness input rather than as a credential.
+        #
+        # Off by default because the rotating persona is an anti-fingerprinting
+        # property: a sample that sees the same login string every analysis can
+        # detect the sandbox on one string compare and go dormant. Both modes
+        # are synthetic, both are redacted, and neither can reach real
+        # infrastructure - the only difference is whether the identity varies.
+        if deterministic_profile_enabled():
+            value = test_input_for(
+                constraints.field_type,
+                max_length=constraints.max_length,
+                min_length=constraints.min_length,
+                numeric_only=constraints.numeric_only,
+            )
+            self.typed_values[key] = value
+            _ISSUED.add(value)
+            return value
 
         # The FIRST identity a run offers is the coherent synthetic citizen
         # (§P8): it is the one that has to survive the app's own validators,

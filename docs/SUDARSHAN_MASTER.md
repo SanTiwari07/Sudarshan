@@ -184,7 +184,7 @@ This section (36. TROUBLESHOOTING) details the sub-component as mapped in the `_
 
 The current test suite collects:
 - **2,622 tests collected** (measured 2026-08-27; command: `$env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; python -m pytest tests/ backend/tests --collect-only`). No CI workflow exists in this repository.
-- 3 collection errors in infrastructure-dependent files (`analysis-engine/test_frida_tcp_first.py`, `scripts/test_e2e_pipeline.py`, `test_frida.py`) — these require live sandbox or network and are not part of the standard offline suite.
+- 2 collection errors in infrastructure-dependent files (`analysis-engine/test_frida_tcp_first.py`, `scripts/test_e2e_pipeline.py`) — these require live sandbox or network and are not part of the standard offline suite.
 
 ## 38. DETERMINISM VERIFICATION
 

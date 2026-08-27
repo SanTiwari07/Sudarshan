@@ -163,6 +163,30 @@ TOOL_REGISTRY: Dict[str, ToolDef] = {
         notes="Resolved via UI XML node matching before fallback to tap.",
     ),
 
+    "click_node": ToolDef(
+        name="click_node",
+        description=(
+            "Tap the accessibility node with a given uiautomator node id or "
+            "resource-id. Used by the deterministic action ladder when a text "
+            "lookup could not resolve the control."
+        ),
+        params=[
+            ToolParam("node_id", "str", required=False,
+                      description="Positional uiautomator node id, e.g. 'n7'"),
+            ToolParam("resource_id", "str", required=False,
+                      description="Android resource-id of the target node"),
+        ],
+        timeout_seconds=8,
+        retry_count=1,
+        failure_strategy="log_and_continue",
+        min_android_api=21,
+        notes=(
+            "Deterministic rung of the action ladder. Resolves the node from a "
+            "fresh hierarchy dump and taps the centre of its bounds. Never "
+            "invented by the planner - it is only produced by ActionDispatcher."
+        ),
+    ),
+
     "swipe": ToolDef(
         name="swipe",
         description="Swipe from one coordinate to another (scroll, dismiss, navigate).",

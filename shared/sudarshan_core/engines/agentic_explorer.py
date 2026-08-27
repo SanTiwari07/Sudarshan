@@ -59,7 +59,10 @@ from sudarshan_core.engines.agentic.action_verifier import (
     verify_action,
     verify_field_population,
 )
-from sudarshan_core.engines.agentic.adaptive_budget import AdaptiveBudget
+from sudarshan_core.engines.agentic.adaptive_budget import (
+    MAX_EXPLORATION_BUDGET_SECONDS,
+    AdaptiveBudget,
+)
 from sudarshan_core.engines.agentic.field_classifier import (
     ClassificationSource,
     classify_field,
@@ -78,10 +81,16 @@ from sudarshan_core.engines.agentic.screenshot_policy import is_safe_interactive
 from sudarshan_core.engines.agentic.planner import AgentPlanner
 from sudarshan_core.engines.agentic.action_dispatch import (
     ActionDispatcher,
+    MAX_ACTION_SECONDS,
     MAX_EXECUTION_ATTEMPTS,
     pipeline_log,
     select_canonical_action,
 )
+from sudarshan_core.engines.dynamic_budget import (
+    TIMEOUT_REASON,
+    get_active_deadline,
+)
+from sudarshan_core.engines.dynamic_coverage import build_dynamic_coverage
 from sudarshan_core.engines.agentic.tool_executor import (
     NAVIGATIONAL_TOOLS,
     ToolExecutor,
@@ -162,6 +171,54 @@ FRIDA_SILENCE_THRESHOLD: int = ExplorationBudget.FRIDA_SILENCE_THRESHOLD
 # (e.g. Stage 5 Login Flow when the app has no conventional login screen).
 # This activates mark_failed → retry branch in next_priority_goal().
 MAX_ATTEMPTS_PER_GOAL: int = int(os.getenv("SUDARSHAN_MAX_ATTEMPTS_PER_GOAL", "8"))
+
+# ── Per-goal time budget ──────────────────────────────────────────────────────
+#
+# The 30-minute wall clock is NOT divided equally across fifteen goals. Most
+# goals resolve in a handful of actions and would waste a fixed slice; the ones
+# that do not are precisely the ones that must be cut off. So each goal gets an
+# upper bound rather than an allocation, and whatever it does not use is
+# available to the goals that follow it.
+#
+# 90s is roughly a dozen actions at the measured per-iteration cost - enough to
+# fill and submit a four-field form, which is the longest legitimate single-goal
+# sequence in the corpus. A goal still working after that is looping, and the
+# right answer is to record what it achieved and move on.
+MAX_GOAL_SECONDS: float = float(os.getenv("SUDARSHAN_MAX_GOAL_SECONDS", "90"))
+
+#: Times the walk will answer the SAME permission dialog on the SAME screen
+#: before it stops trying and explores elsewhere.
+#:
+#: A permission screen the sandbox cannot satisfy re-renders identically after
+#: every tap, which makes it the most effective trap on the device: a walk that
+#: answers it on sight answers it forever and never reaches the sample's own
+#: screens. Three is enough for a genuine two-step grant (Allow -> While using
+#: the app) plus one retry, and few enough that a loop is caught within seconds.
+MAX_PERMISSION_SCREEN_ATTEMPTS: int = int(
+    os.getenv("SUDARSHAN_MAX_PERMISSION_SCREEN_ATTEMPTS", "3")
+)
+
+#: The smallest slice worth starting a goal with. A goal begun with two seconds
+#: left produces one half-verified action and a misleading FAILED; refusing it
+#: and recording TIMEOUT is the honest outcome.
+MIN_GOAL_SLICE_SECONDS: float = float(
+    os.getenv("SUDARSHAN_MIN_GOAL_SLICE_SECONDS", "10")
+)
+
+#: Planner (LLM) calls one goal may consume. Measured at ~12s each, so an
+#: unbounded budget is how a single stubborn screen eats the window. Small on
+#: purpose: after this the deterministic planner drives the goal, which is the
+#: §P19 fallback and not a degraded mode.
+MAX_PLANNER_CALLS_PER_GOAL: int = int(
+    os.getenv("SUDARSHAN_MAX_PLANNER_CALLS_PER_GOAL", "4")
+)
+
+#: What one planner call is assumed to cost when deciding whether to start it.
+#: Measured on gemini-2.5-flash with the explorer's real prompt: 7.9s, 13.8s,
+#: 15.1s and 11.2s on consecutive iterations.
+PLANNER_CALL_COST_SECONDS: float = float(
+    os.getenv("SUDARSHAN_PLANNER_CALL_COST_SECONDS", "15")
+)
 
 # ── Planner budget ────────────────────────────────────────────────────────────
 #
@@ -428,6 +485,15 @@ class AgenticExplorer:
 
         # Subsystems
         self.goals      = GoalTracker()
+        #: Which goal the current iteration is being charged to, and when that
+        #: charge started. Kept on the explorer rather than in GoalTracker
+        #: because the tracker is a pure state machine with no clock of its own.
+        self._current_goal_name: str = ""
+        self._current_goal_started: float = 0.0
+        #: Permission screens answered this run, keyed by (permission,
+        #: screen_hash). See _note_permission_screen - this is what stops the
+        #: walk answering the same dialog forever (§P7).
+        self._permission_attempts: Dict[Tuple[str, str], Dict[str, Any]] = {}
         self.memory     = AgentMemory()
         self.audit_log  = AuditLog()
         self.benchmark  = BenchmarkCollector(package_name=package_name)
@@ -1205,10 +1271,41 @@ class AgenticExplorer:
         return verification
 
     def _action_retry_variants(
-        self, action: Dict[str, Any], attempt: int
+        self,
+        action: Dict[str, Any],
+        attempt: int,
+        tried: Optional[List[str]] = None,
     ) -> Optional[Dict[str, Any]]:
-        """Bounded retry ladder via ActionDispatcher (max 3 attempts)."""
-        return self.dispatcher.retry_payload(action, attempt)
+        """
+        The next rung of the deterministic action ladder, or None when spent.
+
+        The remaining wall-clock comes from the ONE global deadline, so a rung
+        that cannot finish before it is never started (§P9/§P25).
+        """
+        return self.dispatcher.retry_payload(
+            action,
+            attempt,
+            tried=tried,
+            remaining_seconds=self._remaining_budget_seconds(),
+        )
+
+    def _remaining_budget_seconds(self) -> Optional[float]:
+        """
+        Seconds left in the WHOLE dynamic analysis, not in this stage.
+
+        Reads the one shared deadline. Returns None only when no deadline is
+        armed - a unit test or a replay - in which case callers keep their
+        previous unbounded behaviour rather than inventing a second clock.
+        """
+        deadline = get_active_deadline()
+        return deadline.remaining() if deadline is not None else None
+
+    def _budget_allows(self, cost_seconds: float, stage: str) -> bool:
+        """Whether an operation costing `cost_seconds` may start. See §P9."""
+        deadline = get_active_deadline()
+        if deadline is None:
+            return True
+        return deadline.allows(cost_seconds, stage=stage)
 
     async def _execute_with_bounded_retries(
         self,
@@ -1216,11 +1313,24 @@ class AgenticExplorer:
         obs: Any,
     ) -> Tuple[Any, VerificationResult, int]:
         """
-        Execute with up to 3 attempts. ADB success is not verification.
+        Execute one semantic action, walking the deterministic ladder.
 
-        Attempt 1: structured click
-        Attempt 2: geometry / parent tap
-        Attempt 3: visual-grounded current-screen tap
+        ADB exit code zero is not verification and never has been: a
+        `click_text` that matched nothing, a `pm grant` Android refused and a
+        relaunch of an Activity that died immediately all return success. Every
+        rung is therefore judged by comparing device state PRE and POST (see
+        action_verifier), and the ladder escalates only on a verdict, never on
+        a return value.
+
+        The ladder itself lives in ActionDispatcher.retry_payload - resource-id,
+        node, text, bounds-centre, normalised coordinates, vision, then a
+        re-aimed tap for an obstructed control - and is bounded three ways:
+        MAX_EXECUTION_ATTEMPTS rungs, MAX_ACTION_SECONDS of wall clock, and the
+        global deadline underneath both.
+
+        Returns (result, verification, attempts). A FAILED verification here is
+        an ACTION failure. It is not a goal failure and it is emphatically not
+        a dynamic-analysis failure - see _resolve_goal_outcome and §P18.
         """
         from sudarshan_core.engines.agentic.semantic_action import (
             validate_coordinates_for_screen,
@@ -1277,13 +1387,35 @@ class AgenticExplorer:
             outcome="UNVERIFIED",
         )
         attempts = 0
+        # The ladder's only state: which resolutions have been spent. Carried
+        # here rather than on the payload so every rung is built from the
+        # ORIGINAL action - rung 1 rewrites `text` to the resource-id, and
+        # building the "resolve by visible text" rung on top of that would make
+        # it a second resource-id lookup.
+        strategies_tried: List[str] = []
+        action_started = time.monotonic()
 
         for attempt_index in range(MAX_EXECUTION_ATTEMPTS):
             attempts = attempt_index + 1
             if attempt_index > 0:
-                retry = self._action_retry_variants(action, attempt_index)
+                # Per-action wall clock, checked BEFORE the rung is built. One
+                # action may not absorb the run: MAX_ACTION_SECONDS bounds the
+                # whole ladder, and the global deadline bounds that in turn.
+                spent = time.monotonic() - action_started
+                if spent >= MAX_ACTION_SECONDS:
+                    pipeline_log(
+                        "ACTION_LADDER_TIME_EXHAUSTED",
+                        action_id=trace.action_id,
+                        spent=f"{spent:.1f}s",
+                        budget=f"{MAX_ACTION_SECONDS:.0f}s",
+                    )
+                    break
+                retry = self._action_retry_variants(
+                    action, attempt_index, strategies_tried,
+                )
                 if retry is None:
                     break
+                strategies_tried = list(retry.get("_strategies_tried") or [])
                 current = retry
                 pipeline_log(
                     "ACTION_RETRY",
@@ -1528,6 +1660,73 @@ class AgenticExplorer:
             logger.debug("[AgenticExplorer] evidence screenshot failed: %s", exc)
             return None
 
+    def _log_goal_header(self, goal: Any) -> None:
+        """
+        The `[DYNAMIC][GOAL n/15]` block the observability spec asks for.
+
+        Emitted once when a goal becomes current, so a log reader can see where
+        one goal's actions end and the next one's begin without correlating
+        timestamps.
+        """
+        deadline = get_active_deadline()
+        budget = ""
+        if deadline is not None:
+            budget = (
+                f" | budget remaining {deadline.remaining():.0f}s of "
+                f"{deadline.total_seconds:.0f}s"
+            )
+        logger.info(
+            "[DYNAMIC][GOAL %d/%d] %s%s",
+            goal.stage, len(self.goals.goals), goal.name, budget,
+        )
+
+    def _set_permission_screen_result(
+        self, permission: str, screen_hash: str, result: str,
+    ) -> None:
+        """Stamp the outcome on a ledger entry created by _note_permission_screen."""
+        entry = self._permission_attempts.get(
+            (permission or "unknown", screen_hash or "")
+        )
+        if entry is not None:
+            entry["result"] = result
+
+    def _note_permission_screen(
+        self, permission: str, screen_hash: str, result: str = "seen",
+    ) -> int:
+        """
+        Record one encounter with a permission screen and return the attempt count.
+
+        Exists because a permission dialog the walk cannot satisfy is the single
+        most effective trap on the device: it re-renders identically after every
+        tap, so a walk that answers it on sight answers it forever and the
+        sample's own screens are never reached.
+
+        The ledger is keyed by (permission, screen_hash) rather than by
+        permission alone: Android shows genuinely different dialogs for the same
+        permission (the first request, the "don't ask again" variant, the
+        Settings page), and collapsing them would stop the walk answering a
+        dialog it had never actually seen.
+        """
+        key = (permission or "unknown", screen_hash or "")
+        entry = self._permission_attempts.setdefault(
+            key,
+            {
+                "permission": permission or "unknown",
+                "screen_hash": screen_hash or "",
+                "attempt_count": 0,
+                "result": "",
+                "timestamp": self._elapsed_ts(),
+            },
+        )
+        entry["attempt_count"] += 1
+        entry["result"] = result
+        entry["timestamp"] = self._elapsed_ts()
+        return int(entry["attempt_count"])
+
+    def permission_screen_ledger(self) -> List[Dict[str, Any]]:
+        """Every permission screen this run met, with how often and how it ended."""
+        return [dict(v) for v in self._permission_attempts.values()]
+
     def _record_permission_from_screen(self, obs: Any, classification: Any) -> None:
         """Record runtime permission observation from screen classification."""
         if classification.screen_type not in (
@@ -1549,13 +1748,45 @@ class AgenticExplorer:
             "accessibility": "android.permission.BIND_ACCESSIBILITY_SERVICE",
             "overlay": "android.permission.SYSTEM_ALERT_WINDOW",
         }
+        matched_permission = ""
         for keyword, perm in perm_map.items():
             if keyword in combined or keyword in classification.screen_type.lower():
                 self.permissions.record_runtime_request(perm)
+                matched_permission = perm
                 break
         if classification.screen_type == "ACCESSIBILITY_DIALOG":
             self.permissions.record_runtime_request(
                 "android.permission.BIND_ACCESSIBILITY_SERVICE"
+            )
+            matched_permission = (
+                matched_permission
+                or "android.permission.BIND_ACCESSIBILITY_SERVICE"
+            )
+
+        # Ledger the encounter. This is what makes "the same permission screen
+        # keeps coming back" a bounded, reportable fact instead of a loop: the
+        # count is consulted by the boundary budget and surfaced in the report
+        # so an analyst can see the sample was demanding a grant the sandbox
+        # would not give it.
+        permission_label = matched_permission or classification.screen_type
+        screen_hash = getattr(obs, "screen_hash", "")
+        attempts = self._note_permission_screen(permission_label, screen_hash)
+        self._set_permission_screen_result(
+            permission_label, screen_hash,
+            "answered" if attempts <= MAX_PERMISSION_SCREEN_ATTEMPTS
+            else "abandoned_repeat",
+        )
+        if attempts > MAX_PERMISSION_SCREEN_ATTEMPTS:
+            logger.info(
+                "[AgenticExplorer] Permission screen for %s has been answered "
+                "%d times and keeps returning - not answering it again this "
+                "run; exploring other branches instead.",
+                matched_permission or classification.screen_type, attempts,
+            )
+            self.audit_log.record_system_event(
+                "permission_screen_repeat",
+                f"{matched_permission or classification.screen_type}: "
+                f"{attempts} encounters",
             )
 
     async def _handle_home_launcher(
@@ -2056,8 +2287,26 @@ class AgenticExplorer:
         # every sample alike, which cuts off an app that is mid-login and
         # idles for four minutes on one that finished at t=40. The deadline now
         # follows the walk, within a hard maximum that nothing can move.
+        # The exploration window is a CHILD of the one global deadline, never a
+        # peer of it. Both the starting budget and the adaptive ceiling are
+        # clamped to what the whole dynamic analysis has left, so no amount of
+        # measured progress can extend the walk past the 30-minute wall clock -
+        # which is the §P25 rule that there is exactly one deadline and every
+        # child inherits it.
+        _global = get_active_deadline()
+        _initial = float(duration_seconds)
+        _ceiling = float(MAX_EXPLORATION_BUDGET_SECONDS)
+        if _global is not None:
+            _initial = _global.budget_for(_initial)
+            _ceiling = _global.budget_for(_ceiling)
+            logger.info(
+                "[DYNAMIC][BUDGET] exploration window clamped to the global "
+                "deadline: start %.0fs, ceiling %.0fs, global remaining %.0fs",
+                _initial, _ceiling, _global.remaining(),
+            )
         self.budget = AdaptiveBudget(
-            initial_seconds=float(duration_seconds),
+            initial_seconds=_initial,
+            max_seconds=max(_initial, _ceiling),
             started_monotonic=self._start_time,
         )
 
@@ -2137,6 +2386,28 @@ class AgenticExplorer:
                 _work_remaining = bool(self.exploration.coverage_metrics().get(
                     "actionable_elements_unresolved", 0
                 ))
+                # ── The one global deadline outranks everything ───────────────
+                # Checked FIRST and unconditionally. The adaptive budget below
+                # can extend itself while the walk is still learning; this
+                # cannot be extended by anything, which is what makes 30 minutes
+                # a wall-clock guarantee rather than a starting position.
+                _global = get_active_deadline()
+                if _global is not None and _global.expired:
+                    _global.note_expiry("exploration_loop")
+                    logger.warning(
+                        "[DYNAMIC][TIMEOUT] Global %.0f-second deadline reached "
+                        "at elapsed=%.0fs after %d actions. Stopping "
+                        "exploration and finalizing partial result.",
+                        _global.total_seconds, _global.elapsed(), actions_taken,
+                    )
+                    self.audit_log.record_system_event(
+                        "stop_global_deadline",
+                        f"elapsed={_global.elapsed():.0f}s "
+                        f"budget={_global.total_seconds:.0f}s "
+                        f"actions={actions_taken}",
+                    )
+                    self._stop_reason = StopReason.TIME_BUDGET_EXHAUSTED
+                    break
                 if self.budget.should_finish(
                     stagnant_streak=self.progress.stagnant_streak,
                     recovery_exhausted=(frida_silence_streak >= FRIDA_SILENCE_THRESHOLD),
@@ -2822,22 +3093,71 @@ class AgenticExplorer:
                 if next_goal:
                     self.goals.mark_in_progress(next_goal.name)
                     self.goals.record_attempt(next_goal.name)
-
-                    # If this goal has accumulated too many attempts without
-                    # completing, mark it FAILED so the retry branch can take
-                    # over, or downstream goals can unblock via skip_if_missing.
-                    if next_goal.attempts >= MAX_ATTEMPTS_PER_GOAL:
-                        logger.warning(
-                            f"[AgenticExplorer] Goal '{next_goal.name}' exhausted "
-                            f"{next_goal.attempts} attempts - marking FAILED"
+                    # Wall clock charged to whichever goal was current for the
+                    # PREVIOUS iteration, so a goal that keeps being selected
+                    # accumulates its own cost and can be cut off on it. Charged
+                    # here, at selection, because that is the one point every
+                    # iteration passes through exactly once.
+                    now = time.monotonic()
+                    if self._current_goal_name:
+                        self.goals.add_time_spent(
+                            self._current_goal_name,
+                            now - (self._current_goal_started or now),
                         )
-                        self.goals.mark_failed(next_goal.name)
+                    if self._current_goal_name != next_goal.name:
+                        self._log_goal_header(next_goal)
+                    self._current_goal_name = next_goal.name
+                    self._current_goal_started = now
+
+                    # ── Give up on this goal, and ONLY on this goal ───────────
+                    # Three independent bounds, whichever comes first:
+                    #   * attempts   - MAX_ATTEMPTS_PER_GOAL selections
+                    #   * wall clock - MAX_GOAL_SECONDS, so one difficult goal
+                    #     cannot absorb the analysis (§P10)
+                    #   * the global deadline underneath both
+                    #
+                    # The outcome is decided from what the goal DEMONSTRABLY
+                    # produced: verified progress makes it PARTIAL_SUCCESS,
+                    # nothing at all makes it FAILED. Either way the run
+                    # continues to the next goal - a goal outcome is never a
+                    # run outcome (§P18).
+                    _give_up_reason = ""
+                    if next_goal.attempts >= MAX_ATTEMPTS_PER_GOAL:
+                        _give_up_reason = "max_attempts"
+                    elif next_goal.time_spent_seconds >= MAX_GOAL_SECONDS:
+                        _give_up_reason = "goal_time_budget_exhausted"
+                    elif not self._budget_allows(
+                        MIN_GOAL_SLICE_SECONDS, stage=f"goal:{next_goal.name}"
+                    ):
+                        _give_up_reason = TIMEOUT_REASON
+
+                    if _give_up_reason:
+                        if _give_up_reason == TIMEOUT_REASON:
+                            self.goals.mark_timed_out(next_goal.name)
+                        else:
+                            self.goals.resolve_goal(
+                                next_goal.name, reason=_give_up_reason,
+                            )
+                        logger.info(
+                            "[DYNAMIC][GOAL] '%s' resolved as %s "
+                            "(attempts=%d/%d, %.0fs/%.0fs, reason=%s). "
+                            "Continuing to the next goal.",
+                            next_goal.name, next_goal.status.value,
+                            next_goal.attempts, MAX_ATTEMPTS_PER_GOAL,
+                            next_goal.time_spent_seconds, MAX_GOAL_SECONDS,
+                            _give_up_reason,
+                        )
                         self.audit_log.record_system_event(
-                            "goal_max_attempts",
-                            f"{next_goal.name}: {next_goal.attempts}/{MAX_ATTEMPTS_PER_GOAL}"
+                            "goal_resolved",
+                            f"{next_goal.name}: {next_goal.status.value} "
+                            f"({_give_up_reason})",
                         )
                         # Re-evaluate next goal after state change
                         next_goal = self.goals.next_priority_goal()
+                        self._current_goal_name = (
+                            next_goal.name if next_goal else ""
+                        )
+                        self._current_goal_started = time.monotonic()
 
                 # ── Form stagnation outranks planning ─────────────────────────
                 # When the screen has stopped moving on a form, neither planner
@@ -2884,11 +3204,41 @@ class AgenticExplorer:
                     )
                     self._planner_skips = getattr(self, "_planner_skips", 0)
                     force_planner = self._planner_skips >= PLANNER_CONSULT_EVERY
+                    # Two further gates, both of which fall back to the
+                    # deterministic path rather than blocking (§P9/§P19):
+                    #
+                    #   * the per-goal planner budget - a model that keeps
+                    #     returning the same unusable action for one goal must
+                    #     not be asked about it forever;
+                    #   * the ONE global deadline - a call started with less
+                    #     than its own latency remaining costs that latency and
+                    #     produces nothing usable.
+                    _goal_name = next_goal.name if next_goal else ""
+                    _planner_budget_left = (
+                        not _goal_name
+                        or next_goal.planner_calls < MAX_PLANNER_CALLS_PER_GOAL
+                    )
+                    if not _planner_budget_left:
+                        logger.debug(
+                            "[AgenticExplorer] Planner budget for goal '%s' is "
+                            "spent (%d/%d) - deterministic planning only",
+                            _goal_name, next_goal.planner_calls,
+                            MAX_PLANNER_CALLS_PER_GOAL,
+                        )
                     if (
                         should_invoke_planner(classification.screen_type)
                         and (force_planner or _planner_could_change_outcome(graph_action))
+                        and _planner_budget_left
+                        and self._budget_allows(
+                            PLANNER_CALL_COST_SECONDS, stage="planner",
+                        )
                     ):
-                        planner_action = await self.planner.decide(obs, self.memory, self.goals)
+                        if _goal_name:
+                            self.goals.record_planner_call(_goal_name)
+                        planner_action = await self.planner.decide(
+                            obs, self.memory, self.goals,
+                            deadline_seconds=self._remaining_budget_seconds(),
+                        )
                         self._planner_skips = 0
                     else:
                         self._planner_skips += 1
@@ -3070,6 +3420,31 @@ class AgenticExplorer:
                     logger.warning(
                         "[AgenticExplorer] Action reported success but did not "
                         "take effect: %s", verification.detail,
+                    )
+
+                # ── Credit VERIFIED progress to the goal being worked ─────────
+                # This is the input that lets a goal end PARTIAL_SUCCESS rather
+                # than FAILED, and it is fed only from a positive verification -
+                # PRE/POST device state, never an ADB exit code (§P5). A goal
+                # that moved the device somewhere real but never reached its own
+                # confirming hook is a goal with evidence in it, and recording
+                # that is what stops the failure of one action erasing it (§P4).
+                if verification.succeeded and self._current_goal_name:
+                    self.goals.record_progress_signal(
+                        self._current_goal_name,
+                        f"{verification.action}:{verification.observed or 'verified'}",
+                    )
+                # The per-goal [DYNAMIC][GOAL] action line from the
+                # observability spec. One line per action, naming the goal it
+                # was spent on, so a reader can attribute every action.
+                if self._current_goal_name:
+                    logger.info(
+                        "[DYNAMIC][GOAL] goal=%s action=%s status=%s%s",
+                        self._current_goal_name,
+                        action.get("text") or action.get("tool", ""),
+                        "SUCCESS" if verification.succeeded else verification.outcome,
+                        f" reason={verification.detail}"
+                        if verification.failed and verification.detail else "",
                     )
 
                 # ── SETTLE ────────────────────────────────────────────────────
@@ -3597,7 +3972,37 @@ class AgenticExplorer:
             await self._finalize(actions_taken)
 
     async def _finalize(self, actions_taken: int) -> None:
-        """Cleanup and final metric recording."""
+        """
+        Cleanup and final metric recording.
+
+        Runs on EVERY exit path, including the wall-clock deadline, and it is
+        deliberately not gated on remaining time: flushing what was collected is
+        bookkeeping, not exploration, and a run that stops without doing it has
+        thrown away the evidence it spent its whole budget gathering (§P11).
+        """
+        # Charge the final iteration to whichever goal was current, so a goal
+        # that was being worked when the run ended is not credited zero time.
+        if self._current_goal_name and self._current_goal_started:
+            self.goals.add_time_spent(
+                self._current_goal_name,
+                time.monotonic() - self._current_goal_started,
+            )
+
+        # ── Settle every goal the run never concluded ────────────────────────
+        # PENDING in a finished run is not a state, it is an omission: it
+        # invites the reader to treat "never selected" as "did not happen".
+        # finalize() turns those into NOT_REACHED, and a goal that was mid-flight
+        # when the deadline arrived into TIMEOUT.
+        timed_out = self._stop_reason == StopReason.TIME_BUDGET_EXHAUSTED or (
+            (deadline := get_active_deadline()) is not None and deadline.expired
+        )
+        self.goals.finalize(
+            timed_out=timed_out,
+            reason=TIMEOUT_REASON if timed_out else (
+                self._stop_reason.value if self._stop_reason else "run_ended"
+            ),
+        )
+
         # Compute goal summary for benchmark
         completed = sum(1 for g in self.goals.goals if g.status == GoalStatus.COMPLETED)
         skipped   = sum(1 for g in self.goals.goals if g.status == GoalStatus.SKIPPED)
@@ -3738,6 +4143,44 @@ class AgenticExplorer:
         ).value
         exploration_summary["dynamic_status"] = dynamic_status
 
+        # ── Goal coverage (§P2/§P12) ─────────────────────────────────────────
+        # The 15-goal graph reports what it achieved as a DISTRIBUTION, and the
+        # coverage contract is derived from that distribution plus the evidence
+        # actually observed. Neither is a validity verdict on its own: coverage
+        # says how much of the plan was exercised, validity says whether the
+        # run produced trustworthy evidence, and 60% coverage is a valid
+        # partial run, not an invalid one (§P14).
+        goal_coverage = self.goals.coverage_report()
+        deadline = get_active_deadline()
+        timed_out = self._stop_reason == StopReason.TIME_BUDGET_EXHAUSTED or (
+            deadline is not None and deadline.expired
+        )
+        # Verified transitions only: the exploration graph's edge count is what
+        # PRE/POST observation actually proved, not what ADB accepted.
+        meaningful_transitions = len(self.exploration.edges)
+        dynamic_coverage = build_dynamic_coverage(
+            goal_coverage,
+            sandbox_available=True,
+            instrumentation_ok=instrumentation_ok,
+            # The explorer counts what IT observed. frida_sandbox recomputes
+            # this from the full, harness-filtered event set before the result
+            # is published - this value is the explorer's own view and is
+            # deliberately the conservative one.
+            evidence_event_count=int(
+                getattr(self.exploration, "runtime_events_observed", 0)
+            ),
+            meaningful_transition_count=meaningful_transitions,
+            budget_seconds=(
+                deadline.total_seconds if deadline is not None
+                else float(self._duration or 0)
+            ),
+            elapsed_seconds=(
+                deadline.elapsed() if deadline is not None
+                else (time.monotonic() - self._start_time if self._start_time else 0.0)
+            ),
+            timed_out=timed_out,
+        )
+
         return {
             # One view hierarchy per distinct in-app screen, for VIDE. Consumed
             # by vide.pipeline._dynamic_ui_hierarchies(); the single
@@ -3769,6 +4212,12 @@ class AgenticExplorer:
             "audit_log":           audit_entries,
             "benchmark":           benchmark_report,
             "goal_summary":        goal_summary,
+            # Per-goal lifecycle states and the derived coverage contract. New
+            # keys beside `goal_summary`, not a reshape of it, so every existing
+            # consumer keeps working unchanged.
+            "goal_coverage":       goal_coverage,
+            "dynamic_coverage":    dynamic_coverage,
+            "permission_screens":  self.permission_screen_ledger(),
             "agent_memory":        mem_summary,
             "investigation":       investigation_summary,
             "crashes":             [f.to_dict() for f in self.crash_findings],

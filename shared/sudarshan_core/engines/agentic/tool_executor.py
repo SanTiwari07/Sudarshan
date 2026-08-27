@@ -33,7 +33,7 @@ import shlex
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from sudarshan_core.engines.agentic.device_properties import get_screen_size
 from sudarshan_core.engines.agentic.tool_registry import get_tool
@@ -181,7 +181,8 @@ def _paced(seconds: float) -> float:
 # Tools that can change what is on screen. Only these need an idle wait; making
 # a screenshot or a logcat read pay for one would waste most of the time budget.
 NAVIGATIONAL_TOOLS: frozenset = frozenset({
-    "tap", "tap_sequence", "click_text", "swipe", "scroll", "long_press",
+    "tap", "tap_sequence", "click_text", "click_node", "swipe", "scroll",
+    "long_press",
     "press_back", "press_home", "press_enter", "hide_keyboard",
     # "am_start" used to be listed here, but no tool of that name exists in
     # TOOL_REGISTRY or on this class - the real one is "start_activity", which
@@ -407,8 +408,127 @@ class ToolExecutor:
 
     async def _tool_tap(self, action: Dict) -> ToolResult:
         x, y = int(action["x"]), int(action["y"])
+        # The ladder's `normalized_coordinates` rung asks for the point to be
+        # re-mapped against the LIVE device resolution before it is tapped.
+        # That is the rung's whole purpose: coordinates computed against a
+        # screenshot of a different size land tens of pixels off, which is
+        # indistinguishable from an inert control until they are re-mapped.
+        if action.get("_normalize_to_device"):
+            x, y = self._normalize_to_device(x, y, action)
         result = await self._input_tap(x, y)
         result.tool = "tap"
+        return result
+
+    def _normalize_to_device(
+        self, x: int, y: int, action: Dict
+    ) -> Tuple[int, int]:
+        """
+        Re-map a coordinate that was computed against a differently-sized frame.
+
+        The source frame is whatever produced the coordinate - a screenshot, or
+        an older `wm size` reading carried on the action. When no source size is
+        known, or it already matches the device, the point is returned
+        unchanged: guessing a scale factor would move a correct coordinate.
+        """
+        from sudarshan_core.engines.agentic.action_dispatch import (
+            screenshot_coords_to_device,
+        )
+
+        src_w = action.get("_source_width") or action.get("image_width")
+        src_h = action.get("_source_height") or action.get("image_height")
+        dev_w, dev_h = self.screen_size
+        if not src_w or not src_h or not dev_w or not dev_h:
+            return x, y
+        try:
+            return screenshot_coords_to_device(
+                x, y,
+                image_width=int(src_w), image_height=int(src_h),
+                device_width=int(dev_w), device_height=int(dev_h),
+            )
+        except (TypeError, ValueError):
+            return x, y
+
+    async def _tool_click_node(self, action: Dict) -> ToolResult:
+        """
+        Tap a node identified by resource-id or uiautomator node id.
+
+        The rung of the ladder that exists because text lookup and coordinates
+        are the SAME hypothesis dressed differently: `click_text` computes its
+        coordinates from the hierarchy, so when it misses, tapping those
+        coordinates misses identically. This resolves the element by identity
+        instead, from a hierarchy dumped now rather than at selection time - so
+        it also recovers a control that has since moved.
+        """
+        import xml.etree.ElementTree as ET
+
+        node_id = str(action.get("node_id") or "").strip()
+        resource_id = str(action.get("resource_id") or "").strip()
+        if not node_id and not resource_id:
+            return ToolResult(
+                success=False, tool="click_node",
+                error="click_node needs a node_id or a resource_id",
+            )
+
+        xml = await self._get_ui_xml()
+        if not xml:
+            return ToolResult(
+                success=False, tool="click_node",
+                error="UI hierarchy could not be read",
+            )
+        try:
+            root = ET.fromstring(xml)
+        except ET.ParseError as exc:
+            return ToolResult(
+                success=False, tool="click_node",
+                error=f"UI hierarchy did not parse: {exc}",
+            )
+
+        nodes = list(root.iter("node"))
+
+        def _short(raw: str) -> str:
+            return raw.split("/")[-1] if "/" in raw else raw
+
+        match = None
+        if resource_id:
+            wanted = _short(resource_id)
+            match = next(
+                (n for n in nodes
+                 if _short(n.attrib.get("resource-id", "")) == wanted),
+                None,
+            )
+        if match is None and node_id:
+            # node_id is assigned positionally by the perception parser ("n7"),
+            # so it only resolves against a hierarchy parsed the same way.
+            m = re.match(r"n(\d+)$", node_id)
+            if m and 0 <= int(m.group(1)) < len(nodes):
+                match = nodes[int(m.group(1))]
+
+        if match is None:
+            return ToolResult(
+                success=False, tool="click_node",
+                error=f"node not found (node_id={node_id!r} "
+                      f"resource_id={resource_id!r})",
+            )
+
+        bounds = re.match(
+            r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]",
+            match.attrib.get("bounds", ""),
+        )
+        if not bounds:
+            return ToolResult(
+                success=False, tool="click_node",
+                error="matched node has no parseable bounds",
+            )
+        x1, y1, x2, y2 = (int(g) for g in bounds.groups())
+        result = await self._input_tap((x1 + x2) // 2, (y1 + y2) // 2)
+        result.tool = "click_node"
+        result.data = {
+            **(result.data or {}),
+            "resolved_by": "resource_id" if resource_id else "node_id",
+            "node_id": node_id,
+            "resource_id": resource_id,
+            "bounds": match.attrib.get("bounds", ""),
+        }
         return result
 
     async def _tool_tap_sequence(self, action: Dict) -> ToolResult:

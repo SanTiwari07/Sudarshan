@@ -1,0 +1,76 @@
+﻿{
+  "bank": "Bank of India",
+  "screens": [
+    {
+      "screenId": "BOI-LOGIN",
+      "structuralSignature": "AUTH_FORM_VERTICAL_PRIMARY_CTA",
+      "regionOrder": [
+        "HEADER",
+        "PRIMARY_CONTENT",
+        "FOOTER_CTA"
+      ],
+      "exactStrings": [
+        "Password",
+        "Mobile Number / User ID",
+        "Enter registered mobile number",
+        "Welcome to BOI Mobile",
+        "Login to your account",
+        "Forgot User ID?",
+        "Forgot MPIN?",
+        "Proceed",
+        "New to BOI Mobile?",
+        "Register Now"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#005A9C",
+        "colorSecondary": "#F26522"
+      }
+    },
+    {
+      "screenId": "BOI-MPIN",
+      "structuralSignature": "PINPAD_NUMERIC_ENTRY",
+      "regionOrder": [
+        "HEADER",
+        "PIN_INPUT",
+        "NUMERIC_KEYPAD"
+      ],
+      "exactStrings": [
+        "Forgot MPIN?",
+        "Welcome back,",
+        "Enter 6-digit MPIN to login",
+        "Login with User ID"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#005A9C",
+        "colorSecondary": "#F26522"
+      }
+    },
+    {
+      "screenId": "BOI-HOME",
+      "structuralSignature": "DASHBOARD_CARD_GRID_QUICKACTIONS",
+      "regionOrder": [
+        "STATUS",
+        "HEADER",
+        "ACCOUNT_CARD",
+        "QUICK_ACTIONS",
+        "RECENT_TRANSACTIONS",
+        "BOTTOM_NAV"
+      ],
+      "exactStrings": [
+        "Pay Bills",
+        "Recent Activity",
+        "Welcome back,",
+        "Available Balance",
+        "View Details",
+        "Quick Actions",
+        "View All"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#005A9C",
+        "colorSecondary": "#F26522"
+      }
+    }
+  ],
+  "appName": "BOI Mobile",
+  "baselineId": "BASE-07-BOI"
+}

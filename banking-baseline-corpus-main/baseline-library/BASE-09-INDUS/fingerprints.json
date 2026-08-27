@@ -1,0 +1,66 @@
+﻿{
+  "bank": "IndusInd Bank",
+  "screens": [
+    {
+      "screenId": "INDUS-LOGIN",
+      "structuralSignature": "AUTH_FORM_VERTICAL_PRIMARY_CTA",
+      "regionOrder": [
+        "HEADER",
+        "PRIMARY_CONTENT",
+        "FOOTER_CTA"
+      ],
+      "exactStrings": [
+        "Password",
+        "Username or Mobile Number",
+        "Enter username",
+        "Welcome Back",
+        "Log in to IndusMobile",
+        "Continue"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#8C1D40",
+        "colorSecondary": "#F0AB00"
+      }
+    },
+    {
+      "screenId": "INDUS-MPIN",
+      "structuralSignature": "PINPAD_NUMERIC_ENTRY",
+      "regionOrder": [
+        "HEADER",
+        "PIN_INPUT",
+        "NUMERIC_KEYPAD"
+      ],
+      "exactStrings": [
+        "Enter 6-Digit MPIN",
+        "To access your account"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#8C1D40",
+        "colorSecondary": "#F0AB00"
+      }
+    },
+    {
+      "screenId": "INDUS-HOME",
+      "structuralSignature": "DASHBOARD_CARD_GRID_QUICKACTIONS",
+      "regionOrder": [
+        "STATUS",
+        "HEADER",
+        "ACCOUNT_CARD",
+        "QUICK_ACTIONS",
+        "RECENT_TRANSACTIONS",
+        "BOTTOM_NAV"
+      ],
+      "exactStrings": [
+        "Pay Bills",
+        "Savings Account",
+        "Quick Actions"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#8C1D40",
+        "colorSecondary": "#F0AB00"
+      }
+    }
+  ],
+  "appName": "IndusMobile",
+  "baselineId": "BASE-09-INDUS"
+}

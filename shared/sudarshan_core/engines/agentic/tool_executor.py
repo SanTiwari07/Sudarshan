@@ -407,7 +407,7 @@ class ToolExecutor:
         )
 
     async def _tool_tap(self, action: Dict) -> ToolResult:
-        x, y = int(action["x"]), int(action["y"])
+        x, y = int(action['x']), int(action['y'])
         # The ladder's `normalized_coordinates` rung asks for the point to be
         # re-mapped against the LIVE device resolution before it is tapped.
         # That is the rung's whole purpose: coordinates computed against a
@@ -543,7 +543,9 @@ class ToolExecutor:
         Bounded by MAX_TAP_SEQUENCE so a malformed `repeat` cannot turn into an
         unbounded input storm against the device.
         """
-        x, y = int(action["x"]), int(action["y"])
+        x, y = int(action['x']), int(action['y'])
+        if action.get('_normalize_to_device'):
+            x, y = self._normalize_to_device(x, y, action)
         repeat = max(1, min(int(action.get("repeat", 1)), MAX_TAP_SEQUENCE))
         ok = True
         for _ in range(repeat):
@@ -883,7 +885,9 @@ class ToolExecutor:
         """
         sw, sh = self.screen_size
         x = int(action.get("x", sw // 2))
-        y = int(action.get("y", sh // 2))
+        y = int(action.get('y', sh // 2))
+        if action.get('_normalize_to_device'):
+            x, y = self._normalize_to_device(x, y, action)
         field_hint = action.get("field_hint", "search")
 
         # Resolve actual value (not stored in result).

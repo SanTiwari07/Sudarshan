@@ -1,0 +1,12 @@
+@import './styles/tokens.css';
+
+.page-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.page-content {
+  padding: 16px;
+  flex: 1;
+}

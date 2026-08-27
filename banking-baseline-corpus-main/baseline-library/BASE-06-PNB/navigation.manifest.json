@@ -1,0 +1,42 @@
+{
+  "baselineId": "BASE-06-PNB",
+  "coveredRoutes": [
+    "/",
+    "/login",
+    "/mpin",
+    "/home",
+    "/accounts",
+    "/accounts/details",
+    "/accounts/history",
+    "/transfer",
+    "/transfer/amount",
+    "/transfer/review",
+    "/transfer/receipt",
+    "/more"
+  ],
+  "navigationEdges": [
+    { "from": "/", "to": "/login", "trigger": "timeout", "status": "implemented" },
+    { "from": "/login", "to": "/mpin", "trigger": "submit-mock", "status": "implemented" },
+    { "from": "/mpin", "to": "/home", "trigger": "mpin-complete-mock", "status": "implemented" },
+    { "from": "/home", "to": "/accounts", "trigger": "Account Summary Card click", "status": "implemented" },
+    { "from": "/home", "to": "/transfer", "trigger": "Quick Action Transfer", "status": "implemented" },
+    { "from": "/home", "to": "/more", "trigger": "Quick Action / Bottom Nav More", "status": "implemented" },
+    { "from": "/home", "to": "/accounts/history", "trigger": "Recent Transactions View All", "status": "implemented" },
+    { "from": "/accounts", "to": "/accounts/details", "trigger": "Account Item click", "status": "implemented" },
+    { "from": "/accounts/details", "to": "/transfer", "trigger": "Transfer button", "status": "implemented" },
+    { "from": "/accounts/details", "to": "/accounts/history", "trigger": "Statement button", "status": "implemented" },
+    { "from": "/transfer", "to": "/transfer/amount", "trigger": "Continue button", "status": "implemented" },
+    { "from": "/transfer/amount", "to": "/transfer/review", "trigger": "Proceed to Pay button", "status": "implemented" },
+    { "from": "/transfer/review", "to": "/transfer/receipt", "trigger": "Confirm Transfer + MPIN", "status": "implemented" },
+    { "from": "/transfer/receipt", "to": "/home", "trigger": "Home button", "status": "implemented" },
+    { "from": "/more", "to": "/login", "trigger": "Logout button", "status": "implemented" }
+  ],
+  "unreachableScreens": [],
+  "deadButtons": [
+    { "screen": "/login", "button": "Trouble Login?", "issue": "No action attached" },
+    { "screen": "/mpin", "button": "Forgot MPIN?", "issue": "No action attached" },
+    { "screen": "/home", "button": "Notification Bell", "issue": "No action attached" },
+    { "screen": "/transfer/receipt", "button": "Share", "issue": "No action attached" },
+    { "screen": "/more", "button": "Profile / Services List Items", "issue": "No action attached" }
+  ]
+}

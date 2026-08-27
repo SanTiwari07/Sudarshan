@@ -1,0 +1,138 @@
+.txn-history-screen {
+  background-color: var(--color-bg);
+  min-height: 100vh;
+}
+
+.txn-history-content {
+  padding: var(--space-16);
+}
+
+.txn-acc-header {
+  background-color: var(--color-surface);
+  border-radius: var(--radius-md);
+  padding: var(--space-16);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-16);
+  box-shadow: var(--elevation-1);
+}
+
+.txn-acc-type {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.txn-acc-num {
+  margin: var(--space-4) 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: monospace;
+}
+
+.txn-acc-bal {
+  text-align: right;
+}
+
+.txn-bal-label {
+  display: block;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.txn-bal-val {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.txn-filters {
+  display: flex;
+  gap: var(--space-8);
+  margin-bottom: var(--space-16);
+}
+
+.filter-btn {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  padding: var(--space-8) var(--space-16);
+  border-radius: var(--radius-full);
+  font-size: 14px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.filter-btn.active {
+  background-color: var(--color-primary);
+  color: var(--color-surface);
+  border-color: var(--color-primary);
+}
+
+.txn-list {
+  background-color: var(--color-surface);
+  border-radius: var(--radius-card);
+  padding: var(--space-8) var(--space-16);
+}
+
+.txn-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-12) 0;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.txn-item:last-child {
+  border-bottom: none;
+}
+
+.txn-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+}
+
+.txn-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: var(--color-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-primary);
+}
+
+.txn-icon.credit {
+  color: var(--color-success);
+}
+
+.txn-icon.debit {
+  color: var(--color-text-primary);
+}
+
+.txn-desc {
+  margin: 0;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.txn-date {
+  margin: var(--space-4) 0 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.txn-amount {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.txn-amount.credit {
+  color: var(--color-success);
+}
+
+.txn-amount.debit {
+  color: var(--color-text-primary);
+}

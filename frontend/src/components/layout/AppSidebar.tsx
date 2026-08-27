@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Shield, LogOut, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { LogOut, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import logoImg from '../../../logo/SUDARSHAN_LOGO_COLOUR.png';
 import { useAuth } from '../../context/AuthContext';
 import { useCaseLinks } from '../../hooks/useCaseLinks';
 import {
@@ -146,7 +147,7 @@ export default function AppSidebar({ onLogout }: AppSidebarProps) {
       <div className="h-14 border-b border-slate-800 flex items-center shrink-0">
         <Link to={links.summary} className="flex items-center min-w-0 flex-1 h-full focus:outline-none">
           <span className="w-14 h-14 flex items-center justify-center shrink-0">
-            <Shield className="h-5 w-5 text-blue-500" aria-hidden />
+            <img src={logoImg} alt="Sudarshan Logo" className="h-6 w-auto" />
           </span>
           {expanded && (
             <span className="min-w-0">

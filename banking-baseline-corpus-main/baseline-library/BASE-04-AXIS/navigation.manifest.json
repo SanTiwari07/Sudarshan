@@ -1,0 +1,40 @@
+{
+ "baselineId": "BASE-04-AXIS",
+ "entry": "AXIS-SPLASH",
+ "nodes": [
+  { "id": "AXIS-SPLASH", "route": "/splash" },
+  { "id": "AXIS-LOGIN", "route": "/login" },
+  { "id": "AXIS-MPIN", "route": "/mpin" },
+  { "id": "AXIS-HOME", "route": "/home" },
+  { "id": "AXIS-ACCOUNTS", "route": "/accounts" },
+  { "id": "AXIS-ACCOUNT_DETAILS", "route": "/accounts/:id" },
+  { "id": "AXIS-TXN_HISTORY", "route": "/accounts/:id/history" },
+  { "id": "AXIS-TRANSFER", "route": "/transfer" },
+  { "id": "AXIS-AMOUNT", "route": "/transfer/amount" },
+  { "id": "AXIS-REVIEW", "route": "/transfer/review" },
+  { "id": "AXIS-RECEIPT", "route": "/transfer/receipt" },
+  { "id": "AXIS-SERVICES", "route": "/services" },
+  { "id": "AXIS-PROFILE", "route": "/profile" }
+ ],
+ "edges": [
+  { "from": "AXIS-SPLASH", "to": "AXIS-LOGIN", "trigger": "timeout" },
+  { "from": "AXIS-LOGIN", "to": "AXIS-MPIN", "trigger": "submit" },
+  { "from": "AXIS-MPIN", "to": "AXIS-HOME", "trigger": "6-digits" },
+  { "from": "AXIS-HOME", "to": "AXIS-ACCOUNTS", "trigger": "View Statements" },
+  { "from": "AXIS-HOME", "to": "AXIS-TRANSFER", "trigger": "Transfer / Pay Bills" },
+  { "from": "AXIS-HOME", "to": "AXIS-SERVICES", "trigger": "Invest" },
+  { "from": "AXIS-HOME", "to": "AXIS-TXN_HISTORY", "trigger": "View All Transactions" },
+  { "from": "AXIS-ACCOUNTS", "to": "AXIS-ACCOUNT_DETAILS", "trigger": "select-account" },
+  { "from": "AXIS-ACCOUNT_DETAILS", "to": "AXIS-TXN_HISTORY", "trigger": "Recent Transactions" },
+  { "from": "AXIS-TRANSFER", "to": "AXIS-AMOUNT", "trigger": "select-payee" },
+  { "from": "AXIS-AMOUNT", "to": "AXIS-REVIEW", "trigger": "Continue" },
+  { "from": "AXIS-REVIEW", "to": "AXIS-RECEIPT", "trigger": "Confirm & Pay" },
+  { "from": "AXIS-RECEIPT", "to": "AXIS-HOME", "trigger": "Back to Home" },
+  { "from": "AXIS-PROFILE", "to": "AXIS-LOGIN", "trigger": "Logout" },
+  { "from": "ANY_BOTTOM_NAV", "to": "AXIS-HOME", "trigger": "nav-Home" },
+  { "from": "ANY_BOTTOM_NAV", "to": "AXIS-ACCOUNTS", "trigger": "nav-Accounts" },
+  { "from": "ANY_BOTTOM_NAV", "to": "AXIS-TRANSFER", "trigger": "nav-Pay" },
+  { "from": "ANY_BOTTOM_NAV", "to": "AXIS-SERVICES", "trigger": "nav-Services" },
+  { "from": "ANY_BOTTOM_NAV", "to": "AXIS-PROFILE", "trigger": "nav-Profile" }
+ ]
+}

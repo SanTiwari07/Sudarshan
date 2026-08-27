@@ -1,0 +1,34 @@
+{
+  "baselineId": "BASE-05-BOB",
+  "entry": "BOB-SPLASH",
+  "nodes": [
+    { "id": "BOB-SPLASH", "route": "/" },
+    { "id": "BOB-LOGIN", "route": "/login" },
+    { "id": "BOB-MPIN", "route": "/mpin" },
+    { "id": "BOB-HOME", "route": "/home" },
+    { "id": "BOB-ACCOUNTS", "route": "/accounts" },
+    { "id": "BOB-ACCOUNT_DETAILS", "route": "/accounts/:id" },
+    { "id": "BOB-TXN_HISTORY", "route": "/accounts/:id/transactions" },
+    { "id": "BOB-TRANSFER", "route": "/transfer" },
+    { "id": "BOB-AMOUNT", "route": "/transfer/amount" },
+    { "id": "BOB-REVIEW", "route": "/transfer/review" },
+    { "id": "BOB-RECEIPT", "route": "/transfer/receipt" },
+    { "id": "BOB-SERVICES", "route": "/services" }
+  ],
+  "edges": [
+    { "from": "BOB-SPLASH", "to": "BOB-LOGIN", "trigger": "timeout" },
+    { "from": "BOB-LOGIN", "to": "BOB-MPIN", "trigger": "submit-mock" },
+    { "from": "BOB-MPIN", "to": "BOB-HOME", "trigger": "mpin-complete-mock" },
+    { "from": "BOB-HOME", "to": "BOB-ACCOUNTS", "trigger": "accounts-card" },
+    { "from": "BOB-HOME", "to": "BOB-TRANSFER", "trigger": "transfer-quick-action" },
+    { "from": "BOB-HOME", "to": "BOB-SERVICES", "trigger": "services-quick-action" },
+    { "from": "BOB-ACCOUNTS", "to": "BOB-ACCOUNT_DETAILS", "trigger": "select-account" },
+    { "from": "BOB-ACCOUNT_DETAILS", "to": "BOB-TXN_HISTORY", "trigger": "view-statement" },
+    { "from": "BOB-ACCOUNT_DETAILS", "to": "BOB-TRANSFER", "trigger": "fund-transfer" },
+    { "from": "BOB-TRANSFER", "to": "BOB-AMOUNT", "trigger": "select-transfer-type" },
+    { "from": "BOB-AMOUNT", "to": "BOB-REVIEW", "trigger": "continue" },
+    { "from": "BOB-REVIEW", "to": "BOB-RECEIPT", "trigger": "confirm-mock" },
+    { "from": "BOB-RECEIPT", "to": "BOB-HOME", "trigger": "back-to-home" },
+    { "from": "BOB-SERVICES", "to": "BOB-HOME", "trigger": "back-nav" }
+  ]
+}

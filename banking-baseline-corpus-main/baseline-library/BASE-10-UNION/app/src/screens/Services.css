@@ -1,0 +1,62 @@
+.union-services {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: var(--color-bg);
+  padding-bottom: 80px;
+  overflow-y: auto;
+}
+
+.services-content {
+  padding: var(--space-16);
+}
+
+.service-group {
+  margin-bottom: 2rem;
+}
+
+.service-group h3 {
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+  margin-left: 0.5rem;
+}
+
+.service-list {
+  background: var(--color-surface);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.service-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid var(--color-divider);
+  cursor: pointer;
+}
+
+.service-item:last-child {
+  border-bottom: none;
+}
+
+.service-item-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.service-icon {
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.service-item-left span {
+  color: var(--color-text-primary);
+  font-weight: 500;
+}

@@ -1,0 +1,76 @@
+﻿{
+  "bank": "Kotak Mahindra Bank",
+  "screens": [
+    {
+      "screenId": "KOTAK-LOGIN",
+      "structuralSignature": "AUTH_FORM_VERTICAL_PRIMARY_CTA",
+      "regionOrder": [
+        "HEADER",
+        "PRIMARY_CONTENT",
+        "FOOTER_CTA"
+      ],
+      "exactStrings": [
+        "Password",
+        "Enter CRN",
+        "Welcome back",
+        "Enter your CRN or Customer ID to login",
+        "CRN / Customer ID",
+        "Forgot CRN?",
+        "Continue"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#ED1C24",
+        "colorSecondary": "#003366"
+      }
+    },
+    {
+      "screenId": "KOTAK-MPIN",
+      "structuralSignature": "PINPAD_NUMERIC_ENTRY",
+      "regionOrder": [
+        "HEADER",
+        "PIN_INPUT",
+        "NUMERIC_KEYPAD"
+      ],
+      "exactStrings": [
+        "Enter MPIN",
+        "Enter 6-digit MPIN for your account"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#ED1C24",
+        "colorSecondary": "#003366"
+      }
+    },
+    {
+      "screenId": "KOTAK-HOME",
+      "structuralSignature": "DASHBOARD_CARD_GRID_QUICKACTIONS",
+      "regionOrder": [
+        "STATUS",
+        "HEADER",
+        "ACCOUNT_CARD",
+        "QUICK_ACTIONS",
+        "RECENT_TRANSACTIONS",
+        "BOTTOM_NAV"
+      ],
+      "exactStrings": [
+        "Welcome back,",
+        "View All",
+        "Available Balance",
+        "Statements",
+        "Transfer Money",
+        "QUICK ACTIONS",
+        "Transfer",
+        "Money",
+        "Scan",
+        "Any QR",
+        "Pay",
+        "Bills"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#ED1C24",
+        "colorSecondary": "#003366"
+      }
+    }
+  ],
+  "appName": "Kotak811",
+  "baselineId": "BASE-08-KOTAK"
+}

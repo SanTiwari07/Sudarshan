@@ -609,9 +609,10 @@ def _make_launch_timeline() -> LaunchTimeline:
 #: environment variable and is re-rendered from a Python bool, never
 #: interpolated.
 _AGENT_DEOPT_TOKEN = "var DEOPT_BOOT_IMAGE_FORCED = false;"
+_AGENT_TARGET_PACKAGE_TOKEN = 'var TARGET_PACKAGE_NAME = "";'
 
 
-def _apply_agent_config(script_source: str) -> str:
+def _apply_agent_config(script_source: str, package_name: str = "") -> str:
     """
     Render host-side agent configuration into the compiled bundle.
 
@@ -622,22 +623,34 @@ def _apply_agent_config(script_source: str) -> str:
     """
     raw = (os.getenv("SUDARSHAN_DEOPT_BOOT_IMAGE") or "").strip().lower()
     forced = raw in {"1", "true", "yes", "on"}
-    if not forced:
-        return script_source
-    if _AGENT_DEOPT_TOKEN not in script_source:
-        logger.warning(
-            "[Frida] SUDARSHAN_DEOPT_BOOT_IMAGE is set but the agent bundle has "
-            "no configuration slot - rebuild banking_trojan.bundle.js"
+    if forced and _AGENT_DEOPT_TOKEN in script_source:
+        logger.info(
+            "[Frida] Boot-image deoptimization FORCED on by "
+            "SUDARSHAN_DEOPT_BOOT_IMAGE - expect a multi-second device stall after "
+            "attach, and ANR dialogs over the sample on API 34+"
         )
-        return script_source
-    logger.info(
-        "[Frida] Boot-image deoptimization FORCED on by "
-        "SUDARSHAN_DEOPT_BOOT_IMAGE - expect a multi-second device stall after "
-        "attach, and ANR dialogs over the sample on API 34+"
-    )
-    return script_source.replace(
-        _AGENT_DEOPT_TOKEN, "var DEOPT_BOOT_IMAGE_FORCED = true;", 1,
-    )
+        script_source = script_source.replace(
+            _AGENT_DEOPT_TOKEN, "var DEOPT_BOOT_IMAGE_FORCED = true;", 1,
+        )
+    if package_name and _AGENT_TARGET_PACKAGE_TOKEN in script_source:
+        clean_pkg = package_name.replace('"', '').replace('\\', '')
+        script_source = script_source.replace(
+            _AGENT_TARGET_PACKAGE_TOKEN, f'var TARGET_PACKAGE_NAME = "{clean_pkg}";', 1,
+        )
+
+    # Re-calculate package header size if the bundle uses Frida package format
+    if ("📦\n" in script_source[:10] or "\U0001f4e6\n" in script_source[:10]) and ("✄\n" in script_source or "\u2704\n" in script_source):
+        sep = "✄\n" if "✄\n" in script_source else "\u2704\n"
+        header_part, body_part = script_source.split(sep, 1)
+        header_lines = header_part.strip().split("\n")
+        body_bytes = body_part.encode("utf-8")
+        if len(header_lines) >= 2:
+            file_info = header_lines[1].split(" ", 1)
+            file_name = file_info[1] if len(file_info) > 1 else "/banking_trojan.js"
+            header_lines[1] = f"{len(body_bytes)} {file_name}"
+            script_source = "\n".join(header_lines) + "\n" + sep + body_part
+
+    return script_source
 
 
 def _timeline_to_seconds(tl: LaunchTimeline) -> Dict[str, Optional[float]]:
@@ -4127,7 +4140,10 @@ class FridaSession:
             logger.error(f"Frida hooks script not found: {_HOOKS_SCRIPT}")
             return False
 
-        script_source = _apply_agent_config(_HOOKS_SCRIPT.read_text(encoding="utf-8"))
+        script_source = _apply_agent_config(
+            _HOOKS_SCRIPT.read_text(encoding="utf-8"),
+            package_name=self.package_name,
+        )
 
         try:
             logger.info(f"[Frida] Connecting to device {self.device_serial}")
@@ -5056,16 +5072,20 @@ class FridaSession:
                         logger.warning(f"[Frida] Post-spawn attach attempt {attempt+1} failed: {e}")
                         time.sleep(2)
                 if not self._session:
-                    raise Exception("Failed to attach to spawned process")
-                is_spawned = True
+                    logger.warning("[Frida] Failed to attach to spawned process - will explore via UI")
+                else:
+                    is_spawned = True
 
             # Already loaded, while the process was suspended, by
             # _spawn_gated_launch. Loading it again would install every hook
             # twice and double-count every event the sample produces.
-            if self._script is None:
-                self._script = self._session.create_script(script_source)
-                self._script.on("message", self._on_message)
-                self._script.load()
+            if self._script is None and self._session is not None:
+                try:
+                    self._script = self._session.create_script(script_source)
+                    self._script.on("message", self._on_message)
+                    self._script.load()
+                except Exception as script_load_err:
+                    logger.warning(f"[Frida] Script loading failed: {script_load_err}")
 
             # ── Instrument the package that actually draws the journey ────────
             # The target's own session stays primary and is never replaced. A
@@ -5080,10 +5100,12 @@ class FridaSession:
             if _late and _late not in self._companion_sessions:
                 self._attach_companion(device, _late, script_source)
 
-
             if is_spawned:
-                logger.info(f"[Frida] Resuming spawned process {pid} AFTER script load...")
-                device.resume(pid)
+                try:
+                    logger.info(f"[Frida] Resuming spawned process {pid} AFTER script load...")
+                    device.resume(pid)
+                except Exception as resume_err:
+                    logger.warning(f"[Frida] Resume failed: {resume_err}")
 
                 import shlex
                 safe_pkg = shlex.quote(self.package_name)

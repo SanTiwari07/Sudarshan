@@ -1,0 +1,78 @@
+﻿{
+  "bank": "Union Bank of India",
+  "screens": [
+    {
+      "screenId": "UNION-LOGIN",
+      "structuralSignature": "AUTH_FORM_VERTICAL_PRIMARY_CTA",
+      "regionOrder": [
+        "HEADER",
+        "PRIMARY_CONTENT",
+        "FOOTER_CTA"
+      ],
+      "exactStrings": [
+        "Password",
+        "Login",
+        "Forgot Password?",
+        "Customer ID / User ID",
+        "Enter ID",
+        "Enter Password",
+        "Welcome to Vyom",
+        "Login to continue"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#1A365D",
+        "colorSecondary": "#C53030"
+      }
+    },
+    {
+      "screenId": "UNION-MPIN",
+      "structuralSignature": "PINPAD_NUMERIC_ENTRY",
+      "regionOrder": [
+        "HEADER",
+        "PIN_INPUT",
+        "NUMERIC_KEYPAD"
+      ],
+      "exactStrings": [
+        "Enter Login PIN",
+        "Please enter your 6-digit MPIN",
+        "Forgot Login PIN?"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#1A365D",
+        "colorSecondary": "#C53030"
+      }
+    },
+    {
+      "screenId": "UNION-HOME",
+      "structuralSignature": "DASHBOARD_CARD_GRID_QUICKACTIONS",
+      "regionOrder": [
+        "STATUS",
+        "HEADER",
+        "ACCOUNT_CARD",
+        "QUICK_ACTIONS",
+        "RECENT_TRANSACTIONS",
+        "BOTTOM_NAV"
+      ],
+      "exactStrings": [
+        "Vyom",
+        "Savings Account",
+        "View Statement",
+        "Transfer",
+        "Pay Cards",
+        "Services",
+        "Scan & Pay",
+        "Pre-approved Loan",
+        "FD / RD",
+        "Recent Transactions",
+        "Amazon",
+        "Salary Credit"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#1A365D",
+        "colorSecondary": "#C53030"
+      }
+    }
+  ],
+  "appName": "Vyom",
+  "baselineId": "BASE-10-UNION"
+}

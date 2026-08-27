@@ -1,0 +1,113 @@
+.union-amount {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: var(--color-bg);
+}
+
+.amount-content {
+  padding: var(--space-16);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.payee-summary {
+  background: var(--color-surface);
+  padding: 1.5rem;
+  border-radius: var(--radius-card);
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.payee-summary span {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.payee-summary h3 {
+  margin: 0.5rem 0 0.25rem 0;
+  color: var(--color-text-primary);
+}
+
+.payee-summary p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+}
+
+.amount-input-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 2rem 0;
+  gap: 0.5rem;
+}
+
+.currency-symbol {
+  font-size: 2rem;
+  color: var(--color-text-primary);
+}
+
+.amount-input {
+  font-size: 3rem;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: center;
+  outline: none;
+  color: var(--color-text-primary);
+}
+
+.amount-input::placeholder {
+  color: var(--color-divider);
+}
+
+.remarks-input {
+  margin-bottom: 2rem;
+}
+
+.remarks-input input {
+  width: 100%;
+  padding: 1rem;
+  border: 1px solid var(--color-divider);
+  border-radius: 8px;
+  background: var(--color-surface);
+  font-size: 1rem;
+  outline: none;
+}
+
+.from-account {
+  margin-bottom: auto;
+}
+
+.from-account > span {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.account-selector {
+  background: var(--color-surface);
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-primary);
+}
+
+.account-selector strong {
+  display: block;
+  color: var(--color-text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.account-selector p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.amount-actions {
+  margin-top: 2rem;
+  margin-bottom: 2rem;
+}

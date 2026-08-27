@@ -1,0 +1,22 @@
+﻿{
+    "isPrototype":  true,
+    "screens":  [
+                    "SPLASH",
+                    "LOGIN",
+                    "MPIN",
+                    "HOME",
+                    "ACCOUNTS",
+                    "TRANSFER",
+                    "SERVICES",
+                    "PROFILE"
+                ],
+    "corpusVersion":  "1.0",
+    "network":  "none",
+    "appName":  "HDFC Bank MobileBanking",
+    "sector":  "retail_banking",
+    "researchDate":  "2026-08-12",
+    "baselineId":  "BASE-02-HDFC",
+    "mockDataOnly":  true,
+    "bank":  "HDFC Bank",
+    "shortcode":  "HDFC"
+}

@@ -1,0 +1,50 @@
+.login-screen {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: var(--color-bg);
+  padding: var(--space-24);
+}
+
+.login-header {
+  margin-top: 20vh;
+  margin-bottom: var(--space-48);
+  text-align: center;
+}
+
+.login-title {
+  color: var(--color-primary);
+  font-size: 28px;
+  margin: 0;
+}
+
+.login-subtitle {
+  color: var(--color-text-secondary);
+  margin-top: var(--space-8);
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+}
+
+.login-actions {
+  margin-top: var(--space-16);
+}
+
+.login-links {
+  margin-top: auto;
+  margin-bottom: var(--space-24);
+  display: flex;
+  justify-content: space-between;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  color: var(--color-secondary);
+  font-weight: 500;
+  cursor: pointer;
+  padding: var(--space-8);
+}

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">IndusMobile</string>
+    <string name="title_activity_main">IndusMobile</string>
+    <string name="package_name">com.fss.indus</string>
+    <string name="custom_url_scheme">com.fss.indus</string>
+</resources>

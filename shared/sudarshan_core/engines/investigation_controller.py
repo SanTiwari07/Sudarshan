@@ -126,7 +126,7 @@ _BASE_NAVIGATION: FrozenSet[str] = frozenset({
 
 ALLOWED_ACTIONS: Dict[InvestigationState, FrozenSet[str]] = {
     InvestigationState.BOOTSTRAP: _READ_ONLY,
-    InvestigationState.APP_LAUNCH: _READ_ONLY | {"start_activity", "press_back"},
+    InvestigationState.APP_LAUNCH: _BASE_NAVIGATION | {"start_activity"},
     InvestigationState.INITIAL_OBSERVATION: _BASE_NAVIGATION,
     # A modal permission dialog: accept, refuse, or tap within it - plus the
     # read-only tools, so a blocked dialog can still be inspected. Navigation

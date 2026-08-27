@@ -1,0 +1,15 @@
+# IDE and editor settings
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Dependencies and build outputs
+**/node_modules/
+**/dist/
+**/build/
+**/.gradle/
+
+# System files
+.DS_Store
+Thumbs.db

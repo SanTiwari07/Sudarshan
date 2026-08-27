@@ -1,0 +1,184 @@
+.accounts-screen {
+  padding-bottom: 80px;
+  background-color: var(--color-background);
+  min-height: 100vh;
+}
+
+.screen-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background-color: var(--color-primary);
+  color: white;
+}
+
+.back-btn {
+  background: none;
+  border: none;
+  color: white;
+  padding: 8px 0;
+  cursor: pointer;
+}
+
+.screen-header h1 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.account-detail-card {
+  margin: 20px;
+  background: var(--color-surface);
+  border-radius: var(--radius-card);
+  padding: 24px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.acc-info p {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin: 0 0 4px;
+}
+
+.acc-info h3 {
+  font-size: 18px;
+  color: var(--color-text-primary);
+  margin: 0 0 8px;
+  letter-spacing: 1px;
+}
+
+.acc-type-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: rgba(11, 61, 145, 0.1);
+  color: var(--color-primary);
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.bank-icon-large {
+  color: var(--color-secondary);
+  opacity: 0.8;
+}
+
+.acc-balance {
+  margin-bottom: 24px;
+}
+
+.acc-balance p {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  margin: 0 0 8px;
+}
+
+.acc-balance h2 {
+  font-size: 32px;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.acc-actions {
+  display: flex;
+  gap: 16px;
+  border-top: 1px solid var(--color-divider);
+  padding-top: 16px;
+}
+
+.acc-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 8px 0;
+}
+
+.transactions-section {
+  padding: 0 20px;
+}
+
+.icon-btn {
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  padding: 8px;
+}
+
+.txn-list {
+  background: var(--color-surface);
+  border-radius: var(--radius-card);
+  padding: 8px 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.txn-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.txn-item:last-child {
+  border-bottom: none;
+}
+
+.txn-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.txn-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.txn-dot.debit {
+  background-color: var(--color-error);
+}
+
+.txn-dot.credit {
+  background-color: var(--color-success);
+}
+
+.txn-left h4 {
+  font-size: 14px;
+  color: var(--color-text-primary);
+  margin: 0 0 4px;
+}
+
+.txn-left p {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.txn-right {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.txn-right.debit {
+  color: var(--color-text-primary);
+}
+
+.txn-right.credit {
+  color: var(--color-success);
+}

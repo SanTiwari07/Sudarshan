@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Colors */
+    --color-primary: #EB6E1F;     /* Baroda orange */
+    --color-secondary: #B23A18;   /* deep orange */
+    --color-accent: #F4A81D;      /* amber */
+    --color-bg: #FBF6F1;          /* warm light bg */
+    --color-surface: #FFFFFF;     /* cards */
+    --color-text-primary: #2B211A; 
+    --color-text-secondary: #6E6157;
+    --color-divider: #EEE4DA;
+    --color-success: #1E8E4E;
+    --color-warning: #E8A100;
+    --color-error: #C0392B;
+    
+    /* Typography & Layout */
+    --radius-card: 16px;
+    --space-16: 16px;
+    --font-heading: 'Inter', system-ui;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+    font-family: system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+  }
+}

@@ -165,6 +165,9 @@ function isDuplicate(key) {
   return false;
 }
 
+// ─── Target Package Configuration Slot ────────────────────────────────────────
+var TARGET_PACKAGE_NAME = "";
+
 // ─── Runtime Context ──────────────────────────────────────────────────────────
 var runtimeContext = {
   foreground_app: 'Unknown',
@@ -175,7 +178,7 @@ var runtimeContext = {
   hooks_active: 0,
   hook_errors: 0,
   process_id: Process.id,
-  package_name: 'Unknown',
+  package_name: TARGET_PACKAGE_NAME || 'Unknown',
 };
 
 // ─── Event Collector (mirrors Python collected_events keys exactly) ───────────
@@ -611,27 +614,23 @@ function initHooks() {
             {
               try {
                 var pkg = runtimeContext.package_name || '';
-                // "com.example.app" -> "com.example." so sibling packages the
-                // sample also ships are covered, without opening it up to
-                // every vendor library in the process.
                 var prefix = '';
                 var parts = pkg.split('.');
-                if (parts.length >= 2) prefix = parts[0] + '.' + parts[1] + '.';
-                var wrapped = 0;
-                Java.enumerateLoadedClasses({
-                  onMatch: function(className) {
-                    if (wrapped >= ACCESSIBILITY_SUBCLASS_SCAN_LIMIT) return;
-                    if (!className || className.indexOf('$') !== -1) return;
-                    // Belongs to the sample? If the package is not known yet,
-                    // fall back to names that at least mention accessibility,
-                    // rather than wrapping everything.
-                    var mine = prefix
-                      ? className.indexOf(prefix) === 0
-                      : /accessibilit/i.test(className);
-                    if (!mine) return;
-                    if (className.indexOf('android.') === 0 ||
-                        className.indexOf('java.') === 0 ||
-                        className.indexOf('dalvik.') === 0) return;
+                if (parts.length >= 2 && parts[0] !== 'Unknown') prefix = parts[0] + '.' + parts[1] + '.';
+                if (prefix) {
+                  var wrapped = 0;
+                  Java.enumerateLoadedClasses({
+                    onMatch: function(className) {
+                      if (wrapped >= ACCESSIBILITY_SUBCLASS_SCAN_LIMIT) return;
+                      if (!className || className.indexOf('$') !== -1) return;
+                      if (className.indexOf(prefix) !== 0) return;
+                      if (className.indexOf('android.') === 0 ||
+                          className.indexOf('androidx.') === 0 ||
+                          className.indexOf('com.android.') === 0 ||
+                          className.indexOf('com.google.') === 0 ||
+                          className.indexOf('kotlin.') === 0 ||
+                          className.indexOf('java.') === 0 ||
+                          className.indexOf('dalvik.') === 0) return;
                       try {
                         wrapped++;
                         var targetCls = Java.use(className);
@@ -649,31 +648,24 @@ function initHooks() {
                               package: pkgName,
                               description: 'Accessibility event handled by custom service subclass: ' + className,
                             });
-                            // Accessibility events carry the package of the app
-                            // being observed - the working replacement for
-                            // getRunningTasks(), restricted since API 22, and
-                            // exactly how an ATS trojan knows a banking app came
-                            // to the foreground. Moved here from the framework
-                            // base-class hook that had to be removed.
                             _noteForegroundPackage(pkgName, className + '.onAccessibilityEvent');
                             return this.onAccessibilityEvent(event);
                           };
                           registerHook(className + '.onAccessibilityEvent');
                         }
                       } catch(e) {}
-                  },
-                  onComplete: function() {
-                    // Reported so "no custom accessibility service" can be
-                    // told apart from "we never looked properly".
-                    send({
-                      type: 'diag',
-                      msg: 'accessibility_subclass_scan',
-                      prefix: prefix || '(none - name heuristic used)',
-                      classes_wrapped: wrapped,
-                      limit: ACCESSIBILITY_SUBCLASS_SCAN_LIMIT,
-                    });
-                  }
-                });
+                    },
+                    onComplete: function() {
+                      send({
+                        type: 'diag',
+                        msg: 'accessibility_subclass_scan',
+                        prefix: prefix,
+                        classes_wrapped: wrapped,
+                        limit: ACCESSIBILITY_SUBCLASS_SCAN_LIMIT,
+                      });
+                    }
+                  });
+                }
               } catch (e) {}
             }
           }

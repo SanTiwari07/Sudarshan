@@ -1,0 +1,84 @@
+.union-txn-history {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: var(--color-bg);
+  padding-bottom: 80px;
+}
+
+.txn-tools {
+  display: flex;
+  gap: 1rem;
+  padding: var(--space-16);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.search-bar {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  background: var(--color-bg);
+  padding: 0.5rem 1rem;
+  border-radius: 24px;
+  gap: 0.5rem;
+}
+
+.search-bar input {
+  border: none;
+  background: transparent;
+  width: 100%;
+  outline: none;
+  font-size: 0.9rem;
+}
+
+.filter-btn {
+  background: transparent;
+  border: 1px solid var(--color-divider);
+  border-radius: 8px;
+  width: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-primary);
+  cursor: pointer;
+}
+
+.txn-list {
+  background: var(--color-surface);
+  margin-top: 1rem;
+}
+
+.txn-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem var(--space-16);
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.txn-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.txn-desc {
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.txn-date {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.txn-amount.debit {
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.txn-amount.credit {
+  color: var(--color-success);
+  font-weight: 500;
+}

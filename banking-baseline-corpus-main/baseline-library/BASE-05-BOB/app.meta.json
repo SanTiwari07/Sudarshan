@@ -1,0 +1,22 @@
+﻿{
+    "isPrototype":  true,
+    "screens":  [
+                    "SPLASH",
+                    "LOGIN",
+                    "MPIN",
+                    "HOME",
+                    "ACCOUNTS",
+                    "TRANSFER",
+                    "SERVICES",
+                    "PROFILE"
+                ],
+    "corpusVersion":  "1.0",
+    "network":  "none",
+    "appName":  "bob World",
+    "sector":  "retail_banking",
+    "researchDate":  "2026-08-12",
+    "baselineId":  "BASE-05-BOB",
+    "mockDataOnly":  true,
+    "bank":  "Bank of Baroda",
+    "shortcode":  "BOB"
+}

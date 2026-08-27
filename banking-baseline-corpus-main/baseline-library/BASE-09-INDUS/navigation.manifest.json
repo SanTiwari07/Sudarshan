@@ -1,0 +1,33 @@
+{
+  "baselineId": "BASE-09-INDUS",
+  "entry": "INDUS-SPLASH",
+  "nodes": [
+    { "id": "INDUS-SPLASH", "route": "/" },
+    { "id": "INDUS-LOGIN", "route": "/login" },
+    { "id": "INDUS-MPIN", "route": "/mpin" },
+    { "id": "INDUS-HOME", "route": "/home" },
+    { "id": "INDUS-ACCOUNTS", "route": "/accounts" },
+    { "id": "INDUS-ACCOUNT_DETAILS", "route": "/accounts/:id" },
+    { "id": "INDUS-TXN_HISTORY", "route": "/accounts/:id/transactions" },
+    { "id": "INDUS-TRANSFER", "route": "/transfer" },
+    { "id": "INDUS-AMOUNT", "route": "/transfer/amount" },
+    { "id": "INDUS-REVIEW", "route": "/transfer/review" },
+    { "id": "INDUS-RECEIPT", "route": "/transfer/receipt" },
+    { "id": "INDUS-PROFILE", "route": "/profile" }
+  ],
+  "edges": [
+    { "from": "INDUS-SPLASH", "to": "INDUS-LOGIN", "trigger": "timeout" },
+    { "from": "INDUS-LOGIN", "to": "INDUS-MPIN", "trigger": "submit-mock" },
+    { "from": "INDUS-MPIN", "to": "INDUS-HOME", "trigger": "mpin-complete-mock" },
+    { "from": "INDUS-HOME", "to": "INDUS-ACCOUNTS", "trigger": "tap-account-card" },
+    { "from": "INDUS-HOME", "to": "INDUS-TRANSFER", "trigger": "tap-quick-action" },
+    { "from": "INDUS-HOME", "to": "INDUS-PROFILE", "trigger": "bottom-nav" },
+    { "from": "INDUS-ACCOUNTS", "to": "INDUS-ACCOUNT_DETAILS", "trigger": "tap-account" },
+    { "from": "INDUS-ACCOUNT_DETAILS", "to": "INDUS-TXN_HISTORY", "trigger": "tap-view-transactions" },
+    { "from": "INDUS-TRANSFER", "to": "INDUS-AMOUNT", "trigger": "tap-payee" },
+    { "from": "INDUS-AMOUNT", "to": "INDUS-REVIEW", "trigger": "continue" },
+    { "from": "INDUS-REVIEW", "to": "INDUS-RECEIPT", "trigger": "confirm-mock" },
+    { "from": "INDUS-RECEIPT", "to": "INDUS-HOME", "trigger": "tap-home" },
+    { "from": "INDUS-PROFILE", "to": "INDUS-LOGIN", "trigger": "logout" }
+  ]
+}

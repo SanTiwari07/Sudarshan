@@ -1,0 +1,29 @@
+.chip {
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chip-default {
+  background-color: var(--color-divider);
+  color: var(--color-text-primary);
+}
+
+.chip-success {
+  background-color: #E8F5E9;
+  color: var(--color-success);
+}
+
+.chip-warning {
+  background-color: #FFF8E1;
+  color: var(--color-warning);
+}
+
+.chip-error {
+  background-color: #FFEBEE;
+  color: var(--color-error);
+}

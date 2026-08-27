@@ -1,0 +1,96 @@
+{
+  "baselineId": "BASE-08-KOTAK",
+  "screens": [
+    {
+      "id": "KOTAK-SPLASH",
+      "route": "/",
+      "status": "implemented"
+    },
+    {
+      "id": "KOTAK-LOGIN",
+      "route": "/login",
+      "status": "implemented"
+    },
+    {
+      "id": "KOTAK-MPIN",
+      "route": "/mpin",
+      "status": "implemented"
+    },
+    {
+      "id": "KOTAK-HOME",
+      "route": "/home",
+      "status": "implemented"
+    },
+    {
+      "id": "KOTAK-ACCOUNTS",
+      "route": "/accounts",
+      "status": "implemented"
+    },
+    {
+      "id": "KOTAK-ACCOUNT_DETAILS",
+      "route": "/accounts/details",
+      "status": "implemented"
+    },
+    {
+      "id": "KOTAK-TXN_HISTORY",
+      "route": "/transactions",
+      "status": "implemented"
+    },
+    {
+      "id": "KOTAK-TRANSFER",
+      "route": "/transfer",
+      "status": "implemented"
+    },
+    {
+      "id": "KOTAK-AMOUNT",
+      "route": "/transfer/amount",
+      "status": "implemented"
+    },
+    {
+      "id": "KOTAK-REVIEW",
+      "route": "/transfer/review",
+      "status": "implemented"
+    },
+    {
+      "id": "KOTAK-RECEIPT",
+      "route": "/transfer/receipt",
+      "status": "implemented"
+    },
+    {
+      "id": "KOTAK-PROFILE",
+      "route": "/profile",
+      "status": "implemented"
+    },
+    {
+      "id": "KOTAK-SERVICES",
+      "route": "/services",
+      "status": "implemented"
+    }
+  ],
+  "deadButtons": [
+    "Forgot CRN? on Login screen (no handler)",
+    "Pay Bills on Home screen (loops to /home)",
+    "Recharge on Home screen (loops to /home)",
+    "Apply Now on Home screen (no handler)",
+    "Personal Details on Profile screen (no handler)",
+    "Change MPIN on Profile screen (no handler)",
+    "Manage Fingerprint / Face ID on Profile screen (no handler)",
+    "Help Center on Profile screen (no handler)",
+    "Contact Us on Profile screen (no handler)",
+    "Card Services on Services screen (no handler)",
+    "Cheque Book Request on Services screen (no handler)",
+    "Update KYC on Services screen (no handler)"
+  ],
+  "unreachableScreens": [],
+  "backNavigation": [
+    "Accounts: uses navigate(-1)",
+    "AccountDetails: uses navigate(-1)",
+    "TxnHistory: uses navigate(-1)",
+    "Transfer: navigates explicitly to /home",
+    "Amount: uses navigate(-1)",
+    "Review: uses navigate(-1)",
+    "Receipt: no back button (uses home button)",
+    "Profile: uses navigate(-1)",
+    "Services: uses navigate(-1)"
+  ]
+}

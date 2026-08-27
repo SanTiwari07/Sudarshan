@@ -1,5 +1,5 @@
 📦
-530982 /banking_trojan.js
+531247 /banking_trojan.js
 ✄
 var __defProp = Object.defineProperty;
 var __export = (target, all) => {
@@ -13562,6 +13562,7 @@ function isDuplicate(key) {
   }
   return false;
 }
+var TARGET_PACKAGE_NAME = "";
 var runtimeContext = {
   foreground_app: "Unknown",
   current_activity: "Unknown",
@@ -13571,7 +13572,7 @@ var runtimeContext = {
   hooks_active: 0,
   hook_errors: 0,
   process_id: Process.id,
-  package_name: "Unknown"
+  package_name: TARGET_PACKAGE_NAME || "Unknown"
 };
 var eventCounts = {
   // ── Scored ───────────────────────────────────────────────────────────────
@@ -13827,57 +13828,58 @@ function initHooks() {
                 var pkg = runtimeContext.package_name || "";
                 var prefix = "";
                 var parts = pkg.split(".");
-                if (parts.length >= 2) prefix = parts[0] + "." + parts[1] + ".";
-                var wrapped = 0;
-                Java.enumerateLoadedClasses({
-                  onMatch: function(className) {
-                    if (wrapped >= ACCESSIBILITY_SUBCLASS_SCAN_LIMIT) return;
-                    if (!className || className.indexOf("$") !== -1) return;
-                    var mine = prefix ? className.indexOf(prefix) === 0 : /accessibilit/i.test(className);
-                    if (!mine) return;
-                    if (className.indexOf("android.") === 0 || className.indexOf("java.") === 0 || className.indexOf("dalvik.") === 0) return;
-                    try {
-                      wrapped++;
-                      var targetCls = Java.use(className);
-                      if (targetCls && targetCls.onAccessibilityEvent) {
-                        targetCls.onAccessibilityEvent.implementation = function(event) {
-                          var eventType = -1;
-                          var pkgName = null;
-                          try {
-                            eventType = event.getEventType();
-                          } catch (e) {
-                          }
-                          try {
-                            var pn = event.getPackageName();
-                            pkgName = pn ? pn.toString() : null;
-                          } catch (e) {
-                          }
-                          emit("accessibility", {
-                            hook: className + ".onAccessibilityEvent",
-                            class_name: className,
-                            severity: "CRITICAL",
-                            event_type: eventType,
-                            package: pkgName,
-                            description: "Accessibility event handled by custom service subclass: " + className
-                          });
-                          _noteForegroundPackage(pkgName, className + ".onAccessibilityEvent");
-                          return this.onAccessibilityEvent(event);
-                        };
-                        registerHook(className + ".onAccessibilityEvent");
+                if (parts.length >= 2 && parts[0] !== "Unknown") prefix = parts[0] + "." + parts[1] + ".";
+                if (prefix) {
+                  var wrapped = 0;
+                  Java.enumerateLoadedClasses({
+                    onMatch: function(className) {
+                      if (wrapped >= ACCESSIBILITY_SUBCLASS_SCAN_LIMIT) return;
+                      if (!className || className.indexOf("$") !== -1) return;
+                      if (className.indexOf(prefix) !== 0) return;
+                      if (className.indexOf("android.") === 0 || className.indexOf("androidx.") === 0 || className.indexOf("com.android.") === 0 || className.indexOf("com.google.") === 0 || className.indexOf("kotlin.") === 0 || className.indexOf("java.") === 0 || className.indexOf("dalvik.") === 0) return;
+                      try {
+                        wrapped++;
+                        var targetCls = Java.use(className);
+                        if (targetCls && targetCls.onAccessibilityEvent) {
+                          targetCls.onAccessibilityEvent.implementation = function(event) {
+                            var eventType = -1;
+                            var pkgName = null;
+                            try {
+                              eventType = event.getEventType();
+                            } catch (e) {
+                            }
+                            try {
+                              var pn = event.getPackageName();
+                              pkgName = pn ? pn.toString() : null;
+                            } catch (e) {
+                            }
+                            emit("accessibility", {
+                              hook: className + ".onAccessibilityEvent",
+                              class_name: className,
+                              severity: "CRITICAL",
+                              event_type: eventType,
+                              package: pkgName,
+                              description: "Accessibility event handled by custom service subclass: " + className
+                            });
+                            _noteForegroundPackage(pkgName, className + ".onAccessibilityEvent");
+                            return this.onAccessibilityEvent(event);
+                          };
+                          registerHook(className + ".onAccessibilityEvent");
+                        }
+                      } catch (e) {
                       }
-                    } catch (e) {
+                    },
+                    onComplete: function() {
+                      send({
+                        type: "diag",
+                        msg: "accessibility_subclass_scan",
+                        prefix,
+                        classes_wrapped: wrapped,
+                        limit: ACCESSIBILITY_SUBCLASS_SCAN_LIMIT
+                      });
                     }
-                  },
-                  onComplete: function() {
-                    send({
-                      type: "diag",
-                      msg: "accessibility_subclass_scan",
-                      prefix: prefix || "(none - name heuristic used)",
-                      classes_wrapped: wrapped,
-                      limit: ACCESSIBILITY_SUBCLASS_SCAN_LIMIT
-                    });
-                  }
-                });
+                  });
+                }
               } catch (e) {
               }
             }

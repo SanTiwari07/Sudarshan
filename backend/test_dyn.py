@@ -34,7 +34,7 @@ async def run():
         import frida
         print(f"\n[*] Frida version : {frida.__version__}")
         print("[*] Available Frida devices:")
-        devices = frida.enumerate_devices()
+        devices = frida.get_device_manager().enumerate_devices()
         for d in devices:
             print(f"     - {d.id} : {d.name} : {d.type}")
 
@@ -69,23 +69,23 @@ async def run():
         if res.get("available"):
             bfci = res.get("bfci", 0.0)
             components = res.get("bfci_components", {})
-            print(f"✅ SUCCESS: Dynamic Analysis Complete")
+            print(f"SUCCESS SUCCESS: Dynamic Analysis Complete")
             print(f"   Package  : {res.get('package_name')}")
             print(f"   Device   : {res.get('device')}")
             print(f"   Duration : {res.get('duration_seconds')}s")
             print(f"   BFCI Score : {bfci:.2f} / 100")
-            print(f"   ┌─ Accessibility : {components.get('accessibility', 0):.1f}  (w=0.35)")
-            print(f"   ├─ SMS/OTP       : {components.get('sms', 0):.1f}  (w=0.25)")
-            print(f"   ├─ Overlay       : {components.get('overlay', 0):.1f}  (w=0.20)")
-            print(f"   ├─ Banking       : {components.get('banking', 0):.1f}  (w=0.10)")
-            print(f"   ├─ Network C2    : {components.get('network', 0):.1f}  (w=0.05)")
-            print(f"   └─ Persistence   : {components.get('persistence', 0):.1f}  (w=0.05)")
+            print(f"   |- Accessibility : {components.get('accessibility', 0):.1f}  (w=0.35)")
+            print(f"   |- SMS/OTP       : {components.get('sms', 0):.1f}  (w=0.25)")
+            print(f"   |- Overlay       : {components.get('overlay', 0):.1f}  (w=0.20)")
+            print(f"   |- Banking       : {components.get('banking', 0):.1f}  (w=0.10)")
+            print(f"   |- Network C2    : {components.get('network', 0):.1f}  (w=0.05)")
+            print(f"   |- Persistence   : {components.get('persistence', 0):.1f}  (w=0.05)")
             if res.get("bfci_evidence"):
                 print(f"   Evidence:")
                 for e in res["bfci_evidence"]:
-                    print(f"     • {e}")
+                    print(f"     - {e}")
         else:
-            print("❌ FAILED: " + str(res.get("error", "Unknown error")))
+            print("FAILED FAILED: " + str(res.get("error", "Unknown error")))
 
     except Exception as e:
         print("\n[EXCEPTION] " + str(e))

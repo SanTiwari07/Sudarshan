@@ -340,7 +340,10 @@ def load_baselines(directory: Optional[Path] = None) -> List[InstitutionBaseline
     """All baselines: lab set first (explicit dir keeps legacy behaviour)."""
     if directory is not None:
         return load_lab_baselines(directory)
-    return load_lab_baselines() + load_corpus_baselines()
+    corpus = load_corpus_baselines()
+    if corpus:
+        return corpus
+    return load_lab_baselines()
 
 
 # ──────────────────────────────── cache ────────────────────────────────────

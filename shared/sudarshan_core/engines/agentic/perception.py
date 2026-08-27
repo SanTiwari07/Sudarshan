@@ -744,24 +744,43 @@ class PerceptionPipeline:
         minutes.
         """
         xml = await asyncio.to_thread(self._channel.dump_hierarchy)
+        if not xml:
+            # Channel unavailable, or the agent hiccuped on this one dump. The
+            # subprocess path is slower but always present.
+            try:
+                await self._adb("shell", "uiautomator", "dump", "/data/local/tmp/ui_dump.xml")
+                ok, output = await self._adb("shell", "cat", "/data/local/tmp/ui_dump.xml")
+                if ok:
+                    m = re.search(r"(<\?xml.*)", output, re.DOTALL)
+                    xml = m.group(1) if m else None
+            except asyncio.TimeoutError:
+                logger.warning("[Perception] UI dump timed out")
+            except Exception as e:
+                logger.warning(f"[Perception] UI dump error: {e}")
+
+        # WebViews often hide their accessibility nodes until interacted with.
+        # If we see an empty WebView tag (self-closing), we send a TAB keyevent
+        # to focus it, which forces it to render its accessibility tree, then re-dump.
+        if xml and re.search(r'<node[^>]*class="android\.webkit\.WebView"[^>]*/>', xml):
+            logger.info("[Perception] Detected empty WebView. Sending TAB to wake up accessibility tree...")
+            await self._adb("shell", "input", "keyevent", "KEYCODE_TAB")
+            await asyncio.sleep(1.5)
+            
+            # Re-dump after waking it up
+            xml = await asyncio.to_thread(self._channel.dump_hierarchy)
+            if not xml:
+                try:
+                    await self._adb("shell", "uiautomator", "dump", "/data/local/tmp/ui_dump.xml")
+                    ok, output = await self._adb("shell", "cat", "/data/local/tmp/ui_dump.xml")
+                    if ok:
+                        m = re.search(r"(<\?xml.*)", output, re.DOTALL)
+                        xml = m.group(1) if m else None
+                except Exception:
+                    pass
+
         if xml:
             return await self._reclaim_from_keyboard(xml)
-
-        # Channel unavailable, or the agent hiccuped on this one dump. The
-        # subprocess path is slower but always present.
-        try:
-            await self._adb("shell", "uiautomator", "dump", "/data/local/tmp/ui_dump.xml")
-            ok, output = await self._adb("shell", "cat", "/data/local/tmp/ui_dump.xml")
-            if not ok:
-                return None
-            m = re.search(r"(<\?xml.*)", output, re.DOTALL)
-            return await self._reclaim_from_keyboard(m.group(1)) if m else None
-        except asyncio.TimeoutError:
-            logger.warning("[Perception] UI dump timed out")
-            return None
-        except Exception as e:
-            logger.warning(f"[Perception] UI dump error: {e}")
-            return None
+        return None
 
     def _parse_ui_nodes(self, xml_content: str) -> List[UINode]:
         """

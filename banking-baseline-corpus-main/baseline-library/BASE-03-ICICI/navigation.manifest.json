@@ -1,0 +1,37 @@
+{
+  "baselineId": "BASE-03-ICICI",
+  "entry": "ICICI-SPLASH",
+  "nodes": [
+    { "id": "ICICI-SPLASH", "route": "/" },
+    { "id": "ICICI-LOGIN", "route": "/login" },
+    { "id": "ICICI-MPIN", "route": "/mpin" },
+    { "id": "ICICI-HOME", "route": "/home" },
+    { "id": "ICICI-ACCOUNTS", "route": "/accounts" },
+    { "id": "ICICI-ACCOUNT_DETAILS", "route": "/accounts/:id" },
+    { "id": "ICICI-TXN_HISTORY", "route": "/accounts/:id/transactions" },
+    { "id": "ICICI-PAYMENTS", "route": "/payments" },
+    { "id": "ICICI-TRANSFER", "route": "/transfer" },
+    { "id": "ICICI-AMOUNT", "route": "/transfer/amount" },
+    { "id": "ICICI-REVIEW", "route": "/transfer/review" },
+    { "id": "ICICI-RECEIPT", "route": "/transfer/receipt" },
+    { "id": "ICICI-PROFILE", "route": "/profile" }
+  ],
+  "edges": [
+    { "from": "ICICI-SPLASH", "to": "ICICI-LOGIN", "trigger": "timeout" },
+    { "from": "ICICI-LOGIN", "to": "ICICI-MPIN", "trigger": "submit-mock" },
+    { "from": "ICICI-MPIN", "to": "ICICI-HOME", "trigger": "mpin-complete-mock" },
+    { "from": "ICICI-HOME", "to": "ICICI-PAYMENTS", "trigger": "tap-pay" },
+    { "from": "ICICI-HOME", "to": "ICICI-ACCOUNTS", "trigger": "tap-accounts" },
+    { "from": "ICICI-HOME", "to": "ICICI-PROFILE", "trigger": "tap-profile" },
+    { "from": "ICICI-HOME", "to": "ICICI-TXN_HISTORY", "trigger": "tap-recent-activity-view-all" },
+    { "from": "ICICI-PAYMENTS", "to": "ICICI-TRANSFER", "trigger": "choose To account/payee" },
+    { "from": "ICICI-TRANSFER", "to": "ICICI-AMOUNT", "trigger": "tap-payee" },
+    { "from": "ICICI-AMOUNT", "to": "ICICI-REVIEW", "trigger": "continue" },
+    { "from": "ICICI-REVIEW", "to": "ICICI-RECEIPT", "trigger": "confirm-mock" },
+    { "from": "ICICI-RECEIPT", "to": "ICICI-HOME", "trigger": "back-to-home" },
+    { "from": "ICICI-ACCOUNTS", "to": "ICICI-ACCOUNT_DETAILS", "trigger": "tap-account" },
+    { "from": "ICICI-ACCOUNT_DETAILS", "to": "ICICI-TXN_HISTORY", "trigger": "tap-statement" },
+    { "from": "ICICI-ACCOUNT_DETAILS", "to": "ICICI-TRANSFER", "trigger": "tap-transfer" },
+    { "from": "ICICI-PROFILE", "to": "ICICI-LOGIN", "trigger": "logout" }
+  ]
+}

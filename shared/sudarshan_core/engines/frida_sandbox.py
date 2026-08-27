@@ -58,6 +58,7 @@ from sudarshan_core.engines.dynamic_budget import (
     get_active_deadline,
     set_active_deadline,
 )
+from sudarshan_core.engines.runtime_event import normalize_collected_events
 from sudarshan_core.engines.dynamic_coverage import (
     DynamicCoverageStatus,
     build_dynamic_coverage,
@@ -2521,6 +2522,12 @@ class FridaSession:
         #: of leaving an empty result that reads as "attempted, nothing
         #: moved".
         self.anti_evasion_skipped_reason: str = ""
+        #: Canonical behaviours observed this run, {behaviour: count},
+        #: from the post-run reconciliation. The semantic counterpart
+        #: to raw_event_counts: 50 `code_execution` events say nothing
+        #: about WHICH code execution was seen.
+        self.behavior_summary: Dict[str, int] = {}
+        self.normalized_event_count: int = 0
         # True when lifecycle screenshots were taken while another package owned
         # the foreground (typically the launcher home screen).
         self.foreground_mismatch: bool = False
@@ -5312,28 +5319,41 @@ class FridaSession:
                     # cannot un-complete one), so replaying the full set can
                     # only ever ADD confirmations the walk missed.
                     try:
-                        replay = [
-                            event
-                            for bucket, events in self.collected_events.items()
-                            if bucket not in _HARNESS_EVENT_BUCKETS
-                            for event in (events or [])
-                        ]
-                        if replay:
-                            changed = explorer.goals.update_from_frida_events(replay)
-                            if changed:
-                                logger.info(
-                                    "[Frida] Goal graph reconciled against %d "
-                                    "collected event(s); %d goal(s) changed: %s",
-                                    len(replay), len(changed), ", ".join(changed),
-                                )
-                            # Re-settle: the replay can move a goal out of
-                            # NOT_REACHED and into IN_PROGRESS, and a finished
-                            # run must not publish IN_PROGRESS. finalize() is
-                            # idempotent, so this is a no-op when nothing moved.
-                            explorer.goals.finalize(reason="post_run_reconciliation")
+                        # Normalize once, classify into canonical behaviours,
+                        # then evaluate EVERY goal against the complete set.
+                        # Confirmation is by behaviour, never by raw hook name,
+                        # so a hook the agent renames breaks one table entry in
+                        # behavior_taxonomy instead of silently disabling a
+                        # stage - which is the defect the red goal-hook contract
+                        # tests have been reporting since they were written.
+                        normalized = normalize_collected_events(self.collected_events)
+                        summary = explorer.goals.reconcile(normalized=normalized)
+                        self.behavior_summary = summary.get("behaviors_observed", {})
+                        self.normalized_event_count = summary.get("events_considered", 0)
+                        if summary.get("goals_changed"):
+                            logger.info(
+                                "[Frida] Goal graph reconciled against %d collected "
+                                "event(s) -> behaviours %s; %d goal(s) changed: %s",
+                                summary.get("events_considered", 0),
+                                summary.get("behaviors_observed", {}),
+                                len(summary["goals_changed"]),
+                                ", ".join(summary["goals_changed"]),
+                            )
+                        else:
+                            logger.info(
+                                "[Frida] Goal graph reconciled against %d collected "
+                                "event(s); behaviours observed: %s",
+                                summary.get("events_considered", 0),
+                                summary.get("behaviors_observed", {}) or "none",
+                            )
+                        # Re-settle: reconciliation can move a goal out of
+                        # NOT_REACHED, and a finished run must not publish
+                        # IN_PROGRESS. finalize() is idempotent.
+                        explorer.goals.finalize(reason="post_run_reconciliation")
                     except Exception as exc:            # noqa: BLE001
                         logger.warning(
-                            "[Frida] Goal reconciliation skipped: %s", exc
+                            "[Frida] Goal reconciliation skipped: %s", exc,
+                            exc_info=True,
                         )
                     self.reports = explorer.get_reports()
                     ui_xml = getattr(explorer, "last_ui_hierarchy_xml", "") or ""
@@ -6624,6 +6644,75 @@ async def _run_device_session(
         "analysis_elapsed_seconds": dynamic_coverage["analysis_elapsed_seconds"],
         "goal_coverage": _goal_coverage,
         "permission_screens": _explorer_reports.get("permission_screens", []),
+
+        # ── Canonical behaviours ──────────────────────────────────────────────
+        # The SEMANTIC counterpart to raw_event_counts. "50 code_execution
+        # events" does not say which code execution was observed; this does,
+        # and it is what the goal graph and the report both reason from.
+        "behaviors_observed": dict(getattr(session, "behavior_summary", {}) or {}),
+        "normalized_event_count": int(
+            getattr(session, "normalized_event_count", 0) or 0
+        ),
+
+        # ── Dynamic diagnostics ───────────────────────────────────────────────
+        # One place that answers "why was this APK not exercised more deeply?".
+        # Every field is measured, never inferred; a value that could not be
+        # read is absent rather than zero, because a zero here reads as a
+        # finding about the sample rather than a gap in the record.
+        "dynamic_diagnostics": {
+            "instrumentation_status": dynamic_status,
+            "canary_received": session.canary_received,
+            "frida_attached": bool(session.canary_received),
+            "java_bridge_failed": session.java_bridge_failed,
+            "hook_count": session.hooks_installed_count,
+            "java_hooks_installed": session.java_hooks_installed,
+            "native_hooks_installed": session.native_hooks_installed,
+            "hook_errors": len(session.hook_errors or []),
+            "hook_invocations": session.total_hook_events_received,
+            "raw_event_count": sum(
+                len(v) for v in session.collected_events.values()
+            ),
+            "sample_event_count": _sample_events,
+            "normalized_event_count": int(
+                getattr(session, "normalized_event_count", 0) or 0
+            ),
+            "unique_behavior_count": len(
+                getattr(session, "behavior_summary", {}) or {}
+            ),
+            "unique_screen_count": len(
+                (_explorer_reports.get("state_graph") or {}).get("states") or []
+            ),
+            "verified_transition_count": len(
+                (_explorer_reports.get("state_graph") or {}).get("edges") or []
+            ),
+            "actions_attempted": len(_explorer_reports.get("action_traces") or []),
+            "permission_screens_seen": len(
+                _explorer_reports.get("permission_screens") or []
+            ),
+            "boundary_events": len(_explorer_reports.get("boundary_events") or []),
+            "loop_events": len(_explorer_reports.get("loop_events") or []),
+            "crashes": len(_explorer_reports.get("crashes") or []),
+            "network_requests": len(network_logs),
+            "anti_analysis_events": len(
+                session.collected_events.get("anti_analysis") or []
+            ),
+            "companion_packages": list(
+                getattr(session, "companion_packages", []) or []
+            ),
+            "spawn_gated": session.spawn_gated,
+            "explorer_used": session.explorer_used,
+            "explorer_error": session.explorer_error,
+            "anti_evasion_skipped_reason": getattr(
+                session, "anti_evasion_skipped_reason", ""
+            ),
+            "duration_seconds": dynamic_coverage["analysis_elapsed_seconds"],
+            "dynamic_conclusive_inputs": {
+                "coverage_status": dynamic_coverage["dynamic_status"],
+                "goals_successful": dynamic_coverage["goals_successful"],
+                "goals_partial": dynamic_coverage["goals_partial"],
+                "evidence_event_count": dynamic_coverage["evidence_event_count"],
+            },
+        },
         "anti_evasion_skipped_reason": getattr(
             session, "anti_evasion_skipped_reason", ""
         ),

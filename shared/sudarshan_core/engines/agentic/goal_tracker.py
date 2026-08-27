@@ -32,7 +32,20 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
+from sudarshan_core.engines.behavior_taxonomy import (
+    Behavior,
+    BehaviorObservation,
+    BehaviorWeight,
+    EvidenceStrength,
+    classify_events,
+    evaluate_behaviour_evidence,
+)
 from sudarshan_core.engines.dynamic_budget import TIMEOUT_REASON
+from sudarshan_core.engines.runtime_event import (
+    NormalizedEvent,
+    normalize_collected_events,
+    normalize_events,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +106,19 @@ class GoalStatus(str, Enum):
     #: Distinct from NOT_REACHED (never started) and from FAILED (tried and
     #: could not trigger): the attempt was cut off, not concluded.
     TIMEOUT     = "TIMEOUT"
+    #: Something outside the sample stopped the investigation reaching this
+    #: goal - an authentication wall with no obtainable account, a permission
+    #: the sandbox will not grant, a device capability the emulator lacks, or
+    #: the sample refusing to run. Deliberately NOT collapsed into NOT_REACHED:
+    #: "we could not get there" and "we ran out of budget before trying" call
+    #: for completely different remediation, and merging them was hiding the
+    #: single most actionable fact a failed run produces.
+    BLOCKED     = "BLOCKED"
+    #: Static analysis proves this goal cannot apply to this sample - it
+    #: declares no accessibility service, requests no SMS permission. Reporting
+    #: such a goal as FAILED would penalise a sample for not doing something it
+    #: was never built to do.
+    NOT_APPLICABLE = "NOT_APPLICABLE"
     UNSUPPORTED = "UNSUPPORTED"   # No instrument exists that could confirm this
 
 
@@ -117,6 +143,8 @@ RESOLVED_STATES: frozenset = frozenset({
     GoalStatus.FAILED,
     GoalStatus.NOT_REACHED,
     GoalStatus.TIMEOUT,
+    GoalStatus.BLOCKED,
+    GoalStatus.NOT_APPLICABLE,
     GoalStatus.UNSUPPORTED,
 })
 
@@ -130,6 +158,7 @@ SATISFIED_STATES: frozenset = frozenset({GoalStatus.COMPLETED})
 TERMINAL_STATES: frozenset = frozenset({
     GoalStatus.COMPLETED,
     GoalStatus.SKIPPED,
+    GoalStatus.NOT_APPLICABLE,
     GoalStatus.UNSUPPORTED,
 })
 
@@ -158,6 +187,15 @@ class ConfirmationMode(str, Enum):
     #: precedes every hook, and a permission grant is a property of the
     #: package manager, not of a call the app makes.
     DEVICE_STATE = "DEVICE_STATE"
+    #: Confirmed by a canonical BEHAVIOUR rather than by a named hook.
+    #:
+    #: The behaviour layer maps several hooks onto one meaning, so a goal in
+    #: this mode survives the agent renaming a hook - which is the failure the
+    #: hook-name contract exists to catch and which left four stages
+    #: unreachable. A goal declaring this mode MUST declare
+    #: `required_behaviors`; the contract test enforces that, so the mode
+    #: cannot become a way to skip the guard.
+    BEHAVIOR = "BEHAVIOR"
     #: The current Frida agent emits nothing that honestly demonstrates this
     #: goal. The goal resolves as UNSUPPORTED and says so, rather than sitting
     #: PENDING forever while the run reports itself finished.
@@ -241,6 +279,29 @@ class FraudGoal:
     #: Planner (LLM) calls spent on this goal, capped per goal so a model that
     #: keeps returning the same unusable action cannot be asked forever.
     planner_calls:    int                 = 0
+    #: Canonical behaviours that CONFIRM this goal. Declared instead of raw
+    #: hook names, which is the fix for a defect the contract tests have been
+    #: reporting since they were written: a goal naming a hook the agent does
+    #: not emit is unreachable by construction, and four stages were.
+    #:
+    #: Confirmation strength is decided by
+    #: behavior_taxonomy.evaluate_behaviour_evidence, so a single ubiquitous
+    #: observation can never complete a goal however many times it fires.
+    required_behaviors: List[Behavior]  = field(default_factory=list)
+    #: Behaviours consistent with this goal that are never sufficient alone.
+    #: They produce PARTIAL and are named in the report.
+    supporting_behaviors: List[Behavior] = field(default_factory=list)
+    #: What a behaviour proves FOR THIS GOAL, where that differs from what it
+    #: proves in general. Weight is a property of the (behaviour, claim) pair:
+    #: lifecycle callbacks are ubiquitous evidence of code loading and decisive
+    #: evidence that the app launched at all.
+    behavior_weights: Dict[Behavior, BehaviorWeight] = field(default_factory=dict)
+    #: The evidence verdict from the last reconciliation, kept so the report can
+    #: say WHAT was proven rather than only that something was.
+    evidence_verdict: Optional[Any]     = None
+    #: What stopped this goal, when the answer is "something outside the
+    #: sample". One of the BLOCKED_* tokens.
+    blocked_reason:   str               = ""
 
     def __post_init__(self) -> None:
         if not self.completion_categories:
@@ -318,6 +379,17 @@ def _build_default_goals() -> List[FraudGoal]:
             # they are attached to is running - so it is confirmed by observing
             # the foreground window instead. See update_from_foreground().
             confirmation=ConfirmationMode.DEVICE_STATE,
+            # Lifecycle callbacks from the instrumented process are
+            # DIRECT proof the application started and ran its own code -
+            # strictly stronger than the foreground poll this stage used
+            # to rely on, which any loader that hands off to a dropped
+            # package defeats. Measured on Anubis: the sample launched,
+            # handed the journey to a package it had just installed, and
+            # stage 1 never confirmed because the foreground was no
+            # longer the target. The override is what makes lifecycle
+            # decisive HERE and nowhere else.
+            required_behaviors=[Behavior.APP_LIFECYCLE],
+            behavior_weights={Behavior.APP_LIFECYCLE: BehaviorWeight.DECISIVE},
             depends_on=[],
             skip_if_missing=False,
         ),
@@ -345,6 +417,10 @@ def _build_default_goals() -> List[FraudGoal]:
             # See update_from_permission_state().
             frida_hooks=[],
             confirmation=ConfirmationMode.DEVICE_STATE,
+            # No behaviour confirms a permission GRANT - whether a
+            # permission is held is a property of the package manager,
+            # not of any call the app makes. Confirmed by device state.
+            required_behaviors=[],
             depends_on=[1],
             skip_if_missing=True,
         ),
@@ -378,6 +454,11 @@ def _build_default_goals() -> List[FraudGoal]:
                 "AccessibilityNodeInfo.performAction",
                 "AccessibilityService.dispatchGesture",
             ],
+            required_behaviors=[
+                Behavior.ACCESSIBILITY_NODE_HARVEST,
+                Behavior.ACCESSIBILITY_GESTURE_INJECTION,
+            ],
+            supporting_behaviors=[Behavior.ACCESSIBILITY_SERVICE_ACTIVE],
             depends_on=[1, 2],
             skip_if_missing=False,
         ),
@@ -406,6 +487,8 @@ def _build_default_goals() -> List[FraudGoal]:
                 "WindowManager.removeView",
             ],
             completion_categories=["overlay"],
+            required_behaviors=[Behavior.OVERLAY_WINDOW_ADDED],
+            supporting_behaviors=[Behavior.OVERLAY_WINDOW_MANIPULATED],
             depends_on=[1, 2],
             skip_if_missing=True,
         ),
@@ -445,6 +528,9 @@ def _build_default_goals() -> List[FraudGoal]:
                 "SharedPreferences.getString",
             ],
             completion_categories=["banking"],
+            required_behaviors=[Behavior.CREDENTIAL_STORE_ACCESS],
+            supporting_behaviors=[Behavior.KEYSTORE_ACCESS,
+                                  Behavior.KEYBOARD_ACTIVITY],
             depends_on=[1, 2],
             # skip_if_missing=True allows auto-skip after MAX_ATTEMPTS_PER_GOAL
             # when the app has no conventional login screen (most banking trojans).
@@ -475,6 +561,9 @@ def _build_default_goals() -> List[FraudGoal]:
                 "SmsManager.sendMultipartTextMessage",
                 "SmsMessage.getMessageBody",
             ],
+            required_behaviors=[Behavior.SMS_READ, Behavior.SMS_SEND],
+            supporting_behaviors=[Behavior.NOTIFICATION_INTERCEPTION,
+                                  Behavior.CONTENT_PROVIDER_QUERY],
             depends_on=[1, 2, 5],
             skip_if_missing=True,
         ),
@@ -498,6 +587,8 @@ def _build_default_goals() -> List[FraudGoal]:
                 "PackageManager.getInstalledPackages",
                 "PackageManager.getInstalledApplications",
             ],
+            required_behaviors=[Behavior.INSTALLED_PACKAGE_ENUMERATION],
+            supporting_behaviors=[Behavior.FOREGROUND_APP_MONITORING],
             depends_on=[1, 5],
             skip_if_missing=True,
         ),
@@ -527,6 +618,9 @@ def _build_default_goals() -> List[FraudGoal]:
                 "Socket.connect",
             ],
             completion_categories=["network"],
+            required_behaviors=[Behavior.HTTP_REQUEST,
+                                Behavior.TLS_PAYLOAD_CAPTURE],
+            supporting_behaviors=[Behavior.SOCKET_CONNECTION],
             depends_on=[1, 5],
             skip_if_missing=True,
         ),
@@ -562,6 +656,13 @@ def _build_default_goals() -> List[FraudGoal]:
                 "Intent.installPackageRequest",
                 "DevicePolicyManager.lockNow",
             ],
+            required_behaviors=[Behavior.SCHEDULED_EXECUTION,
+                                Behavior.DEVICE_ADMIN_ABUSE,
+                                Behavior.PACKAGE_INSTALL_REQUEST],
+            # isAdminActive is a QUERY. It supports the goal and can
+            # never complete it, which is why it sits here rather than
+            # above - the distinction a hook-name match could not make.
+            supporting_behaviors=[Behavior.DEVICE_ADMIN_QUERY],
             depends_on=[1, 3],
             skip_if_missing=True,
         ),
@@ -593,6 +694,16 @@ def _build_default_goals() -> List[FraudGoal]:
                 "InMemoryDexClassLoader.<init>",
             ],
             completion_categories=["code_execution"],
+            # Both are code the process was not statically linked to
+            # run. The engine already treats them as one axis - the
+            # agent files both under `code_execution` and BFCI weights
+            # that bucket - but the goal graph could only name the Dex
+            # half, so a sample that shells out scored zero goals while
+            # BFCI scored it 10.0 from the same events.
+            required_behaviors=[Behavior.DYNAMIC_DEX_LOADING,
+                                Behavior.COMMAND_EXECUTION],
+            supporting_behaviors=[Behavior.NATIVE_METHOD_REGISTRATION,
+                                  Behavior.NATIVE_LIBRARY_LOAD],
             depends_on=[1, 5],
             skip_if_missing=True,
         ),
@@ -628,6 +739,7 @@ def _build_default_goals() -> List[FraudGoal]:
                 "for every sample. Reflection is reported from static analysis "
                 "(apk_analyzer.REFLECTION_APIS) instead."
             ),
+            required_behaviors=[],
             depends_on=[1, 10],
             skip_if_missing=True,
         ),
@@ -657,6 +769,8 @@ def _build_default_goals() -> List[FraudGoal]:
                 "distinguish a deep link from ordinary navigation. Declared "
                 "intent-filter URIs are reported from the manifest instead."
             ),
+            required_behaviors=[],
+            supporting_behaviors=[Behavior.WEBVIEW_NAVIGATION],
             depends_on=[1],
             skip_if_missing=True,
         ),
@@ -688,6 +802,7 @@ def _build_default_goals() -> List[FraudGoal]:
                 "hook backlog. Not added blind: it needs an emulator run to "
                 "verify before it can be a completion trigger."
             ),
+            required_behaviors=[],
             depends_on=[1, 9],
             skip_if_missing=True,
         ),
@@ -717,6 +832,8 @@ def _build_default_goals() -> List[FraudGoal]:
                 "Activity.onCreate",
             ],
             completion_categories=["smoke"],
+            required_behaviors=[],
+            supporting_behaviors=[Behavior.APP_LIFECYCLE],
             depends_on=[1],
             skip_if_missing=True,
         ),
@@ -746,8 +863,56 @@ def _build_default_goals() -> List[FraudGoal]:
                 "JobScheduler.schedule",
             ],
             completion_categories=["persistence"],
+            required_behaviors=[Behavior.SCHEDULED_EXECUTION],
+            supporting_behaviors=[Behavior.FOREGROUND_APP_MONITORING],
             depends_on=[1, 9],
             skip_if_missing=True,
+        ),
+        FraudGoal(
+            name="Anti-Analysis Resistance",
+            stage=16,
+            description=(
+                "Determine whether the sample resists observation: probing for a "
+                "debugger, reading emulator-identifying system properties, calling "
+                "ptrace, or terminating its own process once instrumentation is "
+                "detected. No navigation is required - this stage is confirmed by "
+                "what the sample does to US."
+            ),
+            # ── Why this stage exists ────────────────────────────────────────
+            #
+            # The engine could already SEE this. The agent files it under
+            # `anti_analysis`, risk_engine scores substantive evasion at
+            # _EVASION_RESISTANCE_SCORE, and dynamic_exclusion_reason treats
+            # self-termination as an explanation for a silent run. The goal
+            # graph was the only layer with no way to say it.
+            #
+            # Measured on Cerberus: Process.killProcess and System.exit both
+            # observed and attributed to the sample - the single most
+            # diagnostic thing that run produced - while the graph reported
+            # zero successful and zero partial goals, because refusing to be
+            # analysed matched no stage.
+            #
+            # Confirmed by behaviour rather than by hook name, and deliberately
+            # not skippable: a sample that does NOT resist resolves this stage
+            # as attempted-and-nothing-observed, which is itself a finding.
+            frida_categories=["anti_analysis"],
+            frida_hooks=[],
+            confirmation=ConfirmationMode.BEHAVIOR,
+            required_behaviors=[
+                Behavior.SELF_TERMINATION,
+                Behavior.PTRACE_CHECK,
+            ],
+            supporting_behaviors=[
+                Behavior.DEBUGGER_CHECK,
+                Behavior.SYSTEM_PROPERTY_PROBE,
+            ],
+            # Depends on nothing. A sample that kills itself inside
+            # Application.onCreate never reaches stage 1's foreground
+            # confirmation, and gating the observation of that refusal behind
+            # the launch it prevented would guarantee it could never be
+            # reported.
+            depends_on=[],
+            skip_if_missing=False,
         ),
     ]
 
@@ -774,6 +939,8 @@ class GoalTracker:
         # Consecutive observations of the target package in the foreground.
         # Reset whenever the reading is unavailable or shows another package.
         self._launch_confirmations: int = 0
+        #: Canonical behaviours from the most recent reconcile().
+        self._last_behaviors: Dict[Any, Any] = {}
         # Goals whose instrument does not exist are resolved once, up front,
         # rather than left PENDING to block their dependents. Doing it in the
         # constructor means the gap is visible in the very first status dump.
@@ -1287,6 +1454,157 @@ class GoalTracker:
             goal.name, len(goal.evidence_collected),
         )
 
+    def mark_blocked(self, goal_name: str, blocker: str, detail: str = "") -> None:
+        """
+        Something outside the sample stopped this goal being reached.
+
+        BLOCKED is deliberately not NOT_REACHED. "The login wall wants an
+        account we cannot obtain" and "the budget ran out before we tried" are
+        different findings with different remediation, and collapsing them hid
+        the single most actionable fact a failed run produces. It is also not
+        FAILED: the sample was never given the chance to exhibit the behaviour,
+        so nothing about the sample has been established.
+
+        A goal that already produced confirming evidence stays COMPLETED - a
+        blocker discovered later does not retract an observation.
+        """
+        goal = self.get_goal_by_name(goal_name)
+        if goal is None or goal.status in TERMINAL_STATES:
+            return
+        if goal.completion_evidence:
+            goal.status = GoalStatus.COMPLETED
+            return
+        goal.status = GoalStatus.BLOCKED
+        goal.blocked_reason = blocker
+        goal.failure_reason = detail or blocker
+        logger.info(
+            "[GoalTracker] '%s' → BLOCKED (%s)%s",
+            goal.name, blocker, f": {detail}" if detail else "",
+        )
+
+    def mark_not_applicable(self, goal_name: str, reason: str) -> None:
+        """
+        Static analysis proves this goal cannot apply to this sample.
+
+        A calculator that declares no accessibility service has not FAILED to
+        abuse accessibility; the question does not arise. Reporting it as
+        failed penalises a sample for not doing something it was never built to
+        do, and pollutes coverage with stages that were never in play.
+        """
+        goal = self.get_goal_by_name(goal_name)
+        if goal is None or goal.status in TERMINAL_STATES:
+            return
+        if goal.completion_evidence:
+            goal.status = GoalStatus.COMPLETED
+            return
+        goal.status = GoalStatus.NOT_APPLICABLE
+        goal.failure_reason = reason
+        logger.info("[GoalTracker] '%s' → NOT_APPLICABLE (%s)", goal.name, reason)
+
+    # ── Whole-evidence reconciliation ─────────────────────────────────────────
+
+    def reconcile(
+        self,
+        collected_events: Optional[Dict[str, Any]] = None,
+        *,
+        normalized: Optional[List[NormalizedEvent]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Re-evaluate EVERY goal against the COMPLETE evidence set.
+
+        This is the answer to a failure mode the per-event path cannot avoid:
+        the tracker only ever saw events the explorer drained from the bus
+        while it was walking, so anything that fired before the walk started,
+        after it stopped, or on a background thread it never observed was
+        invisible to the goal graph - while being counted correctly by BFCI,
+        by the evidence store and by the report.
+
+        Measured on Drinik: 50 `code_execution` events collected, BFCI 10.0
+        scored from them, goal graph reporting zero successful and zero
+        partial. The evidence existed and the graph never looked at it.
+
+        Confirmation is by canonical BEHAVIOUR, never by raw hook name, so a
+        hook the agent renames breaks one table entry in behavior_taxonomy
+        instead of silently disabling a stage - which is the defect the four
+        red `test_goal_hook_contract` tests have been reporting all along.
+
+        Strength decides the state, deterministically:
+
+            CONCLUSIVE -> COMPLETED
+            MODERATE   -> PARTIAL
+            WEAK       -> PARTIAL only if nothing better is known
+            NONE       -> left as it is
+
+        A goal is never DEMOTED here. Reconciliation can only add what the walk
+        missed; it cannot retract what the walk proved.
+        """
+        events = normalized
+        if events is None:
+            events = normalize_collected_events(collected_events or {})
+
+        observed = classify_events(events)
+        self._last_behaviors = observed
+
+        changed: List[str] = []
+        for goal in self._goals:
+            if goal.status in TERMINAL_STATES and goal.status != GoalStatus.COMPLETED:
+                # SKIPPED / NOT_APPLICABLE / UNSUPPORTED are settled questions.
+                continue
+            if not goal.required_behaviors and not goal.supporting_behaviors:
+                continue
+
+            verdict = evaluate_behaviour_evidence(
+                observed,
+                goal.required_behaviors,
+                goal.supporting_behaviors,
+                weight_overrides=goal.behavior_weights,
+            )
+            goal.evidence_verdict = verdict
+            if verdict.strength is EvidenceStrength.NONE:
+                continue
+
+            # Attach the supporting events so the report can cite them, and so
+            # resolve_goal() can tell a goal that produced something from one
+            # that produced nothing.
+            for event in verdict.evidence_events():
+                raw = dict(event.raw)
+                if raw not in goal.evidence_collected:
+                    goal.evidence_collected.append(raw)
+
+            if verdict.conclusive:
+                if goal.status != GoalStatus.COMPLETED:
+                    goal.status = GoalStatus.COMPLETED
+                    changed.append(goal.name)
+                    logger.info(
+                        "[GoalTracker] '%s' → COMPLETED via behaviour evidence: %s",
+                        goal.name, verdict.reason,
+                    )
+                for event in verdict.evidence_events():
+                    raw = dict(event.raw)
+                    if raw not in goal.completion_evidence:
+                        goal.completion_evidence.append(raw)
+            elif goal.status not in (GoalStatus.COMPLETED, GoalStatus.PARTIAL):
+                goal.status = GoalStatus.PARTIAL
+                goal.failure_reason = goal.failure_reason or "evidence_below_completion_threshold"
+                changed.append(goal.name)
+                logger.info(
+                    "[GoalTracker] '%s' → PARTIAL_SUCCESS via behaviour evidence: %s",
+                    goal.name, verdict.reason,
+                )
+
+        return {
+            "events_considered": len(events),
+            "behaviors_observed": {
+                b.value: o.count for b, o in observed.items()
+            },
+            "goals_changed": changed,
+        }
+
+    @property
+    def observed_behaviors(self) -> Dict[Any, Any]:
+        """Canonical behaviours from the last reconcile(), for the report."""
+        return dict(getattr(self, "_last_behaviors", {}) or {})
+
     def finalize(self, *, timed_out: bool = False, reason: str = "") -> Dict[str, int]:
         """
         Settle every goal the run never concluded, once, at the end.
@@ -1476,6 +1794,7 @@ class GoalTracker:
                 GoalStatus.COMPLETED.value, GoalStatus.PARTIAL.value,
                 GoalStatus.SKIPPED.value, GoalStatus.FAILED.value,
                 GoalStatus.NOT_REACHED.value, GoalStatus.TIMEOUT.value,
+                GoalStatus.BLOCKED.value, GoalStatus.NOT_APPLICABLE.value,
                 GoalStatus.UNSUPPORTED.value,
                 GoalStatus.IN_PROGRESS.value, GoalStatus.PENDING.value,
             )

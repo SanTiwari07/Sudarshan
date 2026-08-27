@@ -34,7 +34,11 @@ def test_get_reports_publishes_the_goal_coverage_the_tracker_computed(explorer):
 
     assert "goal_coverage" in reports
     assert "dynamic_coverage" in reports
-    assert reports["goal_coverage"]["goals_total"] == 15
+    # The whole graph, whatever it currently declares. Pinning a number
+    # here would fail on a stage being added, which is not what this
+    # test is about - it is about the coverage reaching get_reports().
+    assert reports["goal_coverage"]["goals_total"] == len(explorer.goals.goals)
+    assert reports["goal_coverage"]["goals_total"] >= 15
 
 
 def test_get_reports_still_carries_every_key_frida_sandbox_reads(explorer):

@@ -41,29 +41,60 @@ from sudarshan_core.engines.dynamic_coverage import (
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
-def _tracker_with(**counts: int) -> GoalTracker:
-    """
-    A tracker whose fifteen goals are forced into a requested distribution.
+#: The number of investigation goals the specification's worked examples are
+#: written against. Pinned as a literal because these tests are about the
+#: coverage ARITHMETIC and the reporting vocabulary, not about how many stages
+#: the graph happens to declare today - coupling them to the live graph made
+#: every one of them fail the moment a stage was added, which says nothing
+#: about the arithmetic. The real graph is exercised by
+#: test_goal_behavior_reconciliation.py and by the wiring test below.
+PLANNED_GOALS = 15
 
-    States are assigned directly rather than driven through the agent loop: the
-    point of these tests is the arithmetic and the reporting, and driving a
-    real walk to produce "exactly two partial goals" would test the walk.
+
+def _coverage(total: int = PLANNED_GOALS, **counts: int) -> dict:
+    """A goal-state distribution, in the shape `coverage_report()` publishes."""
+    named = {
+        "COMPLETED": "goals_successful",
+        "PARTIAL": "goals_partial",
+        "FAILED": "goals_failed",
+        "SKIPPED": "goals_skipped",
+        "NOT_REACHED": "goals_not_reached",
+        "TIMEOUT": "goals_timed_out",
+        "UNSUPPORTED": "goals_unsupported",
+    }
+    report = {key: 0 for key in named.values()}
+    for status_name, count in counts.items():
+        report[named[status_name]] = count
+
+    successful = report["goals_successful"]
+    partial = report["goals_partial"]
+    effective = successful + partial * PARTIAL_GOAL_WEIGHT
+
+    report.update({
+        "goals_total": total,
+        "total_goals": total,
+        "satisfied_goals": successful,
+        "effective_goal_count": round(effective, 4),
+        "effective_coverage_ratio": round(effective / total, 4) if total else 0.0,
+        "successful_goals": [f"goal-{i}" for i in range(successful)],
+        "partial_goals": [f"partial-{i}" for i in range(partial)],
+        "failed_goals": [f"failed-{i}" for i in range(report["goals_failed"])],
+        "goal_states": [],
+        "failure_reasons": [],
+    })
+    return report
+
+
+def test_the_literal_above_matches_what_the_real_tracker_publishes():
+    """
+    Guards the decoupling: the synthetic report must stay a subset of the real
+    one, so these tests cannot drift away from the shape they stand in for.
     """
     tracker = GoalTracker()
-    goals = list(tracker.goals)
-    index = 0
-    for status_name, count in counts.items():
-        status = getattr(GoalStatus, status_name)
-        for _ in range(count):
-            goals[index].status = status
-            index += 1
-    # Anything not named is left alone, then settled the way a real run would.
-    return tracker
-
-
-def _coverage(**counts: int) -> dict:
-    tracker = _tracker_with(**counts)
-    return tracker.coverage_report()
+    tracker.finalize()
+    real = tracker.coverage_report()
+    missing = sorted(set(_coverage(total=1, NOT_REACHED=1)) - set(real))
+    assert not missing, f"coverage_report() no longer publishes: {missing}"
 
 
 # ─── The forbidden global boolean ────────────────────────────────────────────

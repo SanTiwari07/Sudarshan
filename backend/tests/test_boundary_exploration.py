@@ -262,7 +262,18 @@ class TestExplorationCompleteBlockedWithInstallerActions(unittest.TestCase):
 class TestWaitForIdleProbeRetry(unittest.TestCase):
 
     def _run(self, coro):
-        return asyncio.get_event_loop().run_until_complete(coro)
+        # asyncio.run(), not get_event_loop().run_until_complete().
+        #
+        # get_event_loop() stopped implicitly creating a loop for the main
+        # thread: on 3.12 it warns, and from 3.14 it raises
+        # "RuntimeError: There is no current event loop in thread 'MainThread'"
+        # when no loop is running. Both of this class's tests failed that way
+        # on a 3.14 host while passing in the 3.12 container, which makes the
+        # suite's result depend on which interpreter happens to run it.
+        #
+        # asyncio.run() creates, drives and closes a loop of its own and
+        # behaves identically on every version these tests support.
+        return asyncio.run(coro)
 
     def test_single_probe_failure_is_retried(self):
         """T9: Single None from _focus_signature must NOT immediately return False."""

@@ -224,6 +224,27 @@ ALLOWED_ACTIONS = {
     for state, actions in ALLOWED_ACTIONS.items()
 }
 
+# ── start_activity follows full navigation ───────────────────────────────────
+#
+# `start_activity` is how the explorer gets BACK: _handle_crash_state relaunches
+# the target with it after a crash, and the home-recovery path uses it when the
+# walk has been left on the launcher. A stage that forbids it can observe that
+# the run has wandered off and do nothing about it.
+#
+# Observed live: "Rejected 'start_activity' - not permitted in
+# NETWORK_ANALYSIS", on a stage that already permits tap, swipe and scroll -
+# so the agent could walk anywhere except back.
+#
+# Granted only where FULL navigation already is, keyed on `tap`. The modal
+# dialog stages (PERMISSION_ANALYSIS, PERMISSION_HANDLING) deliberately hold
+# navigation out - their own comment says letting the planner "swipe or launch
+# an activity here is how a run wanders off mid-dialog and loses the grant it
+# came for" - and they have no `tap`, so they are untouched.
+ALLOWED_ACTIONS = {
+    state: (actions | {"start_activity"} if "tap" in actions else actions)
+    for state, actions in ALLOWED_ACTIONS.items()
+}
+
 
 #: Observed screen -> the state that screen puts us in. Deterministic: the
 #: classifier is rule-based, so this mapping is too, and the model has no say

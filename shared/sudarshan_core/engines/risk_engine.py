@@ -836,6 +836,74 @@ _INCONCLUSIVE_STATUSES = frozenset({
 })
 
 
+#: Dynamic-axis score awarded to a run whose only sample-attributable
+#: observation is substantive evasion.
+#:
+#: Deliberately mid-band. It has to be high enough that including the axis
+#: raises the verdict rather than diluting it - the whole reason evasion used to
+#: be excluded was that a 0.0 at 0.35 weight read as "clean" - and low enough
+#: that it never outranks a run which actually observed fraud behaviour, where
+#: BFCI carries the score on its own.
+_EVASION_RESISTANCE_SCORE: float = 45.0
+
+#: Severities that make evasion a fight rather than a fingerprinting check.
+_SUBSTANTIVE_EVASION_SEVERITIES = frozenset({"HIGH", "CRITICAL"})
+
+#: Hooks that are themselves an attempt to defeat the analysis, whatever
+#: severity the agent stamped on them. Self-termination is the clearest case:
+#: an app ending its own process on detecting instrumentation is not probing
+#: the environment, it is refusing to be watched.
+_ACTIVE_EVASION_HOOKS = (
+    "killProcess",
+    "System.exit",
+    "Runtime.exit",
+    "Runtime.halt",
+)
+
+
+def _evasive_explains_the_silence(events: Any) -> bool:
+    """
+    Whether this evasion accounts for a run that produced no UI and no fraud.
+
+    Narrower than _evasion_is_substantive on purpose. That function decides
+    whether evasion is worth scoring at all; this one decides whether it
+    outranks NO_UI_RENDERED, which is a stronger claim - it says the sample
+    ENDED itself rather than merely probed its surroundings.
+
+    Only self-termination qualifies. An app that read Build.MODEL and then
+    showed no screen has not explained the missing screen; an app that called
+    System.exit has.
+    """
+    for event in events or []:
+        if not isinstance(event, dict):
+            continue
+        data = event.get("data") if isinstance(event.get("data"), dict) else {}
+        hook = str(event.get("hook") or event.get("method") or data.get("hook") or "")
+        if any(marker in hook for marker in _ACTIVE_EVASION_HOOKS):
+            return True
+    return False
+
+
+def _evasion_is_substantive(events: Any) -> bool:
+    """
+    Whether this evasion is the sample fighting the analysis, not just looking.
+
+    A Build.MODEL read is a fingerprinting check and must not be worth points.
+    Killing your own process when hooks appear is a different act, and it is one
+    we directly observed.
+    """
+    for event in events or []:
+        if not isinstance(event, dict):
+            continue
+        if str(event.get("severity", "")).upper() in _SUBSTANTIVE_EVASION_SEVERITIES:
+            return True
+        data = event.get("data") if isinstance(event.get("data"), dict) else {}
+        hook = str(event.get("hook") or event.get("method") or data.get("hook") or "")
+        if any(marker in hook for marker in _ACTIVE_EVASION_HOOKS):
+            return True
+    return False
+
+
 def dynamic_exclusion_reason(dynamic: Optional[Dict]) -> Optional[str]:
     """
     Why the dynamic axis cannot be scored, or None when it can.
@@ -879,6 +947,25 @@ def dynamic_exclusion_reason(dynamic: Optional[Dict]) -> Optional[str]:
         # does not invent a score; it declines to award one from no data.
         return None
 
+    # ── Why there was no UI matters more than that there was none ────────────
+    #
+    # This check used to come first, so a sample that killed itself the moment
+    # it saw instrumentation was filed as "the app never rendered a screen" -
+    # the reason for the silence discarded in favour of a description of it.
+    #
+    # Measured on Teabot: 80 hooks installed, Application.onCreate fired, then
+    # Process.killProcess and System.exit. It did not fail to draw a window; it
+    # refused to run. NO_UI_RENDERED excluded the axis and said nothing,
+    # whereas the evasion is both an explanation and something we watched
+    # happen.
+    #
+    # So substantive, sample-attributable evasion is consulted first: when we
+    # know WHY nothing rendered, that answer wins. A run with no UI and no
+    # evasion still falls through to NO_UI_RENDERED below, unchanged.
+    _evasion = sample_attributable_evasion(dynamic.get("anti_analysis_events"))
+    if _evasion and _evasive_explains_the_silence(_evasion):
+        return None
+
     if _ui_never_rendered(dynamic):
         return "NO_UI_RENDERED"
 
@@ -888,6 +975,30 @@ def dynamic_exclusion_reason(dynamic: Optional[Dict]) -> Optional[str]:
     # the dynamic axis. Five banking trojans scored Safe that way.
     evasion_events = sample_attributable_evasion(dynamic.get("anti_analysis_events"))
     if evasion_events:
+        # ── Resistance IS an observation about the sample ────────────────────
+        #
+        # Excluding here was protective, not principled: with BFCI at 0.0 the
+        # axis would have scored a clean zero at 0.35 weight, so "we could not
+        # observe it" would have read as "we observed nothing wrong". Excluding
+        # avoided that, at the cost of the report saying nothing at all.
+        #
+        # But an app that detects instrumentation and kills itself has not
+        # hidden from us - we watched it do that. Measured on a live sample:
+        #   [CRITICAL] Process.killProcess - app attempted to self-terminate
+        #   [CRITICAL] System.exit(10)     - app attempted to self-terminate
+        # both blocked by the harness, both attributable to the sample rather
+        # than to us (sample_attributable_evasion already strips the harness's
+        # own Build-field spoof, which is why that filter exists).
+        #
+        # So the axis is scored on the resistance instead of excluded - see
+        # _EVASION_RESISTANCE_SCORE. That raises the verdict rather than
+        # diluting it, which is the honest direction: self-termination on
+        # detection is behaviour no ordinary app exhibits.
+        #
+        # Low-severity evasion alone still excludes. A single Build.MODEL read
+        # is a fingerprinting check, not a fight, and must not be worth points.
+        if _evasion_is_substantive(evasion_events):
+            return None
         return "EVASION_ONLY"
 
     if status in _INCONCLUSIVE_STATUSES or outcome == "FAILED":
@@ -934,7 +1045,30 @@ def _calculate_dynamic_score(dynamic: Optional[Dict]) -> Tuple[float, List[str]]
 
     # ── Frida path: proper BFCI formula ───────────────────────────────────────
     if engine == "frida":
-        return _calculate_bfci_from_frida(dynamic)
+        score, evidence = _calculate_bfci_from_frida(dynamic)
+        # A run whose only sample-attributable observation is substantive
+        # evasion scores on the resistance instead of on BFCI, which is
+        # legitimately 0.0 - none of the fraud buckets fired, and that stays
+        # true in the reported components.
+        #
+        # Without this the axis is included (see dynamic_exclusion_reason) at
+        # 0.0, and a sample that fought the sandbox would score exactly like
+        # one that sat still - the outcome the exclusion existed to prevent.
+        if score <= 0.0:
+            evasion_events = sample_attributable_evasion(
+                dynamic.get("anti_analysis_events")
+            )
+            if evasion_events and _evasion_is_substantive(evasion_events):
+                return _EVASION_RESISTANCE_SCORE, evidence + [
+                    f"Sample actively resisted analysis: "
+                    f"{len(evasion_events)} anti-analysis action(s) attributable "
+                    f"to the app, including attempts to terminate its own "
+                    f"process when instrumentation was detected. Scored "
+                    f"{_EVASION_RESISTANCE_SCORE:.0f}/100 on the dynamic axis - "
+                    f"BFCI remains 0.0 because no fraud capability fired, which "
+                    f"is what the sample prevented."
+                ]
+        return score, evidence
 
     # ── MobSF path: flat-bonus approximation ──────────────────────────────────
     score = 0.0

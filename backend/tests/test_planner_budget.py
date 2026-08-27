@@ -381,3 +381,181 @@ def test_a_truly_headless_package_is_terminal_not_retryable():
     assert res.success is False
     assert res.data["headless"] is True
     assert res.data["retryable"] is False
+
+
+# ── resistance is an observation, not an absence ─────────────────────────────
+
+
+def _evasive(events, bfci=0.0):
+    return {
+        "available": True, "runtime_attempted": True, "engine": "frida",
+        "dynamic_status": "EVENTS_CAPTURED", "bfci": bfci,
+        "anti_analysis_events": events,
+    }
+
+
+def test_self_termination_makes_the_dynamic_axis_scoreable():
+    """
+    Measured on a live sample: the app detected instrumentation and tried to
+    kill itself -
+        [CRITICAL] Process.killProcess - blocked
+        [CRITICAL] System.exit(10)     - blocked
+    - and the axis was excluded as EVASION_ONLY, so the report said nothing
+    about a sample that had just fought the sandbox.
+
+    We watched it do that. It is an observation, not an absence.
+    """
+    from sudarshan_core.engines.risk_engine import (
+        _calculate_dynamic_score, dynamic_exclusion_reason,
+    )
+
+    d = _evasive([
+        {"severity": "CRITICAL", "method": "Process.killProcess"},
+        {"severity": "CRITICAL", "method": "System.exit"},
+    ])
+    assert dynamic_exclusion_reason(d) is None, "axis must be included"
+    score, evidence = _calculate_dynamic_score(d)
+    assert score == 45.0
+    assert any("resisted analysis" in e for e in evidence)
+
+
+def test_the_score_raises_the_verdict_rather_than_diluting_it():
+    """
+    The reason evasion used to be excluded: a 0.0 at 0.35 weight reads as
+    "we looked and it was clean". Including it only helps if it carries a
+    non-zero score.
+    """
+    from sudarshan_core.engines.risk_engine import _calculate_dynamic_score
+
+    score, _ = _calculate_dynamic_score(_evasive(
+        [{"severity": "CRITICAL", "method": "Process.killProcess"}]
+    ))
+    assert score > 0.0
+
+
+def test_mere_fingerprinting_is_still_excluded():
+    """
+    A Build.MODEL read is a check, not a fight, and must not be worth points.
+    """
+    from sudarshan_core.engines.risk_engine import dynamic_exclusion_reason
+
+    d = _evasive([{"severity": "LOW", "method": "Build.MODEL"}])
+    assert dynamic_exclusion_reason(d) == "EVASION_ONLY"
+
+
+def test_the_harness_own_spoof_never_counts_as_the_sample_resisting():
+    """
+    sample_attributable_evasion exists because the harness spoofs Build fields
+    on every emulator run. That must never become evidence about the app.
+    """
+    from sudarshan_core.engines.risk_engine import dynamic_exclusion_reason
+
+    d = _evasive([{"severity": "HIGH", "hook": "Build.<static fields>"}])
+    assert dynamic_exclusion_reason(d) != None  # noqa: E711
+    assert dynamic_exclusion_reason(d) != "EVASION_ONLY"
+
+
+def test_real_fraud_behaviour_still_outranks_resistance():
+    """
+    The resistance floor is a floor, not a ceiling. When fraud capability
+    actually fired, BFCI carries the score and the evasion branch must not
+    touch it - otherwise a trojan that both acted AND resisted would be scored
+    lower than one that only acted.
+    """
+    from unittest.mock import patch
+
+    from sudarshan_core.engines import risk_engine
+
+    d = _evasive([{"severity": "CRITICAL", "method": "Process.killProcess"}])
+    with patch.object(
+        risk_engine, "_calculate_bfci_from_frida",
+        return_value=(80.0, ["accessibility abuse observed"]),
+    ):
+        score, evidence = risk_engine._calculate_dynamic_score(d)
+
+    assert score == 80.0, "BFCI must carry the score when fraud actually fired"
+    assert not any("resisted analysis" in e for e in evidence)
+
+
+def test_start_activity_is_available_wherever_full_navigation_is():
+    """
+    start_activity is how the explorer gets BACK - _handle_crash_state
+    relaunches the target with it, and home recovery uses it when the walk has
+    been left on the launcher.
+
+    Observed live: "Rejected 'start_activity' - not permitted in
+    NETWORK_ANALYSIS", a stage that already permits tap, swipe and scroll. The
+    agent could walk anywhere except back.
+    """
+    from sudarshan_core.engines.investigation_controller import (
+        ALLOWED_ACTIONS, InvestigationState,
+    )
+
+    for state, allowed in ALLOWED_ACTIONS.items():
+        if "tap" in allowed:
+            assert "start_activity" in allowed, f"start_activity missing from {state}"
+
+
+def test_modal_dialog_stages_still_refuse_navigation():
+    """
+    PERMISSION_ANALYSIS deliberately holds navigation out - its own comment:
+    letting the planner "swipe or launch an activity here is how a run wanders
+    off mid-dialog and loses the grant it came for". Widening must not reach it.
+    """
+    from sudarshan_core.engines.investigation_controller import (
+        ALLOWED_ACTIONS, InvestigationState,
+    )
+
+    for state in (
+        InvestigationState.PERMISSION_ANALYSIS,
+        InvestigationState.PERMISSION_HANDLING,
+    ):
+        allowed = ALLOWED_ACTIONS[state]
+        assert "start_activity" not in allowed, state
+        assert "tap" not in allowed, state
+        assert "swipe" not in allowed, state
+        # but it can still answer the dialog it is there for
+        assert "grant_permission" in allowed, state
+        assert "click_text" in allowed, state
+
+
+def test_self_termination_outranks_no_ui_rendered():
+    """
+    Measured on Teabot: 80 hooks installed, Application.onCreate fired, then
+    Process.killProcess and System.exit - and the axis was excluded as
+    NO_UI_RENDERED. The sample did not fail to draw a window; it refused to
+    run, and we watched it refuse.
+
+    Knowing WHY nothing rendered beats describing that nothing rendered.
+    """
+    from sudarshan_core.engines.risk_engine import (
+        _calculate_dynamic_score, dynamic_exclusion_reason,
+    )
+
+    d = {
+        "available": True, "runtime_attempted": True, "engine": "frida",
+        "dynamic_status": "INSTRUMENTATION_FAILED", "bfci": 0.0,
+        "launch_timeline": {"first_activity": None, "first_window": None},
+        "anti_analysis_events": [
+            {"severity": "CRITICAL", "method": "Process.killProcess"},
+            {"severity": "CRITICAL", "method": "System.exit"},
+        ],
+    }
+    assert dynamic_exclusion_reason(d) is None
+    assert _calculate_dynamic_score(d)[0] == 45.0
+
+
+def test_no_ui_without_self_termination_is_still_no_ui_rendered():
+    """
+    The override is narrow. An app that read Build.MODEL and then showed no
+    screen has not explained the missing screen.
+    """
+    from sudarshan_core.engines.risk_engine import dynamic_exclusion_reason
+
+    d = {
+        "available": True, "runtime_attempted": True, "engine": "frida",
+        "dynamic_status": "INSTRUMENTATION_FAILED", "bfci": 0.0,
+        "launch_timeline": {"first_activity": None, "first_window": None},
+        "anti_analysis_events": [{"severity": "LOW", "method": "Build.MODEL"}],
+    }
+    assert dynamic_exclusion_reason(d) == "NO_UI_RENDERED"

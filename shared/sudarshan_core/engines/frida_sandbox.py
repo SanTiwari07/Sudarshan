@@ -259,7 +259,7 @@ except ImportError:
 # a whole scan - static, launch, exploration and teardown - inside 3-4 minutes.
 # Raise it with FRIDA_ANALYSIS_DURATION when a sample genuinely needs a longer
 # walk; nothing here assumes the default.
-ANALYSIS_DURATION_SECONDS = int(os.getenv("FRIDA_ANALYSIS_DURATION", "240"))
+ANALYSIS_DURATION_SECONDS = int(os.getenv("FRIDA_ANALYSIS_DURATION", "130"))
 
 # ── Adaptive exploration window ───────────────────────────────────────────────
 # ANALYSIS_DURATION_SECONDS above is the STARTING budget, not a fixed one. It is
@@ -374,6 +374,13 @@ _THIRD_PARTY_TTL_SECONDS: float = 3.0
 # resumed. Each queued item is a process sitting suspended, so this is a
 # drain deadline, not a politeness timeout.
 SPAWN_WORKER_DRAIN_SECONDS: float = 20.0
+# How long any single frida teardown call may take before it is abandoned.
+# frida's Python API has no timeout of its own: unload() and detach() wait for
+# a reply from an agent that, during teardown after a transport failure, is
+# usually already gone. See the cleanup block in FridaSession.run.
+FRIDA_TEARDOWN_TIMEOUT_SECONDS: float = float(
+    os.getenv("SUDARSHAN_FRIDA_TEARDOWN_TIMEOUT", "10.0")
+)
 
 # How many times to relaunch after a crash that is OURS rather than the app's.
 # See _crash_is_instrumentation_race: an ART JIT thread that SIGSEGVs while
@@ -1741,17 +1748,47 @@ def _collect_crash_diagnostics(
 
             report.logcat_errors = error_lines[:100]  # cap at 100 lines
 
-            # Parse exception type & message from FATAL EXCEPTION block
+            # ── Parse the exception, but only OUR exception ──────────────────
+            #
+            # This used to scan every error line in the buffer for any
+            # "AndroidRuntime ... Exception", with no check that the crash
+            # belonged to the sample. logcat is device-wide, so whatever
+            # happened to be failing in the background became the sample's
+            # cause of death - and the `if "FATAL EXCEPTION" in line: pass`
+            # above it did nothing at all.
+            #
+            # Measured: two unrelated samples (com.sina.weibo and
+            # com.tjmonh.android) both reported the identical
+            # "java.lang.RuntimeException: Bad file descriptor" with no Java
+            # stacktrace. That is one background exception being copied onto
+            # two crash reports.
+            #
+            # It is not only a wrong label. _crash_is_instrumentation_race()
+            # returns False as soon as exception_type is set - "a sample that
+            # throws is a sample that crashed" - so a borrowed exception
+            # silently disables the ART/JIT race retry that would have
+            # relaunched a sample we broke ourselves.
+            #
+            # Android prints the block as:
+            #     E/AndroidRuntime(1234): FATAL EXCEPTION: main
+            #     E/AndroidRuntime(1234): Process: com.foo, PID: 1234
+            #     E/AndroidRuntime(1234): java.lang.RuntimeException: ...
+            # so the exception is claimed only after a Process: line naming the
+            # target, within the same block.
+            _in_fatal_block = False
+            _block_is_ours = False
             for line in error_lines:
                 if "FATAL EXCEPTION" in line:
-                    # Extract the exception on the next "E/AndroidRuntime: " line
-                    pass
-                # Pattern: E/AndroidRuntime:  java.lang.SomeException: message
-                m = re.search(
-                    r"AndroidRuntime[^\s]*\s+([A-Za-z][\w.]+Exception[^\n]*)",
-                    line,
-                )
-                if m and not report.exception_type:
+                    _in_fatal_block = True
+                    _block_is_ours = False
+                    continue
+                if not _in_fatal_block:
+                    continue
+                if "Process:" in line:
+                    _block_is_ours = package_name in line
+                    continue
+                m = re.search(r"([A-Za-z][\w.]*Exception[^\n]*)", line)
+                if m and _block_is_ours and not report.exception_type:
                     exc_str = m.group(1).strip()
                     if ":" in exc_str:
                         parts = exc_str.split(":", 1)
@@ -1759,6 +1796,11 @@ def _collect_crash_diagnostics(
                         report.exception_message = parts[1].strip()
                     else:
                         report.exception_type = exc_str
+                    _in_fatal_block = False
+                elif m:
+                    # An exception line for somebody else's block. Leave the
+                    # report's cause unset rather than borrowing it.
+                    _in_fatal_block = False
 
             if java_trace_lines:
                 report.java_stacktrace = "\n".join(java_trace_lines[:80])
@@ -4912,16 +4954,34 @@ class FridaSession:
             # then stop the worker.
             _dev = getattr(self, "_device", None)
             if _dev is not None and getattr(self, "_spawn_gating_enabled", False):
+                # Bounded for the same reason as the unload/detach calls below:
+                # this is a frida call, and after a transport failure it can
+                # block indefinitely rather than raise.
+                from concurrent.futures import ThreadPoolExecutor as _TPE
+                from concurrent.futures import TimeoutError as _TE0
+
+                _p = _TPE(max_workers=1, thread_name_prefix="frida-ungate")
                 try:
-                    _dev.disable_spawn_gating()
+                    _p.submit(_dev.disable_spawn_gating).result(
+                        timeout=FRIDA_TEARDOWN_TIMEOUT_SECONDS
+                    )
                     self._spawn_gating_enabled = False
                     logger.info("[Frida] Spawn gating disabled")
+                except _TE0:
+                    logger.error(
+                        "[Frida] disable_spawn_gating did not return within "
+                        "%.0fs - abandoning it. New processes on %s may hang "
+                        "suspended until frida-server is restarted.",
+                        FRIDA_TEARDOWN_TIMEOUT_SECONDS, self.device_serial,
+                    )
                 except Exception as exc:               # noqa: BLE001
                     logger.error(
                         "[Frida] Could not disable spawn gating: %s - new "
                         "processes on %s may hang suspended until frida-server "
                         "is restarted.", exc, self.device_serial,
                     )
+                finally:
+                    _p.shutdown(wait=False)
             if getattr(self, "_spawn_worker_thread", None) is not None:
                 self._spawn_queue.put(None)            # shutdown sentinel
                 self._spawn_worker_thread.join(timeout=SPAWN_WORKER_DRAIN_SECONDS)
@@ -4933,30 +4993,54 @@ class FridaSession:
                     )
                 self._spawn_worker_thread = None
 
+            # ── Teardown must be bounded ──────────────────────────────────────
+            #
+            # Every call below goes to frida, and frida's Python API has no
+            # timeout: unload() and detach() wait for a reply from an agent
+            # that, on the path that brings us here, may already be gone.
+            #
+            # Measured on Hook (com.half.powder): the session died with
+            # "TransportError: timeout was reached" and the run then produced
+            # no further output for over ten minutes - teardown blocked on a
+            # transport that no longer existed, and because the device lock is
+            # held for the whole session, every queued sample behind it stopped
+            # too. One dead transport wedged the entire corpus run.
+            #
+            # try/except cannot help: a hang is not an exception. Each call is
+            # given its own bounded attempt and abandoned if it overruns; the
+            # worker thread is left to its fate rather than joined, because
+            # joining it is the very thing that blocks.
+            def _bounded(label: str, fn) -> None:
+                from concurrent.futures import ThreadPoolExecutor
+                from concurrent.futures import TimeoutError as _TE
+
+                pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="frida-teardown")
+                try:
+                    pool.submit(fn).result(timeout=FRIDA_TEARDOWN_TIMEOUT_SECONDS)
+                except _TE:
+                    logger.warning(
+                        "[Frida] %s did not return within %.0fs - abandoning it. "
+                        "The transport is most likely already dead; the run's "
+                        "evidence is unaffected.",
+                        label, FRIDA_TEARDOWN_TIMEOUT_SECONDS,
+                    )
+                except Exception:                      # noqa: BLE001
+                    pass
+                finally:
+                    pool.shutdown(wait=False)
+
             # Companions first: they were attached last, and a failure to tear
             # one down must not prevent the target's own session from closing.
             for _pkg, _cs in list(getattr(self, "_companion_scripts", {}).items()):
-                try:
-                    _cs.unload()
-                except Exception:
-                    pass
+                _bounded(f"companion script unload ({_pkg})", _cs.unload)
             for _pkg, _cse in list(getattr(self, "_companion_sessions", {}).items()):
-                try:
-                    _cse.detach()
-                except Exception:
-                    pass
+                _bounded(f"companion detach ({_pkg})", _cse.detach)
 
             if getattr(self, '_script', None):
-                try:
-                    self._script.unload()
-                except Exception:
-                    pass
+                _bounded("script unload", self._script.unload)
 
             if getattr(self, '_session', None):
-                try:
-                    self._session.detach()
-                except Exception:
-                    pass
+                _bounded("session detach", self._session.detach)
             logger.info(f"[Frida] Session cleanup complete")
 
 
@@ -5656,6 +5740,70 @@ async def _run_device_session(
             base_result["crash_report"] = session.crash_report.to_dict()
         base_result["launch_timeline"] = _timeline_to_seconds(session.launch_timeline)
         base_result["launch_method_used"] = session.launch_method_used
+
+        # ── Keep what the run DID observe before it failed ────────────────────
+        #
+        # A launch failure used to discard session.collected_events entirely, so
+        # a sample that was instrumented and then died reported exactly the same
+        # thing as one that was never instrumented at all: nothing.
+        #
+        # That is wrong whenever the spawn-gated path got its hooks in. Measured
+        # on com.sina.weibo: the agent loaded BEFORE the first instruction, the
+        # process then lived 1.1s and crashed in Application.onCreate - and
+        # every hook that fired during that second was thrown away, even though
+        # onCreate is exactly where a sample that cannot survive startup does
+        # its work.
+        #
+        # The status stays honest - the launch DID fail, and that is reported -
+        # but the events travel with it. dynamic_exclusion_reason checks
+        # observed behaviour BEFORE it checks the status, so a crash-on-launch
+        # run that genuinely saw fraud behaviour is now scoreable on what it
+        # saw instead of being written off by how it ended.
+        try:
+            bfci, components, bfci_evidence = calculate_bfci(session.collected_events)
+            base_result["bfci"] = bfci
+            base_result["bfci_components"] = components
+            base_result["bfci_evidence"] = bfci_evidence
+            base_result["frida_events"] = session.collected_events
+            base_result["raw_event_counts"] = {
+                k: len(v or []) for k, v in session.collected_events.items()
+            }
+            base_result["api_calls"] = [
+                (e.get("data", {}) or {}).get("hook", "") or e.get("hook", "")
+                for bucket in session.collected_events.values()
+                for e in (bucket or [])
+            ]
+            base_result["anti_analysis_events"] = list(
+                session.collected_events.get("anti_analysis", []) or []
+            )
+            base_result["hooks_installed"] = session.hooks_installed_count
+            base_result["canary_received"] = session.canary_received
+            # The evidence store never got flushed on this path, so the count
+            # it would have produced does not exist. Reporting nothing here
+            # leaves the dashboard showing "0 runtime records" beside an axis
+            # that WAS scored - measured on Hook, which contributed BFCI 6.31
+            # from a DexClassLoader load and five anti-analysis events. Count
+            # the events actually held instead, excluding the harness's own.
+            base_result["evidence_record_count"] = sum(
+                len(v or []) for k, v in session.collected_events.items()
+                if k != "harness_action"
+            )
+            observed = sum(
+                len(v or []) for k, v in session.collected_events.items()
+                if k not in ("harness_action",)
+            )
+            if observed:
+                logger.info(
+                    "[Frida] Launch failed, but %d event(s) were captured while "
+                    "the sample was instrumented - reporting them rather than "
+                    "discarding the run.", observed,
+                )
+        except Exception as exc:                       # noqa: BLE001
+            logger.warning(
+                "[Frida] Could not carry collected events onto the failure "
+                "result: %s", exc,
+            )
+
         tracker = get_active_tracker()
         if tracker:
             tracker.frida_status = "FAILED"

@@ -168,7 +168,7 @@ services:
       # window does not have to absorb that latency. 120 keeps a whole scan -
       # static, launch, exploration, teardown - inside ~3-4 minutes.
       # Override in .env when a sample needs a longer walk.
-      - FRIDA_ANALYSIS_DURATION=${FRIDA_ANALYSIS_DURATION:-240}
+      - FRIDA_ANALYSIS_DURATION=${FRIDA_ANALYSIS_DURATION:-130}
       # Raise on a slow sandbox: scales every UI action delay.
       - SUDARSHAN_ACTION_DELAY_SCALE=${SUDARSHAN_ACTION_DELAY_SCALE:-1.0}
       - SUDARSHAN_APP_OPEN_SETTLE=${SUDARSHAN_APP_OPEN_SETTLE:-8.0}

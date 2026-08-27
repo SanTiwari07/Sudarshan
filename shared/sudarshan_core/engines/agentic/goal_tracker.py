@@ -1000,7 +1000,25 @@ class GoalTracker:
                 # app - so it only ever moves PENDING -> IN_PROGRESS.
                 if category in goal.frida_categories:
                     goal.evidence_collected.append(event)
-                    if goal.status == GoalStatus.PENDING:
+                    # NOT_REACHED and TIMEOUT re-open alongside PENDING.
+                    #
+                    # Both are assigned by finalize() to goals the WALK never
+                    # got to, and neither is a claim about the sample - so an
+                    # event arriving afterwards (from a background thread, or
+                    # from the post-run reconciliation against the full
+                    # collected set) is new information and must be able to
+                    # move the goal.
+                    #
+                    # Measured on Drinik: the session collected 49
+                    # `code_execution` events, BFCI scored 10.0 from them, and
+                    # stage 10 stayed NOT_REACHED with 0% coverage because only
+                    # PENDING re-opened. The evidence was there and the graph
+                    # would not look at it.
+                    if goal.status in (
+                        GoalStatus.PENDING,
+                        GoalStatus.NOT_REACHED,
+                        GoalStatus.TIMEOUT,
+                    ):
                         goal.status = GoalStatus.IN_PROGRESS
                         changed.append(goal.name)
                         logger.info(

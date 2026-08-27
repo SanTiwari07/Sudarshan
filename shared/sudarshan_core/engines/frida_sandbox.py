@@ -5291,6 +5291,50 @@ class FridaSession:
             if 'explorer' in locals() and explorer:
                 try:
                     explorer.stop()
+                    # ── Reconcile the goal graph against EVERY collected event ──
+                    #
+                    # The tracker was only ever fed events the explorer happened
+                    # to drain from the bus during its walk, so anything that
+                    # fired before the walk started, after it stopped, or from a
+                    # background thread it never observed was invisible to the
+                    # goal graph - while being counted perfectly well everywhere
+                    # else.
+                    #
+                    # Measured on Drinik: the session collected 49
+                    # `code_execution` events and BFCI scored 10.0 from them,
+                    # yet the goal graph reported 0 successful and 0 partial
+                    # goals, with stage 10 (Dynamic Code Loading) NOT_REACHED.
+                    # The evidence existed; the graph simply never saw it.
+                    #
+                    # This is a reconciliation, not a second source of truth:
+                    # update_from_frida_events is idempotent per goal (a goal
+                    # already COMPLETED is skipped, and duplicate evidence
+                    # cannot un-complete one), so replaying the full set can
+                    # only ever ADD confirmations the walk missed.
+                    try:
+                        replay = [
+                            event
+                            for bucket, events in self.collected_events.items()
+                            if bucket not in _HARNESS_EVENT_BUCKETS
+                            for event in (events or [])
+                        ]
+                        if replay:
+                            changed = explorer.goals.update_from_frida_events(replay)
+                            if changed:
+                                logger.info(
+                                    "[Frida] Goal graph reconciled against %d "
+                                    "collected event(s); %d goal(s) changed: %s",
+                                    len(replay), len(changed), ", ".join(changed),
+                                )
+                            # Re-settle: the replay can move a goal out of
+                            # NOT_REACHED and into IN_PROGRESS, and a finished
+                            # run must not publish IN_PROGRESS. finalize() is
+                            # idempotent, so this is a no-op when nothing moved.
+                            explorer.goals.finalize(reason="post_run_reconciliation")
+                    except Exception as exc:            # noqa: BLE001
+                        logger.warning(
+                            "[Frida] Goal reconciliation skipped: %s", exc
+                        )
                     self.reports = explorer.get_reports()
                     ui_xml = getattr(explorer, "last_ui_hierarchy_xml", "") or ""
                     if ui_xml:

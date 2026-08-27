@@ -18,8 +18,8 @@ Test Suite:          backend/tests/test_pdf_generator.py, backend/tests/test_rep
 ## 1. Executive Overview
 
 The **Security Report Generation Engine** compiles complete case findings, deterministic risk scores, MITRE ATT&CK mappings, threat intelligence, and runtime screenshots into multi-format threat reports:
-1. **ReportLab Enterprise PDF Dossier** ([`pdf_generator.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/pdf_generator.py)): High-density multi-page executive and technical PDF reports with vector gauges, bar meters, and screenshot galleries.
-2. **Standalone HTML Security Report** ([`report_generator.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/report_generator.py)): Single-file self-contained HTML report with interactive styling.
+1. **ReportLab Enterprise PDF Dossier** ([`pdf_generator.py`](../../shared/sudarshan_core/engines/pdf_generator.py)): High-density multi-page executive and technical PDF reports with vector gauges, bar meters, and screenshot galleries.
+2. **Standalone HTML Security Report** ([`report_generator.py`](../../shared/sudarshan_core/engines/report_generator.py)): Single-file self-contained HTML report with interactive styling.
 3. **STIX 2.1 JSON Bundle** (`backend/app/routes/report.py`): Structured cyber threat intelligence format for automated ingestion by SIEM/SOAR platforms.
 4. **CSV / Plaintext IOC Feed** (`backend/app/routes/report.py`): Tabular export of extracted high-confidence malicious domains, IPs, URLs, and file hashes.
 

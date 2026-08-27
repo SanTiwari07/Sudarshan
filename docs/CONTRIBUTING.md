@@ -22,10 +22,10 @@ Target Audience:     Core Contributors, Module Developers, Security Researchers
 
 ### Python (Backend & Shared Core)
 - **Runtime**: Python 3.12+ / 3.13+
-- **Shared Package**: Core logic, models, services, and engines belong in [`shared/sudarshan_core/`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/) so both backend gateway and analysis engine can consume them cleanly.
+- **Shared Package**: Core logic, models, services, and engines belong in [`shared/sudarshan_core/`](../shared/sudarshan_core/) so both backend gateway and analysis engine can consume them cleanly.
 - **Type Hints**: Mandatory for all function signatures.
 - **Formatting**: PEP-8 compliant.
-- **Validation**: Use Pydantic v2 schemas (`BaseModel`) for all API parameters and internal domain contracts ([`schemas.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/models/schemas.py)).
+- **Validation**: Use Pydantic v2 schemas (`BaseModel`) for all API parameters and internal domain contracts ([`schemas.py`](../shared/sudarshan_core/models/schemas.py)).
 
 ### TypeScript / React (Frontend)
 - **Framework**: React 18 with TypeScript and Vite.
@@ -62,7 +62,7 @@ All PRs must maintain 100% test suite compliance (**920 tests collected** across
 $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests
 ```
 
-### Key Test File Inventory (in [`tests/`](file:///d:/Projects/Sudarshan%20BOI/tests/) and [`backend/tests/`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/))
+### Key Test File Inventory (in [`tests/`](../tests/) and [`backend/tests/`](../backend/tests/))
 - `tests/test_remaining_features.py`: Tests `InvestigationManifest`, `ApktoolEngine`, `JadxEngine`, and `mitmproxy` HAR parsing.
 - `tests/test_bfci_scorer.py`: Tests logarithmic volume scoring and sequence bonuses.
 - `tests/test_workflow_reconstructor.py`: Tests causal chain workflow reconstruction.

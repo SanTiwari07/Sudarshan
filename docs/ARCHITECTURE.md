@@ -39,7 +39,7 @@ Sudarshan adheres to four foundational engineering principles:
 
 1. **The Determinism Invariant**: Generative AI models synthesize narrative explanations downstream, but **mathematical risk scores are strictly computed by deterministic algorithms**. No LLM invocation can alter the numerical score or risk band.
 2. **Fail-Loud Canary Instrumentation**: A synthetic canary event is emitted upon Frida script injection. Runs with zero runtime evidence fail loudly, falling back gracefully to the **Static Fallback Risk Engine**.
-3. **Defense-in-Depth Static Decompilation**: Combines **MobSF**, native [`apk_analyzer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/analyzers/apk_analyzer.py), **APKTool**, and **JADX** to ensure complete coverage across XML resources, raw assets, and DEX Java bytecode.
+3. **Defense-in-Depth Static Decompilation**: Combines **MobSF**, native [`apk_analyzer.py`](../shared/sudarshan_core/analyzers/apk_analyzer.py), **APKTool**, and **JADX** to ensure complete coverage across XML resources, raw assets, and DEX Java bytecode.
 4. **Causal Chain Fraud Intelligence**: Measures behavioral sequences (e.g., Overlay Phishing $\rightarrow$ SMS Intercept) rather than merely counting isolated API calls.
 
 ---
@@ -149,7 +149,7 @@ d:\Projects\Sudarshan BOI\
 │   └── entrypoint.sh                # Uvicorn entry point script
 ├── frontend/                        # React 18 SPA (Vite / Port 5173)
 │   ├── src/
-│   │   ├── components/              # WorkflowDiagram.tsx & ErrorBoundary
+│   │   ├── components/              # investigation/, threatIntel/, batch/, layout/, ui/, upload/
 │   │   ├── pages/                   # Upload, FraudCard, TechnicalView, ThreatIntel, Chat, History
 │   │   ├── utils/                   # Export formatters & score derivation
 │   │   ├── App.tsx                  # Main router & layout
@@ -166,10 +166,10 @@ d:\Projects\Sudarshan BOI\
 
 The backend is structured into a Gateway Orchestrator (`backend/app`) and a containerized Analysis Engine (`analysis-engine/app`), communicating over HTTP and sharing a zero-copy volume (`/app/uploads`):
 
-- **Gateway & Authentication ([`backend/app/main.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/main.py), [`backend/app/auth/auth.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/auth/auth.py))**: Handles JWT Bearer authentication, RBAC user management, CORS headers, SQLite database initialization (`sudarshan.db`), and delegates heavy analysis jobs to the analysis-engine microservice over internal Docker network (`http://analysis-engine:8001`).
-- **Containerized Analysis Engine ([`analysis-engine/app/main.py`](file:///d:/Projects/Sudarshan%20BOI/analysis-engine/app/main.py))**: Runs inside Ubuntu 24.04 with Java 17 and Python 3.12. Executes native APK analysis, MobSF client calls, APKTool, JADX, Frida PID attach, and mitmproxy HAR parsing.
-- **Async Job Queue ([`backend/app/workers/analysis_queue.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/workers/analysis_queue.py))**: Dispatches asynchronous analysis jobs for background processing.
-- **Case Store Persistence ([`backend/app/db/database.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/db/database.py))**: Persists structured analysis JSON records, execution metadata, and audit logs in SQLite.
+- **Gateway & Authentication ([`backend/app/main.py`](../backend/app/main.py), [`backend/app/auth/auth.py`](../backend/app/auth/auth.py))**: Handles JWT Bearer authentication, RBAC user management, CORS headers, SQLite database initialization (`sudarshan.db`), and delegates heavy analysis jobs to the analysis-engine microservice over internal Docker network (`http://analysis-engine:8001`).
+- **Containerized Analysis Engine ([`analysis-engine/app/main.py`](../analysis-engine/app/main.py))**: Runs inside Ubuntu 24.04 with Java 17 and Python 3.12. Executes native APK analysis, MobSF client calls, APKTool, JADX, Frida PID attach, and mitmproxy HAR parsing.
+- **Async Job Queue ([`backend/app/workers/analysis_queue.py`](../backend/app/workers/analysis_queue.py))**: Dispatches asynchronous analysis jobs for background processing.
+- **Case Store Persistence ([`backend/app/db/database.py`](../backend/app/db/database.py))**: Persists structured analysis JSON records, execution metadata, and audit logs in SQLite.
 
 ---
 
@@ -194,22 +194,22 @@ graph LR
 ```
 
 ### Decompilation Engine Responsibilities
-1. **MobSF ([`shared/sudarshan_core/services/mobsf_client.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/services/mobsf_client.py))**: Performs primary manifest parsing, certificate evaluation, vulnerability lookup, and domain extraction via MobSF Docker container (Port 8008).
-2. **Native APK Analyzer ([`shared/sudarshan_core/analyzers/apk_analyzer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/analyzers/apk_analyzer.py))**: Native Python static analysis engine; extracts permissions, activities, services, receivers, intent filters, DEX entropy, and suspicious strings.
-3. **APKTool ([`shared/sudarshan_core/engines/apktool_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/apktool_engine.py))**: Decompiles binary XML resources (`AndroidManifest.xml`) and extracts raw assets and layout XML files.
-4. **JADX ([`shared/sudarshan_core/engines/jadx_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/jadx_engine.py))**: Decompiles DEX bytecode into Java source code and scans for fraud-relevant code signatures (`AccessibilityService`, `SmsManager`, `DexClassLoader`, `TYPE_APPLICATION_OVERLAY`, OTP harvesting, etc.).
+1. **MobSF ([`shared/sudarshan_core/services/mobsf_client.py`](../shared/sudarshan_core/services/mobsf_client.py))**: Performs primary manifest parsing, certificate evaluation, vulnerability lookup, and domain extraction via MobSF Docker container (Port 8008).
+2. **Native APK Analyzer ([`shared/sudarshan_core/analyzers/apk_analyzer.py`](../shared/sudarshan_core/analyzers/apk_analyzer.py))**: Native Python static analysis engine; extracts permissions, activities, services, receivers, intent filters, DEX entropy, and suspicious strings.
+3. **APKTool ([`shared/sudarshan_core/engines/apktool_engine.py`](../shared/sudarshan_core/engines/apktool_engine.py))**: Decompiles binary XML resources (`AndroidManifest.xml`) and extracts raw assets and layout XML files.
+4. **JADX ([`shared/sudarshan_core/engines/jadx_engine.py`](../shared/sudarshan_core/engines/jadx_engine.py))**: Decompiles DEX bytecode into Java source code and scans for fraud-relevant code signatures (`AccessibilityService`, `SmsManager`, `DexClassLoader`, `TYPE_APPLICATION_OVERLAY`, OTP harvesting, etc.).
 
 ### Visual Impersonation (VIDE) static inputs
-[`shared/sudarshan_core/engines/vide/`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/vide/) builds a `UIProfile` from Apktool layout XML and `assets/*.html` (`build_static_ui_profile()`). Lab baselines live under `shared/sudarshan_core/data/ui_baselines/`. Full specification: [`architecture/VIDE.md`](architecture/VIDE.md).
+[`shared/sudarshan_core/engines/vide/`](../shared/sudarshan_core/engines/vide/) builds a `UIProfile` from Apktool layout XML and `assets/*.html` (`build_static_ui_profile()`). Lab baselines live under `shared/sudarshan_core/data/ui_baselines/`. Full specification: [`architecture/VIDE.md`](architecture/VIDE.md).
 
-### Investigation Manifest ([`shared/sudarshan_core/models/manifest.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/models/manifest.py))
+### Investigation Manifest ([`shared/sudarshan_core/models/manifest.py`](../shared/sudarshan_core/models/manifest.py))
 Before sandbox execution, static findings are normalized into an `InvestigationManifest` serialized to `manifest.json`. The manifest defines capability flags, dynamic hook profile selection, and goal priorities.
 
 ---
 
 ## 7. Dynamic Sandbox & Agentic Analysis Pipeline
 
-Dynamic analysis executes the target APK inside an Android Virtual Device (Android 13, x86_64, 16KB page size) managed by [`frida_sandbox.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/frida_sandbox.py):
+Dynamic analysis executes the target APK inside an Android Virtual Device (Android 13, x86_64, 16KB page size) managed by [`frida_sandbox.py`](../shared/sudarshan_core/engines/frida_sandbox.py):
 
 ```mermaid
 graph TD
@@ -234,20 +234,20 @@ graph TD
 - **Unconditional ART Deoptimization (`banking_trojan.js`)**: Executes `Java.deoptimizeEverything()` upon script load to force ART interpreter mode, eliminating JIT inlining silent hook suppression.
 - **Fail-Loud Canary**: Synthesizes a `canary` event on injection. If no canary is received, `dynamic_status` is marked `INSTRUMENTATION_FAILED`, triggering the **Static Fallback Risk Engine**.
 
-### mitmproxy Sidecar Integration ([`network_capture.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/network_capture.py))
+### mitmproxy Sidecar Integration ([`network_capture.py`](../shared/sudarshan_core/engines/network_capture.py))
 Intercepts transparent HTTPS traffic via Docker sidecar (`mitmproxy:8080`), parses HAR dump files (`dump.har`), and merges decrypted HTTP headers, status codes, and body sizes with Frida socket/OkHttp hooks.
 
-### Agentic UI Explorer ([`agentic_explorer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/agentic_explorer.py))
-An autonomous UI navigation engine guided by an LLM planner and a 15-stage fraud goal DAG ([`goal_tracker.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/agentic/goal_tracker.py)). Operates with screen-hash loop detection, coordinate bounds validation, and deterministic fallback actions.
+### Agentic UI Explorer ([`agentic_explorer.py`](../shared/sudarshan_core/engines/agentic_explorer.py))
+An autonomous UI navigation engine guided by an LLM planner and a 15-stage fraud goal DAG ([`goal_tracker.py`](../shared/sudarshan_core/engines/agentic/goal_tracker.py)). Operates with screen-hash loop detection, coordinate bounds validation, and deterministic fallback actions.
 
 ### Visual Impersonation (VIDE)
-After dynamic analysis, [`safe_run_vide_analysis()`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/vide/pipeline.py) merges static `UIProfile` data with WebView HTML collected from Frida events (`collect_webview_html_from_frida_events()`). Results are passed to `calculate_risk_score(..., vide_result=...)` and persisted on the analysis payload as `vide`. See [`architecture/VIDE.md`](architecture/VIDE.md).
+After dynamic analysis, [`safe_run_vide_analysis()`](../shared/sudarshan_core/engines/vide/pipeline.py) merges static `UIProfile` data with WebView HTML collected from Frida events (`collect_webview_html_from_frida_events()`). Results are passed to `calculate_risk_score(..., vide_result=...)` and persisted on the analysis payload as `vide`. See [`architecture/VIDE.md`](architecture/VIDE.md).
 
 ---
 
 ## 8. Risk Engine & Mathematical Models
 
-The **Fraud Risk Engine** ([`risk_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/risk_engine.py)) evaluates observable evidence against mathematical formulas:
+The **Fraud Risk Engine** ([`risk_engine.py`](../shared/sudarshan_core/engines/risk_engine.py)) evaluates observable evidence against mathematical formulas:
 
 ### 1. Static Threat and Environmental Index ($STEI$)
 $$STEI = 0.60 \times CT + 0.20 \times BT + 0.10 \times PR + 0.05 \times OB + 0.05 \times IR$$
@@ -266,21 +266,21 @@ Nominal weights: $0.25 \times STEI + 0.35 \times Dynamic + 0.20 \times ThreatCor
 
 Structured findings from static and dynamic analysis are passed to the AI Intelligence Core:
 
-- **Gemini 2.5 Flash Client ([`gemini_client.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/ai/gemini_client.py))**: Generates executive narratives, fraud objectives, banking impact assessments, and CERT-In advisories.
-- **Prompt Sanitization ([`sanitizer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/agentic/sanitizer.py))**: Sanitizes all input strings extracted from decompiled code and UI layouts to prevent prompt injection attacks.
-- **Gemini RAG Indexer ([`gemini_rag.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/ai/gemini_rag.py))**: Indexes findings, causal workflow stages, and threat intel into a vector RAG graph for grounded analyst Q&A in the `InvestigationChat` page.
+- **Gemini 2.5 Flash Client ([`gemini_client.py`](../backend/app/ai/gemini_client.py))**: Generates executive narratives, fraud objectives, banking impact assessments, and CERT-In advisories.
+- **Prompt Sanitization ([`sanitizer.py`](../shared/sudarshan_core/engines/agentic/sanitizer.py))**: Sanitizes all input strings extracted from decompiled code and UI layouts to prevent prompt injection attacks.
+- **Gemini RAG Indexer ([`gemini_rag.py`](../backend/app/ai/gemini_rag.py))**: Indexes findings, causal workflow stages, and threat intel into a vector RAG graph for grounded analyst Q&A in the `InvestigationChat` page.
 
 ---
 
 ## 10. Frontend Analyst Dashboard Architecture
 
-Investigation views (`/fraud-card`, `/technical`, `/threat-intel`, `/chat`, `/history/:sha256`) share [`InvestigationShell.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/components/investigation/InvestigationShell.tsx): loads the active case via `AnalysisContext.loadCaseByHash`, renders `CaseHeader`, and provides `ScoreLedgerSlideOver`, `EvidenceDrawer`, and `AnalystNotesPanel` (notes API). [`useInvestigationModel`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/hooks/useInvestigationModel.ts) merges static findings with `GET /api/v1/cases/{sha256}/evidence` runtime records for the drawer.
+Investigation views (`/fraud-card`, `/technical`, `/threat-intel`, `/chat`, `/history/:sha256`) share [`InvestigationShell.tsx`](../frontend/src/components/investigation/InvestigationShell.tsx): loads the active case via `AnalysisContext.loadCaseByHash`, renders `CaseHeader`, and provides `ScoreLedgerSlideOver`, `EvidenceDrawer`, and `AnalystNotesPanel` (notes API). [`useInvestigationModel`](../frontend/src/hooks/useInvestigationModel.ts) merges static findings with `GET /api/v1/cases/{sha256}/evidence` runtime records for the drawer.
 
 The React 18 SPA provides these primary analytical views:
 
-1. **Executive View ([`FraudCard.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/pages/FraudCard.tsx))**: High-level risk badge, plain-English narrative, recommended SOC actions, regulatory advisory drafts, and [`VisualImpersonationExecutiveCard`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/components/investigation/VisualImpersonationExecutiveCard.tsx) when `vide` is present.
-2. **Technical SOC View ([`TechnicalView.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/pages/TechnicalView.tsx))**: Permissions, URLs, dangerous APIs, IOC panel, evidence registry, [`VisualImpersonationPanel`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/components/investigation/VisualImpersonationPanel.tsx), raw evidence tabs, and the **Causal Fraud Workflow Diagram** ([`WorkflowDiagram.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/components/WorkflowDiagram.tsx)).
-3. **Threat Intelligence View ([`ThreatIntelView.tsx`](file:///d:/Projects/Sudarshan%20BOI/frontend/src/pages/ThreatIntelView.tsx))**: VirusTotal detection ratios, AlienVault OTX pulses, AbuseIPDB reputation, and malware family classification.
+1. **Executive View ([`FraudCard.tsx`](../frontend/src/pages/FraudCard.tsx))**: High-level risk badge, plain-English narrative, recommended SOC actions, regulatory advisory drafts, and [`VisualImpersonationExecutiveCard`](../frontend/src/components/investigation/VisualImpersonationExecutiveCard.tsx) when `vide` is present.
+2. **Technical SOC View ([`TechnicalView.tsx`](../frontend/src/pages/TechnicalView.tsx))**: Permissions, URLs, dangerous APIs, IOC panel, evidence registry, [`VisualImpersonationPanel`](../frontend/src/components/investigation/VisualImpersonationPanel.tsx), raw evidence tabs, and the **causal fraud workflow timeline** ([`AttackStory.tsx`](../frontend/src/components/investigation/AttackStory.tsx)).
+3. **Threat Intelligence View ([`ThreatIntelView.tsx`](../frontend/src/pages/ThreatIntelView.tsx))**: VirusTotal detection ratios, AlienVault OTX pulses, AbuseIPDB reputation, and malware family classification.
 
 ---
 

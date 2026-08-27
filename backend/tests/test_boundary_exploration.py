@@ -262,7 +262,7 @@ class TestExplorationCompleteBlockedWithInstallerActions(unittest.TestCase):
 class TestWaitForIdleProbeRetry(unittest.TestCase):
 
     def _run(self, coro):
-        return asyncio.get_event_loop().run_until_complete(coro)
+        return asyncio.run(coro)
 
     def test_single_probe_failure_is_retried(self):
         """T9: Single None from _focus_signature must NOT immediately return False."""

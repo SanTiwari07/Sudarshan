@@ -22,7 +22,7 @@ Do not cite **[CLAIMED]** items as fact. Several are recorded here precisely bec
 
 **Thesis.** Existing tools answer *"is this malware?"*. Sudarshan aims to answer *"who is targeted, what is at risk, and what should the fraud team do?"* The project frames itself as solving an **intelligence translation** problem rather than a malware detection problem: a malicious APK can compromise an account in under 90 seconds, while a fraud analyst typically begins investigating days later.
 
-**Stated design principles** (from [`README.md`](file:///d:/Projects/Sudarshan%20BOI/README.md)):
+**Stated design principles** (from [`README.md`](../README.md)):
 
 1. *Deterministic Detection, Explainable Intelligence* - AI explains decisions, it does not make them.
 2. *Human Judgment, Machine Scale* - machines process evidence, humans make accountable decisions.
@@ -119,7 +119,7 @@ Sudarshan BOI/
 
 ## 4. Deterministic Scoring Model
 
-**[VERIFIED]** All formulas and constants below were read from [`risk_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/risk_engine.py) and confirmed by executing the test suite.
+**[VERIFIED]** All formulas and constants below were read from [`risk_engine.py`](../shared/sudarshan_core/engines/risk_engine.py) and confirmed by executing the test suite.
 
 ### 4.1 STEI - Static Threat Exposure Index
 

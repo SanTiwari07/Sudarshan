@@ -9,8 +9,8 @@ This document outlines the evaluation methodology, verification protocols, test 
 ## Responsibilities
 
 The evaluation framework is responsible for:
-1. **Determinism Verification**: Running baseline replay tests ([`test_determinism_replay.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_determinism_replay.py)) against pinned benchmark cases ([`determinism_baseline.json`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/determinism_baseline.json)) to guarantee 100% score reproducibility.
-2. **Security & Prompt Injection Audit**: Executing dedicated unit tests ([`test_prompt_injection.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_prompt_injection.py)) against [`sanitizer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/agentic/sanitizer.py) to assert resilience against LLM prompt overrides.
+1. **Determinism Verification**: Running baseline replay tests ([`test_determinism_replay.py`](../../backend/tests/test_determinism_replay.py)) against pinned benchmark cases ([`determinism_baseline.json`](../../backend/tests/determinism_baseline.json)) to guarantee 100% score reproducibility.
+2. **Security & Prompt Injection Audit**: Executing dedicated unit tests ([`test_prompt_injection.py`](../../backend/tests/test_prompt_injection.py)) against [`sanitizer.py`](../../shared/sudarshan_core/engines/agentic/sanitizer.py) to assert resilience against LLM prompt overrides.
 3. **Pipeline End-to-End Testing**: Testing FastAPI routes, MobSF fallback mechanics, Frida sandbox status checks, RAG indexing, and export endpoints.
 4. **Audit Scorecard Management**: Providing evaluation rubrics for judges, security researchers, and Bank of India engineers.
 
@@ -18,7 +18,7 @@ The evaluation framework is responsible for:
 
 ## High-Level Overview
 
-Sudarshan enforces a rigorous quality gate prior to deployment. The automated test suite consists of **920 collected pytest test cases** (measured 2026-08-16; only 525 are enforced by CI) located in [`tests/`](file:///d:/Projects/Sudarshan%20BOI/tests/) and [`backend/tests/`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/).
+Sudarshan enforces a rigorous quality gate prior to deployment. The automated test suite consists of **920 collected pytest test cases** (measured 2026-08-16; only 525 are enforced by CI) located in [`tests/`](../../tests/) and [`backend/tests/`](../../backend/tests/).
 
 ```text
 [ Test Suite Execution (pytest) ]
@@ -74,19 +74,19 @@ graph TD
 
 ## Components
 
-Test suite modules in [`backend/tests/`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/):
+Test suite modules in [`backend/tests/`](../../backend/tests/):
 
 | Test File | Focus & Responsibilities |
 | :--- | :--- |
-| [`test_determinism_replay.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_determinism_replay.py) | Replay testing against `determinism_baseline.json` to verify 100% mathematical score reproducibility. |
-| [`test_prompt_injection.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_prompt_injection.py) | Prompt injection resilience testing verifying sanitization against malicious prompt payloads. |
-| [`test_risk_engine.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_risk_engine.py) | Unit testing 5-axis STEI, BFCI weighting, full FRS, and static fallback formula boundary conditions. |
-| [`test_bfci_scorer.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_bfci_scorer.py) | Logarithmic volume scoring and 30s sequence bonus unit tests. |
-| [`test_workflow_reconstructor.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_workflow_reconstructor.py) | Causal temporal chain workflow reconstruction tests. |
-| [`test_agentic_explorer.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_agentic_explorer.py) | Agentic UI explorer DAG, goal tracking, and perception pipeline tests. |
-| [`test_remaining_features.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_remaining_features.py) | Manifest generation, APKTool, JADX, and mitmproxy HAR ingest tests. |
-| [`test_detection_regressions.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_detection_regressions.py) | Detection regression assertions across malware patterns. |
-| [`test_frida_preflight.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_frida_preflight.py) | Frida attach SELinux preflight execution verification. |
+| [`test_determinism_replay.py`](../../backend/tests/test_determinism_replay.py) | Replay testing against `determinism_baseline.json` to verify 100% mathematical score reproducibility. |
+| [`test_prompt_injection.py`](../../backend/tests/test_prompt_injection.py) | Prompt injection resilience testing verifying sanitization against malicious prompt payloads. |
+| [`test_risk_engine.py`](../../backend/tests/test_risk_engine.py) | Unit testing 5-axis STEI, BFCI weighting, full FRS, and static fallback formula boundary conditions. |
+| [`test_bfci_scorer.py`](../../backend/tests/test_bfci_scorer.py) | Logarithmic volume scoring and 30s sequence bonus unit tests. |
+| [`test_workflow_reconstructor.py`](../../backend/tests/test_workflow_reconstructor.py) | Causal temporal chain workflow reconstruction tests. |
+| [`test_agentic_explorer.py`](../../backend/tests/test_agentic_explorer.py) | Agentic UI explorer DAG, goal tracking, and perception pipeline tests. |
+| [`test_remaining_features.py`](../../backend/tests/test_remaining_features.py) | Manifest generation, APKTool, JADX, and mitmproxy HAR ingest tests. |
+| [`test_detection_regressions.py`](../../backend/tests/test_detection_regressions.py) | Detection regression assertions across malware patterns. |
+| [`test_frida_preflight.py`](../../backend/tests/test_frida_preflight.py) | Frida attach SELinux preflight execution verification. |
 
 ---
 
@@ -174,7 +174,7 @@ backend/
 │   └── test_remaining_features.py     # Manifest, APKTool, JADX & HAR tests
 ```
 
-Live sandbox corpus runs (not part of default `pytest` collection): see [`VALIDATION.md`](../VALIDATION.md) and [`validate_dynamic_pipeline.py`](file:///d:/Projects/Sudarshan%20BOI/validate_dynamic_pipeline.py).
+Live sandbox corpus runs (not part of default `pytest` collection): see [`VALIDATION.md`](../VALIDATION.md) and [`validate_dynamic_pipeline.py`](../../validate_dynamic_pipeline.py).
 
 ---
 

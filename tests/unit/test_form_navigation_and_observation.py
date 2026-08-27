@@ -392,7 +392,8 @@ def test_the_submit_tap_uses_the_coordinates_the_observation_gave_us():
     )
 
     ladder = FormRecoveryLadder()
-    form = _form(keyboard_visible=False, unfilled_input_count=1)
+    form = _form(keyboard_visible=False, unfilled_input_count=0)
+    ladder.plan(form) # Consumes STEP_PRESS_ENTER
     action = ladder.plan(form)
     assert action["_recovery_step"] == STEP_TAP_SUBMIT
     assert (action["x"], action["y"]) == (200, 500)

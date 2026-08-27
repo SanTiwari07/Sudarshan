@@ -1,118 +1,220 @@
-# SUDARSHAN Enterprise Documentation Portal Index
+<div align="center">
 
-Welcome to the **Sudarshan Enterprise Documentation Portal**. This portal serves as the authoritative, evidence-grounded technical reference for the **SUDARSHAN Banking Threat Intelligence Platform**.
+<img src="../frontend/public/brand/sudarshan-mark-colour.png" alt="SUDARSHAN" width="110">
 
-All documentation herein is strictly derived from and cross-verified against the active codebase (**SanTiwari07/Sudarshan**).
+# SUDARSHAN documentation
 
----
+Technical reference for the SUDARSHAN Android fraud investigation platform.
 
-## Core System & Architecture Index
+[Repository README](../README.md) · [API reference](api/ENDPOINTS.md) · [How to run](HOW_TO_RUN.md) · [Feature status](FEATURE_STATUS.md) · [Known limitations](KNOWN_LIMITATIONS.md)
 
-| Document | Title | Primary Focus & System Scope |
-| :--- | :--- | :--- |
-| [**CURRENT_ARCHITECTURE.md**](CURRENT_ARCHITECTURE.md) | **Current System Architecture** | **Authoritative end-to-end technical reference: multi-container topology, pipelines, math formulas, and data flows.** |
-| [**CODEBASE_MAP.md**](CODEBASE_MAP.md) | **Codebase Map & Reference** | **Exhaustive directory-by-directory, class, and function index across backend, engine, shared core, and frontend.** |
-| [**FEATURE_STATUS.md**](FEATURE_STATUS.md) | **Feature Reality Matrix** | **Verified implementation matrix (Implemented, Partial, Experimental, Planned) with test evidence.** |
-| [**KNOWN_LIMITATIONS.md**](KNOWN_LIMITATIONS.md) | **Known Limitations & Boundaries** | **Catalog of runtime constraints, dormancy detection, networking boundaries, token limits, and workarounds.** |
-| [**SUDARSHAN_MASTER.md**](SUDARSHAN_MASTER.md) | **Master Knowledge Base** | **Comprehensive system reference covering all platform components and historical context.** |
+</div>
 
 ---
 
-## Subsystem & Architectural Documentation
+Every document here is written against the active codebase in `SanTiwari07/Sudarshan`. Where a document and the code disagree, the code is correct and the document is a defect — report it.
 
-| Document | Title | Primary Focus & System Scope |
-| :--- | :--- | :--- |
-| [**01 - Introduction**](01_INTRODUCTION.md) | Problem Statement & Scope | Threat model, targeted mobile banking trojans (Drinik, Xenomorph, Cerberus, Anubis, SOVA, etc.), operational scope. |
-| [**02 - System Overview**](02_SYSTEM_OVERVIEW.md) | Platform Architecture & Data Flow | End-to-end processing pipeline, microservices layout, container network topology, runtime telemetry. |
-| [**ARCHITECTURE.md**](ARCHITECTURE.md) | System Design & Technical Spec | In-depth technical specification of backend gateway, frontend, microservice, database, and shared volumes. |
-| [**API Endpoints**](api/ENDPOINTS.md) | REST API Route Index | Complete index of all API routes across `/api/v1/*` (Upload, Batch, Cases, Intel, Reports, Auth) and `/api/*` (Runtime). |
-| [**03 - Static Threat Intelligence**](architecture/03_STATIC_THREAT_INTELLIGENCE.md) | Static Analysis & Decompilation | Androguard native analysis, `apk_repair.py` AXML recovery, APKTool 2.10.0, JADX 1.5.1, `manifest.py`, STEI formula. |
-| [**VIDE - Visual Impersonation**](architecture/VIDE.md) | Visual Impersonation (VIDE) | Layout AST comparison, Delta-E CIE76 color matching, Bank Signer Registry, and CH27 triad escalation rule. |
-| [**04 - Dynamic Analysis Engine**](architecture/04_DYNAMIC_ANALYSIS_ENGINE.md) | Dynamic Sandbox & Deep Explorer | Frida 17 exact PID attach, `banking_trojan.bundle.js` hook bundle, SandboxProvider, Perception pipeline, and Action Dispatch. |
-| [**05 - AI Investigation Engine**](architecture/05_AI_INVESTIGATION_ENGINE.md) | AI Core, RAG & Prompt Safety | Gemini circuit breaker (`AVAILABLE`/`DEGRADED`/`OPEN`), primary/fallback failover, thinking token budgeting, vector RAG. |
-| [**06 - Evidence Processing**](architecture/06_EVIDENCE_PROCESSING.md) | Event Bus & Workflow Engine | `RuntimeEventBus`, `EvidenceStore`, `ScreenshotManager`, `WorkflowReconstructor` causal chain engine, and telemetry sinks. |
-| [**07 - Fraud Intelligence Engine**](architecture/07_FRAUD_INTELLIGENCE_ENGINE.md) | Threat Correlation & Attribution | VirusTotal, AlienVault OTX, AbuseIPDB correlation, 24h TTL SQLite IOC cache, deterministic family classifier. |
-| [**08 - Deterministic Risk Engine**](architecture/08_DETERMINISTIC_RISK_ENGINE.md) | Risk Scoring & Math Formulas | 5-axis STEI, BFCI v2, 4-axis FRS formula, axis exclusion/renormalization, and the 4 safety floors. |
-| [**09 - AI Report Generation**](architecture/09_AI_REPORT_GENERATION.md) | Security Reporting & Export | ReportLab PDF generator (`pdf_generator.py`), standalone HTML reports, STIX 2.1 JSON exporter, CSV IOC feeds. |
-| [**10 - Analyst Dashboard**](dashboard/10_DASHBOARD.md) | Analyst UI & Visual Workflows | React 18 SPA, `AppShell`, `FraudCard.tsx`, `TechnicalView.tsx`, `ThreatIntelView.tsx`, `BatchScan.tsx`, `InvestigationChat.tsx`. |
-| [**11 - Evaluation Strategy**](evaluation/11_EVALUATION.md) | Verification & Testing | Pytest test suites across `tests/` and `backend/tests/`, ground-truth matrix, determinism replay. |
-| [**Corpus Detection Validation**](evaluation/CORPUS_STATIC_VALIDATION.md) | Measured Accuracy | Static-only scoring of 17 labelled samples (8 real banking trojans, 9 controls): **8/8 flagged, 0/9 false positives**. |
-| [**HOW_TO_RUN.md**](HOW_TO_RUN.md) | Installation & Operations | Prerequisites, Docker Compose setup, `start.ps1`, environment configuration, and emulator connectivity. |
-| [**VALIDATION.md**](VALIDATION.md) | Validation Protocols | Determinism replay, ground-truth matrix, pytest suite, and dynamic pipeline validation. |
-| [**DAE_CURRENT_STATE.md**](DAE_CURRENT_STATE.md) | Technical Resolution Audit | Resolution state of containerization, explicit TCP transport, preflight pipeline, Frida 17 Java bridge, exact PID attach, BFCI v2. |
-| [**CONTRIBUTING.md**](CONTRIBUTING.md) | Developer Guidelines | Code standards, PEP-8/ESLint style, pytest testing workflows, pull request process. |
-| [**CHANGELOG.md**](CHANGELOG.md) | Release Notes & Version History | Version history (`v2.1.0`), release highlights, and commit traceability. |
-| [**security/P0_SANDBOX_ESCAPE_INCIDENT.md**](security/P0_SANDBOX_ESCAPE_INCIDENT.md) | Sandbox Escape Incident | P0 containment remediation, hardened compose, env checklist. |
-| [**security/P0_RED_TEAM_PENETRATION_REPORT.md**](security/P0_RED_TEAM_PENETRATION_REPORT.md) | Red Team Findings | ADB bypass fixes, residual risks, regression test commands. |
+Last synchronised against the codebase: **2026-08-27**.
 
 ---
 
-## High-Level Platform Architecture
+## Start here
+
+| If you are | Read, in order |
+| :--- | :--- |
+| Evaluating the platform | [Introduction](01_INTRODUCTION.md) → [System overview](02_SYSTEM_OVERVIEW.md) → [Feature status](FEATURE_STATUS.md) → [Known limitations](KNOWN_LIMITATIONS.md) |
+| Deploying or operating it | [How to run](HOW_TO_RUN.md) → [Current architecture](CURRENT_ARCHITECTURE.md) → [Database](DATABASE.md) → [Security](#security) |
+| Integrating against the API | [API endpoints](api/ENDPOINTS.md) → [System overview](02_SYSTEM_OVERVIEW.md) |
+| Working on the code | [Codebase map](CODEBASE_MAP.md) → [Architecture](ARCHITECTURE.md) → the subsystem document for your area → [Contributing](CONTRIBUTING.md) |
+| Investigating a case as an analyst | [Analyst dashboard](dashboard/10_DASHBOARD.md) → [Deterministic risk engine](architecture/08_DETERMINISTIC_RISK_ENGINE.md) → [Known limitations](KNOWN_LIMITATIONS.md) |
+
+---
+
+## Core reference
+
+| Document | Purpose |
+| :--- | :--- |
+| [01 — Introduction](01_INTRODUCTION.md) | Problem statement, threat model, targeted malware families, operational scope |
+| [02 — System overview](02_SYSTEM_OVERVIEW.md) | Service topology, container network, end-to-end data flow |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Engineering architecture: gateway, microservice, database, shared volumes |
+| [CURRENT_ARCHITECTURE.md](CURRENT_ARCHITECTURE.md) | Authoritative container topology, pipeline stages and scoring formulas |
+| [CODEBASE_MAP.md](CODEBASE_MAP.md) | Directory, module and responsibility index across all four services |
+| [DATABASE.md](DATABASE.md) | SQLite schema, tables, indexes and retention policy |
+| [FEATURE_STATUS.md](FEATURE_STATUS.md) | Implementation status matrix with per-feature source evidence |
+| [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) | Operational boundaries, impact and workarounds |
+| [SUDARSHAN_MASTER.md](SUDARSHAN_MASTER.md) | Consolidated long-form platform reference |
+| [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) | Programme context and design intent |
+
+## Subsystems
+
+| Document | Covers |
+| :--- | :--- |
+| [03 — Static threat intelligence](architecture/03_STATIC_THREAT_INTELLIGENCE.md) | Androguard analysis, APK repair, APKTool 2.10.0, JADX 1.5.1, investigation manifest, STEI |
+| [04 — Dynamic analysis engine](architecture/04_DYNAMIC_ANALYSIS_ENGINE.md) | Sandbox providers, Frida 17 attach, ART deopt, launch ladder, deep UI exploration |
+| [05 — AI investigation engine](architecture/05_AI_INVESTIGATION_ENGINE.md) | Gemini provider failover, circuit breaker, RAG grounding, prompt-injection defence |
+| [06 — Evidence processing](architecture/06_EVIDENCE_PROCESSING.md) | Runtime event bus, evidence store, screenshot manager, workflow reconstruction |
+| [07 — Fraud intelligence engine](architecture/07_FRAUD_INTELLIGENCE_ENGINE.md) | VirusTotal / OTX / AbuseIPDB correlation, IOC cache, family classification |
+| [08 — Deterministic risk engine](architecture/08_DETERMINISTIC_RISK_ENGINE.md) | STEI, BFCI v2, FRS, axis renormalisation, escalation rules, safety floors |
+| [09 — AI report generation](architecture/09_AI_REPORT_GENERATION.md) | ReportLab PDF, standalone HTML, STIX 2.1, IOC and rule exports |
+| [10 — Analyst dashboard](dashboard/10_DASHBOARD.md) | React SPA views, case routes, investigation surfaces |
+| [VIDE](architecture/VIDE.md) | Visual impersonation detection, baseline comparison, signer registry, CH27 |
+
+### Dynamic analysis deep dives
+
+| Document | Covers |
+| :--- | :--- |
+| [DYNAMIC_ANALYSIS_2.0.md](architecture/DYNAMIC_ANALYSIS_2.0.md) | Design of the current dynamic engine generation |
+| [DYNAMIC_AXIS_OBSERVATION.md](architecture/DYNAMIC_AXIS_OBSERVATION.md) | Why an unobserved run is excluded rather than scored zero |
+| [CONCEALED_SAMPLE_SCORING.md](architecture/CONCEALED_SAMPLE_SCORING.md) | Dropper and concealed-payload handling, and the visibility floor |
+| [DYNAMIC_INVESTIGATION_AUDIT.md](architecture/DYNAMIC_INVESTIGATION_AUDIT.md) | Audit of the investigation path against observed runs |
+| [DYNAMIC_INVESTIGATION_TESTING.md](architecture/DYNAMIC_INVESTIGATION_TESTING.md) | Test strategy for the dynamic path |
+| [DYNAMIC_INVESTIGATION_LIVE_VALIDATION.md](architecture/DYNAMIC_INVESTIGATION_LIVE_VALIDATION.md) | Results of live-device validation runs |
+| [DYNAMIC_ANALYSIS_PORTABILITY.md](DYNAMIC_ANALYSIS_PORTABILITY.md) | Moving the sandbox between hosts and providers |
+| [DAE_CURRENT_STATE.md](DAE_CURRENT_STATE.md) | Resolution state of the dynamic engine's known defects |
+
+## Operations
+
+| Document | Purpose |
+| :--- | :--- |
+| [HOW_TO_RUN.md](HOW_TO_RUN.md) | Prerequisites, Docker Compose setup, `start.ps1`, emulator connectivity |
+| [MIGRATION.md](MIGRATION.md) | Upgrade and data migration procedures |
+| [VALIDATION.md](VALIDATION.md) | Determinism replay, ground-truth matrix, pipeline validation |
+| [YARA_RULES.md](YARA_RULES.md) | YARA integration and rule authoring |
+| [BOI_DEMO_CREDENTIALS.md](BOI_DEMO_CREDENTIALS.md) | Demonstration account configuration — placeholders only, never real secrets |
+
+## API
+
+| Document | Purpose |
+| :--- | :--- |
+| [api/ENDPOINTS.md](api/ENDPOINTS.md) | Every active route: method, path, required role, request body, response |
+
+## Evaluation
+
+| Document | Purpose |
+| :--- | :--- |
+| [11 — Evaluation strategy](evaluation/11_EVALUATION.md) | Test suite structure, verification protocols, determinism invariant |
+| [CORPUS_STATIC_VALIDATION.md](evaluation/CORPUS_STATIC_VALIDATION.md) | Measured static-only accuracy over 17 labelled samples |
+| [VIRUSTOTAL_CROSSCHECK.md](evaluation/VIRUSTOTAL_CROSSCHECK.md) | Engine verdicts cross-checked against VirusTotal |
+| [BENCHMARKS.md](evaluation/BENCHMARKS.md) | Timing and throughput measurements |
+| [CASE_STUDIES.md](evaluation/CASE_STUDIES.md) | Worked investigations with per-axis scores |
+
+<a id="security"></a>
+
+## Security
+
+| Document | Purpose |
+| :--- | :--- |
+| [P0_SANDBOX_ESCAPE_INCIDENT.md](security/P0_SANDBOX_ESCAPE_INCIDENT.md) | Containment incident, remediation and the hardened Compose overlay |
+| [P0_RED_TEAM_PENETRATION_REPORT.md](security/P0_RED_TEAM_PENETRATION_REPORT.md) | Red-team findings, ADB bypass fixes, residual risk |
+
+## Project
+
+| Document | Purpose |
+| :--- | :--- |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Development setup, testing, review expectations |
+| [CHANGELOG.md](CHANGELOG.md) | Documentation-scoped change history (repository changelog: [../CHANGELOG.md](../CHANGELOG.md)) |
+| [12 — Future work](future/12_FUTURE_WORK.md) | Planned direction; nothing here is implemented |
+| [report/](report/README.md) | LaTeX prototype report sources |
+
+## Component READMEs
+
+| Component | Document |
+| :--- | :--- |
+| Backend gateway | [../backend/README.md](../backend/README.md) |
+| Analysis engine | [../analysis-engine/README.md](../analysis-engine/README.md) |
+| Shared core | [../shared/README.md](../shared/README.md) |
+| Frontend | [../frontend/README.md](../frontend/README.md) |
+| Scripts | [../scripts/README.md](../scripts/README.md) |
+| Tests | [../tests/README.md](../tests/README.md) |
+| Frida setup notes | [../backend/README_FRIDA.md](../backend/README_FRIDA.md) |
+
+---
+
+## Platform architecture
 
 ```mermaid
 graph TD
-    subgraph Presentation Layer
-        UI["React 18 Analyst Dashboard<br/>(Port 5173 / TechnicalView.tsx / FraudCard.tsx / BatchScan.tsx)"]
+    subgraph Presentation
+        UI["React 18 analyst dashboard<br/>port 5173 · frontend/src/App.tsx"]
     end
 
-    subgraph Core Gateway & Storage
-        API["FastAPI Orchestrator Gateway<br/>(Port 8000 / backend/app/main.py)"]
-        AUTH["JWT Auth & RBAC<br/>(backend/app/auth/auth.py)"]
-        TELEMETRY["Runtime Telemetry API<br/>(backend/app/routes/runtime_api.py)"]
-        DB[(SQLite Case Store & IOC Cache<br/>sudarshan.db)]
-        VOL[("Shared Volume /app/uploads")]
+    subgraph Gateway["Backend gateway · FastAPI 2.1.0 · port 8000"]
+        API["Routers · backend/app/main.py"]
+        AUTH["JWT auth + RBAC<br/>backend/app/auth/auth.py"]
+        TELEMETRY["Runtime telemetry<br/>backend/app/routes/runtime_api.py"]
+        RAG["Gemini RAG<br/>backend/app/ai/gemini_rag.py"]
+        DB[("SQLite case store + IOC cache<br/>aiosqlite")]
+        VOL[("Shared volume /app/uploads")]
     end
 
-    subgraph Containerized Analysis Engine Microservice (Port 8001)
-        ENGINE["Analysis Engine REST API<br/>(Port 8001 / analysis-engine/app/main.py)"]
-        MANIFEST["Investigation Manifest<br/>(shared/sudarshan_core/models/manifest.py)"]
-        ANDRO["Native APK Analyzer<br/>(shared/sudarshan_core/analyzers/apk_analyzer.py)"]
-        REPAIR["APK Repair Engine<br/>(shared/sudarshan_core/engines/apk_repair.py)"]
-        APKT["APKTool Engine<br/>(shared/sudarshan_core/engines/apktool_engine.py)"]
-        JADX["JADX Source Scanner<br/>(shared/sudarshan_core/engines/jadx_engine.py)"]
-        VIDE["VIDE Engine<br/>(shared/sudarshan_core/engines/vide/pipeline.py)"]
-        FRIDA["Frida 17 Sandbox Controller<br/>(shared/sudarshan_core/engines/frida_sandbox.py)"]
-        AGENT["Agentic UI Explorer<br/>(shared/sudarshan_core/engines/agentic_explorer.py)"]
+    subgraph Engine["Analysis engine · FastAPI 2.3.0 · internal port 8001"]
+        ENG["analysis-engine/app/main.py"]
+        MANIFEST["Investigation manifest<br/>models/manifest.py"]
+        ANDRO["Native analyzer<br/>analyzers/apk_analyzer.py"]
+        REPAIR["APK repair<br/>engines/apk_repair.py"]
+        APKT["APKTool 2.10.0<br/>engines/apktool_engine.py"]
+        JADX["JADX 1.5.1<br/>engines/jadx_engine.py"]
+        VIDE["VIDE<br/>engines/vide/pipeline.py"]
+        FRIDA["Frida 17.16.4 controller<br/>engines/frida_sandbox.py"]
+        AGENT["Agentic explorer<br/>engines/agentic_explorer.py"]
     end
 
-    subgraph External Devices & Network Sidecars
-        ADB["ADB TCP Bridge<br/>(Genymotion VM IP or host.docker.internal:5037)"]
-        DEVICE["Android Sandbox (Genymotion / AVD)<br/>frida-server 17.16.4 (Port 27055)"]
-        MOBSF["Optional MobSF Engine<br/>(Port 8008 / mobsf_client.py)"]
+    subgraph Scoring["Evidence and scoring"]
+        BUS["Event bus + evidence store"]
+        BFCI["BFCI v2<br/>engines/bfci_scorer.py"]
+        WORKFLOW["Workflow reconstructor"]
+        CORR["Threat correlator · 24 h IOC cache"]
+        RISK["Deterministic risk engine<br/>engines/risk_engine.py"]
     end
 
-    subgraph Intelligence & Scoring Layer
-        BFCI_ENG["BFCI v2 Scorer<br/>(shared/sudarshan_core/engines/bfci_scorer.py)"]
-        WORKFLOW["Workflow Reconstructor<br/>(shared/sudarshan_core/engines/workflow_reconstructor.py)"]
-        CORR["Threat Correlator (24h Cache)<br/>(shared/sudarshan_core/services/threat_correlator.py)"]
-        RISK["Deterministic Risk Engine<br/>(shared/sudarshan_core/engines/risk_engine.py)"]
-        RAG["Gemini RAG Core<br/>(backend/app/ai/gemini_rag.py)"]
+    subgraph External["Host and sidecars"]
+        ADB["Host ADB server :5037"]
+        DEVICE["Android guest · Genymotion or AVD<br/>frida-server :27055"]
+        MOBSF["MobSF · 127.0.0.1:8008"]
+        MITM["mitmproxy · 127.0.0.1:8085"]
     end
 
-    UI -->|HTTPS REST| API
+    UI -->|REST + SSE| API
     API --> AUTH
     API --> TELEMETRY
+    API --> RAG
     API --> DB
     API --- VOL
-    API -->|HTTP REST / Shared Volume| ENGINE
-    ENGINE --- VOL
+    API -->|HTTP + shared volume| ENG
+    ENG --- VOL
 
-    ENGINE --> MANIFEST
-    MANIFEST --> MOBSF
+    ENG --> MANIFEST
     MANIFEST --> ANDRO
     MANIFEST --> REPAIR
     MANIFEST --> APKT
     MANIFEST --> JADX
     MANIFEST --> VIDE
+    ANDRO -.optional.-> MOBSF
 
-    ENGINE --> FRIDA
-    FRIDA --> ADB
-    ADB --> DEVICE
+    ENG --> FRIDA
+    FRIDA --> ADB --> DEVICE
+    DEVICE -.TLS capture.-> MITM --> FRIDA
     FRIDA --> AGENT
+    AGENT --> BUS
+    FRIDA --> BUS
 
-    FRIDA --> BFCI_ENG
-    FRIDA --> WORKFLOW
-    ENGINE --> CORR
-    ENGINE --> RISK
-    RISK --> RAG
+    BUS --> BFCI
+    BUS --> WORKFLOW
+    ENG --> CORR
+    BFCI --> RISK
+    WORKFLOW --> RISK
+    CORR --> RISK
+    VIDE --> RISK
+    RISK --> DB
+    DB --> RAG
 ```
+
+---
+
+## Conventions used in these documents
+
+- **Source is authoritative.** Every non-obvious claim names the file that implements it.
+- **Deterministic and AI-assisted are distinguished explicitly.** The risk engine owns the score; the model owns the prose. A document that blurs this is wrong.
+- **Absence of evidence is stated as such.** "The sandbox observed nothing" and "the sample is clean" are different claims and are never written interchangeably.
+- **Measurements carry a date and a commit.** A number without provenance is not a measurement.
+- **No credentials.** Placeholders only, in every example.

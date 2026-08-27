@@ -34,7 +34,7 @@ This latency exists not because of a lack of technical malware detection tools, 
  [ 500-Page Technical Log Reports (Smali, Memory Dumps, PCAPs) ]
                  │
                  ▼
- ❌ [ Intelligence Translation Gap: 3–7 Days Delay ]
+ [ Intelligence translation gap: 3-7 day delay ]  <-- the break
                  │
                  ▼
  [ SOC Analyst / Fraud Operations Action (Blocked Account, Revoked Token) ]
@@ -99,7 +99,7 @@ Sudarshan's operational model is built on three core design principles inspired 
 ### 1. Deterministic Detection, Explainable Intelligence
 *Inspired by PayPal & Reserve Bank of India (RBI) Fraud Governance Guidelines.*
 - **Principle**: Artificial Intelligence should explain decisions, not make them.
-- **Implementation**: Every alert, risk score, or mitigation recommendation is derived from a transparent, weighted mathematical formula based on observable threat behaviors. Generative AI models operate strictly downstream of the deterministic risk engine, constrained to summarizing verified evidence stored in the RAG index ([`gemini_rag.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/ai/gemini_rag.py)). No LLM is permitted to mutate or compute risk scores.
+- **Implementation**: Every alert, risk score, or mitigation recommendation is derived from a transparent, weighted mathematical formula based on observable threat behaviors. Generative AI models operate strictly downstream of the deterministic risk engine, constrained to summarizing verified evidence stored in the RAG index ([`gemini_rag.py`](../backend/app/ai/gemini_rag.py)). No LLM is permitted to mutate or compute risk scores.
 
 ### 2. Human Judgment, Machine Scale
 *Inspired by Palantir & Enterprise SOC Operations.*
@@ -223,6 +223,6 @@ docs/
 | Capability / Module | Status | Rationale & Code Location |
 | :--- | :--- | :--- |
 | **Intelligence Problem Framing** | **Implemented** | Reflected across dashboard layout, risk engine outputs, and report templates. |
-| **Deterministic Risk Rules** | **Implemented** | $STEI$, $BFCI$, and $FRS$ formulas implemented in [`shared/sudarshan_core/engines/risk_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/risk_engine.py). |
-| **JWT Authentication** | **Implemented** | Implemented in [`backend/app/auth/auth.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/auth/auth.py) with seeded admin setup on startup. |
-| **Async Worker Queue** | **Implemented** | In-memory asyncio queue worker pool implemented in [`backend/app/workers/analysis_queue.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/workers/analysis_queue.py). |
+| **Deterministic Risk Rules** | **Implemented** | $STEI$, $BFCI$, and $FRS$ formulas implemented in [`shared/sudarshan_core/engines/risk_engine.py`](../shared/sudarshan_core/engines/risk_engine.py). |
+| **JWT Authentication** | **Implemented** | Implemented in [`backend/app/auth/auth.py`](../backend/app/auth/auth.py) with seeded admin setup on startup. |
+| **Async Worker Queue** | **Implemented** | In-memory asyncio queue worker pool implemented in [`backend/app/workers/analysis_queue.py`](../backend/app/workers/analysis_queue.py). |

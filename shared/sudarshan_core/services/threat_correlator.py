@@ -163,7 +163,9 @@ async def _vt_check_hash(sha256: str) -> Dict[str, Any]:
                 headers={"x-apikey": vt_key},
             )
             if r.status_code == 404:
-                return {"found": False, "in_database": False}
+                result = {"found": False, "in_database": False}
+                await _cache_store(sha256, "vt_hash", result)
+                return result
             r.raise_for_status()
             data = r.json()
             attrs = data.get("data", {}).get("attributes", {})
@@ -233,7 +235,9 @@ async def _vt_check_url(url: str) -> Dict[str, Any]:
                 headers={"x-apikey": vt_key},
             )
             if r.status_code == 404:
-                return {"found": False, "url": url}
+                result = {"found": False, "url": url}
+                await _cache_store(url, "vt_url", result)
+                return result
             r.raise_for_status()
             attrs = r.json().get("data", {}).get("attributes", {})
             stats = attrs.get("last_analysis_stats", {})
@@ -260,6 +264,9 @@ async def _otx_check_hash(sha256: str) -> Dict[str, Any]:
     otx_key = _get_otx_key()
     if not otx_key:
         return {}
+    cached = await _cached_lookup(sha256, "otx_hash")
+    if cached is not None:
+        return cached
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
             r = await client.get(
@@ -267,11 +274,13 @@ async def _otx_check_hash(sha256: str) -> Dict[str, Any]:
                 headers={"X-OTX-API-KEY": otx_key},
             )
             if r.status_code == 404:
-                return {"found": False}
+                result = {"found": False}
+                await _cache_store(sha256, "otx_hash", result)
+                return result
             r.raise_for_status()
             data = r.json()
             pulses = data.get("pulse_info", {}).get("pulses", [])
-            return {
+            result = {
                 "found": True,
                 "pulse_count": len(pulses),
                 "pulses": [
@@ -283,6 +292,8 @@ async def _otx_check_hash(sha256: str) -> Dict[str, Any]:
                     for p in pulses[:3]
                 ],
             }
+            await _cache_store(sha256, "otx_hash", result)
+            return result
     except Exception as e:
         logger.warning(f"OTX hash query failed: {e}")
         return {}
@@ -302,7 +313,9 @@ async def _otx_check_domain(domain: str) -> Dict[str, Any]:
                 headers={"X-OTX-API-KEY": otx_key},
             )
             if r.status_code == 404:
-                return {"found": False, "domain": domain}
+                result = {"found": False, "domain": domain}
+                await _cache_store(domain, "otx_domain", result)
+                return result
             r.raise_for_status()
             data = r.json()
             pulses = data.get("pulse_info", {}).get("pulses", [])
@@ -523,6 +536,9 @@ async def correlate(
             if ip_res.get("reputation") == "malicious":
                 result["malicious_ips"].append(ip_res.get("ip", ""))
             sources_queried.append("AbuseIPDB")
+
+    if _get_abuseipdb_key() and not ips:
+        result["abuseipdb_checked_empty"] = True
 
     result["ioc_reputation"] = ioc_rep
     if ioc_rep:

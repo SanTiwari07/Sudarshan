@@ -129,14 +129,14 @@ This document provides a comprehensive specification of all active REST API endp
 
 | Method & Path | Auth Required | Purpose | Request Body / Params | Response Summary |
 | :--- | :--- | :--- | :--- | :--- |
-| `GET /api/runtime/health` | None | Runtime telemetry API health check | None | `{"status": "ok"}` |
-| `GET /api/runtime/status` | None | Pipeline health and active stage status | None | `{"active_stages": [...], "device_connected": bool}` |
-| `GET /api/runtime/hooks` | None | Frida hook installation & hit counters | None | `{"hooks": [{"name": "...", "hits": int, "errors": int}]}` |
-| `GET /api/runtime/events` | None | Ring buffer of recent telemetry events | None | `{"events": [...]}` (max 500 events) |
-| `GET /api/runtime/pipeline` | None | State machine transition history | None | `{"transitions": [...]}` |
-| `GET /api/runtime/metrics` | None | Event throughput and processing metrics | None | `{"events_per_second": float, "dropped_events": int}` |
-| `GET /api/runtime/evidence` | None | Real-time snapshots of dynamic evidence | None | `{"evidence": [...]}` |
-| `GET /api/runtime/diagnostics` | None | Combined system diagnostics | None | Memory, queue, and ADB socket status |
+| `GET /api/runtime/health` | Bearer Token (Analyst scoped) | Runtime telemetry API health check | Bearer Token (Analyst scoped) | `{"status": "ok"}` |
+| `GET /api/runtime/status` | Bearer Token (Analyst scoped) | Pipeline health and active stage status | Bearer Token (Analyst scoped) | `{"active_stages": [...], "device_connected": bool}` |
+| `GET /api/runtime/hooks` | Bearer Token (Analyst scoped) | Frida hook installation & hit counters | Bearer Token (Analyst scoped) | `{"hooks": [{"name": "...", "hits": int, "errors": int}]}` |
+| `GET /api/runtime/events` | Bearer Token (Analyst scoped) | Ring buffer of recent telemetry events | Bearer Token (Analyst scoped) | `{"events": [...]}` (max 500 events) |
+| `GET /api/runtime/pipeline` | Bearer Token (Analyst scoped) | State machine transition history | Bearer Token (Analyst scoped) | `{"transitions": [...]}` |
+| `GET /api/runtime/metrics` | Bearer Token (Analyst scoped) | Event throughput and processing metrics | Bearer Token (Analyst scoped) | `{"events_per_second": float, "dropped_events": int}` |
+| `GET /api/runtime/evidence` | Bearer Token (Analyst scoped) | Real-time snapshots of dynamic evidence | Bearer Token (Analyst scoped) | `{"evidence": [...]}` |
+| `GET /api/runtime/diagnostics` | Bearer Token (Analyst scoped) | Combined system diagnostics | Bearer Token (Analyst scoped) | Memory, queue, and ADB socket status |
 | `POST /api/events` | Internal secret | Ingest runtime events from external sink | `RuntimeEvent` payload | `{"status": "recorded"}` |
 
 ---

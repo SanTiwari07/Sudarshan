@@ -923,8 +923,21 @@ def _dismiss_permission_review_screen(device: str) -> bool:
                 time.sleep(0.75)
                 return True
 
-    logger.info("[Frida] ReviewPermissionsActivity visible - using fallback CONTINUE tap")
-    _adb("-s", device, "shell", "input tap 507 1127", timeout=10)
+    logger.info("[Frida] ReviewPermissionsActivity visible - using fallback CONTINUE tap (screen relative)")
+    ok_wm, wm_out = _adb("-s", device, "shell", "wm size", timeout=10)
+    if ok_wm and wm_out and "Physical size:" in wm_out:
+        try:
+            # "Physical size: 1080x1920"
+            dims = wm_out.strip().split()[-1]
+            w, h = map(int, dims.split("x"))
+            tx, ty = w // 2, int(h * 0.90)
+            _adb("-s", device, "shell", f"input tap {tx} {ty}", timeout=10)
+        except Exception:
+            # Absolute fallback
+            _adb("-s", device, "shell", "input keyevent 66", timeout=10)
+    else:
+        _adb("-s", device, "shell", "input keyevent 66", timeout=10)
+        
     time.sleep(0.75)
     return True
 

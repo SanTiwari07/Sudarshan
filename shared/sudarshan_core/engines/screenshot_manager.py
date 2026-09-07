@@ -378,7 +378,7 @@ class ScreenshotManager:
         )
         safe_label = semantic_stem.replace("/", "_").replace(" ", "_")[:60]
         filename = f"{safe_label}.png"
-        remote_path = f"{REMOTE_CAPTURE_DIR}/sudarshan_screen_{timestamp_ms}.png"
+        remote_path = f"{REMOTE_CAPTURE_DIR}/sudarshan_screen_{timestamp_ms}_{scr_uuid[:8]}.png"
         local_path = self.output_dir / filename
         rel_path = f"screenshots/{filename}"
 
@@ -425,7 +425,6 @@ class ScreenshotManager:
                     pass
                 with self._lock:
                     self.skipped_duplicates += 1
-                    self._counter -= 1
                 logger.debug(
                     "[ScreenshotManager] Skipped duplicate screen (%s)", label
                 )

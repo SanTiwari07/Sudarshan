@@ -16,8 +16,11 @@ from app.services.discovery.validator import validate_apk
 from fastapi import HTTPException
 import httpx
 
-# --- MOCK SERVER SETUP ---
-TEST_PORT = 19998
+import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.bind(("", 0))
+TEST_PORT = s.getsockname()[1]
+s.close()
 VALID_APK_PATH = Path("test_artifact_pytest.apk")
 
 def create_valid_apk():

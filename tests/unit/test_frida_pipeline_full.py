@@ -142,6 +142,10 @@ class TestEventBusAndEvidenceStore(unittest.TestCase):
         time.sleep(0.3)
 
         records = store.get_all()
+        bus.drain()
+        
+        bus.drain()
+        records = store.get_all()
         self.assertGreaterEqual(len(records), 2)
         categories = [r.category.upper() for r in records]
         self.assertIn("ACCESSIBILITY", categories)

@@ -5,8 +5,10 @@ import { lazy, Suspense, useEffect } from 'react';
 import ErrorBoundary from './components/ErrorBoundary';
 import InvestigationShell from './components/investigation/InvestigationShell';
 import { AnalysisProvider, useAnalysis } from './context/AnalysisContext';
+import { caseSectionPath, type CaseSection } from './lib/caseRoutes';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoadingSpinner, ErrorState } from './components/ui/Skeleton';
+import type { AntiEvasionResult } from './lib/resilience';
 
 function lazyWithRetry<T extends React.ComponentType<any>>(
   componentImport: () => Promise<{ default: T }>
@@ -87,9 +89,26 @@ export type FRSBreakdown = {
   };
   axes_used?: Record<string, number>;
   axes_excluded?: string[];
+  /**
+   * STEI axes the engine dropped because a concealed payload made them blind,
+   * and the renormalised weights the surviving axes were scored at. Optional so
+   * cases stored before these fields were declared still parse.
+   */
+  stei_axes_excluded?: string[];
+  stei_weights_used?: Record<string, number>;
   concealed_payload?: boolean;
+  /**
+   * The four safety floors. The engine raises the band above the raw score when
+   * it cannot certify a sample; each flag says which rule fired.
+   *
+   * `_static_evidence` and `_incomplete_exercise` were emitted by the engine but
+   * undeclared here, so `verdictCopy` could only ever explain two of the four
+   * and a floored band appeared to the reader as an unexplained number.
+   */
   verdict_floored_for_visibility?: boolean;
   verdict_floored_for_evasion?: boolean;
+  verdict_floored_for_static_evidence?: boolean;
+  verdict_floored_for_incomplete_exercise?: boolean;
   dynamic_ran?: boolean;
   dynamic_conclusive?: boolean;
   /**
@@ -167,6 +186,8 @@ export type DynamicAnalysis = {
     title: string;
     result_summary: string;
   }[];
+  /** Autonomous anti-evasion delta, measured mid-session. Absent = not run. */
+  anti_evasion?: AntiEvasionResult | null;
   bfci?: number;
   bfci_components?: Record<string, number>;
   bfci_evidence?: string[];
@@ -407,6 +428,26 @@ export type VideForensicBreakdown = {
   };
 };
 
+/**
+ * Why one baseline was preferred over the others.
+ *
+ * Separate from `scores`, which measure how completely the suspect reproduces a
+ * baseline. These measure which baseline - see corpus_compare.py.
+ */
+export type VideAttributionEvidence = {
+  score?: number;
+  tiers?: {
+    identity?: number;
+    discriminative_labels?: number;
+    discriminative_palette?: number;
+  };
+  identity_matches?: string[];
+  discriminative_labels?: string[];
+  discriminative_colors?: VideColorMatch[];
+  /** Features no other baseline carries. Attribution requires at least one. */
+  exclusive_hits?: string[];
+};
+
 export type VideCorpusRanked = {
   institution_id: string;
   display_name: string;
@@ -420,6 +461,7 @@ export type VideCorpusRanked = {
   matched_strings?: string[];
   matched_signatures?: string[];
   color_matches?: VideColorMatch[];
+  attribution?: VideAttributionEvidence;
 };
 
 export type VideCorpusCompare = {
@@ -433,7 +475,11 @@ export type VideCorpusCompare = {
   attribution?: {
     margin?: number;
     ambiguous?: boolean;
+    /** Why a bank was not named: "margin" | "no_exclusive_evidence". */
+    reason?: string;
     candidates?: string[];
+    /** The three attribution tiers, and the features that carried them. */
+    evidence?: VideAttributionEvidence;
   };
   suspect_signatures?: string[];
   scores?: {
@@ -445,6 +491,9 @@ export type VideCorpusCompare = {
   color_matches?: VideColorMatch[];
   ranked?: VideCorpusRanked[];
   evidence_lines?: string[];
+  /** What argues against the attribution, and the caveats it carries. */
+  conflicting_evidence?: string[];
+  limitations?: string[];
   forensics?: VideForensicBreakdown;
 };
 
@@ -551,7 +600,18 @@ function PublicOnlyRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function CaseDetailRoute() {
+/**
+ * A case section.
+ *
+ * The sha in the URL is authoritative. Previously the four views were case-less
+ * paths that read the active sample out of context, so a shared link showed the
+ * recipient whatever case they happened to have open - or nothing.
+ */
+function CaseSectionRoute({
+  component: Component,
+}: {
+  component: React.ComponentType<{ data: FraudCardData | null }>;
+}) {
   const { sha256 } = useParams<{ sha256: string }>();
   const { analysisResult, loadCaseByHash, loading, error } = useAnalysis();
 
@@ -561,16 +621,37 @@ function CaseDetailRoute() {
     }
   }, [sha256, analysisResult, loadCaseByHash]);
 
-  if (loading) return <LoadingSpinner label={`Restoring case ${sha256?.slice(0, 12)}…`} />;
   if (error) return <ErrorState title="Case Restore Failed" message={error} />;
-  if (!analysisResult) return <Navigate to="/history" replace />;
+  if (loading || !analysisResult) {
+    return <LoadingSpinner label={`Loading case ${sha256?.slice(0, 12)}…`} />;
+  }
 
-  return <FraudCard data={analysisResult} />;
+  return <Component data={analysisResult} />;
 }
 
-function ActiveCaseRoute({ component: Component }: { component: React.ComponentType<{ data: FraudCardData | null }> }) {
-  const { analysisResult } = useAnalysis();
-  return <Component data={analysisResult} />;
+/** `/history/:sha256` is an alias for that case's summary. */
+function HistoryCaseRedirect() {
+  const { sha256 } = useParams<{ sha256: string }>();
+  if (!sha256) return <Navigate to="/history" replace />;
+  return <Navigate to={caseSectionPath(sha256, 'summary')} replace />;
+}
+
+/**
+ * Legacy case-less paths, forwarded to the active case.
+ *
+ * These URLs are in saved links, in PDF reports already delivered, and in the
+ * grounded citations the assistant emitted before the move. They keep working
+ * indefinitely - a broken evidence trail is a worse outcome than a redirect.
+ */
+function LegacyCaseRedirect({ section }: { section: CaseSection }) {
+  const { analysisResult, activeSha256 } = useAnalysis();
+  const location = useLocation();
+  const sha = analysisResult?.sha256 || activeSha256;
+
+  if (!sha) return <Navigate to="/history" replace />;
+  return (
+    <Navigate to={`${caseSectionPath(sha, section)}${location.search}${location.hash}`} replace />
+  );
 }
 
 // ─── App Structure ──────────────────────────────────────────────────────────
@@ -599,13 +680,58 @@ function AppContent() {
             </RequireAuth>
           }
         />
+        {/*
+          The case, at /case/:sha256. Four sections named after the question
+          each answers, all under one URL that identifies the sample - so a
+          link to an investigation is a link to that investigation.
+        */}
+        <Route
+          path="/case/:sha256"
+          element={
+            <RequireAuth label="Case">
+              <InvestigationShell className="case-page">
+                <CaseSectionRoute component={FraudCard} />
+              </InvestigationShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/case/:sha256/evidence"
+          element={
+            <RequireAuth label="Evidence">
+              <InvestigationShell>
+                <CaseSectionRoute component={TechnicalView} />
+              </InvestigationShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/case/:sha256/intel"
+          element={
+            <RequireAuth label="Intelligence">
+              <InvestigationShell>
+                <CaseSectionRoute component={ThreatIntelView} />
+              </InvestigationShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/case/:sha256/ask"
+          element={
+            <RequireAuth label="Ask SUDARSHAN">
+              <InvestigationShell className="analyst-page-tight">
+                <CaseSectionRoute component={InvestigationChat} />
+              </InvestigationShell>
+            </RequireAuth>
+          }
+        />
+
+        {/* Legacy case-less paths. Kept indefinitely - see caseRoutes.ts. */}
         <Route
           path="/fraud-card"
           element={
             <RequireAuth label="Fraud Card">
-              <InvestigationShell>
-                <ActiveCaseRoute component={FraudCard} />
-              </InvestigationShell>
+              <LegacyCaseRedirect section="summary" />
             </RequireAuth>
           }
         />
@@ -613,9 +739,7 @@ function AppContent() {
           path="/technical"
           element={
             <RequireAuth label="Technical View">
-              <InvestigationShell>
-                <ActiveCaseRoute component={TechnicalView} />
-              </InvestigationShell>
+              <LegacyCaseRedirect section="evidence" />
             </RequireAuth>
           }
         />
@@ -623,9 +747,7 @@ function AppContent() {
           path="/threat-intel"
           element={
             <RequireAuth label="Threat Intelligence">
-              <InvestigationShell>
-                <ActiveCaseRoute component={ThreatIntelView} />
-              </InvestigationShell>
+              <LegacyCaseRedirect section="intel" />
             </RequireAuth>
           }
         />
@@ -633,9 +755,7 @@ function AppContent() {
           path="/chat"
           element={
             <RequireAuth label="Investigation Chat">
-              <InvestigationShell className="analyst-page-tight">
-                <ActiveCaseRoute component={InvestigationChat} />
-              </InvestigationShell>
+              <LegacyCaseRedirect section="ask" />
             </RequireAuth>
           }
         />
@@ -649,16 +769,11 @@ function AppContent() {
             </RequireAuth>
           }
         />
-        <Route
-          path="/history/:sha256"
-          element={
-            <RequireAuth label="Case Detail">
-              <InvestigationShell>
-                <CaseDetailRoute />
-              </InvestigationShell>
-            </RequireAuth>
-          }
-        />
+        {/*
+          A case opened from the registry is the same case. Redirecting rather
+          than rendering a parallel copy means one canonical URL per sample.
+        */}
+        <Route path="/history/:sha256" element={<HistoryCaseRedirect />} />
         <Route
           path="/batch"
           element={

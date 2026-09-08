@@ -1,0 +1,62 @@
+.union-account-details {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: var(--color-bg);
+  padding-bottom: 80px;
+}
+
+.account-details-content {
+  padding: var(--space-16);
+}
+
+.details-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-card);
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  margin-bottom: 2rem;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-row span {
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+}
+
+.detail-row strong {
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.detail-row.highlight {
+  margin-top: 0.5rem;
+  padding-top: 1.5rem;
+  border-top: 2px dashed var(--color-divider);
+}
+
+.detail-row.highlight span {
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.detail-row.highlight strong {
+  font-size: 1.25rem;
+  color: var(--color-primary);
+}
+
+.details-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}

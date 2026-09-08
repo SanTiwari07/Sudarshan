@@ -124,8 +124,23 @@ class TestGoalTracker(unittest.TestCase):
             if perms.status == self.GoalStatus.COMPLETED:
                 break
 
-    def test_fifteen_goals_loaded(self):
-        self.assertEqual(len(self.tracker.goals), 15)
+    def test_the_fraud_dag_stages_are_all_loaded(self):
+        """
+        The graph is the 15-stage fraud DAG plus stage 16, Anti-Analysis
+        Resistance, which was added because the engine could already OBSERVE a
+        sample refusing to be analysed - the agent files it, risk_engine scores
+        it, dynamic_exclusion_reason explains a silent run with it - and the
+        goal graph was the only layer with no way to say it. Measured on
+        Cerberus: killProcess and System.exit both observed and attributed to
+        the sample, and zero goals to put them on.
+
+        Asserted as ">= 15, contiguous from 1" rather than "== 15", because the
+        property that matters is that no stage is missing, not that the count
+        never grows.
+        """
+        stages = sorted(g.stage for g in self.tracker.goals)
+        self.assertGreaterEqual(len(stages), 15)
+        self.assertEqual(stages, list(range(1, len(stages) + 1)))
 
     def test_goals_in_stage_order(self):
         stages = [g.stage for g in self.tracker.goals]
@@ -200,7 +215,9 @@ class TestGoalTracker(unittest.TestCase):
 
     def test_completion_summary_returns_all_goals(self):
         summary = self.tracker.completion_summary()
-        self.assertEqual(len(summary), 15)
+        # Every goal, whatever the graph currently declares - the point is that
+        # none is omitted from the summary, not that the graph has a fixed size.
+        self.assertEqual(len(summary), len(self.tracker.goals))
         for v in summary.values():
             self.assertIn(v, [s.value for s in self.GoalStatus])
 

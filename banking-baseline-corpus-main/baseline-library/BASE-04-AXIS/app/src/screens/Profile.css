@@ -1,0 +1,126 @@
+.profile-screen {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: var(--color-bg);
+}
+
+.profile-header-card {
+  background-color: var(--color-surface);
+  border-radius: 12px;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  margin-bottom: 24px;
+}
+
+.profile-avatar-large {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background-color: var(--color-primary);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: 600;
+}
+
+.profile-user-info h2 {
+  margin: 0 0 4px 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.profile-user-info p {
+  margin: 0 0 8px 0;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+.last-login-badge {
+  display: inline-block;
+  background-color: var(--color-bg);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.profile-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.menu-group {
+  background-color: var(--color-surface);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid var(--color-divider);
+  cursor: pointer;
+}
+
+.menu-item:last-child {
+  border-bottom: none;
+}
+
+.menu-icon-wrapper {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: rgba(218, 24, 132, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 16px;
+}
+
+.menu-icon {
+  color: var(--color-secondary);
+}
+
+.menu-label {
+  flex: 1;
+  font-size: 1rem;
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.menu-chevron {
+  color: var(--color-text-secondary);
+  opacity: 0.5;
+}
+
+.logout-container {
+  margin-top: 32px;
+  padding-bottom: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.logout-btn {
+  color: var(--color-error);
+  border-color: rgba(192, 57, 43, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-version {
+  margin-top: 16px;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}

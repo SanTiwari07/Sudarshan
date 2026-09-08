@@ -56,6 +56,7 @@ Usage::
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -99,6 +100,36 @@ GEMINI_MODEL: str = os.getenv("GEMINI_MODEL") or os.getenv("SUDARSHAN_AGENT_MODE
 #: gemini-3.6-flash with 400 INVALID_ARGUMENT - so the budget is sized to
 #: accommodate it instead.
 MAX_OUTPUT_TOKENS: int = int(os.getenv("SUDARSHAN_AGENT_MAX_OUTPUT_TOKENS", "2048"))
+
+# ─── Planner call wall clock ──────────────────────────────────────────────────
+#
+# There was none. `_call_llm` awaits `asyncio.to_thread(generate_content)`
+# around a synchronous SDK call which, inside `_call_slot`, retries
+# `max_retries` times with exponential backoff and sets no HTTP deadline. A
+# hung request therefore parked the explorer thread for as long as the socket
+# stayed open - the one place in the dynamic pipeline with no upper bound at
+# all, and the measured path to an analysis that ran for hours.
+#
+# 30s is generous against the measured distribution (7.9s / 13.8s / 15.1s /
+# 11.2s on gemini-2.5-flash with the explorer's real prompt) and still small
+# enough that a stuck call costs one iteration rather than a run.
+PLANNER_CALL_TIMEOUT_SECONDS: float = float(
+    os.getenv("SUDARSHAN_PLANNER_CALL_TIMEOUT", "30")
+)
+
+#: Never spend the last of the analysis budget on a model call. Finalisation -
+#: flushing evidence, reconstructing the workflow, computing BFCI - has to be
+#: affordable after the last action, and a call that consumes the remainder
+#: would trade collected evidence for one more guess.
+PLANNER_FINALISATION_RESERVE_SECONDS: float = float(
+    os.getenv("SUDARSHAN_PLANNER_FINALISATION_RESERVE", "20")
+)
+
+#: Below this, starting a call is worse than not starting one: it cannot
+#: complete, and the latency is spent either way.
+PLANNER_MIN_CALL_SECONDS: float = float(
+    os.getenv("SUDARSHAN_PLANNER_MIN_CALL_SECONDS", "5")
+)
 
 # ─── Cache and budget ─────────────────────────────────────────────────────────
 
@@ -227,10 +258,39 @@ class AgentPlanner:
         self._cache_lock = threading.Lock()
 
         self._use_gemini = bool(api_key)
+        #: How many planner calls this instance abandoned for time. Reported in
+        #: the benchmark so a systematically slow or unreachable model shows up
+        #: as a number rather than as a quietly halved action budget.
+        self._llm_timeouts = 0
         if self._use_gemini:
             logger.info("[Planner] Gemini transport enabled via provider manager")
         else:
             logger.warning("[Planner] Gemini disabled for this planner - FallbackPlanner active")
+
+    @staticmethod
+    def _call_timeout(deadline_seconds: Optional[float]) -> float:
+        """
+        Wall clock one planner call may have.
+
+        Two bounds, and the smaller wins:
+
+          * PLANNER_CALL_TIMEOUT_SECONDS - what a call is WORTH. Measured on
+            gemini-2.5-flash with the explorer's real prompt: 7.9s, 13.8s,
+            15.1s, 11.2s. A call still running at 30s is not going to return
+            something better than the deterministic planner would have
+            produced in zero.
+          * whatever the ONE global dynamic deadline has left, minus a reserve
+            so the run can still finalise. A call is never allowed to consume
+            the budget that flushing evidence needs.
+
+        Returns 0.0 when there is not enough left to be worth starting, which
+        the caller reads as "use the deterministic planner".
+        """
+        budget = PLANNER_CALL_TIMEOUT_SECONDS
+        if deadline_seconds is not None:
+            usable = float(deadline_seconds) - PLANNER_FINALISATION_RESERVE_SECONDS
+            budget = min(budget, usable)
+        return budget if budget >= PLANNER_MIN_CALL_SECONDS else 0.0
 
     # ── Post-run forensic remediation ──────────────────────────────────────────
 
@@ -317,16 +377,28 @@ class AgentPlanner:
         obs:     Observation,
         memory:  AgentMemory,
         goals:   GoalTracker,
+        *,
+        deadline_seconds: Optional[float] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         Return a validated action dict or None (which signals the agent to stop).
 
         Flow:
           1. Check action cache → return cached action if valid (no LLM call).
-          2. Call Gemini → validate response.
-          3. On validation failure: retry once with error appended to prompt.
-          4. On second failure: activate FallbackPlanner.
+          2. Call Gemini, bounded by a wall clock → validate response.
+          3. On validation failure: retry once with error appended to prompt,
+             if and only if the remaining budget can still pay for it.
+          4. On any other outcome: activate FallbackPlanner.
           5. FallbackPlanner returns action or signals stop.
+
+        `deadline_seconds` is what the ONE global dynamic deadline has left.
+        It is passed in rather than read here so this class keeps no clock of
+        its own - a second clock is how nested timeouts multiply (§P25).
+
+        EVERY failure mode of the model lands on the deterministic planner and
+        none of them propagates: timeout, rate limit, malformed output, an
+        action the registry rejects, or the SDK being absent. The model is an
+        accelerator for exploration, never a dependency of it (§P19).
         """
         next_goal = goals.next_priority_goal()
         cache_key = self._cache_key(obs.screen_hash, next_goal.name if next_goal else "none")
@@ -345,19 +417,44 @@ class AgentPlanner:
                 return cached
 
         # ── 2. LLM call ────────────────────────────────────────────────────────
-        if self._use_gemini:
+        # Bounded, always. Before this, `_call_llm` awaited
+        # `asyncio.to_thread(generate_content)` around a synchronous SDK call
+        # that retries three times with exponential backoff and sets NO HTTP
+        # deadline - so a request that hung parked the explorer thread for as
+        # long as the socket stayed open. That is the measured path to a
+        # multi-hour "analysis", and the fix is a wall clock the model cannot
+        # argue with.
+        call_budget = self._call_timeout(deadline_seconds)
+        if self._use_gemini and call_budget > 0.0:
             try:
-                action, validation_error = await self._call_llm(obs, memory, goals, next_goal)
+                action, validation_error = await asyncio.wait_for(
+                    self._call_llm(obs, memory, goals, next_goal),
+                    timeout=call_budget,
+                )
                 if action:
                     self._cache_put(cache_key, action)
                     return action
 
-                # Only retry if it was a schema validation failure (not a hard API/auth/404 error)
-                if validation_error and not validation_error.startswith("LLM API error"):
+                # Only retry if it was a schema validation failure (not a hard
+                # API/auth/404 error), and only when the budget can still pay
+                # for a second call. A retry started with four seconds left
+                # costs its full latency and returns nothing usable.
+                retry_budget = self._call_timeout(
+                    None if deadline_seconds is None
+                    else deadline_seconds - call_budget
+                )
+                if (
+                    validation_error
+                    and not validation_error.startswith("LLM API error")
+                    and retry_budget > 0.0
+                ):
                     logger.warning(f"[Planner] First LLM attempt invalid schema: {validation_error}. Retrying.")
-                    action, _ = await self._call_llm(
-                        obs, memory, goals, next_goal,
-                        previous_error=validation_error
+                    action, _ = await asyncio.wait_for(
+                        self._call_llm(
+                            obs, memory, goals, next_goal,
+                            previous_error=validation_error,
+                        ),
+                        timeout=retry_budget,
                     )
                     if action:
                         self._cache_put(cache_key, action)
@@ -365,8 +462,25 @@ class AgentPlanner:
                 else:
                     logger.warning(f"[Planner] LLM API error: {validation_error}")
 
+            except asyncio.TimeoutError:
+                # Not an error condition for the RUN - the deterministic planner
+                # below is a complete planner, not a degraded one. Logged at
+                # warning so a systematically slow model is visible rather than
+                # silently halving the action budget.
+                logger.warning(
+                    "[Planner] LLM call exceeded its %.1fs budget - falling "
+                    "back to deterministic planning for this iteration",
+                    call_budget,
+                )
+                self._llm_timeouts += 1
             except Exception as e:
                 logger.error(f"[Planner] LLM call raised exception: {e}")
+        elif self._use_gemini:
+            logger.info(
+                "[Planner] Not enough analysis budget remains for an LLM call "
+                "(%.1fs) - deterministic planning only",
+                deadline_seconds if deadline_seconds is not None else -1.0,
+            )
 
         # ── 4. Fallback Planner ────────────────────────────────────────────────
         logger.info("[Planner] Activating FallbackPlanner")

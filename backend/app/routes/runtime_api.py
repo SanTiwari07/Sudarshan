@@ -16,10 +16,12 @@ These endpoints read from the in-process PipelineTracker registry and the
 analysis job store. They require no special permissions beyond a valid JWT.
 """
 
+import asyncio
 import json
 import logging
 import os
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -78,6 +80,12 @@ async def _check_case_access(user: dict, case_id: str) -> None:
 _recent_events: List[Dict[str, Any]] = []       # ring buffer, max 500 events
 _MAX_RECENT_EVENTS = 500
 _hook_registry: Dict[str, Dict[str, Any]] = {}  # hook_name → {installed, fired, errors}
+
+# Monotonic per-category event totals. Deliberately NOT derived from
+# _recent_events: that buffer is a ring, so counting it undercounts as soon as
+# it wraps, and the anti-evasion delta ("did this metric move between two
+# instants?") would silently report a drop where events were merely evicted.
+_category_totals: Dict[str, int] = {}
 _pipeline_metrics: Dict[str, Any] = {
     "events_total": 0,
     "events_per_sec": 0.0,
@@ -97,8 +105,20 @@ def record_event(event: Dict[str, Any]) -> None:
     if len(_recent_events) > _MAX_RECENT_EVENTS:
         _recent_events.pop(0)
 
+    # Hand a copy to the durable index. Appending to a list is atomic under the
+    # GIL, so this is safe from the Frida worker threads that call us and it
+    # never blocks them on I/O - the flusher task does the database work.
+    if len(_persist_buffer) < _PERSIST_BUFFER_MAX:
+        _persist_buffer.append(event)
+    else:
+        _pipeline_metrics["dropped_events"] += 1
+
     _pipeline_metrics["events_total"] += 1
     _pipeline_metrics["last_event_ts"] = time.time()
+
+    category = str(event.get("category") or "").strip().lower()
+    if category:
+        _category_totals[category] = _category_totals.get(category, 0) + 1
 
     # Rolling events/sec calculation (1-minute window)
     now = time.time()
@@ -112,6 +132,118 @@ def record_event(event: Dict[str, Any]) -> None:
         _pipeline_metrics["_rate_window_count"] = 0
 
 
+# ─── Durable runtime-event index ─────────────────────────────────────────────
+#
+# The ring buffer above is a live view: 500 events, in memory, gone on restart.
+# That was the whole record - so once the container restarted, nobody could
+# review which hooks fired during a dynamic run.
+#
+# What goes to SQLite is metadata only: sha256, sequence, type, severity,
+# timestamp, and a reference. The full payload of every event already lives in
+# the per-session evidence store (evidence_store.py writes a WAL SQLite file per
+# case under artifacts/evidence/), and copying those blobs into the gateway
+# database would multiply its size to answer no question the index cannot.
+
+_persist_buffer: List[Dict[str, Any]] = []
+_PERSIST_BUFFER_MAX = int(os.getenv("RUNTIME_EVENT_BUFFER_MAX", "5000"))
+_PERSIST_FLUSH_SECONDS = float(os.getenv("RUNTIME_EVENT_FLUSH_SECONDS", "5"))
+_flush_task: Optional["asyncio.Task"] = None
+_event_seq = 0
+
+
+def _to_index_row(event: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Project a raw bus event onto the runtime_events columns."""
+    global _event_seq
+    sha = (
+        event.get("sha256")
+        or event.get("case_id")
+        or (event.get("context") or {}).get("sha256")
+    )
+    if not sha:
+        # Without a case to hang it on, an indexed event is unreachable.
+        return None
+
+    _event_seq += 1
+    payload = event.get("payload") if isinstance(event.get("payload"), dict) else event
+    summary = (
+        event.get("summary")
+        or event.get("message")
+        or event.get("api")
+        or event.get("event_type")
+        or ""
+    )
+    return {
+        "sha256": sha,
+        "job_id": event.get("job_id") or event.get("session_id"),
+        "seq": event.get("seq") if isinstance(event.get("seq"), int) else _event_seq,
+        "event_type": event.get("event_type") or event.get("type"),
+        "severity": event.get("severity"),
+        "ts": event.get("timestamp") or event.get("ts")
+        or datetime.now(timezone.utc).isoformat(),
+        "evidence_id": event.get("evidence_id") or event.get("id"),
+        "payload_ref": event.get("payload_ref") or (payload or {}).get("evidence_db"),
+        "summary": str(summary),
+    }
+
+
+async def flush_runtime_events() -> int:
+    """Drain the buffer into runtime_events. Returns rows written."""
+    if not _persist_buffer:
+        return 0
+
+    # Swap the whole buffer out in one slice assignment so producers can keep
+    # appending to the fresh list while we write.
+    batch, _persist_buffer[:] = list(_persist_buffer), []
+
+    rows = [r for r in (_to_index_row(e) for e in batch) if r]
+    if not rows:
+        return 0
+
+    from app.db.intel import record_runtime_events
+    return await record_runtime_events(rows)
+
+
+async def _flush_loop() -> None:
+    while True:
+        try:
+            await asyncio.sleep(_PERSIST_FLUSH_SECONDS)
+            written = await flush_runtime_events()
+            if written:
+                logger.debug("[Runtime] indexed %d event(s)", written)
+        except asyncio.CancelledError:
+            break
+        except Exception as exc:  # noqa: BLE001
+            # Telemetry indexing must never take the app down; drop the batch
+            # and keep going. The evidence store still has the payloads.
+            logger.warning("[Runtime] event flush failed: %s", exc)
+
+    # Final drain on shutdown, so a clean stop does not discard the tail.
+    try:
+        await flush_runtime_events()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[Runtime] final event flush failed: %s", exc)
+
+
+async def start_runtime_event_flusher() -> None:
+    global _flush_task
+    if _flush_task is None or _flush_task.done():
+        _flush_task = asyncio.create_task(_flush_loop())
+        logger.info(
+            "[Runtime] event indexer started (flush every %.0fs)", _PERSIST_FLUSH_SECONDS
+        )
+
+
+async def stop_runtime_event_flusher() -> None:
+    global _flush_task
+    if _flush_task and not _flush_task.done():
+        _flush_task.cancel()
+        try:
+            await _flush_task
+        except asyncio.CancelledError:
+            pass
+    _flush_task = None
+
+
 def record_hook(name: str, fired: bool = False, error: bool = False) -> None:
     """Called by analysis workers to track hook telemetry."""
     if name not in _hook_registry:
@@ -122,6 +254,42 @@ def record_hook(name: str, fired: bool = False, error: bool = False) -> None:
     if error:
         _hook_registry[name]["errors"] += 1
         _pipeline_metrics["hook_errors_total"] += 1
+
+
+def hook_telemetry_snapshot(package_name: str = "") -> Dict[str, Any]:
+    """
+    Live hook-telemetry counts, for a before/after behaviour comparison.
+
+    ``attached`` is the load-bearing field. It is True only when a tracker
+    reports Frida actually running against the device, because the counts are
+    otherwise indistinguishable between "the sample did nothing" and "nothing
+    was watching the sample" - and the anti-evasion verdict must never confuse
+    those two. When a package is named, attachment is judged from that
+    package's tracker alone.
+
+    ``concurrent_sessions`` is reported because the telemetry buffer is
+    process-wide: hook events carry no session id, so a second analysis running
+    at the same time contributes to these counts, and a caller drawing
+    conclusions from a delta needs to know that.
+    """
+    trackers = list(_ACTIVE_TRACKERS.values())
+    live = [t for t in trackers if t.frida_running or t.attached]
+    if package_name:
+        matching = [
+            t for t in live
+            if t.package_name == package_name or t.case_id == package_name
+        ]
+        attached = bool(matching)
+    else:
+        attached = bool(live)
+
+    return {
+        "attached": attached,
+        "source": "in-process Frida hook telemetry",
+        "counts": dict(_category_totals),
+        "concurrent_sessions": len(live),
+        "events_total": _pipeline_metrics["events_total"],
+    }
 
 
 # ─── Helper: load evidence.json from artifact directory ──────────────────────

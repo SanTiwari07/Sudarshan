@@ -1,0 +1,72 @@
+.mpin-screen {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-background);
+  padding: 24px;
+}
+
+.mpin-header {
+  margin-top: 48px;
+  text-align: center;
+  margin-bottom: 48px;
+}
+
+.user-avatar {
+  width: 80px;
+  height: 80px;
+  background: var(--color-surface);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.avatar-icon {
+  color: var(--color-primary);
+}
+
+.mpin-header h2 {
+  font-size: 16px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.mpin-header h1 {
+  font-size: 24px;
+  color: var(--color-text-primary);
+  margin-bottom: 16px;
+}
+
+.mpin-header p {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.pinpad-container {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  margin-bottom: 32px;
+}
+
+.mpin-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 24px;
+}
+
+.text-link {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 16px;
+  cursor: pointer;
+}

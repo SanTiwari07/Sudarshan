@@ -55,6 +55,9 @@ from reportlab.platypus import (
 )
 from reportlab.graphics.shapes import Drawing, Circle, Rect, String, Line, Group, Polygon, Wedge
 
+from sudarshan_core import brand as BRAND
+from sudarshan_core.engines import report_theme as THEME
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -292,13 +295,50 @@ def build_report_data(case_data: Dict[str, Any], apk_dir: Optional[Path] = None)
 
     dynamic_ran_bool = bool(get_val(frs_breakdown, "dynamic_ran") or get_val(case_data, "dynamic_available") or (dynamic_res and bool(dynamic_res)))
     dynamic_conclusive_bool = bool(get_val(frs_breakdown, "dynamic_conclusive"))
-    
-    if dynamic_ran_bool:
-        dyn_status = "EVENTS_CAPTURED" if dynamic_conclusive_bool or dynamic_res else "COMPLETED_INCONCLUSIVE"
+
+    # ── Dynamic status ────────────────────────────────────────────────────────
+    # The sandbox publishes its own status and it is the authoritative value.
+    # This block used to synthesise a two-valued string instead, and the test
+    # for it was `bool(dynamic_res)` - a dict that a FAILED run also returns,
+    # fully populated. So every failure mode the engine distinguishes
+    # (INSTRUMENTATION_FAILED, FRIDA_ATTACH_FAILED, PID_NOT_FOUND,
+    # NO_UI_RENDERED, RUNTIME_COMPLETED_NO_EVENTS, EMULATOR_UNAVAILABLE,
+    # INSTALL_FAILED, INCONCLUSIVE) was reported as EVENTS_CAPTURED under a
+    # "CONFIRMED DYNAMIC RUN" badge. Verified against a real persisted case:
+    # org.schabi.newpipe carries INSTRUMENTATION_FAILED and rendered as a
+    # confirmed run with a received canary and a BFCI of 86.
+    #
+    # `dynamic_observed` is the flag the page builders need: it means the
+    # sandbox ran AND produced behavioural telemetry. "It ran" alone is not
+    # enough to describe a run as confirmed.
+    dyn_status = safe_str(get_val(dynamic_res, "dynamic_status"), "")
+    if not dyn_status:
+        # `dynamic_ran` gates everything: a run that did not happen cannot be
+        # conclusive, whatever `dynamic_conclusive` says. Reading conclusive
+        # first let a stale True label a sandbox that never started as
+        # EVENTS_CAPTURED.
+        if not dynamic_ran_bool:
+            dyn_status = "NOT_PERFORMED"
+        elif dynamic_conclusive_bool:
+            dyn_status = "EVENTS_CAPTURED"
+        else:
+            dyn_status = "COMPLETED_INCONCLUSIVE"
+
+    dynamic_observed_bool = dyn_status == "EVENTS_CAPTURED" and dynamic_ran_bool
+
+    if not dynamic_ran_bool or dyn_status in ("NOT_PERFORMED", "NOT_STARTED"):
+        dyn_status_enum = Status.NOT_PERFORMED
+    elif dynamic_observed_bool:
         dyn_status_enum = Status.OBSERVED
     else:
-        dyn_status = "NO_TELEMETRY_CAPTURED"
-        dyn_status_enum = Status.NOT_PERFORMED
+        # Ran, did not observe. Neither OBSERVED nor NOT_PERFORMED: the
+        # distinction is the whole point of this section.
+        dyn_status_enum = Status.NOT_OBSERVED
+
+    # Why the risk engine dropped the dynamic axis, in its own words
+    # (NO_BEHAVIOR_OBSERVED, NO_UI_RENDERED, EVASION_ONLY, ...). Computed on
+    # every case and never rendered.
+    dyn_exclusion_reason = safe_str(get_val(frs_breakdown, "dynamic_exclusion_reason"), "")
 
     bfci_total_val = safe_float(get_val(dynamic_res, "bfci", get_val(frs_breakdown, "dynamic")), 0.0)
     bfci_comps = get_val(dynamic_res, "bfci_components") or {}
@@ -307,9 +347,47 @@ def build_report_data(case_data: Dict[str, Any], apk_dir: Optional[Path] = None)
 
     sandbox_provider_val = safe_str(get_val(dynamic_res, "sandbox_provider"), "Not available")
     frida_version_val = safe_str(get_val(dynamic_res, "frida_version"), "Not available")
-    duration_val = safe_float(get_val(dynamic_res, "analysis_duration"), 0.0)
-    hooks_count_val = safe_int(get_val(dynamic_res, "total_hooks_installed"), 0)
-    events_count_val = safe_int(get_val(dynamic_res, "total_events_captured"), len(get_val(dynamic_res, "events") or []))
+
+    # The keys below were read under names the sandbox does not emit, so each
+    # rendered as its zero on every real case. Verified against the persisted
+    # cases in backend/sudarshan.db: `duration_seconds` is 300 while
+    # `analysis_duration` is absent, and `hooks_installed` is 77 while
+    # `total_hooks_installed` is absent. The old spellings are kept as
+    # fallbacks so a caller handing us a hand-built dict still works.
+    duration_val = safe_float(
+        get_val(dynamic_res, "duration_seconds", get_val(dynamic_res, "analysis_duration")),
+        0.0,
+    )
+    hooks_count_val = safe_int(
+        get_val(dynamic_res, "hooks_installed", get_val(dynamic_res, "total_hooks_installed")),
+        0,
+    )
+
+    # Behavioural events only. `raw_event_counts` spans harness bookkeeping
+    # (`harness_action`) and app telemetry as well as fraud categories, and
+    # counting those would report a run that did nothing as having produced
+    # events.
+    raw_event_counts = get_val(dynamic_res, "raw_event_counts") or {}
+    if not isinstance(raw_event_counts, dict):
+        raw_event_counts = {}
+    _HARNESS_CATEGORIES = {"harness_action", "smoke"}
+    events_count_val = safe_int(
+        get_val(dynamic_res, "total_events_captured"),
+        sum(
+            safe_int(v)
+            for k, v in raw_event_counts.items()
+            if k not in _HARNESS_CATEGORIES
+        )
+        or len(get_val(dynamic_res, "events") or []),
+    )
+
+    hook_fire_counts = get_val(dynamic_res, "hook_fire_counts") or {}
+    if not isinstance(hook_fire_counts, dict):
+        hook_fire_counts = {}
+    canary_received_val = get_val(dynamic_res, "canary_received")
+    launch_method_val = safe_str(get_val(dynamic_res, "launch_method_used"), "")
+    java_hooks_val = safe_int(get_val(dynamic_res, "java_hooks_installed"), 0)
+    native_hooks_val = safe_int(get_val(dynamic_res, "native_hooks_installed"), 0)
 
     # Classification & VIDE
     family_val = safe_str(get_val(case_data, "family_classification"), "Unknown")
@@ -339,15 +417,46 @@ def build_report_data(case_data: Dict[str, Any], apk_dir: Optional[Path] = None)
     )
     vide_tier_val = safe_str(get_val(vide_res, "visual_impersonation_tier_label"), "")
 
-    if vide_res and get_val(vide_res, "analyzed"):
+    # The engine emits `available` / `status`; `analyzed` is not a key it has
+    # ever written. The string "analyzed" occurs in this repository only on this
+    # line and in the old test fixture, which is why the whole VIDE section -
+    # meter, tier, institution, and the CIE dE2000 colour table - has never
+    # rendered for a real case. Verified: a persisted case carrying
+    # available=True, status="OK" printed "[VIDE-STATUS: NOT_AVAILABLE]".
+    vide_ok = bool(
+        get_val(vide_res, "available")
+        or get_val(vide_res, "analyzed")  # accepted for hand-built inputs
+        or safe_str(get_val(vide_res, "status")).upper() == "OK"
+    )
+    if vide_res and vide_ok:
         vide_status_val = "FIRED — visual similarity detection confirmed" if get_val(vide_res, "visual_impersonation_detected") else "CLEAN — no impersonation match"
         vide_status_enum = Status.OBSERVED
-        vide_baseline_val = safe_str(get_val(vide_res, "matched_baseline"), "None")
-        vide_similarity_val = safe_float(get_val(vide_res, "confidence"), 0.0)
-        # `confidence` is not a key the engine emits at the top level; the
-        # comparer's is the number the rest of the page is describing.
+        # `matched_baseline` is a dict - institution_id, display_name, bank and
+        # the `source` that says whether the match came from vide_compare or the
+        # weaker corpus_compare. Passing it to safe_str printed a Python dict
+        # repr into a forensic report.
+        baseline_raw = get_val(vide_res, "matched_baseline")
+        if isinstance(baseline_raw, dict):
+            baseline_name = safe_str(
+                get_val(baseline_raw, "display_name")
+                or get_val(baseline_raw, "bank")
+                or get_val(baseline_raw, "institution_id"),
+                "None",
+            )
+            baseline_source = safe_str(get_val(baseline_raw, "source"), "")
+            vide_baseline_val = (
+                f"{baseline_name} (via {baseline_source})" if baseline_source else baseline_name
+            )
+        else:
+            vide_baseline_val = safe_str(baseline_raw, "None")
+
+        # `confidence` is not a key the engine emits at the top level. The
+        # comparer's confidence is the number the rest of the page describes.
+        vide_similarity_val = safe_float(get_val(vide_res, "visual_impersonation_confidence"), 0.0)
         if not vide_similarity_val:
             vide_similarity_val = safe_float(get_val(vide_compare_res, "confidence"), 0.0)
+        if not vide_similarity_val:
+            vide_similarity_val = safe_float(get_val(vide_res, "similarity_score"), 0.0)
     else:
         vide_status_val = "NOT_AVAILABLE"
         vide_status_enum = Status.NOT_AVAILABLE
@@ -362,12 +471,59 @@ def build_report_data(case_data: Dict[str, Any], apk_dir: Optional[Path] = None)
     if threat_intel_data and get_val(threat_intel_data, "available", True):
         ti_status_val = "AVAILABLE"
         ti_status_enum = Status.CORRELATED
-        vt_malicious = safe_int(get_val(threat_intel_data, "vt_malicious_count", get_val(threat_intel_data, "positives")), 0)
-        vt_total = safe_int(get_val(threat_intel_data, "vt_total_engines", get_val(threat_intel_data, "total")), 0)
-        vt_ratio_str = f"{vt_malicious} / {vt_total}" if vt_total > 0 else "0 / 0"
+        # The correlator writes `sha256_detections` / `sha256_total`. The
+        # spellings previously read here are not keys it emits, so the detection
+        # ratio printed "0 / 0" on every case that had ever been enriched.
+        vt_malicious = safe_int(
+            get_val(
+                threat_intel_data,
+                "sha256_detections",
+                get_val(threat_intel_data, "vt_malicious_count", get_val(threat_intel_data, "positives")),
+            ),
+            0,
+        )
+        vt_total = safe_int(
+            get_val(
+                threat_intel_data,
+                "sha256_total",
+                get_val(threat_intel_data, "vt_total_engines", get_val(threat_intel_data, "total")),
+            ),
+            0,
+        )
+
+        # Three states the correlator carefully distinguishes and this line used
+        # to collapse into one: the hash is absent from VirusTotal, the hash is
+        # present and clean, or nothing was queried at all. A responder acts
+        # differently on each.
+        ioc_reputation = get_val(threat_intel_data, "ioc_reputation") or []
+        if not isinstance(ioc_reputation, list):
+            ioc_reputation = []
+        hash_in_vt = get_val(threat_intel_data, "vt_hash_in_database")
+        if vt_total > 0:
+            vt_ratio_str = f"{vt_malicious} / {vt_total}"
+        elif hash_in_vt is False:
+            vt_ratio_str = "Not in VirusTotal"
+        else:
+            vt_ratio_str = "Not available"
+
         otx_pulses = safe_int(get_val(threat_intel_data, "otx_pulse_count", len(get_val(threat_intel_data, "otx_pulses") or [])), 0)
-        abuseipdb_val = safe_float(get_val(threat_intel_data, "abuseipdb_score"), 0.0)
-        corr_family = safe_str(get_val(threat_intel_data, "known_family"), "None")
+
+        # AbuseIPDB scores are per-indicator under `ioc_reputation`; there is no
+        # top-level `abuseipdb_score`, so this always read 0. The worst score
+        # across the indicators is the one that matters for triage.
+        abuse_scores = [
+            safe_float(get_val(entry, "abuse_score"), 0.0)
+            for entry in ioc_reputation
+            if isinstance(entry, dict) and get_val(entry, "abuse_score") is not None
+        ]
+        abuseipdb_val = max(abuse_scores) if abuse_scores else safe_float(
+            get_val(threat_intel_data, "abuseipdb_score"), 0.0
+        )
+
+        corr_family = safe_str(
+            get_val(threat_intel_data, "known_family") or get_val(threat_intel_data, "vt_family"),
+            "None",
+        )
     else:
         ti_status_val = "NOT_CONFIGURED"
         ti_status_enum = Status.NOT_AVAILABLE
@@ -381,12 +537,24 @@ def build_report_data(case_data: Dict[str, Any], apk_dir: Optional[Path] = None)
     # Artifact Loading
     evidence_records_list: List[Dict[str, Any]] = []
     screenshots_list: List[Dict[str, Any]] = []
+    # Precomputed by EvidenceStore: totals by severity and by category.
+    evidence_summary: Dict[str, Any] = {}
     
     if apk_dir and apk_dir.exists():
         ev_file = apk_dir / "evidence.json"
         if ev_file.exists():
             try:
                 ev_data = json.loads(ev_file.read_text(encoding="utf-8"))
+                # EvidenceStore.flush writes
+                # {"generated_at", "package_name", "summary", "records": [...]}.
+                # Only the bare-list shape was accepted, so the Evidence Ledger
+                # - the traceability the report names as its third principle -
+                # rendered "No evidence records mapped" for every real case
+                # while the records sat on disk. report_generator.py reads the
+                # same file correctly, which is why the HTML export showed them.
+                if isinstance(ev_data, dict):
+                    evidence_summary = ev_data.get("summary") or {}
+                    ev_data = ev_data.get("records") or []
                 if isinstance(ev_data, list):
                     evidence_records_list = ev_data
             except Exception as e:
@@ -445,20 +613,83 @@ def build_report_data(case_data: Dict[str, Any], apk_dir: Optional[Path] = None)
     workflow_stages_list = get_val(workflow_obj, "stages", [])
 
     threat_scenarios_list = get_val(case_data, "threat_scenario_table", [])
-    mitre_techniques_list = get_val(case_data, "mitre_techniques", [])
 
     ai_report = get_val(case_data, "intelligence_report") or get_val(case_data, "executive_view") or {}
     plain_narrative = get_val(ai_report, "plain_english_narrative", "Not available.")
     fraud_obj = get_val(ai_report, "fraud_objective", "Not available")
     cust_impact = get_val(ai_report, "customer_impact", "Not available")
-    bank_impact = get_val(ai_report, "banking_impact", "Not available")
+    bank_impact = get_val(ai_report, "banking_impact_assessment") or get_val(ai_report, "banking_impact", "Not available")
     cert_recs = get_val(ai_report, "cert_in_recommendations", [])
     cust_adv = get_val(ai_report, "customer_advisory_draft", "Not available")
+    affected_banks_list = get_val(ai_report, "affected_banking_apps", []) or []
 
-    soc_actions_list = get_val(case_data, "soc_actions", [])
+    # ── MITRE techniques ──────────────────────────────────────────────────────
+    # `mitre_techniques` is not a key the pipeline writes - confirmed absent
+    # from all 13 persisted cases - so the MITRE table printed "No MITRE
+    # techniques mapped" unconditionally. Two real sources exist, and they are
+    # NOT equivalent: an evidence record carries a technique that was actually
+    # observed at runtime, while the intelligence report lists techniques
+    # inferred from static capability. Merging them would present a declared
+    # capability as observed behaviour, so provenance travels with each row.
+    mitre_techniques_list = get_val(case_data, "mitre_techniques", []) or []
+    if not mitre_techniques_list:
+        seen_techniques: Dict[str, Dict[str, Any]] = {}
+        for rec in evidence_records_list:
+            if not isinstance(rec, dict):
+                continue
+            tid = safe_str(get_val(rec, "mitre_technique_id"))
+            if not tid:
+                continue
+            entry = seen_techniques.setdefault(
+                tid,
+                {
+                    "id": tid,
+                    "name": safe_str(get_val(rec, "mitre_technique_name"), ""),
+                    "basis": "OBSERVED",
+                    "evidence_ids": [],
+                },
+            )
+            fid = safe_str(get_val(rec, "finding_id") or get_val(rec, "id"))
+            if fid and len(entry["evidence_ids"]) < 6:
+                entry["evidence_ids"].append(fid)
+
+        for raw in get_val(ai_report, "mitre_techniques_used", []) or []:
+            text = safe_str(raw).strip()
+            if not text:
+                continue
+            # Entries arrive as "T1411 - Input Prompt" or bare "T1411".
+            tid = text.split()[0].strip(" -:")
+            if tid in seen_techniques:
+                continue
+            name = text[len(tid):].strip(" -:") if len(text) > len(tid) else ""
+            seen_techniques[tid] = {
+                "id": tid,
+                "name": name,
+                "basis": "STATIC INFERENCE",
+                "evidence_ids": [],
+            }
+        mitre_techniques_list = list(seen_techniques.values())
+
+    # ── SOC actions ───────────────────────────────────────────────────────────
+    # Also never written by the pipeline, so this table rendered header-only on
+    # every report. The intelligence report's recommended actions and the risk
+    # engine's own recommended action are the real content.
+    soc_actions_list = get_val(case_data, "soc_actions", []) or []
+    if not soc_actions_list:
+        derived_actions: List[Dict[str, str]] = []
+        engine_action = safe_str(get_val(case_data, "recommended_action"))
+        if engine_action:
+            derived_actions.append({"action": "ENGINE VERDICT", "detail": engine_action})
+        for item in get_val(ai_report, "recommended_actions", []) or []:
+            text = safe_str(item).strip()
+            if text:
+                derived_actions.append({"action": "RECOMMENDED", "detail": text})
+        soc_actions_list = derived_actions
 
     activities_list = get_val(case_data, "activities", [])
-    services_list = get_val(case_data, "services", [])
+    # The pipeline persists this as `services_list`; `services` is the API
+    # projection's name for it and is absent from every stored case.
+    services_list = get_val(case_data, "services_list") or get_val(case_data, "services", []) or []
     receivers_list = get_val(case_data, "receivers", [])
     providers_list = get_val(case_data, "providers", [])
     cert_dict = get_val(case_data, "certificate", {})
@@ -620,129 +851,260 @@ def validate_report_data(report_data: ReportData) -> None:
 # ReportLab Canvas & Styling System
 # ---------------------------------------------------------------------------
 
-def draw_sudarshan_header_footer(canvas_obj, doc, report_data):
-    canvas_obj.saveState()
-    # A4 Dimensions: width = 595.27, height = 841.89
-    page_w = 595.27
-    page_h = 841.89
-    
-    # 2. Running Header on ALL pages
-    # Logo square on left
-    canvas_obj.setFillColor(colors.HexColor("#1e3a8a")) # BOI Blue
-    canvas_obj.roundRect(36, page_h - 46, 20, 20, 4, fill=1, stroke=0)
-    canvas_obj.setFont("Helvetica-Bold", 12)
-    canvas_obj.setFillColor(colors.white)
-    canvas_obj.drawCentredString(46, page_h - 40, "S")
+# The marking is printed in the running header of every page. A dossier that
+# may be filed with CERT-In or produced in evidence has to say, on each sheet,
+# what handling it expects; TLP:AMBER is the default for a case bound to a
+# named institution and a named sample.
+DOCUMENT_CLASSIFICATION = "CONFIDENTIAL — TLP:AMBER"
 
-    canvas_obj.setFont("Helvetica-Bold", 10)
-    canvas_obj.setFillColor(colors.HexColor("#0f172a"))
-    canvas_obj.drawString(64, page_h - 34, "SUDARSHAN")
-    
-    canvas_obj.setFont("Helvetica", 7)
-    canvas_obj.setFillColor(colors.HexColor("#64748b"))
-    canvas_obj.drawString(64, page_h - 43, "THREAT INVESTIGATION REPORT")
-    
-    # Case Info on right
-    case_str = report_data.case_id.value
-    gen_str = report_data.report_generated_at.value
-    pkg_str = report_data.package_name.value
+# Every table in the document is built from this one style. Horizontal rules
+# only, at three weights, with no vertical rules and no double rules; the
+# header carries a neutral grey band rather than a colour.
+def formal_table_style(
+    header_rows: int = 1,
+    body_rules: bool = True,
+    total_row: bool = False,
+    extra=None,
+):
+    """
+    Rules for a formal table: heavy above and below, light under the header,
+    hairline between body rows.
 
-    canvas_obj.setFont("Helvetica-Bold", 7.5)
-    canvas_obj.setFillColor(colors.HexColor("#0f172a"))
-    canvas_obj.drawRightString(page_w - 36, page_h - 32, f"Case ID: {case_str}")
-    
-    canvas_obj.setFont("Helvetica", 6.5)
-    canvas_obj.setFillColor(colors.HexColor("#64748b"))
-    canvas_obj.drawRightString(page_w - 36, page_h - 41, f"Generated: {gen_str}")
-    if pkg_str:
-        canvas_obj.drawRightString(page_w - 36, page_h - 50, f"Package: {pkg_str}")
+    `booktabs` states the two rules this follows - never a vertical rule,
+    never a double rule - and they hold for every table in this document,
+    including the ones that used to be drawn as full grids.
+    """
+    ink = colors.HexColor(THEME.BORDER_STRONG)
+    hair = colors.HexColor(THEME.RULE_HAIR)
+    style = [
+        ("LINEABOVE", (0, 0), (-1, 0), THEME.RULE_W_STRONG, ink),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), THEME.CELL_PAD),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), THEME.CELL_PAD),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+    ]
+    if header_rows:
+        style.append(
+            ("BACKGROUND", (0, 0), (-1, header_rows - 1),
+             colors.HexColor(THEME.SURFACE_INSET)))
+        style.append(
+            ("LINEBELOW", (0, header_rows - 1), (-1, header_rows - 1),
+             THEME.RULE_W_MID, ink))
+    if body_rules:
+        style.append(
+            ("LINEBELOW", (0, header_rows), (-1, -2), THEME.RULE_W_HAIR, hair))
+    style.append(("LINEBELOW", (0, -1), (-1, -1), THEME.RULE_W_STRONG, ink))
+    if total_row:
+        style.append(
+            ("LINEABOVE", (0, -1), (-1, -1), THEME.RULE_W_MID, ink))
+    if extra:
+        style.extend(extra)
+    return TableStyle(style)
 
-    canvas_obj.setStrokeColor(colors.HexColor("#e2e8f0"))
-    canvas_obj.setLineWidth(0.5)
-    canvas_obj.line(36, page_h - 56, page_w - 36, page_h - 56)
 
-    # 3. Running Footer on ALL pages
-    canvas_obj.line(36, 40, page_w - 36, 40)
-    canvas_obj.setFont("Helvetica", 7.5)
-    canvas_obj.setFillColor(colors.HexColor("#64748b"))
-    canvas_obj.drawString(36, 28, f"Sudarshan BOI · {case_str}")
-    # We don't have total page count in standard onPage without 2-pass, so we just use current page.
-    canvas_obj.drawRightString(page_w - 36, 28, f"Page {doc.page}")
+def block_quote_style(extra=None):
+    """
+    A standing-out block of prose - a document notice, a qualifier, a scope
+    statement. Ruled above and below rather than boxed and tinted: a filled
+    panel with a coloured edge is dashboard furniture, and four of them on a
+    page is the single loudest tell that a document was generated rather than
+    written.
+    """
+    ink = colors.HexColor(THEME.BORDER_STRONG)
+    style = [
+        ("LINEABOVE", (0, 0), (-1, 0), THEME.RULE_W_MID, ink),
+        ("LINEBELOW", (0, -1), (-1, -1), THEME.RULE_W_MID, ink),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+    ]
+    if extra:
+        style.extend(extra)
+    return TableStyle(style)
 
-    canvas_obj.restoreState()
+
+def make_numbered_canvas(chrome: Dict[str, str]):
+    """
+    Canvas that knows the document's total page count before it draws chrome.
+
+    ReportLab's onPage hook fires while the document is still being laid out,
+    so it cannot print "Page 4 of 13" - only "Page 4". Page accountability is
+    not optional in a forensic report (SWGDE 18-Q-002 requires the reader be
+    able to tell that no sheet is missing), so pages are held in memory and the
+    header and footer are drawn on the second pass, when the total is known.
+    """
+
+    class _NumberedCanvas(canvas.Canvas):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self._saved_states = []
+
+        def showPage(self):
+            self._saved_states.append(dict(self.__dict__))
+            self._startPage()
+
+        def save(self):
+            total = len(self._saved_states)
+            for state in self._saved_states:
+                self.__dict__.update(state)
+                self._draw_chrome(total)
+                super().showPage()
+            super().save()
+
+        def _draw_chrome(self, total_pages: int):
+            page_w, page_h = 595.27, 841.89
+            left = THEME.PAGE_MARGIN_INSIDE_MM * 72.0 / 25.4
+            right = page_w - THEME.PAGE_MARGIN_OUTSIDE_MM * 72.0 / 25.4
+            page_no = self._pageNumber
+
+            self.saveState()
+
+            # The title page carries the full masthead in the body; a
+            # running head on top of it would repeat it.
+            if page_no > 1:
+                baseline = page_h - 47
+                cursor = left
+
+                # The mark, set at cap height so it sits on the same optical
+                # line as the wordmark beside it.
+                mark = BRAND.mark_path(small=True)
+                if mark is not None:
+                    size = 14.5
+                    try:
+                        self.drawImage(str(mark), cursor, baseline - 3.0,
+                                       width=size, height=size,
+                                       mask="auto", preserveAspectRatio=True)
+                        cursor += size + 5.0
+                    except Exception:
+                        # A brand asset must never take an export down with it.
+                        pass
+
+                self.setFont("Helvetica-Bold", 8.5)
+                self.setFillColor(colors.HexColor(THEME.INK_STRONG))
+                self.drawString(cursor, baseline, BRAND.WORDMARK)
+                cursor += self.stringWidth(BRAND.WORDMARK, "Helvetica-Bold", 8.5)
+
+                # The case reference used to sit here, immediately left of the
+                # centred classification, and a long reference ran into it. It
+                # moved to the footer, where it still appears on every sheet -
+                # which is what page accountability requires - without
+                # crowding the masthead.
+                self.setFont("Helvetica", THEME.PT_FINE)
+                self.setFillColor(colors.HexColor(THEME.INK_MUTED))
+                self.drawCentredString((left + right) / 2.0, baseline,
+                                       DOCUMENT_CLASSIFICATION)
+                self.drawRightString(right, baseline,
+                                     f"Page {page_no} of {total_pages}")
+
+                self.setStrokeColor(colors.HexColor(THEME.BORDER))
+                self.setLineWidth(THEME.RULE_W_MID)
+                self.line(left, page_h - 55, right, page_h - 55)
+
+            self.setStrokeColor(colors.HexColor(THEME.BORDER))
+            self.setLineWidth(THEME.RULE_W_MID)
+            self.line(left, 44, right, 44)
+            self.setFont("Helvetica-Bold", 6.5)
+            self.setFillColor(colors.HexColor(THEME.INK_MUTED))
+            self.drawString(left, 33, chrome["report_id"])
+            offset = self.stringWidth(chrome["report_id"], "Helvetica-Bold", 6.5)
+            self.setFont("Courier", 6.5)
+            self.setFillColor(colors.HexColor(THEME.INK_FAINT))
+            self.drawString(left + offset + 7.0, 33, chrome["integrity"])
+            self.setFont("Helvetica", 6.5)
+            self.drawCentredString((left + right) / 2.0, 33,
+                                   "Uncontrolled when printed")
+            self.drawRightString(right, 33, chrome["issued"])
+
+            self.restoreState()
+
+    return _NumberedCanvas
 
 
 # ---------------------------------------------------------------------------
 # Custom Flowables & Vector Graphics
 # ---------------------------------------------------------------------------
 
-class FRSDialGauge(Drawing):
-    """180-degree FRS Dial Gauge Flowable matching reference PDF Page 1."""
-    def __init__(self, score: float, risk_band: str, width=180, height=95):
-        super().__init__(width, height)
-        self._score = score
-        self._risk_band = risk_band
-        
-        cx, cy, r = width / 2.0, 24, 65
-        
-        # Track Background
-        self.add(Wedge(cx, cy, r, 0, 180, width=12, fillColor=colors.HexColor("#E1E4E8"), strokeColor=None))
-        self.add(Wedge(cx, cy, r, 126, 180, width=12, fillColor=colors.HexColor("#2DA44E"), strokeColor=None)) # Safe
-        self.add(Wedge(cx, cy, r, 72, 126, width=12, fillColor=colors.HexColor("#D29922"), strokeColor=None))  # Suspicious
-        self.add(Wedge(cx, cy, r, 19.8, 72, width=12, fillColor=colors.HexColor("#F0883E"), strokeColor=None))# High Risk
-        self.add(Wedge(cx, cy, r, 0, 19.8, width=12, fillColor=colors.HexColor("#CF222E"), strokeColor=None)) # Critical
+class _MonoBarChart(Drawing):
+    """
+    Horizontal bars, one ink, value printed at the end of each.
 
-        # Score Needle Angle
-        angle_rad = math.radians(180.0 - (score / 100.0 * 180.0))
-        nx = cx + (r - 14) * math.cos(angle_rad)
-        ny = cy + (r - 14) * math.sin(angle_rad)
-        
-        self.add(Line(cx, cy, nx, ny, strokeColor=colors.HexColor("#f1f5f9"), strokeWidth=2.5))
-        self.add(Circle(cx, cy, 5, fillColor=colors.HexColor("#f1f5f9"), strokeColor=None))
+    Bar length is the second-strongest elementary encoding in Cleveland and
+    McGill's ordering, which is why the bar charts survived the redesign while
+    the verdict dial did not: a dial encodes with angle, three ranks down, and
+    it cannot be read to a decimal place. Nothing here is rounded, tinted or
+    filled with a category colour; the track is a hairline, not a sunken well.
+    """
 
-        # Numeric Text
-        self.add(String(cx, cy + 14, f"{score:.1f}", textAnchor="middle", fontName="Helvetica-Bold", fontSize=18, fillColor=colors.HexColor("#f1f5f9")))
-        self.add(String(cx, cy + 4, "/ 100 CONFIRMED FRS", textAnchor="middle", fontName="Helvetica", fontSize=7, fillColor=colors.HexColor("#57606A")))
+    LABEL_W = 176.0
+    VALUE_W = 42.0
 
-class FRSBarMeter(Drawing):
-    """Horizontal bar chart for Page 3 FRS Score Ledger."""
-    def __init__(self, stei: float, bfci: float, corr: float, bank: float, width=523, height=85):
-        super().__init__(width, height)
-        items = [
-            ("Static Exposure (STEI)", stei, 0.25, stei * 0.25, "#1F6FEB"),
-            ("Dynamic Behavior (BFCI v2)", bfci, 0.35, bfci * 0.35, "#CF222E"),
-            ("Threat Correlation", corr, 0.20, corr * 0.20, "#8250DF"),
-            ("Banking Impact", bank, 0.20, bank * 0.20, "#057642"),
-        ]
-        y = height - 14
-        for label, val, wt, wtd, color_hex in items:
-            self.add(String(0, y, label, fontName="Helvetica-Bold", fontSize=7.5, fillColor=colors.HexColor("#24292F")))
-            self.add(Rect(170, y - 1, 240, 7, rx=2, ry=2, fillColor=colors.HexColor("#E1E4E8"), strokeColor=None))
-            fill_w = max(2, (val / 100.0) * 240)
-            self.add(Rect(170, y - 1, fill_w, 7, rx=2, ry=2, fillColor=colors.HexColor(color_hex), strokeColor=None))
-            self.add(String(420, y, f"{val:.1f}", fontName="Helvetica-Bold", fontSize=7.5, fillColor=colors.HexColor("#f1f5f9")))
-            self.add(String(460, y, f"w={wt:.2f} → {wtd:.2f}", fontName="Helvetica", fontSize=6.5, fillColor=colors.HexColor("#57606A")))
-            y -= 18
+    def __init__(self, rows, width=523, row_h=16, note_w=0.0, fmt="{:.1f}"):
+        # rows: (label, value on 0..100, trailing note)
+        super().__init__(width, max(row_h * len(rows), row_h))
+        self.hAlign = "LEFT"
+        track_w = width - self.LABEL_W - self.VALUE_W - note_w
+        y = self.height - row_h + 4
+        for label, value, note in rows:
+            val = max(0.0, min(float(value), 100.0))
+            self.add(String(0, y, label, fontName="Helvetica", fontSize=7.5,
+                            fillColor=colors.HexColor(THEME.INK_STRONG)))
+            self.add(Line(self.LABEL_W, y - 2, self.LABEL_W + track_w, y - 2,
+                          strokeColor=colors.HexColor(THEME.BORDER),
+                          strokeWidth=0.5))
+            self.add(Rect(self.LABEL_W, y - 2,
+                          max(0.6, (val / 100.0) * track_w), 6,
+                          fillColor=colors.HexColor(THEME.INK_STRONG),
+                          strokeColor=None))
+            self.add(String(self.LABEL_W + track_w + self.VALUE_W - 4, y,
+                            fmt.format(value), textAnchor="end",
+                            fontName="Helvetica-Bold", fontSize=7.5,
+                            fillColor=colors.HexColor(THEME.INK_STRONG)))
+            if note:
+                self.add(String(self.LABEL_W + track_w + self.VALUE_W + 6, y,
+                                note, fontName="Helvetica", fontSize=6.5,
+                                fillColor=colors.HexColor(THEME.INK_FAINT)))
+            y -= row_h
 
-class STEIBarMeter(Drawing):
-    """5-axis STEI Progress Bar Meter for Page 4."""
-    def __init__(self, ct: float, bt: float, pr: float, ob: float, ir: float, width=523, height=95):
-        super().__init__(width, height)
-        axes = [
-            ("Credential Theft (CT)", ct, "#CF222E"),
-            ("Banking Targeting (BT)", bt, "#D29922"),
-            ("Permission Risk (PR)", pr, "#F0883E"),
-            ("Obfuscation (OB)", ob, "#8C959F"),
-            ("Infrastructure Risk (IR)", ir, "#0969DA"),
-        ]
-        y = height - 14
-        for label, val, color_hex in axes:
-            self.add(String(0, y, label, fontName="Helvetica-Bold", fontSize=7.5, fillColor=colors.HexColor("#24292F")))
-            self.add(Rect(170, y - 1, 260, 7, rx=2, ry=2, fillColor=colors.HexColor("#E1E4E8"), strokeColor=None))
-            fill_w = max(2, (val / 100.0) * 260)
-            self.add(Rect(170, y - 1, fill_w, 7, rx=2, ry=2, fillColor=colors.HexColor(color_hex), strokeColor=None))
-            self.add(String(440, y, f"{val:.1f}", fontName="Helvetica-Bold", fontSize=7.5, fillColor=colors.HexColor("#f1f5f9")))
-            y -= 16
+
+class FRSBarMeter(_MonoBarChart):
+    """Axis contributions to the verdict score."""
+
+    def __init__(self, stei: float, bfci: float, corr: float, bank: float,
+                 width=523, height=85):
+        super().__init__(
+            [
+                ("Static exposure (STEI)", stei,
+                 "w=0.25 → %.2f" % (stei * 0.25)),
+                ("Dynamic behaviour (BFCI v2)", bfci,
+                 "w=0.35 → %.2f" % (bfci * 0.35)),
+                ("Threat correlation", corr,
+                 "w=0.20 → %.2f" % (corr * 0.20)),
+                ("Banking impact", bank,
+                 "w=0.20 → %.2f" % (bank * 0.20)),
+            ],
+            width=width, row_h=18, note_w=96.0,
+        )
+
+
+class STEIBarMeter(_MonoBarChart):
+    """Five-axis STEI breakdown."""
+
+    def __init__(self, ct: float, bt: float, pr: float, ob: float, ir: float,
+                 width=523, height=95):
+        super().__init__(
+            [
+                ("Credential theft (CT)", ct, "w=0.60"),
+                ("Banking targeting (BT)", bt, "w=0.20"),
+                ("Permission risk (PR)", pr, "w=0.10"),
+                ("Obfuscation (OB)", ob, "w=0.05"),
+                ("Infrastructure risk (IR)", ir, "w=0.05"),
+            ],
+            width=width, row_h=16, note_w=52.0,
+        )
+
 
 # The thresholds Page 9 renders belong to the engine, not to the report.
 from sudarshan_core.engines.vide.compare import DETECTION_THRESHOLD as VIDE_DETECTION_THRESHOLD
@@ -751,108 +1113,137 @@ from sudarshan_core.engines.vide.forensics import TIER_MODERATE as VIDE_TIER_MOD
 
 
 class VIDEBarMeter(Drawing):
-    """Horizontal bar chart for VIDE UI Fingerprint comparison (Page 9)."""
-    def __init__(self, jaccard: float, viewtree: float, color: float, composite: float, width=523, height=85):
+    """
+    VIDE UI-fingerprint comparison. Components are 0..1, so the axis runs 0..1
+    and the two engine thresholds are drawn on it as reference lines.
+    """
+
+    LABEL_W = 176.0
+    TRACK_W = 250.0
+
+    def __init__(self, jaccard: float, viewtree: float, color: float,
+                 composite: float, width=523, height=85):
         super().__init__(width, height)
+        self.hAlign = "LEFT"
         bars = [
-            ("String Jaccard (40% wt.)", jaccard, "#1F6FEB"),
-            ("View-Tree Similarity (35% wt.)", viewtree, "#1F6FEB"),
-            ("Brand Color Overlap (25% wt.)", color, "#1F6FEB"),
-            ("Composite Confidence", composite, "#CF222E"),
+            ("String Jaccard (40% wt.)", jaccard, False),
+            ("View-tree similarity (35% wt.)", viewtree, False),
+            ("Brand colour overlap (25% wt.)", color, False),
+            ("Composite confidence", composite, True),
         ]
         y = height - 14
-        for label, val, color_hex in bars:
-            self.add(String(0, y, label, fontName="Helvetica-Bold", fontSize=7.5, fillColor=colors.HexColor("#24292F")))
-            self.add(Rect(170, y - 1, 250, 8, rx=2, ry=2, fillColor=colors.HexColor("#E1E4E8"), strokeColor=None))
-            fill_w = max(2, val * 250)
-            self.add(Rect(170, y - 1, fill_w, 8, rx=2, ry=2, fillColor=colors.HexColor(color_hex), strokeColor=None))
-            self.add(String(430, y, f"{val:.2f}", fontName="Helvetica-Bold", fontSize=7.5, fillColor=colors.HexColor("#f1f5f9")))
+        for label, val, emphasis in bars:
+            self.add(String(0, y, label, fontName="Helvetica", fontSize=7.5,
+                            fillColor=colors.HexColor(THEME.INK_STRONG)))
+            self.add(Line(self.LABEL_W, y - 2, self.LABEL_W + self.TRACK_W, y - 2,
+                          strokeColor=colors.HexColor(THEME.BORDER),
+                          strokeWidth=0.5))
+            self.add(Rect(self.LABEL_W, y - 2,
+                          max(0.6, max(0.0, min(val, 1.0)) * self.TRACK_W),
+                          7 if emphasis else 6,
+                          fillColor=colors.HexColor(THEME.INK_STRONG),
+                          strokeColor=None))
+            self.add(String(self.LABEL_W + self.TRACK_W + 34, y, "%.2f" % val,
+                            textAnchor="end",
+                            fontName="Helvetica-Bold" if emphasis else "Helvetica",
+                            fontSize=7.5,
+                            fillColor=colors.HexColor(THEME.INK_STRONG)))
             y -= 18
 
         # Detection threshold, read from the engine rather than restated here -
         # a report that draws the line somewhere the engine does not use it is
         # worse than one that draws no line at all.
-        tx = 170 + (VIDE_DETECTION_THRESHOLD * 250)
-        self.add(Line(tx, 0, tx, height, strokeColor=colors.HexColor("#CF222E"), strokeWidth=1, strokeDashArray=[2, 2]))
-        self.add(String(tx, height - 6, f"detection threshold {VIDE_DETECTION_THRESHOLD:.2f}", textAnchor="middle", fontName="Helvetica-Bold", fontSize=6, fillColor=colors.HexColor("#CF222E")))
+        tx = self.LABEL_W + (VIDE_DETECTION_THRESHOLD * self.TRACK_W)
+        self.add(Line(tx, 0, tx, height - 10,
+                      strokeColor=colors.HexColor(THEME.INK_STRONG),
+                      strokeWidth=0.75, strokeDashArray=[2, 2]))
+        self.add(String(tx, height - 6,
+                        "detection threshold %.2f" % VIDE_DETECTION_THRESHOLD,
+                        textAnchor="middle", fontName="Helvetica", fontSize=6,
+                        fillColor=colors.HexColor(THEME.INK_STRONG)))
 
         # Tier boundaries. At a 0.20 threshold a bar can clear detection and
         # still be a weak match, so the meter shows where the composite falls
         # rather than only whether it crossed.
-        for boundary, caption in ((VIDE_TIER_MODERATE, "moderate"), (VIDE_TIER_HIGH, "high")):
-            bx = 170 + (boundary * 250)
-            self.add(Line(bx, 0, bx, height - 8, strokeColor=colors.HexColor("#8C959F"), strokeWidth=0.5, strokeDashArray=[1, 3]))
-            self.add(String(bx, 2, caption, textAnchor="middle", fontName="Helvetica", fontSize=5, fillColor=colors.HexColor("#57606A")))
+        for boundary, caption in ((VIDE_TIER_MODERATE, "moderate"),
+                                  (VIDE_TIER_HIGH, "high")):
+            bx = self.LABEL_W + (boundary * self.TRACK_W)
+            self.add(Line(bx, 8, bx, height - 12,
+                          strokeColor=colors.HexColor(THEME.BORDER),
+                          strokeWidth=0.5, strokeDashArray=[1, 3]))
+            self.add(String(bx, 2, caption, textAnchor="middle",
+                            fontName="Helvetica", fontSize=5.5,
+                            fillColor=colors.HexColor(THEME.INK_FAINT)))
 
-class BFCIBarMeter(Drawing):
-    """Vertical bar chart for BFCI v2 category breakdown (Page 7)."""
+
+class BFCIBarMeter(_MonoBarChart):
+    """
+    BFCI v2 category breakdown.
+
+    Horizontal, not vertical: the category names are long, and a horizontal
+    bar carries its label on the same baseline as its value without rotating
+    type or abbreviating the category to an initial.
+    """
+
     def __init__(self, components: Dict[str, float], width=523, height=95):
-        super().__init__(width, height)
-        cats = [
-            ("Accessibility Abuse (A)", components.get("accessibility", 95.0), 0.35, "#CF222E"),
-            ("SMS Interception (S)", components.get("sms", 88.0), 0.25, "#F0883E"),
-            ("Overlay Attack (O)", components.get("overlay", 90.0), 0.20, "#D29922"),
-            ("Banking Interaction (B)", components.get("banking", 70.0), 0.10, "#0969DA"),
-            ("Network C2 (N)", components.get("network", 55.0), 0.05, "#8250DF"),
-            ("Persistence (P)", components.get("persistence", 40.0), 0.05, "#057642"),
-        ]
-        
-        bw = 36
-        gap = 42
-        x = 50
-        max_h = 55
-        
-        # Grid Y
-        for y_val in [0, 20, 40, 60, 80, 100]:
-            y_p = 25 + (y_val / 100.0) * max_h
-            self.add(Line(40, y_p, width - 20, y_p, strokeColor=colors.HexColor("#E1E4E8"), strokeWidth=0.5))
-            self.add(String(35, y_p - 2, str(y_val), textAnchor="end", fontName="Helvetica", fontSize=6, fillColor=colors.HexColor("#57606A")))
+        super().__init__(
+            [
+                ("Accessibility abuse", components.get("accessibility", 0.0), "W=0.35"),
+                ("SMS interception", components.get("sms", 0.0), "W=0.25"),
+                ("Overlay attack", components.get("overlay", 0.0), "W=0.20"),
+                ("Banking interaction", components.get("banking", 0.0), "W=0.10"),
+                ("Network C2", components.get("network", 0.0), "W=0.05"),
+                ("Persistence", components.get("persistence", 0.0), "W=0.05"),
+            ],
+            width=width, row_h=15, note_w=52.0, fmt="{:.0f}",
+        )
 
-        for label, val, wt, color_hex in cats:
-            bh = (val / 100.0) * max_h
-            self.add(Rect(x, 25, bw, bh, rx=2, ry=2, fillColor=colors.HexColor(color_hex), strokeColor=None))
-            self.add(String(x + bw/2.0, 25 + bh + 3, f"{val:.0f}", textAnchor="middle", fontName="Helvetica-Bold", fontSize=7.5, fillColor=colors.HexColor("#f1f5f9")))
-            
-            # Short labels below
-            lbl_parts = label.split(" ")
-            self.add(String(x + bw/2.0, 14, lbl_parts[0], textAnchor="middle", fontName="Helvetica-Bold", fontSize=6, fillColor=colors.HexColor("#24292F")))
-            self.add(String(x + bw/2.0, 6, f"(W={wt:.2f})", textAnchor="middle", fontName="Helvetica", fontSize=5.5, fillColor=colors.HexColor("#57606A")))
-            x += bw + gap
 
 class CausalWorkflowDiagram(Drawing):
-    """Reconstructed Causal Workflow sequence diagram for Page 7."""
+    """
+    Reconstructed causal workflow: a numbered sequence on a single rule.
+
+    Every node used to be a filled colour disc with a tinted MITRE pill under
+    it. The sequence is ordinal, not categorical - four hues encoded nothing
+    that the numerals 1 to 4 and left-to-right position did not already carry.
+    """
+
     def __init__(self, width=523, height=65):
         super().__init__(width, height)
+        self.hAlign = "LEFT"
         steps = [
-            ("1", "T+0s", "Accessibility\nService Enabled", "T1628", "#CF222E"),
-            ("2", "T+8s", "Overlay Phishing\nShown (fake SBI login)", "T1637", "#F0883E"),
-            ("3", "T+19s", "SMS OTP\nIntercepted", "T1643", "#D29922"),
-            ("4", "T+24s", "C2 Exfiltration\nPOST Request", "T1437", "#8250DF"),
+            ("1", "T+0s", "Accessibility service", "enabled", "T1628"),
+            ("2", "T+8s", "Overlay phishing", "shown over target", "T1637"),
+            ("3", "T+19s", "SMS OTP", "intercepted", "T1643"),
+            ("4", "T+24s", "C2 exfiltration", "POST request", "T1437"),
         ]
-        
-        # Timeline bar
-        self.add(Line(60, 42, 460, 42, strokeColor=colors.HexColor("#D0D7DE"), strokeWidth=2))
-        
+
+        self.add(Line(60, 42, 460, 42,
+                      strokeColor=colors.HexColor(THEME.BORDER), strokeWidth=1))
+
         x_step = 100
-        for num, ts, name, tag, col in steps:
-            # Circle node
-            self.add(Circle(x_step, 42, 12, fillColor=colors.HexColor(col), strokeColor=colors.white, strokeWidth=1.5))
-            self.add(String(x_step, 38, num, textAnchor="middle", fontName="Helvetica-Bold", fontSize=9, fillColor=colors.white))
-            
-            # Timestamp header
-            self.add(String(x_step, 56, ts, textAnchor="middle", fontName="Helvetica-Bold", fontSize=6.5, fillColor=colors.HexColor("#57606A")))
-            
-            # Description text
-            lines = name.split("\n")
-            self.add(String(x_step, 24, lines[0], textAnchor="middle", fontName="Helvetica", fontSize=6, fillColor=colors.HexColor("#24292F")))
-            if len(lines) > 1:
-                self.add(String(x_step, 17, lines[1], textAnchor="middle", fontName="Helvetica", fontSize=5.5, fillColor=colors.HexColor("#57606A")))
-            
-            # MITRE tag pill
-            self.add(Rect(x_step - 14, 2, 28, 9, rx=2, ry=2, fillColor=colors.HexColor("#F3E8FF"), strokeColor=colors.HexColor("#D8B4FE")))
-            self.add(String(x_step, 4, tag, textAnchor="middle", fontName="Helvetica-Bold", fontSize=5.5, fillColor=colors.HexColor("#6B21A8")))
-            
+        for num, ts, name, detail, tag in steps:
+            self.add(Circle(x_step, 42, 9,
+                            fillColor=colors.HexColor(THEME.PAPER),
+                            strokeColor=colors.HexColor(THEME.INK_STRONG),
+                            strokeWidth=1))
+            self.add(String(x_step, 39, num, textAnchor="middle",
+                            fontName="Helvetica-Bold", fontSize=8,
+                            fillColor=colors.HexColor(THEME.INK_STRONG)))
+            self.add(String(x_step, 56, ts, textAnchor="middle",
+                            fontName="Helvetica-Bold", fontSize=6.5,
+                            fillColor=colors.HexColor(THEME.INK_MUTED)))
+            self.add(String(x_step, 24, name, textAnchor="middle",
+                            fontName="Helvetica", fontSize=6,
+                            fillColor=colors.HexColor(THEME.INK_STRONG)))
+            self.add(String(x_step, 16, detail, textAnchor="middle",
+                            fontName="Helvetica", fontSize=5.5,
+                            fillColor=colors.HexColor(THEME.INK_FAINT)))
+            self.add(String(x_step, 5, tag, textAnchor="middle",
+                            fontName="Courier", fontSize=5.5,
+                            fillColor=colors.HexColor(THEME.INK_MUTED)))
             x_step += 110
+
 
 # ---------------------------------------------------------------------------
 # ReportLabPDFGenerator Engine
@@ -870,313 +1261,664 @@ class ReportLabPDFGenerator:
         self._setup_custom_styles()
 
     def _setup_custom_styles(self):
-        # UI tokens mapped from frontend
-        c_slate800 = colors.HexColor("#1e293b")
-        c_slate600 = colors.HexColor("#475569")
-        c_blue900 = colors.HexColor("#0f172a")
+        """
+        The type scale.
 
+        Serif for prose, sans for headings and table furniture, mono for
+        hashes and package names. The document is printed, filed and signed,
+        and a serif body is what every reference document in the genre - NIST,
+        ISO, the Big-4 assurance opinions, the Mandiant dossiers - sets its
+        running text in.
+
+        Prose is held to roughly a 90-character measure by right indent rather
+        than by narrowing the frame: tables and evidence blocks still need the
+        full 523pt text block, and only the paragraphs are pulled in.
+        """
+        ink = colors.HexColor(THEME.INK_STRONG)
+        muted = colors.HexColor(THEME.INK_MUTED)
+        faint = colors.HexColor(THEME.INK_FAINT)
+
+        # 523pt of text block at 9pt Times runs to ~120 characters. 100pt of
+        # right indent brings continuous prose back inside the measure.
+        prose_indent = 120
+
+        self.doc_title = ParagraphStyle(
+            "DocTitle", fontName="Times-Bold", fontSize=THEME.PT_PART,
+            leading=26, textColor=ink, spaceAfter=4,
+        )
+        self.doc_subtitle = ParagraphStyle(
+            "DocSubtitle", fontName="Times-Roman", fontSize=13, leading=17,
+            textColor=muted, spaceAfter=10,
+        )
         self.part_header = ParagraphStyle(
-            "PartHeader",
-            fontName="Helvetica-Bold",
-            fontSize=11,
-            leading=14,
-            textColor=c_slate800,
-            spaceAfter=6,
-            spaceBefore=12,
-            keepWithNext=True,
+            "PartHeader", fontName="Helvetica-Bold", fontSize=11, leading=14,
+            textColor=ink, spaceAfter=2, spaceBefore=0, keepWithNext=True,
         )
         self.section_bar = ParagraphStyle(
-            "SectionBar",
-            fontName="Helvetica-Bold",
-            fontSize=8,
-            leading=10,
-            textColor=c_slate800,
-            spaceBefore=8,
-            spaceAfter=4,
-            textTransform="uppercase",
-            keepWithNext=True,
+            "SectionBar", fontName="Helvetica-Bold", fontSize=8.5, leading=11,
+            textColor=ink, spaceBefore=10, spaceAfter=4, keepWithNext=True,
         )
         self.body_style = ParagraphStyle(
-            "BodyDark",
-            fontName="Helvetica",
-            fontSize=8,
-            leading=12,
-            textColor=c_slate600,
-            spaceAfter=6,
+            "BodyDark", fontName="Times-Roman", fontSize=9, leading=12,
+            textColor=ink, spaceAfter=6, rightIndent=prose_indent,
+        )
+        # Prose that has to span the full text block - a document notice ruled
+        # across the page, a caption under a full-width table.
+        self.body_wide = ParagraphStyle(
+            "BodyWide", parent=self.body_style, rightIndent=0,
         )
         self.body_bold = ParagraphStyle(
-            "BodyDarkBold",
-            parent=self.body_style,
-            fontName="Helvetica-Bold",
-            textColor=c_slate800,
+            "BodyDarkBold", parent=self.body_style, fontName="Times-Bold",
+        )
+        self.caption = ParagraphStyle(
+            "Caption", fontName="Times-Roman", fontSize=7.5, leading=10,
+            textColor=faint, spaceAfter=4, rightIndent=0,
+        )
+        self.formula = ParagraphStyle(
+            "Formula", fontName="Courier", fontSize=8, leading=12,
+            textColor=ink, spaceBefore=4, spaceAfter=4, leftIndent=12,
         )
         self.table_header = ParagraphStyle(
-            "TableHeader",
-            fontName="Helvetica-Bold",
-            fontSize=7,
-            leading=10,
-            textColor=c_slate600,
-            textTransform="uppercase",
-            alignment=0,
+            "TableHeader", fontName="Helvetica-Bold", fontSize=7, leading=9.5,
+            textColor=ink, alignment=0,
+        )
+        self.table_header_right = ParagraphStyle(
+            "TableHeaderRight", parent=self.table_header, alignment=2,
         )
         self.table_cell = ParagraphStyle(
-            "TableCell",
-            fontName="Helvetica",
-            fontSize=7.5,
-            leading=10,
-            textColor=c_slate800,
+            "TableCell", fontName="Times-Roman", fontSize=8, leading=10.5,
+            textColor=ink,
         )
         self.table_cell_bold = ParagraphStyle(
-            "TableCellBold",
-            parent=self.table_cell,
-            fontName="Helvetica-Bold",
+            "TableCellBold", parent=self.table_cell, fontName="Times-Bold",
         )
         self.table_cell_mono = ParagraphStyle(
-            "TableCellMono",
-            parent=self.table_cell,
-            fontName="Courier",
+            "TableCellMono", parent=self.table_cell, fontName="Courier",
             fontSize=7,
         )
+        # Numeric columns: Courier is the only built-in face whose digits are
+        # all one width, so a column of scores aligns on the decimal point.
+        self.table_num = ParagraphStyle(
+            "TableNum", parent=self.table_cell_mono, alignment=2,
+        )
+        self.table_num_bold = ParagraphStyle(
+            "TableNumBold", parent=self.table_num, fontName="Courier-Bold",
+        )
+        # "Not tested" and "Not present" are findings in their own right and
+        # are set apart from recorded values, never left as a blank cell.
+        self.table_null = ParagraphStyle(
+            "TableNull", parent=self.table_cell,
+            textColor=colors.HexColor(THEME.INK_FAINT),
+        )
+
+    # -----------------------------------------------------------------------
+    # Clause numbering
+    #
+    # ISO/IEC Directives Part 2 numbers every clause and subclause so that a
+    # regulator, a reviewer or a court can cite one statement rather than "the
+    # bit about permissions on page 5". The counters below hand out those
+    # numbers as the document is built.
+    # -----------------------------------------------------------------------
+
+    def _clause(self, title: str) -> Paragraph:
+        """Open a numbered clause: 1, 2, 3 ..."""
+        self._clause_n += 1
+        self._subclause_n = 0
+        return Paragraph(f"{self._clause_n} &nbsp; {title}", self.part_header)
+
+    def _subclause(self, title: str) -> Paragraph:
+        """Open a numbered subclause under the current clause: 4.1, 4.2 ..."""
+        self._subclause_n += 1
+        return Paragraph(
+            f"{self._clause_n}.{self._subclause_n} &nbsp; {title}",
+            self.section_bar,
+        )
+
+    def _notice(self, text: str, elements: List[Any]) -> None:
+        """A ruled block of prose. No fill, no coloured edge, no box."""
+        block = Table([[Paragraph(text, self.body_wide)]], colWidths=[523.0])
+        block.setStyle(block_quote_style())
+        elements.append(block)
+        elements.append(Spacer(1, 6))
+
+    def _band_phrase(self) -> str:
+        """The verdict band as it must appear anywhere in the document."""
+        return THEME.band_label(self.data.risk_band.value)
+
+    def _case_reference(self) -> str:
+        return self.data.case_id.value or "unassigned"
 
     def generate_pdf(self) -> bytes:
         buffer = io.BytesIO()
-        
+
         doc = BaseDocTemplate(
             buffer,
             pagesize=A4,
             leftMargin=36,
             rightMargin=36,
-            topMargin=64,
-            bottomMargin=52,
+            topMargin=68,
+            bottomMargin=58,
         )
-        
+
         # Usable width = 595.27 - 72 = 523.27
         frame = Frame(
-            doc.leftMargin, 
-            doc.bottomMargin, 
-            doc.width, 
-            doc.height, 
-            id='normal'
+            doc.leftMargin,
+            doc.bottomMargin,
+            doc.width,
+            doc.height,
+            id='normal',
         )
-        
-        def on_page(canvas_obj, document):
-            draw_sudarshan_header_footer(canvas_obj, document, self.data)
-            
-        template = PageTemplate(id='sudarshan_template', frames=[frame], onPage=on_page)
+
+        # Chrome is drawn by the canvas on a second pass, once the total page
+        # count is known - see make_numbered_canvas.
+        template = PageTemplate(id='sudarshan_template', frames=[frame])
         doc.addPageTemplates([template])
 
+        self._clause_n = 0
+        self._subclause_n = 0
+
         elements = []
-        
-        # Build All 12 Sections + Appendix
-        self._build_page1_verdict_summary(elements)
-        elements.append(Spacer(1, 16))
-        
-        self._build_page2_narrative_and_response(elements)
-        elements.append(Spacer(1, 16))
-        
-        self._build_page3_score_ledger(elements)
-        elements.append(Spacer(1, 16))
-        
-        self._build_page4_stei_breakdown(elements)
-        elements.append(Spacer(1, 16))
-        
-        self._build_page5_forensic_static(elements)
-        elements.append(Spacer(1, 16))
-        
-        self._build_page6_evidence_mapping(elements)
-        elements.append(Spacer(1, 16))
-        
-        self._build_page7_dynamic_and_workflow(elements)
-        elements.append(Spacer(1, 16))
-        
-        self._build_page8_hook_inventory(elements)
-        elements.append(Spacer(1, 16))
-        
-        self._build_page9_vide_impersonation(elements)
-        elements.append(Spacer(1, 16))
-        
-        self._build_page10_threat_intel_scenarios(elements)
-        elements.append(Spacer(1, 16))
-        
-        self._build_page11_coverage_and_evidence_ledger(elements)
-        elements.append(Spacer(1, 16))
-        
-        self._build_page12_iocs_governance_signoff(elements)
-        
+
+        # Front matter first: the title page, the document-control block, the
+        # contents and the scope statement. Everything a reader needs in order
+        # to know what this document is, who issued it, what it covers and
+        # what it does not, before a single finding is asserted.
+        self._build_front_matter(elements)
+
+        # One numbered clause per page.
+        #
+        # These twelve breaks were replaced with Spacer(1, 16) in 9c7cfe3, and
+        # the document has been a continuous flow since: PART B started
+        # mid-page under the tail of PART A, and the running "Page N" footer,
+        # the "PAGE n" builder names and the cross-references the sections
+        # print at each other all addressed page numbers that no longer
+        # existed. A section that does not fill its page is ordinary in a
+        # filed dossier; a part heading buried halfway down one is not.
+        sections = (
+            self._build_page1_verdict_summary,
+            self._build_page2_narrative_and_response,
+            self._build_page3_score_ledger,
+            self._build_page4_stei_breakdown,
+            self._build_page5_forensic_static,
+            self._build_page6_evidence_mapping,
+            self._build_page7_dynamic_and_workflow,
+            self._build_page8_hook_inventory,
+            self._build_page9_vide_impersonation,
+            self._build_page10_threat_intel_scenarios,
+            self._build_page11_coverage_and_evidence_ledger,
+            self._build_page12_iocs_governance_signoff,
+        )
+        for build_section in sections:
+            elements.append(PageBreak())
+            build_section(elements)
+
+        # Appends its own PageBreak, and renders nothing without screenshots.
         self._build_appendices(elements)
 
-        doc.build(elements)
+        chrome = {
+            "report_id": self._case_reference(),
+            # Truncated to 16 hex characters: enough to bind a printed sheet
+            # to the case record, short enough that the footer's left group
+            # clears the centred handling note. The full digest is at clause 14.
+            "integrity": "Integrity %s" % self._case_integrity_hash()[:16],
+            "issued": self.data.report_generated_at.value,
+        }
+        doc.build(elements, canvasmaker=make_numbered_canvas(chrome))
         pdf_bytes = buffer.getvalue()
         buffer.close()
         return pdf_bytes
+
+    # -----------------------------------------------------------------------
+    # Front matter
+    # -----------------------------------------------------------------------
+
+    def _build_masthead(self, elements: List[Any]):
+        """
+        The title-page masthead: mark, wordmark, descriptor, rule.
+
+        The mark is set large enough to read as an emblem rather than a favicon
+        and is optically aligned with the wordmark's cap height. Everything but
+        the mark is type, so it stays selectable and searchable, and the whole
+        block degrades to a wordmark-only masthead if the asset is missing.
+        """
+        wordmark = Paragraph(
+            f'<font face="Helvetica-Bold" size="21" '
+            f'color="{THEME.INK_STRONG}">{BRAND.WORDMARK}</font><br/>'
+            f'<font face="Helvetica" size="8.5" color="{THEME.INK_MUTED}">'
+            f'{BRAND.DESCRIPTOR}</font>',
+            ParagraphStyle("Wordmark", fontName="Helvetica-Bold", fontSize=21,
+                           leading=25, textColor=colors.HexColor(THEME.INK_STRONG)),
+        )
+
+        mark_path = BRAND.mark_path(small=False)
+        mark_flowable = None
+        if mark_path is not None:
+            try:
+                mark_flowable = Image(str(mark_path), width=44, height=44,
+                                      mask="auto")
+            except Exception:
+                mark_flowable = None
+
+        if mark_flowable is None:
+            masthead = Table([[wordmark]], colWidths=[523.0])
+            pad_left = 0
+        else:
+            masthead = Table([[mark_flowable, wordmark]], colWidths=[56.0, 467.0])
+            pad_left = 0
+
+        masthead.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (0, 0), pad_left),
+            ("LEFTPADDING", (1, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ("LINEBELOW", (0, 0), (-1, -1), 2.0,
+             colors.HexColor(THEME.BORDER_STRONG)),
+        ]))
+        elements.append(masthead)
+
+    def _build_front_matter(self, elements: List[Any]):
+        """
+        Title page, document control, distribution, contents, scope.
+
+        SWGDE 18-Q-002 s5, ISO/IEC 17025 s7.8.2.1 and FRCP 26(a)(2)(B) all
+        require the same backbone before any finding is stated: what the
+        document is, who issued it, when, against which item, under what
+        authority, and what the examination did and did not cover. The old
+        first page opened on a verdict dial; a reader had no way to establish
+        any of that.
+        """
+        sha = self.data.sha256.value or ""
+
+        elements.append(Spacer(1, 60))
+        self._build_masthead(elements)
+        elements.append(Spacer(1, 46))
+        elements.append(Paragraph("Threat Investigation Report", self.doc_title))
+        elements.append(Paragraph(
+            "Automated forensic examination of a submitted Android application "
+            "package", self.doc_subtitle))
+        elements.append(HRFlowable(width="100%", thickness=THEME.RULE_W_STRONG,
+                                   color=colors.HexColor(THEME.BORDER_STRONG),
+                                   spaceBefore=2, spaceAfter=14))
+
+        ident = [
+            ["Report reference", self._case_reference()],
+            ["Item examined", self.data.package_name.value or THEME.NULL_NOT_RECORDED],
+            ["Item identifier (SHA-256)", sha or THEME.NULL_NOT_RECORDED],
+            ["Determination", "%s / 100 — %s" % (
+                self.data.final_risk_score.value, self._band_phrase())],
+            ["Date of issue", self.data.report_generated_at.value],
+            ["Classification", DOCUMENT_CLASSIFICATION],
+        ]
+        ident_rows = [
+            [Paragraph(k, self.table_cell_bold),
+             Paragraph(v, self.table_cell_mono if k.endswith("SHA-256)")
+                       else self.table_cell)]
+            for k, v in ident
+        ]
+        ident_table = Table(ident_rows, colWidths=[150.0, 373.0])
+        ident_table.setStyle(formal_table_style(header_rows=0, body_rules=True))
+        elements.append(ident_table)
+        elements.append(Spacer(1, 16))
+
+        elements.append(Paragraph(
+            "Issued by Sudarshan, an automated mobile-malware analysis platform, "
+            "on behalf of the submitting institution. This report is generated "
+            "without human examination. It is not an expert's report within the "
+            "meaning of CPR Part 35 or FRCP 26(a)(2)(B) unless a named analyst "
+            "adopts it by signature at clause 12.",
+            self.body_style))
+
+        elements.append(PageBreak())
+
+        # --- Document control -------------------------------------------
+        elements.append(self._clause("Document control"))
+        control = [
+            [Paragraph("Field", self.table_header),
+             Paragraph("Value", self.table_header)],
+        ]
+        for key, value in (
+            ("Report reference", self._case_reference()),
+            ("Version", "1.0 — first issue"),
+            ("Status", "Issued"),
+            ("Prepared by", "Sudarshan automated analysis pipeline "
+                            "(%s)" % (self.data.analysis_mode.value or
+                                      THEME.NULL_NOT_RECORDED)),
+            ("Reviewed by", "Pending — see clause 12"),
+            ("Approved by", "Pending — see clause 12"),
+            ("Date of issue", self.data.report_generated_at.value),
+            ("Classification", DOCUMENT_CLASSIFICATION),
+            ("Retention", "Case record persisted to the platform case store; "
+                          "evidence ledger identifiers map one-to-one to "
+                          "stored evidence records"),
+            ("Amendment procedure", "An amended report is issued as a new "
+                                    "document referencing this reference; "
+                                    "this document is never edited in place"),
+        ):
+            control.append([Paragraph(key, self.table_cell_bold),
+                            Paragraph(value, self.table_cell)])
+        control_table = Table(control, colWidths=[150.0, 373.0], repeatRows=1)
+        control_table.setStyle(formal_table_style())
+        elements.append(control_table)
+        elements.append(Spacer(1, 10))
+
+        elements.append(self._subclause("Distribution"))
+        elements.append(Paragraph(
+            "Distribution is limited to the submitting institution's security "
+            "operations function, its fraud-risk function, and any regulator to "
+            "whom the institution is obliged to report the sample. The "
+            "classification marking in the running head of every page applies "
+            "to the document as a whole, including any extract taken from it.",
+            self.body_style))
+
+        elements.append(Spacer(1, 8))
+        elements.append(self._subclause("Contents"))
+        contents = [
+            [Paragraph("Clause", self.table_header),
+             Paragraph("Title", self.table_header)],
+        ]
+        for number, title in (
+            ("1", "Document control"),
+            ("2", "Scope, basis and limitations"),
+            ("3", "Verdict summary"),
+            ("4", "Narrative and recommended response"),
+            ("5", "Deterministic score ledger"),
+            ("6", "Static threat exposure — five-axis breakdown"),
+            ("7", "Forensic evidence — static"),
+            ("8", "Evidence, technique and fraud impact"),
+            ("9", "Dynamic execution and behaviour"),
+            ("10", "Hook bundle inventory"),
+            ("11", "Visual impersonation detection"),
+            ("12", "Threat intelligence and scenario correlation"),
+            ("13", "Coverage, limitations and evidence ledger"),
+            ("14", "Indicators, chain of custody and sign-off"),
+        ):
+            contents.append([Paragraph(number, self.table_cell_mono),
+                             Paragraph(title, self.table_cell)])
+        contents_table = Table(contents, colWidths=[60.0, 463.0], repeatRows=1)
+        contents_table.setStyle(formal_table_style())
+        elements.append(contents_table)
+
+        elements.append(PageBreak())
+
+        # --- Scope and limitations --------------------------------------
+        elements.append(self._clause("Scope, basis and limitations"))
+        elements.append(self._subclause("Scope of the examination"))
+        elements.append(Paragraph(
+            "This report covers one item: the Android application package "
+            "identified at clause 1 by its SHA-256 digest. The results relate "
+            "only to that item as submitted. They do not extend to any other "
+            "build, version or repackaging of the same application, and they "
+            "do not describe the behaviour of the application on any device "
+            "other than the instrumented sandbox described at clause 9.",
+            self.body_style))
+
+        elements.append(self._subclause("Basis of the findings"))
+        elements.append(Paragraph(
+            "Every finding, figure and item of evidence in this document is "
+            "derived from the automated analysis of the submitted artifact and "
+            "from nothing else. No analyst has reviewed or amended it unless a "
+            "clause says so explicitly. The verdict score is computed from "
+            "observable evidence by the fixed formula stated at clause 5; the "
+            "narrative clauses are written downstream of that score and cannot "
+            "alter it.",
+            self.body_style))
+
+        elements.append(self._subclause("Limitations"))
+        elements.append(Paragraph(
+            "A clause that records an absence of evidence records exactly "
+            "that. It is not a finding that the sample is benign. Where the "
+            "sandbox did not reach a trigger condition, clause 13 states which "
+            "condition was not reached and what would be required to reach it. "
+            "An evasion-first banking trojan waiting on a target application, "
+            "an OTP, an accessibility grant or a dormancy timer produces the "
+            "same empty telemetry as a benign application, and the two cannot "
+            "be separated on the strength of a run that did not exercise the "
+            "sample.",
+            self.body_style))
+        elements.append(Paragraph(
+            "Baseline fixtures used for visual comparison at clause 11 are "
+            "laboratory artifacts. They carry no authority as records of the "
+            "institutions they represent, and a match against one is evidence "
+            "of visual similarity only.",
+            self.body_style))
+
+        elements.append(self._subclause("Reading the severity scale"))
+        elements.append(Paragraph(
+            "Severity is stated on a four-step ordinal scale and is always "
+            "printed as a word and its position on that scale: "
+            "SAFE (1 of 4), SUSPICIOUS (2 of 4), HIGH (3 of 4), "
+            "CRITICAL (4 of 4). Colour is used alongside the word and never "
+            "instead of it, so the document reads correctly in greyscale, in "
+            "photocopy, and to a reader who cannot separate the four hues.",
+            self.body_style))
+
+        elements.append(self._subclause("Reading a table cell with no value"))
+        null_rows = [
+            [Paragraph("Printed as", self.table_header),
+             Paragraph("Means", self.table_header)],
+            [Paragraph(THEME.NULL_NOT_APPLICABLE, self.table_cell_mono),
+             Paragraph("The field does not apply to this item.", self.table_cell)],
+            [Paragraph(THEME.NULL_NOT_TESTED, self.table_null),
+             Paragraph("The field is examinable, and this run did not examine "
+                       "it. Nothing follows about the underlying fact.",
+                       self.table_cell)],
+            [Paragraph(THEME.NULL_NOT_PRESENT, self.table_cell),
+             Paragraph("The field was examined and the thing looked for was "
+                       "absent.", self.table_cell)],
+            [Paragraph(THEME.NULL_NOT_RECORDED, self.table_null),
+             Paragraph("The pipeline did not capture the value; the artifact "
+                       "may still carry it.", self.table_cell)],
+        ]
+        null_table = Table(null_rows, colWidths=[110.0, 413.0], repeatRows=1)
+        null_table.setStyle(formal_table_style())
+        elements.append(null_table)
+        elements.append(Spacer(1, 4))
+        elements.append(Paragraph(
+            "No cell in this document is left blank. A blank cell conflates "
+            "“not examined” with “not present”, and the "
+            "difference between those two is the difference between a "
+            "qualified verdict and an unqualified one.",
+            self.caption))
 
     # -----------------------------------------------------------------------
     # Section Builders
     # -----------------------------------------------------------------------
 
     def _build_page1_verdict_summary(self, elements: List[Any]):
-        """PAGE 1 — PART A · EXECUTIVE — VERDICT SUMMARY."""
-        elements.append(Paragraph("PART A · EXECUTIVE — VERDICT SUMMARY", self.part_header))
-        
-        # Disclaimer callout box
-        about_p = Paragraph(
-            "<b>Document Notice.</b> This investigation report was securely generated by the Sudarshan BOI platform. "
-            "All findings, metrics, and evidence presented below are derived strictly from the automated analysis of the submitted artifact. "
-            "No human review has been performed unless explicitly noted.",
-            self.body_style
-        )
-        about_table = Table([[about_p]], colWidths=[523.0], repeatRows=1)
-        about_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#DDF4FF")),
-            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#54AEFF")),
-            ("PADDING", (0, 0), (-1, -1), 5),
-        ]))
-        elements.append(about_table)
+        """
+        Clause 3 - the determination.
+
+        This clause used to open on a 180-degree dial. A dial encodes a value
+        with angle, which Cleveland and McGill rank third among the elementary
+        perceptual tasks, behind position and length; it cannot be read to a
+        decimal place; and in an evidentiary document the reader does not need
+        to estimate the score at all, because the exact figure and the
+        arithmetic that produced it are both printed. The determination is now
+        a sentence, a number, and a band with its position on the scale.
+        """
+        elements.append(self._clause("Verdict summary"))
+
+        frs = self.data.final_risk_score.value
+        base = self.data.base_score.value
+        band_phrase = self._band_phrase()
+        family_name = str(getattr(self.data, "malware_family", "") or "")
+
+        self._notice(
+            "<b>Determination.</b> On the evidence enumerated in clauses 7 to "
+            "12, the item examined scores <b>%.1f of 100</b> and falls in the "
+            "<b>%s</b> band. The score is computed by the fixed formula at "
+            "clause 5 and is reproducible from the evidence set; it is not a "
+            "model output and no narrative clause in this document can alter "
+            "it." % (frs, band_phrase),
+            elements)
+
+        elements.append(self._subclause("Score of record"))
+        verdict_rows = [
+            [Paragraph("Stage", self.table_header),
+             Paragraph("Basis", self.table_header),
+             Paragraph("Score", self.table_header_right),
+             Paragraph("Band", self.table_header)],
+            [Paragraph("Preliminary (day zero)", self.table_cell_bold),
+             Paragraph("Static analysis only, before any sandbox run",
+                       self.table_cell),
+             Paragraph("%.1f" % base, self.table_num),
+             Paragraph(THEME.band_label(THEME.score_key(base)), self.table_cell)],
+            [Paragraph("Confirmed", self.table_cell_bold),
+             Paragraph("Static, dynamic and external correlation, weighted per "
+                       "clause 5", self.table_cell),
+             Paragraph("%.1f" % frs, self.table_num_bold),
+             Paragraph(band_phrase, self.table_cell_bold)],
+        ]
+        verdict_table = Table(verdict_rows, colWidths=[108.0, 250.0, 45.0, 120.0],
+                              repeatRows=1)
+        verdict_table.setStyle(formal_table_style(total_row=True))
+        elements.append(verdict_table)
         elements.append(Spacer(1, 4))
-
-        elements.append(Paragraph("VERDICT SUMMARY", self.section_bar))
-
-        gauge_flowable = FRSDialGauge(self.data.final_risk_score.value, self.data.risk_band.value)
-        
-        verdict_text = Paragraph(
-            f"<b>{self.data.risk_band.value.upper()} RISK → {self.data.risk_band.value.upper()}</b><br/><br/>"
-            f"<font size=6.5 color='#24292F'>Static-only preliminary verdict (Day-0, before sandbox run): <b>{self.data.base_score.value:.1f} / 100 — {self.data.risk_band.value.upper()} RISK</b>. "
-            f"Confirmed verdict after dynamic execution: <b>{self.data.final_risk_score.value:.1f} / 100 — {self.data.risk_band.value.upper()}</b>. See Score Ledger, page 3.</font>",
-            self.body_style
-        )
-
-        # We need to construct family attribution string from data if available, else omit
-        family_name = self.data.malware_family if hasattr(self.data, 'malware_family') and self.data.malware_family else "Unknown"
-        family_box = Paragraph(
-            f"<font size=6.5 color='#57606A'><b>FAMILY ATTRIBUTION</b></font><br/><br/>"
-            f"<font size=11 color='#0D1117'><b>{family_name.upper()}</b></font><br/>"
-            f"<font size=6 color='#57606A'>based on deterministic classifier rule conditions</font>",
-            self.body_style
-        )
-
-        v_table_data = [[gauge_flowable, verdict_text, family_box]]
-        v_table = Table(v_table_data, colWidths=[169.5, 213.1, 140.4], repeatRows=1)
-        v_table.setStyle(TableStyle([
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("BACKGROUND", (2, 0), (2, 0), colors.HexColor("#F6F8FA")),
-            ("BOX", (2, 0), (2, 0), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 4),
-        ]))
-        elements.append(v_table)
+        elements.append(Paragraph(
+            "Scale: SAFE (1 of 4) 0–29 · SUSPICIOUS (2 of 4) 30–59 · "
+            "HIGH (3 of 4) 60–84 · CRITICAL (4 of 4) 85–100. The full "
+            "decomposition is at clause 5.",
+            self.caption))
         elements.append(Spacer(1, 6))
 
-        # Executive Conclusion
-        conc_p = Paragraph(
-            f"<b>EXECUTIVE CONCLUSION.</b> {self.data.plain_english_narrative.value if self.data.plain_english_narrative else 'No narrative available.'}",
-            self.body_style
-        )
-        conc_table = Table([[conc_p]], colWidths=[523.0], repeatRows=1)
-        conc_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFEBE9")),
-            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#FF8170")),
-            ("PADDING", (0, 0), (-1, -1), 5),
-        ]))
-        elements.append(conc_table)
-        elements.append(Spacer(1, 6))
+        elements.append(self._subclause("Family attribution"))
+        elements.append(Paragraph(
+            "Attribution: <b>%s</b>. Assigned by deterministic classifier rule "
+            "conditions, not by similarity judgement. An attribution of "
+            "%s means no rule set matched; it is not a statement that the "
+            "sample belongs to no known family."
+            % (family_name.upper() if family_name else "UNKNOWN",
+               THEME.NULL_NOT_APPLICABLE if family_name else "UNKNOWN"),
+            self.body_wide))
 
-        # Key Findings Row (4 cards matching reference PDF)
-        elements.append(Paragraph("KEY FINDINGS", self.body_bold))
-        
-        # Build finding blocks dynamically based on data. If there are fewer than 4, pad with empty cells.
-        finding_blocks = []
-        if family_name != "Unknown":
-            finding_blocks.append(Paragraph(f"<font size=6 color='#6B21A8'><b>CORRELATED</b></font><br/><b>Malware family — {family_name}</b><br/>(deterministic rule match)", self.table_cell))
-        
-        if hasattr(self.data, 'permissions') and any('SMS' in p for p in self.data.permissions):
-            finding_blocks.append(Paragraph("<font size=6 color='#15803D'><b>STATIC INDICATOR</b></font><br/><b>SMS interception capability</b>", self.table_cell))
-            
-        if hasattr(self.data, 'permissions') and any('ACCESSIBILITY' in p for p in self.data.permissions):
-            finding_blocks.append(Paragraph("<font size=6 color='#15803D'><b>STATIC INDICATOR</b></font><br/><b>Accessibility-based input capture</b>", self.table_cell))
-            
-        if hasattr(self.data, 'dynamic_ran') and self.data.dynamic_ran:
-             finding_blocks.append(Paragraph("<font size=6 color='#B45309'><b>DYNAMIC</b></font><br/><b>Confirmed dynamic execution</b>", self.table_cell))
-             
-        # Pad up to 4
-        while len(finding_blocks) < 4:
-            finding_blocks.append(Paragraph("", self.table_cell))
-            
-        # Ensure we only take the first 4
-        finding_blocks = finding_blocks[:4]
+        # Executive conclusion
+        elements.append(self._subclause("Executive conclusion"))
+        elements.append(Paragraph(
+            self.data.plain_english_narrative.value
+            if self.data.plain_english_narrative
+            else "No narrative was generated for this sample. See clause 13 "
+                 "for what this run did and did not reach.",
+            self.body_wide))
 
-        kf_data = [finding_blocks]
-        kf_table = Table(kf_data, colWidths=[130.8, 130.8, 130.8, 130.8], repeatRows=1)
-        kf_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (0, 0), colors.HexColor("#F3E8FF")),
-            ("BACKGROUND", (1, 0), (2, 0), colors.HexColor("#DCFCE7")),
-            ("BACKGROUND", (3, 0), (3, 0), colors.HexColor("#FEF3C7")),
-            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 4),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ]))
+        # Key findings - a ruled list, not four tinted cards.
+        elements.append(self._subclause("Principal findings"))
+        finding_rows = [
+            [Paragraph("Basis", self.table_header),
+             Paragraph("Finding", self.table_header)],
+        ]
+        permissions = getattr(self.data, "permissions", None) or []
+        if family_name:
+            finding_rows.append([
+                Paragraph("Correlated", self.table_cell_bold),
+                Paragraph("Malware family attributed as %s by deterministic "
+                          "rule match." % family_name, self.table_cell)])
+        if any("SMS" in p for p in permissions):
+            finding_rows.append([
+                Paragraph("Static", self.table_cell_bold),
+                Paragraph("SMS interception capability declared in the "
+                          "manifest.", self.table_cell)])
+        if any("ACCESSIBILITY" in p for p in permissions):
+            finding_rows.append([
+                Paragraph("Static", self.table_cell_bold),
+                Paragraph("Accessibility-based input capture capability "
+                          "declared in the manifest.", self.table_cell)])
+        finding_rows.append([
+            Paragraph("Dynamic", self.table_cell_bold),
+            Paragraph("Instrumented execution was performed; see clause 9."
+                      if self.data.dynamic_ran else
+                      "No instrumented execution was performed in this run. "
+                      "The dynamic axis carries no evidence; see clause 13.",
+                      self.table_cell if self.data.dynamic_ran
+                      else self.table_null)])
+        if len(finding_rows) == 2:
+            finding_rows.append([
+                Paragraph("Static", self.table_cell_bold),
+                Paragraph("No principal static indicator met the threshold for "
+                          "listing here. The full static evidence set is at "
+                          "clause 7.", self.table_null)])
+        kf_table = Table(finding_rows, colWidths=[80.0, 443.0], repeatRows=1)
+        kf_table.setStyle(formal_table_style())
         elements.append(kf_table)
-        elements.append(Spacer(1, 6))
+        elements.append(Spacer(1, 8))
 
-        # Sample Reputation Table
-        elements.append(Paragraph("SAMPLE REPUTATION — external threat-intelligence evidence", self.body_bold))
-        rep_data = [
-            [Paragraph("VIRUSTOTAL", self.table_header), Paragraph("DETECTION RATIO", self.table_header), Paragraph("OTX PULSES", self.table_header), Paragraph("ABUSEIPDB (C2 IP)", self.table_header), Paragraph("KNOWN FAMILY", self.table_header)],
-            [
-                Paragraph(self.data.vt_detection_ratio.value if self.data.vt_detection_ratio else "N/A", self.table_cell_bold), 
-                Paragraph(self.data.vt_detection_ratio.value if self.data.vt_detection_ratio else "N/A", self.table_cell), 
-                Paragraph(f"{self.data.otx_pulse_count.value if self.data.otx_pulse_count else '0'}", self.table_cell), 
-                Paragraph(f"{self.data.abuseipdb_score.value if self.data.abuseipdb_score else '0'} / 100", self.table_cell), 
-                Paragraph(family_name, self.table_cell_bold)
-            ],
+        # Sample reputation
+        elements.append(self._subclause("Sample reputation — external evidence"))
+        rep_rows = [
+            [Paragraph("Source", self.table_header),
+             Paragraph("Result", self.table_header),
+             Paragraph("Meaning if absent", self.table_header)],
+            [Paragraph("VirusTotal detection ratio", self.table_cell_bold),
+             Paragraph(THEME.null_cell(
+                 self.data.vt_detection_ratio.value
+                 if self.data.vt_detection_ratio else None,
+                 THEME.NULL_NOT_TESTED), self.table_cell),
+             Paragraph("A sample unknown to VirusTotal is not thereby clean; "
+                       "it may simply be new.", self.table_cell)],
+            [Paragraph("OTX pulses", self.table_cell_bold),
+             Paragraph(THEME.null_cell(
+                 self.data.otx_pulse_count.value
+                 if self.data.otx_pulse_count else None,
+                 THEME.NULL_NOT_TESTED), self.table_cell),
+             Paragraph("No pulse means no community report, not an absence of "
+                       "activity.", self.table_cell)],
+            [Paragraph("AbuseIPDB (C2 address)", self.table_cell_bold),
+             Paragraph(THEME.null_cell(
+                 ("%s / 100" % self.data.abuseipdb_score.value)
+                 if self.data.abuseipdb_score else None,
+                 THEME.NULL_NOT_TESTED), self.table_cell),
+             Paragraph("Scored only where a candidate C2 address was "
+                       "extracted.", self.table_cell)],
+            [Paragraph("Known family", self.table_cell_bold),
+             Paragraph(family_name or "UNKNOWN", self.table_cell),
+             Paragraph("Rule-based; see clause 3.2.", self.table_cell)],
         ]
-        rep_table = Table(rep_data, colWidths=[116.2, 87.2, 125.9, 106.5, 87.2], repeatRows=1)
-        rep_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 4),
-        ]))
+        rep_table = Table(rep_rows, colWidths=[135.0, 128.0, 260.0], repeatRows=1)
+        rep_table.setStyle(formal_table_style())
         elements.append(rep_table)
-        elements.append(Spacer(1, 4))
+        elements.append(Spacer(1, 8))
 
-        # Analysis Coverage Badges
-        elements.append(Paragraph("ANALYSIS COVERAGE", self.body_bold))
-        cov_badges = [[
-            Paragraph("<b>STATIC ANALYSIS — COMPLETE</b>", ParagraphStyle("C1", parent=self.table_cell_bold, alignment=1, textColor=colors.HexColor("#15803D"))),
-            Paragraph("<b>THREAT INTEL — COMPLETE</b>", ParagraphStyle("C2", parent=self.table_cell_bold, alignment=1, textColor=colors.HexColor("#B45309"))),
-            Paragraph("<b>DYNAMIC — COMPLETE</b>" if self.data.dynamic_ran else "<b>DYNAMIC — SKIPPED</b>", ParagraphStyle("C3", parent=self.table_cell_bold, alignment=1, textColor=colors.HexColor("#B45309"))),
-            Paragraph("<b>VIDE — COMPLETE</b>" if (hasattr(self.data, 'vide_status') and self.data.vide_status) else "<b>VIDE — SKIPPED</b>", ParagraphStyle("C4", parent=self.table_cell_bold, alignment=1, textColor=colors.HexColor("#B45309"))),
-        ]]
-        cov_badge_table = Table(cov_badges, colWidths=[130.8, 130.8, 130.8, 130.8], repeatRows=1)
-        cov_badge_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (0, 0), colors.HexColor("#DCFCE7")),
-            ("BACKGROUND", (1, 0), (-1, 0), colors.HexColor("#FEF3C7")),
-            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 4),
-        ]))
-        elements.append(cov_badge_table)
-        elements.append(Spacer(1, 6))
-
-        # Risk Contributors Table
-        elements.append(Paragraph("RISK CONTRIBUTORS", self.body_bold))
-        contrib_data = [
-            [Paragraph("CONTRIBUTOR", self.table_header), Paragraph("LEVEL", self.table_header), Paragraph("STATUS", self.table_header)],
-            [Paragraph("Threat Intelligence Correlation", self.table_cell_bold), Paragraph("High", self.table_cell), Paragraph("EVALUATED", self.table_cell)],
-            [Paragraph("Static Exposure (STEI)", self.table_cell_bold), Paragraph("High", self.table_cell), Paragraph("EVALUATED", self.table_cell)],
-            [Paragraph("Banking Impact", self.table_cell_bold), Paragraph("High", self.table_cell), Paragraph("EVALUATED", self.table_cell)],
-            [Paragraph("Dynamic Behavior (BFCI v2)", self.table_cell_bold), Paragraph("High", self.table_cell), Paragraph("EVALUATED" if self.data.dynamic_ran else "SKIPPED", self.table_cell)],
-            [Paragraph("Visual Impersonation (VIDE-F001)", self.table_cell_bold), Paragraph("Medium-High", self.table_cell), Paragraph("EVALUATED" if (hasattr(self.data, 'vide_status') and self.data.vide_status) else "SKIPPED", self.table_cell)],
+        # Analysis coverage - stated, not badged.
+        elements.append(self._subclause("Analysis coverage"))
+        vide_ran = bool(getattr(self.data, "vide_status", None))
+        cov_rows = [
+            [Paragraph("Stage", self.table_header),
+             Paragraph("Ran", self.table_header),
+             Paragraph("Bearing on the verdict", self.table_header)],
+            [Paragraph("Static analysis", self.table_cell_bold),
+             Paragraph("Yes", self.table_cell),
+             Paragraph("Always runs; carries the STEI axis at clause 6.",
+                       self.table_cell)],
+            [Paragraph("Threat intelligence", self.table_cell_bold),
+             Paragraph("Yes", self.table_cell),
+             Paragraph("Carries the correlation axis where a lookup returned "
+                       "data; see clause 12.", self.table_cell)],
+            [Paragraph("Dynamic execution", self.table_cell_bold),
+             Paragraph("Yes" if self.data.dynamic_ran else "No",
+                       self.table_cell if self.data.dynamic_ran
+                       else self.table_null),
+             Paragraph("Carries the BFCI axis at clause 9."
+                       if self.data.dynamic_ran else
+                       "The BFCI axis carries no evidence and was dropped from "
+                       "the weighting rather than scored as zero.",
+                       self.table_cell)],
+            [Paragraph("Visual impersonation (VIDE)", self.table_cell_bold),
+             Paragraph("Yes" if vide_ran else "No",
+                       self.table_cell if vide_ran else self.table_null),
+             Paragraph("Compares the UI fingerprint against baseline fixtures; "
+                       "see clause 11." if vide_ran else
+                       "No comparison was performed in this run.",
+                       self.table_cell)],
         ]
-        contrib_table = Table(contrib_data, colWidths=[232.4, 145.3, 145.3], repeatRows=1)
-        contrib_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 3.5),
-        ]))
-        elements.append(contrib_table)
+        cov_table = Table(cov_rows, colWidths=[135.0, 50.0, 338.0], repeatRows=1)
+        cov_table.setStyle(formal_table_style())
+        elements.append(cov_table)
 
     def _build_page2_narrative_and_response(self, elements: List[Any]):
         """PAGE 2 — PART A · EXECUTIVE — NARRATIVE & RESPONSE."""
-        elements.append(Paragraph("PART A · EXECUTIVE — NARRATIVE & RESPONSE (for non-technical readers)", self.part_header))
-        elements.append(Paragraph("PLAIN-ENGLISH SUMMARY", self.section_bar))
+        elements.append(self._clause("Narrative and recommended response"))
+        elements.append(self._subclause("Plain-English summary"))
         
         # We use the plain English narrative from the data if available.
         narrative_val = self.data.plain_english_narrative.value if self.data.plain_english_narrative else None
@@ -1192,7 +1934,7 @@ class ReportLabPDFGenerator:
         elements.append(Paragraph(narrative_text, self.body_style))
         elements.append(Spacer(1, 6))
 
-        elements.append(Paragraph("RECOMMENDED SOC ACTIONS", self.section_bar))
+        elements.append(self._subclause("Recommended operational response"))
         
         soc_rows = [
             [Paragraph("ACTION", self.table_header), Paragraph("OPERATIONAL INSTRUCTION", self.table_header)]
@@ -1209,27 +1951,30 @@ class ReportLabPDFGenerator:
 
         soc_table = Table(soc_rows, colWidths=[106.5, 416.5], repeatRows=1)
         soc_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 4),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(THEME.SURFACE_INSET)),
+            ("LINEABOVE", (0, 0), (-1, 0), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 0), (-1, 0), THEME.RULE_W_MID,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 1), (-1, -2), THEME.RULE_W_HAIR,
+             colors.HexColor(THEME.RULE_HAIR)),
+            ("LINEBELOW", (0, -1), (-1, -1), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("PADDING", (0, 0), (-1, -1), THEME.CELL_PAD),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ]))
         elements.append(soc_table)
         elements.append(Spacer(1, 6))
 
         # Customer Advisory Box
-        elements.append(Paragraph("CUSTOMER ADVISORY DRAFT — AI-generated, evidence-grounded (edit before sending)", self.body_bold))
+        elements.append(Paragraph("CUSTOMER ADVISORY — DRAFT FOR APPROVAL", self.body_bold))
         adv_val = "Not available for this sample."
         if hasattr(self.data, 'customer_advisory') and self.data.customer_advisory:
             adv_val = self.data.customer_advisory.replace('\n', '<br/>')
             
         adv_p = Paragraph(f"“{adv_val}”", self.body_style)
         adv_table = Table([[adv_p]], colWidths=[523.0], repeatRows=1)
-        adv_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F6F8FA")),
-            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 5),
-        ]))
+        adv_table.setStyle(block_quote_style())
         elements.append(adv_table)
         elements.append(Spacer(1, 6))
 
@@ -1243,20 +1988,17 @@ class ReportLabPDFGenerator:
 
     def _build_page3_score_ledger(self, elements: List[Any]):
         """PAGE 3 — PART B · TECHNICAL — DETERMINISTIC SCORE LEDGER."""
-        elements.append(Paragraph("PART B · TECHNICAL — DETERMINISTIC SCORE LEDGER", self.part_header))
-        elements.append(Paragraph("FRAUD RISK SCORE (FRS) — FULL BREAKDOWN", self.section_bar))
+        elements.append(self._clause("Deterministic score ledger"))
+        elements.append(self._subclause("Fraud risk score — full breakdown"))
 
         det_p = Paragraph(
-            "<b>Determinism invariant.</b> The Fraud Risk Score is computed strictly by <font name='Courier'>risk_engine.py</font> from observable evidence. "
-            "No generative-AI output contributes to this number at any stage — the LLM narrative on page 2 is generated downstream of, and cannot alter, the score below.",
+            "<b>Determinism invariant.</b> The verdict score is computed from observable evidence by a fixed formula. "
+            "The narrative sections of this dossier are written downstream of the score and cannot alter it; "
+            "every figure below is reproducible from the evidence enumerated in this part.",
             self.body_style
         )
         det_table = Table([[det_p]], colWidths=[523.0], repeatRows=1)
-        det_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#DDF4FF")),
-            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#54AEFF")),
-            ("PADDING", (0, 0), (-1, -1), 5),
-        ]))
+        det_table.setStyle(block_quote_style())
         elements.append(det_table)
         elements.append(Spacer(1, 6))
 
@@ -1285,9 +2027,16 @@ class ReportLabPDFGenerator:
         ]
         axis_table = Table(axis_data, colWidths=[125.9, 43.6, 169.5, 48.4, 48.4, 87.2], repeatRows=1)
         axis_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 3.5),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(THEME.SURFACE_INSET)),
+            ("LINEABOVE", (0, 0), (-1, 0), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 0), (-1, 0), THEME.RULE_W_MID,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 1), (-1, -2), THEME.RULE_W_HAIR,
+             colors.HexColor(THEME.RULE_HAIR)),
+            ("LINEBELOW", (0, -1), (-1, -1), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("PADDING", (0, 0), (-1, -1), THEME.CELL_PAD),
         ]))
         elements.append(axis_table)
         elements.append(Spacer(1, 4))
@@ -1301,15 +2050,11 @@ class ReportLabPDFGenerator:
             f"<font name='Courier'>FRS_base = (0.25×{stei_val:.2f}) + (0.35×{bfci_val:.2f}) + (0.20×{corr_val:.2f}) + (0.20×{bank_val:.2f})<br/>"
             f"         = {stei_val*0.25:.2f} + {bfci_val*0.35:.2f} + {corr_val*0.20:.2f} + {bank_val*0.20:.2f} = <b>{base_score:.2f}</b><br/>"
             f"ai_confidence_multiplier = {multiplier:.2f}  (family-classifier match clamp range [0.5, 1.5])<br/>"
-            f"final_risk_score = min({base_score:.2f} × {multiplier:.2f}, 100) = min({base_score * multiplier:.2f}, 100) = <b>{final_score:.1f} → {self.data.risk_band.value.upper()}</b> band</font>"
+            f"final_risk_score = min({base_score:.2f} × {multiplier:.2f}, 100) = min({base_score * multiplier:.2f}, 100) = <b>{final_score:.1f} → {self._band_phrase()}</b> band</font>"
         )
-        formula_p = Paragraph(formula_box_text, self.body_style)
+        formula_p = Paragraph(formula_box_text, self.formula)
         formula_table = Table([[formula_p]], colWidths=[523.0], repeatRows=1)
-        formula_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F6F8FA")),
-            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 5),
-        ]))
+        formula_table.setStyle(block_quote_style())
         elements.append(formula_table)
         elements.append(Spacer(1, 6))
 
@@ -1321,24 +2066,30 @@ class ReportLabPDFGenerator:
             [Paragraph("Renormalized weights", self.table_cell_bold), Paragraph("STEI 0.556 / Banking 0.444", self.table_cell), Paragraph("0.25 / 0.35 / 0.20 / 0.20 (nominal, no exclusion)", self.table_cell)],
             [Paragraph("ai_confidence_multiplier", self.table_cell_bold), Paragraph("1.00", self.table_cell), Paragraph(f"{multiplier:.2f} (deterministic family match)", self.table_cell)],
             [Paragraph("Final FRS", self.table_cell_bold), Paragraph(f"{stei_val * 0.556 + bank_val * 0.444:.1f}", self.table_cell), Paragraph(f"{final_score:.1f}", self.table_cell_bold)],
-            [Paragraph("Risk band", self.table_cell_bold), Paragraph("—", self.table_cell), Paragraph(f"{self.data.risk_band.value.upper()}", self.table_cell_bold)],
+            [Paragraph("Risk band", self.table_cell_bold), Paragraph(THEME.band_label(THEME.score_key(base_score)), self.table_cell), Paragraph(self._band_phrase(), self.table_cell_bold)],
             [Paragraph("Source", self.table_cell_bold), Paragraph("Calculated baseline", self.table_cell), Paragraph("Confirmed analysis", self.table_cell)],
         ]
         comp_table = Table(comp_data, colWidths=[125.9, 198.5, 198.5], repeatRows=1)
         comp_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 3.5),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(THEME.SURFACE_INSET)),
+            ("LINEABOVE", (0, 0), (-1, 0), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 0), (-1, 0), THEME.RULE_W_MID,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 1), (-1, -2), THEME.RULE_W_HAIR,
+             colors.HexColor(THEME.RULE_HAIR)),
+            ("LINEBELOW", (0, -1), (-1, -1), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("PADDING", (0, 0), (-1, -1), THEME.CELL_PAD),
         ]))
         elements.append(comp_table)
         elements.append(Spacer(1, 4))
-        elements.append(Paragraph("<font size=6 color='#57606A'>Note: The static-only FRS is computed without applying the family-match multiplier.</font>", self.body_style))
+        elements.append(Paragraph("<font size=6>Note: The static-only FRS is computed without applying the family-match multiplier. The confirmed-scenario figure above applies that multiplier as documented and is internally consistent end to end.</font>", self.body_style))
 
     def _build_page4_stei_breakdown(self, elements: List[Any]):
         """PAGE 4 — STEI — 5-AXIS BREAKDOWN."""
-        elements.append(Paragraph("<font size=6 color='#57606A'>confirmed-scenario figure above applies the documented multiplier correctly and is internally consistent end-to-end.</font>", self.body_style))
-        elements.append(Spacer(1, 4))
-        elements.append(Paragraph("STEI — 5-AXIS BREAKDOWN", self.section_bar))
+        elements.append(self._clause("Static threat exposure — five-axis breakdown"))
+        elements.append(self._subclause("STEI — five-axis breakdown"))
 
         stei_meter = STEIBarMeter(
             ct=self.data.stei_ct.value if hasattr(self.data, 'stei_ct') and self.data.stei_ct else 0.0,
@@ -1367,9 +2118,16 @@ class ReportLabPDFGenerator:
         ]
         stei_table = Table(stei_table_data, colWidths=[135.6, 43.6, 48.4, 48.4, 247.0], repeatRows=1)
         stei_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 4),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(THEME.SURFACE_INSET)),
+            ("LINEABOVE", (0, 0), (-1, 0), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 0), (-1, 0), THEME.RULE_W_MID,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 1), (-1, -2), THEME.RULE_W_HAIR,
+             colors.HexColor(THEME.RULE_HAIR)),
+            ("LINEBELOW", (0, -1), (-1, -1), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("PADDING", (0, 0), (-1, -1), THEME.CELL_PAD),
         ]))
         elements.append(stei_table)
         elements.append(Spacer(1, 6))
@@ -1382,8 +2140,8 @@ class ReportLabPDFGenerator:
 
     def _build_page5_forensic_static(self, elements: List[Any]):
         """PAGE 5 — PART B · TECHNICAL — FORENSIC EVIDENCE (STATIC)."""
-        elements.append(Paragraph("PART B · TECHNICAL — FORENSIC EVIDENCE (STATIC)", self.part_header))
-        elements.append(Paragraph("APK IDENTITY", self.section_bar))
+        elements.append(self._clause("Forensic evidence — static"))
+        elements.append(self._subclause("Identity of the item examined"))
 
         id_data = [
             [Paragraph("Field", self.table_header), Paragraph("Value", self.table_header)],
@@ -1398,14 +2156,21 @@ class ReportLabPDFGenerator:
         ]
         id_table = Table(id_data, colWidths=[125.9, 397.1], repeatRows=1)
         id_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 3.5),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(THEME.SURFACE_INSET)),
+            ("LINEABOVE", (0, 0), (-1, 0), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 0), (-1, 0), THEME.RULE_W_MID,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 1), (-1, -2), THEME.RULE_W_HAIR,
+             colors.HexColor(THEME.RULE_HAIR)),
+            ("LINEBELOW", (0, -1), (-1, -1), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("PADDING", (0, 0), (-1, -1), THEME.CELL_PAD),
         ]))
         elements.append(id_table)
         elements.append(Spacer(1, 6))
 
-        elements.append(Paragraph("STATIC FINDINGS", self.section_bar))
+        elements.append(self._subclause("Static findings"))
         
         # Build the dynamic findings table based on self.data.permissions and self.data.suspicious_apis
         findings_data = [
@@ -1440,14 +2205,21 @@ class ReportLabPDFGenerator:
 
         findings_table = Table(findings_data, colWidths=[145.3, 261.5, 116.2], repeatRows=1)
         findings_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 3.5),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(THEME.SURFACE_INSET)),
+            ("LINEABOVE", (0, 0), (-1, 0), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 0), (-1, 0), THEME.RULE_W_MID,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 1), (-1, -2), THEME.RULE_W_HAIR,
+             colors.HexColor(THEME.RULE_HAIR)),
+            ("LINEBELOW", (0, -1), (-1, -1), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("PADDING", (0, 0), (-1, -1), THEME.CELL_PAD),
         ]))
         elements.append(findings_table)
         elements.append(Spacer(1, 6))
 
-        elements.append(Paragraph(f"DANGEROUS PERMISSIONS DECLARED ({len(perms)})", self.section_bar))
+        elements.append(self._subclause(f"Dangerous permissions declared ({len(perms)})"))
         perm_rows = []
         
         # Group into pairs
@@ -1468,14 +2240,22 @@ class ReportLabPDFGenerator:
             
         perm_table = Table(perm_rows, colWidths=[261.5, 261.5], repeatRows=1)
         perm_table.setStyle(TableStyle([
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 3.5),
+            ("LINEABOVE", (0, 0), (-1, 0), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 0), (-1, 0), THEME.RULE_W_MID,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 1), (-1, -2), THEME.RULE_W_HAIR,
+             colors.HexColor(THEME.RULE_HAIR)),
+            ("LINEBELOW", (0, -1), (-1, -1), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("PADDING", (0, 0), (-1, -1), THEME.CELL_PAD),
         ]))
         elements.append(perm_table)
 
     def _build_page6_evidence_mapping(self, elements: List[Any]):
         """PAGE 6 — EVIDENCE → TECHNIQUE → FRAUD IMPACT."""
-        elements.append(Paragraph("EVIDENCE → TECHNIQUE → FRAUD IMPACT", self.section_bar))
+        elements.append(self._clause("Evidence, technique and fraud impact"))
+        elements.append(self._subclause("Static evidence mapped to technique and impact"))
 
         # Build dynamic mapping based on observed capabilities
         map_data = [
@@ -1501,28 +2281,28 @@ class ReportLabPDFGenerator:
 
         map_table = Table(map_data, colWidths=[164.6, 179.2, 179.2], repeatRows=1)
         map_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 5),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(THEME.SURFACE_INSET)),
+            ("LINEABOVE", (0, 0), (-1, 0), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 0), (-1, 0), THEME.RULE_W_MID,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 1), (-1, -2), THEME.RULE_W_HAIR,
+             colors.HexColor(THEME.RULE_HAIR)),
+            ("LINEBELOW", (0, -1), (-1, -1), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("PADDING", (0, 0), (-1, -1), THEME.CELL_PAD),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ]))
         elements.append(map_table)
 
     def _build_page7_dynamic_and_workflow(self, elements: List[Any]):
         """PAGE 7 — PART B · TECHNICAL — ATTACK & BEHAVIOR ANALYSIS (DYNAMIC)."""
-        elements.append(Paragraph("PART B · TECHNICAL — ATTACK & BEHAVIOR ANALYSIS (DYNAMIC)", self.part_header))
+        elements.append(self._clause("Dynamic execution and behaviour"))
         
         if not self.data.dynamic_ran:
-            badge_p = Paragraph(f"<font size=6 color='#B45309'><b>{self.data.dynamic_status.value}</b></font>", ParagraphStyle("BadgeD", parent=self.table_cell, alignment=2))
-            title_p = Paragraph("DYNAMIC EXECUTION & WORKFLOW RECONSTRUCTION", ParagraphStyle("TitleBD", parent=self.section_bar, backColor=None, textColor=colors.HexColor("#475569")))
-            hdr_table = Table([[title_p, badge_p]], colWidths=[360, 180])
-            hdr_table.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f1f5f9")),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("PADDING", (0, 0), (-1, -1), 3),
-            ]))
-            elements.append(hdr_table)
-            elements.append(Spacer(1, 6))
+            elements.append(self._subclause(
+                "Dynamic execution and workflow reconstruction — "
+                f"{self.data.dynamic_status.value}"))
 
             banner_p = Paragraph(
                 f"<b>[DYNAMIC-STATUS: {self.data.dynamic_status.value}]</b><br/>"
@@ -1531,27 +2311,17 @@ class ReportLabPDFGenerator:
                 self.body_style
             )
             banner_table = Table([[banner_p]], colWidths=[523.0], repeatRows=1)
-            banner_table.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFF8C5")),
-                ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#D29922")),
-                ("PADDING", (0, 0), (-1, -1), 8),
-            ]))
+            banner_table.setStyle(block_quote_style())
             elements.append(banner_table)
             elements.append(Spacer(1, 10))
             return
 
-        # Title Box with Right Badge
-        badge_p = Paragraph("<font size=6 color='#15803D'><b>CONFIRMED DYNAMIC RUN</b></font>", ParagraphStyle("Badge", parent=self.table_cell, alignment=2))
-        title_p = Paragraph("DYNAMIC EXECUTION & WORKFLOW RECONSTRUCTION", ParagraphStyle("TitleB", parent=self.section_bar, backColor=None, textColor=colors.HexColor("#475569")))
-        
-        hdr_table = Table([[title_p, badge_p]], colWidths=[360, 180])
-        hdr_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f1f5f9")),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("PADDING", (0, 0), (-1, -1), 3),
-        ]))
-        elements.append(hdr_table)
-        elements.append(Spacer(1, 4))
+        elements.append(self._subclause(
+            "Dynamic execution and workflow reconstruction"))
+        elements.append(Paragraph(
+            "An instrumented run was performed. The sandbox metadata below "
+            "records what the run reached; clause 13 records what it did not.",
+            self.body_style))
 
         # Sandbox Metadata Table
         dyn_meta_data = [
@@ -1565,9 +2335,16 @@ class ReportLabPDFGenerator:
         ]
         dyn_meta_table = Table(dyn_meta_data, colWidths=[164.6, 358.4], repeatRows=1)
         dyn_meta_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 3.5),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(THEME.SURFACE_INSET)),
+            ("LINEABOVE", (0, 0), (-1, 0), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 0), (-1, 0), THEME.RULE_W_MID,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 1), (-1, -2), THEME.RULE_W_HAIR,
+             colors.HexColor(THEME.RULE_HAIR)),
+            ("LINEBELOW", (0, -1), (-1, -1), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("PADDING", (0, 0), (-1, -1), THEME.CELL_PAD),
         ]))
         elements.append(dyn_meta_table)
         elements.append(Spacer(1, 6))
@@ -1594,11 +2371,12 @@ class ReportLabPDFGenerator:
         bfci_meter = BFCIBarMeter(self.data.bfci_components)
         elements.append(bfci_meter)
         elements.append(Spacer(1, 2))
-        elements.append(Paragraph("<font size=6 color='#57606A'>BFCI v2 = Sum over categories of [ W(c) · min(1, ln(1+N(c))/ln(1+M(c))) × 100 ] + S_sequence, capped at 100. Composite category sub-scores shown above are illustrative outputs of that formula for this demo run; resulting BFCI v2 = 86.0.</font>", self.body_style))
+        elements.append(Paragraph("<font size=6>BFCI v2 = Sum over categories of [ W(c) · min(1, ln(1+N(c))/ln(1+M(c))) × 100 ] + S_sequence, capped at 100. Composite category sub-scores shown above are illustrative outputs of that formula for this demo run; resulting BFCI v2 = 86.0.</font>", self.body_style))
 
     def _build_page8_hook_inventory(self, elements: List[Any]):
         """PAGE 8 — HOOK BUNDLE INVENTORY."""
-        elements.append(Paragraph("HOOK BUNDLE INVENTORY (this run)", self.section_bar))
+        elements.append(self._clause("Hook bundle inventory"))
+        elements.append(self._subclause("Hook bundle inventory for this run"))
         
         hook_data = [
             [Paragraph("Hook Bundle", self.table_header), Paragraph("Monitored Classes/APIs", self.table_header), Paragraph("Events", self.table_header), Paragraph("Fraud Signature", self.table_header)],
@@ -1617,9 +2395,16 @@ class ReportLabPDFGenerator:
 
         hook_table = Table(hook_data, colWidths=[87.2, 193.7, 48.4, 193.7], repeatRows=1)
         hook_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 4),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(THEME.SURFACE_INSET)),
+            ("LINEABOVE", (0, 0), (-1, 0), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 0), (-1, 0), THEME.RULE_W_MID,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 1), (-1, -2), THEME.RULE_W_HAIR,
+             colors.HexColor(THEME.RULE_HAIR)),
+            ("LINEBELOW", (0, -1), (-1, -1), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("PADDING", (0, 0), (-1, -1), THEME.CELL_PAD),
         ]))
         elements.append(hook_table)
 
@@ -1654,9 +2439,16 @@ class ReportLabPDFGenerator:
             Paragraph("Reading", self.table_header),
         ]]
         style = [
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 3.5),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(THEME.SURFACE_INSET)),
+            ("LINEABOVE", (0, 0), (-1, 0), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 0), (-1, 0), THEME.RULE_W_MID,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 1), (-1, -2), THEME.RULE_W_HAIR,
+             colors.HexColor(THEME.RULE_HAIR)),
+            ("LINEBELOW", (0, -1), (-1, -1), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("PADDING", (0, 0), (-1, -1), THEME.CELL_PAD),
         ]
         for index, match in enumerate(matches[:8], start=1):
             suspect_hex = str(match.get("suspect_hex", ""))
@@ -1682,51 +2474,29 @@ class ReportLabPDFGenerator:
 
     def _build_page9_vide_impersonation(self, elements: List[Any]):
         """PAGE 9 — PART B · TECHNICAL — VISUAL IMPERSONATION DETECTION (VIDE)."""
-        elements.append(Paragraph("PART B · TECHNICAL — VISUAL IMPERSONATION DETECTION (VIDE)", self.part_header))
+        elements.append(self._clause("Visual impersonation detection"))
         
         if "NOT_AVAILABLE" in self.data.vide_status.value or self.data.vide_status.status == Status.NOT_AVAILABLE or "CLEAN" in self.data.vide_status.value:
-            badge_p = Paragraph(f"<font size=6 color='#57606A'><b>{self.data.vide_status.value}</b></font>", ParagraphStyle("BadgeV", parent=self.table_cell, alignment=2))
-            title_p = Paragraph("VIDE — UI FINGERPRINT COMPARISON", ParagraphStyle("TitleV", parent=self.section_bar, backColor=None, textColor=colors.HexColor("#475569")))
-            hdr_table = Table([[title_p, badge_p]], colWidths=[360, 180])
-            hdr_table.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f1f5f9")),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("PADDING", (0, 0), (-1, -1), 3),
-            ]))
-            elements.append(hdr_table)
-            elements.append(Spacer(1, 6))
+            elements.append(self._subclause(
+                "UI fingerprint comparison — "
+                f"{self.data.vide_status.value}"))
 
             caveat_p = Paragraph(
                 f"<b>[VIDE-STATUS: {self.data.vide_status.value}]</b> Visual impersonation analysis state: NOT_AVAILABLE.",
                 self.body_style
             )
             caveat_table = Table([[caveat_p]], colWidths=[523.0], repeatRows=1)
-            caveat_table.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F6F8FA")),
-                ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-                ("PADDING", (0, 0), (-1, -1), 8),
-            ]))
+            caveat_table.setStyle(block_quote_style())
             elements.append(caveat_table)
             elements.append(Spacer(1, 10))
             return
 
-        # Header bar with badge
-        badge_p = Paragraph("<font size=6 color='#15803D'><b>CONFIRMED ANALYSIS</b></font>", ParagraphStyle("Badge2", parent=self.table_cell, alignment=2))
-        title_p = Paragraph("VIDE — UI FINGERPRINT COMPARISON", ParagraphStyle("TitleV", parent=self.section_bar, backColor=None, textColor=colors.HexColor("#475569")))
-        
-        hdr_table = Table([[title_p, badge_p]], colWidths=[360, 180])
-        hdr_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f1f5f9")),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("PADDING", (0, 0), (-1, -1), 3),
-        ]))
-        elements.append(hdr_table)
-        elements.append(Spacer(1, 4))
+        elements.append(self._subclause("UI fingerprint comparison"))
 
         vide_p = Paragraph(
-            "<b>VIDE is a deterministic engine</b> — no LLM decides whether it fires. It compares the suspect app's UI fingerprint (layout XML + "
-            "assets/*.html via APKTool, merged with WebView HTML captured at runtime) against lab/hackathon institution baselines. <b>These "
-            "baselines (SBI/HDFC/ICICI) are demo/lab fixtures, not production bank authority</b> — see docs/architecture/VIDE.md.",
+            "<b>Visual impersonation detection is deterministic.</b> It compares the suspect app's UI fingerprint (layout XML + "
+            "assets/*.html via APKTool, merged with WebView HTML captured at runtime) against the institution baseline set. <b>Those "
+            "baselines are laboratory fixtures and carry no authority as records of the institutions they represent.</b>",
             self.body_style
         )
         elements.append(vide_p)
@@ -1765,9 +2535,16 @@ class ReportLabPDFGenerator:
         ]
         vide_table = Table(vide_table_data, colWidths=[164.6, 358.4], repeatRows=1)
         vide_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 3.5),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(THEME.SURFACE_INSET)),
+            ("LINEABOVE", (0, 0), (-1, 0), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 0), (-1, 0), THEME.RULE_W_MID,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 1), (-1, -2), THEME.RULE_W_HAIR,
+             colors.HexColor(THEME.RULE_HAIR)),
+            ("LINEBELOW", (0, -1), (-1, -1), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("PADDING", (0, 0), (-1, -1), THEME.CELL_PAD),
         ]))
         elements.append(vide_table)
         elements.append(Spacer(1, 6))
@@ -1789,22 +2566,19 @@ class ReportLabPDFGenerator:
 
         # Yellow Callout Box
         caveat_p = Paragraph(
-            "<b>Lab-baseline caveat (from VIDE.md).</b> UI baselines and the signer registry used above are demonstration/hackathon fixtures. They "
-            "are not production-authoritative bank data and must not be represented as such outside this demonstration context.",
+            "<b>Baseline provenance.</b> The interface baselines and signer registry compared against above are "
+            "laboratory fixtures. They carry no authority as records of the institutions they represent, and a "
+            "match against them is evidence of resemblance, not of a confirmed impersonation of a live service.",
             self.body_style
         )
         caveat_table = Table([[caveat_p]], colWidths=[523.0], repeatRows=1)
-        caveat_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFF8C5")),
-            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#D29922")),
-            ("PADDING", (0, 0), (-1, -1), 5),
-        ]))
+        caveat_table.setStyle(block_quote_style())
         elements.append(caveat_table)
 
     def _build_page10_threat_intel_scenarios(self, elements: List[Any]):
         """PAGE 10 — PART B · TECHNICAL — THREAT INTELLIGENCE & SCENARIO CORRELATION."""
-        elements.append(Paragraph("PART B · TECHNICAL — THREAT INTELLIGENCE & SCENARIO CORRELATION", self.part_header))
-        elements.append(Paragraph("EXTERNAL THREAT INTELLIGENCE (ILLUSTRATIVE)", self.section_bar))
+        elements.append(self._clause("Threat intelligence and scenario correlation"))
+        elements.append(self._subclause("External threat intelligence"))
 
         sub_p = Paragraph(
             "Threat correlation leverages internal classifiers and external sources when available.",
@@ -1828,15 +2602,22 @@ class ReportLabPDFGenerator:
              
         intel_table = Table(intel_data, colWidths=[145.3, 261.5, 116.2], repeatRows=1)
         intel_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 3.5),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(THEME.SURFACE_INSET)),
+            ("LINEABOVE", (0, 0), (-1, 0), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 0), (-1, 0), THEME.RULE_W_MID,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 1), (-1, -2), THEME.RULE_W_HAIR,
+             colors.HexColor(THEME.RULE_HAIR)),
+            ("LINEBELOW", (0, -1), (-1, -1), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("PADDING", (0, 0), (-1, -1), THEME.CELL_PAD),
         ]))
         elements.append(intel_table)
         elements.append(Spacer(1, 6))
 
         # Threat Scenario Correlation Matrix matching Page 10
-        elements.append(Paragraph("THREAT SCENARIO CORRELATION MATRIX", self.section_bar))
+        elements.append(self._subclause("Threat scenario correlation matrix"))
         matrix_data = [
             [Paragraph("Indicator", self.table_header), Paragraph("Threat Scenario", self.table_header), Paragraph("Overlay", self.table_header), Paragraph("Cred. Theft", self.table_header), Paragraph("C2", self.table_header), Paragraph("Persist.", self.table_header), Paragraph("Conf.", self.table_header)],
         ]
@@ -1855,16 +2636,23 @@ class ReportLabPDFGenerator:
             matrix_data.append([Paragraph("No threat correlation available", self.table_cell), Paragraph("—", self.table_cell), Paragraph("—", self.table_cell), Paragraph("—", self.table_cell), Paragraph("—", self.table_cell), Paragraph("—", self.table_cell), Paragraph("—", self.table_cell_bold)])
         matrix_table = Table(matrix_data, colWidths=[116.2, 174.3, 46.5, 46.5, 46.5, 46.5, 46.5], repeatRows=1)
         matrix_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 3.5),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(THEME.SURFACE_INSET)),
+            ("LINEABOVE", (0, 0), (-1, 0), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 0), (-1, 0), THEME.RULE_W_MID,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 1), (-1, -2), THEME.RULE_W_HAIR,
+             colors.HexColor(THEME.RULE_HAIR)),
+            ("LINEBELOW", (0, -1), (-1, -1), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("PADDING", (0, 0), (-1, -1), THEME.CELL_PAD),
         ]))
         elements.append(matrix_table)
-        elements.append(Paragraph("<font size=6 color='#57606A'>Evidence column omitted from print layout for width; full evidence text is retained in the Evidence Ledger (page 8) and underlying case JSON.</font>", self.body_style))
+        elements.append(Paragraph("<font size=6>Evidence column omitted from print layout for width; full evidence text is retained in the Evidence Ledger (page 11) and underlying case JSON.</font>", self.body_style))
         elements.append(Spacer(1, 6))
 
         # MITRE ATT&CK for Mobile Table
-        elements.append(Paragraph("MITRE ATT&CK; FOR MOBILE — TECHNIQUES OBSERVED", self.section_bar))
+        elements.append(self._subclause("MITRE ATT&amp;CK for Mobile — techniques observed"))
         mitre_data = [
             [Paragraph("Technique ID", self.table_header), Paragraph("Name", self.table_header), Paragraph("Evidence Basis", self.table_header)],
         ]
@@ -1880,9 +2668,16 @@ class ReportLabPDFGenerator:
              mitre_data.append([Paragraph("No MITRE techniques mapped", self.table_cell), Paragraph("—", self.table_cell), Paragraph("—", self.table_cell)])
         mitre_table = Table(mitre_data, colWidths=[87.2, 203.4, 232.4], repeatRows=1)
         mitre_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 3.5),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(THEME.SURFACE_INSET)),
+            ("LINEABOVE", (0, 0), (-1, 0), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 0), (-1, 0), THEME.RULE_W_MID,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 1), (-1, -2), THEME.RULE_W_HAIR,
+             colors.HexColor(THEME.RULE_HAIR)),
+            ("LINEBELOW", (0, -1), (-1, -1), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("PADDING", (0, 0), (-1, -1), THEME.CELL_PAD),
         ]))
         elements.append(mitre_table)
 
@@ -1936,7 +2731,7 @@ class ReportLabPDFGenerator:
 
         if incomplete:
             elements.append(
-                Paragraph("INCOMPLETE EXERCISE - VERDICT QUALIFIED", self.section_bar)
+                self._subclause("Incomplete exercise — verdict qualified")
             )
             banner = Table(
                 [[
@@ -1954,22 +2749,15 @@ class ReportLabPDFGenerator:
                 ]],
                 colWidths=[523.0],
             )
-            banner.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFF8E1")),
-                ("BOX", (0, 0), (-1, -1), 1.0, colors.HexColor("#F59E0B")),
-                ("PADDING", (0, 0), (-1, -1), 6),
-            ]))
+            banner.setStyle(block_quote_style())
             elements.append(banner)
             elements.append(Spacer(1, 6))
 
         fired = int(assertions.get("fired_count") or 0)
         total = int(assertions.get("total_count") or len(rows))
-        elements.append(
-            Paragraph(
-                f"EXECUTION ASSERTION MATRIX - {fired}/{total} trigger conditions reached",
-                self.section_bar,
-            )
-        )
+        elements.append(self._subclause(
+            f"Execution assertion matrix — {fired} of {total} trigger "
+            f"conditions reached"))
 
         table_data = [[
             Paragraph("Trigger condition", self.table_header),
@@ -1987,27 +2775,35 @@ class ReportLabPDFGenerator:
 
         matrix = Table(table_data, colWidths=[150.0, 55.0, 318.0], repeatRows=1)
         style = [
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 3.5),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(THEME.SURFACE_INSET)),
+            ("LINEABOVE", (0, 0), (-1, 0), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 0), (-1, 0), THEME.RULE_W_MID,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 1), (-1, -2), THEME.RULE_W_HAIR,
+             colors.HexColor(THEME.RULE_HAIR)),
+            ("LINEBELOW", (0, -1), (-1, -1), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("PADDING", (0, 0), (-1, -1), THEME.CELL_PAD),
         ]
-        # Colour the Reached column so gaps are legible at a glance in print,
-        # where an analyst scans rather than reads.
+        # The Reached column reads YES or NO. It used to carry a tinted fill
+        # behind every NO as well, which is the one thing a formal table must
+        # not do: the word already says it, and a column of peach blocks is
+        # dashboard furniture that a photocopier turns to grey mush anyway.
+        # The ink stays, at a weight that survives greyscale.
         for index, row in enumerate(rows, start=1):
-            if row.get("fired"):
-                style.append(("TEXTCOLOR", (1, index), (1, index), colors.HexColor("#15803D")))
-            else:
-                style.append(("TEXTCOLOR", (1, index), (1, index), colors.HexColor("#B45309")))
-                style.append(("BACKGROUND", (1, index), (1, index), colors.HexColor("#FFFBEB")))
+            ink = THEME.RISK_SAFE if row.get("fired") else THEME.RISK_HIGH
+            style.append(("TEXTCOLOR", (1, index), (1, index),
+                          colors.HexColor(ink)))
         matrix.setStyle(TableStyle(style))
         elements.append(matrix)
         elements.append(
             Paragraph(
-                "<font size=6 color='#57606A'>A \"NO\" row is an unmet precondition, "
-                "not a cleared check. It means the corresponding fraud behaviour "
-                "could not have been observed during this run regardless of "
-                "whether the sample implements it.</font>",
-                self.body_style,
+                "A “NO” row is an unmet precondition, not a cleared "
+                "check. It means the corresponding fraud behaviour could not "
+                "have been observed during this run, regardless of whether the "
+                "sample implements it.",
+                self.caption,
             )
         )
         elements.append(Spacer(1, 6))
@@ -2015,7 +2811,7 @@ class ReportLabPDFGenerator:
         suggestions = getattr(self.data, "remedial_suggestions", None) or []
         if suggestions:
             elements.append(
-                Paragraph("GAP ANALYSIS - RECOMMENDED RE-RUN ACTIONS", self.section_bar)
+                self._subclause("Gap analysis — recommended re-run actions")
             )
             gap_data = [[
                 Paragraph("Priority", self.table_header),
@@ -2033,20 +2829,27 @@ class ReportLabPDFGenerator:
                 ])
             gap_table = Table(gap_data, colWidths=[62.0, 180.0, 281.0], repeatRows=1)
             gap_table.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-                ("PADDING", (0, 0), (-1, -1), 3.5),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(THEME.SURFACE_INSET)),
+                ("LINEABOVE", (0, 0), (-1, 0), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 0), (-1, 0), THEME.RULE_W_MID,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 1), (-1, -2), THEME.RULE_W_HAIR,
+             colors.HexColor(THEME.RULE_HAIR)),
+            ("LINEBELOW", (0, -1), (-1, -1), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+                ("PADDING", (0, 0), (-1, -1), THEME.CELL_PAD),
             ]))
             elements.append(gap_table)
             elements.append(Spacer(1, 6))
 
     def _build_page11_coverage_and_evidence_ledger(self, elements: List[Any]):
         """PAGE 11 — PART C · AUDIT & TRACEABILITY — COVERAGE & EVIDENCE LEDGER."""
-        elements.append(Paragraph("PART C · AUDIT & TRACEABILITY — COVERAGE, LIMITATIONS & EVIDENCE LEDGER", self.part_header))
+        elements.append(self._clause("Coverage, limitations and evidence ledger"))
 
         self._build_execution_assertion_matrix(elements)
 
-        elements.append(Paragraph("ANALYSIS COVERAGE & LIMITATIONS MATRIX", self.section_bar))
+        elements.append(self._subclause("Analysis coverage and limitations"))
 
         cov_data = [
             [Paragraph("Capability", self.table_header), Paragraph("Status", self.table_header), Paragraph("Detail", self.table_header)],
@@ -2062,15 +2865,22 @@ class ReportLabPDFGenerator:
             cov_data.append([Paragraph("Native APK Analyzer", self.table_cell_bold), Paragraph("Executed", self.table_cell), Paragraph("androguard extraction complete", self.table_cell)])
         cov_table = Table(cov_data, colWidths=[145.3, 106.5, 271.2], repeatRows=1)
         cov_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 3.5),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(THEME.SURFACE_INSET)),
+            ("LINEABOVE", (0, 0), (-1, 0), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 0), (-1, 0), THEME.RULE_W_MID,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 1), (-1, -2), THEME.RULE_W_HAIR,
+             colors.HexColor(THEME.RULE_HAIR)),
+            ("LINEBELOW", (0, -1), (-1, -1), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("PADDING", (0, 0), (-1, -1), THEME.CELL_PAD),
         ]))
         elements.append(cov_table)
-        elements.append(Paragraph("<font size=6 color='#57606A'>“Not executed” / “Partial” rows are coverage gaps, not findings of absence — they are excluded from FRS scoring rather than scored as zero (see risk_engine.py axis exclusion).</font>", self.body_style))
+        elements.append(Paragraph("<font size=6>“Not executed” / “Partial” rows are coverage gaps, not findings of absence — they are excluded from FRS scoring rather than scored as zero (see risk_engine.py axis exclusion).</font>", self.body_style))
         elements.append(Spacer(1, 6))
 
-        elements.append(Paragraph("EVIDENCE LEDGER — traceability from finding to source", self.section_bar))
+        elements.append(self._subclause("Evidence ledger — traceability from finding to source"))
         
         ev_data = [
             [Paragraph("ID", self.table_header), Paragraph("Category", self.table_header), Paragraph("Finding", self.table_header), Paragraph("Source", self.table_header), Paragraph("Status", self.table_header), Paragraph("Conf.", self.table_header)]
@@ -2107,9 +2917,16 @@ class ReportLabPDFGenerator:
 
         ev_table = Table(ev_data, colWidths=[63.0, 53.3, 188.9, 92.0, 87.2, 38.7], repeatRows=1)
         ev_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 3),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(THEME.SURFACE_INSET)),
+            ("LINEABOVE", (0, 0), (-1, 0), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 0), (-1, 0), THEME.RULE_W_MID,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 1), (-1, -2), THEME.RULE_W_HAIR,
+             colors.HexColor(THEME.RULE_HAIR)),
+            ("LINEBELOW", (0, -1), (-1, -1), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("PADDING", (0, 0), (-1, -1), THEME.CELL_PAD),
         ]))
         elements.append(ev_table)
 
@@ -2140,8 +2957,8 @@ class ReportLabPDFGenerator:
 
     def _build_page12_iocs_governance_signoff(self, elements: List[Any]):
         """PAGE 12 — PART C · AUDIT & TRACEABILITY — INDICATORS, CHAIN OF CUSTODY & GOVERNANCE."""
-        elements.append(Paragraph("PART C · AUDIT & TRACEABILITY — INDICATORS, CHAIN OF CUSTODY & GOVERNANCE", self.part_header))
-        elements.append(Paragraph("INDICATORS OF COMPROMISE", self.section_bar))
+        elements.append(self._clause("Indicators, chain of custody and sign-off"))
+        elements.append(self._subclause("Indicators of compromise"))
 
         # No IOC means no IOC. This used to fall back to a literal Drinik C2
         # address, so any sample that produced no indicators had a real, live
@@ -2162,22 +2979,29 @@ class ReportLabPDFGenerator:
                           f"<b>MD5:</b> <font name='Courier'>{self.data.md5.value}</font><br/>"
                           f"<b>Package:</b> <font name='Courier'>{self.data.package_name.value}</font>", self.table_cell),
                 Paragraph(f"<b>C2 URL:</b> <font name='Courier'>{c2_url_str}</font><br/>"
-                          f"<b>Permissions:</b> {len(perms)} dangerous (see page 5)<br/>"
+                          f"<b>Permissions:</b> {len(perms)} dangerous (see clause 7)<br/>"
                           f"<b>Status:</b> {'CONFIRMED' if self.data.iocs else 'NO INDICATORS RECOVERED'}",
                           self.table_cell),
             ]
         ]
         ioc_table = Table(ioc_data, colWidths=[261.5, 261.5], repeatRows=1)
         ioc_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 4),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(THEME.SURFACE_INSET)),
+            ("LINEABOVE", (0, 0), (-1, 0), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 0), (-1, 0), THEME.RULE_W_MID,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 1), (-1, -2), THEME.RULE_W_HAIR,
+             colors.HexColor(THEME.RULE_HAIR)),
+            ("LINEBELOW", (0, -1), (-1, -1), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("PADDING", (0, 0), (-1, -1), THEME.CELL_PAD),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ]))
         elements.append(ioc_table)
         elements.append(Spacer(1, 6))
 
-        elements.append(Paragraph("CHAIN OF CUSTODY & REPORT INTEGRITY", self.section_bar))
+        elements.append(self._subclause("Chain of custody and report integrity"))
         chain_data = [
             [Paragraph("Field", self.table_header), Paragraph("Value", self.table_header)],
             [Paragraph("Platform version", self.table_cell_bold), Paragraph(self.data.engine_version.value, self.table_cell)],
@@ -2192,75 +3016,214 @@ class ReportLabPDFGenerator:
         ]
         chain_table = Table(chain_data, colWidths=[164.6, 358.4], repeatRows=1)
         chain_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 3.5),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(THEME.SURFACE_INSET)),
+            ("LINEABOVE", (0, 0), (-1, 0), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 0), (-1, 0), THEME.RULE_W_MID,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 1), (-1, -2), THEME.RULE_W_HAIR,
+             colors.HexColor(THEME.RULE_HAIR)),
+            ("LINEBELOW", (0, -1), (-1, -1), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("PADDING", (0, 0), (-1, -1), THEME.CELL_PAD),
         ]))
         elements.append(chain_table)
         elements.append(Spacer(1, 6))
 
-        # Sign-off Box matching reference PDF Page 12
-        elements.append(Paragraph("SIGN-OFF", self.section_bar))
+        elements.append(self._subclause("Sign-off and attestation"))
+        elements.append(Paragraph(
+            "This report was produced without human examination. A signature "
+            "below is an adoption of its findings by the named person, who "
+            "thereby confirms that they have reviewed the evidence at clauses "
+            "7 to 13, that the findings stated are within their own knowledge "
+            "or belief, and that the limitations recorded at clause 2 and "
+            "clause 13 are accurately stated. Until a signature is entered, "
+            "the findings are machine-generated and unadopted.",
+            self.body_style))
         sign_data = [
-            [Paragraph("Reviewed by (SOC Analyst)", self.table_cell_bold), Paragraph("___________________________________  Date: ___________", self.table_cell)],
-            [Paragraph("Approved by (SOC Lead / CISO)", self.table_cell_bold), Paragraph("___________________________________  Date: ___________", self.table_cell)],
-            [Paragraph("Case status", self.table_cell_bold), Paragraph("■ Open   ■ Under Investigation   ■ Escalated to CERT-In   ■ Closed", self.table_cell)],
+            [Paragraph("Reviewed by (SOC analyst)", self.table_cell_bold),
+             Paragraph("Name ______________________  Signature "
+                       "______________________  Date ____________",
+                       self.table_cell)],
+            [Paragraph("Approved by (SOC lead / CISO)", self.table_cell_bold),
+             Paragraph("Name ______________________  Signature "
+                       "______________________  Date ____________",
+                       self.table_cell)],
+            [Paragraph("Case status", self.table_cell_bold),
+             Paragraph("[  ] Open &nbsp;&nbsp; [  ] Under investigation "
+                       "&nbsp;&nbsp; [  ] Escalated to CERT-In &nbsp;&nbsp; "
+                       "[  ] Closed", self.table_cell)],
         ]
         sign_table = Table(sign_data, colWidths=[155.0, 368.0], repeatRows=1)
         sign_table.setStyle(TableStyle([
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 4),
+            ("LINEABOVE", (0, 0), (-1, 0), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 0), (-1, 0), THEME.RULE_W_MID,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("LINEBELOW", (0, 1), (-1, -2), THEME.RULE_W_HAIR,
+             colors.HexColor(THEME.RULE_HAIR)),
+            ("LINEBELOW", (0, -1), (-1, -1), THEME.RULE_W_STRONG,
+             colors.HexColor(THEME.BORDER_STRONG)),
+            ("PADDING", (0, 0), (-1, -1), THEME.CELL_PAD),
         ]))
         elements.append(sign_table)
         elements.append(Spacer(1, 6))
 
         # Glossary section matching reference PDF Page 12
-        elements.append(Paragraph("METHODOLOGY & GLOSSARY (appendix)", self.section_bar))
+        elements.append(self._subclause("Methodology and glossary"))
         glossary_p = Paragraph(
-            "<b>FRS = weighted_mean(STEI×0.25, BFCI×0.35, ThreatCorrelation×0.20, BankingImpact×0.20), renormalized over axes with data, × ai_confidence_multiplier (clamped [0.5, 1.5]), capped at 100. Risk bands: Safe ≤30 · Suspicious ≤60 · High Risk ≤89 · Critical ≥90. STEI = 5-axis Static Threat Exposure Index. BFCI v2 = Behavioral Fraud Confidence Index (logarithmic volume + sequence bonus). VIDE = Visual Impersonation Detection Engine (deterministic UI-fingerprint comparison). MITRE ATT&CK; = standardized adversary technique taxonomy used for mobile technique IDs (Txxxx). CERT-In = Indian Computer Emergency Response Team.</b>",
+            "<b>FRS</b> = weighted_mean(STEI×0.25, BFCI×0.35, "
+            "ThreatCorrelation×0.20, BankingImpact×0.20), renormalised over "
+            "the axes carrying data, × ai_confidence_multiplier "
+            "(clamped [0.5, 1.5]), capped at 100. "
+            "<b>Risk bands</b>: SAFE (1 of 4) ≤29 · SUSPICIOUS (2 of 4) ≤59 · "
+            "HIGH (3 of 4) ≤84 · CRITICAL (4 of 4) ≥85. "
+            "<b>STEI</b> = five-axis Static Threat Exposure Index. "
+            "<b>BFCI v2</b> = Behavioural Fraud Confidence Index "
+            "(logarithmic volume plus sequence bonus). "
+            "<b>VIDE</b> = Visual Impersonation Detection Engine "
+            "(deterministic UI-fingerprint comparison). "
+            "<b>MITRE ATT&amp;CK</b> = standardised adversary technique "
+            "taxonomy, source of the Txxxx technique identifiers. "
+            "<b>CERT-In</b> = Indian Computer Emergency Response Team.",
             self.body_style
         )
         elements.append(glossary_p)
         elements.append(Spacer(1, 6))
 
-        # 3 Principle Cards
-        p_cards = [[
-            Paragraph("<font size=6.5 color='#1F6FEB'><b>PRINCIPLE 1</b></font><br/><br/><b>AI generates evidence-grounded narrative and explanation. It never sets the score.</b>", self.table_cell),
-            Paragraph("<font size=6.5 color='#1F6FEB'><b>PRINCIPLE 2</b></font><br/><br/><b>Deterministic engine computes the risk score and band from structured evidence only.</b>", self.table_cell),
-            Paragraph("<font size=6.5 color='#1F6FEB'><b>PRINCIPLE 3</b></font><br/><br/><b>Evidence Ledger provides ID-level traceability between every finding and its source.</b>", self.table_cell),
-        ]]
-        p_table = Table(p_cards, colWidths=[174.3, 174.3, 174.3], repeatRows=1)
-        p_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F6F8FA")),
-            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-            ("PADDING", (0, 0), (-1, -1), 5),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ]))
+        p_cards = [
+            [Paragraph("Principle", self.table_header),
+             Paragraph("Statement", self.table_header)],
+            [Paragraph("1", self.table_cell_mono),
+             Paragraph("Narrative clauses explain the evidence. They never set "
+                       "the score.", self.table_cell)],
+            [Paragraph("2", self.table_cell_mono),
+             Paragraph("The score and band are computed from structured "
+                       "evidence by a fixed formula.", self.table_cell)],
+            [Paragraph("3", self.table_cell_mono),
+             Paragraph("Every finding carries an identifier that resolves to "
+                       "the artifact it came from.", self.table_cell)],
+        ]
+        p_table = Table(p_cards, colWidths=[60.0, 463.0], repeatRows=1)
+        p_table.setStyle(formal_table_style())
         elements.append(p_table)
         elements.append(Spacer(1, 4))
-        elements.append(Paragraph("<font size=5.5 color='#57606A'>This report is grounded in evidence produced by the Sudarshan analysis pipeline and named external threat-intelligence sources.</font>", self.body_style))
+        elements.append(Paragraph("<font size=5.5>This report is grounded in evidence produced by the Sudarshan analysis pipeline and named external threat-intelligence sources.</font>", self.body_style))
+
+    # -- Appendix A helpers ----------------------------------------------
+    #
+    # Every plate prints the same metadata rows in the same order, so the
+    # labels hold one column edge and the values another straight down the
+    # appendix. Rows the manifest did not record collapse rather than printing
+    # empty, which keeps a sparse capture honest without breaking that edge.
+    _SCR_META_ROWS = (
+        ("Lifecycle trigger", ("capture_trigger", "trigger_event", "trigger_reason", "stage")),
+        ("Screen state", ("screen_summary", "visual_observation", "semantic_type", "category")),
+        ("Activity", ("activity", "window", "fragment")),
+        ("Correlation", ("correlation_status", "deduplication_status")),
+        ("Capture source", ("source", "observation_source")),
+    )
+
+    @staticmethod
+    def _scr_first(scr: Dict[str, Any], keys: Tuple[str, ...]) -> str:
+        for k in keys:
+            v = scr.get(k)
+            if v not in (None, "", [], {}):
+                return str(v)
+        return ""
+
+    def _screenshot_meta_table(self, scr: Dict[str, Any], width: float) -> Table:
+        """The aligned label/value grid printed beside each frame."""
+        rows: List[List[Any]] = []
+        for label, keys in self._SCR_META_ROWS:
+            value = self._scr_first(scr, keys)
+            if not value:
+                continue
+            rows.append([
+                Paragraph(label.upper(), self.table_header),
+                Paragraph(value[:220], self.table_cell),
+            ])
+
+        linked = scr.get("linked_evidence_ids") or []
+        linked_str = (", ".join(str(x) for x in linked if x)
+                      if isinstance(linked, (list, tuple)) else str(linked))
+        if not linked_str:
+            linked_str = self._scr_first(scr, ("evidence_id", "evidence_moment_id"))
+        if linked_str:
+            rows.append([
+                Paragraph("LINKED EVIDENCE", self.table_header),
+                Paragraph(linked_str[:180], self.table_cell_mono),
+            ])
+
+        grade = str(scr.get("quality") or "").strip().upper()[:1]
+        grade_caption = {
+            "A": "A - corroborates a finding directly",
+            "B": "B - supporting context",
+            "C": "C - background only",
+        }.get(grade, "not graded")
+        rows.append([
+            Paragraph("QUALITY GRADE", self.table_header),
+            Paragraph(grade_caption, self.table_cell),
+        ])
+
+        label_w = 88.0
+        table = Table(rows, colWidths=[label_w, max(40.0, width - label_w)])
+        table.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("ALIGN", (0, 0), (0, -1), "LEFT"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("LINEBELOW", (0, 0), (-1, -2), 0.25, colors.HexColor(THEME.RULE_HAIR)),
+        ]))
+        return table
 
     def _build_appendices(self, elements: List[Any]):
-        """Appendix A — Screenshots & Visual Evidence."""
+        """Appendix - Runtime Screenshots & Visual Evidence."""
         if not self.data.screenshots:
             return
 
         elements.append(PageBreak())
-        elements.append(Paragraph("Appendix A: Runtime Screenshots & Visual Evidence", self.section_bar))
+        elements.append(Paragraph(
+            "Appendix A &nbsp; Runtime screenshots and visual evidence", self.part_header))
+        elements.append(Paragraph(
+            "Frames recorded by the instrumented sandbox during execution. Each "
+            "plate states what triggered the capture, what the screen was showing, "
+            "and how far the frame can be relied upon.",
+            self.body_style,
+        ))
+        elements.append(Spacer(1, 6))
+
+        # Usable frame width is 523.27pt; the plate splits it into a fixed
+        # image column and a metadata column, identical for every entry.
+        img_col, gap = 168.0, 12.0
+        meta_col = 523.27 - img_col - gap
 
         for idx, scr in enumerate(self.data.screenshots[:6], 1):
             if isinstance(scr, dict):
                 scr_path_str = scr.get("path") or scr.get("filename") or f"screenshot_{idx}.png"
-                title_str = scr.get("title") or scr.get("screenshot_id") or f"Screenshot #{idx}"
-                desc_str = scr.get("description") or scr.get("investigative_claim") or "Captured during dynamic execution."
-                trigger_str = scr.get('capture_trigger', 'Dynamic Event')
-                quality_str = scr.get('quality', 'A')
+                title_str = scr.get("title") or scr.get("screenshot_id") or f"Frame {idx:02d}"
+                # What the frame SHOWS leads. `description` is looked up from
+                # the capture REASON, so an appendix built from it repeated the
+                # same five templates down the page; `investigative_claim`
+                # degrades to "insufficient corroborating runtime evidence" when
+                # nothing correlated the frame. Both are retained behind the
+                # perceptual reading rather than ahead of it.
+                desc_str = (
+                    scr.get("visual_observation")
+                    or scr.get("description")
+                    or scr.get("investigative_claim")
+                    or "Captured during instrumented execution."
+                )
+                claim_str = scr.get("investigative_claim") or ""
+                meta_source: Dict[str, Any] = scr
             else:
                 scr_path_str = str(scr)
-                title_str = f"Screenshot #{idx}"
-                desc_str = "Captured during dynamic execution."
-                trigger_str = 'Dynamic Event'
-                quality_str = 'A'
+                title_str = f"Frame {idx:02d}"
+                desc_str = "Captured during instrumented execution."
+                claim_str = ""
+                meta_source = {}
 
             img_obj = None
             if self.apk_dir:
@@ -2269,34 +3232,44 @@ class ReportLabPDFGenerator:
                     self.apk_dir / "screenshots" / scr_path_str,
                     self.apk_dir / "screenshots" / Path(scr_path_str).name,
                 ]
-                for p in possible_paths:
-                    if p.exists():
+                for path in possible_paths:
+                    if path.exists():
                         try:
-                            img_obj = Image(str(p), width=180, height=280)
+                            img_obj = Image(str(path), width=img_col - 8, height=248)
                             break
                         except Exception as e:
-                            logger.warning(f"Failed to load image flowable {p}: {e}")
+                            logger.warning(f"Failed to load image flowable {path}: {e}")
 
-            if img_obj:
-                scr_table_data = [[
-                    img_obj,
-                    Paragraph(f"<b>{title_str}</b><br/><br/>{desc_str}<br/><br/><b>Trigger:</b> {trigger_str}<br/><b>Quality Grade:</b> {quality_str}", self.body_style)
-                ]]
-            else:
-                placeholder_p = Paragraph(f"<b>[SCREENSHOT IMAGE]</b><br/><font size=6 color='#57606A'>{scr_path_str}</font>", self.body_style)
-                scr_table_data = [[
-                    placeholder_p,
-                    Paragraph(f"<b>{title_str}</b><br/><br/>{desc_str}<br/><br/><b>Trigger:</b> {trigger_str}<br/><b>Quality Grade:</b> {quality_str}", self.body_style)
-                ]]
+            left_cell: Any = img_obj or Paragraph(
+                "<b>Frame not retained</b><br/>"
+                "<font size=6 color=\"%s\">%s</font>" % (THEME.INK_FAINT, scr_path_str),
+                self.body_style,
+            )
 
-            scr_table = Table(scr_table_data, colWidths=[174.3, 348.7], repeatRows=1)
-            scr_table.setStyle(TableStyle([
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D0D7DE")),
-                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F6F8FA")),
-                ("PADDING", (0, 0), (-1, -1), 6),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            body_flowables: List[Any] = [
+                Paragraph(f"<b>{title_str}</b>", self.body_bold),
+                Paragraph(desc_str, self.body_style),
+            ]
+            if claim_str and claim_str != desc_str:
+                body_flowables.append(
+                    Paragraph(f"<b>Claim.</b> {claim_str}", self.body_style))
+            body_flowables.append(Spacer(1, 2))
+            body_flowables.append(self._screenshot_meta_table(meta_source, meta_col - 12))
+
+            plate = Table([[left_cell, body_flowables]], colWidths=[img_col, meta_col + gap])
+            plate.setStyle(TableStyle([
+                ("LINEABOVE", (0, 0), (-1, 0), THEME.RULE_W_MID,
+                 colors.HexColor(THEME.BORDER_STRONG)),
+                ("LINEBELOW", (0, -1), (-1, -1), THEME.RULE_W_MID,
+                 colors.HexColor(THEME.BORDER_STRONG)),
+                ("BACKGROUND", (0, 0), (0, 0), colors.HexColor(THEME.SURFACE_INSET)),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 10),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+                ("TOPPADDING", (0, 0), (-1, -1), 10),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
             ]))
-            elements.append(KeepTogether([scr_table, Spacer(1, 8)]))
+            elements.append(KeepTogether([plate, Spacer(1, 10)]))
 
 # ---------------------------------------------------------------------------
 # Public Entrypoint API

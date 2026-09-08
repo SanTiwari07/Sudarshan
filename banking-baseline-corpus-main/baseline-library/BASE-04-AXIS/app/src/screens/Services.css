@@ -1,0 +1,68 @@
+.services-screen {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: var(--color-bg);
+}
+
+.service-category {
+  margin-bottom: 24px;
+}
+
+.category-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 16px;
+  padding: 0 4px;
+}
+
+.service-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.service-card {
+  background-color: var(--color-surface);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.service-card:active {
+  transform: scale(0.98);
+}
+
+.service-icon-bg {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background-color: rgba(151, 20, 77, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.service-icon {
+  color: var(--color-primary);
+}
+
+.service-info h3 {
+  margin: 0 0 4px 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.service-info p {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+}

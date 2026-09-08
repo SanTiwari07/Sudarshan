@@ -172,19 +172,26 @@ To ensure sterile or dormant runs do not masquerade as benign:
 
 ---
 
-## 7. Behavioral Fraud Crime Impact (BFCI v2) Formula
+## 7. Behavioural Fraud Confidence Index (BFCI v2)
 
-The behavioral dynamic score is calculated in `shared/sudarshan_core/engines/bfci_scorer.py`:
+The dynamic behavioural score is calculated in `shared/sudarshan_core/engines/bfci_scorer.py`:
 
-$$BFCI_{\text{v2}} = \min\left(100.0, \sum_{c} W_c \cdot \min\left(1.0, \frac{\ln(1 + N_c)}{\ln(1 + M_c)}\right) \times 100 + S_{\text{sequence}}\right)$$
+$$\text{component}_c = \min\left(1.0, \frac{\ln(1 + N_c)}{\ln(1 + M_c)}\right) \times 100$$
 
-| Component | Weight ($W_c$) | Saturation ($M_c$) | Target Fraud Behavior |
-| :--- | :--- | :--- | :--- |
-| **Accessibility ($A$)** | **0.35** | 10 events | Screen scraping, tap injection, OTP field extraction |
-| **SMS Interception ($S$)** | **0.25** | 5 events | Reading SMS messages, stealing 2FA tokens |
-| **Overlay Window ($O$)** | **0.20** | 3 events | Drawing phishing login overlays over legitimate apps |
-| **Banking Interaction ($B$)**| **0.10** | 5 events | Target package launching and financial API activity |
-| **Network C2 ($N$)** | **0.05** | 20 events | C2 heartbeat beacons and credential exfiltration |
-| **Persistence ($P$)** | **0.05** | 3 events | Device administrator elevation and icon hiding |
+$$BFCI_{\text{v2}} = \min\left(100.0,\; \left(\sum_{c} W_c \cdot \text{component}_c\right) \times S\right)$$
 
-*$S_{\text{sequence}} = +15.0$ bonus is awarded when a complete temporal attack sequence (e.g. Accessibility $\rightarrow$ Overlay $\rightarrow$ SMS) is observed.*
+| Component | Weight ($W_c$) | Cap ($M_c$) | Target fraud behaviour |
+| :--- | ---: | ---: | :--- |
+| Accessibility | 0.315 | 3 | Screen scraping, tap injection, OTP field extraction |
+| SMS interception | 0.225 | 2 | Reading SMS messages, stealing 2FA tokens |
+| Overlay window | 0.180 | 2 | Drawing phishing overlays over legitimate apps |
+| Banking interaction | 0.090 | 3 | Target package launching and financial API activity |
+| Network C2 | 0.045 | 10 | C2 heartbeat beacons and credential exfiltration |
+| Persistence | 0.045 | 2 | Device administrator elevation and icon hiding |
+| Code execution | 0.100 | 2 | Shell execution, dynamic DEX loading, writing an APK to storage |
+
+The weights sum to exactly 1.0 and the module asserts it at import time, because `raw_bfci` applies no normalisation. `code_execution` carries 0.10 and the six original categories are scaled by 0.90, so their relative ordering is unchanged from the validated model.
+
+$S$ is the **sequence multiplier**, `SEQUENCE_MULTIPLIER = 1.25`, applied when every category of a defined fraud sequence has an event inside `SEQUENCE_WINDOW_SECONDS = 30.0`. Sequences: `OTP_THEFT_CHAIN` (accessibility + sms + network), `OVERLAY_BANKING_CHAIN` (overlay + banking), `ACCOUNT_TAKEOVER_CHAIN` (accessibility + overlay + sms), `DROPPER_CHAIN` (persistence + network). It multiplies; it is not an additive bonus.
+
+The caps are small on purpose. With a cap of 2 or 3 and logarithmic scaling, a single event already scores 50-63 for its component, which is why `dangerous_apis`, `files_accessed`, `anti_analysis`, `device_fingerprint`, `app_telemetry` and `notification` are collected as evidence but never scored — a scored category that also catches ordinary application behaviour is a constant, not a signal.

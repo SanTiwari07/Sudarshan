@@ -132,6 +132,94 @@ def build_caption(
         return UNCLEAR_CAPTION
 
 
+def resolve_screen_observation(
+    *,
+    screen_observation: Any = None,
+    ui_xml: str = "",
+    activity: str = "",
+    semantic_type: str = "",
+    reason: str = "",
+    label: str = "",
+    explorer_action: str = "",
+    package_name: str = "",
+) -> Dict[str, str]:
+    """
+    Best available perceptual reading of a frame, from whatever the caller has.
+
+    Three sources, in descending order of how much they know:
+      1. a ScreenObservation the caller already built from parsed UI nodes,
+      2. a raw uiautomator dump taken alongside the frame,
+      3. the frame's own metadata - Activity and screen classification.
+
+    Never raises and never returns empty strings: a description is presentation
+    metadata, and the failure mode it replaces (every screenshot captioned with
+    the reason it was taken) is worse than a short sentence.
+    """
+    try:
+        from sudarshan_core.engines.agentic.ui_observation import (
+            describe_from_metadata,
+            describe_screen,
+        )
+    except Exception as exc:  # pragma: no cover - description must never block
+        logger.debug("[ScreenshotManager] ui_observation unavailable: %s", exc)
+        return {
+            "visual_observation": "",
+            "screen_summary": "",
+            "observation_source": "",
+            "screen_type": semantic_type,
+        }
+
+    try:
+        if screen_observation is not None:
+            text = str(getattr(screen_observation, "visual_observation", "") or "")
+            if text:
+                return {
+                    "visual_observation": text,
+                    "screen_summary": str(
+                        getattr(screen_observation, "screen_summary", "") or ""
+                    ),
+                    "observation_source": str(
+                        getattr(screen_observation, "source", "") or "ui_tree"
+                    ),
+                    "screen_type": str(
+                        getattr(screen_observation, "screen_type", "") or semantic_type
+                    ),
+                }
+
+        if ui_xml:
+            obs = describe_screen(
+                activity=activity, ui_xml=ui_xml, screen_type=semantic_type,
+            )
+            return {
+                "visual_observation": obs.visual_observation,
+                "screen_summary": obs.screen_summary,
+                "observation_source": obs.source,
+                "screen_type": obs.screen_type,
+            }
+
+        obs = describe_screen(activity=activity, screen_type=semantic_type)
+        return {
+            "visual_observation": describe_from_metadata(
+                activity=activity,
+                screen_type=semantic_type,
+                label=label,
+                reason=reason,
+                explorer_action=explorer_action,
+            ),
+            "screen_summary": obs.screen_summary,
+            "observation_source": "metadata",
+            "screen_type": obs.screen_type,
+        }
+    except Exception as exc:  # pragma: no cover
+        logger.debug("[ScreenshotManager] Could not describe screen: %s", exc)
+        return {
+            "visual_observation": "",
+            "screen_summary": "",
+            "observation_source": "",
+            "screen_type": semantic_type,
+        }
+
+
 @dataclass
 class ScreenshotRecord:
     """One entry in the screenshot manifest."""
@@ -164,6 +252,23 @@ class ScreenshotRecord:
     capture_trigger: str = ""
     title: str = ""
     quality: str = "A"
+    # ── What the frame SHOWS ─────────────────────────────────────────────────
+    # `description` answers "why was this captured" and is looked up from the
+    # capture reason, which is why the appendix used to repeat five sentences
+    # down the page. These two answer "what is on it", read from the UI
+    # hierarchy dumped alongside the frame (see agentic.ui_observation) or, when
+    # vision captioning is enabled, from the pixels.
+    #
+    # Kept as separate fields rather than overwriting `description`: the reason
+    # is still worth recording, and the report shows them in different columns.
+    visual_observation: str = ""
+    screen_summary: str = ""
+    observation_source: str = ""
+    # The screen classification at capture time. Already resolved by every
+    # caller and previously used only to pick a policy branch, so it never
+    # reached the manifest - which left downstream consumers (the linker, the
+    # appendix) unable to say what KIND of screen a frame shows.
+    semantic_type: str = ""
     # Causal linking to exploration graph / evidence
     state_id: str = ""
     action_id: str = ""
@@ -295,6 +400,8 @@ class ScreenshotManager:
         foreground_package: str = "",
         transition_event: str = "",
         semantic_type: str = "",
+        screen_observation: Optional[Any] = None,
+        ui_xml: str = "",
     ) -> Optional[str]:
         """
         Take a screenshot on the device, pull it locally, and record it in
@@ -302,6 +409,13 @@ class ScreenshotManager:
 
         All capture requests pass through the central ScreenshotPolicy before
         adb screencap runs.  Suppressed captures return None but are audited.
+
+        `screen_observation` is a ui_observation.ScreenObservation (or anything
+        with the same attributes) describing what is on the screen, supplied by
+        a caller that already holds the UI hierarchy. `ui_xml` is the raw dump
+        for a caller that holds only that. Supplying neither still yields a
+        description - built from the Activity and the screen classification -
+        rather than falling back to restating the capture reason.
         """
         if os.getenv("SUDARSHAN_DISABLE_SCREENSHOTS", "").lower() in ("1", "true", "yes"):
             logger.debug("[ScreenshotManager] Capture disabled via SUDARSHAN_DISABLE_SCREENSHOTS")
@@ -436,6 +550,16 @@ class ScreenshotManager:
                     self._last_layout_hashes.add(layout_hash)
 
             resolved_reason = reason or ScreenshotReason.OTHER.value
+            observation = resolve_screen_observation(
+                screen_observation=screen_observation,
+                ui_xml=ui_xml,
+                activity=activity,
+                semantic_type=semantic_type,
+                reason=resolved_reason,
+                label=label,
+                explorer_action=explorer_action,
+                package_name=self.package_name,
+            )
             record = ScreenshotRecord(
                 screenshot_id=scr_id,
                 filename=rel_path,
@@ -467,6 +591,10 @@ class ScreenshotManager:
                 ),
                 capture_trigger=resolved_reason,
                 title=f"{scr_id} - {label}" if label else scr_id,
+                visual_observation=observation["visual_observation"],
+                screen_summary=observation["screen_summary"],
+                observation_source=observation["observation_source"],
+                semantic_type=semantic_type or observation["screen_type"],
                 state_id=state_id,
                 action_id=action_id,
                 evidence_id=evidence_id,
@@ -617,14 +745,28 @@ class ScreenshotManager:
 
     def enrich_captions_with_vision(self) -> int:
         """
-        Replace low-signal captions with Gemini Vision descriptions.
+        Refine screen descriptions with Gemini Vision.
 
         No-op unless SUDARSHAN_VISION_CAPTIONS=1. Runs after exploration ends,
         so vision latency cannot eat the runtime action budget. Returns the
-        number of captions replaced.
+        number of frames the model described.
+
+        What it writes has changed: the model's sentence now lands on
+        `visual_observation` - the field that answers "what is on screen" -
+        rather than overwriting `description`, which records why the shutter
+        fired. Both are kept, because they are different questions and the
+        report shows them in different places. `description` is still replaced
+        when the deterministic table gave up on it, since UNCLEAR_CAPTION is
+        not worth preserving.
+
+        The UI-tree reading already on the record is passed to the model as
+        grounding, so an ambiguous frame is corrected by the image rather than
+        described from nothing.
         """
         try:
             from sudarshan_core.engines.agentic.caption_generator import (
+                caption_budget,
+                caption_priority,
                 generate_caption,
                 should_caption,
                 vision_captions_enabled,
@@ -636,25 +778,44 @@ class ScreenshotManager:
         if not vision_captions_enabled():
             return 0
 
-        replaced = 0
+        budget = caption_budget()
+        if budget <= 0:
+            return 0
+
         with self._lock:
             snapshot = list(self._manifest)
-        for rec in snapshot:
-            if not should_caption(rec.reason, rec.description):
-                continue
+
+        eligible = [
+            rec for rec in snapshot
+            if should_caption(rec.reason, rec.description)
+        ]
+        # Ordered so a run that cannot afford every frame spends what it has on
+        # the frames whose deterministic description says the least.
+        eligible.sort(key=lambda r: (
+            caption_priority(r.reason, r.description), r.timestamp_ms,
+        ))
+
+        replaced = 0
+        for rec in eligible[:budget]:
             local = self.output_dir / Path(rec.filename).name
-            caption = generate_caption(
-                local,
-                hint_context=f"reason={rec.reason} category={rec.category} label={rec.label}",
+            hint = rec.visual_observation or (
+                f"reason={rec.reason} category={rec.category} label={rec.label}"
             )
-            if caption:
+            caption = generate_caption(local, hint_context=hint)
+            if not caption:
+                continue
+            rec.visual_observation = caption
+            rec.observation_source = "gemini_vision"
+            rec.extra["caption_source"] = "gemini_vision"
+            if rec.description in ("", UNCLEAR_CAPTION):
                 rec.description = caption
-                rec.extra["caption_source"] = "gemini_vision"
-                replaced += 1
+            replaced += 1
+
         if replaced:
             logger.info(
-                "[ScreenshotManager] Vision captions applied to %d screenshot(s)",
-                replaced,
+                "[ScreenshotManager] Vision descriptions applied to %d of %d "
+                "eligible screenshot(s) (budget=%d)",
+                replaced, len(eligible), budget,
             )
         return replaced
 

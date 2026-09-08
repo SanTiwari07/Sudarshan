@@ -1,298 +1,258 @@
-# SUDARSHAN — Codebase Map & Source Reference
+# Codebase map
 
-> **Authoritative Technical Map of the Codebase**  
-> **Source Repository**: `SanTiwari07/Sudarshan`  
-> **Last Verified Against Active Codebase**: 2026-08-25  
+Directory, module and responsibility index for the SUDARSHAN repository. Use it to find where something lives and what owns it.
 
-This document serves as an exhaustive directory-by-directory, class-by-class, and function-by-function index of the **SUDARSHAN** codebase. Use this map to navigate the repository and trace functionality to its source.
+Verified against the active codebase on **2026-08-27**.
+
+> This document maps **structure**, not API surface. Route signatures live in [`api/ENDPOINTS.md`](api/ENDPOINTS.md) and are not duplicated here — two copies of a route table guarantee one of them is wrong.
+
+- Platform overview: [`../README.md`](../README.md)
+- Component READMEs: [backend](../backend/README.md) · [analysis-engine](../analysis-engine/README.md) · [shared](../shared/README.md) · [frontend](../frontend/README.md) · [scripts](../scripts/README.md) · [tests](../tests/README.md)
 
 ---
 
-## Repository Directory Overview
+## Top level
 
 ```text
 Sudarshan/
-├── backend/                  # Gateway & Orchestration API (Port 8000)
-│   ├── app/                  # FastAPI application modules
-│   │   ├── ai/               # Gemini client & RAG core
-│   │   ├── auth/             # JWT auth & RBAC
-│   │   ├── db/               # SQLite database layer & DDL
-│   │   ├── rag/              # Domain knowledge base
-│   │   ├── routes/           # REST API route handlers
-│   │   ├── services/         # Background services & enrichment
-│   │   └── workers/          # Async job & batch workers
-│   └── tests/                # Backend pytest test suite (53 files)
-│
-├── analysis-engine/          # Containerized Microservice (Port 8001)
-│   ├── app/                  # FastAPI microservice entrypoint & routing
-│   │   └── main.py           # Core microservice execution engine
-│   └── Dockerfile            # Container definition with APKTool & JADX
-│
-├── shared/sudarshan_core/    # Shared Core Python Library
-│   ├── ai/                   # Resilient Gemini Provider & Failover
-│   ├── analyzers/            # Native bytecode analyzer (Androguard)
-│   ├── engines/              # Scoring, dynamic sandbox, repair, decompilers
-│   │   ├── agentic/          # Deep UI exploration subsystem
-│   │   ├── vide/             # Visual Impersonation Detection Engine
-│   │   └── frida_hooks/      # Compiled Frida JS hook bundles
-│   ├── models/               # Pydantic schemas & Manifest contracts
-│   ├── sandbox/              # SandboxProvider (Genymotion / AVD abstraction)
-│   ├── security/             # Containment policies & token authentication
-│   ├── services/             # ThreatCorrelator & MobSFClient
-│   ├── validation/           # Corpus validation & stress testing
-│   └── visual_evidence/      # Screenshot linking & claim validation
-│
-├── frontend/                 # React 18 SPA Frontend (Port 5173)
-│   └── src/                  # TypeScript / React source
-│       ├── components/       # Reusable UI, layout & chart components
-│       ├── context/          # AuthContext & AnalysisContext
-│       ├── pages/            # View pages (Upload, FraudCard, Tech, Batch, Chat)
-│       └── types/            # TypeScript interfaces
-│
-├── scripts/                  # Operations, preflight & validation scripts
-└── tests/                    # Core pytest test suite (57 files)
+├── backend/                  Gateway and case store (FastAPI 2.1.0, port 8000)
+├── analysis-engine/          Analysis microservice (FastAPI 2.3.0, internal port 8001)
+├── shared/sudarshan_core/    Domain layer consumed by both services
+├── frontend/                 React 18 analyst dashboard (port 5173)
+├── tests/                    Engine-level pytest suite
+├── scripts/                  Operational and validation tooling
+├── deploy/security/          seccomp profile for the analysis engine
+├── docs/                     This documentation portal
+├── CyberSecurity Bible/      Standalone reference material, not platform documentation
+├── docker-compose.yml        frontend, backend, analysis-engine, mitmproxy, mobsf
+├── docker-compose.hardened.yml
+├── start.ps1                 Windows bootstrap
+└── .env.example              Annotated configuration reference
 ```
 
----
-
-## 1. Backend Gateway (`backend/app/`)
-
-The backend gateway handles user requests, session authentication, case persistence, job queuing, STIX/PDF report generation, and coordinates with the analysis microservice.
-
-### `backend/app/main.py`
-* **Purpose**: Primary FastAPI gateway entrypoint (Port 8000).
-* **Key Components**:
-  * `app = FastAPI(...)`: Initializes application, sets up CORS allow-list (`CORS_ALLOW_ORIGINS`), and registers rate limiter.
-  * `@app.on_event("startup")`: Initializes SQLite database (`init_db`), seeds administrator account (`seed_demo_users`), wires the 24h IOC reputation cache, registers the runtime telemetry sink on `EventBus`, starts the VIDE baseline refresh worker, and spins up `analysis_queue` and `batch_worker` pools.
-  * `@app.on_event("shutdown")`: Gracefully stops background workers.
-  * `read_root()` (`GET /`): Returns platform metadata, active engines, and scoring formulas.
-  * `health()` (`GET /health`): Simple health check endpoint.
-
-### `backend/app/routes/`
-* **`upload.py`**:
-  * `POST /api/v1/analyze`: Synchronous APK analysis. Receives upload, calculates SHA-256, streams to `/app/uploads/`, attempts delegated execution to `analysis-engine:8001`, falls back to local execution if engine is offline, runs RAG synthesis, and saves the case.
-  * `POST /api/v1/analyze/async`: Asynchronous APK analysis. Creates an `analysis_job` record, writes binary to shared volume, and enqueues to the worker pool.
-  * `GET /api/v1/status/{job_id}`: Polls async job progress (`0%` to `100%`) and returns full analysis when complete.
-  * `GET /api/v1/sandbox/status`: Probes sandbox availability.
-* **`batch.py`**:
-  * `POST /api/v1/batches`: Uploads multiple APKs, validates ZIP magic bytes, creates `analysis_batches` and `analysis_batch_jobs` records, and enqueues the batch.
-  * `GET /api/v1/batches`: Lists batches with pagination and role-based filtering (`analyst` vs `soc_lead`/`admin`).
-  * `GET /api/v1/batches/{batch_id}`: Retrieves batch summary, job counts, and completion percentage.
-  * `GET /api/v1/batches/{batch_id}/jobs`: Retrieves lightweight job status rows for a batch.
-  * `POST /api/v1/batches/{batch_id}/pause`, `/resume`, `/cancel`: Controls queue processing.
-  * `POST /api/v1/batch-jobs/{job_id}/retry`: Re-queues a failed batch job.
-* **`cases.py`**:
-  * `GET /api/v1/cases`: Lists historical cases with search (`q`), family filter, risk band filter, and pagination.
-  * `GET /api/v1/cases/{sha256}`: Retrieves full saved case analysis.
-  * `DELETE /api/v1/cases/{sha256}`: Deletes a case (admin only).
-  * `GET` & `POST /api/v1/cases/{sha256}/notes`: Retrieves and adds analyst notes to a case.
-  * `POST /api/v1/cases/{sha256}/chat`: Grounded interactive chat on the case findings via Gemini vector RAG.
-* **`report.py`**:
-  * `GET /api/v1/report/{sha256}/pdf`: Generates and serves a ReportLab PDF investigation report.
-  * `GET /api/v1/report/{sha256}/html`: Serves standalone HTML security report.
-  * `GET /api/v1/report/{sha256}/stix`: Exports case IOCs as a STIX 2.1 JSON bundle.
-  * `GET /api/v1/report/{sha256}/iocs`: Exports high-confidence IOCs as CSV.
-  * `GET /api/v1/report/{sha256}/json`: Returns raw cached JSON report.
-* **`intelligence.py`**:
-  * `POST /api/v1/intel/correlate`: On-demand threat correlation for indicators against VirusTotal/OTX/AbuseIPDB.
-  * `GET /api/v1/intel/cache/stats`: Statistics on cached IOC reputation items.
-  * `POST /api/v1/intel/cache/clear`: Flushes expired IOC cache entries.
-  * `GET /api/v1/intel/live-threats`: Feeds active threat signals.
-* **`discovery.py`**:
-  * `POST /api/v1/discovery/crawl`: Crawls a target domain or URL for direct APK download links.
-  * `GET /api/v1/discovery/sessions` & `/{session_id}`: Retrieves discovery session progress.
-  * `POST /api/v1/discovery/ingest/{candidate_id}`: Automatically downloads and enqueues a discovered APK.
-* **`screenshots.py`**:
-  * `GET /api/v1/screenshots/{sha256}/{filename}`: Serves authenticated screenshot image files.
-* **`baselines.py`**:
-  * `GET /api/v1/baselines`: Lists registered official Indian banking baselines for VIDE.
-  * `POST /api/v1/baselines/refresh`: Triggers in-process baseline corpus reload.
-* **`resilience.py`**:
-  * Endpoints for investigation assertions, time-warp simulations, persona seeding, and checkpoint management.
-* **`runtime_api.py`**:
-  * Registered at prefix `/api`.
-  * `GET /api/runtime/status`: Pipeline health and active stage status.
-  * `GET /api/runtime/events`: Telemetry ring buffer (max 500 events).
-  * `GET /api/runtime/hooks`: Hook hit counters and error metrics.
-  * `POST /api/events`: Ingests runtime events into the telemetry sink.
-
-### `backend/app/auth/`
-* **`auth.py`**:
-  * `hash_password()`, `verify_password()`: Passlib bcrypt password hashing.
-  * `create_access_token()`, `decode_access_token()`: PyJWT token creation and verification with expiration (`JWT_EXPIRE_HOURS`).
-  * `get_current_user()`: FastAPI dependency validating `Authorization: Bearer <token>`.
-  * `require_analyst()`, `require_soc_lead()`, `require_admin()`: Role-based authorization gates.
-
-### `backend/app/db/`
-* **`database.py`**:
-  * `init_db()`: Creates SQLite tables (`users`, `cases`, `ioc_cache`, `case_notes`, `analysis_jobs`, `discovery_sessions`, `discovery_candidates`, `analysis_batches`, `analysis_batch_jobs`) and indexes.
-  * `save_case(sha256, result, analyst_id)`: Persists complete analysis JSON and indexed metadata.
-  * `get_case(sha256)`: Retrieves complete case result.
-  * `list_cases(...)`: Paginated search and filtering over historical cases.
-  * `get_cached_ioc(indicator, ioc_type)`, `save_ioc_cache(...)`: 24-hour TTL IOC reputation store.
-
-### `backend/app/workers/`
-* **`analysis_queue.py`**:
-  * Background asyncio worker pool executing queued single-APK analysis jobs.
-* **`batch_worker.py`**:
-  * Background worker managing enterprise batch scanning, serializing job execution per batch to prevent device contention.
-* **`baseline_refresh.py`**:
-  * Periodic worker that warms and invalidates the in-memory VIDE baseline corpus.
-
-### `backend/app/ai/`
-* **`gemini_client.py`**:
-  * `analyze_with_llm(...)`: Orchestrates AI analysis using `GeminiProviderManager` to generate Executive View, Technical Narrative, Attack Graph, Mitigations, and Customer Advisories.
-* **`gemini_rag.py`**:
-  * Vector embedding, cosine similarity search, and RAG document indexing for cases.
-  * `InvestigationRAG`: In-memory vector store indexing finding claims, permissions, and network IOCs for chat Q&A.
+Both service images install `shared/sudarshan_core` editable at `/opt/sudarshan-core` and bind-mount `./shared` over it in development, so the two services cannot drift.
 
 ---
 
-## 2. Analysis Engine Microservice (`analysis-engine/app/`)
+## 1. Backend gateway — `backend/`
 
-Standalone containerized microservice (Port 8001) executing resource-intensive decompilation, APK repair, native static analysis, and dynamic sandbox execution.
+```text
+backend/
+├── app/
+│   ├── main.py                 App construction, CORS, router registration, lifecycle
+│   ├── rate_limit.py           slowapi limiter
+│   ├── startup_validation.py   Production fail-closed checks
+│   ├── registration_policy.py  Public self-registration policy
+│   ├── case_access.py          Role-based case visibility
+│   ├── artifact_resolve.py     Artifact path resolution for a case
+│   ├── evidence_loader.py      Evidence record loading from artifacts
+│   ├── demo_seed.py            Optional demo account seeding
+│   ├── ai/
+│   │   ├── gemini_client.py    Thin client over the shared provider manager
+│   │   └── gemini_rag.py       Investigation graph, retrieval, streaming answers
+│   ├── auth/auth.py            JWT issue and verify, RBAC dependencies, sessions
+│   ├── db/
+│   │   ├── database.py         aiosqlite connection, schema, case and job accessors
+│   │   ├── intel.py            IOCs, runs, chat, exports, runtime events
+│   │   ├── security.py         Sessions, login attempts
+│   │   ├── migrations.py       Additive schema migrations
+│   │   └── paths.py            Database path resolution
+│   ├── middleware/
+│   │   └── export_ledger.py    Records every report, IOC and rule export
+│   ├── rag/knowledge_base.py   MITRE / RBI / CERT-In / NPCI reference context
+│   ├── routes/                 See the table below
+│   ├── services/
+│   │   ├── audit_service.py           Audit action vocabulary and writer
+│   │   ├── case_intel_enrichment.py   Re-correlation and case merge
+│   │   ├── ioc_extraction.py          Indicator extraction into case_iocs
+│   │   ├── resilience_events.py       Resilience event hub
+│   │   ├── resilience_summary.py      Session summary for the UI
+│   │   ├── run_recorder.py            Per-run history records
+│   │   └── discovery/                 Crawler, downloader, resolver, validator, security
+│   └── workers/
+│       ├── analysis_queue.py   ANALYSIS_WORKERS coroutines (default 2)
+│       ├── batch_worker.py     Single FIFO batch task
+│       ├── baseline_refresh.py Periodic VIDE corpus re-ingest
+│       └── retention.py        Operational-state sweeper
+├── tests/                      61 test modules plus fixture helpers
+├── Dockerfile                  python:3.11-slim
+├── requirements.txt
+└── README_FRIDA.md
+```
 
-### `analysis-engine/app/main.py`
-* **`_execute_analysis_pipeline(apk_path, sha256_hash, timeout_seconds)`**:
-  1. Runs native Androguard analysis (`analyze_apk`).
-  2. Runs APK repair engine (`ApkRepairEngine`) if AXML corruption is detected.
-  3. Decompiles resources via `ApktoolEngine` and source via `JadxEngine`.
-  4. Executes VIDE visual impersonation detection (`run_vide_analysis`).
-  5. Optionally executes MobSF analysis if configured.
-  6. Executes dynamic analysis via `run_frida_analysis` if sandbox is reachable.
-  7. Queries threat correlation (`correlate`).
-  8. Computes deterministic risk score (`compute_fraud_risk_score`).
-  9. Classifies family (`classify_family`).
-  10. Generates Investigation Manifest (`build_manifest`).
-* **Endpoints**:
-  * `POST /api/v1/analyze`: Primary synchronous microservice analysis route.
-  * `POST /api/v1/analyze-path`: Asynchronous microservice analysis route taking an internal volume path.
-  * `GET /api/v1/job/{job_id}`: Polls microservice job status.
-  * `GET /health` & `GET /status`: Probes availability of ADB, APKTool, JADX, and disk limits.
+### Routers
 
----
+| Module | Mount | Owns |
+| :--- | :--- | :--- |
+| `auth/auth.py` | `/api/v1/auth` | Login, registration, `/me`, sessions, role and account administration |
+| `routes/upload.py` | `/api/v1` | Synchronous and async analysis, job status and cancel, sandbox status and debug |
+| `routes/batch.py` | `/api/v1` | Batch lifecycle and per-job retry |
+| `routes/cases.py` | `/api/v1/cases` | Case list and detail, evidence, IOCs, notes, status, verdict, assignment |
+| `routes/report.py` | `/api/v1` | All exports, analyst chat, chat history, artifact explanation |
+| `routes/intelligence.py` | `/api/v1/intelligence` | Per-case correlation result |
+| `routes/screenshots.py` | `/api/v1` | Screenshot manifest and image serving |
+| `routes/baselines.py` | `/api/v1/baselines` | VIDE baseline listing and admin refresh |
+| `routes/discovery.py` | `/api/v1/discovery` | Crawl start, status, results, candidate analysis |
+| `routes/resilience.py` | `/api/v1/analysis` | Personas, assertions, suggestions, time warp, anti-evasion, checkpoints, event stream and WebSocket |
+| `routes/runtime_api.py` | `/api/runtime` | Health, status, hooks, events, pipeline, metrics, evidence, diagnostics |
+| `routes/audit.py` | `/api/v1/audit` | Audit event query |
 
-## 3. Shared Core Library (`shared/sudarshan_core/`)
+81 route decorators in total. Signatures: [`api/ENDPOINTS.md`](api/ENDPOINTS.md).
 
-Core reusable algorithms, scoring math, dynamic exploration, and sandbox drivers.
+### Persistence
 
-### `shared/sudarshan_core/engines/`
-* **`risk_engine.py`**:
-  * `calculate_risk_score(...)`: Authoritative Fraud Risk Score (FRS) engine.
-  * `_axis_ct()`, `_axis_bt()`, `_axis_pr()`, `_axis_ob()`, `_axis_ir()`: Computes the 5 STEI axes.
-  * `_calculate_stei()`: Evaluates STEI formula ($0.60\text{CT} + 0.20\text{BT} + 0.10\text{PR} + 0.05\text{OB} + 0.05\text{IR}$).
-  * `_calculate_dynamic_score()`: Evaluates BFCI from Frida sandbox telemetry.
-  * `_calculate_correlation_score()`: Normalizes VirusTotal/OTX/AbuseIPDB results.
-  * `_calculate_banking_impact()`: Evaluates target bank package matches and regulatory risk.
-  * *Floors & Escalations*: Implements Visibility Floor, Static Evidence Floor, Evasion Floor, `INCOMPLETE_EXERCISE` assertion floor, and CH27 triad escalation.
-* **`bfci_scorer.py`**:
-  * `calculate_bfci_v2(...)`: Logarithmic volume-aware behavioral formula.
-* **`frida_sandbox.py`**:
-  * `run_frida_analysis(...)`: Primary dynamic analysis controller.
-  * `start_session()`: Manages device connection, exact PID resolution, attach retry loop, and script injection.
-  * `_select_hooks_script()`: Resolves the compiled `banking_trojan.bundle.js`.
-* **`apk_repair.py`**:
-  * `ApkRepairEngine`: Detects and fixes AXML corruption (repaired string pool offsets, UTF-8 string table bounds, and manifest chunk headers).
-* **`apktool_engine.py`**:
-  * `ApktoolEngine`: Subprocess wrapper for APKTool 2.10.0 extracting resource XMLs and smali.
-* **`jadx_engine.py`**:
-  * `JadxEngine`: Subprocess wrapper for JADX 1.5.1 decompiling Java sources and scanning for embedded secrets.
-* **`classification_engine.py`**:
-  * `classify_family(...)`: Deterministic rule-based malware family classifier (Drinik, Xenomorph, Cerberus, Anubis, SOVA, Hydra, SpyNote, Joker, FluBot).
-* **`pdf_generator.py`**:
-  * `generate_investigation_pdf(...)`: ReportLab deterministic PDF report compiler creating multi-page executive and technical dossiers.
-* **`report_generator.py`**:
-  * Generates standalone HTML investigation reports.
-* **`evidence_store.py`**:
-  * `EvidenceStore`: Central repository of hashed and tagged runtime evidence items.
-* **`screenshot_manager.py`**:
-  * `ScreenshotManager`: Handles automated device screen captures, image deduplication, and captions.
-* **`workflow_reconstructor.py`**:
-  * `WorkflowReconstructor`: Analyzes temporal sequences of events to build execution kill chains.
-* **`event_bus.py`**:
-  * `RuntimeEventBus`: Pub/sub event broker for runtime telemetry.
-* **`network_capture.py`**:
-  * Captures and filters HTTP/HTTPS network indicators and sockets.
-
-### `shared/sudarshan_core/engines/agentic/` (Deep UI Explorer)
-* **`exploration_engine.py`**:
-  * `AgenticExplorer`: Main exploration coordinator managing budgets (`ExplorationBudget`), state transitions, backtrack stack, and stopping reasons (`StopReason`).
-* **`perception.py`**:
-  * `PerceptionPipeline`: Implements the 5-level priority perception hierarchy (UI XML $\rightarrow$ Activity $\rightarrow$ Frida events $\rightarrow$ Logcat $\rightarrow$ Vision).
-* **`screen_classifier.py`**:
-  * `ScreenClassifier`: Rule-based semantic classification of 17 screen types (`ScreenType`) and package ownership contexts (`classify_screen_with_ownership`).
-* **`screen_graph.py`**:
-  * `ScreenGraphBuilder`: Calculates stable SHA-256 screen hashes $H(activity, topology)$ and tracks navigation edges.
-* **`action_dispatch.py`**:
-  * `ActionDispatcher`: Canonical translator converting semantic goals into executable coordinates and tool payloads (`ExecutableAction`).
-* **`action_verifier.py`**:
-  * `ActionVerifier`: Compares pre- and post-action observations to verify progress and detect state transitions.
-* **`tool_executor.py`**:
-  * `ToolExecutor`: Executes interactions via ADB (`input tap`, `input text`, `keyevent`, `grant_permission`).
-* **`sanitizer.py`**:
-  * Filters and sanitizes text inputs and UI labels to prevent prompt injection.
-
-### `shared/sudarshan_core/engines/vide/` (Visual Impersonation Engine)
-* **`pipeline.py`**:
-  * `run_vide_analysis(...)`: Orchestrates visual comparison against official banking baselines.
-* **`baseline_store.py`**:
-  * Loads and caches visual profiles for protected financial institutions.
-* **`color_match.py`**:
-  * Delta-E CIE76 color difference calculator comparing dominant UI palettes.
-* **`fuzzy.py`**:
-  * Levenshtein-based fuzzy string and keyword matcher.
-* **`signer_registry.py`**:
-  * Verifies APK signing certificates against official bank developer certificate fingerprints.
-
-### `shared/sudarshan_core/ai/`
-* **`gemini_provider.py`**:
-  * `GeminiProviderManager`: Central resilient AI client managing circuit-breaker states (`AVAILABLE`, `DEGRADED`, `OPEN`), primary-to-fallback failover, cooldowns, and retries.
-* **`gemini_settings.py`**:
-  * `load_gemini_settings()`: Parses environment variables for primary/fallback models and keys.
-* **`gemini_errors.py`**:
-  * Classifies Gemini errors (rate limits, auth failures, thinking token budget errors) and redacts secrets from logs.
-
-### `shared/sudarshan_core/sandbox/`
-* **`provider.py`**:
-  * `SandboxProvider`: Base class for device interaction, ADB discovery, package management, and port forwarding.
-* **`auto.py`**:
-  * Auto-discovers whether Genymotion Desktop VM, Android Studio AVD, or a physical device is online.
-* **`genymotion.py`** & **`android_studio.py`**:
-  * Backend providers tailored to Genymotion (VirtualBox host-only networking) and Android Studio AVD.
-
-### `shared/sudarshan_core/security/`
-* **`sandbox_containment.py`**:
-  * Audits and enforces network containment policies to prevent the dynamic sandbox from bridging private host subnets.
-* **`internal_auth.py`**:
-  * Validates internal microservice shared-secret tokens (`ANALYSIS_ENGINE_INTERNAL_TOKEN`).
+SQLite through `aiosqlite` with direct SQL — no ORM, and SQLAlchemy is not a dependency. Tables: `users`, `sessions`, `login_attempts`, `cases`, `case_notes`, `case_iocs`, `analysis_jobs`, `analysis_runs`, `analysis_batches`, `analysis_batch_jobs`, `ioc_cache`, `runtime_events`, `chat_messages`, `export_events`, `audit_events`, `discovery_sessions`, `discovery_candidates`. Schema detail: [`DATABASE.md`](DATABASE.md).
 
 ---
 
-## 4. Frontend Application (`frontend/src/`)
+## 2. Analysis engine — `analysis-engine/`
 
-React 18 SPA built with Vite, TypeScript, and TailwindCSS.
+```text
+analysis-engine/
+├── app/
+│   ├── main.py            FastAPI app, analysis pipeline, in-process job store
+│   └── adb_bootstrap.py   Policy-validated ADB warm-up at container start
+├── entrypoint.sh          Toolchain verification, ADB bootstrap, uvicorn --workers 1
+├── Dockerfile             ubuntu:24.04, JDK 17, Python 3.12, APKTool 2.10.0, JADX 1.5.1
+├── requirements.txt
+└── test_frida*.py, restart_frida*.py   Hand-run diagnostic probes, not tests
+```
 
-### `frontend/src/pages/`
-* **`Upload.tsx`**: APK upload portal with drag-and-drop zone, file validation, and real-time step progress animation.
-* **`FraudCard.tsx`**: Executive overview presenting the FRS dial, Risk Band, Verdict status, plain-English summary, and CERT-In recommendations.
-* **`TechnicalView.tsx`**: Deep technical SOC analyst view with tabs for Manifest, Code Findings, VIDE Impersonation, Behavioral Timeline, Frida Hooks, and Screenshot Gallery.
-* **`ThreatIntelView.tsx`**: Threat actor attribution, IOC reputation table (VirusTotal, OTX, AbuseIPDB), and STIX 2.1 / CSV export downloads.
-* **`InvestigationChat.tsx`**: Interactive chat interface querying the case findings using Gemini RAG.
-* **`History.tsx`**: Paginated, filterable table of all analyzed cases.
-* **`BatchScan.tsx`**: Enterprise batch scanning interface for multi-APK upload and queue management.
-* **`BatchDetail.tsx`**: Real-time batch progress monitor with per-job status, retry, and cancellation controls.
-* **`Login.tsx`**: JWT authentication login page.
+`_execute_analysis_pipeline(apk_path, sha256_hash, timeout_seconds)` is the whole service in one function, instrumented by `PipelineTimer`:
 
-### `frontend/src/context/`
-* **`AuthContext.tsx`**: Manages user login state, JWT storage in `localStorage`, and token expiration.
-* **`AnalysisContext.tsx`**: Holds current active case data and provides global state for investigation views.
+1. Validate the file — ZIP magic, extension, size cap.
+2. Run Androguard (`analyze_apk`), APKTool, JADX and MobSF as concurrent tasks where safe.
+3. Repair the APK (`ApkRepairEngine`) when AXML is malformed, and re-analyse.
+4. Build the investigation manifest (`build_manifest`).
+5. Run the dynamic sandbox (`run_frida_analysis`) when reachable, which drives the agentic explorer.
+6. Run VIDE (`run_vide_analysis`).
+7. Correlate threat intelligence (`correlate`).
+8. Classify the family (`classify_family`).
+9. Compute the deterministic score (`compute_fraud_risk_score`).
+10. Return the case payload to the gateway.
+
+Concurrency: `asyncio.Semaphore(MAX_CONCURRENT_ANALYSES)`, default 2, plus a per-device-serial lock in the sandbox controller. Job state is an in-process dict with TTL eviction — the service is pinned to `--workers 1` for that reason.
 
 ---
 
-## 5. Scripts & Automation (`scripts/`)
+## 3. Shared core — `shared/sudarshan_core/`
 
-* **`scripts/validate_corpus.py`**: Benchmarks static-only scoring against the 17-sample labelled ground-truth corpus.
-* **`scripts/preflight.py`**: Comprehensive preflight diagnostic verifying host environment, ADB, Frida server, Python packages, and API keys.
-* **`scripts/health_check.py`**: End-to-end operational verification script probing backend and analysis-engine endpoints.
-* **`scripts/setup_dynamic_analysis.py`**: Automated helper to push frida-server to an emulator and verify root access.
-* **`scripts/virustotal_crosscheck.py`**: Cross-checks corpus samples against live VirusTotal detections within rate limits.
+### `engines/` — analysis, scoring and reporting
+
+| Module | Owns |
+| :--- | :--- |
+| `risk_engine.py` | STEI, FRS, axis exclusion and renormalisation, bands, escalation rules, four safety floors, confidence |
+| `bfci_scorer.py` | BFCI v2 — seven weighted categories, logarithmic volume scoring, fraud sequence detection |
+| `execution_assertions.py` | Execution Assertion Matrix, `INCOMPLETE_EXERCISE` verdict |
+| `classification_engine.py` | Deterministic malware-family classifier |
+| `frida_sandbox.py` | Sandbox controller: install, launch ladder, PID attach, ART deopt, hooks, event collection |
+| `dae_pipeline.py` | 16-state pipeline machine with logged transitions |
+| `agentic_explorer.py` | Deep UI exploration driver |
+| `ui_explorer.py` | Model-assisted exploration path |
+| `apk_repair.py` | AXML and string-table repair, resign, SHA-256 |
+| `apktool_engine.py`, `jadx_engine.py` | Decompiler wrappers |
+| `event_bus.py`, `evidence_store.py` | Runtime events and normalised evidence records |
+| `screenshot_manager.py` | Capture, dedup policy, storage layout |
+| `workflow_reconstructor.py`, `behavior_graph.py` | Causal chains and behaviour relationships |
+| `mitre_mapper.py` | ATT&CK for Mobile technique mapping |
+| `ioc_collector.py` | Indicator extraction and normalisation |
+| `network_capture.py`, `network_signatures.py` | HAR ingest and C2 signature matching |
+| `anti_evasion.py`, `anti_analysis_detector.py` | Evasion probing and detection |
+| `device_state_simulator.py`, `time_warp.py`, `persona.py` | Synthetic guest state, clock advancement, victim seeding |
+| `permission_orchestrator.py`, `permission_investigator.py` | Pre-grant policy and grant-dialog investigation |
+| `multi_stage_engine.py` | Second-stage payload observation |
+| `capability_profile.py` | Declared-capability summary bridging static to runtime |
+| `session_manager.py`, `runtime_lifecycle.py`, `pipeline_state.py`, `pipeline_timing.py` | Session, lifecycle and timing state |
+| `replay_engine.py` | Deterministic replay for the determinism invariant |
+| `analysis_history.py` | Per-package run history and deltas |
+| `batch_runner.py` | Batch orchestration helpers |
+| `yara_scanner.py`, `yara_rules/` | Runtime-string YARA scanning; 8 rules across 2 files |
+| `pdf_generator.py`, `report_generator.py`, `report_theme.py` | PDF, HTML and shared visual tokens |
+| `frida_hooks/` | Frida agent sources and compiled bundles |
+
+### `engines/agentic/` — deep UI exploration
+
+`perception.py` (five-level observation), `screen_classifier.py`, `screen_graph.py`, `planner.py`, `goal_planner.py`, `goal_tracker.py` (15-stage fraud goal graph), `progress_tracker.py`, `adaptive_budget.py`, `action_dispatch.py`, `semantic_action.py`, `action_verifier.py`, `tool_registry.py`, `tool_executor.py`, `world_model.py`, `coverage_tracker.py`, `agent_memory.py`, `audit_log.py`, `crash_classifier.py`, `remediation.py`, `form_recovery.py`, `field_classifier.py`, `field_taxonomy.py`, `field_constraints.py`, `credentials.py`, `auth_state.py`, `victim_profile.py`, `victim_policy.py`, `visual_grounding.py`, `caption_generator.py`, `screenshot_policy.py`, `device_properties.py`, `ui_observation.py`, `secondary_payload.py`, `sanitizer.py`, `benchmark.py`.
+
+`sanitizer.py` is the single choke point for untrusted content heading into a prompt. Nothing else escapes at a call site.
+
+### `engines/vide/` — visual impersonation
+
+`pipeline.py` orchestrates. `view_ast.py` and `ast_builders.py` normalise hierarchies from layout XML, uiautomator and HTML. `compare.py` and `corpus_compare.py` score against baselines (detection threshold 0.20). `color_match.py` does CIEDE2000 ΔE. `fuzzy.py` does the string axis (threshold 82.0). `discriminative.py` finds exclusive features for attribution. `signer_registry.py` is fail-closed. `baseline_store.py` and `corpus_loader.py` load baselines. `forensics.py` builds the breakdown both the card and the PDF render. `semantic_matcher.py` is advisory only and never the verdict.
+
+### Other packages
+
+| Package | Owns |
+| :--- | :--- |
+| `ai/` | `gemini_provider.py` (slots, circuit breaker, cooldown, retries), `gemini_settings.py`, `gemini_errors.py`, `artifact_explainer.py` |
+| `analyzers/` | `apk_analyzer.py` — Androguard manifest and DEX analysis, entropy, concealed payload |
+| `sandbox/` | `provider.py`, `factory.py`, `auto.py`, `genymotion.py`, `android_studio.py`, `future.py`, `config.py`, `device.py`, `device_channel.py`, `frida_assets.py`, `types.py`, `exceptions.py` |
+| `security/` | `adb_gateway.py`, `sandbox_containment.py`, `internal_auth.py` |
+| `services/` | `threat_correlator.py`, `mobsf_client.py` |
+| `models/` | `schemas.py`, `manifest.py` |
+| `ingest/` | `apk_record.py` |
+| `validation/` | `labelled_corpus.py`, `static_scoring.py`, `corpus.py`, `runner.py`, `coverage.py`, `screenshot_audit.py`, `recovery.py`, `stress.py`, `virustotal_crosscheck.py`, `engineering_report.py` |
+| `visual_evidence/` | `linker.py`, `claim_templates.py`, `enrich.py`, `quality.py`, `api_merge.py`, `report_sections.py`, `static_sources.py`, `models.py`, `constants.py` |
+| `brand/` | Brand marks used by the PDF and HTML renderers |
+| root | `preflight.py`, `runtime_paths.py` |
+
+---
+
+## 4. Frontend — `frontend/src/`
+
+```text
+src/
+├── App.tsx                  Route table, auth guards, shared case types
+├── main.tsx                 Entry point
+├── config.ts                API_BASE, auth headers, 401 interceptor, authed download
+├── components/
+│   ├── batch/               BatchScanPage, BatchDetailPage, fleet summary, job rows, progress hook
+│   ├── discovery/           UrlDiscoveryArea
+│   ├── investigation/       Verdict, findings registry, evidence drawers, score ledger,
+│   │   │                    screenshots, VIDE panels, attack story, MITRE matrix, notes
+│   │   └── scoreInfluence/  Per-axis influence detail views
+│   ├── layout/              AppShell, AppHeader, AppSidebar
+│   ├── motion/              Reduced-motion-aware animation primitives
+│   ├── threatIntel/         Intel overview, attribution, IOC registry, similarity, sources
+│   ├── ui/                  Badge, Card, DrawerShell, EvidenceSection, primitives
+│   └── upload/              Drop zone, pipeline stepper, stage definitions
+├── context/                 AuthContext, AnalysisContext, InvestigationUIContext
+├── hooks/                   useInvestigationModel, useIntelPayload, useResilience,
+│                            useRuntimeScreenshots, useCaseLinks, useDialogBehavior, useReducedMotion
+├── layout/navItems.ts       Workspace navigation
+├── lib/                     View models, evidence mappers, routing and copy helpers
+├── pages/                   Login, Upload, FraudCard, TechnicalView, ThreatIntelView,
+│                            History, InvestigationChat, BatchScan, BatchDetail
+├── theme/                   colors, severity, riskTone, typography
+├── types/                   batch, investigation
+└── utils/derive.ts
+```
+
+Routes and their components: [`../frontend/README.md`](../frontend/README.md).
+
+---
+
+## 5. Tests
+
+| Path | Modules | Collected |
+| :--- | ---: | ---: |
+| `tests/unit/` | 88 | 1,813 |
+| `tests/integration/` | 2 | 12 |
+| `backend/tests/` | 61 (including fixture helpers) | 797 |
+
+**2,622 collected** on 2026-08-27, no collection errors. Inventory: [`../tests/README.md`](../tests/README.md).
+
+---
+
+## 6. Where to look first
+
+| Question | Start at |
+| :--- | :--- |
+| Why did this sample get this score? | `shared/sudarshan_core/engines/risk_engine.py` |
+| Why was the dynamic axis excluded? | `risk_engine.dynamic_exclusion_reason`, `engines/execution_assertions.py` |
+| Why did the sandbox stop where it did? | `engines/dae_pipeline.py` transitions, `GET /api/runtime/pipeline` |
+| Why did the explorer take that action? | `engines/agentic/planner.py`, `action_verifier.py`, `agent_memory.py` |
+| Why was this flagged as an impersonation? | `engines/vide/corpus_compare.py`, `forensics.py` |
+| Why is there no threat-intel data? | `services/threat_correlator.py`, and whether the API keys are set |
+| Why did the model not answer? | `ai/gemini_provider.py` circuit state, `GET /api/runtime/status` |
+| Where is this route defined? | [`api/ENDPOINTS.md`](api/ENDPOINTS.md), then the named router |

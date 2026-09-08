@@ -1,4 +1,8 @@
-# Sudarshan Prototype Progress & Engineering Benchmark Report
+# Prototype report sources
+
+LaTeX and Word sources for the Sudarshan prototype progress and engineering benchmark report.
+
+> **Point-in-time artifact.** The report was written against commit `ec7e6ff` and the corpus record at commit `ce30610`. It is not maintained against later changes to the platform. For the current state see [`../README.md`](../README.md), [`../FEATURE_STATUS.md`](../FEATURE_STATUS.md) and [`../KNOWN_LIMITATIONS.md`](../KNOWN_LIMITATIONS.md).
 
 Two renditions of the same report, one per supplied IEEE template:
 

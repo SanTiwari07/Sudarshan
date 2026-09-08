@@ -1,0 +1,108 @@
+.amount-screen {
+  background-color: var(--color-background);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.amount-content {
+  flex: 1;
+  padding: 24px 20px;
+}
+
+.payee-summary {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.payee-summary p {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  margin: 0 0 8px;
+}
+
+.payee-summary h3 {
+  font-size: 20px;
+  color: var(--color-text-primary);
+  margin: 0 0 4px;
+}
+
+.payee-summary span {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  padding: 4px 12px;
+  border-radius: 12px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.amount-input-section {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 40px;
+}
+
+.currency-symbol {
+  color: var(--color-text-primary);
+}
+
+.amount-input {
+  border: none;
+  background: none;
+  font-size: 48px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  width: 150px;
+  text-align: left;
+  outline: none;
+}
+
+.amount-input::placeholder {
+  color: var(--color-divider);
+}
+
+.account-selection {
+  margin-bottom: 24px;
+}
+
+.account-selection p {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  margin: 0 0 8px;
+}
+
+.account-card-small {
+  background: var(--color-surface);
+  padding: 16px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--color-divider);
+}
+
+.account-card-small h4 {
+  font-size: 14px;
+  color: var(--color-text-primary);
+  margin: 0 0 4px;
+}
+
+.account-card-small p {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.remarks-input input {
+  width: 100%;
+  padding: 16px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--color-divider);
+  background: var(--color-surface);
+  font-size: 14px;
+  outline: none;
+}
+
+.bottom-action {
+  padding: 20px;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-divider);
+}

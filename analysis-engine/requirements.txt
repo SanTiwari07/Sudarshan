@@ -6,6 +6,27 @@ httpx>=0.26.0
 androguard>=4.1.1
 frida==17.16.4
 frida-tools==14.10.4
+# ── Persistent device channel ─────────────────────────────────────────────────
+# uiautomator2 runs a UI server ON the device and holds one connection for the
+# whole session. Without it every device interaction is a `subprocess.run([adb,
+# ...])`: a process spawn plus a TCP connection to the ADB server (which under
+# Docker lives on the host). One perception cycle costs six of those and one
+# explorer action ten to fifteen.
+#
+# Measured before this dependency existed: 5 actions in 611 seconds against a
+# 300-second budget - about two minutes per click - with coverage_percent 0 and
+# 1 of 2 forms completed. The explorer was not choosing badly; it never got to
+# choose more than five times.
+#
+# It is also a correctness dependency, not only a speed one. `input text` types
+# into whatever holds focus, and a real run recorded generated credentials typed
+# into com.google.android.apps.nexuslauncher because the app had moved to the
+# background. uiautomator2's set_text targets the node.
+#
+# Optional at runtime: sandbox/device_channel.py degrades to the ADB path when
+# this is absent, so a missing wheel makes runs slow, never broken.
+uiautomator2==3.7.0
+
 requests>=2.31.0
 
 # ── Required by sudarshan_core ────────────────────────────────────────────────

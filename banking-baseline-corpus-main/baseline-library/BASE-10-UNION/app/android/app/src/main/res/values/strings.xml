@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">UNION</string>
+    <string name="title_activity_main">UNION</string>
+    <string name="package_name">com.union.vyom</string>
+    <string name="custom_url_scheme">com.union.vyom</string>
+</resources>

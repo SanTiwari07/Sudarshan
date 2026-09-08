@@ -10,8 +10,11 @@ No planner performs ADB. Semantic roles are metadata, never executor verbs.
 from __future__ import annotations
 
 import logging
+import os
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -40,7 +43,103 @@ PLANNER_NON_INTERACTIVE = frozenset({
     "",
 })
 
-MAX_EXECUTION_ATTEMPTS: int = 3
+#: Confidence a planner must express before its `field_hint` may replace one
+#: the graph could not resolve. High on purpose: the graph's hint is wrong here
+#: by admission (UNKNOWN), but a hesitant model guess is not obviously better,
+#: and a wrong hint types the wrong value into a real form.
+PLANNER_FIELD_HINT_MIN_CONFIDENCE: float = 0.75
+
+#: Rungs of the deterministic action ladder that may be spent on ONE semantic
+#: action before it is given up on.
+#:
+#: The ladder is longer than it used to be (three rungs: click_text, tap, tap)
+#: because the three it had all failed the same way - they all resolved the
+#: element by the same means. A control that cannot be found by text is not
+#: found by tapping the coordinates text lookup produced either. The rungs
+#: below are ordered by how much they trust, from the most specific identity
+#: the hierarchy offers down to a blind geometric guess.
+#:
+#: The number stays SMALL on purpose. Each rung costs a dispatch plus a
+#: verification round-trip - measured at ~7s - so a generous ladder multiplied
+#: across a form is how a run spends its whole window on one screen. Six rungs
+#: is the whole ladder; MAX_EXECUTION_ATTEMPTS is what any single action may
+#: actually spend, and the per-action time budget cuts it shorter still.
+MAX_EXECUTION_ATTEMPTS: int = int(
+    os.getenv("SUDARSHAN_MAX_ACTION_LADDER_ATTEMPTS", "5")
+)
+
+#: Wall-clock an action may spend across its whole ladder. Consulted against
+#: the ONE global deadline, never against a clock of its own (§P25).
+MAX_ACTION_SECONDS: float = float(
+    os.getenv("SUDARSHAN_MAX_ACTION_SECONDS", "15")
+)
+
+#: How far a re-aimed tap moves when the original coordinate appears to be
+#: obstructed. A control that did not respond may be underneath a banner, a
+#: snackbar or a transparent scrim; nudging inside the same bounds is the
+#: cheapest way to find out. Sized as a fraction of the element's own height so
+#: it stays inside a small control and does not leave a large one.
+OBSTRUCTED_TAP_OFFSET_FRACTION: float = 0.3
+
+
+class ActionStrategy(str, Enum):
+    """
+    One rung of the deterministic action ladder.
+
+    Ordered most-specific-identity first. Recorded on every trace so a failure
+    report can say WHICH resolutions were tried, rather than "3 attempts".
+    """
+
+    #: The element's own resource-id. The strongest identity Android offers and
+    #: the only one that survives a re-layout.
+    RESOURCE_ID = "resource_id"
+    #: The accessibility/uiautomator node, addressed by its parsed node id.
+    NODE = "uiautomator_node"
+    #: Visible text or content-description lookup in a fresh hierarchy dump.
+    TEXT = "text_or_content_desc"
+    #: The centre of the bounds the observation reported for this element.
+    BOUNDS_CENTER = "bounds_center"
+    #: Normalised (fraction-of-screen) coordinates mapped onto the live device
+    #: resolution. Survives a device whose screenshot and `wm size` differ.
+    NORMALIZED_COORDS = "normalized_coordinates"
+    #: A coordinate derived from the screenshot by the visual grounder.
+    VISION = "vision_coordinate"
+    #: The same element, aimed slightly off-centre, on the theory that the
+    #: original point is obstructed.
+    NEARBY_COORD = "nearby_coordinate"
+    #: Give up on resolution; re-read the screen and let selection choose again.
+    REPERCEIVE = "reperceive"
+
+
+#: The ladder, in order. `retry_payload` walks this list and skips any rung it
+#: has no data for, so an action with only text does not burn attempts on
+#: resource-id and node rungs that could never be built.
+#:
+#: The ordering is not "most reliable first", it is "most likely to be NEW
+#: first", and the difference matters because of what attempt 1 already was.
+#: The first dispatch of a labelled control is `click_text` (see
+#: ExecutableAction.to_executor_payload), which dumps the hierarchy and matches
+#: on text. So:
+#:
+#:   * RESOURCE_ID and NODE come first - they are strictly more specific than
+#:     the text match that just failed, and they survive a re-layout;
+#:   * the geometry rungs come next, because they are a genuinely different
+#:     hypothesis from the text lookup;
+#:   * TEXT sits AFTER them. Putting it first made the first escalation repeat
+#:     attempt 1 exactly, which is the defect the whole ladder exists to fix -
+#:     it is retained because a fresh dump can find a control that was mid
+#:     transition a moment ago, but it is not the first thing to try;
+#:   * VISION and the obstructed nudge are last: both are guesses, and a guess
+#:     that taps the wrong control is worse than an attempt that fails cleanly.
+ACTION_LADDER: Tuple[str, ...] = (
+    ActionStrategy.RESOURCE_ID.value,
+    ActionStrategy.NODE.value,
+    ActionStrategy.BOUNDS_CENTER.value,
+    ActionStrategy.NORMALIZED_COORDS.value,
+    ActionStrategy.TEXT.value,
+    ActionStrategy.VISION.value,
+    ActionStrategy.NEARBY_COORD.value,
+)
 
 
 @dataclass
@@ -330,6 +429,29 @@ def select_canonical_action(
         if gtool in ("click_text", "tap", "tap_sequence", "type_text", "check"):
             chosen = dict(graph_action)
             chosen["_selected_by"] = "exploration_graph"
+            # One narrow exception: the graph knows WHERE to type, the planner
+            # may know WHAT. When the graph could not name the field - an
+            # unlabelled WebView box that fell through to the positional guess
+            # - a confident planner hint replaces the hint ONLY. The
+            # coordinates, action id and state id stay the graph's, because
+            # those are what record_action resolves against and what keeps
+            # coverage bookkeeping honest.
+            #
+            # Without this the graph's type_text won unconditionally and the
+            # model had no way to correct a field it could see was an email
+            # box, so every unnamed field on a form received the same generic
+            # value and the form could never be submitted.
+            if (
+                gtool == "type_text"
+                and str(graph_action.get("field_type", "")) in ("", "UNKNOWN")
+                and ptool == "type_text"
+                and planner_action
+                and planner_action.get("field_hint")
+                and float(planner_action.get("confidence") or 0.0)
+                >= PLANNER_FIELD_HINT_MIN_CONFIDENCE
+            ):
+                chosen["field_hint"] = planner_action["field_hint"]
+                chosen["_field_hint_source"] = "planner"
             return chosen, "exploration_graph"
         if ptool in PLANNER_NON_INTERACTIVE or planner_action is None:
             chosen = dict(graph_action)
@@ -382,91 +504,303 @@ class ActionDispatcher:
         self.traces.append(trace)
         return trace
 
-    def retry_payload(self, action: Dict[str, Any], attempt: int) -> Optional[Dict[str, Any]]:
+    def retry_payload(
+        self,
+        action: Dict[str, Any],
+        attempt: int,
+        *,
+        tried: Optional[List[str]] = None,
+        remaining_seconds: Optional[float] = None,
+    ) -> Optional[Dict[str, Any]]:
         """
-        Bounded retry ladder:
-          1. structured click_text (already attempted)
-          2. geometry / clickable-parent tap  (if x, y present)
-             OR text-only semantic retry      (if only text present)
-          3. visual-grounded coordinate tap   (if x, y present)
+        The next rung of the deterministic action ladder, or None when spent.
 
-        Previously returned None immediately when x/y were missing, silently
-        abandoning any action that had text but no computed coordinates.  Now
-        a text-only semantic retry is attempted as step 2 so that discoverd
-        UI elements that were not assigned coordinates during inventory building
-        still get a second attempt via the XML text matcher.
+        The ladder, ordered most-likely-to-be-NEW first (see ACTION_LADDER for
+        why that is not the same as most-reliable-first):
+
+          1. ``resource_id``            - the element's own id
+          2. ``uiautomator_node``       - the parsed accessibility node
+          3. ``bounds_center``          - centre of the reported bounds
+          4. ``normalized_coordinates`` - fraction-of-screen, re-mapped live
+          5. ``text_or_content_desc``   - text / content-description lookup
+          6. ``vision_coordinate``      - the visual grounder's point
+          7. ``nearby_coordinate``      - the same control, aimed off-centre
+
+        Rungs the action has no data for are SKIPPED rather than spent, so an
+        element with only text does not burn its whole budget on resource-id
+        and node rungs that could never have been built. That is the difference
+        between "five attempts" and "five DIFFERENT attempts", and the old
+        three-rung ladder failed the same way three times: it resolved the
+        element by text, then tapped the coordinates the text lookup produced,
+        then tapped them again.
+
+        Every rung is built from the ORIGINAL action, never from the previous
+        rung's payload: rung 1 rewrites ``text`` to the resource-id so the
+        executor matches on it, and building rung 3 on top of that would make
+        the "resolve by visible text" rung a second resource-id lookup. The
+        caller therefore passes the same `action` each time and carries the
+        `tried` list forward, which is the only state the ladder has.
+
+        `remaining_seconds` is the ONE global deadline's answer, passed in
+        rather than read here so this function stays pure and testable. A rung
+        that cannot finish inside the remaining budget is not started - see
+        MAX_ACTION_SECONDS.
+
+        Returns None when the ladder is exhausted, the budget is spent, or the
+        action carries nothing further to try. None means "this action failed",
+        which is an ACTION outcome; it is never by itself a goal outcome and
+        never a run outcome (§P18).
         """
         if attempt >= MAX_EXECUTION_ATTEMPTS:
             return None
-        x, y = action.get("x"), action.get("y")
-        text = (action.get("text") or "").strip()
+        # A rung costs roughly one dispatch plus one verification round-trip.
+        # Refusing to start one that cannot complete is what stops a run
+        # dribbling past its deadline one retry at a time.
+        if remaining_seconds is not None and remaining_seconds < _RUNG_COST_SECONDS:
+            logger.debug(
+                "[ActionDispatcher] LADDER_STOPPED_FOR_TIME action_id=%s "
+                "remaining=%.1fs",
+                action.get("_action_id"), remaining_seconds,
+            )
+            return None
 
-        retry = dict(action)
-        retry["_retry_attempt"] = attempt + 1
-        source = str(action.get("_detection_source") or "")
+        tried: List[str] = list(
+            tried if tried is not None else (action.get("_strategies_tried") or [])
+        )
         # Attempt 1 may have tapped the graph's coordinates without consulting
         # the hierarchy. If it did not land, those coordinates are exactly what
-        # is in doubt, so every escalation re-resolves the element by text.
+        # is in doubt, so the geometry rungs are marked spent and every
+        # escalation re-resolves the element from the hierarchy first.
         geometry_was_trusted = bool(action.pop("_geometry_trusted", False))
-        retry.pop("_geometry_trusted", None)
+        if geometry_was_trusted:
+            for spent in (
+                ActionStrategy.BOUNDS_CENTER.value,
+                ActionStrategy.NORMALIZED_COORDS.value,
+            ):
+                if spent not in tried:
+                    tried.append(spent)
 
-        if geometry_was_trusted and text:
-            retry["tool"] = "click_text"
-            retry["reasoning"] = (
-                f"Retry {attempt + 1}: geometry tap did not land - "
-                f"re-resolving '{text}' from the hierarchy"
-            )
-            retry["_pipeline_debug"] = {
+        for strategy in ACTION_LADDER:
+            if strategy in tried:
+                continue
+            payload = self._payload_for_strategy(action, strategy, attempt)
+            if payload is None:
+                # No data for this rung. Mark it spent so the next call does
+                # not re-consider it, but do NOT count it as an attempt.
+                tried.append(strategy)
+                continue
+            payload["_strategies_tried"] = tried + [strategy]
+            payload["_action_strategy"] = strategy
+            payload["_retry_attempt"] = attempt + 1
+            payload.pop("_geometry_trusted", None)
+            payload["_pipeline_debug"] = {
                 **(action.get("_pipeline_debug") or {}),
-                "retry_strategy": "text_after_geometry",
+                "retry_strategy": strategy,
                 "retry_attempt": attempt + 1,
-            }
-            return retry
-
-        if x is not None and y is not None:
-            # Coordinate-based retry ladder (original behaviour).
-            retry["tool"] = "tap"
-            if attempt == 1:
-                retry["reasoning"] = f"Retry 2: resolved geometry tap @({x},{y})"
-                retry["_pipeline_debug"] = {
-                    **(action.get("_pipeline_debug") or {}),
-                    "retry_strategy": "clickable_parent_or_geometry",
-                    "retry_attempt": 2,
-                }
-            else:
-                retry["reasoning"] = f"Retry 3: visual/current-screen tap @({x},{y})"
-                retry["_pipeline_debug"] = {
-                    **(action.get("_pipeline_debug") or {}),
-                    "retry_strategy": "visual_grounding_tap",
-                    "retry_attempt": 3,
-                }
-                if source:
-                    retry["_detection_source"] = source
-            return retry
-
-        if text:
-            # No coordinates available — fall back to a semantic text retry.
-            # click_text uses XML text/content-desc matching, so it does not
-            # require pre-computed coordinates and may succeed where a raw tap
-            # could not.
-            retry["tool"] = "click_text"
-            retry["reasoning"] = f"Retry {attempt + 1}: semantic text retry for '{text}' (no coords)"
-            retry["_pipeline_debug"] = {
-                **(action.get("_pipeline_debug") or {}),
-                "retry_strategy": "text_semantic_retry",
-                "retry_attempt": attempt + 1,
+                "strategies_tried": tried + [strategy],
             }
             logger.debug(
-                "[ActionDispatcher] retry_payload: no coordinates, "
-                "semantic text retry for '%s' (attempt %d)",
-                text, attempt + 1,
+                "[ActionDispatcher] LADDER attempt=%d strategy=%s action_id=%s",
+                attempt + 1, strategy, action.get("_action_id"),
+            )
+            return payload
+
+        logger.debug(
+            "[ActionDispatcher] LADDER_EXHAUSTED action_id=%s tried=%s",
+            action.get("_action_id"), tried,
+        )
+        return None
+
+    # -- Ladder rungs --------------------------------------------------------
+    #
+    # Each returns a payload or None. None means "this action carries no data
+    # for this rung", never "this rung failed" - failure is decided by the
+    # verifier, from device state, after the payload has been dispatched.
+
+    @staticmethod
+    def _payload_for_strategy(
+        action: Dict[str, Any], strategy: str, attempt: int
+    ) -> Optional[Dict[str, Any]]:
+        text = (action.get("text") or "").strip()
+        resource_id = str(action.get("resource_id") or "").strip()
+        node_id = str(action.get("node_id") or "").strip()
+        content_desc = str(action.get("content_desc") or "").strip()
+        bounds = str(action.get("_bounds") or action.get("bounds") or "").strip()
+        x, y = action.get("x"), action.get("y")
+
+        retry = dict(action)
+
+        if strategy == ActionStrategy.RESOURCE_ID.value:
+            if not resource_id:
+                return None
+            retry["tool"] = "click_text"
+            # `text` is what click_text matches on, and its third pattern is a
+            # resource-id lookup. Handing it the id makes the id the thing that
+            # is matched, which is the strongest identity available.
+            retry["text"] = resource_id
+            retry["resource_id"] = resource_id
+            retry["reasoning"] = (
+                f"Retry {attempt + 1}: resolving by resource-id {resource_id!r}"
             )
             return retry
 
-        # Neither coordinates nor text — truly no retry possible.
-        logger.debug(
-            "[ActionDispatcher] RETRY_UNAVAILABLE: "
-            "no x/y and no text for action_id=%s",
-            action.get("_action_id"),
-        )
+        if strategy == ActionStrategy.NODE.value:
+            if not node_id:
+                return None
+            retry["tool"] = "click_node"
+            retry["node_id"] = node_id
+            retry["reasoning"] = (
+                f"Retry {attempt + 1}: resolving accessibility node {node_id!r}"
+            )
+            return retry
+
+        if strategy == ActionStrategy.TEXT.value:
+            target = text or content_desc
+            if not target:
+                return None
+            retry["tool"] = "click_text"
+            retry["text"] = target
+            retry["reasoning"] = (
+                f"Retry {attempt + 1}: re-resolving {target!r} from a fresh "
+                f"hierarchy dump"
+            )
+            return retry
+
+        if strategy == ActionStrategy.BOUNDS_CENTER.value:
+            centre = _bounds_center(bounds)
+            if centre is None:
+                return None
+            cx, cy = centre
+            retry["tool"] = "tap"
+            retry["x"], retry["y"] = cx, cy
+            retry["reasoning"] = (
+                f"Retry {attempt + 1}: centre of reported bounds {bounds} "
+                f"@({cx},{cy})"
+            )
+            return retry
+
+        if strategy == ActionStrategy.NORMALIZED_COORDS.value:
+            if x is None or y is None:
+                return None
+            try:
+                ix, iy = int(x), int(y)
+            except (TypeError, ValueError):
+                return None
+            retry["tool"] = "tap"
+            retry["x"], retry["y"] = ix, iy
+            # The executor re-maps against the LIVE `wm size`, so this rung is
+            # what recovers an element whose coordinates were computed against
+            # a screenshot of a different resolution.
+            retry["_normalize_to_device"] = True
+            retry["reasoning"] = (
+                f"Retry {attempt + 1}: normalised coordinate tap @({ix},{iy})"
+            )
+            return retry
+
+        if strategy == ActionStrategy.VISION.value:
+            vx, vy = action.get("_vision_x"), action.get("_vision_y")
+            if vx is None or vy is None:
+                return None
+            try:
+                retry["x"], retry["y"] = int(vx), int(vy)
+            except (TypeError, ValueError):
+                return None
+            retry["tool"] = "tap"
+            retry["_detection_source"] = "visual_grounding"
+            retry["reasoning"] = (
+                f"Retry {attempt + 1}: screenshot-derived coordinate "
+                f"@({retry['x']},{retry['y']})"
+            )
+            return retry
+
+        if strategy == ActionStrategy.NEARBY_COORD.value:
+            nearby = _obstructed_alternate(bounds, x, y)
+            if nearby is None:
+                return None
+            nx, ny = nearby
+            retry["tool"] = "tap"
+            retry["x"], retry["y"] = nx, ny
+            retry["reasoning"] = (
+                f"Retry {attempt + 1}: original point appears obstructed - "
+                f"re-aimed inside the same control @({nx},{ny})"
+            )
+            return retry
+
         return None
+
+
+#: Rough cost of one ladder rung: dispatch plus the verification round-trip
+#: that follows it. Measured at ~7s on the reference emulator; used only to
+#: decline a rung that cannot finish before the global deadline.
+_RUNG_COST_SECONDS: float = float(
+    os.getenv("SUDARSHAN_ACTION_RUNG_COST_SECONDS", "7")
+)
+
+
+def _parse_bounds(bounds: str) -> Optional[Tuple[int, int, int, int]]:
+    """`[x1,y1][x2,y2]` -> the four ints, or None when unparseable."""
+    match = re.match(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", bounds or "")
+    if not match:
+        return None
+    x1, y1, x2, y2 = (int(g) for g in match.groups())
+    if x2 <= x1 or y2 <= y1:
+        return None
+    return x1, y1, x2, y2
+
+
+def _bounds_center(bounds: str) -> Optional[Tuple[int, int]]:
+    """
+    The centre of an element's reported bounds.
+
+    Deliberately a separate rung from the action's own x/y. Those two are
+    usually the same point but not always: a container whose clickable child
+    sits at one end has a centre that misses the child, and the inventory's x/y
+    may have been resolved against the child instead. Trying both is trying two
+    different hypotheses, not the same one twice.
+    """
+    parsed = _parse_bounds(bounds)
+    if parsed is None:
+        return None
+    x1, y1, x2, y2 = parsed
+    return (x1 + x2) // 2, (y1 + y2) // 2
+
+
+def _obstructed_alternate(
+    bounds: str, x: Any, y: Any
+) -> Optional[Tuple[int, int]]:
+    """
+    A second point inside the same control, for when the first is obstructed.
+
+    A tap that reports success and changes nothing is most often a tap that
+    landed on something else: a snackbar, a scrim, a banner that was still
+    animating in. Re-aiming inside the element's own bounds - never outside
+    them - is the cheapest way to distinguish "the control is inert" from
+    "something was on top of it".
+
+    Returns None when there are no bounds to stay inside, because a blind
+    offset from a bare coordinate could land on an unrelated control, and
+    tapping an unrelated control is worse than not retrying.
+    """
+    parsed = _parse_bounds(bounds)
+    if parsed is None:
+        return None
+    x1, y1, x2, y2 = parsed
+    height = y2 - y1
+    offset = max(1, int(height * OBSTRUCTED_TAP_OFFSET_FRACTION))
+
+    try:
+        base_x = int(x) if x is not None else (x1 + x2) // 2
+        base_y = int(y) if y is not None else (y1 + y2) // 2
+    except (TypeError, ValueError):
+        base_x, base_y = (x1 + x2) // 2, (y1 + y2) // 2
+
+    # Aim lower first - a banner or system bar obstructs from above far more
+    # often than from below - and fall back to higher when there is no room.
+    candidate_y = base_y + offset
+    if candidate_y >= y2:
+        candidate_y = base_y - offset
+    if candidate_y <= y1 or candidate_y >= y2:
+        return None
+    if candidate_y == base_y:
+        return None
+    return max(x1 + 1, min(base_x, x2 - 1)), candidate_y

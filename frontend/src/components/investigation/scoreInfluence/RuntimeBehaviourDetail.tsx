@@ -23,7 +23,7 @@ export default function RuntimeBehaviourDetail({
             view.includedInFrs ? 'border-emerald-200 bg-emerald-50/50' : 'border-amber-200 bg-amber-50/40'
           }`}
         >
-          <div className="text-lg font-black tracking-wide text-slate-900">{view.statusHeadline}</div>
+          <div className="text-lg font-semibold tracking-wide text-slate-900">{view.statusHeadline}</div>
           {view.observedScore != null && (
             <p className="text-sm mt-2">
               Observed runtime score:{' '}
@@ -49,7 +49,7 @@ export default function RuntimeBehaviourDetail({
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
             {(view.telemetry as any[]).map((t: any) => (
               <div key={t.label} className="rounded-lg border border-slate-200 bg-slate-50/80 p-2.5">
-                <dt className="text-[10px] font-bold uppercase text-slate-500">{t.label}</dt>
+                <dt className="text-[12px] font-bold uppercase text-slate-500">{t.label}</dt>
                 <dd className="font-mono font-semibold text-slate-900 mt-0.5">{t.value}</dd>
               </div>
             ))}

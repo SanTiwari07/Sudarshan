@@ -2,15 +2,15 @@
 
 ## Purpose
 
-This document outlines the evaluation methodology, verification protocols, test suite architecture, and audit scorecards for the **SUDARSHAN** platform. It documents how the system asserts mathematical determinism, prompt injection resilience, pipeline robustness, and accuracy across **920 automated unit, integration, and replay tests** (measured 2026-08-16; 525 of them enforced by CI).
+This document outlines the evaluation methodology, verification protocols, test suite architecture, and audit scorecards for the **SUDARSHAN** platform. It documents how the system asserts mathematical determinism, prompt injection resilience, pipeline robustness, and accuracy across **2,622 automated unit, integration and replay tests** (measured 2026-08-27). There is no CI workflow in this repository, so the suite is developer-run.
 
 ---
 
 ## Responsibilities
 
 The evaluation framework is responsible for:
-1. **Determinism Verification**: Running baseline replay tests ([`test_determinism_replay.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_determinism_replay.py)) against pinned benchmark cases ([`determinism_baseline.json`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/determinism_baseline.json)) to guarantee 100% score reproducibility.
-2. **Security & Prompt Injection Audit**: Executing dedicated unit tests ([`test_prompt_injection.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_prompt_injection.py)) against [`sanitizer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/agentic/sanitizer.py) to assert resilience against LLM prompt overrides.
+1. **Determinism Verification**: Running baseline replay tests ([`test_determinism_replay.py`](../../backend/tests/test_determinism_replay.py)) against pinned benchmark cases ([`determinism_baseline.json`](../../backend/tests/determinism_baseline.json)) to guarantee 100% score reproducibility.
+2. **Security & Prompt Injection Audit**: Executing dedicated unit tests ([`test_prompt_injection.py`](../../backend/tests/test_prompt_injection.py)) against [`sanitizer.py`](../../shared/sudarshan_core/engines/agentic/sanitizer.py) to assert resilience against LLM prompt overrides.
 3. **Pipeline End-to-End Testing**: Testing FastAPI routes, MobSF fallback mechanics, Frida sandbox status checks, RAG indexing, and export endpoints.
 4. **Audit Scorecard Management**: Providing evaluation rubrics for judges, security researchers, and Bank of India engineers.
 
@@ -18,7 +18,7 @@ The evaluation framework is responsible for:
 
 ## High-Level Overview
 
-Sudarshan enforces a rigorous quality gate prior to deployment. The automated test suite consists of **920 collected pytest test cases** (measured 2026-08-16; only 525 are enforced by CI) located in [`tests/`](file:///d:/Projects/Sudarshan%20BOI/tests/) and [`backend/tests/`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/).
+Sudarshan enforces a rigorous quality gate prior to deployment. The automated test suite consists of **2,622 collected pytest test cases** (measured 2026-08-27, no collection errors) located in [`tests/`](../../tests/) and [`backend/tests/`](../../backend/tests/): 1,813 in `tests/unit`, 12 in `tests/integration` and 797 in `backend/tests`.
 
 ```text
 [ Test Suite Execution (pytest) ]
@@ -74,19 +74,19 @@ graph TD
 
 ## Components
 
-Test suite modules in [`backend/tests/`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/):
+Test suite modules in [`backend/tests/`](../../backend/tests/):
 
 | Test File | Focus & Responsibilities |
 | :--- | :--- |
-| [`test_determinism_replay.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_determinism_replay.py) | Replay testing against `determinism_baseline.json` to verify 100% mathematical score reproducibility. |
-| [`test_prompt_injection.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_prompt_injection.py) | Prompt injection resilience testing verifying sanitization against malicious prompt payloads. |
-| [`test_risk_engine.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_risk_engine.py) | Unit testing 5-axis STEI, BFCI weighting, full FRS, and static fallback formula boundary conditions. |
-| [`test_bfci_scorer.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_bfci_scorer.py) | Logarithmic volume scoring and 30s sequence bonus unit tests. |
-| [`test_workflow_reconstructor.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_workflow_reconstructor.py) | Causal temporal chain workflow reconstruction tests. |
-| [`test_agentic_explorer.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_agentic_explorer.py) | Agentic UI explorer DAG, goal tracking, and perception pipeline tests. |
-| [`test_remaining_features.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_remaining_features.py) | Manifest generation, APKTool, JADX, and mitmproxy HAR ingest tests. |
-| [`test_detection_regressions.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_detection_regressions.py) | Detection regression assertions across malware patterns. |
-| [`test_frida_preflight.py`](file:///d:/Projects/Sudarshan%20BOI/backend/tests/test_frida_preflight.py) | Frida attach SELinux preflight execution verification. |
+| [`test_determinism_replay.py`](../../backend/tests/test_determinism_replay.py) | Replay testing against `determinism_baseline.json` to verify 100% mathematical score reproducibility. |
+| [`test_prompt_injection.py`](../../backend/tests/test_prompt_injection.py) | Prompt injection resilience testing verifying sanitization against malicious prompt payloads. |
+| [`test_risk_engine.py`](../../backend/tests/test_risk_engine.py) | Unit testing 5-axis STEI, BFCI weighting, full FRS, and static fallback formula boundary conditions. |
+| [`test_bfci_scorer.py`](../../backend/tests/test_bfci_scorer.py) | Logarithmic volume scoring and 30s sequence bonus unit tests. |
+| [`test_workflow_reconstructor.py`](../../backend/tests/test_workflow_reconstructor.py) | Causal temporal chain workflow reconstruction tests. |
+| [`test_agentic_explorer.py`](../../backend/tests/test_agentic_explorer.py) | Agentic UI explorer DAG, goal tracking, and perception pipeline tests. |
+| [`test_remaining_features.py`](../../backend/tests/test_remaining_features.py) | Manifest generation, APKTool, JADX, and mitmproxy HAR ingest tests. |
+| [`test_detection_regressions.py`](../../backend/tests/test_detection_regressions.py) | Detection regression assertions across malware patterns. |
+| [`test_frida_preflight.py`](../../backend/tests/test_frida_preflight.py) | Frida attach SELinux preflight execution verification. |
 
 ---
 
@@ -174,13 +174,13 @@ backend/
 │   └── test_remaining_features.py     # Manifest, APKTool, JADX & HAR tests
 ```
 
-Live sandbox corpus runs (not part of default `pytest` collection): see [`VALIDATION.md`](../VALIDATION.md) and [`validate_dynamic_pipeline.py`](file:///d:/Projects/Sudarshan%20BOI/validate_dynamic_pipeline.py).
+Live sandbox corpus runs (not part of default `pytest` collection): see [`VALIDATION.md`](../VALIDATION.md) and [`validate_dynamic_pipeline.py`](../../validate_dynamic_pipeline.py).
 
 ---
 
 ## API Reference
 
-Run the automated test suite locally (**920 tests collected**; CI runs only the 525 under `backend/tests/`):
+Run the automated test suite locally (**2,622 tests collected**, 2026-08-27). Nothing runs it for you - the repository has no CI workflow:
 
 ```powershell
 $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytest"; backend\.venv\Scripts\python.exe -m pytest tests/ backend/tests
@@ -197,7 +197,7 @@ $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytes
 
 | Evaluation Category | Status | Details |
 | :--- | :--- | :--- |
-| **Total Test Suite** | **Implemented** | **920** pytest cases across `tests/` and `backend/tests/`. **525 are enforced by CI** - `ci.yml` runs pytest with `working-directory: backend`, so `tests/unit/` and `tests/integration/` (including every `test_vide_*.py`) are collected locally but never gated. One collection error: `test_pdf_generator.py` requires `pypdf`, which is not a declared dependency. |
+| **Total Test Suite** | **Implemented** | **2,622** pytest cases across `tests/` and `backend/tests/`, measured 2026-08-27 with no collection errors. **Nothing enforces them automatically** - there is no `.github/` directory and no CI workflow. The only git-side gate is `.githooks/pre-push`, which checks commit attribution, not tests. |
 | **Sandbox Containment Tests** | **Implemented** | `tests/unit/test_sandbox_containment.py`, `test_adb_policy_bypass.py`, `test_blocker_fixes.py`; `backend/tests/test_gateway_dynamic_blocker.py`. |
 | **Determinism Baselines** | **Implemented** | Pinned benchmark cases passing in `test_determinism_replay.py`. |
 | **Sanitizer Tests** | **Implemented** | Prompt injection tests passing in `test_prompt_injection.py`. |

@@ -14,7 +14,7 @@ export default function ExplainFindingButton({
   return (
     <button
       type="button"
-      className={`inline-flex shrink-0 rounded-full p-0.5 text-slate-400 hover:text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 ${className}`}
+      className={`inline-flex shrink-0 rounded-full p-0.5 text-slate-500 hover:text-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 ${className}`}
       aria-label="Explain this finding"
       title="Explain this finding"
       onClick={(e) => {

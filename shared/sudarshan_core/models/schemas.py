@@ -86,6 +86,14 @@ class FRSBreakdown(BaseModel):
     # STEI axis breakdown (PDF 5-axis formula)
     stei_axes: Dict[str, float] = Field(default_factory=dict)
 
+    # Which STEI axes carried no evidence because the payload is concealed, and
+    # the renormalised weights the remaining axes were scored at. The engine has
+    # always computed both; undeclared here, response_model dropped them, so the
+    # score ledger had to assume the nominal weights and mis-stated every
+    # per-axis contribution for a concealed sample.
+    stei_axes_excluded: List[str] = Field(default_factory=list)
+    stei_weights_used: Dict[str, float] = Field(default_factory=dict)
+
     # Scoring provenance. FastAPI's response_model silently drops any key not
     # declared here, so omitting these made the API report `null` for fields the
     # engine had actually computed - the analyst could not see WHY a verdict was
@@ -102,6 +110,25 @@ class FRSBreakdown(BaseModel):
     # observed real behaviour" - only the latter is scored.
     dynamic_ran: bool = False
     dynamic_conclusive: bool = False
+
+    # Coverage and validity, which are DIFFERENT questions and were previously
+    # collapsed into `dynamic_conclusive` alone. `dynamic_conclusive` still
+    # decides whether the axis is scored; these say what kind of run produced
+    # that score, so the UI stops rendering "9 of 15 goals, 47 events observed"
+    # and "we never got to look" as the same word.
+    #
+    # dynamic_status:   COMPLETE / PARTIAL / NO_BEHAVIOR_OBSERVED /
+    #                   INSTRUMENTATION_FAILED / SKIPPED /
+    #                   TIME_BUDGET_EXHAUSTED
+    # dynamic_valid:    trustworthy runtime evidence was obtained
+    # dynamic_complete: every planned investigation goal was confirmed
+    #
+    # 60% coverage means dynamic_valid=True, dynamic_status=PARTIAL. It does not
+    # mean dynamic_valid=False.
+    dynamic_status: str = ""
+    dynamic_valid: bool = False
+    dynamic_complete: bool = False
+    dynamic_coverage: Dict[str, Any] = Field(default_factory=dict)
 
     # Why the dynamic axis was excluded: NO_UI_RENDERED, EVASION_ONLY,
     # INSTRUMENTATION_FAILED, NO_BEHAVIOR_OBSERVED, DYNAMIC_UNAVAILABLE, or None
@@ -171,6 +198,11 @@ class DynamicAnalysisResult(BaseModel):
     clicked_nodes: List[str] = Field(default_factory=list)
     anti_analysis_events: List[Dict[str, Any]] = Field(default_factory=list)
     resilience_actions: List[Dict[str, Any]] = Field(default_factory=list)
+    # Before/after result of the autonomous anti-evasion sequence, or None when
+    # it did not run. Optional rather than an empty dict: "not attempted" and
+    # "attempted, nothing moved" are different findings and the UI renders them
+    # differently.
+    anti_evasion: Optional[Dict[str, Any]] = None
     yara_matches: List[str] = Field(default_factory=list)
     bfci: float = 0.0
     bfci_components: Dict[str, float] = Field(default_factory=dict)

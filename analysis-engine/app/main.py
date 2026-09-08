@@ -34,6 +34,7 @@ from sudarshan_core.analyzers.apk_analyzer import analyze_apk
 from sudarshan_core.engines.apktool_engine import ApktoolEngine
 from sudarshan_core.engines.jadx_engine import JadxEngine
 from sudarshan_core.engines.frida_sandbox import run_frida_analysis
+from sudarshan_core.engines.dynamic_budget import DYNAMIC_MAX_WALL_TIME_SECONDS
 from sudarshan_core.engines.network_capture import NetworkCapture
 from sudarshan_core.engines.risk_engine import calculate_risk_score as compute_fraud_risk_score
 from sudarshan_core.engines.classification_engine import classify_family
@@ -142,7 +143,33 @@ async def _sandbox_containment_startup() -> None:
         log("[Containment] %s: %s", finding.code, finding.message)
 
 
-DEFAULT_TIMEOUT_SECONDS = int(os.getenv("ANALYSIS_TIMEOUT_SECONDS", "300"))
+# ── Request timeout vs. the dynamic wall clock ────────────────────────────────
+#
+# These two numbers have to be ordered correctly or the smaller one silently
+# defines the system's real behaviour. ANALYSIS_TIMEOUT_SECONDS was 300 while
+# the dynamic pipeline's own ceiling is DYNAMIC_MAX_WALL_TIME_SECONDS (1800), so
+# a sample that legitimately used its dynamic budget was cancelled here with a
+# 408 and its collected evidence discarded - the request timeout deciding the
+# analysis policy by accident.
+#
+# The default is therefore DERIVED: the dynamic ceiling plus the static and
+# reporting work that surrounds it (measured at ~120s: ~10s static with the
+# stages in parallel, ~20s launch, a ~68s post-analysis tail for the explorer
+# join, artifact and screenshot flush, and ~20s of final reporting), plus
+# margin. ANALYSIS_TIMEOUT_SECONDS still overrides it for an operator who wants
+# a tighter request bound.
+#
+# This is a REQUEST bound, not the analysis budget. The dynamic side stops
+# itself at its own deadline and finalises; this only exists so a wedged
+# pipeline cannot hold a connection forever.
+_DYNAMIC_CEILING_SECONDS = DYNAMIC_MAX_WALL_TIME_SECONDS
+_PIPELINE_OVERHEAD_SECONDS = int(os.getenv("ANALYSIS_PIPELINE_OVERHEAD_SECONDS", "300"))
+DEFAULT_TIMEOUT_SECONDS = int(
+    os.getenv(
+        "ANALYSIS_TIMEOUT_SECONDS",
+        str(_DYNAMIC_CEILING_SECONDS + _PIPELINE_OVERHEAD_SECONDS),
+    )
+)
 UPLOADS_DIR = Path(os.getenv("UPLOADS_DIR", "/app/uploads"))
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 

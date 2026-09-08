@@ -138,7 +138,7 @@ Core modules imported across both backend and analysis-engine:
 | `engines/bfci_scorer.py` | Behavioral Fraud Confidence Index (v2 logarithmic volume scoring) |
 | `engines/report_generator.py` | Self-contained HTML report builder |
 | `engines/pdf_generator.py` | ReportLab enterprise PDF report builder |
-| `engines/vide/` | Visual Impersonation Detection Engine (AST comparing, CIE76 color matching) |
+| `engines/vide/` | Visual Impersonation Detection Engine (AST comparing, CIEDE2000 color matching) |
 | `engines/event_bus.py` | In-memory pub/sub RuntimeEventBus |
 | `engines/evidence_store.py` | Evidence record structured JSON persistence |
 | `engines/workflow_reconstructor.py` | Causal temporal chain reconstruction (MITRE ATT&CK stages) |
@@ -179,7 +179,7 @@ POST /api/v1/analyze (multipart APK upload)
   │           │    ├── Java.deoptimizeEverything() to bypass ART JIT suppression
   │           │    ├── AgenticExplorer: 5-level perception, 17 screen types, state graph
   │           │    └── Runtime telemetry to EvidenceStore (Accessibility, SMS, Overlays, C2)
-  │           ├── VIDE Visual Impersonation analysis (AST compare, CIE76 color matching)
+  │           ├── VIDE Visual Impersonation analysis (AST compare, CIEDE2000 color matching)
   │           ├── calculate_risk_score(): 5-axis STEI, BFCI v2, FRS, safety floors
   │           └── Return raw result dict to Gateway
   │
@@ -220,7 +220,7 @@ graph TD
     
     subgraph VIDE_Engine["Visual Impersonation Detection (VIDE)"]
         LAYOUT["Layout & View AST Extraction"]
-        COLOR["Delta-E CIE76 Color Matching"]
+        COLOR["CIEDE2000 ΔE Color Matching"]
         FUZZY["Fuzzy Text & Keyword Matching"]
         SIGNER["Bank Signer Registry Cross-Check"]
         VIDE_SCORE["VIDE-F001 Impersonation Confidence"]
@@ -379,6 +379,6 @@ The SQLite database (`sudarshan.db`) runs in WAL mode with 9 tables:
 ## 11. Testing & Verification
 
 Comprehensive test suites in `tests/` and `backend/tests/`:
-* **920 collected tests**, **525 CI-enforced**.
+* **2,622 collected tests** across `tests/` and `backend/tests` (measured 2026-08-27). No CI workflow exists in this repository; the suite is developer-run.
 * Determinism replay asserts zero score drift against `determinism_baseline.json`.
 * Labelled corpus static validation achieves 8/8 trojan detection with 0/9 false positives.

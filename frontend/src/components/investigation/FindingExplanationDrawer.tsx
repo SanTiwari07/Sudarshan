@@ -31,12 +31,12 @@ export default function FindingExplanationDrawer({
       subtitle={vm.subtitle}
       headerExtra={
         <div className="flex flex-wrap items-center gap-2 mt-2">
-          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${sevClass}`}>
+          <span className={`text-[13px] font-semibold uppercase px-2 py-0.5 rounded border ${sevClass}`}>
             {vm.severityLabel}
           </span>
           {vm.confidencePercent != null && (
-            <span className="text-[10px] text-slate-600">
-              Confidence <span className="font-bold tabular-nums">{vm.confidencePercent}%</span>
+            <span className="text-[13px] text-slate-600">
+              Confidence <span className="font-semibold tabular-nums">{vm.confidencePercent}%</span>
             </span>
           )}
         </div>
@@ -62,7 +62,7 @@ export default function FindingExplanationDrawer({
 
       <FindingSection label="Evidence basis">
         <div className="flex flex-wrap items-center gap-2 mb-2">
-          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded border border-slate-300 bg-white text-slate-700">
+          <span className="text-[13px] font-semibold uppercase px-2 py-0.5 rounded border border-slate-300 bg-white text-slate-700">
             {sec.evidenceBasisBadge}
           </span>
           <span className="text-slate-600">{sec.evidenceBasisLabel}</span>

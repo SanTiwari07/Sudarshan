@@ -1,0 +1,106 @@
+.transfer-screen {
+  background-color: var(--color-background);
+  min-height: 100vh;
+}
+
+.transfer-content {
+  padding: 20px;
+}
+
+.search-bar {
+  display: flex;
+  align-items: center;
+  background: var(--color-surface);
+  padding: 12px 16px;
+  border-radius: var(--radius-card);
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.search-icon {
+  color: var(--color-text-secondary);
+  margin-right: 12px;
+}
+
+.search-bar input {
+  border: none;
+  background: none;
+  font-size: 14px;
+  color: var(--color-text-primary);
+  width: 100%;
+  outline: none;
+}
+
+.recent-payees-section h3,
+.new-transfer-options h3 {
+  font-size: 16px;
+  color: var(--color-text-primary);
+  margin: 0 0 16px;
+}
+
+.payees-list {
+  background: var(--color-surface);
+  border-radius: var(--radius-card);
+  padding: 8px 16px;
+  margin-bottom: 32px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.payee-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 16px 0;
+  border: none;
+  background: none;
+  border-bottom: 1px solid var(--color-divider);
+  text-align: left;
+  cursor: pointer;
+}
+
+.payee-item:last-child {
+  border-bottom: none;
+}
+
+.payee-avatar {
+  width: 40px;
+  height: 40px;
+  background: rgba(11, 61, 145, 0.1);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-primary);
+}
+
+.payee-info h4 {
+  font-size: 14px;
+  color: var(--color-text-primary);
+  margin: 0 0 4px;
+}
+
+.payee-info p {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.new-transfer-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.transfer-option-btn {
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  padding: 16px;
+  border-radius: var(--radius-card);
+  text-align: left;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}

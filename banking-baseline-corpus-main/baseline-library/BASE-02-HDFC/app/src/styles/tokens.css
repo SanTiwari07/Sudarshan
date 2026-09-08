@@ -1,0 +1,53 @@
+:root {
+  /* Palette (APPROXIMATED) */
+  --color-primary: #004C8F;
+  --color-secondary: #ED232A;
+  --color-accent: #0072BC;
+  --color-bg: #F2F5F9;
+  --color-surface: #FFFFFF;
+  --color-text-primary: #12233B;
+  --color-text-secondary: #5A6577;
+  --color-divider: #E1E6EE;
+
+  /* States */
+  --color-success: #178C4E;
+  --color-warning: #E8A100;
+  --color-error: #ED232A;
+
+  /* Typography & Spacing */
+  --font-heading: 'Inter', system-ui;
+  --font-body: 'Inter', system-ui;
+  --radius-card: 16px;
+  --radius-button: 8px;
+  
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-32: 32px;
+  
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.05);
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}

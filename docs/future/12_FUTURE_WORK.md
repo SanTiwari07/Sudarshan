@@ -68,14 +68,14 @@ Future development focuses on advancing from user-space application hooking to u
 
 ## 2. Distributed Celery + Redis Worker Cluster
 *Refinement for Queue Scalability*
-- **Problem**: The current `analysis_queue.py` ([`analysis_queue.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/workers/analysis_queue.py)) operates within FastAPI process memory, restricting worker execution to a single node instance.
+- **Problem**: The current `analysis_queue.py` ([`analysis_queue.py`](../../backend/app/workers/analysis_queue.py)) operates within FastAPI process memory, restricting worker execution to a single node instance.
 - **Solution Blueprint**: Migrate job dispatching to a Redis-backed Celery distributed task queue.
 
 ---
 
 ## 3. Persistent Vector Database RAG Integration
 *Refinement for Multi-Case Campaign Discovery*
-- **Problem**: In-memory `_investigation_index` ([`gemini_rag.py`](file:///d:/Projects/Sudarshan%20BOI/backend/app/ai/gemini_rag.py)) clears upon backend restart and supports single-case query context only.
+- **Problem**: In-memory `_investigation_index` ([`gemini_rag.py`](../../backend/app/ai/gemini_rag.py)) clears upon backend restart and supports single-case query context only.
 - **Solution Blueprint**: Integrate a local vector database (ChromaDB or FAISS) to persist chunk embeddings across all historical cases, enabling cross-case campaign queries (e.g., *"Which other cases shared this C2 IP address?"*).
 
 ---
@@ -94,4 +94,4 @@ Future development focuses on advancing from user-space application hooking to u
 
 ## Current Implementation Status
 
-All roadmap initiatives detailed in this document represent **Planned** enhancements. Current operational state remains accurately documented in [`docs/README.md`](file:///d:/Projects/Sudarshan%20BOI/docs/README.md) and [`docs/DAE_CURRENT_STATE.md`](file:///d:/Projects/Sudarshan%20BOI/docs/DAE_CURRENT_STATE.md).
+All roadmap initiatives detailed in this document represent **Planned** enhancements. Current operational state remains accurately documented in [`docs/README.md`](../../docs/README.md) and [`docs/DAE_CURRENT_STATE.md`](../../docs/DAE_CURRENT_STATE.md).

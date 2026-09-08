@@ -18,8 +18,8 @@ Test Suite:          backend/tests/test_pdf_generator.py, backend/tests/test_rep
 ## 1. Executive Overview
 
 The **Security Report Generation Engine** compiles complete case findings, deterministic risk scores, MITRE ATT&CK mappings, threat intelligence, and runtime screenshots into multi-format threat reports:
-1. **ReportLab Enterprise PDF Dossier** ([`pdf_generator.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/pdf_generator.py)): High-density multi-page executive and technical PDF reports with vector gauges, bar meters, and screenshot galleries.
-2. **Standalone HTML Security Report** ([`report_generator.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/report_generator.py)): Single-file self-contained HTML report with interactive styling.
+1. **ReportLab Enterprise PDF Dossier** ([`pdf_generator.py`](../../shared/sudarshan_core/engines/pdf_generator.py)): High-density multi-page executive and technical PDF reports with vector gauges, bar meters, and screenshot galleries.
+2. **Standalone HTML Security Report** ([`report_generator.py`](../../shared/sudarshan_core/engines/report_generator.py)): Single-file self-contained HTML report with interactive styling.
 3. **STIX 2.1 JSON Bundle** (`backend/app/routes/report.py`): Structured cyber threat intelligence format for automated ingestion by SIEM/SOAR platforms.
 4. **CSV / Plaintext IOC Feed** (`backend/app/routes/report.py`): Tabular export of extracted high-confidence malicious domains, IPs, URLs, and file hashes.
 
@@ -36,10 +36,10 @@ graph TD
     GATE --> STIX_GEN["STIX 2.1 Bundle Builder"]
     GATE --> CSV_GEN["CSV IOC Formatter"]
 
-    PDF_GEN --> PDF_OUT["/api/v1/report/{sha256}/pdf"]
-    HTML_GEN --> HTML_OUT["/api/v1/report/{sha256}/html"]
-    STIX_GEN --> STIX_OUT["/api/v1/report/{sha256}/stix"]
-    CSV_GEN --> CSV_OUT["/api/v1/report/{sha256}/iocs"]
+    PDF_GEN --> PDF_OUT["/api/v1/report/pdf/{sha256}"]
+    HTML_GEN --> HTML_OUT["/api/v1/report/html/{sha256}"]
+    STIX_GEN --> STIX_OUT["/api/v1/report/stix/{sha256}"]
+    CSV_GEN --> CSV_OUT["/api/v1/report/iocs/{sha256}"]
 ```
 
 ### Zero-Fabrication Invariant:
@@ -74,8 +74,11 @@ graph TD
 
 ## 4. API Endpoints & Export Routes
 
-* `GET /api/v1/report/{sha256}/pdf`: Generates and serves the ReportLab PDF binary stream (`application/pdf`). Requires Bearer token.
-* `GET /api/v1/report/{sha256}/html`: Serves standalone single-file HTML report (`text/html`).
-* `GET /api/v1/report/{sha256}/stix`: Exports case indicators as a STIX 2.1 JSON bundle (`application/json`).
-* `GET /api/v1/report/{sha256}/iocs`: Exports high-confidence IOCs as CSV (`text/csv`).
-* `GET /api/v1/report/{sha256}/json`: Returns raw cached JSON report data.
+* `GET /api/v1/report/pdf/{sha256}`: Generates and serves the ReportLab PDF binary stream (`application/pdf`). Requires a bearer token with the `analyst` role or above.
+* `GET /api/v1/report/html/{sha256}`: Serves the standalone single-file HTML report (`text/html`).
+* `GET /api/v1/report/stix/{sha256}`: Exports case indicators as a STIX 2.1 JSON bundle (`application/json`) with deterministic UUIDv5 identifiers.
+* `GET /api/v1/report/iocs/{sha256}`: Exports high-confidence IOCs as CSV (`text/csv`). A plain one-per-line list is available at `/api/v1/report/iocs-txt/{sha256}`.
+* `GET /api/v1/report/yara/{sha256}`, `/suricata/{sha256}`, `/snort/{sha256}`, `/mitre/{sha256}`: Detection rules and the ATT&CK technique mapping for the case.
+* The full case object as JSON comes from `GET /api/v1/cases/{sha256}`; there is no `/report/json` route.
+
+Path order is `/report/<format>/{sha256}`. Full reference: [api/ENDPOINTS.md](../api/ENDPOINTS.md).

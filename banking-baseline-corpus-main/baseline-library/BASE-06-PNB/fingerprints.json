@@ -1,0 +1,72 @@
+﻿{
+  "bank": "Punjab National Bank",
+  "screens": [
+    {
+      "screenId": "PNB-LOGIN",
+      "structuralSignature": "AUTH_FORM_VERTICAL_PRIMARY_CTA",
+      "regionOrder": [
+        "HEADER",
+        "PRIMARY_CONTENT",
+        "FOOTER_CTA"
+      ],
+      "exactStrings": [
+        "User ID",
+        "Password",
+        "Login",
+        "Enter User ID",
+        "Welcome to PNB ONE",
+        "Login with your User ID",
+        "Remember Me",
+        "Trouble Login?",
+        "Sign In"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#A21A33",
+        "colorSecondary": "#E2A627"
+      }
+    },
+    {
+      "screenId": "PNB-MPIN",
+      "structuralSignature": "PINPAD_NUMERIC_ENTRY",
+      "regionOrder": [
+        "HEADER",
+        "PIN_INPUT",
+        "NUMERIC_KEYPAD"
+      ],
+      "exactStrings": [
+        "Forgot MPIN?",
+        "Enter MPIN",
+        "Please enter your 6-digit MPIN to continue"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#A21A33",
+        "colorSecondary": "#E2A627"
+      }
+    },
+    {
+      "screenId": "PNB-HOME",
+      "structuralSignature": "DASHBOARD_CARD_GRID_QUICKACTIONS",
+      "regionOrder": [
+        "STATUS",
+        "HEADER",
+        "ACCOUNT_CARD",
+        "QUICK_ACTIONS",
+        "RECENT_TRANSACTIONS",
+        "BOTTOM_NAV"
+      ],
+      "exactStrings": [
+        "Pay Bills",
+        "Welcome,",
+        "Quick Actions",
+        "Recent Transactions",
+        "View All"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#A21A33",
+        "colorSecondary": "#E2A627"
+      }
+    }
+  ],
+  "appName": "PNB ONE",
+  "baselineId": "BASE-06-PNB"
+}

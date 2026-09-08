@@ -1,0 +1,26 @@
+@import './styles/tokens.css';
+
+:root {
+  font-family: var(--font-heading);
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.page-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.page-content {
+  padding: var(--space-16);
+  flex: 1;
+  overflow-y: auto;
+}

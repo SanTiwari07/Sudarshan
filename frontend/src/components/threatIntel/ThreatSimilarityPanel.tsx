@@ -36,20 +36,20 @@ export default function ThreatSimilarityPanel({ items }: { items: FamilySimilari
               }`}
             >
               <div className="flex justify-between items-center text-xs">
-                <span className="font-bold text-slate-800">
+                <span className="font-semibold text-slate-800">
                   {item.family}
                   {item.isAssigned && (
-                    <span className="ml-2 text-[10px] font-semibold text-blue-700 uppercase">Assigned</span>
+                    <span className="ml-2 text-[13px] font-medium tracking-[0.01em] text-slate-500">Assigned</span>
                   )}
                 </span>
-                <span className="font-mono font-bold text-blue-800 tabular-nums">{item.percent}%</span>
+                <span className="font-mono font-semibold text-blue-800 tabular-nums">{item.percent}%</span>
               </div>
               <div className="h-1.5 bg-blue-100 rounded-full mt-2 overflow-hidden">
                 <div className={`h-full ${INTEL_THEME.bar} rounded-full transition-all`} style={{ width: `${item.percent}%` }} />
               </div>
               <ul className="mt-2 space-y-0.5">
                 {item.reasons.map((r) => (
-                  <li key={r} className="text-[10px] text-slate-600 font-mono">
+                  <li key={r} className="text-[13px] text-slate-600 font-mono">
                     {r}
                   </li>
                 ))}

@@ -184,20 +184,96 @@ class TestPDFGeneratorUnit:
         report_data = build_report_data(sample_case_data)
         pdf_bytes = build_pdf_report(sample_case_data)
         reader = PdfReader(io.BytesIO(pdf_bytes))
-        page1_text = reader.pages[0].extract_text()
+        title_text = reader.pages[0].extract_text()
 
-        # Final FRS score (96.8) and Risk Band (Critical) must match exactly
-        assert f"{report_data.final_risk_score.value:.1f}" in page1_text
-        assert report_data.risk_band.value.upper() in page1_text
+        # The title page carries the identification block, so the score and
+        # band are asserted there rather than on whichever page the verdict
+        # clause happens to land on - the report now opens on front matter.
+        assert f"{report_data.final_risk_score.value:.1f}" in title_text
+        assert report_data.risk_band.value.upper() in title_text
+
+    def test_band_always_carries_its_ordinal(self, sample_case_data):
+        """
+        Severity must never be carried by colour alone.
+
+        Everywhere the band is printed it is printed with its position on the
+        four-step scale, so the document reads correctly in greyscale, in
+        photocopy, and to a reader who cannot separate the four hues.
+        """
+        pdf_bytes = build_pdf_report(sample_case_data)
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+        assert "CRITICAL (4 of 4)" in reader.pages[0].extract_text()
+
+    def test_front_matter_states_scope_and_limitations(self, sample_case_data):
+        """
+        SWGDE 18-Q-002 s5 and ISO/IEC 17025 s7.8.2.1 both require the report to
+        bound itself before it asserts anything. The clause that does so must
+        be present, and must carry the results-relate-only-to-the-item wording.
+        """
+        pdf_bytes = build_pdf_report(sample_case_data)
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+        front = "\n".join(page.extract_text() for page in reader.pages[:3])
+        assert "Document control" in front
+        assert "Scope, basis and limitations" in front
+        assert "results relate" in front.lower()
+
+    def test_masthead_and_running_head_carry_the_brand(self, sample_case_data):
+        """
+        The title page opens on a masthead; every page after it carries the
+        wordmark in the running head. The mark itself is artwork and does not
+        extract as text, so what is asserted here is the wordmark beside it -
+        the part a reader can search for.
+        """
+        pdf_bytes = build_pdf_report(sample_case_data)
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+        assert "SUDARSHAN" in reader.pages[0].extract_text()
+        assert "Banking Malware Intelligence" in reader.pages[0].extract_text()
+        for page in reader.pages[1:]:
+            assert "SUDARSHAN" in page.extract_text()
+
+    def test_brand_mark_ships_inside_the_package(self):
+        """
+        Both renderers resolve the mark from disk at render time. If the asset
+        stops shipping, the masthead silently degrades to a monogram - so the
+        asset's presence is asserted rather than left to be noticed in a
+        filed report.
+        """
+        from sudarshan_core import brand
+
+        assert brand.mark_path(small=False) is not None
+        assert brand.mark_path(small=True) is not None
+        assert (brand.mark_data_uri(small=True) or "").startswith(
+            "data:image/png;base64,")
+
+    def test_every_page_carries_accountability_chrome(self, sample_case_data):
+        """Page X of Y, the classification marking, and the integrity digest."""
+        pdf_bytes = build_pdf_report(sample_case_data)
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+        total = len(reader.pages)
+        for number, page in enumerate(reader.pages[1:], start=2):
+            text = page.extract_text()
+            assert f"Page {number} of {total}" in text
+            assert "TLP:AMBER" in text
+            assert "Uncontrolled when printed" in text
 
     def test_build_pdf_report_zero_dynamic(self, sample_case_data):
+        """
+        A run that never happened must say so, in the engine's own vocabulary.
+
+        This previously asserted "NO_TELEMETRY_CAPTURED", a string the report
+        synthesised for itself. The sandbox publishes `dynamic_status` and the
+        report now renders that value verbatim, so the assertion tracks the
+        engine's vocabulary instead of a name only the PDF ever used.
+        """
         sample_case_data["dynamic_result"] = None
         sample_case_data["frs_breakdown"]["dynamic_ran"] = False
         pdf_bytes = build_pdf_report(sample_case_data)
         reader = PdfReader(io.BytesIO(pdf_bytes))
         full_text = " ".join([page.extract_text() for page in reader.pages])
 
-        assert "[DYNAMIC-STATUS: NO_TELEMETRY_CAPTURED]" in full_text or "NO_TELEMETRY_CAPTURED" in full_text
+        assert "NOT_PERFORMED" in full_text
+        # And it must NOT claim the sandbox confirmed anything.
+        assert "CONFIRMED DYNAMIC RUN" not in full_text
 
     def test_vide_unavailable_and_clean_handling(self, sample_case_data):
         # VIDE not analyzed
@@ -228,18 +304,25 @@ class TestPDFGeneratorUnit:
         assert report_data.risk_band.value == "Critical"
         
         reader = PdfReader(io.BytesIO(pdf_bytes))
-        p1_text = reader.pages[0].extract_text()
-        full_text = " ".join([page.extract_text() for page in reader.pages])
-        
-        assert "96.8" in p1_text
-        assert "96.8" in full_text
+        pages = [page.extract_text() for page in reader.pages]
+
+        # The score is stated on the title page, restated in the verdict
+        # clause, and derived again in the score ledger. Asserting on content
+        # rather than on a page index keeps this test honest across changes to
+        # the front matter.
+        assert "96.8" in pages[0]
+        carrying = [text for text in pages if "96.8" in text]
+        assert len(carrying) >= 3, (
+            "the score of record should appear on the title page, in the "
+            "verdict clause and in the score ledger"
+        )
 
     def test_threat_intel_unavailable_handling(self, sample_case_data):
         """Verifies report generation when threat intelligence API is unavailable."""
         sample_case_data["threat_correlation"] = {"available": False}
         pdf_bytes = build_pdf_report(sample_case_data)
         reader = PdfReader(io.BytesIO(pdf_bytes))
-        assert len(reader.pages) >= 5
+        assert len(reader.pages) >= 15
 
     def test_empty_evidence_records_handling(self, sample_case_data):
         """Verifies report generation with empty evidence lists."""
@@ -247,7 +330,7 @@ class TestPDFGeneratorUnit:
         sample_case_data["mitre_techniques"] = []
         pdf_bytes = build_pdf_report(sample_case_data)
         reader = PdfReader(io.BytesIO(pdf_bytes))
-        assert len(reader.pages) >= 5
+        assert len(reader.pages) >= 15
 
 from fastapi.testclient import TestClient
 
@@ -257,13 +340,12 @@ class TestPDFExportAPI:
         os.environ["JWT_SECRET_KEY"] = "test-secret-key-1234567890-super-secret-sudarshan"
         from app.main import app
         from app.routes.report import cache_report
-        from app.auth.auth import create_access_token
+        from auth_helpers import auth_headers_sync
 
         cache_report(sample_case_data["sha256"], sample_case_data)
-        
+
         client = TestClient(app)
-        valid_token = create_access_token(1, "testanalyst", "analyst")
-        headers = {"Authorization": f"Bearer {valid_token}"}
+        headers = auth_headers_sync("testanalyst", "analyst")
 
         response = client.get(f"/api/v1/report/pdf/{sample_case_data['sha256']}", headers=headers)
         assert response.status_code == 200

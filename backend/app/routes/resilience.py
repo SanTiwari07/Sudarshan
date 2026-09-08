@@ -6,12 +6,13 @@ something:
     POST /api/v1/analysis/{session_id}/checkpoint/restore   resume after a crash
     POST /api/v1/analysis/{session_id}/time-warp            defeat dormancy timers
     POST /api/v1/analysis/{session_id}/seed-persona         defeat emptiness checks
+    POST /api/v1/analysis/{session_id}/autonomous-anti-evasion  both, measured
     GET  /api/v1/analysis/{session_id}/suggestions          what to try next
     GET  /api/v1/analysis/{session_id}/assertions           execution matrix
     GET  /api/v1/analysis/personas                          persona catalogue
     WS   /api/v1/analysis/{session_id}/events               live event stream
 
-All four mutating endpoints touch a live sandbox running hostile code, so they
+All the mutating endpoints touch a live sandbox running hostile code, so they
 are analyst-gated and every one of them reports what *actually* happened rather
 than echoing the request - a time warp the device refused must not read as
 applied.
@@ -21,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
@@ -28,6 +30,8 @@ from pydantic import BaseModel, Field
 
 from app.auth.auth import require_analyst
 from app.services.resilience_events import (
+    EVT_ANTI_EVASION_COMPLETE,
+    EVT_ANTI_EVASION_STEP,
     EVT_CHECKPOINT_SAVED,
     EVT_EXECUTION_ASSERTION_UPDATED,
     EVT_PERSONA_SEEDED,
@@ -61,6 +65,25 @@ class SeedPersonaRequest(BaseModel):
     device_serial: str = Field("")
     include: Optional[List[str]] = Field(
         None, description="Subset of contacts/messages/calls/photos."
+    )
+
+
+class AntiEvasionRequest(BaseModel):
+    package_name: str = Field(
+        "", description="Target package; read from the stored case when empty."
+    )
+    device_serial: str = Field("")
+    persona_id: str = Field("default_retail_user")
+    contact_count: int = Field(12, ge=0, le=120)
+    sms_count: int = Field(4, ge=0, le=50)
+    call_count: int = Field(10, ge=0, le=100)
+    photo_count: int = Field(3, ge=0, le=50)
+    battery_level: int = Field(50, ge=1, le=100)
+    observation_seconds: float = Field(
+        3.0, ge=0.0, le=60.0, description="Hook-stream sampling window before the closing snapshot."
+    )
+    warp_schedule: Optional[List[float]] = Field(
+        None, description="Cumulative clock offsets in hours; defaults to 6/12/24."
     )
 
 
@@ -284,6 +307,176 @@ async def seed_persona(
 
     payload = {"device_serial": serial, **result.to_dict()}
     await hub.publish(EVT_PERSONA_SEEDED, session_id, payload)
+    return payload
+
+
+# ── Autonomous anti-evasion ────────────────────────────────────────────────
+
+#: One anti-evasion sequence per device at a time. Two overlapping runs would
+#: interleave clock shifts and provider writes on the same sandbox, and neither
+#: run's before/after delta would mean anything afterwards.
+_anti_evasion_locks: Dict[str, asyncio.Lock] = {}
+
+
+async def _resolve_package_name(session_id: str, requested: str) -> str:
+    """Requested package, else the one recorded on the stored case."""
+    if requested.strip():
+        return requested.strip()
+    try:
+        from app.db.database import get_case_by_sha256
+
+        case = await get_case_by_sha256(session_id)
+        if case:
+            return str(case.get("package_name") or "").strip()
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("[Resilience] no stored package for %s: %s", session_id, exc)
+    return ""
+
+
+@router.post("/{session_id}/autonomous-anti-evasion")
+async def run_autonomous_anti_evasion(
+    session_id: str,
+    body: AntiEvasionRequest,
+    user: dict = Depends(require_analyst),
+) -> Dict[str, Any]:
+    """
+    Run the full time-warp + persona sequence and measure what it changed.
+
+    The steps are driven from here, one at a time, so each one is published to
+    the live event stream as it executes: a fifteen-second sequence against a
+    live sandbox should not be a silent spinner. Blocking device work goes to
+    the executor as everywhere else in this module; only the sampling window is
+    an actual sleep, and it is awaited rather than occupying a worker thread.
+
+    The response reports the *observed* delta between two behaviour snapshots.
+    A metric the device would not surface comes back as null, and a run with no
+    hook stream attached returns ``NO_RUNTIME_TELEMETRY`` rather than a clean
+    bill of health - see :mod:`sudarshan_core.engines.anti_evasion`.
+    """
+    from app.routes.runtime_api import hook_telemetry_snapshot
+    from sudarshan_core.engines.anti_evasion import (
+        DEFAULT_WARP_SCHEDULE,
+        AntiEvasionOrchestrator,
+    )
+
+    serial = _resolve_serial(body.device_serial)
+    package_name = await _resolve_package_name(session_id, body.package_name)
+
+    lock = _anti_evasion_locks.setdefault(serial, asyncio.Lock())
+    if lock.locked():
+        raise HTTPException(
+            status_code=409,
+            detail=f"An anti-evasion sequence is already running on {serial}.",
+        )
+
+    schedule = tuple(body.warp_schedule) if body.warp_schedule else DEFAULT_WARP_SCHEDULE
+    orchestrator = AntiEvasionOrchestrator(
+        serial,
+        package_name,
+        persona_id=body.persona_id,
+        warp_schedule=schedule,
+        contact_count=body.contact_count,
+        sms_count=body.sms_count,
+        call_count=body.call_count,
+        photo_count=body.photo_count,
+        battery_level=body.battery_level,
+        telemetry_probe=lambda: hook_telemetry_snapshot(package_name),
+    )
+
+    async with lock:
+        started_at = time.time()
+        try:
+            plan = orchestrator.steps()
+            await hub.publish(
+                EVT_ANTI_EVASION_STEP,
+                session_id,
+                {
+                    "phase": "started",
+                    "device_serial": serial,
+                    "package_name": package_name,
+                    "total_steps": len(plan) + 1,
+                    "steps": [
+                        {"key": s.key, "label": s.label, "description": s.description}
+                        for s in plan
+                    ],
+                },
+            )
+
+            before = await _run_blocking(orchestrator.snapshot)
+            results: List[Any] = []
+
+            for index, step in enumerate(plan):
+                await hub.publish(
+                    EVT_ANTI_EVASION_STEP,
+                    session_id,
+                    {
+                        "phase": "running",
+                        "index": index,
+                        "total_steps": len(plan) + 1,
+                        "key": step.key,
+                        "label": step.label,
+                        "description": step.description,
+                    },
+                )
+                step_start = time.perf_counter()
+                outcome = await _run_blocking(step.run)
+                outcome.duration_ms = (time.perf_counter() - step_start) * 1000.0
+                results.append(outcome)
+                await hub.publish(
+                    EVT_ANTI_EVASION_STEP,
+                    session_id,
+                    {"phase": "finished", "index": index, **outcome.to_dict()},
+                )
+
+            # Sampling window: the manipulations have landed, and whatever the
+            # sample does in response happens now.
+            observe = orchestrator.observation_step(body.observation_seconds)
+            await hub.publish(
+                EVT_ANTI_EVASION_STEP,
+                session_id,
+                {
+                    "phase": "running",
+                    "index": len(plan),
+                    "total_steps": len(plan) + 1,
+                    "key": observe.key,
+                    "label": observe.label,
+                    "description": "Watch the instrumented process for new hook activity.",
+                },
+            )
+            await asyncio.sleep(body.observation_seconds)
+            results.append(observe)
+            await hub.publish(
+                EVT_ANTI_EVASION_STEP,
+                session_id,
+                {"phase": "finished", "index": len(plan), **observe.to_dict()},
+            )
+
+            after = await _run_blocking(orchestrator.snapshot)
+        except asyncio.TimeoutError:
+            raise HTTPException(
+                status_code=504, detail="The anti-evasion sequence timed out on the device"
+            )
+        except HTTPException:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("[Resilience] anti-evasion sequence failed")
+            raise HTTPException(
+                status_code=500, detail=f"Anti-evasion sequence failed: {exc}"
+            ) from exc
+
+    result = orchestrator.summarise(
+        before, after, results, session_id=session_id, started_at=started_at
+    )
+    payload = result.to_dict()
+    await hub.publish(EVT_ANTI_EVASION_COMPLETE, session_id, payload)
+    logger.info(
+        "[Resilience] %s ran anti-evasion on %s (%s): %s%s",
+        user.get("username", "?"),
+        serial,
+        package_name or "no package",
+        result.verdict,
+        f" [{', '.join(result.triggered_keys)}]" if result.triggered_keys else "",
+    )
     return payload
 
 

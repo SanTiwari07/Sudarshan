@@ -64,7 +64,7 @@ export default function VisualEvidenceCard({
             <button
               type="button"
               onClick={onExpand}
-              className="font-mono text-[11px] font-bold text-slate-800 hover:text-blue-600 transition-colors text-left"
+              className="font-mono text-[13px] font-semibold text-slate-800 hover:text-blue-600 transition-colors text-left"
             >
               {entry.screenshot_id || entry.id || 'SCR-000'}
             </button>
@@ -72,30 +72,30 @@ export default function VisualEvidenceCard({
               <button
                 type="button"
                 onClick={onExpand}
-                className="text-[10px] font-mono text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                className="text-[13px] font-mono text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
               >
                 Inspect
               </button>
             )}
           </div>
           <p
-            className={`text-[12px] text-slate-800 leading-snug mt-1 ${
+            className={`text-[14px] text-slate-800 leading-snug mt-1 ${
               onExpand ? 'cursor-pointer hover:text-blue-900' : ''
             }`}
             onClick={onExpand}
           >
             {ve.investigative_claim}
           </p>
-          <p className="text-[10px] text-slate-500 mt-1 font-mono">
+          <p className="text-[13px] text-slate-500 mt-1 font-mono">
             Quality {ve.quality} · {ve.correlation_status} · {formatScreenshotTime(entry.timestamp_ms)}
           </p>
           {ve.linked_evidence_ids && ve.linked_evidence_ids.length > 0 && (
-            <p className="text-[10px] text-slate-500 mt-0.5 font-mono">
+            <p className="text-[13px] text-slate-500 mt-0.5 font-mono">
               Evidence: {ve.linked_evidence_ids.join(', ')}
             </p>
           )}
           {ve.workflow_stage_label && (
-            <p className="text-[10px] text-slate-500 font-mono">Workflow: {ve.workflow_stage_label}</p>
+            <p className="text-[13px] text-slate-500 font-mono">Workflow: {ve.workflow_stage_label}</p>
           )}
         </div>
       </div>

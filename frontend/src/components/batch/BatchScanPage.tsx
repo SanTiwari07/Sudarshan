@@ -14,6 +14,7 @@ import { SocCard } from '../ui/Card';
 import BatchProgressBar from './BatchProgressBar';
 import BatchJobRow from './BatchJobRow';
 import BatchHistory from './BatchHistory';
+import BatchFleetSummary from './BatchFleetSummary';
 import { useBatchProgress } from './useBatchProgress';
 import { API_BASE, authHeaders } from '../../config';
 import { TYPOGRAPHY } from '../../theme/typography';
@@ -179,6 +180,9 @@ export default function BatchScanPage() {
 
   return (
     <div className="w-full min-w-0 space-y-4">
+      {/* The scale claim, before the queue that backs it up. */}
+      <BatchFleetSummary />
+
       {/* Navigation Tabs */}
         <div className="flex border-b border-slate-200 justify-between items-center">
           <div className="flex space-x-2">
@@ -196,7 +200,7 @@ export default function BatchScanPage() {
               }`}
             >
               <Layers className="w-4 h-4" />
-              <span>Enterprise Batch Scan</span>
+              <span>Batch scan</span>
             </button>
             <button
               onClick={() => setActiveTab('history')}
@@ -207,7 +211,7 @@ export default function BatchScanPage() {
               }`}
             >
               <History className="w-4 h-4" />
-              <span>Batch History</span>
+              <span>History</span>
             </button>
           </div>
 
@@ -242,7 +246,7 @@ export default function BatchScanPage() {
                       ID: #{batch.batch_id.slice(0, 8)}
                     </span>
                   </div>
-                  <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 font-mono tracking-tight mt-1">
+                  <h2 className="text-xl sm:text-2xl font-semibold text-slate-900 font-mono tracking-tight mt-1">
                     Batch #{batch.batch_id.slice(0, 8)}
                   </h2>
                   <p className="text-xs text-slate-500 mt-0.5 font-mono">
@@ -301,7 +305,7 @@ export default function BatchScanPage() {
                         <Loader2 className="w-5 h-5 animate-spin" />
                       </div>
                       <div>
-                        <span className="text-[10px] font-bold text-blue-800 uppercase tracking-wider block font-mono">
+                        <span className="text-[12px] font-bold text-blue-800 uppercase tracking-wider block font-mono">
                           Currently Scanning
                         </span>
                         <span className="text-sm font-bold text-slate-900 font-mono truncate max-w-md block" title={currentScanningJob.filename}>
@@ -342,7 +346,7 @@ export default function BatchScanPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider font-mono bg-surface-secondary">
+                    <tr className="border-b border-slate-200 text-[13px] font-bold text-slate-500 uppercase tracking-wider font-mono bg-surface-secondary">
                       <th className="py-3 px-4">APK File</th>
                       <th className="py-3 px-4">Status</th>
                       <th className="py-3 px-4">Risk</th>
@@ -372,7 +376,7 @@ export default function BatchScanPage() {
               <div className="inline-flex items-center justify-center p-3 bg-blue-50 rounded-2xl mb-3 text-blue-600">
                 <Layers className="w-8 h-8" />
               </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 font-mono tracking-tight">
+              <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900 font-mono tracking-tight">
                 Enterprise Batch Scan
               </h1>
               <p className="text-sm text-slate-500 mt-2">
@@ -407,7 +411,7 @@ export default function BatchScanPage() {
               <p className="text-xs text-slate-500 mt-1">
                 or <span className="text-blue-600 font-semibold underline">browse from your computer</span>
               </p>
-              <p className="text-[11px] text-slate-400 mt-3 font-mono">
+              <p className="text-[13px] text-slate-400 mt-3 font-mono">
                 Supports 2 to 50 .apk files per batch • Up to 200MB each
               </p>
             </div>

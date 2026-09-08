@@ -1,170 +1,220 @@
-# SUDARSHAN - Frida Dynamic Analysis Setup Guide
+# Frida sandbox setup
 
-This document explains how to set up the Frida-based dynamic behavioral analysis sandbox for the Sudarshan platform.
+How to prepare the Android guest and `frida-server` so SUDARSHAN's dynamic analysis can run.
+
+Verified against the active codebase on **2026-08-27**.
+
+- Full operations guide: [`../docs/HOW_TO_RUN.md`](../docs/HOW_TO_RUN.md)
+- Engine design: [`../docs/architecture/04_DYNAMIC_ANALYSIS_ENGINE.md`](../docs/architecture/04_DYNAMIC_ANALYSIS_ENGINE.md)
+- Backend service notes: [`README.md`](README.md)
+
+The Android guest runs on the **host**, never inside a container. The analysis engine reaches it through the host ADB server.
+
+---
 
 ## Prerequisites
 
-| Requirement | Status | Notes |
-|---|---|---|
-| `frida` (Python) | In `requirements.txt` (`17.16.4`) | Auto-installed via `pip` / Docker build |
-| `adb` | In `Dockerfile` | `android-sdk-platform-tools` installed in container |
-| Android Sandbox (Genymotion Desktop default) | On your HOST machine | Rooted Android 10/11 x86_64; optional Android Studio AVD via `SANDBOX_PROVIDER=android_studio` |
-| `frida-server` | One-time emulator setup | Downloaded matching version `17.16.4` |
+| Requirement | Where it comes from | Notes |
+| :--- | :--- | :--- |
+| `frida` and `frida-tools` (Python) | Pinned in `backend/requirements.txt` and `analysis-engine/requirements.txt` | `frida==17.16.4`, `frida-tools==14.10.4`; installed in both images |
+| `adb` | Installed in both Dockerfiles | The backend image pulls Google's platform-tools directly |
+| Rooted Android guest | Your host machine | Genymotion Desktop or Android Studio AVD; Android 10/11, x86_64 |
+| `frida-server` on the guest | Downloaded on first use | Must be **exactly** 17.16.4 to match the host package |
+
+### Why the version is pinned
+
+Two constraints collide:
+
+- **Frida 17 removed the built-in `Java` global.** The Android bridge became an external module, so a classic `Java.perform` script fails with `ReferenceError: 'Java' is not defined`. Hook scripts must be bundled with `frida-java-bridge` via `frida-compile`, which is why the controller loads `banking_trojan.bundle.js` and not the raw `.js` source.
+- **Frida 16 cannot link on a 16 KB page-size device** (`empty/missing DT_HASH/DT_GNU_HASH`), which rules it out for the `google_apis_ps16k` image this project targets.
+
+17 is therefore mandatory, and host and guest versions must match exactly.
 
 ---
 
-## Quick Start (Recommended)
+## Quick path
 
-After the one-time emulator setup (Steps 1–2 below), use the startup script to launch the **entire platform with a single command**:
+After the one-time guest setup below, the whole platform starts with:
 
 ```powershell
-.\start.ps1
+.\start.ps1 -Detach
 ```
 
-This script automatically:
-1. Restarts ADB server
-2. Enables ADB over TCP (port 5555)
-3. Restarts `adbd` as root
-4. Kills any stale `frida-server` and starts a fresh instance using `nohup`
-5. Launches `docker compose up`
+`start.ps1` restarts the ADB server, elevates `adbd` to root, kills any stale `frida-server` and starts a fresh instance, then brings up Compose.
 
-> **First-time execution policy:** If Windows blocks the script, run once:
-> ```powershell
-> Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
-> ```
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned   # first run only, if Windows blocks the script
+```
 
 ---
 
-## Running with Docker
+## Guest setup
 
-The backend Docker container has `adb` and `frida`/`frida-tools` pre-installed.
-The Android sandbox runs on your **host machine** (Genymotion Desktop by default).
-The container reaches it over **ADB TCP** using `host.docker.internal`.
+### Genymotion Desktop (default)
 
-### One-time host setup (run on your host machine, NOT inside Docker)
+1. Create and start a rooted x86_64 device (Android 10 or 11). Genymotion images are rooted by default.
+2. Confirm the endpoint:
+
+   ```powershell
+   adb devices -l
+   # 192.168.56.101:5555   device   product:vbox86p ...
+   ```
+
+3. Genymotion already exposes a TCP endpoint, so `adb tcpip` is not needed. It is also blocked by the ADB gateway policy (`shared/sudarshan_core/security/adb_gateway.py`) and cannot be issued from analysis code.
+
+### Android Studio AVD
+
+1. **Virtual Device Manager → Create Device → Pixel 6 → Next.**
+2. Choose a system image **without Google Play** — Play images cannot be rooted. For 16 KB page alignment, use API 33/34 x86_64 `google_apis_ps16k`.
+3. Start it, then:
+
+   ```powershell
+   adb root
+   adb shell whoami       # must print: root
+   adb shell setenforce 0
+   adb shell getenforce   # Permissive
+   ```
+
+### Deploy `frida-server`
+
+Automated, and the recommended path:
 
 ```powershell
-# 1. Start Genymotion Desktop (rooted Android 10/11 x86_64)
-#    Or: set SANDBOX_PROVIDER=android_studio and start an AVD
-
-# 2. Ensure ADB is on PATH (or Genymotion\tools\adb.exe)
-
-# 3. Switch ADB to TCP mode:
-adb tcpip 5555
-
-# 4. Verify (set DEVICE_SERIAL if multiple devices):
-adb devices
-# Genymotion example: 192.168.56.101:5555   device
-# AVD example:        emulator-5554         device
-
-# 5. Optional automated setup:
-python scripts/setup_dynamic_analysis.py
+python scripts/setup_dynamic_analysis.py --serial <DEVICE_SERIAL>
 ```
 
-### Start the full stack:
+It accepts `--serial`, `--avd`, `--push-server` / `--no-push-server` and `--skip-start`.
+
+The analysis engine can also fetch the ABI-matched binary itself into `FRIDA_SERVER_DIR` (default `/opt/frida-cache`, bind-mounted from the host `./tools`), so it is downloaded once per machine rather than once per image build. `tools/` is gitignored because the binary is roughly 106 MB, over GitHub's file limit.
+
+Manual equivalent:
 
 ```powershell
-docker compose up --build
+# Download frida-server-17.16.4-android-x86_64.xz from
+# https://github.com/frida/frida/releases/tag/17.16.4 and extract it
+adb root
+adb push frida-server-17.16.4-android-x86_64 /data/local/tmp/frida-server
+adb shell chmod 755 /data/local/tmp/frida-server
+adb shell "nohup /data/local/tmp/frida-server -l 127.0.0.1:27055 > /dev/null 2>&1 &"
+frida-ps -D <DEVICE_SERIAL>
 ```
 
-The backend automatically calls `adb connect host.docker.internal:5555` on startup.
+Port 27055 is the project default (`FRIDA_PORT` / `SUDARSHAN_FRIDA_PORT`), not Frida's stock 27042. `FRIDA_LISTEN_HOST` defaults to `127.0.0.1` and should not be widened.
 
-### Sandbox status health check:
+---
 
+## Configuration
+
+```env
+SANDBOX_PROVIDER=auto            # auto | genymotion | android_avd | physical
+DEVICE_SERIAL=                   # pin when more than one device is attached
+ADB_SERVER_SOCKET=tcp:host.docker.internal:5037
+ADB_HOST=                        # leave empty on Docker Desktop
+ADB_PORT=5555
+FRIDA_PORT=27055
+FRIDA_VERSION=17.16.4
+FRIDA_SERVER_DIR=/opt/frida-cache
+FRIDA_LISTEN_HOST=127.0.0.1
+ROOT_REQUIRED=true
+AUTO_CONNECT=true
+FRIDA_ANALYSIS_DURATION=240      # exploration window, seconds
 ```
+
+Leave `ADB_HOST` empty on Docker Desktop for Windows and macOS. Genymotion VMs live on a VirtualBox host-only adapter that `host.docker.internal` cannot reach; the auto-detect provider resolves the endpoint from `adb devices -l` instead.
+
+---
+
+## Verification
+
+```bash
+# From the host, checks the whole chain including inside the engine container
+python scripts/preflight.py --container
+```
+
+```http
 GET http://localhost:8000/api/v1/sandbox/status
+Authorization: Bearer <token>
 ```
 
-Expected response when Docker + emulator are configured:
-```json
-{
-  "ready": true,
-  "mode": "docker-tcp",
-  "frida_available": true,
-  "frida_version": "17.16.4",
-  "adb_found": true,
-  "adb_host": "host.docker.internal",
-  "adb_port": "5555",
-  "emulators_connected": ["host.docker.internal:5555"],
-  "hooks_script_present": true,
-  "message": "Frida sandbox is ready for dynamic analysis."
-}
-```
+A healthy response reports the resolved provider, device serial, ADB reachability, the Frida version and whether the hook bundle is present. Preflight is the better diagnostic: it names the specific failing link rather than reporting the sandbox as simply unavailable.
 
 ---
 
-## Architecture & Instrumentation Flow
+## Instrumentation flow
 
-```
-APK Uploaded
+```text
+APK uploaded
      │
      ▼
-Static Analysis (Androguard / MobSF)
+Static analysis (Androguard, APKTool, JADX, optional MobSF)
+     │
+     ▼
+Investigation manifest  -  the minimal hook profile this sample needs
      │
      ▼
 [FRIDA SANDBOX]
-  ├─ ADB installs APK on Android Emulator (AVD)
-  ├─ Resolves PID via `adb shell pidof` and attaches Frida instantly
-  ├─ Loads bundled banking_trojan.bundle.js (compiled with frida-java-bridge):
-  │     [A] Accessibility Service Abuse  (wa = 0.35)
-  │     [S] SMS Interception / OTP       (ws = 0.25)
-  │     [O] Overlay Phishing Attacks     (wo = 0.20)
-  │     [B] Banking App Detection        (wb = 0.10)
-  │     [N] Network / C2                 (wn = 0.05)
-  │     [P] Persistence                  (wp = 0.05)
-  └─ Behavioral events collected by AgenticExplorer (15-stage Fraud Goal DAG)
+  ├─ Install via ADB, pre-grant manifest permissions
+  ├─ Five-step launch ladder; the successful rung is recorded as launch_method_used
+  ├─ Resolve the exact PID and require a stability window before attaching
+  ├─ ART deoptimization, then install hooks and verify them
+  ├─ Load banking_trojan.bundle.js (compiled with frida-java-bridge)
+  └─ AgenticExplorer drives a 15-stage fraud goal graph while events stream in
      │
      ▼
-BFCI = (wa × A) + (ws × S) + (wo × O) + (wb × B) + (wn × N) + (wp × P)
-     │
-     ▼
-FRS = 0.25×STEI + 0.35×BFCI + 0.20×Correlation + 0.20×BankingImpact
-     │
-     ▼
-Fraud Intelligence Report (via Gemini 2.5 Flash)
+Evidence store  →  BFCI v2  →  deterministic risk engine  →  case
 ```
 
----
+### BFCI v2 weights
 
-## Step 1 - Create an Android Emulator in Android Studio
+Seven categories, summing to 1.0. `code_execution` carries 0.10; the six original categories are scaled by 0.90 so their relative ordering is unchanged from the validated model.
 
-1. Open **Android Studio → Virtual Device Manager**.
-2. Click **Create Device**.
-3. Choose **Pixel 6** → **Next**.
-4. Select system image **API 33/34 (x86_64, google_apis_ps16k)** supporting 16 KB page alignment.
-5. Click **Finish** and start the emulator.
+| Category | Weight | Event cap |
+| :--- | ---: | ---: |
+| Accessibility abuse | 0.315 | 3 |
+| SMS / OTP interception | 0.225 | 2 |
+| Overlay phishing | 0.180 | 2 |
+| Banking app interaction | 0.090 | 3 |
+| Network / C2 | 0.045 | 10 |
+| Persistence | 0.045 | 2 |
+| Code execution | 0.100 | 2 |
 
----
+Each component is volume-aware on a logarithmic scale — `min(ln(1+N) / ln(1+cap), 1) × 100` — so one event is not equivalent to many. When a defined fraud sequence completes within 30 seconds, BFCI is multiplied by 1.25 and capped at 100.
 
-## Step 2 - Deploy frida-server on the Emulator
+Then:
 
-1. Download `frida-server-17.16.4-android-x86_64.xz` from [Frida Releases](https://github.com/frida/frida/releases/tag/17.16.4).
-2. Extract the file and push it to the device:
-   ```powershell
-   adb root
-   adb push frida-server-17.16.4-android-x86_64 /data/local/tmp/frida-server
-   adb shell chmod 755 /data/local/tmp/frida-server
-   adb shell "nohup /data/local/tmp/frida-server > /dev/null 2>&1 &"
-   ```
-3. Verify connection:
-   ```powershell
-   frida-ps -D emulator-5554
-   ```
+```
+FRS = 0.25·STEI + 0.35·Dynamic + 0.20·Correlation + 0.20·BankingImpact
+```
+
+renormalised over whichever axes have data. Full derivation: [`../docs/architecture/08_DETERMINISTIC_RISK_ENGINE.md`](../docs/architecture/08_DETERMINISTIC_RISK_ENGINE.md).
 
 ---
 
-## Files Reference
+## Files
 
 | File | Purpose |
-|---|---|
-| `app/engines/frida_sandbox.py` | Controller for ADB, PID resolution, attach, and event collection |
-| `app/engines/frida_hooks/banking_trojan.bundle.js` | Compiled Frida JS bundle with `frida-java-bridge` |
-| `app/engines/risk_engine.py` | Sole verdict authority implementing STEI, BFCI, and FRS |
-| `app/engines/agentic_explorer.py` | Agentic exploration loop executing tool calls and goal DAG tracking |
-| `start.ps1` | Automated platform bootstrapper script |
+| :--- | :--- |
+| `shared/sudarshan_core/engines/frida_sandbox.py` | Sandbox controller: ADB, launch ladder, PID resolution, attach, hooks, event collection |
+| `shared/sudarshan_core/engines/frida_hooks/banking_trojan.bundle.js` | Compiled agent bundle; the only script Frida 17 will load |
+| `shared/sudarshan_core/engines/frida_hooks/banking_trojan.js` | Authoring source for the bundle, compiled with `frida-compile` |
+| `shared/sudarshan_core/engines/dae_pipeline.py` | 16-state pipeline machine with logged transitions |
+| `shared/sudarshan_core/engines/agentic_explorer.py` | Exploration loop driving the goal graph |
+| `shared/sudarshan_core/engines/risk_engine.py` | Sole verdict authority — STEI, FRS, floors |
+| `shared/sudarshan_core/sandbox/` | `SandboxProvider` implementations and the device channel |
+| `shared/sudarshan_core/security/adb_gateway.py` | The single choke point for ADB execution |
+| `scripts/setup_dynamic_analysis.py` | One-command guest preparation |
+| `scripts/preflight.py` | Environment and toolchain verification |
+| `start.ps1` | Windows platform bootstrap |
 
 ---
 
-## Graceful Degradation
+## Graceful degradation
 
-If the emulator or Frida server is offline, the platform automatically degrades gracefully to static-only analysis, redistributing the STEI weight to 50% without failing requests.
+When the emulator or `frida-server` is unreachable, the platform completes the analysis static-only. It does not fail the request, and it does not quietly score the missing evidence as clean:
+
+- `dynamic_available` is false and the 0.35 dynamic axis is **excluded** from the FRS.
+- The remaining live axes are renormalised over their own sum. With correlation also unavailable, that leaves STEI at `0.25 / 0.45 = 0.556` and banking impact at `0.20 / 0.45 = 0.444`.
+- `axes_used` and `axes_excluded` are returned on the case so the renormalisation is auditable.
+- If the resulting band would be `Safe` and the sample shows a concealed payload or strong static capability, a safety floor raises the band to `Suspicious` without changing the score.
+
+A run that produced no observation is reported as a run that produced no observation, never as a clean result.

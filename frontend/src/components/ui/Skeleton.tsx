@@ -31,7 +31,7 @@ export function ErrorState({ title = 'An error occurred', message, onRetry }: { 
 
 export function EmptyState({ label = 'No records found' }: { label?: string }) {
   return (
-    <div className="p-8 text-center text-slate-400 text-sm">
+    <div className="p-8 text-center text-slate-500 text-sm">
       {label}
     </div>
   );

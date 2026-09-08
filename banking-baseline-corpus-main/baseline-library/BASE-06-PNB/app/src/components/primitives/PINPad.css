@@ -1,0 +1,36 @@
+.pinpad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  max-width: 300px;
+  margin: 0 auto;
+}
+
+.pinpad-btn {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: none;
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  font-size: 24px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  transition: transform 0.1s, box-shadow 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+.pinpad-btn:active {
+  transform: scale(0.95);
+  background-color: var(--color-divider);
+}
+
+.pinpad-empty {
+  background: transparent;
+  box-shadow: none;
+  cursor: default;
+}

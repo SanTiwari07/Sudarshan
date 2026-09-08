@@ -3,17 +3,26 @@
   "runtime_requested": true,
   "runtime_attempted": false,
   "engine": "frida",
-  "dynamic_status": "EMULATOR_UNAVAILABLE",
-  "sha256": "b18af2a0e44d7634bbcdf93664d9c78a2695e050393fcfbb5e8b91f902d194a4",
+  "dynamic_status": "INSTRUMENTATION_FAILED",
+  "sha256": "aa2304ca4b97c0de41bcc2dff17e5da1e57230bb4ceca4e3d7aa831c6cbc6d4c",
   "bfci": 0.0,
-  "bfci_components": {},
+  "bfci_components": {
+    "accessibility": 0.0,
+    "sms": 0.0,
+    "overlay": 0.0,
+    "banking": 0.0,
+    "network": 0.0,
+    "persistence": 0.0,
+    "code_execution": 0.0
+  },
   "bfci_weights": {
-    "accessibility": 0.35,
-    "sms": 0.25,
-    "overlay": 0.2,
-    "banking": 0.1,
-    "network": 0.05,
-    "persistence": 0.05
+    "accessibility": 0.315,
+    "sms": 0.225,
+    "overlay": 0.18,
+    "banking": 0.09,
+    "network": 0.045,
+    "persistence": 0.045,
+    "code_execution": 0.1
   },
   "activities_triggered": [],
   "network_logs": [],
@@ -23,20 +32,60 @@
   "logcat": "",
   "evidence": [],
   "hook_errors": [],
-  "duration_seconds": 300,
-  "error": "Root unavailable on emulator-5554. adb root output: 'adb command timed out'. Use a rooted/userdebug image, or set ROOT_REQUIRED=false.",
-  "error_code": "ROOT_UNAVAILABLE",
+  "duration_seconds": 150,
   "sandbox_connection": {
-    "ok": false,
-    "device": null,
-    "frida": null,
-    "error_code": "ROOT_UNAVAILABLE",
-    "error_message": "Root unavailable on emulator-5554. adb root output: 'adb command timed out'. Use a rooted/userdebug image, or set ROOT_REQUIRED=false.",
+    "ok": true,
+    "device": {
+      "serial": "emulator-5554",
+      "state": "device",
+      "provider": "android_avd",
+      "android_version": "17",
+      "api_level": "37",
+      "abi": "x86_64",
+      "abilist": "x86_64,arm64-v8a",
+      "model": "sdk_gphone64_x86_64",
+      "manufacturer": "Google",
+      "ip": "",
+      "transport": "emulator",
+      "is_emulator": true,
+      "avd_name": "Pixel_6",
+      "rooted": true,
+      "root_available": true,
+      "frida_running": true,
+      "frida_available": true,
+      "frida_version": "17.16.4",
+      "frida_port": "27055",
+      "adb_forwarding": true,
+      "connection_time_ms": 3669.3213999969885,
+      "extra": {
+        "product": "emu64xa",
+        "device": "emu64xa",
+        "hardware": "ranchu",
+        "fingerprint": "google/sdk_gphone64_x86_64/emu64xa:17/CP21.260330.012/15545953:userdebug/dev-keys"
+      }
+    },
+    "frida": {
+      "available": true,
+      "running": true,
+      "binary_path": "",
+      "binary_name": "sudarshan_agent_srv",
+      "host_binary": "",
+      "port": "27055",
+      "version": "",
+      "host_version": "17.16.4",
+      "abi": "x86_64",
+      "compatible": true,
+      "restarted": false,
+      "forwarded": true,
+      "message": "frida agent running (4552\n11132)"
+    },
+    "error_code": null,
+    "error_message": null,
     "stages": [
       {
         "stage": "adb",
         "ok": true,
-        "detail": "C:\\Users\\sansk\\AppData\\Local\\Android\\Sdk\\platform-tools\\adb.EXE"
+        "detail": "C:\\Users\\Harshad\\AppData\\Local\\Android\\Sdk\\platform-tools\\adb.EXE"
       },
       {
         "stage": "device_detect",
@@ -55,21 +104,131 @@
       },
       {
         "stage": "root",
-        "ok": false,
-        "detail": "unavailable - Root unavailable on emulator-5554. adb root output: 'adb command timed out'. Use a rooted/userdebug image, or set ROOT_REQUIRED=false."
+        "ok": true,
+        "detail": "available"
+      },
+      {
+        "stage": "selinux",
+        "ok": true,
+        "detail": "Permissive"
+      },
+      {
+        "stage": "frida",
+        "ok": true,
+        "detail": "frida agent running (4552\n11132)"
       }
     ],
-    "connection_time_ms": 397452.36529999966
+    "connection_time_ms": 3669.3213999969885
   },
+  "sandbox_provider": "auto",
+  "provenance": {
+    "is_repaired_derivative": false,
+    "original_sha256": "aa2304ca4b97c0de41bcc2dff17e5da1e57230bb4ceca4e3d7aa831c6cbc6d4c",
+    "repaired_sha256": null,
+    "repair_tool": "apkInspector v1.2.8",
+    "repair_reason": null,
+    "modifications_performed": [],
+    "signature_used": "Original APK Signature",
+    "timestamp": "2026-08-27T12:21:57Z"
+  },
+  "error": "TransportError: timeout was reached",
+  "launch_timeline": {
+    "apk_install": 0.0,
+    "launch_intent": 64.496,
+    "first_pid": 37.905,
+    "first_activity": 132.634,
+    "first_window": 132.634,
+    "first_ui_dump": 133.257,
+    "frida_attach": 133.257,
+    "canary_received": 39.116,
+    "explorer_start": null,
+    "first_hook_event": null
+  },
+  "launch_method_used": "am_start_main_activity",
+  "bfci_evidence": [],
+  "frida_events": {
+    "accessibility": [],
+    "sms": [],
+    "overlay": [],
+    "banking": [],
+    "network": [],
+    "persistence": [],
+    "code_execution": [],
+    "dangerous_apis": [],
+    "files_accessed": [],
+    "anti_analysis": [],
+    "harness_action": [],
+    "smoke": [],
+    "device_fingerprint": [],
+    "app_telemetry": [],
+    "notification": []
+  },
+  "raw_event_counts": {
+    "accessibility": 0,
+    "sms": 0,
+    "overlay": 0,
+    "banking": 0,
+    "network": 0,
+    "persistence": 0,
+    "code_execution": 0,
+    "dangerous_apis": 0,
+    "files_accessed": 0,
+    "anti_analysis": 0,
+    "harness_action": 0,
+    "smoke": 0,
+    "device_fingerprint": 0,
+    "app_telemetry": 0,
+    "notification": 0
+  },
+  "anti_analysis_events": [],
+  "hooks_installed": 0,
+  "canary_received": true,
+  "evidence_record_count": 0,
+  "dynamic_coverage": {
+    "dynamic_status": "INSTRUMENTATION_FAILED",
+    "dynamic_valid": false,
+    "dynamic_available": true,
+    "dynamic_complete": false,
+    "dynamic_instrumented": false,
+    "analysis_budget_seconds": 1800.0,
+    "analysis_elapsed_seconds": 225.9,
+    "goals_total": 0,
+    "goals_successful": 0,
+    "goals_partial": 0,
+    "goals_failed": 0,
+    "goals_skipped": 0,
+    "goals_not_reached": 0,
+    "goals_timed_out": 0,
+    "goals_unsupported": 0,
+    "effective_goal_count": 0.0,
+    "coverage_ratio": 0.0,
+    "coverage_percent": 0.0,
+    "evidence_event_count": 0,
+    "meaningful_transition_count": 0,
+    "successful_goals": [],
+    "partial_goals": [],
+    "failed_goals": [],
+    "goal_states": [],
+    "failure_reasons": [],
+    "timeout_reason": null,
+    "limitations": [
+      "Runtime instrumentation could not be established; dynamic evidence was unavailable. Absence of findings here is absence of observation, not evidence that the sample is benign."
+    ],
+    "narrative": "Runtime instrumentation could not be established; dynamic evidence was unavailable for this sample."
+  },
+  "dynamic_valid": false,
+  "limitations": [
+    "Runtime instrumentation could not be established; dynamic evidence was unavailable. Absence of findings here is absence of observation, not evidence that the sample is benign."
+  ],
   "runtime_lifecycle": {
-    "case_id": "b18af2a0e44d7634bbcdf93664d9c78a2695e050393fcfbb5e8b91f902d194a4",
-    "analysis_id": "b18af2a0e44d7634bbcdf93664d9c78a2695e050393fcfbb5e8b91f902d194a4",
+    "case_id": "aa2304ca4b97c0de41bcc2dff17e5da1e57230bb4ceca4e3d7aa831c6cbc6d4c",
+    "analysis_id": "aa2304ca4b97c0de41bcc2dff17e5da1e57230bb4ceca4e3d7aa831c6cbc6d4c",
     "dynamic_requested": true,
-    "dynamic_status": "EMULATOR_UNAVAILABLE",
-    "emulator_status": "FAILED",
-    "apk_install_status": "UNKNOWN",
-    "frida_status": "UNKNOWN",
-    "explorer_status": "UNKNOWN",
+    "dynamic_status": "INSTRUMENTATION_FAILED",
+    "emulator_status": "READY",
+    "apk_install_status": "SUCCESS",
+    "frida_status": "FAILED",
+    "explorer_status": "none",
     "persistence_status": "UNKNOWN",
     "dashboard_inclusion_status": "FAILED",
     "actions_discovered": 0,
@@ -78,35 +237,53 @@
     "runtime_events": 0,
     "evidence_moments": 0,
     "action_pipeline": [],
-    "elapsed_seconds": 1187.83,
+    "elapsed_seconds": 225.86,
     "events": [
       {
         "event": "runtime_requested",
         "status": "QUEUED",
         "component": "orchestrator",
         "message": "Dynamic analysis requested for case",
-        "timestamp": "2026-09-08T00:39:58.723585+00:00",
-        "case_id": "b18af2a0e44d7634bbcdf93664d9c78a2695e050393fcfbb5e8b91f902d194a4",
-        "analysis_id": "b18af2a0e44d7634bbcdf93664d9c78a2695e050393fcfbb5e8b91f902d194a4"
+        "timestamp": "2026-08-27T12:21:52.846427+00:00",
+        "case_id": "aa2304ca4b97c0de41bcc2dff17e5da1e57230bb4ceca4e3d7aa831c6cbc6d4c",
+        "analysis_id": "aa2304ca4b97c0de41bcc2dff17e5da1e57230bb4ceca4e3d7aa831c6cbc6d4c"
       },
       {
         "event": "runtime_controller_started",
         "status": "STARTING",
         "component": "frida_sandbox",
         "message": "run_frida_analysis invoked",
-        "timestamp": "2026-09-08T00:39:58.723625+00:00",
-        "case_id": "b18af2a0e44d7634bbcdf93664d9c78a2695e050393fcfbb5e8b91f902d194a4",
-        "analysis_id": "b18af2a0e44d7634bbcdf93664d9c78a2695e050393fcfbb5e8b91f902d194a4"
+        "timestamp": "2026-08-27T12:21:52.846513+00:00",
+        "case_id": "aa2304ca4b97c0de41bcc2dff17e5da1e57230bb4ceca4e3d7aa831c6cbc6d4c",
+        "analysis_id": "aa2304ca4b97c0de41bcc2dff17e5da1e57230bb4ceca4e3d7aa831c6cbc6d4c"
       },
       {
         "event": "emulator_selected",
         "status": "FAILED",
         "component": "sandbox_provider",
-        "message": "Root unavailable on emulator-5554. adb root output: 'adb command timed out'. Use a rooted/userdebug image, or set ROOT_REQUIRED=false.",
-        "timestamp": "2026-09-08T00:59:46.555043+00:00",
-        "case_id": "b18af2a0e44d7634bbcdf93664d9c78a2695e050393fcfbb5e8b91f902d194a4",
-        "analysis_id": "b18af2a0e44d7634bbcdf93664d9c78a2695e050393fcfbb5e8b91f902d194a4",
-        "error": "ROOT_UNAVAILABLE"
+        "message": "serial=emulator-5554",
+        "timestamp": "2026-08-27T12:21:56.516122+00:00",
+        "case_id": "aa2304ca4b97c0de41bcc2dff17e5da1e57230bb4ceca4e3d7aa831c6cbc6d4c",
+        "analysis_id": "aa2304ca4b97c0de41bcc2dff17e5da1e57230bb4ceca4e3d7aa831c6cbc6d4c"
+      },
+      {
+        "event": "apk_install_completed",
+        "status": "SUCCESS",
+        "component": "adb",
+        "message": "com.boi.ua.android",
+        "timestamp": "2026-08-27T12:22:04.389118+00:00",
+        "case_id": "aa2304ca4b97c0de41bcc2dff17e5da1e57230bb4ceca4e3d7aa831c6cbc6d4c",
+        "analysis_id": "aa2304ca4b97c0de41bcc2dff17e5da1e57230bb4ceca4e3d7aa831c6cbc6d4c"
+      },
+      {
+        "event": "dynamic_analysis_completed",
+        "status": "FAILED",
+        "component": "FridaSession",
+        "message": "TransportError: timeout was reached",
+        "timestamp": "2026-08-27T12:25:38.705444+00:00",
+        "case_id": "aa2304ca4b97c0de41bcc2dff17e5da1e57230bb4ceca4e3d7aa831c6cbc6d4c",
+        "analysis_id": "aa2304ca4b97c0de41bcc2dff17e5da1e57230bb4ceca4e3d7aa831c6cbc6d4c",
+        "error": "INSTRUMENTATION_FAILED"
       }
     ]
   }

@@ -31,6 +31,7 @@ from sudarshan_core.engines.vide.corpus_loader import (
     read_corpus_json,
 )
 from sudarshan_core.engines.vide.color_match import is_brand_color, palette_similarity
+from sudarshan_core.engines.vide.discriminative import reset_discriminator_cache
 from sudarshan_core.engines.vide.fuzzy import fuzzy_containment
 from sudarshan_core.engines.vide.official_packages import (
     display_name_for,
@@ -339,7 +340,10 @@ def load_baselines(directory: Optional[Path] = None) -> List[InstitutionBaseline
     """All baselines: lab set first (explicit dir keeps legacy behaviour)."""
     if directory is not None:
         return load_lab_baselines(directory)
-    return load_lab_baselines() + load_corpus_baselines()
+    corpus = load_corpus_baselines()
+    if corpus:
+        return corpus
+    return load_lab_baselines()
 
 
 # ──────────────────────────────── cache ────────────────────────────────────
@@ -378,6 +382,10 @@ def get_baselines(force_refresh: bool = False) -> List[InstitutionBaseline]:
 def refresh_baselines() -> Dict[str, Any]:
     """Invalidate and reload the cache. Returns a report for the admin API."""
     started = time.time()
+    # Attribution weights are derived from the baseline set, so a corpus that
+    # gained or lost a bank changes what counts as distinctive. Dropping them
+    # here keeps the two caches from disagreeing about which corpus is loaded.
+    reset_discriminator_cache()
     baselines = get_baselines(force_refresh=True)
     corpus = [b for b in baselines if b.source == SOURCE_CORPUS]
     return {

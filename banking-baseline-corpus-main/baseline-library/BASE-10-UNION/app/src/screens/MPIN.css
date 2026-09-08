@@ -1,0 +1,54 @@
+.union-mpin {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: var(--space-16);
+  background-color: var(--color-bg);
+}
+
+.union-mpin-header {
+  margin-top: 4rem;
+  text-align: center;
+}
+
+.union-mpin-header h2 {
+  color: var(--color-primary);
+  margin-bottom: 0.5rem;
+}
+
+.union-mpin-dots {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin: 3rem 0;
+}
+
+.pin-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--color-primary);
+  background: transparent;
+}
+
+.pin-dot.filled {
+  background: var(--color-primary);
+}
+
+.union-mpin-pad-container {
+  margin-top: auto;
+  margin-bottom: 2rem;
+}
+
+.union-mpin-footer {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.forgot-btn {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-weight: 500;
+  cursor: pointer;
+}

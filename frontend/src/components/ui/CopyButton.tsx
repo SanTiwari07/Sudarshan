@@ -20,7 +20,7 @@ export default function CopyButton({ value, className = '', title = 'Copy' }: Co
   return (
     <button
       onClick={handleCopy}
-      className={`p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0 ${className}`}
+      className={`p-1 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-600 transition-colors flex-shrink-0 ${className}`}
       title={title}
     >
       {copied ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}

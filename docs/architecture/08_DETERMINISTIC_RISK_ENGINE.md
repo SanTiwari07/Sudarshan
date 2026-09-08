@@ -73,13 +73,50 @@ $$\text{STEI} = 0.60 \times \text{CT} + 0.20 \times \text{BT} + 0.10 \times \tex
 
 ---
 
-## 4. Behavioral Fraud Crime Impact (BFCI v2)
+## 4. Behavioural Fraud Confidence Index (BFCI v2)
 
-Calculated in `shared/sudarshan_core/engines/bfci_scorer.py`:
+Calculated in `shared/sudarshan_core/engines/bfci_scorer.py`.
 
-$$BFCI_{\text{v2}} = \min\left(100.0, \sum_{c} W_c \cdot \min\left(1.0, \frac{\ln(1 + N_c)}{\ln(1 + M_c)}\right) \times 100 + S_{\text{sequence}}\right)$$
+Each category's component score is volume-aware on a logarithmic scale, so one event is not equivalent to many:
 
-Where $W_c$ is category weight, $N_c$ is event count, $M_c$ is saturation threshold, and $S_{\text{sequence}} = +15.0$ when a temporal causal attack chain completes within 30 seconds.
+$$\text{component}_c = \min\left(1.0, \frac{\ln(1 + N_c)}{\ln(1 + M_c)}\right) \times 100$$
+
+$$BFCI_{\text{v2}} = \min\left(100.0,\; \left(\sum_{c} W_c \cdot \text{component}_c\right) \times S\right)$$
+
+$N_c$ is the observed event count for category $c$ and $M_c$ its saturation cap. $S$ is the **sequence multiplier**: `SEQUENCE_MULTIPLIER = 1.25` when events from a defined fraud sequence all fall inside `SEQUENCE_WINDOW_SECONDS = 30.0`, and `1.0` otherwise. It is a multiplier, not an additive bonus.
+
+### Weights and caps
+
+Seven categories, summing to exactly 1.0 - `raw_bfci` applies no normalisation, so the module asserts the sum at import time.
+
+| Category | $W_c$ | Cap $M_c$ |
+| :--- | ---: | ---: |
+| `accessibility` | 0.315 | 3 |
+| `sms` | 0.225 | 2 |
+| `overlay` | 0.180 | 2 |
+| `banking` | 0.090 | 3 |
+| `network` | 0.045 | 10 |
+| `persistence` | 0.045 | 2 |
+| `code_execution` | 0.100 | 2 |
+
+`code_execution` was added after Drinik - a labelled banking trojan - was observed calling `ProcessBuilder.start` and native `execve("/bin/sh")` in a live run and still scored BFCI 0.0, because those events landed in the unscored `dangerous_apis` bucket. The six original categories were **scaled by `1 - 0.10`** rather than re-tuned, so their relative ordering is exactly as validated against the corpus: adding an axis is a claim about what was missing, not a reason to re-rank what was already there.
+
+### Fraud sequences
+
+Defined in `FRAUD_SEQUENCES`. All required categories must have an event inside a common 30-second window:
+
+| Label | Required categories |
+| :--- | :--- |
+| `OTP_THEFT_CHAIN` | `accessibility`, `sms`, `network` |
+| `OVERLAY_BANKING_CHAIN` | `overlay`, `banking` |
+| `ACCOUNT_TAKEOVER_CHAIN` | `accessibility`, `overlay`, `sms` |
+| `DROPPER_CHAIN` | `persistence`, `network` |
+
+### Unscored categories
+
+`dangerous_apis`, `files_accessed`, `anti_analysis`, `device_fingerprint`, `app_telemetry` and `notification` are collected as evidence and **never scored**. The caps above are 2-3 events with logarithmic scaling, so a single event already scores 50-63 for its component; a scored category that also catches ordinary application behaviour is not a weak signal but a constant, and it would inflate every verdict equally. `calculate_bfci_v2` iterates `for cat in BFCI_WEIGHTS`, so a category listed as unscored is inert by construction.
+
+Adding a weight to any of them is a **model change**: it raises existing verdicts and must be validated against the labelled corpus.
 
 ---
 
@@ -98,11 +135,18 @@ $$\text{final\_risk\_score} = \min(\text{base\_frs} \times \text{ai\_confidence\
 
 *Note: The `ai_confidence_multiplier` is rule-derived from family classification confidence ($1.0$ or $1.2$), clamped to $[0.5, 1.5]$.*
 
-### Risk Bands:
-* **`0.0 – 30.0`**: **Safe**
-* **`30.1 – 60.0`**: **Suspicious**
-* **`60.1 – 89.0`**: **High Risk**
-* **`≥ 90.0`**: **Critical**
+### Risk bands
+
+The comparisons in `calculate_risk_score` are inclusive upper bounds on the unrounded score:
+
+| Band | Condition |
+| :--- | :--- |
+| **Safe** | `final_score <= 30` |
+| **Suspicious** | `30 < final_score <= 60` |
+| **High Risk** | `60 < final_score <= 89` |
+| **Critical** | `final_score > 89` |
+
+A score of 89.5 is therefore `Critical`, not `High Risk`.
 
 ---
 

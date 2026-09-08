@@ -72,6 +72,12 @@ import JavaBridgeModule from 'frida-java-bridge';
 // Taking the namespace object directly yields available===undefined, which
 // reads as "no Java" and silently disables every Java hook.
 var JAVA_BRIDGE_SOURCE = 'none';
+
+// Host-settable agent configuration. Rewritten by _apply_agent_config() in
+// frida_sandbox.py when SUDARSHAN_DEOPT_BOOT_IMAGE is set; see the
+// deoptimizeBootImage block below for why the default is false on API 34+.
+// The literal text of this line is a contract with that function.
+var DEOPT_BOOT_IMAGE_FORCED = false;
 var Java = (function resolveJavaBridge() {
   try {
     var mod = JavaBridgeModule;
@@ -159,6 +165,9 @@ function isDuplicate(key) {
   return false;
 }
 
+// ─── Target Package Configuration Slot ────────────────────────────────────────
+var TARGET_PACKAGE_NAME = "";
+
 // ─── Runtime Context ──────────────────────────────────────────────────────────
 var runtimeContext = {
   foreground_app: 'Unknown',
@@ -169,7 +178,7 @@ var runtimeContext = {
   hooks_active: 0,
   hook_errors: 0,
   process_id: Process.id,
-  package_name: 'Unknown',
+  package_name: TARGET_PACKAGE_NAME || 'Unknown',
 };
 
 // ─── Event Collector (mirrors Python collected_events keys exactly) ───────────
@@ -220,6 +229,13 @@ var OVERLAY_WINDOW_TYPES = [
 var overlayViewKeys = {};
 var overlayViewCount = 0;
 var MAX_TRACKED_OVERLAY_VIEWS = 256;
+
+// Ceiling on how many classes the custom-AccessibilityService scan may wrap
+// with Java.use(). Java.use() loads the class and builds a JS wrapper while
+// holding ART locks, so an unbounded scan is what made the app unreadable to
+// uiautomator (see the scan itself for the measurement). A sample's own
+// package tree is tens of classes; this is slack, not a target.
+var ACCESSIBILITY_SUBCLASS_SCAN_LIMIT = 300;
 
 function viewKey(view) {
   try {
@@ -368,6 +384,13 @@ function reportHookError(hookName, errorMsg) {
 send({ type: 'canary', msg: 'script_loaded_v4_frida17', ts: Date.now() });
 
 // ─── Heartbeat Loop ───────────────────────────────────────────────────────────
+//
+// NOTE: this timer does not fire in practice. Measured on a live session -
+// zero pings received over 18s against a 3s interval - so the agent's JS event
+// loop is not being serviced once the script has finished loading. Left in
+// place because it is harmless and correct if that is ever fixed, but nothing
+// may DEPEND on it: see the rpc export below, which is how recurring work is
+// actually driven.
 setInterval(function () {
   send({
     type: 'ping',
@@ -378,6 +401,31 @@ setInterval(function () {
     hook_errors: runtimeContext.hook_errors,
   });
 }, 3000);
+
+// ─── Host-driven work ─────────────────────────────────────────────────────────
+//
+// Anything that has to happen REPEATEDLY is driven from Python, because the
+// agent's own timers are dead (above). The WebView drain is the case that
+// forced this: the page's request queue has to be collected periodically, and
+// a queue that is never collected is the same as no instrumentation at all.
+var sdsnWebViewCount = 0;
+
+rpc.exports = {
+  // Collect whatever the in-page shims have queued since the last call, and
+  // re-inject into any WebView that has navigated. Returns the number of
+  // WebViews currently held so the caller can tell "nothing happened" from
+  // "there was nothing to look at".
+  // Reports how many WebViews are currently instrumented. Deliberately does
+  // NOT drive the drain: an rpc call arrives on a thread that is not attached
+  // to the VM, and Java.choose from such a thread HANGS rather than failing -
+  // measured, and it wedges the caller for the rest of the run. The drain is
+  // triggered from inside a hook instead, where the thread is already a Java
+  // thread. This export exists so the host can distinguish "the page made no
+  // requests" from "there was no page to watch".
+  webviewCount: function () {
+    return sdsnWebViewCount;
+  },
+};
 
 // Call synchronously - do NOT use setImmediate() here.
 //
@@ -438,9 +486,13 @@ function initHooks() {
 
       // ── Deoptimize ART for hook reliability ──────────────────────────────────
       // Without this, ART may inline virtual dispatch, making method hooks unreachable.
+      // Read once, outside the try, so a failure to read the API level cannot
+      // leave `sdkLevel` undefined for the boot-image gate below - which would
+      // fall through to the API<34 branch and re-introduce the ANR stall.
+      var sdkLevel = 0;
       try {
         var BuildVersion = Java.use('android.os.Build$VERSION');
-        var sdkLevel = BuildVersion.SDK_INT ? BuildVersion.SDK_INT.value : 0;
+        sdkLevel = BuildVersion.SDK_INT ? BuildVersion.SDK_INT.value : 0;
         if (sdkLevel > 0 && sdkLevel < 34) {
           Java.deoptimizeEverything();
           send({ type: 'diag', msg: 'deoptimizeEverything_success', ts: Date.now() });
@@ -453,9 +505,36 @@ function initHooks() {
 
       // deoptimizeBootImage: new in Frida 16.2 - deoptimizes AOT-compiled boot image
       // Fixes hooks on system classes that are inlined into the boot image (API 29+).
+      //
+      // Gated on the same API level as deoptimizeEverything above, and for the
+      // same reason. On API 34+ (measured on an API 37 x86_64 emulator) this
+      // call leaves the whole device crawling for ~30s. Android's ANR watchdog
+      // fires well inside that, so the system puts up "<app> isn't responding"
+      // over the sample before the walk has taken an action - measured four
+      // consecutive ANRs, exploration stopping after 4 actions on 1 screen,
+      // and no runtime behaviour captured at all.
+      //
+      // The trade-off is deliberate: deoptimizing the boot image makes hooks on
+      // INLINED system classes more reliable, but a sample that never renders
+      // its form produces no behaviour to hook. Hooks on the app's own classes,
+      // which is where the credential-harvesting lives, do not depend on it.
+      //
+      // SUDARSHAN_DEOPT_BOOT_IMAGE=1 forces it back on for an investigation
+      // that specifically needs boot-image coverage and can afford the stall.
       try {
-        Java.deoptimizeBootImage();
-        send({ type: 'diag', msg: 'deoptimizeBootImage_success', ts: Date.now() });
+        var forceDeopt = DEOPT_BOOT_IMAGE_FORCED;
+        if (forceDeopt || (sdkLevel > 0 && sdkLevel < 34)) {
+          Java.deoptimizeBootImage();
+          send({ type: 'diag', msg: 'deoptimizeBootImage_success', ts: Date.now() });
+        } else {
+          send({
+            type: 'diag',
+            msg: 'deoptimizeBootImage_skipped_api34_plus',
+            sdk_int: sdkLevel,
+            reason: 'stalls the device past the ANR watchdog on API 34+',
+            ts: Date.now(),
+          });
+        }
       } catch (e) {
         send({ type: 'diag', msg: 'deoptimizeBootImage_skipped', error: e.message });
       }
@@ -480,39 +559,80 @@ function initHooks() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
       try {
-        var AccessibilityService = Java.use('android.accessibilityservice.AccessibilityService');
-        AccessibilityService.onAccessibilityEvent.implementation = function (event) {
-          var eventType = -1;
-          var pkgName = null;
-          try { eventType = event.getEventType(); } catch (e) {}
-          try { var pn = event.getPackageName(); pkgName = pn ? pn.toString() : null; } catch (e) {}
-          emit('accessibility', {
-            hook: 'AccessibilityService.onAccessibilityEvent',
-            class_name: 'android.accessibilityservice.AccessibilityService',
-            severity: 'CRITICAL',
-            event_type: eventType,
-            package: pkgName,
-            description: 'App is monitoring screen content via Accessibility API (ATS pattern)',
-          });
-          // Accessibility events carry the package of the app being observed.
-          // This is the working replacement for getRunningTasks(), which is
-          // restricted on API 22+ - and it is exactly how an ATS trojan knows a
-          // banking app came to the foreground.
-          _noteForegroundPackage(pkgName, 'AccessibilityService.onAccessibilityEvent');
-          return this.onAccessibilityEvent(event);
-        };
-        registerHook('AccessibilityService.onAccessibilityEvent');
+        // The framework BASE class is deliberately NOT hooked.
+        //
+        // Replacing android.accessibilityservice.AccessibilityService
+        // .onAccessibilityEvent routes the whole process's accessibility
+        // delivery through a Frida trampoline, and on API 37 that breaks the
+        // accessibility pipeline outright: UiAutomation can no longer obtain a
+        // root node, so `uiautomator dump` answers
+        // "ERROR: null root node returned by UiTestAutomationBridge" forever.
+        //
+        // Bisected against the live e-challan payload, 16 dumps over 40s:
+        //
+        //   no agent .................... first readable 3.6s, 16/16
+        //   full agent (81 hooks) ....... NEVER readable,      0/16
+        //   full agent minus THIS hook .. first readable 2.4s, 16/16
+        //
+        // The explorer sees the screen through that same dump, so this one
+        // hook was making every UI-driven objective impossible: 0 screens
+        // observed, no form found, no field filled, and the ANR dialogs that
+        // followed were the app being unable to answer accessibility requests.
+        //
+        // Nothing is lost analytically. A trojan does not instantiate the
+        // abstract framework class - it ships its OWN AccessibilityService
+        // subclass, and that subclass is what the scan below hooks. BFCI
+        // scores the `accessibility` CATEGORY rather than a hook name, so a
+        // subclass hit contributes exactly as the base hook did.
 
-        // Dynamic subclass hook for malware custom AccessibilityService subclasses
-        // Defer non-critical class enumeration so script load completes instantly without locking UI thread / Frida transport
+        // Hook the sample's OWN AccessibilityService subclasses. With the
+        // framework base class left alone (above), this is where the whole
+        // accessibility signal now comes from.
+        //
+        // Two things were wrong with how this used to run:
+        //
+        // 1. It was deferred with `setTimeout`, which never fires in this
+        //    agent - the same dead-timer problem documented on the WebView
+        //    drain. So it did not run AT ALL, and the "dynamic subclass" cover
+        //    it was supposed to provide never existed. It now runs inline.
+        //
+        // 2. It called Java.use() on every loaded class that was not
+        //    android.*/java.*/dalvik.*. On a WebView banking app that is
+        //    thousands of classes, and Java.use() is not a lookup - it loads
+        //    the class and builds a full JS wrapper, holding ART locks while
+        //    it does. Running that inline without bounds would trade one stall
+        //    for another, so it is bounded twice:
+        //
+        //      · only classes under the SAMPLE's own package prefix, which is
+        //        where a trojan puts its service;
+        //      · a hard cap on how many classes may be wrapped.
+        //
+        // Both bounds are on the Java.use() call, not on the enumeration -
+        // walking the class NAMES is cheap, wrapping them is not.
         try {
-          setTimeout(function () {
-            Java.perform(function () {
+          {
+            {
               try {
-                Java.enumerateLoadedClasses({
-                  onMatch: function(className) {
-                    if (className && className.indexOf('android.') === -1 && className.indexOf('java.') === -1 && className.indexOf('dalvik.') === -1 && className.indexOf('$') === -1) {
+                var pkg = runtimeContext.package_name || '';
+                var prefix = '';
+                var parts = pkg.split('.');
+                if (parts.length >= 2 && parts[0] !== 'Unknown') prefix = parts[0] + '.' + parts[1] + '.';
+                if (prefix) {
+                  var wrapped = 0;
+                  Java.enumerateLoadedClasses({
+                    onMatch: function(className) {
+                      if (wrapped >= ACCESSIBILITY_SUBCLASS_SCAN_LIMIT) return;
+                      if (!className || className.indexOf('$') !== -1) return;
+                      if (className.indexOf(prefix) !== 0) return;
+                      if (className.indexOf('android.') === 0 ||
+                          className.indexOf('androidx.') === 0 ||
+                          className.indexOf('com.android.') === 0 ||
+                          className.indexOf('com.google.') === 0 ||
+                          className.indexOf('kotlin.') === 0 ||
+                          className.indexOf('java.') === 0 ||
+                          className.indexOf('dalvik.') === 0) return;
                       try {
+                        wrapped++;
                         var targetCls = Java.use(className);
                         if (targetCls && targetCls.onAccessibilityEvent) {
                           targetCls.onAccessibilityEvent.implementation = function(event) {
@@ -528,20 +648,29 @@ function initHooks() {
                               package: pkgName,
                               description: 'Accessibility event handled by custom service subclass: ' + className,
                             });
+                            _noteForegroundPackage(pkgName, className + '.onAccessibilityEvent');
                             return this.onAccessibilityEvent(event);
                           };
                           registerHook(className + '.onAccessibilityEvent');
                         }
                       } catch(e) {}
+                    },
+                    onComplete: function() {
+                      send({
+                        type: 'diag',
+                        msg: 'accessibility_subclass_scan',
+                        prefix: prefix,
+                        classes_wrapped: wrapped,
+                        limit: ACCESSIBILITY_SUBCLASS_SCAN_LIMIT,
+                      });
                     }
-                  },
-                  onComplete: function() {}
-                });
+                  });
+                }
               } catch (e) {}
-            });
-          }, 1000);
+            }
+          }
         } catch (e) {}
-      } catch (e) { reportHookError('AccessibilityService.onAccessibilityEvent', e.message); }
+      } catch (e) { reportHookError('AccessibilityService.subclass_scan', e.message); }
 
       try {
         var AccessibilityNodeInfo = Java.use('android.view.accessibility.AccessibilityNodeInfo');
@@ -610,11 +739,34 @@ function initHooks() {
       try {
         var AccessibilityManager = Java.use('android.view.accessibility.AccessibilityManager');
         AccessibilityManager.sendAccessibilityEvent.implementation = function (event) {
-          emit('accessibility', {
+          // UNSCORED ON PURPOSE.
+          //
+          // Android dispatches this whenever a view announces a UI change, so
+          // every app with a user interface fires it. It is not a property of
+          // the sample.
+          //
+          // It used to emit under 'accessibility', which carries the heaviest
+          // BFCI weight (0.35) and a cap of 2-3 events, so ONE dispatch scored
+          // 50/100 for the component. Measured on this emulator: Anubis and
+          // NewPipe - a banking trojan and a video player - each fired it
+          // exactly once and BOTH scored BFCI 17.5 with accessibility 50.0.
+          // The heaviest-weighted axis could not tell them apart.
+          //
+          // bfci_scorer's own note states the rule this restores: "A scored
+          // category that also catches ordinary application behaviour is not a
+          // weak signal - it is a constant, and it inflates every verdict
+          // equally."
+          //
+          // Real accessibility ABUSE is still scored, by the hooks that
+          // require the app to own a service or drive the screen:
+          // onAccessibilityEvent, getText, performAction,
+          // findAccessibilityNodeInfosByText, dispatchGesture.
+          emit('app_telemetry', {
             hook: 'AccessibilityManager.sendAccessibilityEvent',
             class_name: 'android.view.accessibility.AccessibilityManager',
-            severity: 'HIGH',
-            description: 'AccessibilityManager event dispatched (possible ATS relay)',
+            severity: 'INFO',
+            description: 'UI accessibility event dispatched (ordinary for any ' +
+                         'app with a user interface; recorded, not scored)',
           });
           return this.sendAccessibilityEvent(event);
         };
@@ -1326,10 +1478,94 @@ function initHooks() {
         registerHook('Retrofit.OkHttpCall.execute');
       } catch (e) { reportHookError('Retrofit.OkHttpCall.execute', e.message); }
 
+      // ── WebView instance registry ──────────────────────────────────────────
+      //
+      // A WebView's JS runs in Chromium's own process-internal stack, so a page
+      // that submits with fetch() or XHR touches NO Java networking API. Every
+      // Java-side hook below is blind to it. Measured on an e-challan sample
+      // whose entire journey is an HTML form: 69 hooks installed, the victim
+      // filled and submitted the form, and not one network event fired.
+      //
+      // The only vantage point that sees those requests is inside the page, so
+      // the instances have to be reachable to inject into. Held here as they
+      // are seen; capped, because a retained reference keeps the view alive.
+      var sdsnWebViews = [];
+      var sdsnSeen = {};
+      var SDSN_MAX_WEBVIEWS = 8;
+
+      function rememberWebView(wv, deferHooksTo) {
+        try {
+          if (!wv) return;
+          var h = wv.hashCode();
+          if (sdsnSeen[h]) return;
+          if (sdsnWebViews.length >= SDSN_MAX_WEBVIEWS) return;
+          sdsnSeen[h] = 1;
+          sdsnWebViews.push(Java.retain(wv));
+          sdsnWebViewCount = sdsnWebViews.length;
+          // The drain trigger has to be hooked on the class this view ACTUALLY
+          // is (see sdsnHookTouchFor) - but NOT from here when we are inside a
+          // Java.choose enumeration. Replacing a method implementation during
+          // a heap walk reports success and then never fires: measured, the
+          // hook installed, logged webview_touch_hooked, and no touch ever
+          // reached it. The caller passes an array to collect into and hooks
+          // once the walk has finished.
+          if (deferHooksTo) deferHooksTo.push(wv.$className);
+          else sdsnHookTouchFor(wv.$className);
+        } catch (e) { /* a view we cannot hold is one we cannot inject into */ }
+      }
+
+      //: Classes whose onTouchEvent has already been hooked.
+      var sdsnTouchHooked = {};
+
+      /**
+       * Hook the drain trigger on the WebView's own class.
+       *
+       * Hooking android.webkit.WebView.onTouchEvent is not enough. A framework
+       * WebView is routinely subclassed, and a subclass that OVERRIDES
+       * onTouchEvent without calling super never reaches the base
+       * implementation - so the base hook is installed, reports no error, and
+       * silently never fires. Measured on a Capacitor app: with both hooked,
+       * com.getcapacitor.CapacitorWebView.onTouchEvent fired on every tap while
+       * android.webkit.WebView.onTouchEvent fired zero times.
+       *
+       * The class name is taken from the live instance, so this stays generic:
+       * nothing here knows about any particular framework.
+       */
+      function sdsnHookTouchFor(className) {
+        if (!className || sdsnTouchHooked[className]) return;
+        sdsnTouchHooked[className] = 1;
+        try {
+          var Cls = Java.use(className);
+          if (!Cls.onTouchEvent) return;
+          Cls.onTouchEvent.overload('android.view.MotionEvent')
+            .implementation = function (ev) {
+              var result = this.onTouchEvent(ev);
+              try {
+                // ACTION_UP (1) only: a drag delivers dozens of MOVE events,
+                // and re-injecting the shim on each would be pointless work on
+                // the UI thread.
+                if (ev && ev.getAction() === 1 && SdsnDrainCallback) {
+                  // Already on the UI thread here - the only thread allowed to
+                  // call evaluateJavascript - so drain directly.
+                  sdsnDrainNow();
+                }
+              } catch (e) { /* never let instrumentation break a touch */ }
+              return result;
+            };
+          send({ type: 'diag', msg: 'webview_touch_hooked', cls: className });
+        } catch (e) {
+          send({
+            type: 'diag', msg: 'webview_touch_hook_failed',
+            cls: className, error: e.message,
+          });
+        }
+      }
+
       // WebView - loading C2 URLs, evaluating injected JS
       try {
         var WebView = Java.use('android.webkit.WebView');
         WebView.loadUrl.overload('java.lang.String').implementation = function (url) {
+          rememberWebView(this);
           emit('network', {
             hook: 'WebView.loadUrl',
             class_name: 'android.webkit.WebView',
@@ -1363,6 +1599,7 @@ function initHooks() {
           'java.lang.String',
           'java.lang.String'
         ).implementation = function (baseUrl, data, mime, encoding, historyUrl) {
+          rememberWebView(this);
           var preview = data ? data.substring(0, 500) : '';
           emit('network', {
             hook: 'WebView.loadDataWithBaseURL',
@@ -1388,7 +1625,242 @@ function initHooks() {
           return this.evaluateJavascript(script, callback);
         };
         registerHook('WebView.evaluateJavascript');
+
+        // A JS->Java bridge is how a page reaches native capability - and how a
+        // phishing page ships what it collected back into the app.
+        try {
+          WebView.addJavascriptInterface.overload('java.lang.Object', 'java.lang.String')
+            .implementation = function (obj, name) {
+              emit('network', {
+                hook: 'WebView.addJavascriptInterface',
+                class_name: 'android.webkit.WebView',
+                severity: 'HIGH',
+                interface_name: name ? name.toString() : null,
+                description:
+                  'WebView exposed a Java object to page JavaScript as "' +
+                  (name ? name.toString() : '?') +
+                  '" - page script can now call into the app',
+              });
+              return this.addJavascriptInterface(obj, name);
+            };
+          registerHook('WebView.addJavascriptInterface');
+        } catch (e) { reportHookError('WebView.addJavascriptInterface', e.message); }
+
+        try {
+          WebView.postUrl.overload('java.lang.String', '[B').implementation =
+            function (url, body) {
+              emit('network', {
+                hook: 'WebView.postUrl',
+                class_name: 'android.webkit.WebView',
+                severity: 'HIGH',
+                url: url ? url.toString() : null,
+                ioc: url ? url.toString() : null,
+                description: 'WebView POSTed to: ' + (url ? url.toString() : 'null'),
+              });
+              return this.postUrl(url, body);
+            };
+          registerHook('WebView.postUrl');
+        } catch (e) { reportHookError('WebView.postUrl', e.message); }
       } catch (e) { reportHookError('WebView', e.message); }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// [W] IN-PAGE (JAVASCRIPT) NETWORK VISIBILITY
+//
+// The gap this closes: a WebView app's requests are issued by Chromium, not by
+// java.net or OkHttp, so `HttpURLConnection`, `Socket` and the OkHttp hooks
+// never see them. `WebView.loadUrl` catches only the initial navigation. An
+// HTML form that posts with fetch() is, to every Java hook, completely silent.
+//
+// The page's own JS is the only place those calls are observable, so a shim is
+// installed INTO the page: it wraps fetch, XMLHttpRequest, sendBeacon and form
+// submission, queues what it sees, and hands the queue back on the next poll.
+//
+// Deliberately observe-only. Nothing is blocked, nothing is rewritten, and
+// every wrapper calls through to the original - an analysis that changes what
+// the app does is measuring itself.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+      // Idempotent: a page that navigates loses `window`, so the shim is
+      // re-sent on every poll and returns early when it is already present.
+      // Password-typed inputs are recorded as <redacted>: the point is to show
+      // WHICH fields leave the device, not to write a synthetic secret into a
+      // forensic report.
+      var SDSN_SHIM = [
+        '(function(){',
+        'if(window.__sdsn){return window.__sdsn_drain?window.__sdsn_drain():"[]";}',
+        'window.__sdsn=1;window.__sdsnQ=[];',
+        'function push(k,m,u,b){try{if(window.__sdsnQ.length<200){',
+        'window.__sdsnQ.push({k:k,m:String(m||"GET"),u:String(u||""),',
+        'b:b?String(b).substring(0,512):"",t:Date.now()});}}catch(e){}}',
+        'function ser(f){try{var o=[],els=f.elements||[];',
+        'for(var i=0;i<els.length;i++){var el=els[i];if(!el.name)continue;',
+        'o.push(el.name+"="+(el.type==="password"?"<redacted>":',
+        'String(el.value||"").substring(0,64)));}return o.join("&");}catch(e){return "";}}',
+        'try{var of=window.fetch;if(of){window.fetch=function(i,o){try{',
+        'var u=(i&&i.url)?i.url:i;var m=(o&&o.method)||(i&&i.method)||"GET";',
+        'push("fetch",m,u,(o&&o.body)||null);}catch(e){}',
+        'return of.apply(this,arguments);};}}catch(e){}',
+        'try{var xo=XMLHttpRequest.prototype.open,xs=XMLHttpRequest.prototype.send;',
+        'XMLHttpRequest.prototype.open=function(m,u){this.__sm=m;this.__su=u;',
+        'return xo.apply(this,arguments);};',
+        'XMLHttpRequest.prototype.send=function(b){try{push("xhr",this.__sm,this.__su,b);}',
+        'catch(e){}return xs.apply(this,arguments);};}catch(e){}',
+        'try{if(navigator.sendBeacon){var sb=navigator.sendBeacon.bind(navigator);',
+        'navigator.sendBeacon=function(u,d){try{push("beacon","POST",u,d);}catch(e){}',
+        'return sb(u,d);};}}catch(e){}',
+        'try{var fsub=HTMLFormElement.prototype.submit;',
+        'HTMLFormElement.prototype.submit=function(){try{',
+        'push("form_submit",this.method,this.action,ser(this));}catch(e){}',
+        'return fsub.apply(this,arguments);};',
+        'document.addEventListener("submit",function(ev){try{var f=ev.target;',
+        'push("form_submit",f.method,f.action,ser(f));}catch(e){}},true);}catch(e){}',
+        'window.__sdsn_drain=function(){try{return JSON.stringify(window.__sdsnQ.splice(0));}',
+        'catch(e){return "[]";}};',
+        'return "[]";})()',
+      ].join('');
+
+      var sdsnDrainDiag = 0;
+
+      function sdsnHandleDrain(raw) {
+        if (!raw) return;
+        var records = null;
+        try {
+          // evaluateJavascript hands back a JSON-ENCODED value, so a JS string
+          // arrives quoted and has to be unwrapped before it can be parsed.
+          var once = JSON.parse(raw);
+          records = (typeof once === 'string') ? JSON.parse(once) : once;
+        } catch (e) {
+          if (sdsnDrainDiag < 3) {
+            sdsnDrainDiag++;
+            send({
+              type: 'diag', msg: 'webview_drain_unparsed',
+              error: e.message, raw: String(raw).substring(0, 200),
+            });
+          }
+          return;
+        }
+        if (sdsnDrainDiag < 3 && raw !== '"[]"') {
+          sdsnDrainDiag++;
+          send({
+            type: 'diag', msg: 'webview_drain',
+            raw: String(raw).substring(0, 200),
+            parsed: records ? records.length : -1,
+          });
+        }
+        if (!records || !records.length) return;
+
+        for (var i = 0; i < records.length; i++) {
+          var r = records[i];
+          if (!r || !r.u) continue;
+          emit('network', {
+            hook: 'WebView.js.' + (r.k || 'request'),
+            class_name: 'android.webkit.WebView',
+            severity: 'HIGH',
+            url: r.u,
+            ioc: r.u,
+            method: r.m || 'GET',
+            body_preview: r.b || '',
+            source: 'in_page_javascript',
+            description:
+              'WebView page JavaScript issued ' + (r.m || 'GET') + ' ' + r.u +
+              ' via ' + (r.k || 'request') +
+              ' - invisible to Java networking hooks',
+          });
+        }
+      }
+
+      // The return channel. evaluateJavascript is the only way to read a value
+      // back out of a page, and it answers through a ValueCallback.
+      var SdsnDrainCallback = null;
+      try {
+        var ValueCallbackCls = Java.use('android.webkit.ValueCallback');
+        SdsnDrainCallback = Java.registerClass({
+          name: 'com.sudarshan.analysis.WebViewDrainCallback',
+          implements: [ValueCallbackCls],
+          methods: {
+            onReceiveValue: function (value) {
+              try { sdsnHandleDrain(value ? value.toString() : ''); } catch (e) { /* never throw into ART */ }
+            },
+          },
+        });
+        registerHook('WebView.js.drain_channel');
+      } catch (e) {
+        // Recorded rather than swallowed: without this channel the shim still
+        // installs and still queues, but nothing can read the queue - so the
+        // report must not imply the page was watched.
+        send({ type: 'diag', msg: 'webview_js_drain_unavailable', error: e.message });
+        reportHookError('WebView.js.drain_channel', e.message);
+      }
+
+      var sdsnEvalFailureReported = false;
+
+      // MUST be called on the UI thread. WebView is not thread-safe and
+      // evaluateJavascript throws outright anywhere else.
+      function sdsnDrainNow() {
+        for (var i = 0; i < sdsnWebViews.length; i++) {
+          try {
+            sdsnWebViews[i].evaluateJavascript(SDSN_SHIM, SdsnDrainCallback.$new());
+          } catch (e) {
+            if (!sdsnEvalFailureReported) {
+              sdsnEvalFailureReported = true;
+              send({ type: 'diag', msg: 'webview_eval_failed', error: e.message });
+            }
+          }
+        }
+      }
+
+      // A one-off sweep of the heap, because the WebView that matters usually
+      // already exists: the page is built during startup, and on a hand-off
+      // the agent attaches to a process that has been drawing for seconds. The
+      // load hooks above only ever see views created after us.
+      function sdsnSweepForWebViews() {
+        var pendingClasses = [];
+        try {
+          Java.choose('android.webkit.WebView', {
+            onMatch: function (instance) {
+              rememberWebView(instance, pendingClasses);
+            },
+            onComplete: function () { },
+          });
+        } catch (e) {
+          send({ type: 'diag', msg: 'webview_sweep_failed', error: e.message });
+          return;
+        }
+        // Outside the heap walk, where a method replacement actually takes.
+        for (var i = 0; i < pendingClasses.length; i++) {
+          sdsnHookTouchFor(pendingClasses[i]);
+        }
+        // Reported, not silent. "How many WebViews are we injecting into?" is
+        // the difference between "the page made no requests" and "we were
+        // never looking at the page", and a report must never present the
+        // second as the first.
+        send({ type: 'diag', msg: 'webview_sweep', held: sdsnWebViews.length });
+      }
+
+      try {
+        sdsnSweepForWebViews();
+
+        // ── What triggers a drain ────────────────────────────────────────────
+        //
+        // Neither of the obvious options works here:
+        //
+        //   · a timer in the agent - `setInterval` never fires once the script
+        //     has loaded. Measured: zero heartbeat pings over 18s against the
+        //     agent's own 3s interval, which has been dead this whole time.
+        //   · an rpc call from the host - it arrives on a thread that is not
+        //     attached to the VM, and Java.choose from there HANGS rather than
+        //     failing, wedging the caller for the rest of the run.
+        //
+        // A touch on the WebView has neither problem: it is already on the UI
+        // thread, which is the only thread allowed to call evaluateJavascript,
+        // and it happens at exactly the moment the page is doing something. A
+        // form is submitted by tapping it, so the tap that causes a request is
+        // also what collects the previous one.
+        // The hook itself is installed per WebView CLASS, by
+        // rememberWebView -> sdsnHookTouchFor, because the class that
+        // actually receives the touch is not known until a view is seen.
+        registerHook('WebView.js.network_interception');
+      } catch (e) { reportHookError('WebView.js.network_interception', e.message); }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // [P] PERSISTENCE & ADMIN HOOKS (weight 0.05)
@@ -1460,7 +1932,7 @@ function initHooks() {
         DexClassLoader.$init.overload(
           'java.lang.String', 'java.lang.String', 'java.lang.String', 'java.lang.ClassLoader'
         ).implementation = function (dexPath, optDir, libSearchPath, parent) {
-          emit('dangerous_apis', {
+          emit('code_execution', {
             hook: 'DexClassLoader.<init>',
             class_name: 'dalvik.system.DexClassLoader',
             severity: 'HIGH',
@@ -1507,7 +1979,7 @@ function initHooks() {
         var Runtime = Java.use('java.lang.Runtime');
         Runtime.exec.overload('java.lang.String').implementation = function (cmd) {
           var cmdStr = cmd ? cmd.toString() : null;
-          emit('dangerous_apis', {
+          emit('code_execution', {
             hook: 'Runtime.exec',
             class_name: 'java.lang.Runtime',
             severity: 'CRITICAL',
@@ -1531,7 +2003,7 @@ function initHooks() {
           } catch (joinErr) {
             cmdStr = String(cmds);
           }
-          emit('dangerous_apis', {
+          emit('code_execution', {
             hook: 'Runtime.exec[]',
             class_name: 'java.lang.Runtime',
             severity: 'CRITICAL',
@@ -1552,7 +2024,7 @@ function initHooks() {
             var cmd = this.command();
             command = cmd ? cmd.toString() : '';
           } catch (e2) {}
-          emit('dangerous_apis', {
+          emit('code_execution', {
             hook: 'ProcessBuilder.start',
             class_name: 'java.lang.ProcessBuilder',
             severity: 'CRITICAL',
@@ -1693,12 +2165,34 @@ function initHooks() {
           } catch (fieldErr) { /* field absent on this API level */ }
         }
         if (spoofedFields.length > 0) {
-          emit('anti_analysis', {
-            hook: 'Build.<static fields>',
+          // THE SANDBOX DID THIS, NOT THE SAMPLE.
+          //
+          // This block runs unconditionally at hook-install time: we overwrite
+          // emulator-identifying Build fields to hide the sandbox, whether or
+          // not the app ever reads them. It therefore fires exactly once on
+          // every emulator run and says nothing about the sample.
+          //
+          // It used to emit under 'anti_analysis'. Measured consequence: all
+          // ten stored runs carried exactly one anti_analysis event - this one
+          // - and dynamic_exclusion_reason() reads any anti_analysis event as
+          // proof the SAMPLE evaded, which excluded the dynamic axis (weight
+          // 0.35, the largest) on five banking trojans and let them score Safe.
+          // The sandbox's own countermeasure was being recorded as the
+          // sample's evasion, and the evidence was discarded because of it.
+          //
+          // Kept as evidence - what we changed on the device is provenance an
+          // analyst needs - but in a category that cannot be mistaken for
+          // sample behaviour. `actor` is explicit for the same reason.
+          emit('harness_action', {
+            hook: 'sandbox.build_fields_spoofed',
             class_name: 'android.os.Build',
-            severity: 'HIGH',
+            actor: 'harness',
+            severity: 'INFO',
             spoofed_fields: spoofedFields,
-            description: 'Emulator-identifying Build fields replaced: ' + spoofedFields.join(', '),
+            description: 'SANDBOX ACTION: emulator-identifying Build fields ' +
+                         'replaced to conceal the analysis environment: ' +
+                         spoofedFields.join(', ') +
+                         ' (performed by the harness, not by the application)',
           });
         }
         registerHook('Build.staticFields');
@@ -1806,7 +2300,7 @@ function initHooks() {
         InMemoryDexClassLoader.$init.overload(
           'java.nio.ByteBuffer', 'java.lang.ClassLoader'
         ).implementation = function (buffer, parent) {
-          emit('dangerous_apis', {
+          emit('code_execution', {
             hook: 'InMemoryDexClassLoader.<init>',
             class_name: 'dalvik.system.InMemoryDexClassLoader',
             severity: 'CRITICAL',
@@ -1948,7 +2442,7 @@ function initHooks() {
         FOSClass.$init.overload('java.lang.String').implementation = function (path) {
           try {
             if (path && path.toLowerCase().indexOf('.apk') >= 0) {
-              emit('dangerous_apis', {
+              emit('code_execution', {
                 hook: 'FileOutputStream.apkWrite',
                 class_name: 'java.io.FileOutputStream',
                 severity: 'CRITICAL',
@@ -2213,7 +2707,7 @@ function installNativeHooks() {
                   payload: {
                     event_id: 'native_ev_' + Date.now(),
                     timestamp: Date.now(),
-                    category: 'dangerous_apis',
+                    category: 'code_execution',
                     source: 'native',
                     hook: 'libc.execve',
                     severity: 'CRITICAL',

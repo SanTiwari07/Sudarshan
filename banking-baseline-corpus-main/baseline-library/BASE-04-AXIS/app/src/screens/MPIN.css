@@ -1,0 +1,58 @@
+.mpin-screen {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: var(--color-bg);
+  padding: var(--space-24);
+}
+
+.mpin-header {
+  margin-top: 10vh;
+  text-align: center;
+  color: var(--color-text-primary);
+}
+
+.mpin-header h2 {
+  margin: 0 0 var(--space-8);
+}
+
+.mpin-header p {
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.mpin-display {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-16);
+  margin: var(--space-48) 0;
+}
+
+.mpin-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--color-divider);
+  background-color: transparent;
+  transition: all 0.2s ease;
+}
+
+.mpin-dot.filled {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.mpin-pad-container {
+  margin-top: auto;
+  margin-bottom: var(--space-24);
+}
+
+.forgot-mpin-btn {
+  background: none;
+  border: none;
+  color: var(--color-secondary);
+  font-weight: 500;
+  text-align: center;
+  padding: var(--space-16);
+  cursor: pointer;
+}

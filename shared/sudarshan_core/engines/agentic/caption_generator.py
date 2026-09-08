@@ -1,7 +1,23 @@
 """
-Optional Gemini Vision captioning for screenshots the lookup table cannot label.
+Optional Gemini Vision captioning for screenshots.
 
 DISABLED BY DEFAULT. Enable with SUDARSHAN_VISION_CAPTIONS=1.
+
+Scope. When the flag is on, EVERY capture is eligible by default - a run's
+screenshots are the report's primary evidence, and a lifecycle frame labelled
+"Application launched - initial screen state" tells an analyst nothing that the
+word "launch" did not. This used to be restricted to AMBIGUOUS_REASONS, which
+meant the three frames a login-gated sample actually produces - launch, state
+discovery, session end - were the exact three the model never looked at. Set
+SUDARSHAN_VISION_CAPTION_SCOPE=ambiguous to restore the narrow policy, and
+SUDARSHAN_VISION_CAPTION_MAX to bound the calls a run may make.
+
+Relationship to the UI-tree reading. This describes PIXELS; `ui_observation`
+describes the HIERARCHY. The hierarchy reading always runs, needs no key and no
+network, and is what fills `visual_observation` on an air-gapped deployment;
+vision refines it when it is available. The hierarchy reading is also passed to
+the model as grounding, so a caption is corrected by the image rather than
+invented from nothing.
 
 Design constraints:
   - Off by default. A run with the flag unset makes zero network calls and
@@ -28,23 +44,66 @@ VISION_CAPTION_MODEL: str = (
     os.getenv("GEMINI_MODEL") or os.getenv("SUDARSHAN_AGENT_MODEL", "gemini-2.5-flash")
 )
 
-# Screenshot reasons whose deterministic caption carries no real signal and are
-# therefore worth spending a vision call on.
+# Screenshot reasons whose deterministic caption carries no real signal. Still
+# the eligible set under SCOPE_AMBIGUOUS; under the default scope every reason
+# is eligible and this only decides which frames go first when a run hits its
+# call budget.
 AMBIGUOUS_REASONS = frozenset({"OTHER", "SUSPICIOUS_UI", "EXPLORER_ACTION"})
+
+#: Caption every eligible capture (default when vision is enabled).
+SCOPE_ALL = "all"
+#: Legacy policy: only AMBIGUOUS_REASONS and captions the table gave up on.
+SCOPE_AMBIGUOUS = "ambiguous"
+
+#: Upper bound on vision calls per run. A long walk can produce a hundred
+#: frames, and captioning all of them would add minutes of latency and cost to
+#: a stage whose output is presentation metadata.
+DEFAULT_CAPTION_BUDGET: int = 40
 
 _MAX_CAPTION_CHARS = 200
 
 _PROMPT = """You are labelling a screenshot taken from an Android app during \
 automated malware analysis. Describe ONLY what is visibly on screen in one \
-factual sentence of at most 20 words.
+factual sentence of at most 25 words.
 
 Rules:
-- Describe what you see. Do not speculate about intent, malice, or risk.
+- Describe what you see: the kind of screen, its input fields, its buttons, \
+and any clearly legible heading or brand name.
+- Do not speculate about intent, malice, or risk.
 - Do not invent text, brand names, or UI elements you cannot clearly read.
 - If the screen is blank, corrupted, or too ambiguous to describe, reply with \
 exactly: {unclear}
 
 Context hint (may be empty, and may be wrong - trust the image over the hint): {hint}"""
+
+
+def caption_scope() -> str:
+    """Which captures are eligible for a vision call."""
+    raw = (os.getenv("SUDARSHAN_VISION_CAPTION_SCOPE", "") or SCOPE_ALL).strip().lower()
+    return SCOPE_AMBIGUOUS if raw == SCOPE_AMBIGUOUS else SCOPE_ALL
+
+
+def caption_budget() -> int:
+    """Maximum vision calls this run may make. Zero disables captioning."""
+    try:
+        return max(0, int(os.getenv("SUDARSHAN_VISION_CAPTION_MAX", "")
+                          or DEFAULT_CAPTION_BUDGET))
+    except ValueError:
+        return DEFAULT_CAPTION_BUDGET
+
+
+def caption_priority(reason: str, current_caption: str) -> int:
+    """
+    Ordering for a budget-limited run. Lower goes first.
+
+    A frame whose deterministic caption already gave up carries the least
+    information, so it gains the most from a look at the pixels.
+    """
+    if current_caption == UNCLEAR_CAPTION:
+        return 0
+    if (reason or "") in AMBIGUOUS_REASONS:
+        return 1
+    return 2
 
 
 def _image_part(img_bytes: bytes):
@@ -70,12 +129,19 @@ def should_caption(reason: str, current_caption: str) -> bool:
     """
     Decide whether a screenshot warrants a vision call.
 
-    Only ambiguous reasons, or ones the lookup table already gave up on,
-    are eligible - and only when the feature flag is on.
+    Under the default scope every capture is eligible once the operator has
+    turned vision captions on: a lifecycle frame is exactly as worth describing
+    as an ambiguous one, and excluding it is what left the three frames a
+    login-gated sample produces uncaptioned. SCOPE_AMBIGUOUS restores the old
+    narrow policy for a deployment that wants to spend fewer calls.
+
+    Always False with the feature flag unset - the no-network guarantee.
     """
     if not vision_captions_enabled():
         return False
-    return reason in AMBIGUOUS_REASONS or current_caption == UNCLEAR_CAPTION
+    if caption_scope() == SCOPE_AMBIGUOUS:
+        return reason in AMBIGUOUS_REASONS or current_caption == UNCLEAR_CAPTION
+    return True
 
 
 def generate_caption(

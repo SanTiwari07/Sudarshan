@@ -14,6 +14,22 @@ import React from 'react';
  */
 export type CardSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
+/**
+ * Reading rank, which is a separate axis from severity.
+ *
+ * Severity says how bad a finding is. Rank says how much of the analyst's
+ * attention the panel has earned on this screen. A certificate table can be
+ * perfectly benign and still be the least important thing on the page; before
+ * this existed it occupied exactly as much visual weight as a confirmed
+ * runtime C2 callback, which is why the console read as an undifferentiated
+ * wall of boxes.
+ *
+ *   primary   - the answer. One or two per page, at most.
+ *   standard  - supporting evidence. The default.
+ *   reference - raw lookup material. Recedes; expected to be collapsed.
+ */
+export type CardRank = 'primary' | 'standard' | 'reference';
+
 const SEVERITY_ACCENT: Record<CardSeverity, string> = {
   critical: 'border-l-4 border-l-red-500',
   high: 'border-l-4 border-l-orange-400',
@@ -22,12 +38,19 @@ const SEVERITY_ACCENT: Record<CardSeverity, string> = {
   info: 'border-l-4 border-l-slate-300',
 };
 
+const RANK_SURFACE: Record<CardRank, string> = {
+  primary: 'bg-white border-slate-300 shadow-[0_1px_3px_rgba(15,23,42,0.06)]',
+  standard: 'bg-white border-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)]',
+  reference: 'bg-slate-50/60 border-slate-200/60 shadow-none',
+};
+
 interface SocCardProps {
   children: React.ReactNode;
   className?: string;
   id?: string;
   onClick?: () => void;
   severity?: CardSeverity;
+  rank?: CardRank;
 }
 
 export function SocCard({
@@ -36,6 +59,7 @@ export function SocCard({
   id,
   onClick,
   severity,
+  rank = 'standard',
 }: SocCardProps) {
   const accent = severity ? SEVERITY_ACCENT[severity] : '';
   return (
@@ -43,7 +67,8 @@ export function SocCard({
       id={id}
       onClick={onClick}
       data-severity={severity}
-      className={`bg-white border border-slate-200/80 rounded-md shadow-[0_1px_2px_rgba(0,0,0,0.02)] overflow-hidden ${accent} ${className}`}
+      data-rank={rank}
+      className={`border rounded-xl overflow-hidden ${RANK_SURFACE[rank]} ${accent} ${className}`}
     >
       {children}
     </div>

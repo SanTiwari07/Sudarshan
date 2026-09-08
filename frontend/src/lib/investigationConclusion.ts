@@ -136,7 +136,7 @@ export function buildInvestigationConclusion(
 
   const records = bundle?.evidenceRecords ?? [];
   const confidencePct =
-    records.length > 0 ? overallAnalysisConfidence(records, data) : Math.round(data.confidence ?? 70);
+    records.length > 0 ? overallAnalysisConfidence(records, data) : Math.round(data.confidence ?? 0);
 
   let confidenceLabel = 'Moderate';
   if (confidencePct >= 75) confidenceLabel = 'High';

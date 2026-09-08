@@ -1,0 +1,24 @@
+.union-splash {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  width: 100vw;
+  background-color: var(--color-primary);
+  color: var(--color-surface);
+}
+
+.union-splash-content {
+  text-align: center;
+}
+
+.union-splash-content h1 {
+  font-size: 3rem;
+  margin: 0;
+}
+
+.union-splash-content p {
+  font-size: 1.2rem;
+  margin-top: 0.5rem;
+  opacity: 0.9;
+}

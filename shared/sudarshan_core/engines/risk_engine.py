@@ -229,11 +229,70 @@ def _calculate_stei(
     axes = {"ct": round(ct, 2), "bt": round(bt, 2), "pr": round(pr, 2),
             "ob": round(ob, 2), "ir": round(ir, 2)}
 
-    stei = (0.60 * ct) + (0.20 * bt) + (0.10 * pr) + (0.05 * ob) + (0.05 * ir)
-    stei = round(min(stei, 100.0), 2)
-
     all_evidence = ct_ev + bt_ev + pr_ev + ob_ev + ir_ev
     by_axis = {"ct": ct_ev, "bt": bt_ev, "pr": pr_ev, "ob": ob_ev, "ir": ir_ev}
+
+    weights = {"ct": 0.60, "bt": 0.20, "pr": 0.10, "ob": 0.05, "ir": 0.05}
+
+    # ── Blind axes are UNKNOWN, not zero ──────────────────────────────────────
+    #
+    # CT and BT are read entirely from the manifest and the string pool. When a
+    # concealed payload is present, the manifest describes a stub and the real
+    # code is a nested archive nobody has parsed - so a 0 on those axes means
+    # "we could not see", not "there is nothing".
+    #
+    # Scoring it as 0 anyway inverts the metric for exactly the samples it
+    # exists to catch. Measured on this emulator, with the real analyzer:
+    #
+    #   Anubis  (banking trojan, payload concealed) STEI  9.20  CT  0  IR  50
+    #   NewPipe (video player, nothing concealed)   STEI 24.64  CT 25  IR 100
+    #
+    # The benign app scored higher, because it honestly declares
+    # SYSTEM_ALERT_WINDOW for picture-in-picture and ships real endpoints,
+    # while the trojan declares four permissions and hides the rest. An app
+    # was being rewarded for disclosure and a trojan rewarded for concealment.
+    #
+    # This is the treatment the FRS axes already get one level up
+    # ("an excluded axis is one with no data - it is not scored as benign"):
+    # drop the blind axes and renormalise over the axes that still carry
+    # evidence. It invents nothing - PR, OB and IR are still measured - it only
+    # stops counting an unknown as an acquittal.
+    #
+    # Deliberately narrow: only axes that are BOTH visibility-dependent AND
+    # actually zero are dropped. A concealed sample that still declares
+    # accessibility has told us something real, and that evidence is kept.
+    excluded: List[str] = []
+    if flags.get("has_concealed_payload"):
+        for name, value in (("ct", ct), ("bt", bt)):
+            if value <= 0.0:
+                excluded.append(name)
+
+    scored = {k: v for k, v in weights.items() if k not in excluded}
+    total_weight = sum(scored.values())
+    if not scored or total_weight <= 0:
+        # Every axis blind. Refuse to emit a number rather than emit 0.0, which
+        # would read as "measured, and clean".
+        excluded = []
+        scored = weights
+        total_weight = sum(weights.values())
+
+    values = {"ct": ct, "bt": bt, "pr": pr, "ob": ob, "ir": ir}
+    stei = sum(values[k] * (w / total_weight) for k, w in scored.items())
+    stei = round(min(stei, 100.0), 2)
+
+    if excluded:
+        all_evidence.append(
+            "STEI axes " + "/".join(a.upper() for a in excluded) +
+            " could not be measured: the payload is concealed, so the manifest "
+            "and string pool describe a stub rather than the code that runs. "
+            "They are excluded rather than scored as zero."
+        )
+    axes["excluded"] = excluded
+    # The renormalised weight each axis actually carried. The frontend ledger
+    # reconstructs per-axis contributions from these; without them it has to
+    # assume the nominal 0.60/0.20/0.10/0.05/0.05 split, which is wrong for
+    # every sample where a blind axis was dropped and the rest renormalised.
+    axes["weights_used"] = {k: round(w / total_weight, 4) for k, w in scored.items()}
     return stei, axes, all_evidence, by_axis
 
 
@@ -499,31 +558,148 @@ _OBSERVED_BEHAVIOR_FIELDS = (
 _HARNESS_EVIDENCE_CATEGORIES = frozenset({
     "SCREENSHOT",
     "HARNESS",
+    "HARNESS_ACTION",
     "DIAGNOSTIC",
 })
+
+# Hooks that describe something the HARNESS did, not something the sample did.
+#
+# The agent now files these under the `harness_action` category, but ten stored
+# runs predate that split and still carry them under `anti_analysis`. Matching
+# on the hook name as well keeps those runs scoring correctly instead of
+# requiring a re-analysis of every case.
+#
+# `Build.<static fields>` is the whole reason this exists: the harness spoofs
+# emulator-identifying Build fields at attach time on every emulator run, and
+# emitted an evasion event about its own action. Every stored run carries
+# exactly one - the same hook, for benign apps and trojans alike - and that one
+# event excluded the dynamic axis on five banking trojans.
+_HARNESS_ATTRIBUTED_HOOKS = frozenset({
+    "Build.<static fields>",
+    "sandbox.build_fields_spoofed",
+})
+
+
+def _is_harness_attributed(event: Any) -> bool:
+    """True when an event describes the harness's own action, not the sample's."""
+    if not isinstance(event, dict):
+        return False
+    data = event.get("data") if isinstance(event.get("data"), dict) else {}
+    if str(event.get("actor") or data.get("actor") or "").lower() == "harness":
+        return True
+    if str(event.get("category") or data.get("category") or "").upper() == "HARNESS_ACTION":
+        return True
+    hook = event.get("hook") or data.get("hook") or ""
+    return hook in _HARNESS_ATTRIBUTED_HOOKS
+
+
+def sample_attributable_evasion(events: Any) -> List[Dict]:
+    """
+    The subset of evasion events the SAMPLE is responsible for.
+
+    Evasion is a claim about the sample resisting observation. Anything the
+    harness did to conceal itself is not evidence for that claim, and counting
+    it as such inverts the meaning of the whole dynamic axis.
+    """
+    try:
+        return [e for e in (events or []) if not _is_harness_attributed(e)]
+    except TypeError:
+        return []
 
 # Evasion is the sample resisting observation, not the sample behaving. It is
 # counted separately so an evasion-only run reads as "we were blocked", never as
 # "we looked and found nothing".
 _EVASION_EVIDENCE_CATEGORIES = frozenset({"ANTI_ANALYSIS"})
 
+# Buckets that hold ORDINARY application behaviour, by their own definition:
+# `app_telemetry` is "activity lifecycle, keyboard, generic crypto / prefs /
+# windows" and `smoke` is "baseline runtime smoke-test events" (see
+# frida_sandbox.collected_events).
+#
+# They are recorded as evidence but must not, on their own, establish that the
+# sandbox meaningfully observed the sample - because every app produces them.
+# _MIN_DYNAMIC_EVENTS is 1, so a single lifecycle event was enough to mark a run
+# conclusive and score the fraud axis 0.0 at weight 0.35.
+#
+# Measured: Anubis fired four hooks in a 300s run - one UI accessibility
+# dispatch, one harness action, two preference reads - reached 25% coverage,
+# and that one telemetry event scored the fraud axis as a clean zero, costing
+# 15 points (34.44 -> 19.38, out of the Suspicious band into Safe).
+#
+# This does NOT make the dynamic axis one-directional. A well-covered run that
+# observes benign behaviour still lowers the verdict: api_calls, network_logs,
+# activities_triggered and files_accessed are all still counted, and so is any
+# fraud-category bucket. Only the two ordinary-behaviour buckets stop counting
+# as proof that we looked.
+_BASELINE_EVIDENCE_CATEGORIES = frozenset({"APP_TELEMETRY", "SMOKE"})
+
 
 def _count_observed_sample_behavior(dynamic: Dict) -> int:
     """Count hook-derived sample behaviour items (not harness commentary)."""
+    # Hook names already accounted for in a bucket that does not count as
+    # observation. `api_calls` is a FLATTENED, uncategorised projection of the
+    # same hook events, so without this the identical event is counted twice -
+    # once categorised (and skipped) and once as a bare name (and counted).
+    #
+    # Measured on a live Anubis run: frida_events held exactly
+    # {harness_action: 1, smoke: 1, app_telemetry: 1} and api_calls held
+    # ["Activity.onResume", "ContextWrapper.getSharedPreferences"] - the same
+    # two ordinary events. The bucket filter skipped them and api_calls let
+    # them back in, so the run still read as conclusive.
+    #
+    # Subtracting by name rather than mapping names to categories: the result
+    # already tells us which bucket each hook landed in, so no second table is
+    # needed and none can drift.
+    _discounted: set = set()
+    _buckets = dynamic.get("frida_events")
+    if isinstance(_buckets, dict):
+        for _name, _events in _buckets.items():
+            _upper = str(_name).upper()
+            if not (
+                _upper in _EVASION_EVIDENCE_CATEGORIES
+                or _upper in _HARNESS_EVIDENCE_CATEGORIES
+                or _upper in _BASELINE_EVIDENCE_CATEGORIES
+            ):
+                continue
+            for _event in _events or []:
+                if not isinstance(_event, dict):
+                    continue
+                _data = _event.get("data") if isinstance(_event.get("data"), dict) else {}
+                _hook = _event.get("hook") or _data.get("hook")
+                if _hook:
+                    _discounted.add(str(_hook))
+
     observed = 0
     for field in _OBSERVED_BEHAVIOR_FIELDS:
         value = dynamic.get(field)
-        try:
-            observed += len(value or [])
-        except TypeError:
+        if not isinstance(value, list):
+            try:
+                observed += len(value or [])
+            except TypeError:
+                pass
             continue
+        for entry in value:
+            if isinstance(entry, str) and entry in _discounted:
+                continue
+            observed += 1
 
-    # frida_events is a dict of per-category buckets. Every bucket except the
-    # evasion one is sample behaviour.
+    # frida_events is a dict of per-category buckets. Sample behaviour is every
+    # bucket except the sample's evasion and the harness's own actions.
+    #
+    # harness_action has to be skipped explicitly: it is a new bucket, and
+    # without this the sandbox's Build-field spoofing would count as observed
+    # sample behaviour - enough on its own to make an empty run read as
+    # conclusive, which is the same misattribution this split exists to end,
+    # only pointing the other way.
     buckets = dynamic.get("frida_events")
     if isinstance(buckets, dict):
         for name, events in buckets.items():
-            if str(name).upper() in _EVASION_EVIDENCE_CATEGORIES:
+            upper = str(name).upper()
+            if (
+                upper in _EVASION_EVIDENCE_CATEGORIES
+                or upper in _HARNESS_EVIDENCE_CATEGORIES
+                or upper in _BASELINE_EVIDENCE_CATEGORIES
+            ):
                 continue
             try:
                 observed += len(events or [])
@@ -554,6 +730,8 @@ def _count_behavioural_evidence_records(dynamic: Dict) -> int:
         if category in _HARNESS_EVIDENCE_CATEGORIES:
             continue
         if category in _EVASION_EVIDENCE_CATEGORIES:
+            continue
+        if category in _BASELINE_EVIDENCE_CATEGORIES:
             continue
         behavioural += 1
     return behavioural
@@ -649,13 +827,94 @@ def reconcile_frs_breakdown(
 _INCONCLUSIVE_STATUSES = frozenset({
     "NO_BEHAVIOR_OBSERVED",
     "NO_UI_RENDERED",
+    # Hooks installed, the process ran, and the agent arrived after the app had
+    # already acted. The sandbox observed nothing about the sample, so scoring
+    # the fraud axis from it would award a clean zero at 0.35 weight for a run
+    # that measured the harness.
+    "INSTRUMENTED_TOO_LATE",
     "INSTRUMENTATION_FAILED",
     "FRIDA_ATTACH_FAILED",
     "EMULATOR_UNAVAILABLE",
     "INSTALL_FAILED",
     "TIMEOUT",
+    # The 30-minute wall clock arrived. Listed here so a run that hit it with
+    # NOTHING observed is excluded rather than scored as a clean zero.
+    #
+    # A run that hit it WITH evidence is unaffected: dynamic_exclusion_reason
+    # consults _dynamic_behavior_is_conclusive BEFORE it looks at the status, so
+    # observed behaviour outranks the label - which is the whole §P16 rule that
+    # a timeout with meaningful evidence is scored on that evidence.
+    "TIME_BUDGET_EXHAUSTED",
     "FAILED",
 })
+
+
+#: Dynamic-axis score awarded to a run whose only sample-attributable
+#: observation is substantive evasion.
+#:
+#: Deliberately mid-band. It has to be high enough that including the axis
+#: raises the verdict rather than diluting it - the whole reason evasion used to
+#: be excluded was that a 0.0 at 0.35 weight read as "clean" - and low enough
+#: that it never outranks a run which actually observed fraud behaviour, where
+#: BFCI carries the score on its own.
+_EVASION_RESISTANCE_SCORE: float = 45.0
+
+#: Severities that make evasion a fight rather than a fingerprinting check.
+_SUBSTANTIVE_EVASION_SEVERITIES = frozenset({"HIGH", "CRITICAL"})
+
+#: Hooks that are themselves an attempt to defeat the analysis, whatever
+#: severity the agent stamped on them. Self-termination is the clearest case:
+#: an app ending its own process on detecting instrumentation is not probing
+#: the environment, it is refusing to be watched.
+_ACTIVE_EVASION_HOOKS = (
+    "killProcess",
+    "System.exit",
+    "Runtime.exit",
+    "Runtime.halt",
+)
+
+
+def _evasive_explains_the_silence(events: Any) -> bool:
+    """
+    Whether this evasion accounts for a run that produced no UI and no fraud.
+
+    Narrower than _evasion_is_substantive on purpose. That function decides
+    whether evasion is worth scoring at all; this one decides whether it
+    outranks NO_UI_RENDERED, which is a stronger claim - it says the sample
+    ENDED itself rather than merely probed its surroundings.
+
+    Only self-termination qualifies. An app that read Build.MODEL and then
+    showed no screen has not explained the missing screen; an app that called
+    System.exit has.
+    """
+    for event in events or []:
+        if not isinstance(event, dict):
+            continue
+        data = event.get("data") if isinstance(event.get("data"), dict) else {}
+        hook = str(event.get("hook") or event.get("method") or data.get("hook") or "")
+        if any(marker in hook for marker in _ACTIVE_EVASION_HOOKS):
+            return True
+    return False
+
+
+def _evasion_is_substantive(events: Any) -> bool:
+    """
+    Whether this evasion is the sample fighting the analysis, not just looking.
+
+    A Build.MODEL read is a fingerprinting check and must not be worth points.
+    Killing your own process when hooks appear is a different act, and it is one
+    we directly observed.
+    """
+    for event in events or []:
+        if not isinstance(event, dict):
+            continue
+        if str(event.get("severity", "")).upper() in _SUBSTANTIVE_EVASION_SEVERITIES:
+            return True
+        data = event.get("data") if isinstance(event.get("data"), dict) else {}
+        hook = str(event.get("hook") or event.get("method") or data.get("hook") or "")
+        if any(marker in hook for marker in _ACTIVE_EVASION_HOOKS):
+            return True
+    return False
 
 
 def dynamic_exclusion_reason(dynamic: Optional[Dict]) -> Optional[str]:
@@ -682,23 +941,143 @@ def dynamic_exclusion_reason(dynamic: Optional[Dict]) -> Optional[str]:
     if _dynamic_behavior_is_conclusive(dynamic):
         if status == "NO_BEHAVIOR_OBSERVED":
             return "NO_BEHAVIOR_OBSERVED"
+
+        # Observed SOMETHING, but nothing the fraud axis is made of.
+        #
+        # BFCI is computed only from the categories in BFCI_WEIGHTS. When none
+        # of them fired, a BFCI of 0.0 is not a measurement of "no fraud" - it
+        # is the absence of a measurement, and scoring it at the axis's 0.35
+        # weight reads as "we looked and it was clean".
+        #
+        # Measured on Anubis: the axis excluded gives FRS 34.44 Suspicious; the
+        # same run scored at 0.0 gives 19.38, inside the Safe band. Fifteen
+        # points were lost for successfully analysing the sample, so a dropper
+        # scored better by behaving during the window than by defeating the
+        # sandbox. risk_engine's own note names this: "observing nothing scored
+        # worse than failing to observe".
+        #
+        # This is the treatment the other inconclusive reasons already get. It
+        # does not invent a score; it declines to award one from no data.
+        return None
+
+    # ── Why there was no UI matters more than that there was none ────────────
+    #
+    # This check used to come first, so a sample that killed itself the moment
+    # it saw instrumentation was filed as "the app never rendered a screen" -
+    # the reason for the silence discarded in favour of a description of it.
+    #
+    # Measured on Teabot: 80 hooks installed, Application.onCreate fired, then
+    # Process.killProcess and System.exit. It did not fail to draw a window; it
+    # refused to run. NO_UI_RENDERED excluded the axis and said nothing,
+    # whereas the evasion is both an explanation and something we watched
+    # happen.
+    #
+    # So substantive, sample-attributable evasion is consulted first: when we
+    # know WHY nothing rendered, that answer wins. A run with no UI and no
+    # evasion still falls through to NO_UI_RENDERED below, unchanged.
+    _evasion = sample_attributable_evasion(dynamic.get("anti_analysis_events"))
+    if _evasion and _evasive_explains_the_silence(_evasion):
         return None
 
     if _ui_never_rendered(dynamic):
         return "NO_UI_RENDERED"
 
-    evasion_events = dynamic.get("anti_analysis_events")
-    try:
-        evasion_seen = len(evasion_events or []) > 0
-    except TypeError:
-        evasion_seen = False
-    if evasion_seen:
+    # Only the sample's own evasion counts. Reading this bucket raw meant the
+    # harness's Build-field spoofing - one event, present on every emulator run
+    # regardless of the sample - was enough to return EVASION_ONLY and exclude
+    # the dynamic axis. Five banking trojans scored Safe that way.
+    evasion_events = sample_attributable_evasion(dynamic.get("anti_analysis_events"))
+    if evasion_events:
+        # ── Resistance IS an observation about the sample ────────────────────
+        #
+        # Excluding here was protective, not principled: with BFCI at 0.0 the
+        # axis would have scored a clean zero at 0.35 weight, so "we could not
+        # observe it" would have read as "we observed nothing wrong". Excluding
+        # avoided that, at the cost of the report saying nothing at all.
+        #
+        # But an app that detects instrumentation and kills itself has not
+        # hidden from us - we watched it do that. Measured on a live sample:
+        #   [CRITICAL] Process.killProcess - app attempted to self-terminate
+        #   [CRITICAL] System.exit(10)     - app attempted to self-terminate
+        # both blocked by the harness, both attributable to the sample rather
+        # than to us (sample_attributable_evasion already strips the harness's
+        # own Build-field spoof, which is why that filter exists).
+        #
+        # So the axis is scored on the resistance instead of excluded - see
+        # _EVASION_RESISTANCE_SCORE. That raises the verdict rather than
+        # diluting it, which is the honest direction: self-termination on
+        # detection is behaviour no ordinary app exhibits.
+        #
+        # Low-severity evasion alone still excludes. A single Build.MODEL read
+        # is a fingerprinting check, not a fight, and must not be worth points.
+        if _evasion_is_substantive(evasion_events):
+            return None
         return "EVASION_ONLY"
 
     if status in _INCONCLUSIVE_STATUSES or outcome == "FAILED":
         return status or "FAILED"
 
     return "NO_BEHAVIOR_OBSERVED"
+
+
+def _dynamic_coverage_block(dynamic: Optional[Dict]) -> Dict[str, Any]:
+    """
+    Coverage and validity metadata for the FRS breakdown.
+
+    Read from the dynamic result's own `dynamic_coverage` block when it has one
+    (every run produced by the current sandbox does), and reconstructed
+    conservatively when serving a STORED case from before the block existed -
+    an old payload must not suddenly report zero coverage, which would read as
+    a regression in the sample rather than in the record.
+
+    Nothing here is scored. The score comes from BFCI, computed from observed
+    events; this is what the score TRAVELS WITH, so a partial run can never be
+    reported as though it were a complete one.
+    """
+    if not isinstance(dynamic, dict):
+        return {
+            "dynamic_status": "SKIPPED",
+            "dynamic_valid": False,
+            "dynamic_complete": False,
+            "dynamic_coverage_ratio": 0.0,
+            "goals_total": 0,
+            "goals_successful": 0,
+            "coverage_known": False,
+            "limitations": [],
+        }
+
+    block = dynamic.get("dynamic_coverage")
+    if isinstance(block, dict) and block:
+        return {
+            "dynamic_status": block.get("dynamic_status", ""),
+            "dynamic_valid": bool(block.get("dynamic_valid")),
+            "dynamic_complete": bool(block.get("dynamic_complete")),
+            "dynamic_coverage_ratio": float(block.get("coverage_ratio") or 0.0),
+            "goals_total": int(block.get("goals_total") or 0),
+            "goals_successful": int(block.get("goals_successful") or 0),
+            "goals_partial": int(block.get("goals_partial") or 0),
+            "goals_failed": int(block.get("goals_failed") or 0),
+            "goals_skipped": int(block.get("goals_skipped") or 0),
+            "goals_not_reached": int(block.get("goals_not_reached") or 0),
+            "coverage_known": True,
+            "timeout_reason": block.get("timeout_reason"),
+            "limitations": list(block.get("limitations") or []),
+            "coverage_narrative": block.get("narrative", ""),
+        }
+
+    # Legacy payload. `coverage_known` False is the load-bearing field: it tells
+    # the report to say "coverage was not recorded for this run" rather than to
+    # print a zero that would read as "nothing was covered".
+    return {
+        "dynamic_status": str(dynamic.get("dynamic_status") or ""),
+        "dynamic_valid": bool(_dynamic_run_was_conclusive(dynamic)),
+        "dynamic_complete": False,
+        "dynamic_coverage_ratio": 0.0,
+        "goals_total": 0,
+        "goals_successful": 0,
+        "coverage_known": False,
+        "limitations": [],
+    }
 
 
 def _dynamic_run_was_conclusive(dynamic: Optional[Dict]) -> bool:
@@ -739,7 +1118,30 @@ def _calculate_dynamic_score(dynamic: Optional[Dict]) -> Tuple[float, List[str]]
 
     # ── Frida path: proper BFCI formula ───────────────────────────────────────
     if engine == "frida":
-        return _calculate_bfci_from_frida(dynamic)
+        score, evidence = _calculate_bfci_from_frida(dynamic)
+        # A run whose only sample-attributable observation is substantive
+        # evasion scores on the resistance instead of on BFCI, which is
+        # legitimately 0.0 - none of the fraud buckets fired, and that stays
+        # true in the reported components.
+        #
+        # Without this the axis is included (see dynamic_exclusion_reason) at
+        # 0.0, and a sample that fought the sandbox would score exactly like
+        # one that sat still - the outcome the exclusion existed to prevent.
+        if score <= 0.0:
+            evasion_events = sample_attributable_evasion(
+                dynamic.get("anti_analysis_events")
+            )
+            if evasion_events and _evasion_is_substantive(evasion_events):
+                return _EVASION_RESISTANCE_SCORE, evidence + [
+                    f"Sample actively resisted analysis: "
+                    f"{len(evasion_events)} anti-analysis action(s) attributable "
+                    f"to the app, including attempts to terminate its own "
+                    f"process when instrumentation was detected. Scored "
+                    f"{_EVASION_RESISTANCE_SCORE:.0f}/100 on the dynamic axis - "
+                    f"BFCI remains 0.0 because no fraud capability fired, which "
+                    f"is what the sample prevented."
+                ]
+        return score, evidence
 
     # ── MobSF path: flat-bonus approximation ──────────────────────────────────
     score = 0.0
@@ -964,6 +1366,26 @@ def calculate_risk_score(
     # lowers it. The distinction is whether the sandbox actually observed
     # anything to reason about.
     dynamic_conclusive = dynamic_available and _dynamic_run_was_conclusive(dynamic_result)
+
+    # ── Coverage is not validity, and neither is completeness ────────────────
+    #
+    # Four separate questions were previously collapsed into one boolean, which
+    # is why a partial run could not be distinguished from a failed one in the
+    # report:
+    #
+    #   dynamic_available   Was the dynamic infrastructure there at all?
+    #   dynamic_valid       Did we obtain trustworthy dynamic evidence?
+    #   dynamic_complete    Were all planned investigation goals completed?
+    #   dynamic_coverage    How much of the plan was exercised?
+    #
+    # These are REPORTED, not scored. `dynamic_conclusive` above still decides
+    # whether the axis is included, and it is still derived from observed
+    # evidence rather than from goal completion - so a run with 60% coverage
+    # whose observed events clear the threshold is scored exactly as it always
+    # was, and one with 100% coverage and no events is still excluded. What
+    # changes is that the analyst can now see which of the two they are looking
+    # at instead of both reading as "inconclusive".
+    dynamic_coverage_block = _dynamic_coverage_block(dynamic_result)
 
     axes = [("stei", 0.25, stei, True)]
     axes.append(("dynamic", 0.35, dynamic_score, dynamic_conclusive))
@@ -1247,6 +1669,30 @@ def calculate_risk_score(
             "concealed_payload": bool(flags_dict.get("has_concealed_payload")),
             "dynamic_ran": dynamic_available,
             "dynamic_conclusive": dynamic_conclusive,
+
+            # ── Coverage and validity, reported alongside the score ──────────
+            # `dynamic_conclusive` above decides whether the axis is SCORED and
+            # is unchanged: it reads observed evidence, never goal completion.
+            # These four say what kind of run produced that score, so a partial
+            # run cannot silently read as a complete one:
+            #
+            #   COMPLETE                use the dynamic score normally
+            #   PARTIAL                 score the observed evidence, and say so
+            #   TIME_BUDGET_EXHAUSTED   score the observed evidence when there
+            #                           is any; otherwise treat as no behaviour
+            #   NO_BEHAVIOR_OBSERVED    do not pretend evidence exists; the
+            #                           static/evasion floors stay in force
+            #   INSTRUMENTATION_FAILED  exclude the axis and renormalise
+            #   SKIPPED                 exclude the axis
+            #
+            # All six of those outcomes are already produced by the existing
+            # exclusion logic. What is added here is the LABEL, so the report
+            # and the UI stop rendering "partial with evidence" and "we never
+            # got to look" identically.
+            "dynamic_status": dynamic_coverage_block.get("dynamic_status", ""),
+            "dynamic_valid": dynamic_coverage_block.get("dynamic_valid", False),
+            "dynamic_complete": dynamic_coverage_block.get("dynamic_complete", False),
+            "dynamic_coverage": dynamic_coverage_block,
             "verdict_floored_for_visibility": visibility_floored,
             "verdict_floored_for_evasion": evasion_floored,
             "verdict_floored_for_static_evidence": static_evidence_floored,
@@ -1263,6 +1709,15 @@ def calculate_risk_score(
                 "ob": stei_axes.get("ob", 0.0),
                 "ir": stei_axes.get("ir", 0.0),
             },
+            # Which STEI axes carried no evidence because the payload is
+            # concealed. Without this the reader sees CT 0.0 next to a STEI of
+            # 46 and cannot reconstruct the arithmetic - the axis was dropped
+            # and the rest renormalised, not scored as a zero. An unexplained
+            # number is the same defect as a wrong one.
+            "stei_axes_excluded": list(stei_axes.get("excluded") or []),
+            # Renormalised per-axis STEI weights, so the score ledger shows the
+            # arithmetic that was actually performed rather than a nominal one.
+            "stei_weights_used": dict(stei_axes.get("weights_used") or {}),
         },
 
         # Threat scenario correlation table

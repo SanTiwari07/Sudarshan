@@ -33,7 +33,7 @@ import shlex
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from sudarshan_core.engines.agentic.device_properties import get_screen_size
 from sudarshan_core.engines.agentic.tool_registry import get_tool
@@ -86,8 +86,56 @@ SCREEN_HEIGHT: int = int(os.getenv("SUDARSHAN_SCREEN_HEIGHT", "1920"))
 #: unbounded input storm. Longest realistic PIN/MPIN is 8 digits.
 MAX_TAP_SEQUENCE: int = 12
 
+#: Backspaces sent to empty a field whose current length is unknown. Batched
+#: into one `input keyevent`, so the cost is the length of one argv rather than
+#: one round trip per character. 64 covers every field in the corpus (the
+#: longest realistic entry is a 34-character email) with room to spare.
+CLEAR_FIELD_MAX_DELETES: int = int(
+    os.getenv("SUDARSHAN_CLEAR_FIELD_MAX_DELETES", "64")
+)
+
 DEFAULT_SCROLL_AMOUNT: int = 600
 DEFAULT_SWIPE_DURATION_MS: int = 300
+
+
+# ─── Soft keyboard ────────────────────────────────────────────────────────────
+#
+# Typing raises the IME, and the IME covers the bottom half of the screen.
+# Everything the agent wants next on a login form - the second field, the
+# "Login" button - lives exactly there. `input tap` at those coordinates lands
+# on a key of the keyboard instead, uiautomator dumps the IME's own hierarchy
+# over the app's, and the screen hash stops changing: the walk reads that as
+# "the app did nothing" and stalls on the form it had almost completed.
+#
+# So a field is not finished until the keyboard it raised is put away again.
+#
+# The dismissal is BACK, and it is only ever sent once the IME has been
+# CONFIRMED visible. Android routes BACK to the IME while the input view is
+# shown and the IME consumes it; with no IME up the same key leaves the
+# Activity, which on a login screen means leaving the app. "Cannot tell" is
+# therefore treated as "do not press", never as "press and hope".
+DISMISS_KEYBOARD_AFTER_TYPING: bool = os.getenv(
+    "SUDARSHAN_DISMISS_KEYBOARD", "1"
+).lower() in ("1", "true", "yes")
+
+#: Probes the IME state. `mInputShown` is the field on every API level the
+#: corpus runs on; `mIsInputViewShown` is its name on some vendor builds, so
+#: both are read and either one answers.
+_KEYBOARD_PROBE = "dumpsys input_method | grep -E 'mInputShown|mIsInputViewShown'"
+
+#: IME action keys. "next" is a TAB rather than an ENTER on purpose: on a
+#: multi-field form ENTER commits and TAB advances, and asking for the wrong
+#: one submits a half-filled form.
+ACTION_KEYCODES: Dict[str, str] = {
+    "enter":  "KEYCODE_ENTER",
+    "go":     "KEYCODE_ENTER",
+    "done":   "KEYCODE_ENTER",
+    "send":   "KEYCODE_ENTER",
+    "search": "KEYCODE_SEARCH",
+    "next":   "KEYCODE_TAB",
+    "tab":    "KEYCODE_TAB",
+    "escape": "KEYCODE_ESCAPE",
+}
 
 
 # ─── Action pacing ────────────────────────────────────────────────────────────
@@ -133,8 +181,9 @@ def _paced(seconds: float) -> float:
 # Tools that can change what is on screen. Only these need an idle wait; making
 # a screenshot or a logcat read pay for one would waste most of the time budget.
 NAVIGATIONAL_TOOLS: frozenset = frozenset({
-    "tap", "tap_sequence", "click_text", "swipe", "scroll", "long_press",
-    "press_back", "press_home", "press_enter",
+    "tap", "tap_sequence", "click_text", "click_node", "swipe", "scroll",
+    "long_press",
+    "press_back", "press_home", "press_enter", "hide_keyboard",
     # "am_start" used to be listed here, but no tool of that name exists in
     # TOOL_REGISTRY or on this class - the real one is "start_activity", which
     # was missing. The effect was that relaunching the app never waited for the
@@ -296,6 +345,13 @@ class ToolExecutor:
 
     # ── ADB Helper ─────────────────────────────────────────────────────────────
 
+    @property
+    def _channel(self):
+        """The persistent device connection shared with PerceptionPipeline."""
+        from sudarshan_core.sandbox.device_channel import get_channel
+
+        return get_channel(self.device_serial)
+
     async def _adb(self, *args: str) -> tuple[bool, str]:
         """Run an ADB command asynchronously via SandboxProvider (policy-enforced)."""
         provider = get_sandbox_provider()
@@ -327,7 +383,13 @@ class ToolExecutor:
                 data={"coordinate_validation": "FAIL", "reason": reason, "x": x, "y": y},
             )
         logger.info("[ToolExecutor] ADB_TAP x=%s y=%s", x, y)
-        ok, out = await self._adb("shell", "input", "tap", str(x), str(y))
+        # The channel taps over the connection that is already open. Same
+        # coordinate semantics, without the process spawn and TCP handshake
+        # that made a single action cost seconds.
+        if await asyncio.to_thread(self._channel.click_xy, x, y):
+            ok, out = True, ""
+        else:
+            ok, out = await self._adb("shell", "input", "tap", str(x), str(y))
         await asyncio.sleep(_paced(0.8))
         return ToolResult(
             success=ok, tool="tap", output=out,
@@ -345,9 +407,128 @@ class ToolExecutor:
         )
 
     async def _tool_tap(self, action: Dict) -> ToolResult:
-        x, y = int(action["x"]), int(action["y"])
+        x, y = int(action['x']), int(action['y'])
+        # The ladder's `normalized_coordinates` rung asks for the point to be
+        # re-mapped against the LIVE device resolution before it is tapped.
+        # That is the rung's whole purpose: coordinates computed against a
+        # screenshot of a different size land tens of pixels off, which is
+        # indistinguishable from an inert control until they are re-mapped.
+        if action.get("_normalize_to_device"):
+            x, y = self._normalize_to_device(x, y, action)
         result = await self._input_tap(x, y)
         result.tool = "tap"
+        return result
+
+    def _normalize_to_device(
+        self, x: int, y: int, action: Dict
+    ) -> Tuple[int, int]:
+        """
+        Re-map a coordinate that was computed against a differently-sized frame.
+
+        The source frame is whatever produced the coordinate - a screenshot, or
+        an older `wm size` reading carried on the action. When no source size is
+        known, or it already matches the device, the point is returned
+        unchanged: guessing a scale factor would move a correct coordinate.
+        """
+        from sudarshan_core.engines.agentic.action_dispatch import (
+            screenshot_coords_to_device,
+        )
+
+        src_w = action.get("_source_width") or action.get("image_width")
+        src_h = action.get("_source_height") or action.get("image_height")
+        dev_w, dev_h = self.screen_size
+        if not src_w or not src_h or not dev_w or not dev_h:
+            return x, y
+        try:
+            return screenshot_coords_to_device(
+                x, y,
+                image_width=int(src_w), image_height=int(src_h),
+                device_width=int(dev_w), device_height=int(dev_h),
+            )
+        except (TypeError, ValueError):
+            return x, y
+
+    async def _tool_click_node(self, action: Dict) -> ToolResult:
+        """
+        Tap a node identified by resource-id or uiautomator node id.
+
+        The rung of the ladder that exists because text lookup and coordinates
+        are the SAME hypothesis dressed differently: `click_text` computes its
+        coordinates from the hierarchy, so when it misses, tapping those
+        coordinates misses identically. This resolves the element by identity
+        instead, from a hierarchy dumped now rather than at selection time - so
+        it also recovers a control that has since moved.
+        """
+        import xml.etree.ElementTree as ET
+
+        node_id = str(action.get("node_id") or "").strip()
+        resource_id = str(action.get("resource_id") or "").strip()
+        if not node_id and not resource_id:
+            return ToolResult(
+                success=False, tool="click_node",
+                error="click_node needs a node_id or a resource_id",
+            )
+
+        xml = await self._get_ui_xml()
+        if not xml:
+            return ToolResult(
+                success=False, tool="click_node",
+                error="UI hierarchy could not be read",
+            )
+        try:
+            root = ET.fromstring(xml)
+        except ET.ParseError as exc:
+            return ToolResult(
+                success=False, tool="click_node",
+                error=f"UI hierarchy did not parse: {exc}",
+            )
+
+        nodes = list(root.iter("node"))
+
+        def _short(raw: str) -> str:
+            return raw.split("/")[-1] if "/" in raw else raw
+
+        match = None
+        if resource_id:
+            wanted = _short(resource_id)
+            match = next(
+                (n for n in nodes
+                 if _short(n.attrib.get("resource-id", "")) == wanted),
+                None,
+            )
+        if match is None and node_id:
+            # node_id is assigned positionally by the perception parser ("n7"),
+            # so it only resolves against a hierarchy parsed the same way.
+            m = re.match(r"n(\d+)$", node_id)
+            if m and 0 <= int(m.group(1)) < len(nodes):
+                match = nodes[int(m.group(1))]
+
+        if match is None:
+            return ToolResult(
+                success=False, tool="click_node",
+                error=f"node not found (node_id={node_id!r} "
+                      f"resource_id={resource_id!r})",
+            )
+
+        bounds = re.match(
+            r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]",
+            match.attrib.get("bounds", ""),
+        )
+        if not bounds:
+            return ToolResult(
+                success=False, tool="click_node",
+                error="matched node has no parseable bounds",
+            )
+        x1, y1, x2, y2 = (int(g) for g in bounds.groups())
+        result = await self._input_tap((x1 + x2) // 2, (y1 + y2) // 2)
+        result.tool = "click_node"
+        result.data = {
+            **(result.data or {}),
+            "resolved_by": "resource_id" if resource_id else "node_id",
+            "node_id": node_id,
+            "resource_id": resource_id,
+            "bounds": match.attrib.get("bounds", ""),
+        }
         return result
 
     async def _tool_tap_sequence(self, action: Dict) -> ToolResult:
@@ -362,7 +543,9 @@ class ToolExecutor:
         Bounded by MAX_TAP_SEQUENCE so a malformed `repeat` cannot turn into an
         unbounded input storm against the device.
         """
-        x, y = int(action["x"]), int(action["y"])
+        x, y = int(action['x']), int(action['y'])
+        if action.get('_normalize_to_device'):
+            x, y = self._normalize_to_device(x, y, action)
         repeat = max(1, min(int(action.get("repeat", 1)), MAX_TAP_SEQUENCE))
         ok = True
         for _ in range(repeat):
@@ -603,6 +786,96 @@ class ToolExecutor:
         return ToolResult(success=ok, tool="press_home", output=out,
                           error=out if not ok else None)
 
+    # ── Soft keyboard ─────────────────────────────────────────────────────────
+
+    async def is_keyboard_visible(self) -> Optional[bool]:
+        """
+        Whether the IME's input view is on screen.
+
+        Tri-state on purpose. `None` means the probe could not answer - a
+        failed shell, a build that reports neither field - and the caller must
+        read that as "unknown", never as "not shown". The only irreversible
+        action downstream (pressing BACK) is gated on a definite True.
+        """
+        ok, out = await self._adb("shell", _KEYBOARD_PROBE)
+        if not ok or not out:
+            return None
+        text = out.lower()
+        if "mInputShown=true".lower() in text or "misinputviewshown=true" in text:
+            return True
+        if "minputshown=false" in text or "misinputviewshown=false" in text:
+            return False
+        return None
+
+    async def hide_keyboard(self) -> ToolResult:
+        """
+        Put the soft keyboard away so the controls under it become tappable.
+
+        A no-op - reported as success - when the keyboard is already down or
+        when the IME state cannot be read. Success here means "the screen is
+        not occluded as far as we can tell", which is what the caller needs to
+        decide whether its next tap is worth dispatching.
+        """
+        visible = await self.is_keyboard_visible()
+        if visible is not True:
+            return ToolResult(
+                success=True,
+                tool="hide_keyboard",
+                output="keyboard not shown" if visible is False else "keyboard state unknown",
+                data={
+                    "keyboard_was_visible": bool(visible),
+                    "keyboard_state": "hidden" if visible is False else "unknown",
+                    "dismissed": False,
+                },
+            )
+
+        ok, out = await self._adb("shell", "input", "keyevent", "KEYCODE_BACK")
+        await asyncio.sleep(_paced(0.5))
+        still_visible = await self.is_keyboard_visible()
+        dismissed = still_visible is not True
+        if not dismissed:
+            logger.debug("[ToolExecutor] Keyboard still shown after BACK")
+        return ToolResult(
+            success=ok,
+            tool="hide_keyboard",
+            output=out,
+            error=out if not ok else None,
+            adb_command="input keyevent KEYCODE_BACK",
+            adb_return_code=0 if ok else 1,
+            data={
+                "keyboard_was_visible": True,
+                "keyboard_state": "hidden" if dismissed else "shown",
+                "dismissed": bool(dismissed),
+            },
+        )
+
+    async def press_action_key(self, key: str = "enter") -> ToolResult:
+        """
+        Send an IME action key (Go / Done / Next / Search) to the focused field.
+
+        This is how a login form is committed when its button is under the
+        keyboard: the IME's own action key is always reachable, whatever the
+        layout below it looks like.
+        """
+        keycode = ACTION_KEYCODES.get(str(key or "enter").lower(), "KEYCODE_ENTER")
+        ok, out = await self._adb("shell", "input", "keyevent", keycode)
+        await asyncio.sleep(_paced(0.8))
+        return ToolResult(
+            success=ok,
+            tool="press_enter",
+            output=out,
+            error=out if not ok else None,
+            adb_command=f"input keyevent {keycode}",
+            adb_return_code=0 if ok else 1,
+            data={"key": str(key or "enter").lower(), "keycode": keycode},
+        )
+
+    async def _tool_hide_keyboard(self, action: Dict) -> ToolResult:
+        return await self.hide_keyboard()
+
+    async def _tool_press_enter(self, action: Dict) -> ToolResult:
+        return await self.press_action_key(action.get("key", "enter"))
+
     async def _tool_type_text(self, action: Dict) -> ToolResult:
         """
         Type text into a focused input field.
@@ -612,7 +885,9 @@ class ToolExecutor:
         """
         sw, sh = self.screen_size
         x = int(action.get("x", sw // 2))
-        y = int(action.get("y", sh // 2))
+        y = int(action.get('y', sh // 2))
+        if action.get('_normalize_to_device'):
+            x, y = self._normalize_to_device(x, y, action)
         field_hint = action.get("field_hint", "search")
 
         # Resolve actual value (not stored in result).
@@ -662,14 +937,167 @@ class ToolExecutor:
             )
         safe_text    = actual_value.replace(" ", "%s")
 
+        # ── Preferred: set the field's text by NODE ──────────────────────────
+        #
+        # `input text` writes to whatever holds focus at the moment the
+        # keystrokes land, which is not necessarily the field we aimed at. A
+        # real run recorded generated credentials typed into
+        # com.google.android.apps.nexuslauncher, because the app moved to the
+        # background between the observation and the typing.
+        #
+        # set_text resolves the focused editable first and REPLACES its
+        # contents, so it also removes the MOVE_END + N x KEYCODE_DEL clearing
+        # dance below (whose failure mode was silent appending:
+        # `user4f2a` -> `user4f2auser9c1b`), needs no IME on screen, and carries
+        # characters `input text` cannot express.
+        #
+        # A False answer means the node could not be resolved - which is
+        # exactly the case where blind typing would have gone somewhere wrong -
+        # so the ADB path below runs only when the channel is absent, and the
+        # verifier still checks what actually landed in the field.
+        if self._channel.available:
+            resource_id = (action.get("resource_id") or "").strip()
+            wrote = False
+            # A resourceId names the field regardless of what is focused or
+            # what moved on screen since the observation - the strongest
+            # selector available. Focus is the fallback for the many samples
+            # whose fields carry no id.
+            if resource_id:
+                wrote = await asyncio.to_thread(
+                    self._channel.set_text_node, actual_value,
+                    resourceId=resource_id,
+                )
+            if not wrote and await asyncio.to_thread(self._channel.click_xy, x, y):
+                await asyncio.sleep(_paced(0.3))
+                wrote = await asyncio.to_thread(
+                    self._channel.set_text_focused, actual_value
+                )
+            if wrote:
+                keyboard_data: Dict[str, Any] = {}
+                dismiss = action.get("dismiss_keyboard")
+                if dismiss is None:
+                    dismiss = DISMISS_KEYBOARD_AFTER_TYPING
+                if dismiss:
+                    hide_data = (await self.hide_keyboard()).data or {}
+                    keyboard_data = {
+                        "keyboard_was_visible": hide_data.get("keyboard_was_visible"),
+                        "keyboard_state": hide_data.get("keyboard_state", "unknown"),
+                        "keyboard_dismissed": bool(hide_data.get("dismissed")),
+                    }
+                return ToolResult(
+                    success=True,
+                    tool="type_text",
+                    adb_command=f"set_text(field_hint={field_hint})",
+                    adb_return_code=0,
+                    data={
+                        "field_hint": field_hint,
+                        "field_type": field_type or "",
+                        "typed_length": len(actual_value),
+                        # set_text REPLACES the field contents, so the field is
+                        # clean by construction - there is no separate clear
+                        # step that can silently fail and leave the value
+                        # appended to what was already there.
+                        "field_cleared": True,
+                        "input_method": "node_set_text",
+                        "resource_id": resource_id,
+                        "node_id": action.get("node_id", ""),
+                        "x": x,
+                        "y": y,
+                        "coordinate_validation": "PASS",
+                        "adb_command_generated": True,
+                        "adb_command_executed": True,
+                        "adb_return_code": 0,
+                        **keyboard_data,
+                    },
+                )
+            logger.info(
+                "[ToolExecutor] set_text could not resolve a field at (%s,%s) "
+                "for field_hint=%s - falling back to input text",
+                x, y, field_hint,
+            )
+
         # Tap the field first to focus it
         await self._adb("shell", "input", "tap", str(x), str(y))
         await asyncio.sleep(_paced(0.4))
-        # Clear existing content
-        await self._adb("shell", "input", "keyevent", "KEYCODE_CTRL_A")
+
+        # ── Clear existing content ───────────────────────────────────────────
+        #
+        # This used to send `input keyevent KEYCODE_CTRL_A`. That is not an
+        # Android keycode - KeyEvent defines KEYCODE_CTRL_LEFT and
+        # KEYCODE_CTRL_RIGHT and no per-letter chord - so the device answered
+        # "Unknown keycode" and cleared nothing. The result was discarded, so
+        # the failure was silent and every re-entry APPENDED:
+        # `user4f2a` -> `user4f2auser9c1b` -> ..., which no email or phone
+        # validator accepts. A login box filled once never showed it; a
+        # registration form revisited after a validation error always did.
+        #
+        # `input keycombination` would express Ctrl+A but only exists on API 30+.
+        # Caret-to-end plus backspaces works on every level the corpus runs on,
+        # and `input keyevent` accepts a whole list of keycodes, so the entire
+        # clear is ONE round trip rather than one per character.
+        existing_length = action.get("existing_length")
+        try:
+            existing_length = int(existing_length) if existing_length else 0
+        except (TypeError, ValueError):
+            existing_length = 0
+
+        if existing_length > 0:
+            # A margin over the observed length: the reading came from the
+            # previous observation and the field may have gained a character
+            # since (an IME autocorrect, a formatting mask inserting spaces).
+            deletes = min(existing_length + 4, CLEAR_FIELD_MAX_DELETES)
+        else:
+            # Length unknown. Clear to the cap - the extra backspaces are free
+            # in an already-empty field and cost nothing extra on the wire.
+            deletes = CLEAR_FIELD_MAX_DELETES
+
+        clear_ok, clear_out = await self._adb(
+            "shell", "input", "keyevent",
+            "KEYCODE_MOVE_END", *(["KEYCODE_DEL"] * deletes),
+        )
+        if not clear_ok:
+            # Surfaced rather than swallowed: an uncleared field means the value
+            # below is appended to whatever was there. Typing still proceeds -
+            # a field with the wrong value is more recoverable than one never
+            # filled - and `field_cleared` lets the field-population verifier
+            # read the resulting length mismatch as a retry rather than as the
+            # app rejecting our value.
+            logger.warning(
+                "[ToolExecutor] Could not clear field before typing "
+                "(field_hint=%s): %s", field_hint, (clear_out or "")[:120],
+            )
         await asyncio.sleep(_paced(0.2))
+
         ok, out = await self._adb("shell", "input", "text", shlex.quote(safe_text))
         await asyncio.sleep(_paced(0.6))
+
+        # ── Put the keyboard away ────────────────────────────────────────────
+        #
+        # The field is filled but the IME it raised is still covering the
+        # bottom of the screen, and that is where the next field and the submit
+        # button are. Leaving it up is what stalled the walk on a login form:
+        # the tap for "Login" landed on a keyboard key, the screen hash did not
+        # move, and the loop read the form as unresponsive.
+        #
+        # `press_key` commits through the IME's own action key first when the
+        # caller asks for it - useful when the button really is unreachable -
+        # and `dismiss_keyboard=False` opts a caller out entirely.
+        keyboard_data: Dict[str, Any] = {}
+        press_key = action.get("press_key") or ""
+        if ok and press_key:
+            key_result = await self.press_action_key(press_key)
+            keyboard_data["action_key"] = (key_result.data or {}).get("keycode", "")
+            keyboard_data["action_key_sent"] = bool(key_result.success)
+
+        dismiss = action.get("dismiss_keyboard")
+        if dismiss is None:
+            dismiss = DISMISS_KEYBOARD_AFTER_TYPING
+        if ok and dismiss:
+            hide_result = await self.hide_keyboard()
+            hide_data = hide_result.data or {}
+            keyboard_data["keyboard_was_visible"] = hide_data.get("keyboard_was_visible")
+            keyboard_data["keyboard_state"] = hide_data.get("keyboard_state", "unknown")
+            keyboard_data["keyboard_dismissed"] = bool(hide_data.get("dismissed"))
 
         return ToolResult(
             success=ok,
@@ -686,10 +1114,16 @@ class ToolExecutor:
                 "field_hint": field_hint,
                 "field_type": field_type or "",
                 "typed_length": len(actual_value),
+                # Whether the field was empty when the value went in. A False
+                # here means the observed length may legitimately exceed
+                # typed_length, and the verifier must read that as our failure
+                # to clear rather than as the field truncating our value.
+                "field_cleared": bool(clear_ok),
                 "resource_id": action.get("resource_id", ""),
                 "node_id": action.get("node_id", ""),
                 "x": x,
                 "y": y,
+                **keyboard_data,
             },
             error=out if not ok else None,
         )
@@ -886,6 +1320,70 @@ class ToolExecutor:
                 await asyncio.sleep(_paced(1.5))
                 # monkey exits 0 and prints its error, so the text decides.
                 launched = ok and "No activities found" not in (out or "")
+
+                # ── A package with no launcher is not a failed launch ────────
+                #
+                # monkey can only start something carrying
+                # android.intent.category.LAUNCHER. A dropped payload routinely
+                # declares none - it installs, hides its icon, and lives as a
+                # service or receiver. Measured on a live run:
+                #   pm path com.pagethan10      -> installed
+                #   resolve-activity LAUNCHER   -> No activity found
+                # and the explorer re-issued the same monkey command every ~2s,
+                # spending its action budget on a command that could never
+                # succeed.
+                #
+                # So: try any activity the package DOES export, and if there is
+                # genuinely none, say so terminally. `headless=True` marks it as
+                # a property of the sample rather than a transient failure, so
+                # the caller can record it and move on instead of retrying.
+                if not launched and "No activities found" in (out or ""):
+                    ok_r, comp = await self._adb(
+                        "shell", "cmd", "package", "resolve-activity",
+                        "--brief", shlex.quote(package),
+                    )
+                    component_line = ""
+                    for line in reversed((comp or "").splitlines()):
+                        line = line.strip()
+                        if "/" in line and package in line:
+                            component_line = line
+                            break
+                    if component_line:
+                        ok2, out2 = await self._adb(
+                            "shell", "am", "start", "-n", shlex.quote(component_line),
+                        )
+                        await asyncio.sleep(_paced(1.5))
+                        if ok2 and "Error" not in (out2 or ""):
+                            logger.info(
+                                "[ToolExecutor] %s declares no LAUNCHER activity; "
+                                "started its exported component %s instead",
+                                package, component_line,
+                            )
+                            return ToolResult(
+                                success=True, tool="start_activity", output=out2,
+                                data={
+                                    "launched_package": package,
+                                    "via": "resolved_component",
+                                    "component": component_line,
+                                },
+                            )
+                    logger.info(
+                        "[ToolExecutor] %s has no launchable activity at all - "
+                        "headless payload. Not retrying; its behaviour is "
+                        "observed through the hooks rather than the UI.",
+                        package,
+                    )
+                    return ToolResult(
+                        success=False, tool="start_activity", output=out,
+                        error=f"{package} declares no launchable activity (headless)",
+                        data={
+                            "launched_package": package,
+                            "via": "monkey",
+                            "headless": True,
+                            "retryable": False,
+                        },
+                    )
+
                 return ToolResult(
                     success=launched, tool="start_activity", output=out,
                     error=None if launched else (out or "monkey launch failed"),

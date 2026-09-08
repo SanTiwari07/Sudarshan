@@ -149,6 +149,23 @@ def test_env_override_takes_priority(monkeypatch):
 
 
 def test_invalid_env_override_is_ignored(monkeypatch):
+    """
+    A non-numeric override must be ignored rather than crashing or being
+    half-applied.
+
+    The device query is stubbed out rather than defeated with a bogus
+    adb_path. `get_screen_size` routes every query through
+    `get_sandbox_provider()` - the policy-enforcing choke point - and does not
+    use `adb_path` at all, so on a machine with an emulator attached the bogus
+    path did not prevent a real `wm size`, and the assertion compared the
+    fallback against that device's true resolution (1080x2400 here). The test
+    passed only where no device was connected.
+
+    What is under test is the override handling, so the device answer is made
+    deterministic instead of being left to whatever hardware is plugged in.
+    """
+    import sudarshan_core.engines.agentic.device_properties as dp
+
     clear_cache()
     
     # Mock adb so it fails instead of returning real device stats
@@ -157,9 +174,17 @@ def test_invalid_env_override_is_ignored(monkeypatch):
     
     monkeypatch.setenv("SUDARSHAN_SCREEN_WIDTH", "not-a-number")
     monkeypatch.setenv("SUDARSHAN_SCREEN_HEIGHT", "3120")
-    assert get_screen_size(adb_path="definitely-not-a-real-binary") == (
-        FALLBACK_SCREEN_WIDTH, FALLBACK_SCREEN_HEIGHT
+
+    class _NoDevice:
+        def adb(self, *a, **k):
+            return False, ""
+
+    monkeypatch.setattr(dp, "get_sandbox_provider", lambda: _NoDevice(), raising=False)
+    monkeypatch.setattr(
+        "sudarshan_core.sandbox.get_sandbox_provider", lambda: _NoDevice(),
     )
+
+    assert get_screen_size() == (FALLBACK_SCREEN_WIDTH, FALLBACK_SCREEN_HEIGHT)
 
 
 def test_falls_back_when_adb_unavailable(monkeypatch):

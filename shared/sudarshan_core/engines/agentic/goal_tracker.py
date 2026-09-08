@@ -32,6 +32,21 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
+from sudarshan_core.engines.behavior_taxonomy import (
+    Behavior,
+    BehaviorObservation,
+    BehaviorWeight,
+    EvidenceStrength,
+    classify_events,
+    evaluate_behaviour_evidence,
+)
+from sudarshan_core.engines.dynamic_budget import TIMEOUT_REASON
+from sudarshan_core.engines.runtime_event import (
+    NormalizedEvent,
+    normalize_collected_events,
+    normalize_events,
+)
+
 logger = logging.getLogger(__name__)
 
 # ─── Tunables ─────────────────────────────────────────────────────────────────
@@ -61,11 +76,49 @@ LAUNCH_GOAL_NAME: str = "Launch Application"
 # ─── Goal Status ──────────────────────────────────────────────────────────────
 
 class GoalStatus(str, Enum):
+    """
+    One goal's independent lifecycle state.
+
+    Every goal owns its own state. There is deliberately NO global boolean
+    derived from these - no ``dynamic_valid = all(goals_successful)`` - because
+    a run in which nine goals produced evidence and six did not is a run with
+    nine goals' worth of evidence in it. Coverage is computed from the
+    distribution (see :meth:`GoalTracker.coverage_report`); VALIDITY is decided
+    from observed evidence elsewhere and never from this enum.
+    """
+
     PENDING     = "PENDING"       # Not yet started
     IN_PROGRESS = "IN_PROGRESS"   # Agent is actively working on this goal
     COMPLETED   = "COMPLETED"     # Evidence collected or goal satisfied
+    #: The goal produced SOME evidence but was never confirmed - a login form
+    #: filled but not submitted, an overlay permission screen answered with no
+    #: overlay drawn afterwards. Distinct from FAILED, which produced nothing,
+    #: and from COMPLETED, which produced confirmation. Counts half toward
+    #: effective coverage; contributes only its ACTUAL evidence to scoring.
+    PARTIAL     = "PARTIAL_SUCCESS"
     SKIPPED     = "SKIPPED"       # Evidence proves not applicable; skip safely
     FAILED      = "FAILED"        # Agent tried but could not trigger
+    #: The run ended - budget, deadline or crash - before this goal was ever
+    #: selected. Says nothing about the sample, and must never be reported as
+    #: an absence of the behaviour. Assigned by :meth:`GoalTracker.finalize`.
+    NOT_REACHED = "NOT_REACHED"
+    #: This goal was being worked when the global wall-clock deadline arrived.
+    #: Distinct from NOT_REACHED (never started) and from FAILED (tried and
+    #: could not trigger): the attempt was cut off, not concluded.
+    TIMEOUT     = "TIMEOUT"
+    #: Something outside the sample stopped the investigation reaching this
+    #: goal - an authentication wall with no obtainable account, a permission
+    #: the sandbox will not grant, a device capability the emulator lacks, or
+    #: the sample refusing to run. Deliberately NOT collapsed into NOT_REACHED:
+    #: "we could not get there" and "we ran out of budget before trying" call
+    #: for completely different remediation, and merging them was hiding the
+    #: single most actionable fact a failed run produces.
+    BLOCKED     = "BLOCKED"
+    #: Static analysis proves this goal cannot apply to this sample - it
+    #: declares no accessibility service, requests no SMS permission. Reporting
+    #: such a goal as FAILED would penalise a sample for not doing something it
+    #: was never built to do.
+    NOT_APPLICABLE = "NOT_APPLICABLE"
     UNSUPPORTED = "UNSUPPORTED"   # No instrument exists that could confirm this
 
 
@@ -85,14 +138,38 @@ class GoalStatus(str, Enum):
 #: precondition held.
 RESOLVED_STATES: frozenset = frozenset({
     GoalStatus.COMPLETED,
+    GoalStatus.PARTIAL,
     GoalStatus.SKIPPED,
     GoalStatus.FAILED,
+    GoalStatus.NOT_REACHED,
+    GoalStatus.TIMEOUT,
+    GoalStatus.BLOCKED,
+    GoalStatus.NOT_APPLICABLE,
     GoalStatus.UNSUPPORTED,
 })
 
 #: Statuses that mean the goal was actually SATISFIED - the behaviour was
 #: observed. Only COMPLETED. Used for coverage reporting, never for unblocking.
 SATISFIED_STATES: frozenset = frozenset({GoalStatus.COMPLETED})
+
+#: Statuses no further evidence may move a goal out of. PARTIAL is deliberately
+#: NOT here: a goal that produced some evidence can still be confirmed by a
+#: later hook, and demoting it to terminal would discard that upgrade.
+TERMINAL_STATES: frozenset = frozenset({
+    GoalStatus.COMPLETED,
+    GoalStatus.SKIPPED,
+    GoalStatus.NOT_APPLICABLE,
+    GoalStatus.UNSUPPORTED,
+})
+
+#: Weight a PARTIAL_SUCCESS goal carries toward effective coverage.
+#:
+#: Half, and the number is a reporting convention rather than a measurement:
+#: it exists so "9 confirmed + 2 partial of 15" reports as 66.7% instead of
+#: either 60% (partial evidence discarded) or 73.3% (partial counted as
+#: confirmed). It NEVER touches BFCI or FRS - scoring reads observed events,
+#: not goal states. See §P13.
+PARTIAL_GOAL_WEIGHT: float = 0.5
 
 
 # ─── Confirmation modes ───────────────────────────────────────────────────────
@@ -110,6 +187,15 @@ class ConfirmationMode(str, Enum):
     #: precedes every hook, and a permission grant is a property of the
     #: package manager, not of a call the app makes.
     DEVICE_STATE = "DEVICE_STATE"
+    #: Confirmed by a canonical BEHAVIOUR rather than by a named hook.
+    #:
+    #: The behaviour layer maps several hooks onto one meaning, so a goal in
+    #: this mode survives the agent renaming a hook - which is the failure the
+    #: hook-name contract exists to catch and which left four stages
+    #: unreachable. A goal declaring this mode MUST declare
+    #: `required_behaviors`; the contract test enforces that, so the mode
+    #: cannot become a way to skip the guard.
+    BEHAVIOR = "BEHAVIOR"
     #: The current Frida agent emits nothing that honestly demonstrates this
     #: goal. The goal resolves as UNSUPPORTED and says so, rather than sitting
     #: PENDING forever while the run reports itself finished.
@@ -177,6 +263,45 @@ class FraudGoal:
     status:           GoalStatus          = GoalStatus.PENDING
     attempts:         int                 = 0
     retries_used:     int                 = 0
+    #: Why this goal ended where it did, in one machine-readable token
+    #: ("no_state_transition", "auth_flow_rejected", "time_budget_exhausted").
+    #: Reported per goal so the analyst can tell a goal that was refused from
+    #: one that was never tried. Never a verdict about the sample.
+    failure_reason:   str                 = ""
+    #: Verified, non-confirming progress this goal produced: a field populated,
+    #: a screen transition proven by PRE/POST observation, a permission grant.
+    #: This is what separates PARTIAL_SUCCESS from FAILED - the goal moved the
+    #: device somewhere, it just never reached its own confirmation.
+    progress_signals: List[str]           = field(default_factory=list)
+    #: Wall-clock seconds this goal has consumed. Compared against the adaptive
+    #: per-goal slice so one difficult goal cannot absorb the whole run.
+    time_spent_seconds: float             = 0.0
+    #: Planner (LLM) calls spent on this goal, capped per goal so a model that
+    #: keeps returning the same unusable action cannot be asked forever.
+    planner_calls:    int                 = 0
+    #: Canonical behaviours that CONFIRM this goal. Declared instead of raw
+    #: hook names, which is the fix for a defect the contract tests have been
+    #: reporting since they were written: a goal naming a hook the agent does
+    #: not emit is unreachable by construction, and four stages were.
+    #:
+    #: Confirmation strength is decided by
+    #: behavior_taxonomy.evaluate_behaviour_evidence, so a single ubiquitous
+    #: observation can never complete a goal however many times it fires.
+    required_behaviors: List[Behavior]  = field(default_factory=list)
+    #: Behaviours consistent with this goal that are never sufficient alone.
+    #: They produce PARTIAL and are named in the report.
+    supporting_behaviors: List[Behavior] = field(default_factory=list)
+    #: What a behaviour proves FOR THIS GOAL, where that differs from what it
+    #: proves in general. Weight is a property of the (behaviour, claim) pair:
+    #: lifecycle callbacks are ubiquitous evidence of code loading and decisive
+    #: evidence that the app launched at all.
+    behavior_weights: Dict[Behavior, BehaviorWeight] = field(default_factory=dict)
+    #: The evidence verdict from the last reconciliation, kept so the report can
+    #: say WHAT was proven rather than only that something was.
+    evidence_verdict: Optional[Any]     = None
+    #: What stopped this goal, when the answer is "something outside the
+    #: sample". One of the BLOCKED_* tokens.
+    blocked_reason:   str               = ""
 
     def __post_init__(self) -> None:
         if not self.completion_categories:
@@ -254,6 +379,17 @@ def _build_default_goals() -> List[FraudGoal]:
             # they are attached to is running - so it is confirmed by observing
             # the foreground window instead. See update_from_foreground().
             confirmation=ConfirmationMode.DEVICE_STATE,
+            # Lifecycle callbacks from the instrumented process are
+            # DIRECT proof the application started and ran its own code -
+            # strictly stronger than the foreground poll this stage used
+            # to rely on, which any loader that hands off to a dropped
+            # package defeats. Measured on Anubis: the sample launched,
+            # handed the journey to a package it had just installed, and
+            # stage 1 never confirmed because the foreground was no
+            # longer the target. The override is what makes lifecycle
+            # decisive HERE and nowhere else.
+            required_behaviors=[Behavior.APP_LIFECYCLE],
+            behavior_weights={Behavior.APP_LIFECYCLE: BehaviorWeight.DECISIVE},
             depends_on=[],
             skip_if_missing=False,
         ),
@@ -281,6 +417,10 @@ def _build_default_goals() -> List[FraudGoal]:
             # See update_from_permission_state().
             frida_hooks=[],
             confirmation=ConfirmationMode.DEVICE_STATE,
+            # No behaviour confirms a permission GRANT - whether a
+            # permission is held is a property of the package manager,
+            # not of any call the app makes. Confirmed by device state.
+            required_behaviors=[],
             depends_on=[1],
             skip_if_missing=True,
         ),
@@ -314,6 +454,11 @@ def _build_default_goals() -> List[FraudGoal]:
                 "AccessibilityNodeInfo.performAction",
                 "AccessibilityService.dispatchGesture",
             ],
+            required_behaviors=[
+                Behavior.ACCESSIBILITY_NODE_HARVEST,
+                Behavior.ACCESSIBILITY_GESTURE_INJECTION,
+            ],
+            supporting_behaviors=[Behavior.ACCESSIBILITY_SERVICE_ACTIVE],
             depends_on=[1, 2],
             skip_if_missing=False,
         ),
@@ -342,6 +487,8 @@ def _build_default_goals() -> List[FraudGoal]:
                 "WindowManager.removeView",
             ],
             completion_categories=["overlay"],
+            required_behaviors=[Behavior.OVERLAY_WINDOW_ADDED],
+            supporting_behaviors=[Behavior.OVERLAY_WINDOW_MANIPULATED],
             depends_on=[1, 2],
             skip_if_missing=True,
         ),
@@ -381,6 +528,9 @@ def _build_default_goals() -> List[FraudGoal]:
                 "SharedPreferences.getString",
             ],
             completion_categories=["banking"],
+            required_behaviors=[Behavior.CREDENTIAL_STORE_ACCESS],
+            supporting_behaviors=[Behavior.KEYSTORE_ACCESS,
+                                  Behavior.KEYBOARD_ACTIVITY],
             depends_on=[1, 2],
             # skip_if_missing=True allows auto-skip after MAX_ATTEMPTS_PER_GOAL
             # when the app has no conventional login screen (most banking trojans).
@@ -411,6 +561,9 @@ def _build_default_goals() -> List[FraudGoal]:
                 "SmsManager.sendMultipartTextMessage",
                 "SmsMessage.getMessageBody",
             ],
+            required_behaviors=[Behavior.SMS_READ, Behavior.SMS_SEND],
+            supporting_behaviors=[Behavior.NOTIFICATION_INTERCEPTION,
+                                  Behavior.CONTENT_PROVIDER_QUERY],
             depends_on=[1, 2, 5],
             skip_if_missing=True,
         ),
@@ -434,6 +587,8 @@ def _build_default_goals() -> List[FraudGoal]:
                 "PackageManager.getInstalledPackages",
                 "PackageManager.getInstalledApplications",
             ],
+            required_behaviors=[Behavior.INSTALLED_PACKAGE_ENUMERATION],
+            supporting_behaviors=[Behavior.FOREGROUND_APP_MONITORING],
             depends_on=[1, 5],
             skip_if_missing=True,
         ),
@@ -463,6 +618,9 @@ def _build_default_goals() -> List[FraudGoal]:
                 "Socket.connect",
             ],
             completion_categories=["network"],
+            required_behaviors=[Behavior.HTTP_REQUEST,
+                                Behavior.TLS_PAYLOAD_CAPTURE],
+            supporting_behaviors=[Behavior.SOCKET_CONNECTION],
             depends_on=[1, 5],
             skip_if_missing=True,
         ),
@@ -498,6 +656,13 @@ def _build_default_goals() -> List[FraudGoal]:
                 "Intent.installPackageRequest",
                 "DevicePolicyManager.lockNow",
             ],
+            required_behaviors=[Behavior.SCHEDULED_EXECUTION,
+                                Behavior.DEVICE_ADMIN_ABUSE,
+                                Behavior.PACKAGE_INSTALL_REQUEST],
+            # isAdminActive is a QUERY. It supports the goal and can
+            # never complete it, which is why it sits here rather than
+            # above - the distinction a hook-name match could not make.
+            supporting_behaviors=[Behavior.DEVICE_ADMIN_QUERY],
             depends_on=[1, 3],
             skip_if_missing=True,
         ),
@@ -509,7 +674,7 @@ def _build_default_goals() -> List[FraudGoal]:
                 "Navigate to any update or plugin screens. Monitor for DexClassLoader "
                 "instantiation with external file paths."
             ),
-            frida_categories=["dangerous_apis"],
+            frida_categories=["code_execution", "dangerous_apis"],
             # Removed: Runtime.load - not emitted. No substitute needed: native
             # library loading is already covered by System.loadLibrary below,
             # which IS emitted, so the goal loses no reachable behaviour.
@@ -518,12 +683,27 @@ def _build_default_goals() -> List[FraudGoal]:
             # also emitted under `smoke` as a start-up probe, and the agent
             # loading its own library is not the sample loading code.
             frida_hooks=[
+                # These two now complete the goal, and only these two.
+                # `code_execution` was split out of `dangerous_apis` so it could
+                # carry a BFCI weight: PathClassLoader and System.loadLibrary
+                # stayed behind because EVERY app loads its own APK through the
+                # first and any app with native code triggers the second.
+                # Keeping them as completion triggers would let a calculator
+                # complete "Dynamic Code Loading".
                 "DexClassLoader.<init>",
-                "PathClassLoader.<init>",
                 "InMemoryDexClassLoader.<init>",
-                "System.loadLibrary",
             ],
-            completion_categories=["dangerous_apis"],
+            completion_categories=["code_execution"],
+            # Both are code the process was not statically linked to
+            # run. The engine already treats them as one axis - the
+            # agent files both under `code_execution` and BFCI weights
+            # that bucket - but the goal graph could only name the Dex
+            # half, so a sample that shells out scored zero goals while
+            # BFCI scored it 10.0 from the same events.
+            required_behaviors=[Behavior.DYNAMIC_DEX_LOADING,
+                                Behavior.COMMAND_EXECUTION],
+            supporting_behaviors=[Behavior.NATIVE_METHOD_REGISTRATION,
+                                  Behavior.NATIVE_LIBRARY_LOAD],
             depends_on=[1, 5],
             skip_if_missing=True,
         ),
@@ -559,6 +739,7 @@ def _build_default_goals() -> List[FraudGoal]:
                 "for every sample. Reflection is reported from static analysis "
                 "(apk_analyzer.REFLECTION_APIS) instead."
             ),
+            required_behaviors=[],
             depends_on=[1, 10],
             skip_if_missing=True,
         ),
@@ -588,6 +769,8 @@ def _build_default_goals() -> List[FraudGoal]:
                 "distinguish a deep link from ordinary navigation. Declared "
                 "intent-filter URIs are reported from the manifest instead."
             ),
+            required_behaviors=[],
+            supporting_behaviors=[Behavior.WEBVIEW_NAVIGATION],
             depends_on=[1],
             skip_if_missing=True,
         ),
@@ -619,6 +802,7 @@ def _build_default_goals() -> List[FraudGoal]:
                 "hook backlog. Not added blind: it needs an emulator run to "
                 "verify before it can be a completion trigger."
             ),
+            required_behaviors=[],
             depends_on=[1, 9],
             skip_if_missing=True,
         ),
@@ -648,6 +832,8 @@ def _build_default_goals() -> List[FraudGoal]:
                 "Activity.onCreate",
             ],
             completion_categories=["smoke"],
+            required_behaviors=[],
+            supporting_behaviors=[Behavior.APP_LIFECYCLE],
             depends_on=[1],
             skip_if_missing=True,
         ),
@@ -677,8 +863,56 @@ def _build_default_goals() -> List[FraudGoal]:
                 "JobScheduler.schedule",
             ],
             completion_categories=["persistence"],
+            required_behaviors=[Behavior.SCHEDULED_EXECUTION],
+            supporting_behaviors=[Behavior.FOREGROUND_APP_MONITORING],
             depends_on=[1, 9],
             skip_if_missing=True,
+        ),
+        FraudGoal(
+            name="Anti-Analysis Resistance",
+            stage=16,
+            description=(
+                "Determine whether the sample resists observation: probing for a "
+                "debugger, reading emulator-identifying system properties, calling "
+                "ptrace, or terminating its own process once instrumentation is "
+                "detected. No navigation is required - this stage is confirmed by "
+                "what the sample does to US."
+            ),
+            # ── Why this stage exists ────────────────────────────────────────
+            #
+            # The engine could already SEE this. The agent files it under
+            # `anti_analysis`, risk_engine scores substantive evasion at
+            # _EVASION_RESISTANCE_SCORE, and dynamic_exclusion_reason treats
+            # self-termination as an explanation for a silent run. The goal
+            # graph was the only layer with no way to say it.
+            #
+            # Measured on Cerberus: Process.killProcess and System.exit both
+            # observed and attributed to the sample - the single most
+            # diagnostic thing that run produced - while the graph reported
+            # zero successful and zero partial goals, because refusing to be
+            # analysed matched no stage.
+            #
+            # Confirmed by behaviour rather than by hook name, and deliberately
+            # not skippable: a sample that does NOT resist resolves this stage
+            # as attempted-and-nothing-observed, which is itself a finding.
+            frida_categories=["anti_analysis"],
+            frida_hooks=[],
+            confirmation=ConfirmationMode.BEHAVIOR,
+            required_behaviors=[
+                Behavior.SELF_TERMINATION,
+                Behavior.PTRACE_CHECK,
+            ],
+            supporting_behaviors=[
+                Behavior.DEBUGGER_CHECK,
+                Behavior.SYSTEM_PROPERTY_PROBE,
+            ],
+            # Depends on nothing. A sample that kills itself inside
+            # Application.onCreate never reaches stage 1's foreground
+            # confirmation, and gating the observation of that refusal behind
+            # the launch it prevented would guarantee it could never be
+            # reported.
+            depends_on=[],
+            skip_if_missing=False,
         ),
     ]
 
@@ -705,6 +939,8 @@ class GoalTracker:
         # Consecutive observations of the target package in the foreground.
         # Reset whenever the reading is unavailable or shows another package.
         self._launch_confirmations: int = 0
+        #: Canonical behaviours from the most recent reconcile().
+        self._last_behaviors: Dict[Any, Any] = {}
         # Goals whose instrument does not exist are resolved once, up front,
         # rather than left PENDING to block their dependents. Doing it in the
         # constructor means the gap is visible in the very first status dump.
@@ -828,9 +1064,16 @@ class GoalTracker:
         # this branch a transient failure permanently removed a goal from the
         # graph, which is what the docstring above always promised but the code
         # did not previously do.
+        # PARTIAL_SUCCESS is retryable on the same budget as FAILED. A goal that
+        # got a form filled but never submitted is the single most likely one to
+        # succeed on a second pass, and excluding it would mean the state that
+        # exists to record "nearly there" was the one state that never got
+        # another try. NOT_REACHED and TIMEOUT are NOT retried here: the first
+        # is only ever assigned by finalize() at the end of the run, and the
+        # second means the wall-clock deadline has already arrived.
         retryable = [
             g for g in self._goals
-            if g.status == GoalStatus.FAILED
+            if g.status in (GoalStatus.FAILED, GoalStatus.PARTIAL)
             and g.is_unblocked(resolved)
             and g.retries_used < MAX_GOAL_RETRIES
         ]
@@ -909,9 +1152,14 @@ class GoalTracker:
                 # UNSUPPORTED goals are terminal: no event can confirm a goal
                 # whose instrument does not exist, and letting one drift back
                 # into IN_PROGRESS would re-open the stall.
-                if goal.status in (
-                    GoalStatus.COMPLETED, GoalStatus.SKIPPED, GoalStatus.UNSUPPORTED,
-                ):
+                # TERMINAL_STATES rather than a literal tuple: PARTIAL is
+                # deliberately NOT terminal, so a goal that produced some
+                # evidence can still be CONFIRMED by a later hook. FAILED,
+                # NOT_REACHED and TIMEOUT are likewise re-openable by evidence
+                # - a goal the UI could not drive may still fire from a
+                # background thread, and discarding that would be discarding
+                # observed behaviour.
+                if goal.status in TERMINAL_STATES:
                     continue
 
                 # ── Activity: this goal's subject matter is happening ────────
@@ -919,7 +1167,25 @@ class GoalTracker:
                 # app - so it only ever moves PENDING -> IN_PROGRESS.
                 if category in goal.frida_categories:
                     goal.evidence_collected.append(event)
-                    if goal.status == GoalStatus.PENDING:
+                    # NOT_REACHED and TIMEOUT re-open alongside PENDING.
+                    #
+                    # Both are assigned by finalize() to goals the WALK never
+                    # got to, and neither is a claim about the sample - so an
+                    # event arriving afterwards (from a background thread, or
+                    # from the post-run reconciliation against the full
+                    # collected set) is new information and must be able to
+                    # move the goal.
+                    #
+                    # Measured on Drinik: the session collected 49
+                    # `code_execution` events, BFCI scored 10.0 from them, and
+                    # stage 10 stayed NOT_REACHED with 0% coverage because only
+                    # PENDING re-opened. The evidence was there and the graph
+                    # would not look at it.
+                    if goal.status in (
+                        GoalStatus.PENDING,
+                        GoalStatus.NOT_REACHED,
+                        GoalStatus.TIMEOUT,
+                    ):
                         goal.status = GoalStatus.IN_PROGRESS
                         changed.append(goal.name)
                         logger.info(
@@ -1074,12 +1340,317 @@ class GoalTracker:
         )
         return changed
 
-    def mark_failed(self, goal_name: str) -> None:
-        """Called when the agent exhausts retries on a goal."""
+    def record_progress_signal(self, goal_name: str, signal: str) -> None:
+        """
+        Note verified, non-confirming progress toward a goal.
+
+        This is the input that lets :meth:`resolve_goal` choose PARTIAL_SUCCESS
+        over FAILED. It must only be called for progress that was VERIFIED - a
+        field the population verifier read back, a screen transition proven by
+        PRE/POST observation, a permission the device reported held. An ADB exit
+        code is not a progress signal (see the action ladder, §P5).
+        """
         goal = self.get_goal_by_name(goal_name)
-        if goal and goal.status not in (GoalStatus.COMPLETED, GoalStatus.UNSUPPORTED):
+        if goal is None or not signal:
+            return
+        if signal not in goal.progress_signals:
+            goal.progress_signals.append(signal)
+
+    def record_planner_call(self, goal_name: str) -> int:
+        """Count one planner consultation against this goal. Returns the total."""
+        goal = self.get_goal_by_name(goal_name)
+        if goal is None:
+            return 0
+        goal.planner_calls += 1
+        return goal.planner_calls
+
+    def add_time_spent(self, goal_name: str, seconds: float) -> float:
+        """Accumulate wall-clock time against a goal. Returns the total."""
+        goal = self.get_goal_by_name(goal_name)
+        if goal is None:
+            return 0.0
+        goal.time_spent_seconds += max(0.0, float(seconds))
+        return goal.time_spent_seconds
+
+    def resolve_goal(self, goal_name: str, reason: str = "") -> Optional[GoalStatus]:
+        """
+        Settle a goal the agent has given up on, as PARTIAL_SUCCESS or FAILED.
+
+        The choice is made from what the goal DEMONSTRABLY produced, never from
+        the agent's opinion of how it went:
+
+          * any confirming evidence -> COMPLETED (already set by the event path;
+            re-asserted here so a race cannot demote a confirmed goal);
+          * verified progress signals, or related evidence that could not
+            confirm it -> PARTIAL_SUCCESS;
+          * nothing at all -> FAILED.
+
+        Returns the resulting status, or None when the goal is already terminal.
+
+        This is the ONLY place a goal is given up on, and the decision is
+        goal-scoped by construction: a goal ending FAILED is a statement about
+        that goal. What the RUN achieved is :meth:`coverage_report`, which reads
+        the whole distribution and never a single goal's outcome.
+        """
+        goal = self.get_goal_by_name(goal_name)
+        if goal is None or goal.status in TERMINAL_STATES:
+            return None
+
+        if goal.completion_evidence:
+            goal.status = GoalStatus.COMPLETED
+            return goal.status
+
+        if reason:
+            goal.failure_reason = reason
+
+        if goal.progress_signals or goal.evidence_collected:
+            goal.status = GoalStatus.PARTIAL
+            logger.info(
+                "[GoalTracker] '%s' → PARTIAL_SUCCESS (%d verified progress "
+                "signal(s), %d related event(s), no confirming evidence)%s",
+                goal.name, len(goal.progress_signals),
+                len(goal.evidence_collected),
+                f" reason={reason}" if reason else "",
+            )
+        else:
             goal.status = GoalStatus.FAILED
-            logger.warning(f"[GoalTracker] '{goal_name}' → FAILED (max attempts)")
+            logger.warning(
+                "[GoalTracker] '%s' → FAILED (nothing observed)%s",
+                goal.name, f" reason={reason}" if reason else "",
+            )
+        return goal.status
+
+    def mark_failed(self, goal_name: str, reason: str = "") -> None:
+        """
+        Called when the agent exhausts retries on a goal.
+
+        Kept under its original name and one-argument contract because existing
+        callers and tests use it. It now routes through :meth:`resolve_goal`, so
+        a goal that DID produce verified progress lands on PARTIAL_SUCCESS
+        instead of having that progress erased by a blanket FAILED - which is
+        the §P4 rule restated: an action failure is not an evidence failure.
+        """
+        self.resolve_goal(goal_name, reason=reason or "max_attempts")
+
+    def mark_timed_out(self, goal_name: str) -> None:
+        """
+        The global wall-clock deadline arrived while this goal was being worked.
+
+        Distinct from FAILED: the attempt was cut off, not concluded. A goal
+        that had already produced confirming evidence stays COMPLETED - a
+        deadline does not retract an observation.
+        """
+        goal = self.get_goal_by_name(goal_name)
+        if goal is None or goal.status in TERMINAL_STATES:
+            return
+        if goal.completion_evidence:
+            goal.status = GoalStatus.COMPLETED
+            return
+        goal.status = GoalStatus.TIMEOUT
+        goal.failure_reason = TIMEOUT_REASON
+        logger.warning(
+            "[GoalTracker] '%s' → TIMEOUT (global deadline reached mid-goal; "
+            "%d related event(s) retained)",
+            goal.name, len(goal.evidence_collected),
+        )
+
+    def mark_blocked(self, goal_name: str, blocker: str, detail: str = "") -> None:
+        """
+        Something outside the sample stopped this goal being reached.
+
+        BLOCKED is deliberately not NOT_REACHED. "The login wall wants an
+        account we cannot obtain" and "the budget ran out before we tried" are
+        different findings with different remediation, and collapsing them hid
+        the single most actionable fact a failed run produces. It is also not
+        FAILED: the sample was never given the chance to exhibit the behaviour,
+        so nothing about the sample has been established.
+
+        A goal that already produced confirming evidence stays COMPLETED - a
+        blocker discovered later does not retract an observation.
+        """
+        goal = self.get_goal_by_name(goal_name)
+        if goal is None or goal.status in TERMINAL_STATES:
+            return
+        if goal.completion_evidence:
+            goal.status = GoalStatus.COMPLETED
+            return
+        goal.status = GoalStatus.BLOCKED
+        goal.blocked_reason = blocker
+        goal.failure_reason = detail or blocker
+        logger.info(
+            "[GoalTracker] '%s' → BLOCKED (%s)%s",
+            goal.name, blocker, f": {detail}" if detail else "",
+        )
+
+    def mark_not_applicable(self, goal_name: str, reason: str) -> None:
+        """
+        Static analysis proves this goal cannot apply to this sample.
+
+        A calculator that declares no accessibility service has not FAILED to
+        abuse accessibility; the question does not arise. Reporting it as
+        failed penalises a sample for not doing something it was never built to
+        do, and pollutes coverage with stages that were never in play.
+        """
+        goal = self.get_goal_by_name(goal_name)
+        if goal is None or goal.status in TERMINAL_STATES:
+            return
+        if goal.completion_evidence:
+            goal.status = GoalStatus.COMPLETED
+            return
+        goal.status = GoalStatus.NOT_APPLICABLE
+        goal.failure_reason = reason
+        logger.info("[GoalTracker] '%s' → NOT_APPLICABLE (%s)", goal.name, reason)
+
+    # ── Whole-evidence reconciliation ─────────────────────────────────────────
+
+    def reconcile(
+        self,
+        collected_events: Optional[Dict[str, Any]] = None,
+        *,
+        normalized: Optional[List[NormalizedEvent]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Re-evaluate EVERY goal against the COMPLETE evidence set.
+
+        This is the answer to a failure mode the per-event path cannot avoid:
+        the tracker only ever saw events the explorer drained from the bus
+        while it was walking, so anything that fired before the walk started,
+        after it stopped, or on a background thread it never observed was
+        invisible to the goal graph - while being counted correctly by BFCI,
+        by the evidence store and by the report.
+
+        Measured on Drinik: 50 `code_execution` events collected, BFCI 10.0
+        scored from them, goal graph reporting zero successful and zero
+        partial. The evidence existed and the graph never looked at it.
+
+        Confirmation is by canonical BEHAVIOUR, never by raw hook name, so a
+        hook the agent renames breaks one table entry in behavior_taxonomy
+        instead of silently disabling a stage - which is the defect the four
+        red `test_goal_hook_contract` tests have been reporting all along.
+
+        Strength decides the state, deterministically:
+
+            CONCLUSIVE -> COMPLETED
+            MODERATE   -> PARTIAL
+            WEAK       -> PARTIAL only if nothing better is known
+            NONE       -> left as it is
+
+        A goal is never DEMOTED here. Reconciliation can only add what the walk
+        missed; it cannot retract what the walk proved.
+        """
+        events = normalized
+        if events is None:
+            events = normalize_collected_events(collected_events or {})
+
+        observed = classify_events(events)
+        self._last_behaviors = observed
+
+        changed: List[str] = []
+        for goal in self._goals:
+            if goal.status in TERMINAL_STATES and goal.status != GoalStatus.COMPLETED:
+                # SKIPPED / NOT_APPLICABLE / UNSUPPORTED are settled questions.
+                continue
+            if not goal.required_behaviors and not goal.supporting_behaviors:
+                continue
+
+            verdict = evaluate_behaviour_evidence(
+                observed,
+                goal.required_behaviors,
+                goal.supporting_behaviors,
+                weight_overrides=goal.behavior_weights,
+            )
+            goal.evidence_verdict = verdict
+            if verdict.strength is EvidenceStrength.NONE:
+                continue
+
+            # Attach the supporting events so the report can cite them, and so
+            # resolve_goal() can tell a goal that produced something from one
+            # that produced nothing.
+            for event in verdict.evidence_events():
+                raw = dict(event.raw)
+                if raw not in goal.evidence_collected:
+                    goal.evidence_collected.append(raw)
+
+            if verdict.conclusive:
+                if goal.status != GoalStatus.COMPLETED:
+                    goal.status = GoalStatus.COMPLETED
+                    changed.append(goal.name)
+                    logger.info(
+                        "[GoalTracker] '%s' → COMPLETED via behaviour evidence: %s",
+                        goal.name, verdict.reason,
+                    )
+                for event in verdict.evidence_events():
+                    raw = dict(event.raw)
+                    if raw not in goal.completion_evidence:
+                        goal.completion_evidence.append(raw)
+            elif goal.status not in (GoalStatus.COMPLETED, GoalStatus.PARTIAL):
+                goal.status = GoalStatus.PARTIAL
+                goal.failure_reason = goal.failure_reason or "evidence_below_completion_threshold"
+                changed.append(goal.name)
+                logger.info(
+                    "[GoalTracker] '%s' → PARTIAL_SUCCESS via behaviour evidence: %s",
+                    goal.name, verdict.reason,
+                )
+
+        return {
+            "events_considered": len(events),
+            "behaviors_observed": {
+                b.value: o.count for b, o in observed.items()
+            },
+            "goals_changed": changed,
+        }
+
+    @property
+    def observed_behaviors(self) -> Dict[Any, Any]:
+        """Canonical behaviours from the last reconcile(), for the report."""
+        return dict(getattr(self, "_last_behaviors", {}) or {})
+
+    def finalize(self, *, timed_out: bool = False, reason: str = "") -> Dict[str, int]:
+        """
+        Settle every goal the run never concluded, once, at the end.
+
+        This is what makes NOT_REACHED a real state rather than a euphemism for
+        PENDING. A goal that was never selected says nothing about the sample,
+        and leaving it PENDING in a finished run invites the reader to treat it
+        as an absence of the behaviour.
+
+        Rules, in order:
+
+          * IN_PROGRESS -> TIMEOUT when the deadline ended the run, otherwise
+            resolved as PARTIAL/FAILED from what it produced. The goal was
+            genuinely being worked, so it gets the same evidence-driven
+            treatment any attempted goal gets.
+          * PENDING -> NOT_REACHED. Never selected; there is nothing to judge.
+
+        Idempotent, so a second call after a late event changes nothing.
+        Returns a count of goals moved into each state.
+        """
+        moved: Dict[str, int] = {}
+        for goal in self._goals:
+            if goal.status in TERMINAL_STATES or goal.status in (
+                GoalStatus.PARTIAL, GoalStatus.FAILED,
+                GoalStatus.NOT_REACHED, GoalStatus.TIMEOUT,
+            ):
+                continue
+            if goal.status == GoalStatus.IN_PROGRESS:
+                if timed_out:
+                    self.mark_timed_out(goal.name)
+                else:
+                    self.resolve_goal(goal.name, reason=reason or "run_ended")
+            elif goal.status == GoalStatus.PENDING:
+                goal.status = GoalStatus.NOT_REACHED
+                goal.failure_reason = (
+                    TIMEOUT_REASON if timed_out
+                    else (reason or "run_ended_before_selection")
+                )
+            else:
+                continue
+            moved[goal.status.value] = moved.get(goal.status.value, 0) + 1
+        if moved:
+            logger.info(
+                "[GoalTracker] finalize(timed_out=%s): %s", timed_out, moved,
+            )
+        return moved
 
     def auto_skip_if_applicable(self, consecutive_empty_actions: int, threshold: int = 5) -> None:
         """
@@ -1220,8 +1791,11 @@ class GoalTracker:
         parts = [
             f"{counts[status]} {status.lower()}"
             for status in (
-                GoalStatus.COMPLETED.value, GoalStatus.SKIPPED.value,
-                GoalStatus.FAILED.value, GoalStatus.UNSUPPORTED.value,
+                GoalStatus.COMPLETED.value, GoalStatus.PARTIAL.value,
+                GoalStatus.SKIPPED.value, GoalStatus.FAILED.value,
+                GoalStatus.NOT_REACHED.value, GoalStatus.TIMEOUT.value,
+                GoalStatus.BLOCKED.value, GoalStatus.NOT_APPLICABLE.value,
+                GoalStatus.UNSUPPORTED.value,
                 GoalStatus.IN_PROGRESS.value, GoalStatus.PENDING.value,
             )
             if counts.get(status)
@@ -1252,9 +1826,22 @@ class GoalTracker:
             by_status[goal.status.value] = by_status.get(goal.status.value, 0) + 1
 
         satisfied = by_status.get(GoalStatus.COMPLETED.value, 0)
+        partial = by_status.get(GoalStatus.PARTIAL.value, 0)
+        failed = by_status.get(GoalStatus.FAILED.value, 0)
+        skipped = by_status.get(GoalStatus.SKIPPED.value, 0)
+        not_reached = by_status.get(GoalStatus.NOT_REACHED.value, 0)
+        timed_out = by_status.get(GoalStatus.TIMEOUT.value, 0)
+        unsupported_count = by_status.get(GoalStatus.UNSUPPORTED.value, 0)
         resolved = sum(
             1 for g in self._goals if g.status in RESOLVED_STATES
         )
+        # Effective coverage: confirmed goals in full, partial goals at half.
+        # A REPORTING convention, not a measurement, and deliberately kept out
+        # of every scoring path - BFCI and FRS read observed events, never goal
+        # states (§P13/§P17). It exists so "9 confirmed + 2 partial of 15"
+        # reports 66.7% rather than 60% (partial evidence silently discarded)
+        # or 73.3% (partial counted as proof).
+        effective = satisfied + partial * PARTIAL_GOAL_WEIGHT
         unattempted = [
             g.stage for g in self._goals
             if g.attempts == 0 and g.status not in RESOLVED_STATES
@@ -1273,12 +1860,57 @@ class GoalTracker:
             "total_goals": total,
             "satisfied_goals": satisfied,
             "resolved_goals": resolved,
+            # Per-state counts, flat, because this is the shape the dynamic
+            # result contract and the analyst-facing coverage panel consume.
+            "goals_total": total,
+            "goals_successful": satisfied,
+            "goals_partial": partial,
+            "goals_failed": failed,
+            "goals_skipped": skipped,
+            "goals_not_reached": not_reached,
+            "goals_timed_out": timed_out,
+            "goals_unsupported": unsupported_count,
+            "effective_goal_count": round(effective, 4),
+            "effective_coverage_ratio": round(effective / total, 4) if total else 0.0,
             "confirmed_ratio": round(satisfied / total, 4) if total else 0.0,
             "assessed_ratio": round(resolved / total, 4) if total else 0.0,
             # Alias, kept so existing readers do not silently change meaning.
+            # The §P12 contract's `coverage_ratio` is the EFFECTIVE one and is
+            # published by dynamic_coverage.build_dynamic_coverage(); this one
+            # keeps meaning "what was proven", as its docstring has promised.
             "coverage_ratio": round(satisfied / total, 4) if total else 0.0,
             "disposition": self.disposition_line(),
             "by_status": by_status,
+            # Per-goal outcome detail, so the report can name which goals
+            # succeeded, which were partial and which failed - and why - rather
+            # than printing three integers.
+            "goal_states": [
+                {
+                    "stage": g.stage,
+                    "goal_name": g.name,
+                    "status": g.status.value,
+                    "attempts": g.attempts,
+                    "planner_calls": g.planner_calls,
+                    "time_spent_seconds": round(g.time_spent_seconds, 1),
+                    "confirming_evidence_count": len(g.completion_evidence),
+                    "related_evidence_count": len(g.evidence_collected),
+                    "progress_signals": list(g.progress_signals),
+                    "failure_reason": g.failure_reason,
+                }
+                for g in sorted(self._goals, key=lambda g: g.stage)
+            ],
+            "successful_goals": [
+                g.name for g in self._goals if g.status == GoalStatus.COMPLETED
+            ],
+            "partial_goals": [
+                g.name for g in self._goals if g.status == GoalStatus.PARTIAL
+            ],
+            "failed_goals": [
+                g.name for g in self._goals if g.status == GoalStatus.FAILED
+            ],
+            "failure_reasons": sorted({
+                g.failure_reason for g in self._goals if g.failure_reason
+            }),
             # A non-empty list here means the graph stalled. It is the direct
             # regression signal for the deadlock this module was fixed for.
             "unattempted_stages": unattempted,

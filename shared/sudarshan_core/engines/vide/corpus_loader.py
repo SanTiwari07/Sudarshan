@@ -47,6 +47,7 @@ _CORPUS_ENV_VARS = ("BANKING_BASELINE_CORPUS_DIR", "VIDE_CORPUS_DIR")
 # here and is kept so an existing working copy is still found.
 _DEFAULT_CORPUS_DIRS = (
     _REPO_ROOT / "banking-baseline-corpus",
+    _REPO_ROOT / "banking-baseline-corpus-main",
     _REPO_ROOT / "apk_details",
 )
 

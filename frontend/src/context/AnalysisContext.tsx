@@ -38,7 +38,10 @@ function mapCaseDetailToFraudCard(caseDetail: Record<string, unknown>): FraudCar
     ai_confidence_multiplier: Number(caseDetail.ai_confidence_multiplier ?? 1),
     final_risk_score: Number(caseDetail.final_risk_score ?? 0),
     risk_band: String(caseDetail.risk_band || 'Safe'),
-    confidence: Number(caseDetail.confidence ?? 70),
+    // The engine always publishes a confidence. Defaulting a missing one to 70
+    // presented an unmeasured case as moderately-confident; 0 says nothing was
+    // reported, which is what the downstream labels should react to.
+    confidence: Number(caseDetail.confidence ?? 0),
     recommended_action: normalizeRecommendedAction(
       String(
         caseDetail.recommended_action ||
@@ -46,6 +49,21 @@ function mapCaseDetailToFraudCard(caseDetail: Record<string, unknown>): FraudCar
           'Monitor application',
       ),
     ),
+    /**
+     * The verdict and its supporting assertion matrix.
+     *
+     * These were absent from this mapper, so every case restored from history
+     * lost the one signal that stops a low score from reading as a clean bill
+     * of health. A case the engine refused to certify came back looking
+     * certified.
+     *
+     * `verdict` falls back to `risk_band` for cases persisted before the
+     * Execution Assertion Matrix existed; `execution_assertions` stays
+     * undefined for those, which the UI renders as "coverage not assessed"
+     * rather than inventing a matrix after the fact.
+     */
+    verdict: String(caseDetail.verdict || caseDetail.risk_band || 'Safe'),
+    execution_assertions: caseDetail.execution_assertions as FraudCardData['execution_assertions'],
     frs_breakdown: caseDetail.frs_breakdown as FraudCardData['frs_breakdown'],
     risk_explanation: caseDetail.risk_explanation as FraudCardData['risk_explanation'],
     threat_scenario_table: (caseDetail.threat_scenario_table as FraudCardData['threat_scenario_table']) || [],

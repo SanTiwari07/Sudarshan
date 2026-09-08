@@ -16,8 +16,10 @@ import {
   videTierStyles,
 } from '../../lib/videUi';
 import { AlertTriangle, Eye, LayoutTemplate, Palette, ShieldAlert, Type } from 'lucide-react';
+import { useCaseLinks } from '../../hooks/useCaseLinks';
 
 export default function VisualImpersonationExecutiveCard({ data }: { data: FraudCardData }) {
+  const links = useCaseLinks();
   const vide = resolveVideFromData(data);
   const state = getVideUiState(vide);
 
@@ -29,7 +31,7 @@ export default function VisualImpersonationExecutiveCard({ data }: { data: Fraud
             <Eye className="h-4 w-4" />
           </span>
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Visual impersonation</p>
+            <p className="font-sans text-[13px] font-medium tracking-[0.01em] text-slate-500">Visual impersonation</p>
             <p className="text-sm font-semibold text-slate-800 mt-0.5">Analysis unavailable</p>
             <p className="text-xs text-slate-500 mt-1">VIDE results were not included in this case payload.</p>
           </div>
@@ -49,7 +51,7 @@ export default function VisualImpersonationExecutiveCard({ data }: { data: Fraud
             <Eye className="h-4 w-4" />
           </span>
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Visual impersonation</p>
+            <p className="font-sans text-[13px] font-medium tracking-[0.01em] text-slate-500">Visual impersonation</p>
             <p className="text-sm font-semibold text-slate-800 mt-0.5">Analysis unavailable</p>
             <p className="text-xs text-slate-500 mt-1">
               {vide!.error?.trim() || `VIDE status: ${vide!.status || 'UNAVAILABLE'}`}
@@ -69,7 +71,7 @@ export default function VisualImpersonationExecutiveCard({ data }: { data: Fraud
             <Eye className="h-4 w-4" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Visual impersonation</p>
+            <p className="font-sans text-[13px] font-medium tracking-[0.01em] text-slate-500">Visual impersonation</p>
             <p className="text-sm font-semibold text-slate-800 mt-0.5">No banking-app impersonation detected</p>
             <p className="text-xs text-slate-600 mt-1">
               VIDE compared the application interface against available laboratory banking UI baselines.
@@ -85,10 +87,10 @@ export default function VisualImpersonationExecutiveCard({ data }: { data: Fraud
             </p>
             <p className="text-xs text-slate-500 mt-1">No sufficiently similar interface was identified.</p>
             {evidence.length > 0 && (
-              <p className="text-[11px] text-slate-500 mt-1">Evidence: {evidence.join(' · ')}</p>
+              <p className="text-[13px] text-slate-500 mt-1">Evidence: {evidence.join(' · ')}</p>
             )}
             <Link
-              to="/technical"
+              to={links.evidence}
               className="inline-flex items-center gap-1 text-xs text-blue-700 font-semibold hover:underline mt-2"
             >
               View visual evidence
@@ -123,17 +125,17 @@ export default function VisualImpersonationExecutiveCard({ data }: { data: Fraud
 
   return (
     <SocCard className={styles.card}>
-      <div className="px-4 sm:px-5 py-4 border-b border-slate-200/80 bg-gradient-to-r from-slate-50/80 via-white to-white">
+      <div className="px-4 sm:px-5 py-4 border-b border-slate-200/80 bg-slate-50/60">
         <div className="flex items-start gap-3">
           <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${styles.icon}`}>
             <Eye className="h-4 w-4" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Visual impersonation</p>
-            <p className="text-lg font-bold text-slate-900 truncate">{institution}</p>
+            <p className="font-sans text-[13px] font-medium tracking-[0.01em] text-slate-500">Visual impersonation</p>
+            <p className="text-lg font-semibold text-slate-900 truncate">{institution}</p>
             <p className="text-sm text-slate-600 mt-0.5">
               <span className="font-semibold tabular-nums">{formatVideConfidence(confidence)}</span> similarity
-              <span className={`ml-2 rounded border px-1.5 py-0.5 text-[10px] font-semibold ${styles.chip}`}>
+              <span className={`ml-2 rounded border px-1.5 py-0.5 text-[13px] font-semibold ${styles.chip}`}>
                 {tierText}
               </span>
             </p>
@@ -143,7 +145,7 @@ export default function VisualImpersonationExecutiveCard({ data }: { data: Fraud
 
       <div className="px-4 sm:px-5 py-3 space-y-3 text-xs">
         <div className="flex flex-wrap items-center gap-2">
-          <span className={`font-mono font-bold border px-2 py-1 rounded ${styles.chip}`}>{ruleId}</span>
+          <span className={`font-mono font-semibold border px-2 py-1 rounded ${styles.chip}`}>{ruleId}</span>
           <span className="text-slate-700 font-medium">Matched laboratory baseline</span>
         </div>
 
@@ -266,7 +268,7 @@ export default function VisualImpersonationExecutiveCard({ data }: { data: Fraud
         )}
 
         <Link
-          to="/technical"
+          to={links.evidence}
           className="inline-flex items-center gap-1 text-blue-700 font-semibold hover:underline"
         >
           View evidence

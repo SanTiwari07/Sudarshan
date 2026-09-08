@@ -24,12 +24,12 @@ Test Suite:          backend/tests/test_analysis_client.py, backend/tests/test_m
 ## 1. Executive Overview
 
 The **Static Threat Intelligence Engine** performs multi-layered pre-execution binary analysis on uploaded Android APKs. Rather than relying on a single tool, SUDARSHAN deploys a layered defense-in-depth static extraction pipeline:
-1. **Native APK Analyzer ([`apk_analyzer.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/analyzers/apk_analyzer.py))**: Native Python DEX/AXML bytecode parsing via `androguard`.
-2. **APK Corruption Repair ([`apk_repair.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/apk_repair.py))**: Automated reconstruction of obfuscated/corrupted `AndroidManifest.xml` files.
-3. **APKTool Engine ([`apktool_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/apktool_engine.py))**: Decompiles binary XMLs, smali, layout hierarchies, and string tables.
-4. **JADX Engine ([`jadx_engine.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/jadx_engine.py))**: Decompiles DEX bytecode to Java source code and scans for 10 fraud signatures.
-5. **VIDE Static Profile ([`shared/sudarshan_core/engines/vide/`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/engines/vide/))**: Extracts UI layout ASTs and brand colors to detect visual impersonation of protected Indian banks.
-6. **Optional MobSF Client ([`mobsf_client.py`](file:///d:/Projects/Sudarshan%20BOI/shared/sudarshan_core/services/mobsf_client.py))**: Provides supplementary AppSec vulnerability ratings when available.
+1. **Native APK Analyzer ([`apk_analyzer.py`](../../shared/sudarshan_core/analyzers/apk_analyzer.py))**: Native Python DEX/AXML bytecode parsing via `androguard`.
+2. **APK Corruption Repair ([`apk_repair.py`](../../shared/sudarshan_core/engines/apk_repair.py))**: Automated reconstruction of obfuscated/corrupted `AndroidManifest.xml` files.
+3. **APKTool Engine ([`apktool_engine.py`](../../shared/sudarshan_core/engines/apktool_engine.py))**: Decompiles binary XMLs, smali, layout hierarchies, and string tables.
+4. **JADX Engine ([`jadx_engine.py`](../../shared/sudarshan_core/engines/jadx_engine.py))**: Decompiles DEX bytecode to Java source code and scans for 10 fraud signatures.
+5. **VIDE Static Profile ([`shared/sudarshan_core/engines/vide/`](../../shared/sudarshan_core/engines/vide/))**: Extracts UI layout ASTs and brand colors to detect visual impersonation of protected Indian banks.
+6. **Optional MobSF Client ([`mobsf_client.py`](../../shared/sudarshan_core/services/mobsf_client.py))**: Provides supplementary AppSec vulnerability ratings when available.
 
 Findings are normalized and compiled into an **Investigation Manifest** (`InvestigationManifest`), configuring the dynamic sandbox hooks and priority goals.
 

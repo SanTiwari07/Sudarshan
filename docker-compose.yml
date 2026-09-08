@@ -67,6 +67,13 @@ services:
       - ABUSEIPDB_API_KEY=${ABUSEIPDB_API_KEY}
       - ANALYSIS_TIMEOUT_SECONDS=1200
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set in .env}
+      # Explicit, absolute, and on a named volume. Left unset it resolved
+      # against the process CWD, which produced three unrelated sudarshan.db
+      # files (backend/, repo root, analysis-engine/) and, under the hardened
+      # overlay - read_only rootfs, dev bind-mount removed - pointed at
+      # /app/sudarshan.db on an unwritable filesystem, so the container could
+      # not start.
+      - SUDARSHAN_DB_PATH=${SUDARSHAN_DB_PATH:-/app/data/sudarshan.db}
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
     volumes:
@@ -74,6 +81,20 @@ services:
       - ./shared:/opt/sudarshan-core
       - ./.env:/app/.env:ro
       - uploads:/app/uploads
+      # The database lives on its own volume, not inside the source bind-mount,
+      # so it survives `docker compose down`, image rebuilds, and the hardened
+      # overlay removing ./backend:/app.
+      #
+      # Existing installs keep data in backend/sudarshan.db. That file is NOT
+      # picked up automatically - a silent switch would make 13 cases vanish
+      # from the UI. Move it once, deliberately:
+      #     docker compose run --rm backend \
+      #       python /opt/sudarshan-scripts/db_admin.py adopt /app/sudarshan.db
+      # or from the host, with SUDARSHAN_DB_PATH pointed at the volume.
+      # Pick up the banking baseline corpus
+      - ./banking-baseline-corpus-main:/opt/banking-baseline-corpus-main:ro
+      - dbdata:/app/data
+      - ./scripts:/opt/sudarshan-scripts:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -144,7 +165,12 @@ services:
       # A measured exploration iteration costs ~14.8s (see .env), so the old 90s
       # default bought only 4-7 actions per sample and every run ended in
       # TIME_BUDGET_EXHAUSTED with unexplored work still in hand.
-      - FRIDA_ANALYSIS_DURATION=${FRIDA_ANALYSIS_DURATION:-300}
+      # Exploration window. 300 was sized when the Gemini planner sat on the
+      # critical path of every action (~12s each); it no longer does, so the
+      # window does not have to absorb that latency. 120 keeps a whole scan -
+      # static, launch, exploration, teardown - inside ~3-4 minutes.
+      # Override in .env when a sample needs a longer walk.
+      - FRIDA_ANALYSIS_DURATION=${FRIDA_ANALYSIS_DURATION:-130}
       # Raise on a slow sandbox: scales every UI action delay.
       - SUDARSHAN_ACTION_DELAY_SCALE=${SUDARSHAN_ACTION_DELAY_SCALE:-1.0}
       - SUDARSHAN_APP_OPEN_SETTLE=${SUDARSHAN_APP_OPEN_SETTLE:-8.0}
@@ -169,6 +195,7 @@ services:
       # purpose: the engine downloads the ABI-matched binary here on first use
       # and every later container reuses it.
       - ./tools:/opt/frida-cache
+      - ./banking-baseline-corpus-main:/opt/banking-baseline-corpus-main:ro
       - mitmproxy_har:/mitmproxy_har:ro
     cpus: 2.0
     security_opt:
@@ -221,3 +248,4 @@ services:
 volumes:
   uploads:         # Shared volume for zero-copy file sharing between backend & engine
   mitmproxy_har:   # Shared volume: mitmproxy writes HAR, engine reads it
+  dbdata:          # Authoritative application database. Back up with scripts/db_admin.py backup

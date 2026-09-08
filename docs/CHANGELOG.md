@@ -2,90 +2,326 @@
 
 All notable changes to this project are documented in this file.
 
+## 2026-08-27
+
+### Documentation - full synchronization against the codebase
+
+A documentation-only pass. No application source, test, configuration,
+Dockerfile, Compose file, script, dependency manifest or `.env` file was
+changed.
+
+The audit found drift in three categories, in ascending order of how much it
+mattered.
+
+**Numbers that had stopped being true.** The suite is **2,622 tests collected**
+(2026-08-27, no collection errors), not 920. BFCI v2 carries **seven** weighted
+categories, not six - `code_execution` was added at 0.10 and the original six
+scaled by 0.90 - and its sequence bonus is a **x1.25 multiplier**, not `+15`
+points. The VIDE colour axis is **CIEDE2000**, not CIE76. The screen classifier
+recognises 21 types, not 17. The launch ladder has five steps, not seven. The
+YARA scanner ships eight rules; it was documented as having none.
+
+**Routes that did not exist.** `api/ENDPOINTS.md` described `/api/v1/intel/*`,
+`DELETE /api/v1/cases/{sha256}`, `POST /api/v1/cases/{sha256}/chat`,
+`/api/v1/auth/registration-policy`, `/report/{sha256}/json`, `POST /api/events`
+and the engine's `/analyze-path` and `/job/{job_id}`. None are registered
+anywhere in the codebase. It also had the report export paths inverted -
+`/report/pdf/{sha256}`, not `/report/{sha256}/pdf` - and described login as an
+OAuth2 form when it takes a JSON body. The document was rebuilt from the 81
+route decorators the backend actually registers plus the engine's six.
+
+**A quality gate that was never there.** Several documents described
+`.github/workflows/ci.yml` enforcing a subset of the suite. There is no
+`.github/` directory in this repository and no CI workflow. The only automated
+git-side gate is `.githooks/pre-push`, which checks commit attribution rather
+than running tests. An enforced gate that does not exist is worse than an
+absent one, because it stops anyone from adding it.
+
+Also in this pass:
+
+- **Component READMEs created** for `backend/`, `analysis-engine/`, `shared/`,
+  `frontend/`, `scripts/` and `tests/`, each scoped to its own directory.
+- **Root `README.md` and `docs/README.md` rewritten** around what the code does,
+  using the project brand mark from `frontend/public/brand/`.
+- **149 absolute filesystem links** (`file:///d:/Projects/Sudarshan%20BOI/...`)
+  across 13 files replaced with repository-relative paths.
+- **Invented metrics removed**: `CURRENT_STATE.md` carried a "Project Health
+  Score of 7.75 / 10" with twelve component sub-scores that had no method behind
+  them and nothing to regenerate them.
+- **Eight code issues documented rather than fixed**, since this pass was
+  documentation-only: the `technical-pdf` route's declared response class does
+  not match what it returns; `ANALYSIS_TIMEOUT_SECONDS` has two different
+  defaults; `demo_seed.py` falls back to hardcoded passwords; `_otx_check_hash`
+  bypasses the IOC cache; AbuseIPDB is never marked queried when a case has no
+  IPs, so re-correlation never stops; `SSRFSafeAsyncClient` re-resolves the
+  hostname after checking it; runtime telemetry authenticates but does not scope
+  to the requesting analyst; `ScreenshotManager` can reissue an ID and reuse a
+  device path. Each is recorded in `BUGS_AND_IMPROVEMENTS.md` with severity and
+  remediation.
+
+Full pass record: `docs/DOCUMENTATION_AUDIT_REPORT.md`.
+
+
+## 2026-08-26
+
+### Changed - VIDE attribution rebuilt on multi-tier discriminative matching
+
+Attribution against the banking baseline corpus was decided by evidence that
+cannot distinguish one bank from another. All ten baselines' `fingerprints.json`
+ship the **same ten** `exactStrings` and the **same three** structural
+signatures, and their brand palettes collide across banks at ΔE₂₀₀₀ ≈ 0 - BOI
+`#f26522` is bit-identical to BOB's, ICICI `#f37021` sits ΔE 0.0 from BOI's
+orange, PNB and INDUS agree to 0.5. Every candidate therefore collected an
+identical `0.40 × 1.0` from the shared strings and `0.35 × 1.0` from the shared
+signatures, and the leader was decided by a colour collision.
+
+Measured over the ten reference APKs before the change: **7/10 attributed**,
+with BOI ranking *behind* Union Bank and ICICI on its own app, and ICICI, BOI
+and UNION unattributable at all (margins 0.006-0.04). After: **10/10, margins
+0.26-0.79**.
+
+- **New `discriminative.py`**: corpus-wide feature weighting,
+  `w = (1/df - 1/n) / (1 - 1/n)`. A feature every baseline carries is worth
+  exactly zero, so the shared template strings and signatures drop out of
+  attribution arithmetically instead of being excluded by name - and a
+  regenerated corpus re-weights the engine with no code change. Colour `df` is
+  counted over ΔE₂₀₀₀ neighbourhoods, not hex equality.
+- **Three attribution tiers** in `corpus_compare.py`, separate from the
+  spec-mandated confidence formula, which is unchanged: identity (0.50),
+  discriminative labels (0.30), discriminative palette (0.20).
+- **Identity tier**: the bank's own names, scored as coverage of its *readable*
+  names times a repetition factor. Package aliases no longer dilute the
+  denominator, and mock payee data naming an unrelated bank once no longer
+  outscores the bank whose app it is - the Union Bank reference app names
+  "ICICI Bank" in its payee list and matched ICICI as strongly as ICICI's own
+  app did.
+- **Corroboration requirement**: naming an institution now needs at least one
+  feature no other baseline carries, with colours counting only when actually
+  reproduced (ΔE ≤ 2.3), not approximated. A margin alone cannot supply this - a
+  lead computed over indistinguishable candidates is not evidence. Ambiguous
+  verdicts carry an `ambiguity_reason` (`margin` / `no_exclusive_evidence`).
+- **Attribution colour curve** reaches zero at ΔE 8 rather than 18. The generic
+  curve answers "would a victim see the same colour"; separating ten banks whose
+  palettes sit ΔE 4-6 apart needs a tighter test. `color_match.py` is unchanged.
+- **Attribution margin** 0.05 -> 0.15. The low value was forced by the shared
+  axes compressing every margin toward zero; with the constant removed the guard
+  is meaningful again.
+- **Colour-only suspects** are no longer dropped before comparison - a Capacitor
+  clone whose labels sit in an unreadable bundle now reaches the palette tier.
+- **`conflicting_evidence` and `limitations`** are now populated on every corpus
+  verdict, as `BASELINE_REGISTRATION_PIPELINE` §6 mandates.
+- **Tests**: `test_vide_discriminative.py` added, pinning the BOI/BOB/ICICI
+  orange collision and the identity rules. `test_vide_apk_attribution.py` and
+  `test_vide_pipeline.py` no longer assert a specific baseline *source* - the
+  same bank is registered as both a corpus and a lab baseline, and those tests
+  passed only when no corpus was checked out.
+
+## 2026-08-25
+
+### Changed - VIDE calibrated to a 20% detection threshold
+
+`VIDE-F001` fired only at `confidence >= 0.72`, which in practice required all
+three axes to be near-perfect. A Capacitor clone keeps its labels in a minified
+bundle, so static extraction recovers the brand palette and the form skeleton
+and almost no text - the app VIDE exists to catch scored clean.
+
+- **Threshold 0.72 -> 0.20**, in both `compare.py` and `corpus_compare.py`.
+- **Evidence floors**: `MIN_STRING_EVIDENCE` 0.08 -> 0.02, and a new
+  `MIN_COLOR_EVIDENCE` (0.10) so a palette-only extraction can carry a verdict.
+- **Structure is no longer sufficient evidence.** It is worth 0.35 of the score,
+  so at a 0.20 threshold any login-shaped layout cleared the bar alone - a
+  device settings screen scored 0.21 against the SBI baseline during
+  calibration. A finding now requires a *discriminating* axis (text or palette);
+  `MIN_STRUCTURE_EVIDENCE` (0.10) marks structure as corroboration only.
+- **Attribution margin** 0.20 -> 0.05 (`corpus_compare.py`), and
+  `MIN_SHAPE_EVIDENCE` 0.35 -> 0.15. The wide margin was calibrated against
+  spec-authored fingerprints where only colour separated the banks; it was
+  discarding correct attributions more often than preventing wrong ones.
+- **Candidate shortlisting** (`baseline_store.shortlist_baselines`) qualifies a
+  baseline on *any* scored axis. Filtering on shared strings alone dropped
+  palette-only clones before the colour comparison - the axis that carries
+  attribution - ever ran.
+
+### Added - ten institution baselines, and the string-axis fixes they exposed
+
+`data/ui_baselines/` carried three hand-written lab profiles (SBI/HDFC/ICICI),
+so seven of the ten reference bank APKs had nothing to be attributed *to*. All
+ten institutions are now present with their brand palettes and screen labels,
+each declaring the reference app it stands for via a new `baseline_id` field -
+lab profiles and corpus entries use different institution ids, so without it
+there was no way to ask "did `BASE-02-HDFC.apk` attribute correctly".
+
+Attribution over the ten reference APKs went 2/10 -> 10/10. Two string-axis
+defects surfaced during that work and are fixed:
+
+- **Short credential names are compared strictly** (`fuzzy.same_label`).
+  `"Forgot IPIN"` scored 90.9 against `"Forgot MPIN?"` - over threshold, because
+  the shared word dominates and the two four-letter tokens differ by one
+  character. An IPIN is HDFC's netbanking password and an MPIN is a generic app
+  PIN. That single false match was worth an eighth of HDFC's string score
+  against *every* app in the set and decided one attribution outright. The rule
+  distinguishes substitution from omission: a confusable stand-in
+  (`MPIN` for `IPIN`) is rejected, a dropped qualifier (`MPIN` for
+  `6-digit MPIN`, `YONO` for `YONO SBI`) is still a match.
+- **Labels are weighted by rarity** (`fuzzy.label_weights`). `"Login"`, `"OTP"`
+  and `"Customer ID"` establish that an app is a banking UI and say nothing
+  about which bank it imitates; `"PNB ONE"` is close to proof on its own.
+  Counting them equally let a bank win on shared vocabulary - PNB's app was
+  attributed to IndusInd on a palette the two genuinely share, despite PNB
+  leading on its own name. Standard inverse document frequency over the baseline
+  set, so the weights move with the corpus instead of being a hand-kept list of
+  "generic" words. This is the same reasoning `corpus_compare` already applies
+  when it excludes structure from attribution.
+
+`scripts/verify_vide_corpus.py` gained `--apk-dir` and `--forensics`, and now
+falls back to the general comparer's attribution when no corpus is checked out -
+it previously read only the corpus comparer and so reported ten failures for a
+reason that had nothing to do with the ten APKs.
+
+**`demo_sbi_yono` carries its reference app's palette, not only YONO's real
+one.** The prototype ships `#1B4AA0` / `#D0342C` / `#16213A`, which sit ΔE 4.1 /
+5.2 / 4.9 from HDFC's brand colours and ΔE 16-30 from the real YONO palette, so
+`BASE-01-SBI.apk` was attributed to HDFC on colour despite winning its own
+string axis 0.59 to 0.35. The baseline now lists the three colours the reference
+app renders alongside YONO's `#280071` / `#002D62` / `#577CB7`. `#00ADE9` and
+`#9A3E76` were dropped: at ΔE 30.1 and 18.7 from anything the app renders they
+are past `MAX_MATCH_DELTA_E` - a different colour family - so they scored 0.00
+and only diluted the coverage average, which is a mean over baseline colours.
+
+That last point is a property worth knowing when authoring a baseline: listing a
+brand colour the app does not render costs score rather than adding coverage.
+Adding `#1B4AA0` alone moved the colour axis 0.19 -> 0.33 and all three observed
+colours took it to 0.49, both short of the 0.54 needed; removing the two dead
+entries is what carried it to 0.66.
+
+### Added - VIDE forensic breakdown
+
+`engines/vide/forensics.py` assembles the machine-readable "why is this a
+clone", so the investigation UI and the PDF render the same facts instead of
+parsing evidence prose apart:
+
+- **Colour scheme**: suspect hex vs baseline hex per pair, with CIE ΔE₂₀₀₀ and a
+  plain-language reading ("visually identical", "close match").
+- **UI text**: the banking labels matched, with the baseline denominator.
+- **View hierarchy**: structural signatures and layout similarity.
+- **Confidence tiers** - high (≥ 0.60), moderate (0.35-0.59), low/suspicious
+  (0.20-0.34) - carried on the verdict, so a weak match and a pixel-faithful
+  clone no longer render identically.
+- PDF page 9 draws the threshold line from the engine constant rather than a
+  hardcoded 0.72, adds the matched institution and a swatch-by-swatch colour
+  table, and now populates the per-axis meter at all (`vide_jaccard` and its
+  siblings were read through `hasattr` and never set).
+
+### Fixed - deep dynamic exploration
+
+Findings below come from instrumented runs of the real `AgenticExplorer` against
+a live emulator, not from static review. Baseline before this work: 14.8s per
+exploration iteration, 34.3% coverage, five structural states for one
+`LoginActivity`, zero scroll actions executed, and a run that could spend all
+300s inside Android Settings.
+
+- **Deployed analysis window** (`docker-compose.yml`): `FRIDA_ANALYSIS_DURATION`
+  defaulted to 90s while `frida_sandbox.py` defaults to 300s, and the variable
+  was unset in every `.env`. At the measured cost that bought 4-7 actions per
+  sample. Now 300 in both, and explicit in `.env`.
+- **State identity** (`exploration_engine.compute_composite_state_signature`):
+  identity is structural. An input's VALUE no longer contributes, so typing into
+  a form does not fork the screen into a new state with all work reset. Node
+  position is excluded (the soft keyboard shifts a WebView by ~63px) and
+  container size is excluded (it tracks the keyboard); control size is kept.
+- **Action identity** (`ActionItem.signature`): no longer includes the
+  positional `node_id`, which was renumbered whenever a WebView reflowed and
+  grew the inventory without bound (306 action ids for six widgets).
+- **System-boundary containment**: `com.android.settings` is no longer blanket
+  in scope, nor admitted to the target graph on ownership alone. A Settings
+  screen qualifies only when its `semantic_type` is an actual prompt, which
+  keeps the accessibility and VPN consent flows working. Boundary excursions are
+  bounded by `SUDARSHAN_MAX_BOUNDARY_ACTIONS` (6) with a deterministic
+  `start_activity` route home.
+- **Back navigation**: never pressed from the task-root state, nor between
+  states of a single-Activity WebView app, where back leaves the sample instead
+  of traversing it. Exhausted screens now re-drive a recorded route
+  (`_replay_route`) to reach a state that still has work.
+- **Iteration cost**: the post-action observation is carried into the next
+  iteration behind a focus-signature check; `click_text` taps known-good
+  geometry instead of re-dumping the hierarchy; the duplicate `wait_for_idle`
+  is gone; and a demonstrably inert control stops at two attempts instead of
+  three.
+- **Scroll fairness / repeated visits**: pending scroll actions are promoted
+  after a screen has been worked twice, and `MAX_REPEATED_STATE_VISITS` is now
+  enforced (it was declared but never read; one state was visited 17 times).
+- **Action inventory**: full-screen containers (a clickable WebView) and
+  decorative captions promoted through them are no longer offered as controls.
+
+### Added - credential entry and in-app evidence
+
+- **`shared/sudarshan_core/engines/agentic/credentials.py`**: per-run synthetic
+  credentials, regenerated on each login attempt, plus field-kind resolution and
+  login-outcome detection. Values are disposable and never real user data.
+- **Field identification**: `perception` now parses uiautomator's `password`
+  attribute and attaches the caption rendered above each input. On the WebView
+  banking corpus these are the only signals available - the EditText nodes carry
+  no resource-id, text or content-desc - so both fields previously received the
+  same placeholder and no login could succeed.
+- **Form completion order**: submit controls are held back until the inputs on
+  the screen are filled. Submit matching is word-bounded, so "Forgot MPIN?" is
+  no longer treated as the login button because "go" appears inside "Forgot".
+- **Login retry**: an app that says nothing gets a fresh identity and another
+  attempt, up to `SUDARSHAN_MAX_LOGIN_ATTEMPTS` (5). An explicit "invalid
+  credentials" ends the branch immediately.
+- **Numeric PIN pads**: a keypad is entered as one `tap_sequence` action rather
+  than one key per iteration, which never filled the field.
+- **In-app screenshots**: one evidence frame per distinct in-app screen, so the
+  report shows the app from the inside rather than only its launch screen.
+- **VIDE**: `vide.pipeline` now consumes every captured view hierarchy
+  (`ui_hierarchies`), not only the last screen observed. The login form is the
+  one screen a clone and its target necessarily share; the screens behind it are
+  where the difference shows. The legacy `ui_hierarchy_xml` remains supported.
+- **Tests**: `backend/tests/test_deep_exploration_fixes.py` (46) and
+  `backend/tests/test_credential_exploration.py` (39).
+
 ## 2026-08-24
 
 ### Added
-- **Enterprise Batch Scan Architecture**: Built bulk APK analysis orchestration engine allowing SOC analysts to upload 2–50 suspicious APKs in a single batch.
-- **Persistent Database Models**: Added `analysis_batches` and `analysis_batch_jobs` SQLite tables in `backend/app/db/database.py` with indexes and migrations.
-- **Dedicated FIFO Batch Worker**: Created `backend/app/workers/batch_worker.py` managing sequential FIFO job dispatch to the existing analysis pipeline (`_run_analysis_pipeline`) with automatic recovery for interrupted jobs.
-- **Enterprise Batch REST APIs**: Added `backend/app/routes/batch.py` exposing:
-  - `POST /api/v1/batches`: Multi-file upload, validation, and batch initiation
-  - `GET /api/v1/batches`: Paginated, role-scoped batch history
-  - `GET /api/v1/batches/{batch_id}`: Full batch metadata and live job summaries
-  - `GET /api/v1/batches/{batch_id}/jobs`: Lightweight job list for real-time polling
-  - `POST /api/v1/batches/{batch_id}/pause`: Safe queue pausing
-  - `POST /api/v1/batches/{batch_id}/resume`: Queue resumption
-  - `POST /api/v1/batches/{batch_id}/cancel`: Safe cancellation of queued jobs
-  - `POST /api/v1/batch-jobs/{job_id}/retry`: Retry capability for failed analysis jobs
-- **Enterprise Batch Dashboard UI**: Created complete React 18 / TypeScript frontend suite:
-  - `frontend/src/pages/BatchScan.tsx` & `BatchDetail.tsx` routes (`/batch` and `/batch/:batch_id`)
-  - `frontend/src/components/batch/BatchScanPage.tsx`: Multi-file drag & drop, selected file list with size/status indicators, live active batch queue
-  - `frontend/src/components/batch/BatchDetailPage.tsx`: Dedicated batch view with metadata, progress bar, and results table
-  - `frontend/src/components/batch/BatchHistory.tsx`: Historical batch runs and risk distributions
-  - `frontend/src/components/batch/BatchProgressBar.tsx`: Deterministic multi-segment progress bar with discrete counters
-  - `frontend/src/components/batch/BatchJobRow.tsx`: Results row linking completed jobs directly to existing `InvestigationShell` (`/history/:sha256`)
-  - `frontend/src/components/batch/useBatchProgress.ts`: Auto-polling hook with cached case scoring
-- **Automated Test Suite**: Added `backend/tests/test_batch.py` with 8 comprehensive unit and integration tests covering batch creation, validation, FIFO ordering, pause/resume/cancel, retry, role-scoping, and duplicate APK handling.
-- **Gemini failover**: Documented primary Gemini 3.x Flash + fallback Gemini 2.5 Flash, cooldown, and environment variables in `05_AI_INVESTIGATION_ENGINE.md` and `HOW_TO_RUN.md`.
-
-## 2026-08-14
-
-### Added
-- **Preflight Checks**: Added `scripts/preflight.py` and `shared/sudarshan_core/preflight.py` to turn silent dynamic analysis degradations into an explicit checklist with remediation, runnable on the host and inside the analysis engine.
-- **Dynamic Analysis Testing Pipeline**: Implemented automated test pipeline for Frida with standalone test files (`analysis-engine/test_frida_*.py`, `tests/unit/test_frida_pipeline_full.py`, `tests/unit/test_dynamic_pipeline_regression.py`).
+- **Screenshot hardening (second-phase)**: Central `ScreenshotPolicy` (`shared/sudarshan_core/engines/agentic/screenshot_policy.py`) with state/event-aware deduplication — separate from event and evidence deduplication. Decisions: CAPTURE, DEDUPLICATED, SUPPRESSED, BLOCKED, REUSE with auditable reasons.
+- **Screen ownership classification**: `HOME_LAUNCHER`, `EXTERNAL_APP`, `CRASH_STATE`, `SYSTEM_INSTALLER`, etc. via package/activity context (`classify_screen_with_ownership`). Home launcher is not explored as target-app UI; Gemini planner skipped for non-explorable states.
+- **External application graph**: External/system screens stored in `ExplorationGraph.external_states`, linked from target states via transition edges.
+- **Crash handling**: One crash-context screenshot per crash transition; `APP_CRASH` events in exploration graph; recovery without home screenshot spam.
+- **20 regression tests** (`tests/unit/test_screenshot_hardening.py`): Home spam, external dedup, permission dedup, same-screen reuse, crash handling, long-run bounded captures.
 
 ### Changed
-- **Frida Transport Selection Fixes**: Prefer the remote TCP device whenever the configured port is not 27042. Frida's USB/ADB transport only talks to port 27042. When those differ, transport falls back to jailed mode.
-- **ADB Forward Binding**: Added `adb_server_host()` and `frida_client_hosts()` to dial forwarded ports through the correct host instead of `127.0.0.1` inside containers.
-- **Process Verification**: `_frida_process_running()` now matches on exact process name via `pidof` and `ps -A -o PID,NAME` rather than `pgrep -f`, preventing false positives on shells running the probe.
-- **Frida Asset Caching**: `auto_download_dir()` caches `frida-server` into `tools/`. Bind-mounted `tools/` into containers so the 106 MB binary is fetched once per machine rather than once per container build.
-- **Optional Analysis Engine Env**: Made `analysis-engine/.env` optional to prevent fresh clones from aborting the whole stack on a missing env file.
-- **Upload Page Pipeline Visualization**: Updated `frontend/src/components/upload/UploadPage.tsx` and `StageCard.tsx` to handle expanded backend pipeline stages.
+- **ScreenshotManager** routes all captures through `ScreenshotPolicy` before adb screencap. Manifest includes `policy_statistics`, `suppressed_count`, semantic filenames, and ownership metadata.
+- **AgenticExplorer** per-action screenshots no longer use `force=True`; policy evaluates each capture. Home/crash states handled by dedicated async handlers without normal exploration.
+- **PerceptionPipeline** skips Level-5 vision for `HOME_LAUNCHER` foreground.
+- **Deep Dynamic Exploration Engine** (`shared/sudarshan_core/engines/agentic/exploration_engine.py`): Per-analysis state/action graph with `ApplicationProfile`, `EvidenceMoment`, victim journey reconstruction, deterministic action prioritization, scroll/menu/backtrack support, and exploration coverage metrics. Integrated into `AgenticExplorer` with post-action re-observe, causal screenshot linking, and explicit stop reasons.
+- **27 new unit tests** (`tests/unit/test_deep_exploration.py`): State graph, deduplication, evidence moments, mock RTO multi-branch exploration, permission investigation, secondary APK boundary, prompt injection defense.
+- **Gemini primary/fallback manager**: `shared/sudarshan_core/ai/gemini_provider.py` routes every Gemini call through Gemini 3.x Flash first, then Gemini 2.5 Flash on quota, rate-limit, 5xx, timeout, or primary-key auth failure, with a configurable primary cooldown. Legacy `GEMINI_API_KEY` / `GEMINI_MODEL` remain primary aliases.
 
-### Bug Fixes
-- **PDF Generator Crash**: Fixed a `TypeError` in `pdf_generator.py` (lines 1155, 1164) that caused a 500 Internal Server Error when `banking_impact` was absent or null, ensuring fallback to `0.0`.
-- **Prompt Sanitization Coverage**: Updated `sanitizer.py`'s `_INJECTION_PHRASES` to cover non-English (Spanish, French, German, Chinese, Italian, Portuguese, Polish, Russian) and persona-based prompt injection / jailbreak attempts.
+### Changed
+- **AgenticExplorer** no longer stops when all 15 fraud goals complete; goals are threat-intelligence prioritization only. Exploration stops on graph exhaustion, budget, or safety boundary.
+- Default action budget raised to 120 (`SUDARSHAN_AGENT_ACTION_BUDGET`). Frida silence threshold raised to 8 and requires no unexplored graph branches.
+- **Screen classifier** extended with `UPDATE_PROMPT`, `VPN_REQUEST`, `EXTERNAL_APK`, `DOWNLOAD_PROMPT`, `WEBVIEW`, `DIALOG`, `HOME_LAUNCHER`, `EXTERNAL_APP`, `CRASH_STATE` types and ownership resolution.
+- **ScreenshotManager** gains causal linking fields (`state_id`, `action_id`, `evidence_id`, `evidence_moment_id`, `ownership`, `deduplication_status`) and suppression statistics.
 
-### Documentation
-- **Zero-Drift Master Knowledge Base**: Synthesized 16 subsystem audit reports into a single, comprehensive 58-section `SUDARSHAN_MASTER.md` document that serves as the ultimate source of truth, superseding previous fragmented documentation files.
+## 2026-08-12
+
+### Added / Upgraded
+- **Reference-Replication ReportLab PDF Engine**: Redesigned server-side ReportLab PDF threat investigation generator (`shared/sudarshan_core/engines/pdf_generator.py`) to strictly replicate the visual structure, 12-section technical organization, typography, color scheme, headers/footers, and information density of master reference specification `sudarshan pdf.pdf`.
+- **Vector Drawing Flowables**: Custom ReportLab `FRSDialGauge` (180° arc dial), `FRSBarMeter` (4-axis FRS breakdown), `STEIBarMeter` (5-axis STEI breakdown), `VIDEBarMeter` (UI comparison chart with 0.72 detection threshold line), `BFCIBarMeter` (vertical behavioral category bar chart), `WorkflowDiagram` (horizontal attack step flow), and `NumberedCanvas` running headers/footers.
+- **Canonical FRS Consistency Fix**: Resolved FRS score drift bug in `FraudRiskHero.tsx` and PDF generation pipeline. All UI cards, API responses, PDF pages, executive summaries, and assessment blocks now consume the single canonical `final_risk_score` from `risk_engine.py`.
+- **Real-Data Pipeline & Provenance Grounding**: Fully grounded report data model in real case payloads and disk evidence artifacts (`evidence.json`, screenshots manifest) with zero synthetic/fake data fabrication.
+- **Enhanced Test Suite**: Added comprehensive unit, API, and edge-case tests in `backend/tests/test_pdf_generator.py` covering score consistency, empty evidence, missing dynamic analysis, VIDE states, and screenshot embedding.
 
 ## 2026-08-11
-### Documentation
-- **Full Documentation Audit (2026-08-11)**: Complete codebase-verified documentation pass against all files in `docs/`.
-- **Version corrected**: All docs now state `v2.1.0` (from `backend/app/main.py`); prior docs incorrectly stated `v2.5.0-STABLE`.
-- **Test count corrected**: Verified **583 tests collected** (from 519 in prior docs) via `pytest tests/ backend/tests --collect-only`.
-- **Bank package count corrected**: `08_DETERMINISTIC_RISK_ENGINE.md` updated to state 21 package prefixes (from 47); verified against `apk_analyzer.py::INDIAN_BANK_PACKAGES`.
-- **Demo credentials sanitized**: `BOI_DEMO_CREDENTIALS.md` no longer contains plaintext passwords; replaced with `.env` configuration guidance.
-- **CASE_STUDIES.md annotated**: Summary table now notes FRS/STEI distinction and that scores are pending re-baseline.
-- **BENCHMARKS.md annotated**: Not-verified warning added; metrics are from prior benchmarking, not re-measured.
-
-## 2026-08-08
-
-### Added
-- **VIDE (Visual Impersonation Detection Engine)**: `shared/sudarshan_core/engines/vide/` - static/dynamic UI profiling, baseline compare, rule **VIDE-F001**, CH06 signer registry; integrated in `analysis-engine/app/main.py` via `safe_run_vide_analysis()`; `vide` field on analysis and case payloads; dashboard `VisualImpersonationPanel` / `VisualImpersonationExecutiveCard`; unit tests `tests/unit/test_vide_*.py`.
-- **Investigation shell UI**: `frontend/src/components/investigation/InvestigationShell.tsx` wraps fraud-card, technical, threat-intel, chat, and `/history/:sha256` routes with shared `CaseHeader`, `ScoreLedgerSlideOver`, `EvidenceDrawer`, and `AnalystNotesPanel`; `useInvestigationModel` merges static + runtime evidence for the drawer.
-- **Cases API expansion**: `GET/POST /api/v1/cases/{sha256}/notes`, `GET /api/v1/cases/{sha256}/evidence` (Frida `evidence.json` via `evidence_loader.py`); role-scoped case list for `analyst`; `GET /api/v1/cases/{sha256}` returns full persisted record including `vide`.
-
-### Changed
-- **Automated test suite**: **583** tests collected (`pytest tests/ backend/tests --collect-only`, 2026-08-08).
 
 ### Documentation
-- Synchronized `/docs` with VIDE, investigation shell, cases/evidence APIs, and test metric **583**; cross-linked [`architecture/VIDE.md`](architecture/VIDE.md) in the documentation portal index.
-
-## 2026-08-06
-
-### Added
-- **Sandbox containment module**: `shared/sudarshan_core/security/` (`sandbox_containment.py`, `adb_gateway.py`, `internal_auth.py`) with startup audits on backend and analysis-engine.
-- **Production compose overlay**: `docker-compose.hardened.yml` and `deploy/security/seccomp-analysis-engine.json`.
-- **Containment regression tests**: `tests/unit/test_sandbox_containment.py`, `test_adb_policy_bypass.py`, `test_blocker_fixes.py`; `backend/tests/test_gateway_dynamic_blocker.py`.
-
-### Changed
-- **Gateway analysis path**: `upload.py` returns HTTP 503 when analysis-engine is unreachable unless `SUDARSHAN_ALLOW_GATEWAY_DYNAMIC=true`.
-- **Compose exposure**: MobSF and mitmproxy published on `127.0.0.1` only in base `docker-compose.yml`.
-- **Automated test suite**: **486** tests collected (`pytest tests/ backend/tests --collect-only`).
-
-### Documentation
-- Synchronized `/docs` with containment architecture, corrected FRS formula and risk bands to match `risk_engine.py`, updated test metrics to **486**, documented hardened deployment in `HOW_TO_RUN.md` and `ARCHITECTURE.md` §12.
+- **Full Documentation Audit**: Complete codebase-verified documentation pass across all files in `docs/` and root `README.md`. Codebase treated as sole source of truth.
+- **Version corrected**: All docs and `README.md` now state `v2.1.0` (from `backend/app/main.py`); prior docs incorrectly stated `v2.5.0-STABLE`.
+- **Test count corrected**: Verified **583 tests collected** (2026-08-11 live run, 42.63s) via `pytest tests/ backend/tests --collect-only`. Prior `README.md` stated 526; prior `docs/` stated 519.
+- **Indian bank package count corrected**: `08_DETERMINISTIC_RISK_ENGINE.md` and `README.md` updated to state 21 package prefixes (from 47/various); verified against `apk_analyzer.py::INDIAN_BANK_PACKAGES`.
+- **Demo credentials sanitized**: `docs/BOI_DEMO_CREDENTIALS.md` no longer contains plaintext passwords; replaced with `.env` placeholder guidance.
+- **CASE_STUDIES.md annotated**: Summary table notes FRS/STEI distinction; Drinik/Xenomorph FRS scores marked "Not re-verified".
+- **BENCHMARKS.md annotated**: Warning added — metrics not re-measured in this audit pass.
 
 ## [2.5.0-STABLE] - 2026-08-05
 

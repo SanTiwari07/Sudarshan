@@ -27,6 +27,7 @@ from app.ai.gemini_client import analyze_with_llm
 from sudarshan_core.analyzers.apk_analyzer import analyze_apk
 from app.auth.auth import get_current_user, require_analyst
 from app.db.database import save_case
+from app.services.run_recorder import record_run
 from sudarshan_core.engines.classification_engine import classify_family
 from sudarshan_core.engines.frida_sandbox import artifact_dir_for, get_sandbox_status, run_frida_analysis
 from sudarshan_core.engines.risk_engine import calculate_risk_score
@@ -154,6 +155,7 @@ def _build_dynamic_analysis_model(dynamic_result: Optional[Dict]) -> Optional[Dy
         clicked_nodes=list(dynamic_result.get("clicked_nodes", [])),
         anti_analysis_events=dynamic_result.get("anti_analysis_events", []),
         resilience_actions=dynamic_result.get("resilience_actions", []),
+        anti_evasion=dynamic_result.get("anti_evasion"),
         yara_matches=dynamic_result.get("yara_matches", []),
         bfci=float(dynamic_result.get("bfci", 0.0) or 0.0),
         bfci_components=dynamic_result.get("bfci_components", {}) or {},
@@ -342,6 +344,10 @@ async def _persist_and_index(
     """
     await save_case(sha256_hash, result, analyst_id=analyst_id)
 
+    # History row for trending. save_case cannot do this - it is also called
+    # when a case is re-opened and re-enriched, which is not a new run.
+    await record_run(result, sha256=sha256_hash, stage_name="delegated")
+
     cache_report(sha256_hash, {
         "sha256": sha256_hash,
         "package_name": result.get("package_name"),
@@ -429,39 +435,14 @@ async def _enrich_engine_result(
     result["manifest_findings"] = _coerce_manifest_findings(result.get("manifest_findings"))
     result["dangerous_perms"] = _coerce_dangerous_permissions(result.get("dangerous_perms"))
 
-    # Compute resilience_actions if dynamic_result is present
+    # What the sandbox did TO the device, for the fraud-card banner. Derived
+    # from the recorded anti-evasion sequence, not inferred from the sample's
+    # own telemetry - see services/resilience_summary.
     if result.get("dynamic_result") and isinstance(result["dynamic_result"], dict):
-        res_actions = []
+        from app.services.resilience_summary import build_resilience_actions
+
         dyn = result["dynamic_result"]
-        
-        # Check if time-warp hooks fired
-        anti_events = dyn.get("anti_analysis_events", [])
-        time_events = [e for e in anti_events if 'time' in str(e).lower() or 'alarm' in str(e).lower()]
-        if time_events:
-            res_actions.append({
-                "type": "time_warp",
-                "title": "Time-Warping",
-                "result_summary": f"Fast-forwarded time (+24h) and intercepted dormant time-delayed payloads ({len(time_events)} events forced)."
-            })
-            
-        # Check if persona seeding was used (contacts/SMS accessed)
-        api_calls = dyn.get("api_calls", [])
-        if any("content://contacts" in str(a).lower() or "content://sms" in str(a).lower() for a in api_calls):
-            res_actions.append({
-                "type": "persona_seeding",
-                "title": "Persona Seeding",
-                "result_summary": "Injected synthetic contacts and SMS history to successfully bypass sterile environment checks."
-            })
-            
-        # Check if permissions were auto-granted
-        if flags_dict.get("has_system_alert_window") or flags_dict.get("has_accessibility_abuse"):
-            res_actions.append({
-                "type": "permission_grants",
-                "title": "Permission Grants",
-                "result_summary": "Auto-granted high-risk privileges (Accessibility/Overlay) to force execution of malicious payloads."
-            })
-            
-        dyn["resilience_actions"] = res_actions
+        dyn["resilience_actions"] = build_resilience_actions(dyn, flags_dict)
         result["dynamic_result"] = dyn
 
     # Family classification - the engine reports one, but only the gateway has
@@ -946,6 +927,15 @@ async def _run_analysis_pipeline(
         "ai_confidence_multiplier": risk_result["ai_confidence_multiplier"],
         "final_risk_score": risk_result["final_risk_score"],
         "risk_band": risk_result["risk_band"],
+        # The Execution Assertion Matrix. `risk_band` keeps its four-value
+        # vocabulary for the badge colours; `verdict` carries INCOMPLETE_EXERCISE
+        # when the sandbox ran but never reached any of the sample's own trigger
+        # conditions. Without these three keys the frontend cannot distinguish
+        # "we observed nothing bad" from "we never got to look", and a floored
+        # case reads as a clean one.
+        "verdict": risk_result.get("verdict", risk_result["risk_band"]),
+        "execution_assertions": risk_result.get("execution_assertions"),
+        "incomplete_exercise": bool(risk_result.get("incomplete_exercise", False)),
         "confidence": risk_result.get("confidence", 70.0),
         "recommended_action": risk_result.get("recommended_action", ""),
         "frs_breakdown": risk_result.get("frs_breakdown", {}),
@@ -1013,6 +1003,7 @@ async def _run_analysis_pipeline(
     timer.set_orchestrator_stage(OrchestratorStage.PERSISTING)
     timer.stage_started("PERSISTENCE")
     await save_case(sha256_hash, result, analyst_id=analyst_id)
+    await record_run(result, sha256=sha256_hash, stage_name="local")
 
     # ── Cache for export endpoints ────────────────────────────────────────────
     report_cache_data = {
@@ -1021,6 +1012,10 @@ async def _run_analysis_pipeline(
         "family_classification": family_class,
         "final_risk_score": risk_result["final_risk_score"],
         "risk_band": risk_result["risk_band"],
+        # Carried so the PDF renders the verdict the engine actually reached
+        # rather than rebuilding the assertion matrix from dynamic_result.
+        "verdict": risk_result.get("verdict", risk_result["risk_band"]),
+        "execution_assertions": risk_result.get("execution_assertions"),
         "confidence": risk_result.get("confidence", 70.0),
         "has_accessibility_abuse": flags_dict.get("has_accessibility_abuse", False),
         "has_sms_read_write": flags_dict.get("has_sms_read_write", False),

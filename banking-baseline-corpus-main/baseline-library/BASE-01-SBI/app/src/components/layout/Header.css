@@ -1,0 +1,37 @@
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background-color: var(--color-primary);
+  color: var(--color-surface);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.header-left, .header-right {
+  width: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.header-title h1 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+  text-align: center;
+}
+
+.icon-btn {
+  background: none;
+  border: none;
+  color: inherit;
+  padding: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: -8px;
+}

@@ -1,0 +1,38 @@
+{
+  "baselineId": "BASE-10-UNION",
+  "entry": "UNION-SPLASH",
+  "nodes": [
+    { "id": "UNION-SPLASH", "route": "/" },
+    { "id": "UNION-LOGIN", "route": "/login" },
+    { "id": "UNION-MPIN", "route": "/mpin" },
+    { "id": "UNION-HOME", "route": "/home" },
+    { "id": "UNION-ACCOUNTS", "route": "/accounts" },
+    { "id": "UNION-ACCOUNT_DETAILS", "route": "/accounts/:id" },
+    { "id": "UNION-TXN_HISTORY", "route": "/accounts/:id/transactions" },
+    { "id": "UNION-TRANSFER", "route": "/transfer" },
+    { "id": "UNION-AMOUNT", "route": "/transfer/amount" },
+    { "id": "UNION-REVIEW", "route": "/transfer/review" },
+    { "id": "UNION-RECEIPT", "route": "/transfer/receipt" },
+    { "id": "UNION-SERVICES", "route": "/services" },
+    { "id": "UNION-PROFILE", "route": "/profile" }
+  ],
+  "edges": [
+    { "from": "UNION-SPLASH", "to": "UNION-LOGIN", "trigger": "timeout" },
+    { "from": "UNION-LOGIN", "to": "UNION-MPIN", "trigger": "submit-mock" },
+    { "from": "UNION-MPIN", "to": "UNION-HOME", "trigger": "mpin-complete-mock" },
+    { "from": "UNION-HOME", "to": "UNION-ACCOUNTS", "trigger": "bottom-nav-accounts" },
+    { "from": "UNION-HOME", "to": "UNION-TRANSFER", "trigger": "bottom-nav-pay" },
+    { "from": "UNION-HOME", "to": "UNION-SERVICES", "trigger": "bottom-nav-services" },
+    { "from": "UNION-HOME", "to": "UNION-PROFILE", "trigger": "bottom-nav-profile" },
+    { "from": "UNION-HOME", "to": "UNION-TRANSFER", "trigger": "quick-action-transfer" },
+    { "from": "UNION-HOME", "to": "UNION-SERVICES", "trigger": "quick-action-services" },
+    { "from": "UNION-ACCOUNTS", "to": "UNION-ACCOUNT_DETAILS", "trigger": "select-account" },
+    { "from": "UNION-ACCOUNT_DETAILS", "to": "UNION-TXN_HISTORY", "trigger": "view-transactions" },
+    { "from": "UNION-ACCOUNT_DETAILS", "to": "UNION-TRANSFER", "trigger": "fund-transfer" },
+    { "from": "UNION-TRANSFER", "to": "UNION-AMOUNT", "trigger": "select-payee" },
+    { "from": "UNION-AMOUNT", "to": "UNION-REVIEW", "trigger": "continue" },
+    { "from": "UNION-REVIEW", "to": "UNION-RECEIPT", "trigger": "confirm-mock" },
+    { "from": "UNION-RECEIPT", "to": "UNION-HOME", "trigger": "back-to-home" },
+    { "from": "UNION-PROFILE", "to": "UNION-LOGIN", "trigger": "logout" }
+  ]
+}

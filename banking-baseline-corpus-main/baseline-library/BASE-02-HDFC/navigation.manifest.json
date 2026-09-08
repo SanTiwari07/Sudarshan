@@ -1,0 +1,23 @@
+{
+  "f:/banking-baseline-corpus/baseline-library/BASE-02-HDFC/app/src/screens/Login.tsx": {
+    "status": "passed"
+  },
+  "f:/banking-baseline-corpus/baseline-library/BASE-02-HDFC/app/src/screens/MPIN.tsx": {
+    "status": "passed"
+  },
+  "f:/banking-baseline-corpus/baseline-library/BASE-02-HDFC/app/src/screens/Home.tsx": {
+    "status": "passed"
+  },
+  "f:/banking-baseline-corpus/baseline-library/BASE-02-HDFC/app/src/screens/Profile.tsx": {
+    "status": "passed"
+  },
+  "f:/banking-baseline-corpus/baseline-library/BASE-02-HDFC/app/src/screens/AccountDetails.tsx": {
+    "status": "passed"
+  },
+  "f:/banking-baseline-corpus/baseline-library/BASE-02-HDFC/app/src/screens/TxnHistory.tsx": {
+    "status": "passed"
+  },
+  "f:/banking-baseline-corpus/baseline-library/BASE-02-HDFC/app/src/screens/Amount.tsx": {
+    "status": "passed"
+  }
+}

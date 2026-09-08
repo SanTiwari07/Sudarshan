@@ -1,0 +1,97 @@
+{
+  "baselineId": "BASE-07-BOI",
+  "entry": "BOI-SPLASH",
+  "nodes": [
+    {
+      "id": "BOI-SPLASH",
+      "route": "/"
+    },
+    {
+      "id": "BOI-LOGIN",
+      "route": "/login"
+    },
+    {
+      "id": "BOI-MPIN",
+      "route": "/mpin"
+    },
+    {
+      "id": "BOI-HOME",
+      "route": "/home"
+    },
+    {
+      "id": "BOI-ACCOUNTS",
+      "route": "/accounts"
+    },
+    {
+      "id": "BOI-TRANSFER",
+      "route": "/transfer"
+    },
+    {
+      "id": "BOI-AMOUNT",
+      "route": "/transfer/amount"
+    },
+    {
+      "id": "BOI-REVIEW",
+      "route": "/transfer/review"
+    },
+    {
+      "id": "BOI-RECEIPT",
+      "route": "/transfer/receipt"
+    },
+    {
+      "id": "SERVICES",
+      "route": "/services"
+    },
+    {
+      "id": "PROFILE",
+      "route": "/profile"
+    }
+  ],
+  "edges": [
+    {
+      "from": "BOI-SPLASH",
+      "to": "BOI-LOGIN",
+      "trigger": "timeout"
+    },
+    {
+      "from": "BOI-LOGIN",
+      "to": "BOI-MPIN",
+      "trigger": "submit-mock"
+    },
+    {
+      "from": "BOI-MPIN",
+      "to": "BOI-HOME",
+      "trigger": "mpin-complete-mock"
+    },
+    {
+      "from": "BOI-HOME",
+      "to": "BOI-TRANSFER",
+      "trigger": "quick-action-transfer"
+    },
+    {
+      "from": "BOI-HOME",
+      "to": "BOI-ACCOUNTS",
+      "trigger": "view-details"
+    },
+    {
+      "from": "BOI-TRANSFER",
+      "to": "BOI-AMOUNT",
+      "trigger": "select-payee"
+    },
+    {
+      "from": "BOI-AMOUNT",
+      "to": "BOI-REVIEW",
+      "trigger": "continue"
+    },
+    {
+      "from": "BOI-REVIEW",
+      "to": "BOI-RECEIPT",
+      "trigger": "confirm-mock"
+    },
+    {
+      "from": "BOI-RECEIPT",
+      "to": "BOI-HOME",
+      "trigger": "back-to-home"
+    }
+  ]
+}

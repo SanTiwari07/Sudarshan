@@ -1,0 +1,74 @@
+﻿{
+  "bank": "ICICI Bank",
+  "screens": [
+    {
+      "screenId": "ICICI-LOGIN",
+      "structuralSignature": "AUTH_FORM_VERTICAL_PRIMARY_CTA",
+      "regionOrder": [
+        "HEADER",
+        "PRIMARY_CONTENT",
+        "FOOTER_CTA"
+      ],
+      "exactStrings": [
+        "User ID",
+        "Password",
+        "Login",
+        "Enter User ID",
+        "Welcome to iMobile Pay",
+        "Please log in to continue",
+        "Forgot User ID?",
+        "Register"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#F37021",
+        "colorSecondary": "#052F6B"
+      }
+    },
+    {
+      "screenId": "ICICI-MPIN",
+      "structuralSignature": "PINPAD_NUMERIC_ENTRY",
+      "regionOrder": [
+        "HEADER",
+        "PIN_INPUT",
+        "NUMERIC_KEYPAD"
+      ],
+      "exactStrings": [
+        "Enter 6-Digit MPIN",
+        "Enter MPIN to login"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#F37021",
+        "colorSecondary": "#052F6B"
+      }
+    },
+    {
+      "screenId": "ICICI-HOME",
+      "structuralSignature": "DASHBOARD_CARD_GRID_QUICKACTIONS",
+      "regionOrder": [
+        "STATUS",
+        "HEADER",
+        "ACCOUNT_CARD",
+        "QUICK_ACTIONS",
+        "RECENT_TRANSACTIONS",
+        "BOTTOM_NAV"
+      ],
+      "exactStrings": [
+        "Recent Activity",
+        "Savings Account XX4321",
+        "Statement",
+        "All Accounts",
+        "Quick Actions",
+        "Pre-approved Loan",
+        "Get up to ₹5,00,000 instantly",
+        "Apply",
+        "View All"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#F37021",
+        "colorSecondary": "#052F6B"
+      }
+    }
+  ],
+  "appName": "iMobile Pay",
+  "baselineId": "BASE-03-ICICI"
+}

@@ -1,0 +1,78 @@
+﻿{
+  "bank": "Axis Bank",
+  "screens": [
+    {
+      "screenId": "AXIS-LOGIN",
+      "structuralSignature": "AUTH_FORM_VERTICAL_PRIMARY_CTA",
+      "regionOrder": [
+        "HEADER",
+        "PRIMARY_CONTENT",
+        "FOOTER_CTA"
+      ],
+      "exactStrings": [
+        "Password",
+        "Login ID / Customer ID",
+        "Enter your ID",
+        "Welcome to open",
+        "by Axis Bank",
+        "Proceed",
+        "Forgot Login ID?",
+        "Register"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#97124B",
+        "colorSecondary": "#820C3A"
+      }
+    },
+    {
+      "screenId": "AXIS-MPIN",
+      "structuralSignature": "PINPAD_NUMERIC_ENTRY",
+      "regionOrder": [
+        "HEADER",
+        "PIN_INPUT",
+        "NUMERIC_KEYPAD"
+      ],
+      "exactStrings": [
+        "Forgot MPIN?",
+        "Enter MPIN",
+        "Please enter your 6-digit MPIN"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#97124B",
+        "colorSecondary": "#820C3A"
+      }
+    },
+    {
+      "screenId": "AXIS-HOME",
+      "structuralSignature": "DASHBOARD_CARD_GRID_QUICKACTIONS",
+      "regionOrder": [
+        "STATUS",
+        "HEADER",
+        "ACCOUNT_CARD",
+        "QUICK_ACTIONS",
+        "RECENT_TRANSACTIONS",
+        "BOTTOM_NAV"
+      ],
+      "exactStrings": [
+        "Pay Bills",
+        "Recent Activity",
+        "View Statements",
+        "Transfer",
+        "Invest",
+        "Scan QR",
+        "Pre-approved Personal Loan",
+        "Get up to ₹5,00,000 instantly in your account.",
+        "Apply Now",
+        "UPI/Zomato/123456",
+        "NEFT/Salary/Corp",
+        "View All Transactions"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#97124B",
+        "colorSecondary": "#820C3A"
+      }
+    }
+  ],
+  "appName": "Axis Mobile",
+  "baselineId": "BASE-04-AXIS"
+}

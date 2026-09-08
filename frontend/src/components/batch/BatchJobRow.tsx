@@ -89,7 +89,7 @@ export default function BatchJobRow({ job, onRetry, actionLoading }: BatchJobRow
             {job.current_stage || 'Processing'}
           </span>
           {job.progress_pct > 0 && (
-            <span className="text-[11px] font-mono text-slate-500">
+            <span className="text-[13px] font-mono text-slate-500">
               {job.progress_pct}%
             </span>
           )}
@@ -158,7 +158,7 @@ export default function BatchJobRow({ job, onRetry, actionLoading }: BatchJobRow
               {job.filename}
             </span>
             {job.sha256 && (
-              <span className="text-[10px] font-mono text-slate-400 truncate max-w-[160px]">
+              <span className="text-[12px] font-mono text-slate-400 truncate max-w-[160px]">
                 SHA: {job.sha256.slice(0, 12)}…
               </span>
             )}

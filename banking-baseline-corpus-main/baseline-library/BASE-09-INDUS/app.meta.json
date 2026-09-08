@@ -1,0 +1,22 @@
+﻿{
+    "isPrototype":  true,
+    "screens":  [
+                    "SPLASH",
+                    "LOGIN",
+                    "MPIN",
+                    "HOME",
+                    "ACCOUNTS",
+                    "TRANSFER",
+                    "SERVICES",
+                    "PROFILE"
+                ],
+    "corpusVersion":  "1.0",
+    "network":  "none",
+    "appName":  "IndusMobile",
+    "sector":  "retail_banking",
+    "researchDate":  "2026-08-12",
+    "baselineId":  "BASE-09-INDUS",
+    "mockDataOnly":  true,
+    "bank":  "IndusInd Bank",
+    "shortcode":  "INDUS"
+}

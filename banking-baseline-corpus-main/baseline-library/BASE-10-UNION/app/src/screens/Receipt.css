@@ -1,0 +1,112 @@
+.union-receipt {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: var(--color-bg);
+}
+
+.receipt-content {
+  padding: var(--space-16);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  align-items: center;
+}
+
+.success-icon-wrap {
+  margin-top: 3rem;
+  margin-bottom: 1rem;
+}
+
+.success-msg {
+  color: var(--color-success);
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.success-date {
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+  margin-bottom: 2rem;
+}
+
+.receipt-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-card);
+  width: 100%;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.receipt-amount {
+  text-align: center;
+  padding: 1.5rem;
+}
+
+.receipt-amount span {
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+}
+
+.receipt-amount h3 {
+  font-size: 2rem;
+  color: var(--color-text-primary);
+  margin: 0.25rem 0 0 0;
+}
+
+.receipt-divider {
+  border-top: 1px dashed var(--color-divider);
+  margin: 0 1rem;
+}
+
+.receipt-details {
+  padding: 1.5rem;
+}
+
+.receipt-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.receipt-row:last-child {
+  margin-bottom: 0;
+}
+
+.receipt-row span {
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+}
+
+.receipt-row strong {
+  color: var(--color-text-primary);
+  font-weight: 500;
+  text-align: right;
+}
+
+.receipt-tools {
+  display: flex;
+  gap: 2rem;
+  margin-top: 2rem;
+  margin-bottom: auto;
+}
+
+.tool-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: transparent;
+  border: none;
+  color: var(--color-primary);
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.tool-btn span {
+  font-size: 0.8rem;
+}
+
+.receipt-actions {
+  width: 100%;
+  margin-bottom: 2rem;
+}

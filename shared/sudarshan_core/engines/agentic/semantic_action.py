@@ -35,6 +35,27 @@ class SemanticRole(str, Enum):
     UNKNOWN = "UNKNOWN"
 
 
+#: Longest a label may be and still read as a button rather than a sentence.
+#: The real controls on these dialogs are "Allow", "Don't allow", "Allow from
+#: this source", "Install", "Update" - all comfortably inside this.
+_MAX_BUTTON_LABEL_CHARS = 30
+
+
+def _is_dialog_prompt(label: str) -> bool:
+    """
+    Whether this text is a dialog's question rather than one of its controls.
+
+    Deliberately narrow: BOTH long AND question-shaped. "Allow?" stays a
+    button, and a long imperative like "Allow from this source" stays a button
+    because it asks nothing. Only the sentence-length question - which is what
+    Android renders as a permission dialog's title - is excluded.
+    """
+    text = (label or "").strip()
+    if len(text) <= _MAX_BUTTON_LABEL_CHARS:
+        return False
+    return text.endswith("?")
+
+
 # Linguistic patterns — examples, not an exhaustive allowlist.
 _ACCEPT_PATTERNS: Tuple[re.Pattern[str], ...] = tuple(
     re.compile(p, re.I) for p in (
@@ -149,6 +170,31 @@ def classify_semantic_role(
             return SemanticClassification(SemanticRole.DECLINE, 0.8, ("checkable_decline",))
         return SemanticClassification(SemanticRole.ENABLE, 0.75, ("checkable_toggle",))
 
+    # ── A dialog's question is not its button ────────────────────────────────
+    #
+    # Android permission dialogs read "Allow RTO eChallan to make and manage
+    # phone calls?" as their TITLE, and that title sits inside a clickable
+    # container, so it arrives here looking actionable. It also matches
+    # `\ballow\b`, so it scored ACCEPT 0.55+ - exactly what the real Allow
+    # button scores - and the agent kept choosing the prompt.
+    #
+    # Measured on the Anubis payload: three consecutive
+    #   click_text(Allow RTO eChallan to make and manage phone calls?)
+    # before it finally reached click_text(Allow). Permission screens go
+    # through the planner, so each wasted pick cost ~25s: three dialogs
+    # consumed 263 seconds - more than half the walk - and the credential form
+    # was not reached until t+382s.
+    #
+    # Told apart the way this codebase already separates a field caption from
+    # prose: by shape. A button label is short and imperative; a permission
+    # prompt is a long question. Returning UNKNOWN keeps the node available
+    # (it is still a legal tap target if nothing better exists) while letting
+    # the actual Allow/Deny button outrank it.
+    if _is_dialog_prompt(label):
+        return SemanticClassification(
+            SemanticRole.UNKNOWN, 0.2, ("dialog_prompt_not_control",),
+        )
+
     # Pattern scoring
     if _match_any(text, _ACCEPT_PATTERNS):
         scores[SemanticRole.ACCEPT] += 0.55 + _score_patterns(text, _ACCEPT_PATTERNS)
@@ -228,6 +274,53 @@ def is_acceptance_role(role: SemanticRole) -> bool:
 
 def is_rejection_role(role: SemanticRole) -> bool:
     return role in {SemanticRole.DECLINE, SemanticRole.CANCEL, SemanticRole.DISABLE, SemanticRole.CLOSE}
+
+
+#: Controls that END the process under analysis rather than navigating within
+#: it. These are the system's own words, not the app's: Android renders them on
+#: the ANR ("<app> isn't responding") and crash ("<app> keeps stopping")
+#: dialogs, and on the Settings App-info page.
+_SAMPLE_TERMINATING_LABELS: Tuple[re.Pattern[str], ...] = tuple(
+    re.compile(p, re.I) for p in (
+        r"\bclose app\b",
+        r"\bforce ?stop\b",
+        r"\bforce close\b",
+        r"\buninstall\b",
+        r"\bclear (data|storage|cache)\b",
+        r"\bapp info\b",
+        r"\bquit\b",
+    )
+)
+
+#: The ANR dialog's keep-alive control. Pressing it is how an analysis survives
+#: an app that is merely slow - which, on an emulator running a Frida agent
+#: that has just deoptimized the boot image, is the common case.
+_ANR_WAIT_LABELS: Tuple[re.Pattern[str], ...] = tuple(
+    re.compile(p, re.I) for p in (r"^\s*wait\s*$", r"\bwait\b")
+)
+
+
+def terminates_sample(label: str) -> bool:
+    """
+    Whether tapping this control would kill the app being analysed.
+
+    The explorer must never choose one. "Close app" on an ANR dialog scores
+    like any other low-value control - it is a CANCEL, worth -20 - so once the
+    dialog's other options had been tried it was the highest-ranked action left
+    and got clicked. That ends the process under analysis: the remaining
+    exploration budget is spent on a dead app, every runtime hook goes silent,
+    and the run reports no behaviour for a sample that was mid-form.
+
+    Matched on the label alone because these strings come from the Android
+    framework, not from the sample, so they are stable across apps and are not
+    attacker-controlled in the cases that matter.
+    """
+    return _match_any((label or "").strip(), _SAMPLE_TERMINATING_LABELS)
+
+
+def is_anr_wait_control(label: str) -> bool:
+    """Whether this control is the ANR dialog's "keep waiting" option."""
+    return _match_any((label or "").strip(), _ANR_WAIT_LABELS)
 
 
 def acceptance_priority_boost(role: SemanticRole) -> int:

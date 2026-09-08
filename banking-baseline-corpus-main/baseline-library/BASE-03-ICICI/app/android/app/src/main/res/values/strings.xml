@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">iMobile Pay</string>
+    <string name="title_activity_main">iMobile Pay</string>
+    <string name="package_name">com.sudarshan.baseline.icici</string>
+    <string name="custom_url_scheme">com.sudarshan.baseline.icici</string>
+</resources>

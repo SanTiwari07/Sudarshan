@@ -1,0 +1,155 @@
+.transfer-screen {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: var(--color-bg);
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  background-color: var(--color-primary);
+  color: white;
+  gap: 16px;
+}
+
+.back-button {
+  background: none;
+  border: none;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  cursor: pointer;
+  border-radius: 50%;
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.page-content {
+  padding: 16px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.search-bar {
+  display: flex;
+  align-items: center;
+  background-color: var(--color-surface);
+  border-radius: 8px;
+  padding: 12px 16px;
+  gap: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  margin-bottom: 24px;
+}
+
+.search-icon {
+  color: var(--color-text-secondary);
+}
+
+.search-bar input {
+  border: none;
+  background: none;
+  flex: 1;
+  font-size: 1rem;
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+.quick-transfer-actions {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.add-payee-btn {
+  background: none;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.icon-circle {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background-color: rgba(218, 24, 132, 0.1);
+  color: var(--color-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.add-payee-btn span {
+  font-size: 0.875rem;
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.payee-list-section h2 {
+  font-size: 1rem;
+  color: var(--color-text-secondary);
+  margin-bottom: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.payee-list {
+  background-color: var(--color-surface);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.payee-item {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  gap: 16px;
+  border-bottom: 1px solid var(--color-divider);
+  cursor: pointer;
+}
+
+.payee-item:last-child {
+  border-bottom: none;
+}
+
+.payee-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background-color: var(--color-secondary);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 1.125rem;
+}
+
+.payee-info {
+  flex: 1;
+}
+
+.payee-name {
+  margin: 0 0 4px 0;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  font-size: 1rem;
+}
+
+.payee-detail {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}

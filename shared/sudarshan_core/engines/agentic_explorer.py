@@ -40,11 +40,12 @@ import asyncio
 import logging
 import os
 import re
+import subprocess
 import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from sudarshan_core.engines.agentic.agent_memory import AgentMemory
 from sudarshan_core.engines.agentic.audit_log import AuditLog
@@ -58,7 +59,17 @@ from sudarshan_core.engines.agentic.action_verifier import (
     verify_action,
     verify_field_population,
 )
-from sudarshan_core.engines.agentic.adaptive_budget import AdaptiveBudget
+from sudarshan_core.engines.agentic.adaptive_budget import (
+    MAX_EXPLORATION_BUDGET_SECONDS,
+    AdaptiveBudget,
+)
+from sudarshan_core.engines.agentic.field_classifier import (
+    ClassificationSource,
+    classify_field,
+    classify_field_with_gemini,
+    needs_escalation,
+)
+from sudarshan_core.engines.agentic.field_taxonomy import FieldType
 from sudarshan_core.engines.agentic.auth_state import AuthState, AuthStateMachine
 from sudarshan_core.engines.agentic.progress_tracker import ProgressTracker
 from sudarshan_core.engines.agentic.perception import (
@@ -70,10 +81,16 @@ from sudarshan_core.engines.agentic.screenshot_policy import is_safe_interactive
 from sudarshan_core.engines.agentic.planner import AgentPlanner
 from sudarshan_core.engines.agentic.action_dispatch import (
     ActionDispatcher,
+    MAX_ACTION_SECONDS,
     MAX_EXECUTION_ATTEMPTS,
     pipeline_log,
     select_canonical_action,
 )
+from sudarshan_core.engines.dynamic_budget import (
+    TIMEOUT_REASON,
+    get_active_deadline,
+)
+from sudarshan_core.engines.dynamic_coverage import build_dynamic_coverage
 from sudarshan_core.engines.agentic.tool_executor import (
     NAVIGATIONAL_TOOLS,
     ToolExecutor,
@@ -93,6 +110,13 @@ from sudarshan_core.engines.agentic.screen_classifier import (
 from sudarshan_core.engines.agentic.secondary_payload import (
     SecondaryPayloadTracker,
 )
+from sudarshan_core.engines.agentic.form_recovery import (
+    SOURCE as FORM_RECOVERY_SOURCE,
+    STAGNATION_THRESHOLD as FORM_STAGNATION_THRESHOLD,
+    FormRecoveryLadder,
+    describe_form_screen,
+)
+from sudarshan_core.engines.agentic.ui_observation import describe_screen
 from sudarshan_core.engines.event_bus import RuntimeEventBus
 from sudarshan_core.engines.screenshot_manager import ScreenshotReason
 from sudarshan_core.engines.investigation_controller import (
@@ -110,6 +134,15 @@ from sudarshan_core.engines.agentic.exploration_engine import (
 )
 
 logger = logging.getLogger(__name__)
+
+#: Screens where entering data IS entering credentials, so a submit on them
+#: advances the authentication state and may be retried with a fresh identity.
+#: DATA_ENTRY_FORM is deliberately absent - see its definition in
+#: :mod:`~sudarshan_core.engines.agentic.screen_classifier`.
+_CREDENTIAL_SCREEN_TYPES: frozenset = frozenset({
+    "BANK_LOGIN",
+    "OTP_SCREEN",
+})
 
 # ─── Configuration (env overrides) ────────────────────────────────────────────
 
@@ -138,6 +171,106 @@ FRIDA_SILENCE_THRESHOLD: int = ExplorationBudget.FRIDA_SILENCE_THRESHOLD
 # (e.g. Stage 5 Login Flow when the app has no conventional login screen).
 # This activates mark_failed → retry branch in next_priority_goal().
 MAX_ATTEMPTS_PER_GOAL: int = int(os.getenv("SUDARSHAN_MAX_ATTEMPTS_PER_GOAL", "8"))
+
+# ── Per-goal time budget ──────────────────────────────────────────────────────
+#
+# The 30-minute wall clock is NOT divided equally across fifteen goals. Most
+# goals resolve in a handful of actions and would waste a fixed slice; the ones
+# that do not are precisely the ones that must be cut off. So each goal gets an
+# upper bound rather than an allocation, and whatever it does not use is
+# available to the goals that follow it.
+#
+# 90s is roughly a dozen actions at the measured per-iteration cost - enough to
+# fill and submit a four-field form, which is the longest legitimate single-goal
+# sequence in the corpus. A goal still working after that is looping, and the
+# right answer is to record what it achieved and move on.
+MAX_GOAL_SECONDS: float = float(os.getenv("SUDARSHAN_MAX_GOAL_SECONDS", "90"))
+
+#: Times the walk will answer the SAME permission dialog on the SAME screen
+#: before it stops trying and explores elsewhere.
+#:
+#: A permission screen the sandbox cannot satisfy re-renders identically after
+#: every tap, which makes it the most effective trap on the device: a walk that
+#: answers it on sight answers it forever and never reaches the sample's own
+#: screens. Three is enough for a genuine two-step grant (Allow -> While using
+#: the app) plus one retry, and few enough that a loop is caught within seconds.
+MAX_PERMISSION_SCREEN_ATTEMPTS: int = int(
+    os.getenv("SUDARSHAN_MAX_PERMISSION_SCREEN_ATTEMPTS", "3")
+)
+
+#: Recorded on the Login Flow goal when the app has explicitly refused the
+#: synthetic credentials.
+#:
+#: This is a STOPPING condition, not a failure to report: an app that shows
+#: "Invalid credentials" has answered the question, and no further synthetic
+#: identity will be accepted. Retrying only spends budget the other
+#: investigation branches need - accessibility abuse, overlay draw, SMS
+#: interception, WebView phishing, dynamic code loading, C2 traffic - which is
+#: what the run is actually here to observe.
+AUTH_FLOW_REJECTED: str = "AUTH_FLOW_REJECTED"
+
+#: The smallest slice worth starting a goal with. A goal begun with two seconds
+#: left produces one half-verified action and a misleading FAILED; refusing it
+#: and recording TIMEOUT is the honest outcome.
+MIN_GOAL_SLICE_SECONDS: float = float(
+    os.getenv("SUDARSHAN_MIN_GOAL_SLICE_SECONDS", "10")
+)
+
+#: Planner (LLM) calls one goal may consume. Measured at ~12s each, so an
+#: unbounded budget is how a single stubborn screen eats the window. Small on
+#: purpose: after this the deterministic planner drives the goal, which is the
+#: §P19 fallback and not a degraded mode.
+MAX_PLANNER_CALLS_PER_GOAL: int = int(
+    os.getenv("SUDARSHAN_MAX_PLANNER_CALLS_PER_GOAL", "4")
+)
+
+#: What one planner call is assumed to cost when deciding whether to start it.
+#: Measured on gemini-2.5-flash with the explorer's real prompt: 7.9s, 13.8s,
+#: 15.1s and 11.2s on consecutive iterations.
+PLANNER_CALL_COST_SECONDS: float = float(
+    os.getenv("SUDARSHAN_PLANNER_CALL_COST_SECONDS", "15")
+)
+
+# ── Planner budget ────────────────────────────────────────────────────────────
+#
+# How many consecutive graph-led iterations may pass before the planner is
+# consulted anyway. The graph cannot propose device-state work - granting a
+# permission, injecting a test SMS, warping the clock - so the model has to get
+# a turn even when the graph always has a tap to offer.
+#
+# Four is a deliberate trade: at ~12s per call it costs ~3s per iteration
+# amortised, against ~12s when every iteration paid for one.
+PLANNER_CONSULT_EVERY: int = int(os.getenv("SUDARSHAN_PLANNER_CONSULT_EVERY", "4"))
+
+#: Tools the graph wins outright in select_canonical_action. When the graph
+#: offers one of these, the planner's answer is discarded - so computing it is
+#: pure latency. Kept in sync with that function by the test in
+#: test_planner_budget.py, which fails if the two lists drift apart.
+_GRAPH_WINS_TOOLS = frozenset({
+    "click_text", "tap", "tap_sequence", "type_text", "check",
+})
+
+
+def _planner_could_change_outcome(graph_action: Optional[Dict[str, Any]]) -> bool:
+    """
+    Whether consulting the planner can still affect what happens this iteration.
+
+    False only when the graph already holds an action that select_canonical_action
+    will pick over anything the planner returns. The one exception it keeps is
+    the narrow hint-substitution path: a `type_text` whose field the graph could
+    not name is exactly where a model that can read the screen earns its cost.
+    """
+    if not graph_action:
+        return True
+    tool = graph_action.get("tool", "")
+    if tool not in _GRAPH_WINS_TOOLS:
+        return True
+    if tool == "type_text":
+        # The graph knows WHERE to type; the planner may know WHAT. Only worth
+        # asking when the graph could not work the field out for itself.
+        return str(graph_action.get("field_type", "")) in ("", "UNKNOWN")
+    return False
+
 
 # Attempts after which a demonstrably inert control stops being retried.
 # Applies ONLY when ADB reported success, the window settled, and the screen is
@@ -169,6 +302,22 @@ CRASH_RECOVERY_MAX_SECONDS: float = float(
 # keep what was collected rather than spending the budget on relaunches.
 MAX_CONSECUTIVE_CRASHES: int = int(
     os.getenv("SUDARSHAN_MAX_CONSECUTIVE_CRASHES", "3")
+)
+# An ANR whose process is still alive is not a crash, and must not spend the
+# crash budget at the same rate.
+#
+# Attaching Frida and installing ~70 hooks runs on the app's main thread, so the
+# app misses the window-focus event and Android reports
+# "Input dispatching timed out ... Waited 5002ms for FocusEvent(hasFocus=true)".
+# Measured on the e-challan payload: the dialog appears once per attach, "Wait"
+# clears it, and the app then behaves normally. Counting each one as a crash
+# retired the 3-crash budget before the walk had taken an action - exploration
+# stopped at 2 actions on 0 screens with the form never reached.
+#
+# A separate, larger budget: a genuinely wedged app still terminates the run,
+# but a startup stall the walk can wait out no longer does.
+MAX_SURVIVABLE_ANRS: int = int(
+    os.getenv("SUDARSHAN_MAX_SURVIVABLE_ANRS", "8")
 )
 
 # ─── In-content settle delay ──────────────────────────────────────────────────
@@ -347,6 +496,15 @@ class AgenticExplorer:
 
         # Subsystems
         self.goals      = GoalTracker()
+        #: Which goal the current iteration is being charged to, and when that
+        #: charge started. Kept on the explorer rather than in GoalTracker
+        #: because the tracker is a pure state machine with no clock of its own.
+        self._current_goal_name: str = ""
+        self._current_goal_started: float = 0.0
+        #: Permission screens answered this run, keyed by (permission,
+        #: screen_hash). See _note_permission_screen - this is what stops the
+        #: walk answering the same dialog forever (§P7).
+        self._permission_attempts: Dict[Tuple[str, str], Dict[str, Any]] = {}
         self.memory     = AgentMemory()
         self.audit_log  = AuditLog()
         self.benchmark  = BenchmarkCollector(package_name=package_name)
@@ -366,7 +524,15 @@ class AgenticExplorer:
         # Verification reads device state through the executor's ADB channel,
         # which routes via the policy-enforcing SandboxProvider. The probe must
         # never open its own transport or it would bypass those controls.
-        self._probe = DeviceStateProbe(self.executor._adb, package_name)
+        self._probe = DeviceStateProbe(
+            self.executor._adb,
+            package_name,
+            # The persistent device channel, injected the same way: the probe
+            # still owns no transport, it is just handed a hierarchy read that
+            # does not cost a subprocess. Falls back to ADB on its own when the
+            # channel is unavailable.
+            dump_hierarchy=self.executor._channel.dump_hierarchy,
+        )
         # A screen-changing action awaiting judgement by the next observation.
         self._pending_verification = None
         # Every crash this run, classified. Reported rather than summed: three
@@ -419,8 +585,24 @@ class AgenticExplorer:
         # Child applications already explored, so a package that keeps coming
         # back to the foreground is not explored twice.
         self._explored_children: set = set()
+        #: package -> "was this installed onto the device, or shipped with the
+        #: image?". Answered once per package; see _is_third_party_package.
+        self._third_party_cache: Dict[str, bool] = {}
+        #: Third-party packages present before the walk started, filled in by
+        #: run(). None until then, which reads as "no baseline, prove nothing".
+        self._baseline_third_party: Optional[Set[str]] = None
         # State ids that already contributed an in-app evidence frame.
         self._state_frames_captured: set = set()
+        # ── Form stagnation ───────────────────────────────────────────────────
+        # Consecutive actions after which the screen was unchanged, and the
+        # per-screen escalation ladder that answers it. A form the walk has
+        # stopped being able to move is not a planning failure - the action was
+        # aimed at a control the keyboard was standing in front of - so it needs
+        # a different answer than re-planning or backtracking. See
+        # form_recovery.
+        self._unchanged_action_streak: int = 0
+        self._form_recovery: FormRecoveryLadder = FormRecoveryLadder()
+        self._form_recoveries_issued: int = 0
         # One view hierarchy per distinct in-app screen, keyed by state id.
         # VIDE compares view structure to decide whether a sample is a clone,
         # and a single hierarchy of the login form - the one screen a clone and
@@ -505,6 +687,47 @@ class AgenticExplorer:
         match = re.search(r"\d+", out)
         return int(match.group(0)) if match else 0
 
+    async def _target_process_is_alive(self) -> bool:
+        """
+        Whether the sample (or a package it handed the journey to) is still up.
+
+        This is what separates an ANR from a crash. Android puts the same style
+        of dialog over both, but a process that is merely stalled can be waited
+        out and explored afterwards, while one that has died cannot. Asked over
+        the sandbox provider's adb, like every other device question here.
+        """
+        loop = asyncio.get_running_loop()
+
+        def _alive() -> bool:
+            if self._resolve_target_pid():
+                return True
+            # The companion is the app the victim is actually looking at, so an
+            # ANR over IT is still a survivable stall for this investigation.
+            companions = getattr(
+                getattr(self, "exploration", None), "companion_packages", None,
+            ) or []
+            for package in companions:
+                try:
+                    from sudarshan_core.sandbox import get_sandbox_provider
+
+                    provider = get_sandbox_provider()
+                    args = ["-s", self.device_serial] if self.device_serial else []
+                    ok, out = provider.adb(
+                        *args, "shell", "pidof", package, timeout=10,
+                    )
+                except Exception:  # noqa: BLE001
+                    continue
+                if ok and isinstance(out, str) and re.search(r"\d+", out):
+                    return True
+            return False
+
+        try:
+            return await loop.run_in_executor(None, _alive)
+        except Exception:  # noqa: BLE001
+            # Unknown means "do not escalate": treat it as survivable and let
+            # the ordinary budget end the run if the app really is gone.
+            return True
+
     def _check_target_pid(self) -> None:
         """
         Notice that the sample restarted, and keep exploring it.
@@ -586,6 +809,78 @@ class AgenticExplorer:
             parts.extend(re.findall(r'content-desc="([^"]+)"', raw))
         return " ".join(parts)
 
+    async def _form_recovery_action(
+        self,
+        state: Any,
+        classification: Any,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Something to try when a form has stopped responding, or None.
+
+        Engages only after FORM_STAGNATION_THRESHOLD consecutive actions left
+        the screen unchanged, and only on a screen that actually has input
+        fields. One unchanged screen is not stagnation - typing into a field is
+        SUPPOSED to leave the hash where it was - and reacting to it would fire
+        the ladder on every well-behaved form.
+
+        The IME probe is the one device call this makes, and it only happens
+        once stagnation is established, so a healthy walk never pays for it.
+        """
+        if self._unchanged_action_streak < FORM_STAGNATION_THRESHOLD:
+            return None
+
+        screen_type = str(getattr(classification, "screen_type", "") or "")
+        form = describe_form_screen(state, screen_type)
+        if not form.is_form:
+            return None
+
+        try:
+            form.keyboard_visible = await self.executor.is_keyboard_visible()
+        except Exception as exc:
+            logger.debug("[AgenticExplorer] IME probe failed: %s", exc)
+            form.keyboard_visible = None
+
+        action = self._form_recovery.plan(form)
+        if action is None:
+            return None
+
+        self._form_recoveries_issued += 1
+        logger.info(
+            "[AgenticExplorer] FORM_STAGNATION state=%s streak=%d step=%s "
+            "inputs=%d unfilled=%d keyboard=%s",
+            form.state_id, self._unchanged_action_streak,
+            action.get("_recovery_step"), form.input_count,
+            form.unfilled_input_count, form.keyboard_visible,
+        )
+        self.audit_log.record_system_event(
+            "form_stagnation_recovery",
+            f"state={form.state_id} step={action.get('_recovery_step')} "
+            f"streak={self._unchanged_action_streak} "
+            f"inputs={form.input_count} unfilled={form.unfilled_input_count}",
+        )
+        return action
+
+    def _screen_observation(self, obs: Any, classification: Any) -> Any:
+        """
+        A perceptual description of what is on screen right now.
+
+        Attached to every frame this explorer captures so the Screenshot
+        Appendix and the evidence modal can say what a picture SHOWS rather
+        than repeating why it was taken. Never raises: a description that
+        cannot be built costs a sentence, not a frame.
+        """
+        try:
+            return describe_screen(
+                activity=getattr(obs, "activity", "") or "",
+                ui_nodes=getattr(obs, "ui_nodes", None) or None,
+                ui_xml=getattr(obs, "ui_xml_raw", "") or "",
+                screen_type=str(getattr(classification, "screen_type", "") or ""),
+                app_label=str(self.static_findings.get("app_label") or ""),
+            )
+        except Exception as exc:
+            logger.debug("[AgenticExplorer] screen description failed: %s", exc)
+            return None
+
     def _capture_state_frame(
         self,
         obs: Any,
@@ -623,6 +918,11 @@ class AgenticExplorer:
         if raw_xml and len(self.state_ui_hierarchies) < MAX_STATE_HIERARCHIES:
             self.state_ui_hierarchies[state_id] = raw_xml[:120_000]
         semantic = str(getattr(classification, "screen_type", "") or "")
+        # What this frame SHOWS, read from the hierarchy that produced it. The
+        # capture reason says why the shutter fired and describes no picture;
+        # this travels with the frame into the manifest so the appendix and the
+        # evidence modal have something screen-specific to print.
+        observation = self._screen_observation(obs, classification)
         try:
             self.screenshot_manager.capture_async(
                 label=label or f"state_{state_id}_{semantic}".lower(),
@@ -636,6 +936,7 @@ class AgenticExplorer:
                 layout_hash=getattr(obs, "screen_hash", ""),
                 semantic_type=semantic,
                 explorer_action=f"state:{state_id}",
+                screen_observation=observation,
             )
             logger.info(
                 "[AgenticExplorer] IN_APP_FRAME state=%s semantic=%s activity=%s",
@@ -765,6 +1066,94 @@ class AgenticExplorer:
             self.planner.invalidate_cache_for_screen(before.screen_hash)
         return result
 
+    async def _resolve_ambiguous_fields(
+        self, obs: Any, screen_type: str = "",
+    ) -> Dict[str, Any]:
+        """
+        Name the input fields the local patterns could not.
+
+        A registration / KYC / personal-details form rendered in a WebView
+        gives its fields no caption, no resource-id and no content-desc, so
+        every one of them falls through to the positional guess: the first is
+        assumed to be the identifier and the rest resolve to UNKNOWN. They then
+        all receive the same generic string, no email or phone validator
+        accepts it, the form can never be submitted, and the walk eventually
+        abandons a screen it never had a chance on.
+
+        The deterministic pass still leads and still decides the ordinary
+        captioned field. Only fields it could not name, on a screen that looks
+        like a form, cost a model round trip.
+
+        Returns {node_id: FieldClassification}, empty when nothing needed
+        resolving. Never raises: an unavailable model degrades the
+        classification, it does not stop the walk.
+        """
+        inputs = [n for n in (getattr(obs, "ui_nodes", None) or [])
+                  if getattr(n, "is_input", False)]
+        if not inputs:
+            return {}
+
+        deterministic: List[tuple] = []
+        for index, node in enumerate(inputs):
+            deterministic.append((node, classify_field(
+                field_label=getattr(node, "field_label", "") or "",
+                resource_id=getattr(node, "resource_id", "") or "",
+                content_desc=getattr(node, "desc", "") or "",
+                class_name=getattr(node, "class_name", "") or "",
+                text=getattr(node, "text", "") or "",
+                hint=getattr(node, "hint", "") or "",
+                input_type=getattr(node, "input_type", "") or "",
+                is_password=bool(getattr(node, "is_password", False)),
+                index=index,
+                screen_type=screen_type,
+            )))
+
+        is_webview = bool(getattr(obs, "is_webview", False))
+        pending = [
+            (node, c) for node, c in deterministic
+            if needs_escalation(
+                c, screen_type=screen_type, is_webview=is_webview,
+            )
+        ]
+        if not pending:
+            return {}
+
+        unnamed = sum(
+            1 for _, c in deterministic
+            if c.source == ClassificationSource.POSITIONAL
+        )
+        logger.info(
+            "[AgenticExplorer] FIELD_ESCALATION screen_type=%s inputs=%d "
+            "unnamed=%d escalating=%d",
+            screen_type or "UNKNOWN", len(inputs), unnamed, len(pending),
+        )
+
+        resolved: Dict[str, Any] = {}
+        for node, det in pending:
+            try:
+                answer = await classify_field_with_gemini(
+                    det,
+                    field_label=getattr(node, "field_label", "") or "",
+                    hint=getattr(node, "hint", "") or "",
+                    resource_id=getattr(node, "resource_id", "") or "",
+                    content_desc=getattr(node, "desc", "") or "",
+                    class_name=getattr(node, "class_name", "") or "",
+                    input_type=getattr(node, "input_type", "") or "",
+                    is_password=bool(getattr(node, "is_password", False)),
+                    screen_type=screen_type,
+                    package=self.package_name,
+                    activity=getattr(obs, "activity", "") or "",
+                    ocr_text=self._screen_text(obs)[:400],
+                )
+            except Exception as exc:
+                logger.debug(
+                    "[AgenticExplorer] Field escalation failed: %s", exc,
+                )
+                continue
+            if answer is not None and answer.field_type is not FieldType.UNKNOWN:
+                resolved[getattr(node, "node_id", "")] = answer
+        return resolved
+
     @staticmethod
     def _field_snapshot_from_obs(
         obs: Any, action: Dict[str, Any],
@@ -862,6 +1251,18 @@ class AgenticExplorer:
         # The value is never in this line - only its length and the field's
         # identity, both of which are already visible on the screen itself.
         logger.info("[AgenticExplorer] %s", verification.log_line())
+        # §P28 / §P34: the forensic record of an input is (field_type,
+        # value_source, result). The VALUE is deliberately absent: it is a
+        # synthetic secret, and a persistent report carrying it in plaintext is
+        # the thing §P28 exists to prevent. `value_source` names where the
+        # value came from, which is what an analyst actually needs to know when
+        # reading a screenshot of the filled form.
+        logger.info(
+            "[DAE][INPUT] field=%s source=%s result=%s",
+            data.get("field_type") or action.get("field_hint") or "UNKNOWN",
+            action.get("value_source") or "SYNTHETIC_PERSONA",
+            "SUCCESS" if verification.succeeded else verification.outcome,
+        )
         self.audit_log.record_system_event(
             "field_population_verified",
             f"field_hint={action.get('field_hint', '')} "
@@ -881,10 +1282,41 @@ class AgenticExplorer:
         return verification
 
     def _action_retry_variants(
-        self, action: Dict[str, Any], attempt: int
+        self,
+        action: Dict[str, Any],
+        attempt: int,
+        tried: Optional[List[str]] = None,
     ) -> Optional[Dict[str, Any]]:
-        """Bounded retry ladder via ActionDispatcher (max 3 attempts)."""
-        return self.dispatcher.retry_payload(action, attempt)
+        """
+        The next rung of the deterministic action ladder, or None when spent.
+
+        The remaining wall-clock comes from the ONE global deadline, so a rung
+        that cannot finish before it is never started (§P9/§P25).
+        """
+        return self.dispatcher.retry_payload(
+            action,
+            attempt,
+            tried=tried,
+            remaining_seconds=self._remaining_budget_seconds(),
+        )
+
+    def _remaining_budget_seconds(self) -> Optional[float]:
+        """
+        Seconds left in the WHOLE dynamic analysis, not in this stage.
+
+        Reads the one shared deadline. Returns None only when no deadline is
+        armed - a unit test or a replay - in which case callers keep their
+        previous unbounded behaviour rather than inventing a second clock.
+        """
+        deadline = get_active_deadline()
+        return deadline.remaining() if deadline is not None else None
+
+    def _budget_allows(self, cost_seconds: float, stage: str) -> bool:
+        """Whether an operation costing `cost_seconds` may start. See §P9."""
+        deadline = get_active_deadline()
+        if deadline is None:
+            return True
+        return deadline.allows(cost_seconds, stage=stage)
 
     async def _execute_with_bounded_retries(
         self,
@@ -892,11 +1324,24 @@ class AgenticExplorer:
         obs: Any,
     ) -> Tuple[Any, VerificationResult, int]:
         """
-        Execute with up to 3 attempts. ADB success is not verification.
+        Execute one semantic action, walking the deterministic ladder.
 
-        Attempt 1: structured click
-        Attempt 2: geometry / parent tap
-        Attempt 3: visual-grounded current-screen tap
+        ADB exit code zero is not verification and never has been: a
+        `click_text` that matched nothing, a `pm grant` Android refused and a
+        relaunch of an Activity that died immediately all return success. Every
+        rung is therefore judged by comparing device state PRE and POST (see
+        action_verifier), and the ladder escalates only on a verdict, never on
+        a return value.
+
+        The ladder itself lives in ActionDispatcher.retry_payload - resource-id,
+        node, text, bounds-centre, normalised coordinates, vision, then a
+        re-aimed tap for an obstructed control - and is bounded three ways:
+        MAX_EXECUTION_ATTEMPTS rungs, MAX_ACTION_SECONDS of wall clock, and the
+        global deadline underneath both.
+
+        Returns (result, verification, attempts). A FAILED verification here is
+        an ACTION failure. It is not a goal failure and it is emphatically not
+        a dynamic-analysis failure - see _resolve_goal_outcome and §P18.
         """
         from sudarshan_core.engines.agentic.semantic_action import (
             validate_coordinates_for_screen,
@@ -953,13 +1398,35 @@ class AgenticExplorer:
             outcome="UNVERIFIED",
         )
         attempts = 0
+        # The ladder's only state: which resolutions have been spent. Carried
+        # here rather than on the payload so every rung is built from the
+        # ORIGINAL action - rung 1 rewrites `text` to the resource-id, and
+        # building the "resolve by visible text" rung on top of that would make
+        # it a second resource-id lookup.
+        strategies_tried: List[str] = []
+        action_started = time.monotonic()
 
         for attempt_index in range(MAX_EXECUTION_ATTEMPTS):
             attempts = attempt_index + 1
             if attempt_index > 0:
-                retry = self._action_retry_variants(action, attempt_index)
+                # Per-action wall clock, checked BEFORE the rung is built. One
+                # action may not absorb the run: MAX_ACTION_SECONDS bounds the
+                # whole ladder, and the global deadline bounds that in turn.
+                spent = time.monotonic() - action_started
+                if spent >= MAX_ACTION_SECONDS:
+                    pipeline_log(
+                        "ACTION_LADDER_TIME_EXHAUSTED",
+                        action_id=trace.action_id,
+                        spent=f"{spent:.1f}s",
+                        budget=f"{MAX_ACTION_SECONDS:.0f}s",
+                    )
+                    break
+                retry = self._action_retry_variants(
+                    action, attempt_index, strategies_tried,
+                )
                 if retry is None:
                     break
+                strategies_tried = list(retry.get("_strategies_tried") or [])
                 current = retry
                 pipeline_log(
                     "ACTION_RETRY",
@@ -1204,6 +1671,73 @@ class AgenticExplorer:
             logger.debug("[AgenticExplorer] evidence screenshot failed: %s", exc)
             return None
 
+    def _log_goal_header(self, goal: Any) -> None:
+        """
+        The `[DYNAMIC][GOAL n/15]` block the observability spec asks for.
+
+        Emitted once when a goal becomes current, so a log reader can see where
+        one goal's actions end and the next one's begin without correlating
+        timestamps.
+        """
+        deadline = get_active_deadline()
+        budget = ""
+        if deadline is not None:
+            budget = (
+                f" | budget remaining {deadline.remaining():.0f}s of "
+                f"{deadline.total_seconds:.0f}s"
+            )
+        logger.info(
+            "[DYNAMIC][GOAL %d/%d] %s%s",
+            goal.stage, len(self.goals.goals), goal.name, budget,
+        )
+
+    def _set_permission_screen_result(
+        self, permission: str, screen_hash: str, result: str,
+    ) -> None:
+        """Stamp the outcome on a ledger entry created by _note_permission_screen."""
+        entry = self._permission_attempts.get(
+            (permission or "unknown", screen_hash or "")
+        )
+        if entry is not None:
+            entry["result"] = result
+
+    def _note_permission_screen(
+        self, permission: str, screen_hash: str, result: str = "seen",
+    ) -> int:
+        """
+        Record one encounter with a permission screen and return the attempt count.
+
+        Exists because a permission dialog the walk cannot satisfy is the single
+        most effective trap on the device: it re-renders identically after every
+        tap, so a walk that answers it on sight answers it forever and the
+        sample's own screens are never reached.
+
+        The ledger is keyed by (permission, screen_hash) rather than by
+        permission alone: Android shows genuinely different dialogs for the same
+        permission (the first request, the "don't ask again" variant, the
+        Settings page), and collapsing them would stop the walk answering a
+        dialog it had never actually seen.
+        """
+        key = (permission or "unknown", screen_hash or "")
+        entry = self._permission_attempts.setdefault(
+            key,
+            {
+                "permission": permission or "unknown",
+                "screen_hash": screen_hash or "",
+                "attempt_count": 0,
+                "result": "",
+                "timestamp": self._elapsed_ts(),
+            },
+        )
+        entry["attempt_count"] += 1
+        entry["result"] = result
+        entry["timestamp"] = self._elapsed_ts()
+        return int(entry["attempt_count"])
+
+    def permission_screen_ledger(self) -> List[Dict[str, Any]]:
+        """Every permission screen this run met, with how often and how it ended."""
+        return [dict(v) for v in self._permission_attempts.values()]
+
     def _record_permission_from_screen(self, obs: Any, classification: Any) -> None:
         """Record runtime permission observation from screen classification."""
         if classification.screen_type not in (
@@ -1225,13 +1759,45 @@ class AgenticExplorer:
             "accessibility": "android.permission.BIND_ACCESSIBILITY_SERVICE",
             "overlay": "android.permission.SYSTEM_ALERT_WINDOW",
         }
+        matched_permission = ""
         for keyword, perm in perm_map.items():
             if keyword in combined or keyword in classification.screen_type.lower():
                 self.permissions.record_runtime_request(perm)
+                matched_permission = perm
                 break
         if classification.screen_type == "ACCESSIBILITY_DIALOG":
             self.permissions.record_runtime_request(
                 "android.permission.BIND_ACCESSIBILITY_SERVICE"
+            )
+            matched_permission = (
+                matched_permission
+                or "android.permission.BIND_ACCESSIBILITY_SERVICE"
+            )
+
+        # Ledger the encounter. This is what makes "the same permission screen
+        # keeps coming back" a bounded, reportable fact instead of a loop: the
+        # count is consulted by the boundary budget and surfaced in the report
+        # so an analyst can see the sample was demanding a grant the sandbox
+        # would not give it.
+        permission_label = matched_permission or classification.screen_type
+        screen_hash = getattr(obs, "screen_hash", "")
+        attempts = self._note_permission_screen(permission_label, screen_hash)
+        self._set_permission_screen_result(
+            permission_label, screen_hash,
+            "answered" if attempts <= MAX_PERMISSION_SCREEN_ATTEMPTS
+            else "abandoned_repeat",
+        )
+        if attempts > MAX_PERMISSION_SCREEN_ATTEMPTS:
+            logger.info(
+                "[AgenticExplorer] Permission screen for %s has been answered "
+                "%d times and keeps returning - not answering it again this "
+                "run; exploring other branches instead.",
+                matched_permission or classification.screen_type, attempts,
+            )
+            self.audit_log.record_system_event(
+                "permission_screen_repeat",
+                f"{matched_permission or classification.screen_type}: "
+                f"{attempts} encounters",
             )
 
     async def _handle_home_launcher(
@@ -1350,6 +1916,53 @@ class AgenticExplorer:
                 transition_event="APP_CRASH",
             )
 
+        # An ANR is not a crash: the process is alive and merely slow, which on
+        # an emulator that has just deoptimized the boot image for Frida is the
+        # ordinary case. "Wait" keeps it alive and often lets the screen the
+        # walk was mid-way through finish rendering, whereas relaunching throws
+        # away whatever had already been filled in. Tried first, once, and only
+        # when the dialog actually offers it; relaunch remains the fallback.
+        if classification.screen_type == ScreenType.APP_NOT_RESPONDING:
+            from sudarshan_core.engines.agentic.semantic_action import (
+                is_anr_wait_control,
+            )
+
+            wait_label = next(
+                (
+                    (getattr(n, "text", "") or getattr(n, "desc", "") or "").strip()
+                    for n in (obs.ui_nodes or [])
+                    if is_anr_wait_control(
+                        getattr(n, "text", "") or getattr(n, "desc", "") or ""
+                    )
+                ),
+                "",
+            )
+            if wait_label:
+                logger.info(
+                    "[AgenticExplorer] ANR dialog: pressing %r to keep the "
+                    "sample alive rather than relaunching it", wait_label,
+                )
+                try:
+                    await self.executor.execute({
+                        "tool": "click_text", "text": wait_label,
+                    })
+                    await self.executor.wait_for_idle(
+                        timeout=CRASH_RECOVERY_TIMEOUT_SECONDS,
+                    )
+                    # The dialog does not always go away the instant "Wait" is
+                    # pressed - the app is, after all, still stalled. Observing
+                    # immediately re-reads the same dialog and books a second
+                    # ANR for the same event, which is how a single startup
+                    # stall used to retire the whole budget. Give it a bounded
+                    # chance to clear before handing back.
+                    await asyncio.sleep(CRASH_RECOVERY_BASE_SECONDS)
+                    return
+                except Exception as exc:
+                    logger.debug(
+                        "[AgenticExplorer] ANR wait-press failed, "
+                        "falling through to relaunch: %s", exc,
+                    )
+
         component = self._launch_component()
         if component:
             try:
@@ -1381,11 +1994,276 @@ class AgenticExplorer:
             "data":      event.get("data", {}),
         })
 
+    def _is_third_party_package(self, package: str) -> bool:
+        """
+        Whether `package` was installed onto this device rather than shipped
+        with the image.
+
+        Asked of the device instead of matched against a denylist, because a
+        denylist of "apps that are not payloads" cannot be written: the whole
+        point is that the payload's package name is unknown and often random.
+        Chrome, Settings and the launcher are system packages on every image we
+        run, so this single question excludes them all without naming any.
+
+        Cached per package - the answer cannot change during a run - and a
+        failed query answers False, so an unreadable device narrows scope
+        rather than widening it.
+        """
+        cached = self._third_party_cache.get(package)
+        if cached is not None:
+            return cached
+        answer = False
+        try:
+            out = subprocess.run(
+                [self.adb_path, "-s", self.device_serial, "shell",
+                 "pm", "list", "packages", "-3"],
+                capture_output=True, text=True, timeout=20,
+            ).stdout
+            answer = f"package:{package}" in (out or "")
+        except Exception as exc:                      # noqa: BLE001
+            logger.debug(
+                "[AgenticExplorer] Could not classify '%s' as third-party: %s",
+                package, exc,
+            )
+        self._third_party_cache[package] = answer
+        return answer
+
+    def _snapshot_third_party_packages(self) -> Set[str]:
+        """
+        Every third-party package present right now, as a set.
+
+        Taken once at the start of the walk. A failed query returns an empty
+        set, and the caller treats "no baseline" as "cannot prove anything was
+        installed" - so an unreadable device narrows scope rather than
+        adopting every foreign package it meets.
+        """
+        try:
+            out = subprocess.run(
+                [self.adb_path, "-s", self.device_serial, "shell",
+                 "pm", "list", "packages", "-3"],
+                capture_output=True, text=True, timeout=20,
+            ).stdout or ""
+        except Exception as exc:                      # noqa: BLE001
+            logger.warning(
+                "[AgenticExplorer] Could not snapshot installed packages (%s) - "
+                "a payload installed during this run will not be recognised as "
+                "the sample's own.", exc,
+            )
+            return set()
+        packages = {
+            line.split("package:", 1)[1].strip()
+            for line in out.splitlines()
+            if line.strip().startswith("package:")
+        }
+        logger.info(
+            "[AgenticExplorer] Baseline: %d third-party package(s) on device "
+            "before the walk.", len(packages),
+        )
+        return packages
+
+    def _installed_during_this_run(self, package: str) -> bool:
+        """
+        Whether `package` arrived on the device after the walk started.
+
+        The baseline is the whole test. A package that was not there when we
+        started and is there now was put there during the session, and the
+        sample is the only thing installing packages inside the sandbox.
+        """
+        if not package or self._baseline_third_party is None:
+            return False
+        if package in self._baseline_third_party:
+            return False
+        return self._is_third_party_package(package)
+
+    def _detect_launch_handoff(self, foreground_package: str, obs: Any) -> bool:
+        """
+        Adopt a package the SAMPLE launched to render its own UI.
+
+        Four conditions, all required, and each one removes a specific way this
+        could go wrong:
+
+        1. The victim has taken no action yet. A foreign app that appears after
+           a tap was reached BY that tap - that is a departure, and §P24 owns
+           it. Only a foreground that appears as a consequence of launching the
+           target can be a hand-off.
+        2. The sample's process is still alive. A sample that died and left
+           something else on screen did not hand off to it.
+        3. The foreground is a third-party package. Excludes the launcher,
+           Settings, Chrome and every other system surface without naming them.
+        4. It is not already a known boundary surface.
+
+        Returns True when a hand-off was adopted, and is idempotent afterwards.
+        """
+        if not foreground_package or foreground_package == self.package_name:
+            return False
+        if foreground_package in self.exploration.companion_packages:
+            return True
+
+        # (0) A package that was installed DURING this run is the sample's own
+        # second stage, whatever the victim did in between.
+        #
+        # Condition (1) below restricts adoption to a foreground that appears
+        # before any victim action, on the reasoning that a foreign app which
+        # shows up after a tap was reached BY that tap and is therefore a
+        # departure. That is right for navigation - tapping a link that opens
+        # Chrome IS leaving - and exactly wrong for a dropper, where the taps
+        # are the install: measured on Anubis (com.tjmonh.android, posing as
+        # "RTO eChallan"), the walk clicked Install -> OK -> Allow from this
+        # source -> Install, Android installed com.hsjjsjs.android, and its
+        # phishing form - Full Name, Mobile Number, Mother Name, Date Of Birth -
+        # took the screen. Ten actions had been attempted by then, so (1)
+        # rejected it, the scope guard called the payload a departure, and the
+        # run spent its remaining budget pressing back towards the inert
+        # dropper. forms_found: 0, forms_completed: 0, login_outcome:
+        # not_attempted - on a screen built for nothing but credential theft.
+        #
+        # SecondaryPayloadTracker.child_packages() was supposed to cover this
+        # (its own comment: "a foreground package that is a KNOWN CHILD is in
+        # scope"), and the scope guard at G8 already honours it. But that set is
+        # fed by confirm_installed(), which nothing in the production path ever
+        # calls - the same "the API existed, the producer did not" gap that
+        # module's docstring describes for record_secondary_apk(). This is the
+        # producer, and it asks the device rather than depending on the install
+        # hooks firing.
+        if self._installed_during_this_run(foreground_package):
+            logger.info(
+                "[DAE][HANDOFF] %s was not on the device when this run started "
+                "- the sample installed it. Adopting the payload as a surface "
+                "of this investigation.", foreground_package,
+            )
+            self._payloads.confirm_installed(foreground_package)
+            return self.adopt_companion_package(
+                foreground_package,
+                activity=getattr(obs, "activity", ""),
+                evidence=(
+                    f"absent from the device at session start and in the "
+                    f"foreground now - installed by {self.package_name} "
+                    f"during this run"
+                ),
+            )
+
+        # (1) nothing the victim did can explain this foreground.
+        if self.exploration.actions_attempted > 0:
+            return False
+        # (4) a system boundary is a boundary, however early it appears.
+        if in_investigation_scope(
+            foreground_package, self.package_name, activity=obs.activity,
+        ):
+            return False
+        from sudarshan_core.engines.agentic.screenshot_policy import (
+            LAUNCHER_PACKAGES,
+        )
+        if foreground_package in LAUNCHER_PACKAGES:
+            return False
+        # (2) the sample is still running behind whatever is on screen.
+        if self._resolve_target_pid() <= 0:
+            logger.info(
+                "[DAE][HANDOFF] rejected foreground=%s - target process is not "
+                "running, so the sample did not hand off to it",
+                foreground_package,
+            )
+            return False
+        # (3) shipped with the image, or installed onto it?
+        if not self._is_third_party_package(foreground_package):
+            return False
+
+        return self.adopt_companion_package(
+            foreground_package,
+            activity=getattr(obs, "activity", ""),
+            evidence=(
+                f"foreground before any victim action while {self.package_name} "
+                f"(pid {self._target_pid}) was still running"
+            ),
+        )
+
+    def adopt_companion_package(
+        self,
+        package: str,
+        *,
+        activity: str = "",
+        evidence: str = "",
+    ) -> bool:
+        """
+        Take ownership of a package the sample launched to render its journey.
+
+        Public because the SANDBOX detects this first. The hand-off completes
+        milliseconds after launch, long before the explorer starts, so
+        frida_sandbox sees it while deciding which processes to instrument -
+        and it must not have to be rediscovered here, where the "before any
+        victim action" test could already have expired.
+
+        Idempotent, so the sandbox seeding it and the explorer observing it
+        independently cannot produce two adoptions.
+        """
+        if not package or package == self.package_name:
+            return False
+        if package in self.exploration.companion_packages:
+            return True
+
+        record = self._payloads.register_launch_handoff(
+            package,
+            activity=activity,
+            detected_at_ms=int(time.time() * 1000),
+            evidence=evidence,
+        )
+        if not record:
+            return False
+        foreground_package = package
+        self.exploration.companion_packages.add(foreground_package)
+        logger.info(
+            "[DAE][HANDOFF] target=%s companion=%s activity=%s "
+            "- adopted as a target surface",
+            self.package_name, foreground_package, activity,
+        )
+        self.audit_log.record_system_event(
+            "launch_handoff_detected",
+            f"{self.package_name} -> {foreground_package} (activity={activity})",
+        )
+        self.attack_timeline.append({
+            "timestamp": self._elapsed_ts(),
+            "source":    "System",
+            "action":    "Launch Hand-off",
+            "details":   (
+                f"{self.package_name} launched {foreground_package}, which "
+                f"renders the user-facing journey"
+            ),
+        })
+        if self.event_bus:
+            try:
+                self.event_bus.publish({
+                    "type": "event",
+                    "category": "multi_stage",
+                    "severity": "MEDIUM",
+                    "data": {
+                        # Named for what was OBSERVED - a foreground change
+                        # while the sample was running - not for an API we did
+                        # not hook.
+                        "hook": "activity.launch_handoff",
+                        "description": (
+                            f"{self.package_name} put {foreground_package} in "
+                            f"front of the user immediately after launch; the "
+                            f"app's journey is rendered by a second package"
+                        ),
+                        "package": self.package_name,
+                        "child_package": foreground_package,
+                    },
+                })
+            except Exception:
+                pass
+        return True
+
     def _drain_frida_events(self) -> List[Dict]:
         """Drain and return all buffered Frida events since the last drain."""
         with self._events_lock:
             events = list(self._pending_frida_events)
             self._pending_frida_events.clear()
+        # The Smart Investigator's tally. Counted on the drain rather than in
+        # the graph because the event stream belongs to the explorer, and
+        # counted even when a branch is blocked: a sample that keeps calling
+        # hooked APIs while the victim is stuck at a boundary is exactly the
+        # case §P29 asks to keep observing.
+        if events:
+            self.exploration.runtime_events_observed += len(events)
         return events
 
     # ── Main agent loop ────────────────────────────────────────────────────────
@@ -1408,13 +2286,38 @@ class AgenticExplorer:
         self._start_time   = time.monotonic()
         self._duration     = duration_seconds
 
+        # Everything third-party already on the device, before the walk touches
+        # anything. Any third-party package that appears in the foreground later
+        # and is NOT in this set was installed DURING the session - and the only
+        # thing installing packages in here is the sample. See
+        # _detect_launch_handoff for what that buys.
+        self._baseline_third_party = self._snapshot_third_party_packages()
+
         # The caller's duration is the STARTING budget, not the whole story.
         # frida_sandbox passes FRIDA_ANALYSIS_DURATION (300s by default) to
         # every sample alike, which cuts off an app that is mid-login and
         # idles for four minutes on one that finished at t=40. The deadline now
         # follows the walk, within a hard maximum that nothing can move.
+        # The exploration window is a CHILD of the one global deadline, never a
+        # peer of it. Both the starting budget and the adaptive ceiling are
+        # clamped to what the whole dynamic analysis has left, so no amount of
+        # measured progress can extend the walk past the 30-minute wall clock -
+        # which is the §P25 rule that there is exactly one deadline and every
+        # child inherits it.
+        _global = get_active_deadline()
+        _initial = float(duration_seconds)
+        _ceiling = float(MAX_EXPLORATION_BUDGET_SECONDS)
+        if _global is not None:
+            _initial = _global.budget_for(_initial)
+            _ceiling = _global.budget_for(_ceiling)
+            logger.info(
+                "[DYNAMIC][BUDGET] exploration window clamped to the global "
+                "deadline: start %.0fs, ceiling %.0fs, global remaining %.0fs",
+                _initial, _ceiling, _global.remaining(),
+            )
         self.budget = AdaptiveBudget(
-            initial_seconds=float(duration_seconds),
+            initial_seconds=_initial,
+            max_seconds=max(_initial, _ceiling),
             started_monotonic=self._start_time,
         )
 
@@ -1457,6 +2360,7 @@ class AgenticExplorer:
         last_action_failed    = False
         last_screen_hash      = ""
         consecutive_crashes   = 0
+        survivable_anrs       = 0
         out_of_scope_streak   = 0
         # Whether the previous iteration was outside the sample. Distinct from
         # the streak, which the recovery path resets: this survives long enough
@@ -1493,6 +2397,28 @@ class AgenticExplorer:
                 _work_remaining = bool(self.exploration.coverage_metrics().get(
                     "actionable_elements_unresolved", 0
                 ))
+                # ── The one global deadline outranks everything ───────────────
+                # Checked FIRST and unconditionally. The adaptive budget below
+                # can extend itself while the walk is still learning; this
+                # cannot be extended by anything, which is what makes 30 minutes
+                # a wall-clock guarantee rather than a starting position.
+                _global = get_active_deadline()
+                if _global is not None and _global.expired:
+                    _global.note_expiry("exploration_loop")
+                    logger.warning(
+                        "[DYNAMIC][TIMEOUT] Global %.0f-second deadline reached "
+                        "at elapsed=%.0fs after %d actions. Stopping "
+                        "exploration and finalizing partial result.",
+                        _global.total_seconds, _global.elapsed(), actions_taken,
+                    )
+                    self.audit_log.record_system_event(
+                        "stop_global_deadline",
+                        f"elapsed={_global.elapsed():.0f}s "
+                        f"budget={_global.total_seconds:.0f}s "
+                        f"actions={actions_taken}",
+                    )
+                    self._stop_reason = StopReason.TIME_BUDGET_EXHAUSTED
+                    break
                 if self.budget.should_finish(
                     stagnant_streak=self.progress.stagnant_streak,
                     recovery_exhausted=(frida_silence_streak >= FRIDA_SILENCE_THRESHOLD),
@@ -1587,6 +2513,12 @@ class AgenticExplorer:
                 # not by the LLM. Without this the whole dependency graph stays
                 # blocked on stage 1 forever.
                 foreground_package = package_of(obs.activity)
+                # Adoption runs BEFORE classification so the payload's very
+                # first screen - usually its most interesting - is classified
+                # as the sample's own rather than as EXTERNAL_APP. It needs
+                # only the foreground package and the observation, so there is
+                # nothing to wait for.
+                self._detect_launch_handoff(foreground_package, obs)
                 # Classified here rather than after the scope guard: the guard
                 # needs the screen type to distinguish a consent prompt hosted
                 # by Settings from an ordinary Settings screen. Reused verbatim
@@ -1594,6 +2526,7 @@ class AgenticExplorer:
                 classification = classify_screen_with_ownership(
                     obs.activity, obs.ui_nodes, obs.ui_xml_raw,
                     self.package_name, foreground_package,
+                    companion_packages=self.exploration.companion_packages,
                 )
                 self.goals.update_from_foreground(
                     foreground_package=foreground_package,
@@ -1619,6 +2552,9 @@ class AgenticExplorer:
                 # back out of the one surface worth looking at. The parent
                 # investigation still owns it: evidence stays attached here and
                 # the original APK context is never replaced.
+                # A package the sample launched to render its own journey was
+                # adopted above, before classification. See
+                # _detect_launch_handoff.
                 _is_child = self._payloads.is_child_package(foreground_package)
                 if _is_child and foreground_package not in self._explored_children:
                     self._explored_children.add(foreground_package)
@@ -1653,6 +2589,7 @@ class AgenticExplorer:
                     activity=obs.activity,
                     ui_text=screen_text,
                     screen_type=classification.screen_type,
+                    companion_packages=self.exploration.companion_packages,
                 ):
                     out_of_scope_streak += 1
                     was_out_of_scope = True
@@ -1890,12 +2827,21 @@ class AgenticExplorer:
 
 
                 # ── DEEP EXPLORATION: update state graph ─────────────────────
+                # Name any input the local patterns could not, before the
+                # inventory is built from them. Done here because this is the
+                # async side: the graph's build is synchronous and cannot
+                # await a model call.
+                field_overrides = await self._resolve_ambiguous_fields(
+                    obs, screen_type=classification.screen_type,
+                )
+
                 graph_state = self.exploration.observe(
                     obs,
                     semantic_type=classification.screen_type,
                     foreground_package=foreground_package,
                     ownership=classification.ownership,
                     elapsed_ts=self._elapsed_ts(),
+                    field_overrides=field_overrides,
                 )
                 self._record_permission_from_screen(obs, classification)
 
@@ -1931,10 +2877,29 @@ class AgenticExplorer:
                     ScreenType.CRASH_STATE, ScreenType.APP_NOT_RESPONDING,
                 ):
                     await self._handle_crash_state(obs, classification, actions_taken)
-                    consecutive_crashes += 1
-                    if consecutive_crashes >= MAX_CONSECUTIVE_CRASHES:
-                        self._stop_reason = StopReason.APPLICATION_CRASH_LOOP
-                        break
+                    # An ANR whose process is still running is a stall, not a
+                    # death, and gets its own larger budget - see
+                    # MAX_SURVIVABLE_ANRS. A crash, or an ANR the app did not
+                    # survive, still spends the crash budget.
+                    survivable_anr = (
+                        classification.screen_type == ScreenType.APP_NOT_RESPONDING
+                        and await self._target_process_is_alive()
+                    )
+                    if survivable_anr:
+                        survivable_anrs += 1
+                        logger.info(
+                            "[AgenticExplorer] ANR %d/%d - process still alive, "
+                            "not counting it against the crash budget",
+                            survivable_anrs, MAX_SURVIVABLE_ANRS,
+                        )
+                        if survivable_anrs >= MAX_SURVIVABLE_ANRS:
+                            self._stop_reason = StopReason.APPLICATION_CRASH_LOOP
+                            break
+                    else:
+                        consecutive_crashes += 1
+                        if consecutive_crashes >= MAX_CONSECUTIVE_CRASHES:
+                            self._stop_reason = StopReason.APPLICATION_CRASH_LOOP
+                            break
                     actions_taken += 1
                     continue
 
@@ -2139,31 +3104,157 @@ class AgenticExplorer:
                 if next_goal:
                     self.goals.mark_in_progress(next_goal.name)
                     self.goals.record_attempt(next_goal.name)
-
-                    # If this goal has accumulated too many attempts without
-                    # completing, mark it FAILED so the retry branch can take
-                    # over, or downstream goals can unblock via skip_if_missing.
-                    if next_goal.attempts >= MAX_ATTEMPTS_PER_GOAL:
-                        logger.warning(
-                            f"[AgenticExplorer] Goal '{next_goal.name}' exhausted "
-                            f"{next_goal.attempts} attempts - marking FAILED"
+                    # Wall clock charged to whichever goal was current for the
+                    # PREVIOUS iteration, so a goal that keeps being selected
+                    # accumulates its own cost and can be cut off on it. Charged
+                    # here, at selection, because that is the one point every
+                    # iteration passes through exactly once.
+                    now = time.monotonic()
+                    if self._current_goal_name:
+                        self.goals.add_time_spent(
+                            self._current_goal_name,
+                            now - (self._current_goal_started or now),
                         )
-                        self.goals.mark_failed(next_goal.name)
+                    if self._current_goal_name != next_goal.name:
+                        self._log_goal_header(next_goal)
+                    self._current_goal_name = next_goal.name
+                    self._current_goal_started = now
+
+                    # ── Give up on this goal, and ONLY on this goal ───────────
+                    # Three independent bounds, whichever comes first:
+                    #   * attempts   - MAX_ATTEMPTS_PER_GOAL selections
+                    #   * wall clock - MAX_GOAL_SECONDS, so one difficult goal
+                    #     cannot absorb the analysis (§P10)
+                    #   * the global deadline underneath both
+                    #
+                    # The outcome is decided from what the goal DEMONSTRABLY
+                    # produced: verified progress makes it PARTIAL_SUCCESS,
+                    # nothing at all makes it FAILED. Either way the run
+                    # continues to the next goal - a goal outcome is never a
+                    # run outcome (§P18).
+                    _give_up_reason = ""
+                    if next_goal.attempts >= MAX_ATTEMPTS_PER_GOAL:
+                        _give_up_reason = "max_attempts"
+                    elif next_goal.time_spent_seconds >= MAX_GOAL_SECONDS:
+                        _give_up_reason = "goal_time_budget_exhausted"
+                    elif not self._budget_allows(
+                        MIN_GOAL_SLICE_SECONDS, stage=f"goal:{next_goal.name}"
+                    ):
+                        _give_up_reason = TIMEOUT_REASON
+
+                    if _give_up_reason:
+                        if _give_up_reason == TIMEOUT_REASON:
+                            self.goals.mark_timed_out(next_goal.name)
+                        else:
+                            self.goals.resolve_goal(
+                                next_goal.name, reason=_give_up_reason,
+                            )
+                        logger.info(
+                            "[DYNAMIC][GOAL] '%s' resolved as %s "
+                            "(attempts=%d/%d, %.0fs/%.0fs, reason=%s). "
+                            "Continuing to the next goal.",
+                            next_goal.name, next_goal.status.value,
+                            next_goal.attempts, MAX_ATTEMPTS_PER_GOAL,
+                            next_goal.time_spent_seconds, MAX_GOAL_SECONDS,
+                            _give_up_reason,
+                        )
                         self.audit_log.record_system_event(
-                            "goal_max_attempts",
-                            f"{next_goal.name}: {next_goal.attempts}/{MAX_ATTEMPTS_PER_GOAL}"
+                            "goal_resolved",
+                            f"{next_goal.name}: {next_goal.status.value} "
+                            f"({_give_up_reason})",
                         )
                         # Re-evaluate next goal after state change
                         next_goal = self.goals.next_priority_goal()
+                        self._current_goal_name = (
+                            next_goal.name if next_goal else ""
+                        )
+                        self._current_goal_started = time.monotonic()
+
+                # ── Form stagnation outranks planning ─────────────────────────
+                # When the screen has stopped moving on a form, neither planner
+                # has anything new to say: the graph re-offers the action it
+                # already chose and the LLM re-derives it, because the action
+                # was never wrong - the keyboard was standing in front of the
+                # control it aimed at. Recovery is tried FIRST, and only for as
+                # many rungs as its ladder has, after which selection returns
+                # to normal.
+                action = await self._form_recovery_action(
+                    graph_state, classification,
+                )
+                selected_by = "form_recovery"
 
                 planner_action = None
-                if should_invoke_planner(classification.screen_type):
-                    planner_action = await self.planner.decide(obs, self.memory, self.goals)
+                if action is None:
+                    # ── Ask the graph first, and only pay for the model when
+                    #    its answer can still change the outcome ─────────────
+                    #
+                    # This used to call the planner BEFORE looking at the graph,
+                    # every iteration. But select_canonical_action gives the
+                    # graph priority for click_text / tap / tap_sequence /
+                    # type_text / check, so on those iterations the model's
+                    # answer was computed and then discarded.
+                    #
+                    # Measured on a live Anubis run: Gemini took 7.9s, 13.8s,
+                    # 15.1s and 11.2s on consecutive iterations - ~12s average
+                    # against ~10s for all of perception, execution and
+                    # verification combined. Twenty calls consumed roughly 240s
+                    # of a 300s window, which is why a four-field form could not
+                    # be filled inside one run: each field cost a round trip
+                    # whose result was thrown away.
+                    #
+                    # The planner is still consulted whenever it could matter:
+                    #   * the graph has nothing to offer
+                    #   * the graph's action is not one the graph wins with
+                    #   * the graph wants to type but cannot name the field, so
+                    #     the planner's hint would be substituted in
+                    #   * periodically regardless, so privileged device-state
+                    #     moves (grant_permission, inject_test_sms, ...) still
+                    #     get their turn - those can never come from the graph
+                    graph_action = self.exploration.get_next_action(
+                        state_id=graph_state.state_id, memory=self.memory,
+                    )
+                    self._planner_skips = getattr(self, "_planner_skips", 0)
+                    force_planner = self._planner_skips >= PLANNER_CONSULT_EVERY
+                    # Two further gates, both of which fall back to the
+                    # deterministic path rather than blocking (§P9/§P19):
+                    #
+                    #   * the per-goal planner budget - a model that keeps
+                    #     returning the same unusable action for one goal must
+                    #     not be asked about it forever;
+                    #   * the ONE global deadline - a call started with less
+                    #     than its own latency remaining costs that latency and
+                    #     produces nothing usable.
+                    _goal_name = next_goal.name if next_goal else ""
+                    _planner_budget_left = (
+                        not _goal_name
+                        or next_goal.planner_calls < MAX_PLANNER_CALLS_PER_GOAL
+                    )
+                    if not _planner_budget_left:
+                        logger.debug(
+                            "[AgenticExplorer] Planner budget for goal '%s' is "
+                            "spent (%d/%d) - deterministic planning only",
+                            _goal_name, next_goal.planner_calls,
+                            MAX_PLANNER_CALLS_PER_GOAL,
+                        )
+                    if (
+                        should_invoke_planner(classification.screen_type)
+                        and (force_planner or _planner_could_change_outcome(graph_action))
+                        and _planner_budget_left
+                        and self._budget_allows(
+                            PLANNER_CALL_COST_SECONDS, stage="planner",
+                        )
+                    ):
+                        if _goal_name:
+                            self.goals.record_planner_call(_goal_name)
+                        planner_action = await self.planner.decide(
+                            obs, self.memory, self.goals,
+                            deadline_seconds=self._remaining_budget_seconds(),
+                        )
+                        self._planner_skips = 0
+                    else:
+                        self._planner_skips += 1
 
-                graph_action = self.exploration.get_next_action(
-                    state_id=graph_state.state_id, memory=self.memory,
-                )
-                action, selected_by = select_canonical_action(graph_action, planner_action)
+                    action, selected_by = select_canonical_action(graph_action, planner_action)
                 if action is not None:
                     action["_selected_by"] = selected_by
                     pipeline_log(
@@ -2233,6 +3324,11 @@ class AgenticExplorer:
                 chosen_tool = action.get("tool", "")
                 _exploration_sources = frozenset({
                     "exploration_engine", "backtrack", "exploration_fallback",
+                    # Recovery answers a screen that has stopped responding.
+                    # Gating it on the investigation stage would leave the walk
+                    # stuck on exactly the form whose completion advances that
+                    # stage in the first place.
+                    FORM_RECOVERY_SOURCE,
                 })
                 if (
                     not self.investigation.is_action_allowed(chosen_tool)
@@ -2268,9 +3364,38 @@ class AgenticExplorer:
                 # onboarding carousel is not a login attempt, and treating it as
                 # one would spend the credential-retry budget on the wrong
                 # screen.
+                # `press_enter` counts too: the IME's action key commits the
+                # form exactly as its button would, and recovery reaches for it
+                # precisely when that button is unreachable. Leaving it out
+                # would have the walk submit credentials the auth state machine
+                # never hears about, so the app's answer is read as an
+                # unexplained screen change.
+                # A CREDENTIAL screen, not merely a screen with boxes on it.
+                #
+                # ScreenType.DATA_ENTRY_FORM is documented as deliberately not
+                # driving the authentication state - it is data entry, not
+                # credential entry - but this site did not honour that, and the
+                # `press_enter` branch fires on the IME action after ANY field.
+                # Measured on an e-challan form whose four boxes are a name, a
+                # phone, a mother's name and a date: typing them raised seven
+                # LOGIN_ATTEMPTs and three LOGIN_ATTEMPTS_EXHAUSTED, and each
+                # "rejection" rotated the vault to a fresh identity. The form
+                # was then re-filled with one persona's name beside another
+                # persona's phone number - incoherent data that the app itself
+                # would be right to reject.
+                _auth_screen = classification.screen_type in _CREDENTIAL_SCREEN_TYPES or any(
+                    getattr(n, "is_password", False)
+                    for n in (getattr(obs, "ui_nodes", []) or [])
+                )
                 self._submitted_credentials = bool(
-                    last_action_tool in ("click_text", "tap")
-                    and _is_submit_label(last_action_target)
+                    _auth_screen
+                    and (
+                        (
+                            last_action_tool in ("click_text", "tap")
+                            and _is_submit_label(last_action_target)
+                        )
+                        or last_action_tool == "press_enter"
+                    )
                     and any(
                         getattr(n, "is_password", False)
                         or getattr(n, "is_input", False)
@@ -2306,6 +3431,31 @@ class AgenticExplorer:
                     logger.warning(
                         "[AgenticExplorer] Action reported success but did not "
                         "take effect: %s", verification.detail,
+                    )
+
+                # ── Credit VERIFIED progress to the goal being worked ─────────
+                # This is the input that lets a goal end PARTIAL_SUCCESS rather
+                # than FAILED, and it is fed only from a positive verification -
+                # PRE/POST device state, never an ADB exit code (§P5). A goal
+                # that moved the device somewhere real but never reached its own
+                # confirming hook is a goal with evidence in it, and recording
+                # that is what stops the failure of one action erasing it (§P4).
+                if verification.succeeded and self._current_goal_name:
+                    self.goals.record_progress_signal(
+                        self._current_goal_name,
+                        f"{verification.action}:{verification.observed or 'verified'}",
+                    )
+                # The per-goal [DYNAMIC][GOAL] action line from the
+                # observability spec. One line per action, naming the goal it
+                # was spent on, so a reader can attribute every action.
+                if self._current_goal_name:
+                    logger.info(
+                        "[DYNAMIC][GOAL] goal=%s action=%s status=%s%s",
+                        self._current_goal_name,
+                        action.get("text") or action.get("tool", ""),
+                        "SUCCESS" if verification.succeeded else verification.outcome,
+                        f" reason={verification.detail}"
+                        if verification.failed and verification.detail else "",
                     )
 
                 # ── SETTLE ────────────────────────────────────────────────────
@@ -2367,6 +3517,7 @@ class AgenticExplorer:
                     post_obs.activity, post_obs.ui_nodes,
                     post_obs.ui_xml_raw, self.package_name,
                     package_of(post_obs.activity),
+                    companion_packages=self.exploration.companion_packages,
                 )
                 post_state = self.exploration.observe(
                     post_obs,
@@ -2424,6 +3575,7 @@ class AgenticExplorer:
                             post_obs.activity, post_obs.ui_nodes,
                             post_obs.ui_xml_raw, self.package_name,
                             package_of(post_obs.activity),
+                            companion_packages=self.exploration.companion_packages,
                         )
                         post_state = self.exploration.observe(
                             post_obs,
@@ -2468,12 +3620,20 @@ class AgenticExplorer:
                 field_verification = self._verify_typed_field(
                     action, result, post_obs,
                 )
-                if field_verification is not None and field_verification.failed:
-                    # Bounded recovery: re-perceive, refocus and retry happen
-                    # through the existing action ladder by leaving the action
-                    # unresolved. No new loop is introduced here - the retry
-                    # ceiling that already governs every action governs this.
-                    last_action_failed = True
+                # Tri-state, and the distinction carries the whole fix:
+                #   None  - not a type_text, or the field could not be re-read.
+                #   True  - the value is in the field.
+                #   False - the field was READ and our value is not in it.
+                # Only False resolves differently. An INCONCLUSIVE read (a
+                # masked field exposing neither text nor length) stays None and
+                # resolves as it always did, so password boxes cannot loop.
+                input_verified: Optional[bool] = None
+                if field_verification is not None:
+                    if field_verification.failed:
+                        input_verified = False
+                        last_action_failed = True
+                    elif field_verification.succeeded:
+                        input_verified = True
 
                 if self._submitted_credentials:
                     self._submitted_credentials = False
@@ -2509,6 +3669,41 @@ class AgenticExplorer:
                             post_obs, post_state, post_classification,
                             reason=ScreenshotReason.LOGIN.value,
                             label="authenticated_session",
+                        )
+                    elif self.auth.is_terminal:
+                        # ── The app has answered, so stop asking ─────────────
+                        #
+                        # An explicit "invalid credentials" settles the
+                        # question: no further synthetic identity will be
+                        # accepted, and retrying only spends budget the other
+                        # investigation branches need. The purpose of filling a
+                        # login form during analysis is to get PAST it and
+                        # observe what the sample does next - accessibility
+                        # abuse, overlay draw, SMS interception, C2 traffic -
+                        # not to succeed at authenticating.
+                        #
+                        # The goal is resolved as PARTIAL rather than FAILED
+                        # whenever the form was actually filled and submitted:
+                        # that is verified progress, and it stays in the record
+                        # even though the credentials were refused.
+                        self.goals.record_progress_signal(
+                            "Login Flow", "credentials_submitted",
+                        )
+                        self.goals.resolve_goal(
+                            "Login Flow", reason=AUTH_FLOW_REJECTED,
+                        )
+                        logger.info(
+                            "[DYNAMIC][GOAL] goal=Login Flow status=%s "
+                            "reason=%s auth_state=%s - moving to another "
+                            "investigation branch",
+                            (self.goals.get_goal_by_name("Login Flow").status.value
+                             if self.goals.get_goal_by_name("Login Flow") else "?"),
+                            AUTH_FLOW_REJECTED, self.auth.state.value,
+                        )
+                        self.audit_log.record_system_event(
+                            "auth_flow_rejected",
+                            f"auth_state={self.auth.state.value} "
+                            f"attempts={self.exploration.login_attempts}",
                         )
 
                 pipeline_log("POST_ACTION_OBSERVE", state_id=post_state.state_id)
@@ -2564,6 +3759,43 @@ class AgenticExplorer:
                 if post_state.state_id != self._pre_action_state_id:
                     ever_ui_changed = True
 
+                # ── Form stagnation streak ────────────────────────────────────
+                # Counts actions that left the screen exactly where it was.
+                # A screen that moved has nothing to recover from, so its ladder
+                # is forgotten too: if the walk comes back to the same form
+                # later - after a validation error, say - it gets the full set
+                # of escapes again rather than an already-spent one.
+                # ── Filling a field is progress, even on a still screen ───────
+                #
+                # The streak used to reset only on a state-id change. Populating
+                # a WebView input does not change one: the hierarchy keeps the
+                # same nodes and the same structure, only an attribute moves.
+                # So every successful fill counted as stagnation.
+                #
+                # Measured on the Anubis payload's four-field form: Full Name
+                # and Mobile Number were both filled and verified
+                # (field_populated len=11, len=10), and the very next line was
+                #   FORM_STAGNATION streak=2 ... inputs=4 unfilled=2
+                # Recovery then took the loop - it runs BEFORE the graph, by
+                # design - and walked its ladder to `tap_submit`, submitting the
+                # form with two fields still empty. Mother Name and Date Of
+                # Birth were never filled on a form the walk was actively
+                # completing.
+                #
+                # A verified population is unambiguous evidence the screen is
+                # responding to us, which is exactly what the streak is meant to
+                # detect the absence of.
+                _filled_a_field = (
+                    (action or {}).get("tool") == "type_text"
+                    and bool(result.success)
+                    and bool((getattr(result, "data", None) or {}).get("typed_length"))
+                )
+                if ever_ui_changed or _filled_a_field:
+                    self._unchanged_action_streak = 0
+                    self._form_recovery.reset(self._pre_action_state_id)
+                else:
+                    self._unchanged_action_streak += 1
+
                 adb_ok = bool(result.success)
                 verified = bool(adb_ok and ui_changed)
                 self.exploration.record_action(
@@ -2579,6 +3811,7 @@ class AgenticExplorer:
                     action_id=action.get("_action_id", ""),
                     ui_changed=ui_changed,
                     ever_ui_changed=ever_ui_changed,
+                    input_verified=input_verified,
                 )
                 if self.dispatcher.last_trace is not None:
                     tr = self.dispatcher.last_trace
@@ -2710,6 +3943,9 @@ class AgenticExplorer:
                             foreground_package=package_of(obs.activity),
                             layout_hash=obs.screen_hash,
                             semantic_type=post_classification.screen_type,
+                            screen_observation=self._screen_observation(
+                                post_obs, post_classification,
+                            ),
                         )
                     except Exception as exc:
                         logger.debug(
@@ -2782,7 +4018,37 @@ class AgenticExplorer:
             await self._finalize(actions_taken)
 
     async def _finalize(self, actions_taken: int) -> None:
-        """Cleanup and final metric recording."""
+        """
+        Cleanup and final metric recording.
+
+        Runs on EVERY exit path, including the wall-clock deadline, and it is
+        deliberately not gated on remaining time: flushing what was collected is
+        bookkeeping, not exploration, and a run that stops without doing it has
+        thrown away the evidence it spent its whole budget gathering (§P11).
+        """
+        # Charge the final iteration to whichever goal was current, so a goal
+        # that was being worked when the run ended is not credited zero time.
+        if self._current_goal_name and self._current_goal_started:
+            self.goals.add_time_spent(
+                self._current_goal_name,
+                time.monotonic() - self._current_goal_started,
+            )
+
+        # ── Settle every goal the run never concluded ────────────────────────
+        # PENDING in a finished run is not a state, it is an omission: it
+        # invites the reader to treat "never selected" as "did not happen".
+        # finalize() turns those into NOT_REACHED, and a goal that was mid-flight
+        # when the deadline arrived into TIMEOUT.
+        timed_out = self._stop_reason == StopReason.TIME_BUDGET_EXHAUSTED or (
+            (deadline := get_active_deadline()) is not None and deadline.expired
+        )
+        self.goals.finalize(
+            timed_out=timed_out,
+            reason=TIMEOUT_REASON if timed_out else (
+                self._stop_reason.value if self._stop_reason else "run_ended"
+            ),
+        )
+
         # Compute goal summary for benchmark
         completed = sum(1 for g in self.goals.goals if g.status == GoalStatus.COMPLETED)
         skipped   = sum(1 for g in self.goals.goals if g.status == GoalStatus.SKIPPED)
@@ -2909,6 +4175,58 @@ class AgenticExplorer:
         deep_exploration = self.exploration.to_dict()
         action_traces = [t.to_dict() for t in self.dispatcher.traces]
 
+        # ── Dynamic status (§P25) ────────────────────────────────────────────
+        # Instrumentation is judged by whether the run ever had a target
+        # process to watch, not by whether the walk got far: a sample that was
+        # launched, attached to and then blocked at a boundary produced real
+        # evidence, and reporting that as INSTRUMENTATION_FAILED would let a
+        # partial run be mistaken for an unobserved one.
+        instrumentation_ok = bool(self._target_pid) or bool(
+            self.exploration.states
+        )
+        dynamic_status = self.exploration.dynamic_status(
+            instrumentation_ok=instrumentation_ok
+        ).value
+        exploration_summary["dynamic_status"] = dynamic_status
+
+        # ── Goal coverage (§P2/§P12) ─────────────────────────────────────────
+        # The 15-goal graph reports what it achieved as a DISTRIBUTION, and the
+        # coverage contract is derived from that distribution plus the evidence
+        # actually observed. Neither is a validity verdict on its own: coverage
+        # says how much of the plan was exercised, validity says whether the
+        # run produced trustworthy evidence, and 60% coverage is a valid
+        # partial run, not an invalid one (§P14).
+        goal_coverage = self.goals.coverage_report()
+        deadline = get_active_deadline()
+        timed_out = self._stop_reason == StopReason.TIME_BUDGET_EXHAUSTED or (
+            deadline is not None and deadline.expired
+        )
+        # Verified transitions only: the exploration graph's edge count is what
+        # PRE/POST observation actually proved, not what ADB accepted.
+        meaningful_transitions = len(self.exploration.edges)
+        dynamic_coverage = build_dynamic_coverage(
+            goal_coverage,
+            sandbox_available=True,
+            instrumentation_ok=instrumentation_ok,
+            # The explorer counts what IT observed. frida_sandbox recomputes
+            # this from the full, harness-filtered event set before the result
+            # is published - this value is the explorer's own view and is
+            # deliberately the conservative one.
+            evidence_event_count=int(
+                getattr(self.exploration, "runtime_events_observed", 0)
+            ),
+            meaningful_transition_count=meaningful_transitions,
+            budget_seconds=(
+                deadline.total_seconds if deadline is not None
+                else float(self._duration or 0)
+            ),
+            elapsed_seconds=(
+                deadline.elapsed() if deadline is not None
+                else (time.monotonic() - self._start_time if self._start_time else 0.0)
+            ),
+            timed_out=timed_out,
+        )
+
         return {
             # One view hierarchy per distinct in-app screen, for VIDE. Consumed
             # by vide.pipeline._dynamic_ui_hierarchies(); the single
@@ -2940,6 +4258,12 @@ class AgenticExplorer:
             "audit_log":           audit_entries,
             "benchmark":           benchmark_report,
             "goal_summary":        goal_summary,
+            # Per-goal lifecycle states and the derived coverage contract. New
+            # keys beside `goal_summary`, not a reshape of it, so every existing
+            # consumer keeps working unchanged.
+            "goal_coverage":       goal_coverage,
+            "dynamic_coverage":    dynamic_coverage,
+            "permission_screens":  self.permission_screen_ledger(),
             "agent_memory":        mem_summary,
             "investigation":       investigation_summary,
             "crashes":             [f.to_dict() for f in self.crash_findings],
@@ -2963,6 +4287,10 @@ class AgenticExplorer:
             ),
             "secondary_apk_summary": self._payloads.summary(),
             "action_traces":       action_traces,
+            # ── Target-boundary and status reporting (§P24, §P25, §P26) ───────
+            "dynamic_status":      dynamic_status,
+            "boundary_events":     deep_exploration.get("boundary_events", []),
+            "loop_events":         deep_exploration.get("loop_events", []),
         }
 
     def preserve_secondary_payloads(self, output_dir: Path) -> List[Dict[str, Any]]:

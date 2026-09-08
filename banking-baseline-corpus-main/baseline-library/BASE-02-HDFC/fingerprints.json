@@ -1,0 +1,69 @@
+﻿{
+  "bank": "HDFC Bank",
+  "screens": [
+    {
+      "screenId": "HDFC-LOGIN",
+      "structuralSignature": "AUTH_FORM_VERTICAL_PRIMARY_CTA",
+      "regionOrder": [
+        "HEADER",
+        "PRIMARY_CONTENT",
+        "FOOTER_CTA"
+      ],
+      "exactStrings": [
+        "Password",
+        "Login",
+        "Customer ID/Username",
+        "Enter your ID",
+        "HDFC Bank",
+        "Welcome to MobileBanking",
+        "Forgot?",
+        "Register"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#004B8D",
+        "colorSecondary": "#000000"
+      }
+    },
+    {
+      "screenId": "HDFC-MPIN",
+      "structuralSignature": "PINPAD_NUMERIC_ENTRY",
+      "regionOrder": [
+        "HEADER",
+        "PIN_INPUT",
+        "NUMERIC_KEYPAD"
+      ],
+      "exactStrings": [
+        "Enter MPIN",
+        "Please enter your 6-digit MPIN to login"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#004B8D",
+        "colorSecondary": "#000000"
+      }
+    },
+    {
+      "screenId": "HDFC-HOME",
+      "structuralSignature": "DASHBOARD_CARD_GRID_QUICKACTIONS",
+      "regionOrder": [
+        "STATUS",
+        "HEADER",
+        "ACCOUNT_CARD",
+        "QUICK_ACTIONS",
+        "RECENT_TRANSACTIONS",
+        "BOTTOM_NAV"
+      ],
+      "exactStrings": [
+        "Pay Bills",
+        "Recent Activity",
+        "View All",
+        "Available Balance"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#004B8D",
+        "colorSecondary": "#000000"
+      }
+    }
+  ],
+  "appName": "HDFC Bank MobileBanking",
+  "baselineId": "BASE-02-HDFC"
+}

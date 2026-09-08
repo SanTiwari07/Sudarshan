@@ -1,0 +1,81 @@
+﻿{
+  "bank": "Bank of Baroda",
+  "screens": [
+    {
+      "screenId": "BOB-LOGIN",
+      "structuralSignature": "AUTH_FORM_VERTICAL_PRIMARY_CTA",
+      "regionOrder": [
+        "HEADER",
+        "PRIMARY_CONTENT",
+        "FOOTER_CTA"
+      ],
+      "exactStrings": [
+        "Password",
+        "Login",
+        "Mobile Number / Customer ID",
+        "Enter User ID",
+        "Login Password",
+        "Enter Password",
+        "Welcome to bob World",
+        "Please enter your credentials to login",
+        "Forgot Login PIN?",
+        "Open a Digital Account"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#F26522",
+        "colorSecondary": "#005B9A"
+      }
+    },
+    {
+      "screenId": "BOB-MPIN",
+      "structuralSignature": "PINPAD_NUMERIC_ENTRY",
+      "regionOrder": [
+        "HEADER",
+        "PIN_INPUT",
+        "NUMERIC_KEYPAD"
+      ],
+      "exactStrings": [
+        "AV",
+        "Enter Login PIN",
+        "Please enter your 4-digit or 6-digit MPIN",
+        "Forgot PIN?"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#F26522",
+        "colorSecondary": "#005B9A"
+      }
+    },
+    {
+      "screenId": "BOB-HOME",
+      "structuralSignature": "DASHBOARD_CARD_GRID_QUICKACTIONS",
+      "regionOrder": [
+        "STATUS",
+        "HEADER",
+        "ACCOUNT_CARD",
+        "QUICK_ACTIONS",
+        "RECENT_TRANSACTIONS",
+        "BOTTOM_NAV"
+      ],
+      "exactStrings": [
+        "Welcome,",
+        "Mini Statement",
+        "Details",
+        "QUICK ACTIONS",
+        "Transfer",
+        "Services",
+        "Scan",
+        "Cards",
+        "EXPLORE BOB WORLD",
+        "Over 240+ Services",
+        "Experience banking like never before",
+        "Explore"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#F26522",
+        "colorSecondary": "#005B9A"
+      }
+    }
+  ],
+  "appName": "bob World",
+  "baselineId": "BASE-05-BOB"
+}

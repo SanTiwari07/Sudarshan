@@ -1,0 +1,33 @@
+@import './styles/tokens.css';
+
+:root {
+  --font-sans: var(--font-body);
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  width: 100%;
+  max-width: 480px; /* Mobile viewport simulation */
+  margin: 0 auto;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  background-color: var(--color-background);
+  position: relative;
+  overflow-x: hidden;
+  box-shadow: 0 0 20px rgba(0,0,0,0.1);
+}
+
+* {
+  box-sizing: border-box;
+}
+

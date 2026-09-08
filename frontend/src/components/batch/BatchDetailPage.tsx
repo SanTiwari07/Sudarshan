@@ -92,7 +92,7 @@ export default function BatchDetailPage() {
                   ID: {batch.batch_id}
                 </span>
               </div>
-              <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 font-mono tracking-tight mt-0.5">
+              <h1 className="text-xl sm:text-2xl font-semibold text-slate-900 font-mono tracking-tight mt-0.5">
                 Batch #{batch.batch_id.slice(0, 8)}
               </h1>
             </div>
@@ -247,7 +247,7 @@ export default function BatchDetailPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider font-mono bg-surface-secondary">
+                <tr className="border-b border-slate-200 text-[13px] font-bold text-slate-500 uppercase tracking-wider font-mono bg-surface-secondary">
                   <th className="py-3 px-4">APK File</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4">Risk Band</th>

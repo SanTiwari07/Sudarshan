@@ -7,6 +7,15 @@ export type RuntimeDynamicStatus =
   | 'QUEUED'
   | 'RUNNING'
   | 'COMPLETED'
+  // A run that produced real runtime evidence from part of its planned
+  // investigation. Previously such a run had nowhere to go but INCONCLUSIVE,
+  // which reads to an analyst exactly like a run that observed nothing - so 47
+  // captured events across 9 confirmed goals and a sandbox that never attached
+  // rendered with the same word.
+  | 'PARTIAL'
+  // The 30-minute wall clock arrived. Distinct from PARTIAL because the reason
+  // the investigation stopped short is itself worth reporting.
+  | 'TIME_BUDGET_EXHAUSTED'
   | 'INCONCLUSIVE'
   | 'FAILED'
   | 'UNAVAILABLE'
@@ -25,6 +34,27 @@ export type ScreenshotUxState =
   | 'ARTIFACT_MISSING'
   | 'API_ERROR';
 
+export type DynamicCoverage = {
+  dynamic_status?: string;
+  dynamic_valid?: boolean;
+  dynamic_complete?: boolean;
+  coverage_ratio?: number;
+  coverage_percent?: number;
+  goals_total?: number;
+  goals_successful?: number;
+  goals_partial?: number;
+  goals_failed?: number;
+  goals_skipped?: number;
+  goals_not_reached?: number;
+  evidence_event_count?: number;
+  meaningful_transition_count?: number;
+  analysis_budget_seconds?: number;
+  analysis_elapsed_seconds?: number;
+  timeout_reason?: string | null;
+  limitations?: string[];
+  narrative?: string;
+};
+
 type DynPayload = {
   dynamic_status?: string;
   dae_pipeline?: { current_stage?: string };
@@ -32,6 +62,7 @@ type DynPayload = {
   available?: boolean;
   runtime_requested?: boolean;
   runtime_attempted?: boolean;
+  dynamic_coverage?: DynamicCoverage;
 };
 
 function dynPayload(data: FraudCardData): DynPayload {
@@ -40,6 +71,38 @@ function dynPayload(data: FraudCardData): DynPayload {
       ? data.dynamic_result
       : data.dynamic_analysis) || {};
   return raw as DynPayload;
+}
+
+/**
+ * The dynamic coverage block, from wherever this case carries it.
+ *
+ * Read from the dynamic result first and the FRS breakdown second, because a
+ * stored case may have only the latter. Returns null when neither has it - an
+ * older record, where the honest thing is to show no coverage panel rather than
+ * a row of zeros that reads as "nothing was covered".
+ */
+export function resolveDynamicCoverage(data: FraudCardData): DynamicCoverage | null {
+  const dyn = dynPayload(data);
+  if (dyn.dynamic_coverage && typeof dyn.dynamic_coverage === 'object') {
+    return dyn.dynamic_coverage;
+  }
+  const fromFrs = (data.frs_breakdown as { dynamic_coverage?: DynamicCoverage } | undefined)
+    ?.dynamic_coverage;
+  if (fromFrs && typeof fromFrs === 'object' && Object.keys(fromFrs).length > 0) {
+    return fromFrs;
+  }
+  return null;
+}
+
+/** "14m 02s" from a raw second count. Empty when there is nothing to show. */
+export function formatRuntimeDuration(seconds: number | undefined | null): string {
+  if (seconds === undefined || seconds === null || !Number.isFinite(seconds) || seconds < 0) {
+    return '';
+  }
+  const total = Math.round(seconds);
+  const mins = Math.floor(total / 60);
+  const secs = total % 60;
+  return `${mins}m ${String(secs).padStart(2, '0')}s`;
 }
 
 export function resolveRuntimeDynamicStatus(data: FraudCardData): RuntimeDynamicStatus {
@@ -80,6 +143,28 @@ export function resolveRuntimeDynamicStatus(data: FraudCardData): RuntimeDynamic
     return 'RUNNING';
   }
 
+  // ── Coverage decides between COMPLETED, PARTIAL and INCONCLUSIVE ────────
+  //
+  // Consulted BEFORE the dynamic_conclusive fallback below, because that
+  // boolean cannot tell a run that observed part of its plan from one that
+  // observed nothing at all - and rendering those identically is the defect
+  // this whole path exists to fix. A run is only INCONCLUSIVE here when its own
+  // coverage block says it obtained no trustworthy evidence.
+  const coverage = resolveDynamicCoverage(data);
+  if (coverage?.dynamic_status) {
+    const cov = String(coverage.dynamic_status).toUpperCase();
+    if (cov === 'COMPLETE') return 'COMPLETED';
+    if (cov === 'PARTIAL') return 'PARTIAL';
+    if (cov === 'TIME_BUDGET_EXHAUSTED') {
+      // A timeout that still collected evidence is a usable partial result.
+      // One that collected nothing is not, and says so.
+      return coverage.dynamic_valid ? 'TIME_BUDGET_EXHAUSTED' : 'INCONCLUSIVE';
+    }
+    if (cov === 'INSTRUMENTATION_FAILED') return 'FRIDA_ATTACH_FAILED';
+    if (cov === 'SKIPPED') return 'NOT_REQUESTED';
+    if (cov === 'NO_BEHAVIOR_OBSERVED') return 'INCONCLUSIVE';
+  }
+
   if (frs?.dynamic_ran && frs.dynamic_conclusive) return 'COMPLETED';
   if (frs?.dynamic_ran && !frs.dynamic_conclusive) return 'INCONCLUSIVE';
   if (raw === 'FAILED' || dyn.error) return 'FAILED';
@@ -101,6 +186,12 @@ export function runtimeStatusHeadline(status: RuntimeDynamicStatus): string {
       return 'Running';
     case 'COMPLETED':
       return 'Completed';
+    // Never "Failed". A run with meaningful evidence in it has not failed, and
+    // labelling it so tells the analyst to ignore evidence that is there.
+    case 'PARTIAL':
+      return 'Partial evidence';
+    case 'TIME_BUDGET_EXHAUSTED':
+      return 'Partial evidence (time limit reached)';
     case 'INCONCLUSIVE':
       return 'Inconclusive';
     case 'FAILED':
@@ -132,6 +223,10 @@ export function runtimeStatusExplanation(status: RuntimeDynamicStatus): string {
       return 'The sandbox is executing the application and collecting telemetry.';
     case 'COMPLETED':
       return 'Runtime behaviour was captured and used in scoring where applicable.';
+    case 'PARTIAL':
+      return 'The sandbox produced usable runtime evidence from part of its planned investigation. Scoring uses only what was actually observed; the goals that were not exercised contribute nothing.';
+    case 'TIME_BUDGET_EXHAUSTED':
+      return 'The analysis reached its wall-clock budget. Everything collected up to that point was flushed and scored; the remaining investigation goals were not exercised.';
     case 'INCONCLUSIVE':
       return 'The sandbox executed, but insufficient reliable runtime behaviour was captured for scoring.';
     case 'FAILED':
@@ -187,7 +282,17 @@ export function classifyScreenshotUxState(args: {
     failure.includes('no runtime screenshots') ||
     failure.includes('dynamic analysis was not executed')
   ) {
-    if (dynStatus === 'INCONCLUSIVE' || (data.frs_breakdown?.dynamic_ran && !data.frs_breakdown?.dynamic_conclusive)) {
+    // A PARTIAL run is deliberately excluded from this branch. It HAS runtime
+    // evidence; the absence of screenshots in it is a capture question, not a
+    // "no reliable runtime evidence" one, and conflating the two hides the
+    // evidence the run did collect.
+    if (
+      dynStatus === 'INCONCLUSIVE' ||
+      (data.frs_breakdown?.dynamic_ran &&
+        !data.frs_breakdown?.dynamic_conclusive &&
+        dynStatus !== 'PARTIAL' &&
+        dynStatus !== 'TIME_BUDGET_EXHAUSTED')
+    ) {
       return 'RUNTIME_INCONCLUSIVE';
     }
   }

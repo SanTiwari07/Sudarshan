@@ -1,0 +1,2793 @@
+{
+  "activities": [
+    "ai.agribid.esurvey_farmer.MainActivity",
+    "com.google.android.gms.common.api.GoogleApiActivity"
+  ],
+  "ai_confidence_multiplier": 1.0,
+  "all_permissions": [
+    "android.permission.CAMERA",
+    "android.permission.READ_EXTERNAL_STORAGE",
+    "Manifest.permission.CAPTURE_AUDIO_OUTPUT",
+    "android.permission.ACCESS_COARSE_LOCATION",
+    "ai.agribid.esurvey_farmer.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
+    "android.permission.WRITE_EXTERNAL_STORAGE",
+    "android.permission.MODIFY_AUDIO_SETTINGS",
+    "android.permission.WAKE_LOCK",
+    "android.permission.BLUETOOTH",
+    "android.permission.ACCESS_FINE_LOCATION",
+    "android.permission.INTERNET",
+    "android.permission.RECORD_AUDIO"
+  ],
+  "analysis_completeness": {
+    "dynamic_frida": true,
+    "static_androguard": true,
+    "static_apktool": true,
+    "static_jadx": true,
+    "static_mobsf": true,
+    "threat_correlation": true,
+    "vide_ui": false
+  },
+  "analysis_mode": "androguard+mobsf",
+  "analyst_id": 7,
+  "apktool_enrichment": null,
+  "app_name": "ai.agribid.esurvey_farmer",
+  "appsec_score": 41,
+  "base_score": 8.57,
+  "binary_analysis": [],
+  "certificate": {
+    "certificate_findings": [
+      [
+        "info",
+        "Application is signed with a code signing certificate",
+        "Signed Application"
+      ],
+      [
+        "high",
+        "Application signed with a debug certificate. Production application must not be shipped with a debug certificate.",
+        "Application signed with debug certificate"
+      ]
+    ],
+    "certificate_info": "Binary is signed\nv1 signature: False\nv2 signature: True\nv3 signature: False\nv4 signature: False\nX.509 Subject: CN=Android Debug, O=Android, C=US\nSignature Algorithm: rsassa_pkcs1v15\nValid From: 2026-06-29 07:21:16+00:00\nValid To: 2056-06-21 07:21:16+00:00\nIssuer: CN=Android Debug, O=Android, C=US\nSerial Number: 0x1\nHash Algorithm: sha256\nmd5: 3add7ec1c4efa85cff29d9d98b7df6f1\nsha1: bc3fd0cb79d1d62da6d697a3efd115659d8f231e\nsha256: ca3b6a9ce4d19da78c25953218af9ba43d73ea04186a4688e926f3ab638353fe\nsha512: c5255bff832a51b53292360152c68c54ce83f1987722e2fc8e827da99e31d97978506a8c52a254f95629865aab669968328b3ab47548fa0526343be2daa985e5\nPublicKey Algorithm: rsa\nBit Size: 2048\nFingerprint: 75bba6443fd76bacefa86e3965e084b71e05ca158cd550ec8c3a5f1fe30750f8\nFound 1 unique certificates",
+    "certificate_summary": {
+      "high": 1,
+      "info": 1,
+      "warning": 0
+    }
+  },
+  "code_findings": [
+    {
+      "cwe": "CWE-532: Insertion of Sensitive Information into Log File",
+      "description": "The App logs information. Sensitive information should never be logged.",
+      "files": [
+        "A1/a.java",
+        "A1/b.java",
+        "A2/a.java",
+        "B1/a.java",
+        "C/k.java"
+      ],
+      "masvs": "MSTG-STORAGE-3",
+      "owasp": "",
+      "rule_id": "android_logging",
+      "severity": "info",
+      "title": "The App logs information. Sensitive information should never be logged."
+    },
+    {
+      "cwe": "CWE-276: Incorrect Default Permissions",
+      "description": "App can read/write to External Storage. Any App can read data written to External Storage.",
+      "files": [
+        "T1/d.java",
+        "h0/AbstractC0246g.java"
+      ],
+      "masvs": "MSTG-STORAGE-2",
+      "owasp": "M2: Insecure Data Storage",
+      "rule_id": "android_read_write_external",
+      "severity": "warning",
+      "title": "App can read/write to External Storage. Any App can read data written to External Storage."
+    },
+    {
+      "cwe": "CWE-330: Use of Insufficiently Random Values",
+      "description": "The App uses an insecure Random Number Generator.",
+      "files": [
+        "C/s.java",
+        "F/g.java",
+        "j2/a.java",
+        "j2/b.java",
+        "k2/a.java"
+      ],
+      "masvs": "MSTG-CRYPTO-6",
+      "owasp": "M5: Insufficient Cryptography",
+      "rule_id": "android_insecure_random",
+      "severity": "warning",
+      "title": "The App uses an insecure Random Number Generator."
+    },
+    {
+      "cwe": "CWE-276: Incorrect Default Permissions",
+      "description": "App creates temp file. Sensitive information should never be written into a temp file.",
+      "files": [
+        "F/h.java",
+        "N/g.java",
+        "R1/f0.java",
+        "a/a.java",
+        "c/C0201b.java"
+      ],
+      "masvs": "MSTG-STORAGE-2",
+      "owasp": "M2: Insecure Data Storage",
+      "rule_id": "android_temp_file",
+      "severity": "warning",
+      "title": "App creates temp file. Sensitive information should never be written into a temp file."
+    },
+    {
+      "cwe": "",
+      "description": "This App copies data to clipboard. Sensitive data should not be copied to clipboard as other applications can access it.",
+      "files": [
+        "A2/a.java",
+        "io/flutter/plugin/editing/c.java"
+      ],
+      "masvs": "MSTG-STORAGE-10",
+      "owasp": "",
+      "rule_id": "android_clipboard_copy",
+      "severity": "info",
+      "title": "This App copies data to clipboard. Sensitive data should not be copied to clipboard as other applications can access it."
+    }
+  ],
+  "confidence": 60.0,
+  "created_at": "2026-08-26T06:11:41.278429+00:00",
+  "dangerous_apis_found_raw": [],
+  "dangerous_perms": [],
+  "domains": {
+    "android.googlesource.com": {
+      "bad": "no",
+      "geolocation": {
+        "city": "Mountain View",
+        "country_long": "United States of America",
+        "country_short": "US",
+        "ip": "192.178.211.82",
+        "latitude": "37.405991",
+        "longitude": "-122.078514",
+        "region": "California"
+      },
+      "ofac": false
+    },
+    "api.flutter.dev": {
+      "bad": "no",
+      "geolocation": {
+        "city": "Mountain View",
+        "country_long": "United States of America",
+        "country_short": "US",
+        "ip": "199.36.158.100",
+        "latitude": "37.405991",
+        "longitude": "-122.078514",
+        "region": "California"
+      },
+      "ofac": false
+    },
+    "apiesurvey.mindstrix.com": {
+      "bad": "no",
+      "geolocation": {
+        "city": "Mumbai",
+        "country_long": "India",
+        "country_short": "IN",
+        "ip": "34.100.207.155",
+        "latitude": "19.014410",
+        "longitude": "72.847939",
+        "region": "Maharashtra"
+      },
+      "ofac": false
+    },
+    "dartbug.com": {
+      "bad": "no",
+      "geolocation": {
+        "city": "Mountain View",
+        "country_long": "United States of America",
+        "country_short": "US",
+        "ip": "216.239.38.21",
+        "latitude": "37.405991",
+        "longitude": "-122.078514",
+        "region": "California"
+      },
+      "ofac": false
+    },
+    "developer.android.com": {
+      "bad": "no",
+      "geolocation": {
+        "city": "Mountain View",
+        "country_long": "United States of America",
+        "country_short": "US",
+        "ip": "142.250.146.100",
+        "latitude": "37.405991",
+        "longitude": "-122.078514",
+        "region": "California"
+      },
+      "ofac": false
+    },
+    "docs.flutter.dev": {
+      "bad": "no",
+      "geolocation": {
+        "city": "Mountain View",
+        "country_long": "United States of America",
+        "country_short": "US",
+        "ip": "199.36.158.100",
+        "latitude": "37.405991",
+        "longitude": "-122.078514",
+        "region": "California"
+      },
+      "ofac": false
+    },
+    "flutter.dev": {
+      "bad": "no",
+      "geolocation": {
+        "city": "Mountain View",
+        "country_long": "United States of America",
+        "country_short": "US",
+        "ip": "199.36.158.100",
+        "latitude": "37.405991",
+        "longitude": "-122.078514",
+        "region": "California"
+      },
+      "ofac": false
+    },
+    "fonts.gstatic.com": {
+      "bad": "no",
+      "geolocation": {
+        "city": "Mountain View",
+        "country_long": "United States of America",
+        "country_short": "US",
+        "ip": "142.250.143.94",
+        "latitude": "37.405991",
+        "longitude": "-122.078514",
+        "region": "California"
+      },
+      "ofac": false
+    },
+    "github.com": {
+      "bad": "no",
+      "geolocation": {
+        "city": "Redmond",
+        "country_long": "United States of America",
+        "country_short": "US",
+        "ip": "20.207.73.82",
+        "latitude": "47.682899",
+        "longitude": "-122.120903",
+        "region": "Washington"
+      },
+      "ofac": false
+    },
+    "issuetracker.google.com": {
+      "bad": "no",
+      "geolocation": {
+        "city": "Mountain View",
+        "country_long": "United States of America",
+        "country_short": "US",
+        "ip": "192.178.174.139",
+        "latitude": "37.405991",
+        "longitude": "-122.078514",
+        "region": "California"
+      },
+      "ofac": false
+    },
+    "ns.adobe.com": {
+      "bad": "no",
+      "geolocation": null
+    },
+    "www.unicode.org": {
+      "bad": "no",
+      "geolocation": {
+        "city": "San Francisco",
+        "country_long": "United States of America",
+        "country_short": "US",
+        "ip": "172.67.74.23",
+        "latitude": "37.775700",
+        "longitude": "-122.395203",
+        "region": "California"
+      },
+      "ofac": false
+    },
+    "www.w3.org": {
+      "bad": "no",
+      "geolocation": {
+        "city": "San Francisco",
+        "country_long": "United States of America",
+        "country_short": "US",
+        "ip": "104.18.22.19",
+        "latitude": "37.775700",
+        "longitude": "-122.395203",
+        "region": "California"
+      },
+      "ofac": false
+    },
+    "youtrack.jetbrains.com": {
+      "bad": "no",
+      "geolocation": {
+        "city": "Dublin",
+        "country_long": "Ireland",
+        "country_short": "IE",
+        "ip": "63.33.88.220",
+        "latitude": "53.343990",
+        "longitude": "-6.267190",
+        "region": "Dublin"
+      },
+      "ofac": false
+    }
+  },
+  "dynamic_available": true,
+  "dynamic_result": {
+    "activities_triggered": [],
+    "anti_analysis_events": [],
+    "api_calls": [
+      "AccessibilityManager.sendAccessibilityEvent"
+    ],
+    "artifact_dir": "/app/uploads/sudarshan_artifacts/tmpys5hvu2k_c9601997",
+    "attack_timeline": [
+      {
+        "action": "AgenticExplorer Started",
+        "details": "ActionBudget=120",
+        "source": "System",
+        "timestamp": "00:00"
+      },
+      {
+        "category": "app_telemetry",
+        "data": {
+          "class_name": "android.view.accessibility.AccessibilityManager",
+          "description": "UI accessibility event dispatched (ordinary for any app with a user interface; recorded, not scored)",
+          "hook": "AccessibilityManager.sendAccessibilityEvent",
+          "severity": "INFO"
+        },
+        "source": "Frida",
+        "timestamp": "00:00"
+      },
+      {
+        "category": "general",
+        "data": {
+          "category": "app_telemetry",
+          "evidence_id": "EVID-003",
+          "id": "010eb5aa-c59b-4ad7-badf-5cae59f45539",
+          "severity": "INFO"
+        },
+        "source": "Frida",
+        "timestamp": "00:00"
+      },
+      {
+        "action": "type_text",
+        "details": "Explore input '\u092a\u0940\u0915 \u0928\u0941\u0915\u0938\u093e\u0928 \u00b7 \u092e\u0926\u0924 \u00b7 \u0925\u0947\u091f \u0932\u093e\u092d \u0939\u0938\u094d\u0924\u093e\u0902\u0924\u0930\u0923' (role=INPUT, priority=139, source=uiautomator)",
+        "goal": "DEEP_EXPLORATION",
+        "source": "EXPLORATION_ENGINE",
+        "success": true,
+        "target": "\u092a\u0940\u0915 \u0928\u0941\u0915\u0938\u093e\u0928 \u00b7 \u092e\u0926\u0924 \u00b7 \u0925\u0947\u091f \u0932\u093e\u092d \u0939\u0938\u094d\u0924\u093e\u0902\u0924\u0930\u0923",
+        "timestamp": "00:55"
+      },
+      {
+        "category": "general",
+        "data": {
+          "category": "explorer_state",
+          "filename": "screenshots/0002_state_state-001_otp_scree.png",
+          "label": "state_state-001_otp_screen",
+          "reason": "SUSPICIOUS_UI",
+          "screen_hash": "d3cda773fa968267",
+          "screenshot_id": "SCR-002",
+          "screenshot_uuid": "0a76ea34-06e6-4660-bdb8-f0dce4a49398",
+          "source": "explorer",
+          "trigger_event": ""
+        },
+        "source": "Frida",
+        "timestamp": "00:55"
+      },
+      {
+        "category": "general",
+        "data": {
+          "category": "SCREENSHOT",
+          "evidence_id": "EVID-004",
+          "id": "7570b7e8-4e7a-46a6-913f-5155f65418ef",
+          "severity": "INFO"
+        },
+        "source": "Frida",
+        "timestamp": "00:55"
+      },
+      {
+        "action": "click_text",
+        "details": "Explore click 'OTP \u092a\u093e\u0920\u0935\u093e' (role=PROGRESS, priority=159, source=uiautomator)",
+        "goal": "DEEP_EXPLORATION",
+        "source": "EXPLORATION_ENGINE",
+        "success": true,
+        "target": "OTP \u092a\u093e\u0920\u0935\u093e",
+        "timestamp": "01:16"
+      },
+      {
+        "category": "general",
+        "data": {
+          "category": "explorer_action",
+          "filename": "screenshots/0004_action_03_click_text.png",
+          "label": "action_03_click_text",
+          "reason": "EXPLORER_ACTION",
+          "screen_hash": "1453afa9adcae5c1",
+          "screenshot_id": "SCR-004",
+          "screenshot_uuid": "8e7bce63-8b51-46eb-a107-6305037332b4",
+          "source": "explorer",
+          "trigger_event": ""
+        },
+        "source": "Frida",
+        "timestamp": "01:17"
+      },
+      {
+        "category": "general",
+        "data": {
+          "category": "SCREENSHOT",
+          "evidence_id": "EVID-005",
+          "id": "120875de-ed02-4106-bb90-17c2fb3a8e62",
+          "severity": "INFO"
+        },
+        "source": "Frida",
+        "timestamp": "01:17"
+      },
+      {
+        "category": "general",
+        "data": {
+          "category": "explorer_state",
+          "filename": "screenshots/0003_state_state-002_home.png",
+          "label": "state_state-002_home",
+          "reason": "SUSPICIOUS_UI",
+          "screen_hash": "1453afa9adcae5c1",
+          "screenshot_id": "SCR-003",
+          "screenshot_uuid": "78d657ef-14de-4682-990f-3ac0c520444d",
+          "source": "explorer",
+          "trigger_event": ""
+        },
+        "source": "Frida",
+        "timestamp": "01:17"
+      },
+      {
+        "category": "general",
+        "data": {
+          "category": "SCREENSHOT",
+          "evidence_id": "EVID-006",
+          "id": "a8dc4630-b7cd-4727-87fd-2f3033b69772",
+          "severity": "INFO"
+        },
+        "source": "Frida",
+        "timestamp": "01:17"
+      },
+      {
+        "action": "click_text",
+        "details": "Explore click 'Wait' (role=CANCEL, priority=119, source=uiautomator)",
+        "goal": "DEEP_EXPLORATION",
+        "source": "EXPLORATION_ENGINE",
+        "success": true,
+        "target": "Wait",
+        "timestamp": "01:44"
+      },
+      {
+        "action": "grant_permission",
+        "details": "Granting SMS permission via ADB",
+        "goal": "Grant Runtime Permissions",
+        "source": "AI",
+        "success": true,
+        "target": "",
+        "timestamp": "01:57"
+      },
+      {
+        "action": "grant_permission",
+        "details": "Granting location permission via ADB",
+        "goal": "Grant Runtime Permissions",
+        "source": "AI",
+        "success": true,
+        "target": "",
+        "timestamp": "03:05"
+      },
+      {
+        "action": "click_text",
+        "details": "Explore click 'eSurvey isn't responding' (role=CANCEL, priority=99, source=xml_structure_recovery)",
+        "goal": "DEEP_EXPLORATION",
+        "source": "EXPLORATION_ENGINE",
+        "success": true,
+        "target": "eSurvey isn't responding",
+        "timestamp": "03:34"
+      },
+      {
+        "action": "click_text",
+        "details": "Explore click 'Close app' (role=CANCEL, priority=0, source=uiautomator)",
+        "goal": "DEEP_EXPLORATION",
+        "source": "EXPLORATION_ENGINE",
+        "success": true,
+        "target": "Close app",
+        "timestamp": "03:56"
+      },
+      {
+        "action": "click_text",
+        "details": "Explore click 'eSurvey' (role=PROGRESS, priority=133, source=xml_structure_recovery)",
+        "goal": "DEEP_EXPLORATION",
+        "source": "EXPLORATION_ENGINE",
+        "success": true,
+        "target": "eSurvey",
+        "timestamp": "05:14"
+      },
+      {
+        "action": "AgenticExplorer Completed",
+        "details": "Actions=18, Goals: completed=1 skipped=0 failed=1, StopReason=TIME_BUDGET_EXHAUSTED, States=2",
+        "source": "System",
+        "timestamp": "05:14"
+      }
+    ],
+    "available": true,
+    "bfci": 0.0,
+    "bfci_components": {
+      "accessibility": 0.0,
+      "banking": 0.0,
+      "code_execution": 0.0,
+      "network": 0.0,
+      "overlay": 0.0,
+      "persistence": 0.0,
+      "sms": 0.0
+    },
+    "bfci_evidence": [],
+    "bfci_weights": {
+      "accessibility": 0.315,
+      "banking": 0.09,
+      "code_execution": 0.1,
+      "network": 0.045,
+      "overlay": 0.18,
+      "persistence": 0.045,
+      "sms": 0.225
+    },
+    "canary_received": true,
+    "clicked_nodes": [],
+    "coverage_metrics": {
+      "buttons_clicked": 5,
+      "buttons_found": 4,
+      "coverage_percent": 37,
+      "dialogs_dismissed": 0,
+      "forms_completed": 1,
+      "forms_found": 1,
+      "navigation_depth": 2,
+      "permissions_granted": 2,
+      "screens": 2
+    },
+    "crash_report": null,
+    "crashes": [],
+    "dae_pipeline": {
+      "current_stage": "START_EXPLORER",
+      "failure_reason": "",
+      "metrics": {
+        "coverage_percent": 0.0,
+        "crashes_recovered": 0,
+        "current_activity": "",
+        "current_fragment": "",
+        "events_captured": 0,
+        "explorer_actions": 0,
+        "hooks_installed": 0,
+        "launch_retries": 0,
+        "screenshots_captured": 0,
+        "screenshots_skipped_duplicate": 0,
+        "workflow_stage": ""
+      },
+      "package_name": "ai.agribid.esurvey_farmer",
+      "session_id": "",
+      "suggested_recovery": "",
+      "transitions": [
+        {
+          "detail": {},
+          "from": "INITIALIZING",
+          "reason": "adb install",
+          "timestamp": 1787724194.4616392,
+          "to": "INSTALLING"
+        },
+        {
+          "detail": {},
+          "from": "INSTALLING",
+          "reason": "pm path verification",
+          "timestamp": 1787724198.1981127,
+          "to": "VERIFY_INSTALL"
+        },
+        {
+          "detail": {},
+          "from": "VERIFY_INSTALL",
+          "reason": "launch ladder",
+          "timestamp": 1787724207.815118,
+          "to": "RESOLVE_ACTIVITY"
+        },
+        {
+          "detail": {},
+          "from": "RESOLVE_ACTIVITY",
+          "reason": "issuing launch intents",
+          "timestamp": 1787724207.8153381,
+          "to": "LAUNCHING"
+        },
+        {
+          "detail": {},
+          "from": "LAUNCHING",
+          "reason": "attaching to stable PID",
+          "timestamp": 1787724223.0168924,
+          "to": "ATTACH_FRIDA"
+        },
+        {
+          "detail": {},
+          "from": "ATTACH_FRIDA",
+          "reason": "canary received",
+          "timestamp": 1787724223.717872,
+          "to": "VERIFY_HOOKS"
+        },
+        {
+          "detail": {},
+          "from": "VERIFY_HOOKS",
+          "reason": "exploration window",
+          "timestamp": 1787724225.947024,
+          "to": "CAPTURE_RUNTIME"
+        },
+        {
+          "detail": {},
+          "from": "CAPTURE_RUNTIME",
+          "reason": "AgenticExplorer",
+          "timestamp": 1787724226.3357065,
+          "to": "START_EXPLORER"
+        }
+      ]
+    },
+    "device": "emulator-5554",
+    "duration_seconds": 300,
+    "dynamic_status": "EVENTS_CAPTURED",
+    "engine": "frida",
+    "evidence": [],
+    "evidence_record_count": 7,
+    "explorer_error": null,
+    "explorer_used": "agentic",
+    "files_accessed": [],
+    "foreground_mismatch": false,
+    "fraud_workflow": {
+      "chain_confidence": 0.0,
+      "fraud_sequence_detected": false,
+      "sequence_label": "PRECONDITIONS_ONLY",
+      "stage_count": 1,
+      "stages": [
+        {
+          "confidence": 1.0,
+          "description": "The analysis sandbox granted runtime permissions the application declared, so no permission dialog was shown. Harness action, not application behaviour.",
+          "end_ms": 9,
+          "evidence_ids": [
+            "investigation_sandbox.grant.runtime_permission_0",
+            "investigation_sandbox.grant.runtime_permission_1",
+            "investigation_sandbox.grant.runtime_permission_2",
+            "investigation_sandbox.grant.runtime_permission_3",
+            "investigation_sandbox.grant.runtime_permission_4",
+            "investigation_sandbox.grant.runtime_permission_5",
+            "investigation_sandbox.grant.runtime_permission_6",
+            "investigation_sandbox.grant.runtime_permission_7",
+            "investigation_sandbox.grant.runtime_permission_8",
+            "investigation_sandbox.grant.runtime_permission_9"
+          ],
+          "hook_names": [
+            "sandbox.grant.runtime_permission"
+          ],
+          "is_precondition": true,
+          "label": "Runtime Permissions Granted by Sandbox",
+          "start_ms": 0,
+          "technique_id": "T1401"
+        }
+      ],
+      "total_events_analyzed": 12
+    },
+    "frida_events": {
+      "accessibility": [],
+      "anti_analysis": [],
+      "app_telemetry": [
+        {
+          "arguments": [],
+          "category": "app_telemetry",
+          "class": "android.view.accessibility.AccessibilityManager",
+          "context": {
+            "current_activity": "Unknown",
+            "foreground_app": "Unknown",
+            "previous_event_id": "ev_1787724220839_1"
+          },
+          "data": {
+            "class_name": "android.view.accessibility.AccessibilityManager",
+            "description": "UI accessibility event dispatched (ordinary for any app with a user interface; recorded, not scored)",
+            "hook": "AccessibilityManager.sendAccessibilityEvent",
+            "severity": "INFO"
+          },
+          "event_id": "ev_1787724223423_2",
+          "event_type": "FRIDA_HOOK",
+          "evidence": "UI accessibility event dispatched (ordinary for any app with a user interface; recorded, not scored)",
+          "hook": "AccessibilityManager.sendAccessibilityEvent",
+          "ioc": null,
+          "method": "AccessibilityManager.sendAccessibilityEvent",
+          "package": "ai.agribid.esurvey_farmer",
+          "pid": 7406,
+          "process": "ai.agribid.esurvey_farmer",
+          "process_id": 7406,
+          "return_value": null,
+          "risk_vector": "app_telemetry",
+          "severity": "INFO",
+          "source": "frida",
+          "stack_trace": [
+            "android.view.View.requestParentSendAccessibilityEvent(View.java:9293)",
+            "android.view.View.sendAccessibilityEventUncheckedInternal(View.java:9286)",
+            "android.view.View.sendAccessibilityEventUnchecked(View.java:9249)",
+            "android.view.View.sendAccessibilityEventInternal(View.java:9226)",
+            "android.view.View.sendAccessibilityEvent(View.java:9163)",
+            "com.android.internal.policy.DecorView.sendAccessibilityEvent(DecorView.java:604)"
+          ],
+          "stacktrace": [
+            "android.view.View.requestParentSendAccessibilityEvent(View.java:9293)",
+            "android.view.View.sendAccessibilityEventUncheckedInternal(View.java:9286)",
+            "android.view.View.sendAccessibilityEventUnchecked(View.java:9249)",
+            "android.view.View.sendAccessibilityEventInternal(View.java:9226)",
+            "android.view.View.sendAccessibilityEvent(View.java:9163)",
+            "com.android.internal.policy.DecorView.sendAccessibilityEvent(DecorView.java:604)"
+          ],
+          "thread": 7406,
+          "thread_id": 7406,
+          "timestamp": 1787724223427
+        }
+      ],
+      "banking": [],
+      "code_execution": [],
+      "dangerous_apis": [],
+      "device_fingerprint": [],
+      "files_accessed": [],
+      "harness_action": [
+        {
+          "arguments": [],
+          "category": "harness_action",
+          "class": "android.os.Build",
+          "context": {
+            "current_activity": "Unknown",
+            "foreground_app": "Unknown",
+            "previous_event_id": null
+          },
+          "data": {
+            "actor": "harness",
+            "class_name": "android.os.Build",
+            "description": "SANDBOX ACTION: emulator-identifying Build fields replaced to conceal the analysis environment: FINGERPRINT=\"google/sdk_gphone16k_x86_64/emu64xa16k:17/CP31.260623.005/15817740:userdebug/dev-keys\", MODEL=\"sdk_gphone16k_x86_64\", DEVICE=\"emu64xa16k\", PRODUCT=\"sdk_gphone16k_x86_64\", HARDWARE=\"ranchu\" (performed by the harness, not by the application)",
+            "hook": "sandbox.build_fields_spoofed",
+            "severity": "INFO",
+            "spoofed_fields": [
+              "FINGERPRINT=\"google/sdk_gphone16k_x86_64/emu64xa16k:17/CP31.260623.005/15817740:userdebug/dev-keys\"",
+              "MODEL=\"sdk_gphone16k_x86_64\"",
+              "DEVICE=\"emu64xa16k\"",
+              "PRODUCT=\"sdk_gphone16k_x86_64\"",
+              "HARDWARE=\"ranchu\""
+            ]
+          },
+          "event_id": "ev_1787724220839_1",
+          "event_type": "FRIDA_HOOK",
+          "evidence": "SANDBOX ACTION: emulator-identifying Build fields replaced to conceal the analysis environment: FINGERPRINT=\"google/sdk_gphone16k_x86_64/emu64xa16k:17/CP31.260623.005/15817740:userdebug/dev-keys\", MODEL=\"sdk_gphone16k_x86_64\", DEVICE=\"emu64xa16k\", PRODUCT=\"sdk_gphone16k_x86_64\", HARDWARE=\"ranchu\" (performed by the harness, not by the application)",
+          "hook": "sandbox.build_fields_spoofed",
+          "ioc": null,
+          "method": "sandbox.build_fields_spoofed",
+          "package": "ai.agribid.esurvey_farmer",
+          "pid": 7406,
+          "process": "ai.agribid.esurvey_farmer",
+          "process_id": 7406,
+          "return_value": null,
+          "risk_vector": "harness_action",
+          "severity": "INFO",
+          "source": "frida",
+          "stack_trace": [],
+          "stacktrace": [],
+          "thread": 7563,
+          "thread_id": 7563,
+          "timestamp": 1787724220841
+        }
+      ],
+      "network": [],
+      "notification": [],
+      "overlay": [],
+      "persistence": [],
+      "smoke": [],
+      "sms": []
+    },
+    "harness_actions": [
+      {
+        "arguments": [],
+        "category": "harness_action",
+        "class": "android.os.Build",
+        "context": {
+          "current_activity": "Unknown",
+          "foreground_app": "Unknown",
+          "previous_event_id": null
+        },
+        "data": {
+          "actor": "harness",
+          "class_name": "android.os.Build",
+          "description": "SANDBOX ACTION: emulator-identifying Build fields replaced to conceal the analysis environment: FINGERPRINT=\"google/sdk_gphone16k_x86_64/emu64xa16k:17/CP31.260623.005/15817740:userdebug/dev-keys\", MODEL=\"sdk_gphone16k_x86_64\", DEVICE=\"emu64xa16k\", PRODUCT=\"sdk_gphone16k_x86_64\", HARDWARE=\"ranchu\" (performed by the harness, not by the application)",
+          "hook": "sandbox.build_fields_spoofed",
+          "severity": "INFO",
+          "spoofed_fields": [
+            "FINGERPRINT=\"google/sdk_gphone16k_x86_64/emu64xa16k:17/CP31.260623.005/15817740:userdebug/dev-keys\"",
+            "MODEL=\"sdk_gphone16k_x86_64\"",
+            "DEVICE=\"emu64xa16k\"",
+            "PRODUCT=\"sdk_gphone16k_x86_64\"",
+            "HARDWARE=\"ranchu\""
+          ]
+        },
+        "event_id": "ev_1787724220839_1",
+        "event_type": "FRIDA_HOOK",
+        "evidence": "SANDBOX ACTION: emulator-identifying Build fields replaced to conceal the analysis environment: FINGERPRINT=\"google/sdk_gphone16k_x86_64/emu64xa16k:17/CP31.260623.005/15817740:userdebug/dev-keys\", MODEL=\"sdk_gphone16k_x86_64\", DEVICE=\"emu64xa16k\", PRODUCT=\"sdk_gphone16k_x86_64\", HARDWARE=\"ranchu\" (performed by the harness, not by the application)",
+        "hook": "sandbox.build_fields_spoofed",
+        "ioc": null,
+        "method": "sandbox.build_fields_spoofed",
+        "package": "ai.agribid.esurvey_farmer",
+        "pid": 7406,
+        "process": "ai.agribid.esurvey_farmer",
+        "process_id": 7406,
+        "return_value": null,
+        "risk_vector": "harness_action",
+        "severity": "INFO",
+        "source": "frida",
+        "stack_trace": [],
+        "stacktrace": [],
+        "thread": 7563,
+        "thread_id": 7563,
+        "timestamp": 1787724220841
+      }
+    ],
+    "has_high_risk_capabilities": false,
+    "hook_error_counts": {
+      "OkHttp": 1,
+      "Retrofit.OkHttpCall.execute": 1
+    },
+    "hook_errors": [
+      "Hook failed: OkHttp - java.lang.ClassNotFoundException: Didn't find class \"okhttp3.internal.connection.RealCall\" on path: DexPathList[[zip file \"/data/app/~~01ttJW_WLG-jQ9NCkSEeBA==/ai.agribid.esurvey_farmer-4KBCa9mRshHMK2JkDIhkZg==/base.apk\"],nativeLibraryDirectories=[/data/app/~~01ttJW_WLG-jQ9NCkSEeBA==/ai.agribid.esurvey_farmer-4KBCa9mRshHMK2JkDIhkZg==/lib/x86_64, /data/app/~~01ttJW_WLG-jQ9NCkSEeBA==/ai.agribid.esurvey_farmer-4KBCa9mRshHMK2JkDIhkZg==/base.apk!/lib/x86_64, /system/lib64, /system_ext/lib64]]",
+      "Hook failed: Retrofit.OkHttpCall.execute - java.lang.ClassNotFoundException: Didn't find class \"retrofit2.OkHttpCall\" on path: DexPathList[[zip file \"/data/app/~~01ttJW_WLG-jQ9NCkSEeBA==/ai.agribid.esurvey_farmer-4KBCa9mRshHMK2JkDIhkZg==/base.apk\"],nativeLibraryDirectories=[/data/app/~~01ttJW_WLG-jQ9NCkSEeBA==/ai.agribid.esurvey_farmer-4KBCa9mRshHMK2JkDIhkZg==/lib/x86_64, /data/app/~~01ttJW_WLG-jQ9NCkSEeBA==/ai.agribid.esurvey_farmer-4KBCa9mRshHMK2JkDIhkZg==/base.apk!/lib/x86_64, /system/lib64, /system_ext/lib64]]"
+    ],
+    "hook_fire_counts": {
+      "AccessibilityManager.sendAccessibilityEvent": 1,
+      "AccessibilityNodeInfo.findAccessibilityNodeInfosByText": 0,
+      "AccessibilityNodeInfo.getText": 0,
+      "AccessibilityNodeInfo.performAction": 0,
+      "AccessibilityService.dispatchGesture": 0,
+      "AccessibilityService.onAccessibilityEvent": 0,
+      "AccountManager.getAccountsByType": 0,
+      "Activity.onCreate": 0,
+      "Activity.onResume": 0,
+      "ActivityManager.getRunningTasks": 0,
+      "AlarmManager.setExact": 0,
+      "Application.onCreate": 0,
+      "BufferedReader.readLine(anti-frida)": 0,
+      "Build.staticFields": 0,
+      "Cipher.doFinal": 0,
+      "ClipboardManager.getPrimaryClip": 0,
+      "ContentResolver.delete": 0,
+      "ContentResolver.insert": 0,
+      "ContentResolver.query(sms/mms/contacts)": 0,
+      "ContextWrapper.getSharedPreferences": 0,
+      "Debug.isDebuggerConnected": 0,
+      "DevicePolicyManager.isAdminActive": 0,
+      "DevicePolicyManager.lockNow": 0,
+      "DexClassLoader.<init>": 0,
+      "DownloadManager.enqueue": 0,
+      "File.<init>": 0,
+      "FileInputStream.<init>(String)": 0,
+      "FileOutputStream.apkWrite": 0,
+      "HttpURLConnection.getInputStream": 0,
+      "HttpsURLConnection.connect": 0,
+      "InMemoryDexClassLoader.<init>": 0,
+      "InputMethodManager.showSoftInput": 0,
+      "Intent.installPackageRequest": 0,
+      "JobScheduler.schedule": 0,
+      "KeyStore.getInstance": 0,
+      "NotificationListenerService.onNotificationPosted": 0,
+      "PackageManager.getInstalledApplications": 0,
+      "PackageManager.getInstalledPackages": 0,
+      "PathClassLoader.<init>": 0,
+      "Process.killProcess": 0,
+      "ProcessBuilder.start": 0,
+      "Runtime.exec": 0,
+      "Runtime.exec[]": 0,
+      "Runtime.exit": 0,
+      "SharedPreferences.getString": 0,
+      "SmsManager.sendMultipartTextMessage": 0,
+      "SmsManager.sendTextMessage": 0,
+      "SmsMessage.getMessageBody": 0,
+      "Socket.connect": 0,
+      "System.exit": 0,
+      "System.loadLibrary": 0,
+      "SystemProperties.get": 0,
+      "SystemProperties.get(default)": 0,
+      "TelephonyManager.getDeviceId": 0,
+      "TelephonyManager.getLine1Number": 0,
+      "TelephonyManager.getSimSerialNumber": 0,
+      "TelephonyManager.getSubscriberId": 0,
+      "URL.openConnection": 0,
+      "UsageStatsManager.queryEvents": 0,
+      "WebView.evaluateJavascript": 0,
+      "WebView.loadData": 0,
+      "WebView.loadDataWithBaseURL": 0,
+      "WebView.loadUrl": 0,
+      "WindowManager.addView": 0,
+      "WindowManager.removeView": 0,
+      "WindowManager.updateViewLayout": 0,
+      "native:SSL_read": 0,
+      "native:SSL_write": 0,
+      "native:android_dlopen_ext": 0,
+      "native:connect": 0,
+      "native:dlopen": 0,
+      "native:execve": 0,
+      "native:open": 0,
+      "native:ptrace": 0,
+      "sandbox.build_fields_spoofed": 1
+    },
+    "hooks_installed": 77,
+    "investigation": {
+      "actions_taken": 11,
+      "category": "UNKNOWN",
+      "elapsed_seconds": 316.22,
+      "package_name": "ai.agribid.esurvey_farmer",
+      "planned_states": [
+        "BOOTSTRAP",
+        "APP_LAUNCH",
+        "INITIAL_OBSERVATION",
+        "PERMISSION_ANALYSIS",
+        "POST_PERMISSION_EXPLORATION",
+        "NETWORK_ANALYSIS",
+        "FINAL_OBSERVATION",
+        "COMPLETE",
+        "OTP_ANALYSIS"
+      ],
+      "state": "POST_PERMISSION_EXPLORATION",
+      "transitions": [
+        {
+          "action_index": 0,
+          "elapsed_seconds": 0.01,
+          "from": "BOOTSTRAP",
+          "reason": "target app launched by Frida session before explorer start",
+          "to": "INITIAL_OBSERVATION"
+        },
+        {
+          "action_index": 0,
+          "elapsed_seconds": 2.28,
+          "from": "INITIAL_OBSERVATION",
+          "reason": "observed OTP_SCREEN",
+          "to": "OTP_ANALYSIS"
+        },
+        {
+          "action_index": 4,
+          "elapsed_seconds": 117.76,
+          "from": "OTP_ANALYSIS",
+          "reason": "stage made no progress",
+          "to": "APP_LAUNCH"
+        },
+        {
+          "action_index": 7,
+          "elapsed_seconds": 169.42,
+          "from": "APP_LAUNCH",
+          "reason": "stage made no progress",
+          "to": "PERMISSION_ANALYSIS"
+        },
+        {
+          "action_index": 9,
+          "elapsed_seconds": 214.23,
+          "from": "PERMISSION_ANALYSIS",
+          "reason": "stage made no progress",
+          "to": "POST_PERMISSION_EXPLORATION"
+        }
+      ],
+      "visited_states": [
+        "BOOTSTRAP",
+        "INITIAL_OBSERVATION",
+        "OTP_ANALYSIS",
+        "APP_LAUNCH",
+        "PERMISSION_ANALYSIS",
+        "POST_PERMISSION_EXPLORATION"
+      ]
+    },
+    "java_bridge_failed": false,
+    "java_bridge_source": null,
+    "java_hooks_installed": 69,
+    "launch_method_used": "am_start_main_activity",
+    "launch_timeline": {
+      "apk_install": 0.0,
+      "canary_received": 25.384,
+      "explorer_start": null,
+      "first_activity": 22.317,
+      "first_hook_event": 25.69,
+      "first_pid": 19.127,
+      "first_ui_dump": 24.683,
+      "first_window": 22.317,
+      "frida_attach": 24.683,
+      "launch_intent": 9.482
+    },
+    "logcat": "",
+    "login_attempts": 0,
+    "login_outcome": "not_attempted",
+    "native_hooks_installed": 8,
+    "network_flows": [],
+    "network_logs": [],
+    "package_name": "ai.agribid.esurvey_farmer",
+    "permission_findings": {
+      "declared": 12,
+      "granted": 10,
+      "package_name": "ai.agribid.esurvey_farmer",
+      "profile": {
+        "app_label": "eSurvey",
+        "category": "UNKNOWN",
+        "confidence": "LOW",
+        "package_name": "ai.agribid.esurvey_farmer",
+        "signals": [
+          "no category signal in label or package name"
+        ]
+      },
+      "records": [
+        {
+          "classification": "DORMANT_CAPABILITY",
+          "declared": true,
+          "evidence_ids": [],
+          "expectation": "PLAUSIBLE",
+          "expected_for_app": true,
+          "granted": false,
+          "group": "",
+          "permission": "Manifest.permission.CAPTURE_AUDIO_OUTPUT",
+          "permission_class": "unknown",
+          "requested_at_runtime": false,
+          "screenshot_ids": [],
+          "severity": "INFO"
+        },
+        {
+          "classification": "DORMANT_CAPABILITY",
+          "declared": true,
+          "evidence_ids": [],
+          "expectation": "PLAUSIBLE",
+          "expected_for_app": true,
+          "granted": false,
+          "group": "",
+          "permission": "ai.agribid.esurvey_farmer.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
+          "permission_class": "unknown",
+          "requested_at_runtime": false,
+          "screenshot_ids": [],
+          "severity": "INFO"
+        },
+        {
+          "classification": "GRANTED_WITHOUT_REQUEST",
+          "declared": true,
+          "evidence_ids": [],
+          "expectation": "PLAUSIBLE",
+          "expected_for_app": true,
+          "granted": true,
+          "group": "LOCATION",
+          "permission": "android.permission.ACCESS_COARSE_LOCATION",
+          "permission_class": "dangerous",
+          "requested_at_runtime": false,
+          "screenshot_ids": [],
+          "severity": "INFO"
+        },
+        {
+          "classification": "GRANTED_WITHOUT_REQUEST",
+          "declared": true,
+          "evidence_ids": [],
+          "expectation": "PLAUSIBLE",
+          "expected_for_app": true,
+          "granted": true,
+          "group": "LOCATION",
+          "permission": "android.permission.ACCESS_FINE_LOCATION",
+          "permission_class": "dangerous",
+          "requested_at_runtime": false,
+          "screenshot_ids": [],
+          "severity": "INFO"
+        },
+        {
+          "classification": "GRANTED_WITHOUT_REQUEST",
+          "declared": true,
+          "evidence_ids": [],
+          "expectation": "PLAUSIBLE",
+          "expected_for_app": true,
+          "granted": true,
+          "group": "",
+          "permission": "android.permission.BLUETOOTH",
+          "permission_class": "unknown",
+          "requested_at_runtime": false,
+          "screenshot_ids": [],
+          "severity": "INFO"
+        },
+        {
+          "classification": "GRANTED_WITHOUT_REQUEST",
+          "declared": true,
+          "evidence_ids": [],
+          "expectation": "PLAUSIBLE",
+          "expected_for_app": true,
+          "granted": true,
+          "group": "CAMERA",
+          "permission": "android.permission.CAMERA",
+          "permission_class": "dangerous",
+          "requested_at_runtime": false,
+          "screenshot_ids": [],
+          "severity": "INFO"
+        },
+        {
+          "classification": "GRANTED_WITHOUT_REQUEST",
+          "declared": true,
+          "evidence_ids": [],
+          "expectation": "PLAUSIBLE",
+          "expected_for_app": true,
+          "granted": true,
+          "group": "NETWORK",
+          "permission": "android.permission.INTERNET",
+          "permission_class": "normal",
+          "requested_at_runtime": false,
+          "screenshot_ids": [],
+          "severity": "INFO"
+        },
+        {
+          "classification": "GRANTED_WITHOUT_REQUEST",
+          "declared": true,
+          "evidence_ids": [],
+          "expectation": "PLAUSIBLE",
+          "expected_for_app": true,
+          "granted": true,
+          "group": "",
+          "permission": "android.permission.MODIFY_AUDIO_SETTINGS",
+          "permission_class": "unknown",
+          "requested_at_runtime": false,
+          "screenshot_ids": [],
+          "severity": "INFO"
+        },
+        {
+          "classification": "GRANTED_WITHOUT_REQUEST",
+          "declared": true,
+          "evidence_ids": [],
+          "expectation": "PLAUSIBLE",
+          "expected_for_app": true,
+          "granted": true,
+          "group": "STORAGE",
+          "permission": "android.permission.READ_EXTERNAL_STORAGE",
+          "permission_class": "dangerous",
+          "requested_at_runtime": false,
+          "screenshot_ids": [],
+          "severity": "INFO"
+        },
+        {
+          "classification": "GRANTED_WITHOUT_REQUEST",
+          "declared": true,
+          "evidence_ids": [],
+          "expectation": "PLAUSIBLE",
+          "expected_for_app": true,
+          "granted": true,
+          "group": "MICROPHONE",
+          "permission": "android.permission.RECORD_AUDIO",
+          "permission_class": "dangerous",
+          "requested_at_runtime": false,
+          "screenshot_ids": [],
+          "severity": "INFO"
+        },
+        {
+          "classification": "GRANTED_WITHOUT_REQUEST",
+          "declared": true,
+          "evidence_ids": [],
+          "expectation": "PLAUSIBLE",
+          "expected_for_app": true,
+          "granted": true,
+          "group": "BACKGROUND",
+          "permission": "android.permission.WAKE_LOCK",
+          "permission_class": "normal",
+          "requested_at_runtime": false,
+          "screenshot_ids": [],
+          "severity": "INFO"
+        },
+        {
+          "classification": "GRANTED_WITHOUT_REQUEST",
+          "declared": true,
+          "evidence_ids": [],
+          "expectation": "PLAUSIBLE",
+          "expected_for_app": true,
+          "granted": true,
+          "group": "STORAGE",
+          "permission": "android.permission.WRITE_EXTERNAL_STORAGE",
+          "permission_class": "dangerous",
+          "requested_at_runtime": false,
+          "screenshot_ids": [],
+          "severity": "INFO"
+        }
+      ],
+      "requested_at_runtime": 0,
+      "special": 0,
+      "total": 12,
+      "unexpected": 0
+    },
+    "provenance": {
+      "is_repaired_derivative": false,
+      "modifications_performed": [],
+      "original_sha256": "fcd3e78d6706ac3b48547af9109f30d5d7c601ad938cba5f0f40c1cc9765b822",
+      "repair_reason": null,
+      "repair_tool": "apkInspector v1.2.8",
+      "repaired_sha256": null,
+      "signature_used": "Original APK Signature",
+      "timestamp": "2026-08-26T06:03:14Z"
+    },
+    "raw_event_counts": {
+      "accessibility": 0,
+      "anti_analysis": 0,
+      "app_telemetry": 1,
+      "banking": 0,
+      "code_execution": 0,
+      "dangerous_apis": 0,
+      "device_fingerprint": 0,
+      "files_accessed": 0,
+      "harness_action": 1,
+      "network": 0,
+      "notification": 0,
+      "overlay": 0,
+      "persistence": 0,
+      "smoke": 0,
+      "sms": 0
+    },
+    "resilience_actions": [],
+    "root_cause_analysis": {
+      "fix_applied": "Session completed successfully - no crash detected.",
+      "is_apk_repair": false,
+      "is_emulator_compat": false,
+      "is_instrumentation": false,
+      "is_launch_logic": false,
+      "is_manifest": false,
+      "is_resigning": false,
+      "subsystem": null,
+      "why_crashing": null
+    },
+    "runtime_attempted": true,
+    "runtime_lifecycle": {
+      "action_pipeline": [
+        {
+          "UI_changed": false,
+          "action_id": "ACT-001",
+          "action_verification": "FAIL",
+          "adb_command_executed": true,
+          "adb_command_generated": true,
+          "adb_return_code": 0,
+          "adb_stderr": "",
+          "adb_stdout": "",
+          "attempts": 2,
+          "bounds": "[63,1145][1017,1649]",
+          "clickable": true,
+          "confidence": 0.95,
+          "coordinate_generated": true,
+          "coordinate_validation": "PASS",
+          "detection_source": "uiautomator",
+          "discovered": true,
+          "enabled": true,
+          "executor_method": "click_text",
+          "executor_received": true,
+          "foreground_package_after": "ai.agribid.esurvey_farmer",
+          "foreground_package_before": "ai.agribid.esurvey_farmer",
+          "lifecycle": [
+            "ACTION_DISCOVERED",
+            "ACTION_SELECTED",
+            "ACTION_DISPATCHED",
+            "ACTION_EXECUTED"
+          ],
+          "planner_selected": false,
+          "prioritization_score": 139,
+          "selected_by": "exploration_graph",
+          "semantic_role": "INPUT",
+          "state_after": "5cc5e9187f4386c1",
+          "state_before": "5cc5e9187f4386c1",
+          "state_id": "STATE-001",
+          "text": "\u092a\u0940\u0915 \u0928\u0941\u0915\u0938\u093e\u0928 \u00b7 \u092e\u0926\u0924 \u00b7 \u0925\u0947\u091f \u0932\u093e\u092d \u0939\u0938\u094d\u0924\u093e\u0902\u0924\u0930\u0923"
+        },
+        {
+          "UI_changed": true,
+          "action_id": "ACT-002",
+          "action_verification": "PASS",
+          "adb_command_executed": true,
+          "adb_command_generated": true,
+          "adb_return_code": 0,
+          "adb_stderr": "",
+          "adb_stdout": "",
+          "attempts": 1,
+          "bounds": "[116,1460][964,1596]",
+          "clickable": true,
+          "confidence": 0.4,
+          "coordinate_generated": true,
+          "coordinate_validation": "PASS",
+          "detection_source": "uiautomator",
+          "discovered": true,
+          "enabled": true,
+          "executor_method": "click_text",
+          "executor_received": true,
+          "foreground_package_after": "ai.agribid.esurvey_farmer",
+          "foreground_package_before": "ai.agribid.esurvey_farmer",
+          "lifecycle": [
+            "ACTION_DISCOVERED",
+            "ACTION_SELECTED",
+            "ACTION_DISPATCHED",
+            "ACTION_EXECUTED",
+            "ACTION_VERIFIED"
+          ],
+          "planner_selected": false,
+          "prioritization_score": 159,
+          "selected_by": "exploration_graph",
+          "semantic_role": "PROGRESS",
+          "state_after": "919d479d7d9439e9",
+          "state_before": "5cc5e9187f4386c1",
+          "state_id": "STATE-001",
+          "text": "OTP \u092a\u093e\u0920\u0935\u093e"
+        },
+        {
+          "UI_changed": false,
+          "action_id": "ACT-017",
+          "action_verification": "FAIL",
+          "adb_command_executed": true,
+          "adb_command_generated": true,
+          "adb_return_code": 0,
+          "adb_stderr": "",
+          "adb_stdout": "",
+          "attempts": 3,
+          "bounds": "[70,1300][1010,1426]",
+          "clickable": true,
+          "confidence": 0.4,
+          "coordinate_generated": true,
+          "coordinate_validation": "PASS",
+          "detection_source": "uiautomator",
+          "discovered": true,
+          "enabled": true,
+          "executor_method": "click_text",
+          "executor_received": true,
+          "foreground_package_after": "ai.agribid.esurvey_farmer",
+          "foreground_package_before": "ai.agribid.esurvey_farmer",
+          "lifecycle": [
+            "ACTION_DISCOVERED",
+            "ACTION_SELECTED",
+            "ACTION_DISPATCHED",
+            "ACTION_EXECUTED"
+          ],
+          "planner_selected": false,
+          "prioritization_score": 119,
+          "selected_by": "exploration_graph",
+          "semantic_role": "CANCEL",
+          "state_after": "919d479d7d9439e9",
+          "state_before": "919d479d7d9439e9",
+          "state_id": "STATE-002",
+          "text": "Wait"
+        },
+        {
+          "UI_changed": false,
+          "action_id": "",
+          "action_verification": "FAIL",
+          "adb_command_executed": true,
+          "adb_command_generated": true,
+          "adb_return_code": 0,
+          "adb_stderr": "",
+          "adb_stdout": "",
+          "attempts": 2,
+          "bounds": "",
+          "clickable": true,
+          "confidence": 0.9,
+          "coordinate_generated": false,
+          "coordinate_validation": "",
+          "detection_source": "",
+          "discovered": true,
+          "enabled": true,
+          "executor_method": "grant_permission",
+          "executor_received": true,
+          "foreground_package_after": "ai.agribid.esurvey_farmer",
+          "foreground_package_before": "ai.agribid.esurvey_farmer",
+          "lifecycle": [
+            "ACTION_DISCOVERED",
+            "ACTION_SELECTED",
+            "ACTION_DISPATCHED",
+            "ACTION_EXECUTED"
+          ],
+          "planner_selected": true,
+          "prioritization_score": 0,
+          "selected_by": "planner_privileged",
+          "semantic_role": "",
+          "state_after": "919d479d7d9439e9",
+          "state_before": "919d479d7d9439e9",
+          "state_id": "",
+          "text": ""
+        },
+        {
+          "UI_changed": false,
+          "action_id": "",
+          "action_verification": "FAIL",
+          "adb_command_executed": true,
+          "adb_command_generated": true,
+          "adb_return_code": 0,
+          "adb_stderr": "",
+          "adb_stdout": "",
+          "attempts": 1,
+          "bounds": "",
+          "clickable": true,
+          "confidence": 0.95,
+          "coordinate_generated": false,
+          "coordinate_validation": "",
+          "detection_source": "",
+          "discovered": true,
+          "enabled": true,
+          "executor_method": "grant_permission",
+          "executor_received": true,
+          "foreground_package_after": "ai.agribid.esurvey_farmer",
+          "foreground_package_before": "ai.agribid.esurvey_farmer",
+          "lifecycle": [
+            "ACTION_DISCOVERED",
+            "ACTION_SELECTED",
+            "ACTION_DISPATCHED",
+            "ACTION_EXECUTED",
+            "ACTION_VERIFIED"
+          ],
+          "planner_selected": true,
+          "prioritization_score": 0,
+          "selected_by": "planner_privileged",
+          "semantic_role": "",
+          "state_after": "919d479d7d9439e9",
+          "state_before": "919d479d7d9439e9",
+          "state_id": "",
+          "text": ""
+        },
+        {
+          "UI_changed": false,
+          "action_id": "ACT-018",
+          "action_verification": "FAIL",
+          "adb_command_executed": true,
+          "adb_command_generated": true,
+          "adb_return_code": 0,
+          "adb_stderr": "",
+          "adb_stdout": "",
+          "attempts": 3,
+          "bounds": "[133,1064][947,1135]",
+          "clickable": true,
+          "confidence": 0.92,
+          "coordinate_generated": true,
+          "coordinate_validation": "PASS",
+          "detection_source": "xml_structure_recovery",
+          "discovered": true,
+          "enabled": true,
+          "executor_method": "click_text",
+          "executor_received": true,
+          "foreground_package_after": "ai.agribid.esurvey_farmer",
+          "foreground_package_before": "ai.agribid.esurvey_farmer",
+          "lifecycle": [
+            "ACTION_DISCOVERED",
+            "ACTION_SELECTED",
+            "ACTION_DISPATCHED",
+            "ACTION_EXECUTED"
+          ],
+          "planner_selected": false,
+          "prioritization_score": 99,
+          "selected_by": "exploration_graph",
+          "semantic_role": "CANCEL",
+          "state_after": "919d479d7d9439e9",
+          "state_before": "919d479d7d9439e9",
+          "state_id": "STATE-002",
+          "text": "eSurvey isn't responding"
+        },
+        {
+          "UI_changed": true,
+          "action_id": "ACT-016",
+          "action_verification": "PASS",
+          "adb_command_executed": true,
+          "adb_command_generated": true,
+          "adb_return_code": 0,
+          "adb_stderr": "",
+          "adb_stdout": "",
+          "attempts": 1,
+          "bounds": "[70,1174][1010,1300]",
+          "clickable": true,
+          "confidence": 0.99,
+          "coordinate_generated": true,
+          "coordinate_validation": "PASS",
+          "detection_source": "uiautomator",
+          "discovered": true,
+          "enabled": true,
+          "executor_method": "click_text",
+          "executor_received": true,
+          "foreground_package_after": "com.google.android.apps.nexuslauncher",
+          "foreground_package_before": "ai.agribid.esurvey_farmer",
+          "lifecycle": [
+            "ACTION_DISCOVERED",
+            "ACTION_SELECTED",
+            "ACTION_DISPATCHED",
+            "ACTION_EXECUTED",
+            "ACTION_VERIFIED"
+          ],
+          "planner_selected": false,
+          "prioritization_score": 0,
+          "selected_by": "exploration_graph",
+          "semantic_role": "CANCEL",
+          "state_after": "380eefd54061f846",
+          "state_before": "919d479d7d9439e9",
+          "state_id": "STATE-002",
+          "text": "Close app"
+        },
+        {
+          "UI_changed": false,
+          "action_id": "ACT-003",
+          "action_verification": "FAIL",
+          "adb_command_executed": true,
+          "adb_command_generated": true,
+          "adb_return_code": 0,
+          "adb_stderr": "",
+          "adb_stdout": "",
+          "attempts": 3,
+          "bounds": "[416,919][664,1008]",
+          "clickable": true,
+          "confidence": 0.38,
+          "coordinate_generated": true,
+          "coordinate_validation": "PASS",
+          "detection_source": "xml_structure_recovery",
+          "discovered": true,
+          "enabled": true,
+          "executor_method": "click_text",
+          "executor_received": true,
+          "foreground_package_after": "ai.agribid.esurvey_farmer",
+          "foreground_package_before": "ai.agribid.esurvey_farmer",
+          "lifecycle": [
+            "ACTION_DISCOVERED",
+            "ACTION_SELECTED",
+            "ACTION_DISPATCHED",
+            "ACTION_EXECUTED"
+          ],
+          "planner_selected": false,
+          "prioritization_score": 133,
+          "selected_by": "exploration_graph",
+          "semantic_role": "PROGRESS",
+          "state_after": "5cc5e9187f4386c1",
+          "state_before": "5cc5e9187f4386c1",
+          "state_id": "STATE-001",
+          "text": "eSurvey"
+        }
+      ],
+      "actions_discovered": 0,
+      "actions_executed": 5,
+      "actions_verified": 0,
+      "analysis_id": "fcd3e78d6706ac3b48547af9109f30d5d7c601ad938cba5f0f40c1cc9765b822",
+      "apk_install_status": "SUCCESS",
+      "case_id": "fcd3e78d6706ac3b48547af9109f30d5d7c601ad938cba5f0f40c1cc9765b822",
+      "dashboard_inclusion_status": "EXCLUDED",
+      "dynamic_requested": true,
+      "dynamic_status": "EVENTS_CAPTURED",
+      "elapsed_seconds": 351.12,
+      "emulator_status": "READY",
+      "events": [
+        {
+          "analysis_id": "fcd3e78d6706ac3b48547af9109f30d5d7c601ad938cba5f0f40c1cc9765b822",
+          "case_id": "fcd3e78d6706ac3b48547af9109f30d5d7c601ad938cba5f0f40c1cc9765b822",
+          "component": "orchestrator",
+          "event": "runtime_requested",
+          "message": "Dynamic analysis requested for case",
+          "status": "QUEUED",
+          "timestamp": "2026-08-26T06:03:11.940508+00:00"
+        },
+        {
+          "analysis_id": "fcd3e78d6706ac3b48547af9109f30d5d7c601ad938cba5f0f40c1cc9765b822",
+          "case_id": "fcd3e78d6706ac3b48547af9109f30d5d7c601ad938cba5f0f40c1cc9765b822",
+          "component": "frida_sandbox",
+          "event": "runtime_controller_started",
+          "message": "run_frida_analysis invoked",
+          "status": "STARTING",
+          "timestamp": "2026-08-26T06:03:11.940668+00:00"
+        },
+        {
+          "analysis_id": "fcd3e78d6706ac3b48547af9109f30d5d7c601ad938cba5f0f40c1cc9765b822",
+          "case_id": "fcd3e78d6706ac3b48547af9109f30d5d7c601ad938cba5f0f40c1cc9765b822",
+          "component": "sandbox_provider",
+          "event": "emulator_ready",
+          "message": "serial=emulator-5554",
+          "status": "READY",
+          "timestamp": "2026-08-26T06:03:13.745902+00:00"
+        },
+        {
+          "analysis_id": "fcd3e78d6706ac3b48547af9109f30d5d7c601ad938cba5f0f40c1cc9765b822",
+          "case_id": "fcd3e78d6706ac3b48547af9109f30d5d7c601ad938cba5f0f40c1cc9765b822",
+          "component": "adb",
+          "event": "apk_install_completed",
+          "message": "ai.agribid.esurvey_farmer",
+          "status": "SUCCESS",
+          "timestamp": "2026-08-26T06:03:18.198201+00:00"
+        },
+        {
+          "analysis_id": "fcd3e78d6706ac3b48547af9109f30d5d7c601ad938cba5f0f40c1cc9765b822",
+          "case_id": "fcd3e78d6706ac3b48547af9109f30d5d7c601ad938cba5f0f40c1cc9765b822",
+          "component": "AgenticExplorer",
+          "event": "explorer_started",
+          "message": "interactive stage=INITIAL_OBSERVATION",
+          "status": "RUNNING",
+          "timestamp": "2026-08-26T06:03:46.336776+00:00"
+        },
+        {
+          "analysis_id": "fcd3e78d6706ac3b48547af9109f30d5d7c601ad938cba5f0f40c1cc9765b822",
+          "case_id": "fcd3e78d6706ac3b48547af9109f30d5d7c601ad938cba5f0f40c1cc9765b822",
+          "component": "AgenticExplorer",
+          "event": "first_screen_observed",
+          "message": "activity=ai.agribid.esurvey_farmer/.MainActivity nodes=5",
+          "status": "OK",
+          "timestamp": "2026-08-26T06:03:48.598773+00:00"
+        },
+        {
+          "analysis_id": "fcd3e78d6706ac3b48547af9109f30d5d7c601ad938cba5f0f40c1cc9765b822",
+          "case_id": "fcd3e78d6706ac3b48547af9109f30d5d7c601ad938cba5f0f40c1cc9765b822",
+          "component": "FridaSession",
+          "event": "dynamic_analysis_completed",
+          "message": "status=EVENTS_CAPTURED events=2",
+          "status": "COMPLETED",
+          "timestamp": "2026-08-26T06:09:03.040355+00:00"
+        },
+        {
+          "analysis_id": "fcd3e78d6706ac3b48547af9109f30d5d7c601ad938cba5f0f40c1cc9765b822",
+          "case_id": "fcd3e78d6706ac3b48547af9109f30d5d7c601ad938cba5f0f40c1cc9765b822",
+          "component": "artifact_store",
+          "event": "dynamic_result_persisted",
+          "message": "/app/uploads/sudarshan_artifacts/tmpys5hvu2k_c9601997",
+          "status": "SUCCESS",
+          "timestamp": "2026-08-26T06:09:03.040574+00:00"
+        }
+      ],
+      "evidence_moments": 7,
+      "explorer_status": "agentic",
+      "frida_status": "ATTACHED",
+      "persistence_status": "SUCCESS",
+      "runtime_events": 2
+    },
+    "runtime_requested": true,
+    "sandbox_connection": {
+      "connection_time_ms": 1804.7563079962856,
+      "device": {
+        "abi": "x86_64",
+        "abilist": "x86_64,arm64-v8a",
+        "adb_forwarding": true,
+        "android_version": "17",
+        "api_level": "37",
+        "avd_name": "Pixel_6",
+        "connection_time_ms": 1804.7563079962856,
+        "extra": {
+          "device": "emu64xa16k",
+          "fingerprint": "google/sdk_gphone16k_x86_64/emu64xa16k:17/CP31.260623.005/15817740:userdebug/dev-keys",
+          "hardware": "ranchu",
+          "product": "emu64xa16k"
+        },
+        "frida_available": true,
+        "frida_port": "27055",
+        "frida_running": true,
+        "frida_version": "17.16.4",
+        "ip": "",
+        "is_emulator": true,
+        "manufacturer": "Google",
+        "model": "sdk_gphone16k_x86_64",
+        "provider": "android_avd",
+        "root_available": true,
+        "rooted": true,
+        "serial": "emulator-5554",
+        "state": "device",
+        "transport": "emulator"
+      },
+      "error_code": null,
+      "error_message": null,
+      "frida": {
+        "abi": "x86_64",
+        "available": true,
+        "binary_name": "sudarshan_agent_srv",
+        "binary_path": "",
+        "compatible": true,
+        "forwarded": true,
+        "host_binary": "",
+        "host_version": "17.16.4",
+        "message": "frida agent running (6968)",
+        "port": "27055",
+        "restarted": false,
+        "running": true,
+        "version": ""
+      },
+      "ok": true,
+      "stages": [
+        {
+          "detail": "/usr/bin/adb",
+          "ok": true,
+          "stage": "adb"
+        },
+        {
+          "detail": "emulator-5554",
+          "ok": true,
+          "stage": "device_detect"
+        },
+        {
+          "detail": "emulator-5554",
+          "ok": true,
+          "stage": "online"
+        },
+        {
+          "detail": "android=17 api=37 abi=x86_64",
+          "ok": true,
+          "stage": "props"
+        },
+        {
+          "detail": "available",
+          "ok": true,
+          "stage": "root"
+        },
+        {
+          "detail": "Permissive",
+          "ok": true,
+          "stage": "selinux"
+        },
+        {
+          "detail": "frida agent running (6968)",
+          "ok": true,
+          "stage": "frida"
+        }
+      ]
+    },
+    "sandbox_provider": "android_avd",
+    "screenshots": [
+      {
+        "action_id": "",
+        "activity": "ai.agribid.esurvey_farmer/.MainActivity",
+        "capture_trigger": "LIFECYCLE",
+        "category": "lifecycle",
+        "confidence": 0.0,
+        "deduplication_status": "CAPTURE",
+        "description": "Lifecycle capture - 01_app_opened",
+        "embedding_status": "embedded_in_manifest",
+        "evidence_id": "",
+        "evidence_moment_id": "",
+        "explorer_action": "",
+        "extra": {},
+        "filename": "screenshots/0001_01_app_opened.png",
+        "foreground_package": "ai.agribid.esurvey_farmer",
+        "fragment": "",
+        "gated": false,
+        "label": "01_app_opened",
+        "layout_hash": "",
+        "ownership": "TARGET_APP",
+        "package": "ai.agribid.esurvey_farmer",
+        "quality": "A",
+        "reason": "LIFECYCLE",
+        "report_path": "screenshots/0001_01_app_opened.png",
+        "reused_screenshot_id": "",
+        "risk_category": "",
+        "screen_hash": "d3cda773fa968267",
+        "screenshot_id": "SCR-001",
+        "source": "lifecycle",
+        "stage": "",
+        "state_id": "",
+        "storage_status": "stored",
+        "target_package": "ai.agribid.esurvey_farmer",
+        "thumbnail_path": "",
+        "timestamp_ms": 1787724225438,
+        "title": "SCR-001 - 01_app_opened",
+        "trigger_event": "",
+        "trigger_reason": "FORCE_REQUEST",
+        "uuid": "098b57c2-85fc-453d-9ea9-ad5231bb0a66",
+        "window": ""
+      },
+      {
+        "action_id": "",
+        "activity": "ai.agribid.esurvey_farmer/.MainActivity",
+        "capture_trigger": "SUSPICIOUS_UI",
+        "category": "explorer_state",
+        "confidence": 0.0,
+        "deduplication_status": "CAPTURE",
+        "description": "Suspicious or unreadable UI state captured for vision analysis",
+        "embedding_status": "embedded_in_manifest",
+        "evidence_id": "",
+        "evidence_moment_id": "",
+        "explorer_action": "state:STATE-001",
+        "extra": {},
+        "filename": "screenshots/0002_state_state-001_otp_scree.png",
+        "foreground_package": "ai.agribid.esurvey_farmer",
+        "fragment": "",
+        "gated": false,
+        "label": "state_state-001_otp_screen",
+        "layout_hash": "5cc5e9187f4386c1",
+        "ownership": "TARGET_APP",
+        "package": "ai.agribid.esurvey_farmer",
+        "quality": "A",
+        "reason": "SUSPICIOUS_UI",
+        "report_path": "screenshots/0002_state_state-001_otp_scree.png",
+        "reused_screenshot_id": "",
+        "risk_category": "",
+        "screen_hash": "d3cda773fa968267",
+        "screenshot_id": "SCR-002",
+        "source": "explorer",
+        "stage": "",
+        "state_id": "STATE-001",
+        "storage_status": "stored",
+        "target_package": "ai.agribid.esurvey_farmer",
+        "thumbnail_path": "",
+        "timestamp_ms": 1787724281493,
+        "title": "SCR-002 - state_state-001_otp_screen",
+        "trigger_event": "",
+        "trigger_reason": "FORCE_REQUEST",
+        "uuid": "0a76ea34-06e6-4660-bdb8-f0dce4a49398",
+        "window": ""
+      },
+      {
+        "action_id": "ACT-002",
+        "activity": "ai.agribid.esurvey_farmer/.MainActivity",
+        "capture_trigger": "EXPLORER_ACTION",
+        "category": "explorer_action",
+        "confidence": 0.0,
+        "deduplication_status": "CAPTURE",
+        "description": "Screen state after explorer action - click_text:OTP \u092a\u093e\u0920\u0935\u093e",
+        "embedding_status": "embedded_in_manifest",
+        "evidence_id": "",
+        "evidence_moment_id": "",
+        "explorer_action": "click_text:OTP \u092a\u093e\u0920\u0935\u093e",
+        "extra": {},
+        "filename": "screenshots/0004_action_03_click_text.png",
+        "foreground_package": "ai.agribid.esurvey_farmer",
+        "fragment": "",
+        "gated": false,
+        "label": "action_03_click_text",
+        "layout_hash": "919d479d7d9439e9",
+        "ownership": "TARGET_APP",
+        "package": "ai.agribid.esurvey_farmer",
+        "quality": "A",
+        "reason": "EXPLORER_ACTION",
+        "report_path": "screenshots/0004_action_03_click_text.png",
+        "reused_screenshot_id": "",
+        "risk_category": "",
+        "screen_hash": "1453afa9adcae5c1",
+        "screenshot_id": "SCR-004",
+        "source": "explorer",
+        "stage": "DEEP_EXPLORATION",
+        "state_id": "STATE-002",
+        "storage_status": "stored",
+        "target_package": "ai.agribid.esurvey_farmer",
+        "thumbnail_path": "",
+        "timestamp_ms": 1787724303201,
+        "title": "SCR-004 - action_03_click_text",
+        "trigger_event": "",
+        "trigger_reason": "NEW_STATE_OR_HIGH_PRIORITY",
+        "uuid": "8e7bce63-8b51-46eb-a107-6305037332b4",
+        "window": ""
+      },
+      {
+        "action_id": "",
+        "activity": "ai.agribid.esurvey_farmer/.MainActivity",
+        "capture_trigger": "SUSPICIOUS_UI",
+        "category": "explorer_state",
+        "confidence": 0.0,
+        "deduplication_status": "CAPTURE",
+        "description": "Suspicious or unreadable UI state captured for vision analysis",
+        "embedding_status": "embedded_in_manifest",
+        "evidence_id": "",
+        "evidence_moment_id": "",
+        "explorer_action": "state:STATE-002",
+        "extra": {},
+        "filename": "screenshots/0003_state_state-002_home.png",
+        "foreground_package": "ai.agribid.esurvey_farmer",
+        "fragment": "",
+        "gated": false,
+        "label": "state_state-002_home",
+        "layout_hash": "919d479d7d9439e9",
+        "ownership": "TARGET_APP",
+        "package": "ai.agribid.esurvey_farmer",
+        "quality": "A",
+        "reason": "SUSPICIOUS_UI",
+        "report_path": "screenshots/0003_state_state-002_home.png",
+        "reused_screenshot_id": "",
+        "risk_category": "",
+        "screen_hash": "1453afa9adcae5c1",
+        "screenshot_id": "SCR-003",
+        "source": "explorer",
+        "stage": "",
+        "state_id": "STATE-002",
+        "storage_status": "stored",
+        "target_package": "ai.agribid.esurvey_farmer",
+        "thumbnail_path": "",
+        "timestamp_ms": 1787724303200,
+        "title": "SCR-003 - state_state-002_home",
+        "trigger_event": "",
+        "trigger_reason": "FORCE_REQUEST",
+        "uuid": "78d657ef-14de-4682-990f-3ac0c520444d",
+        "window": ""
+      },
+      {
+        "action_id": "",
+        "activity": "ai.agribid.esurvey_farmer/.MainActivity",
+        "capture_trigger": "LIFECYCLE",
+        "category": "lifecycle",
+        "confidence": 0.0,
+        "deduplication_status": "CAPTURE",
+        "description": "Lifecycle capture - 99_final_screen",
+        "embedding_status": "embedded_in_manifest",
+        "evidence_id": "",
+        "evidence_moment_id": "",
+        "explorer_action": "",
+        "extra": {},
+        "filename": "screenshots/0005_99_final_screen.png",
+        "foreground_package": "ai.agribid.esurvey_farmer",
+        "fragment": "",
+        "gated": false,
+        "label": "99_final_screen",
+        "layout_hash": "",
+        "ownership": "TARGET_APP",
+        "package": "ai.agribid.esurvey_farmer",
+        "quality": "A",
+        "reason": "LIFECYCLE",
+        "report_path": "screenshots/0005_99_final_screen.png",
+        "reused_screenshot_id": "",
+        "risk_category": "",
+        "screen_hash": "d3cda773fa968267",
+        "screenshot_id": "SCR-005",
+        "source": "lifecycle",
+        "stage": "",
+        "state_id": "",
+        "storage_status": "stored",
+        "target_package": "ai.agribid.esurvey_farmer",
+        "thumbnail_path": "",
+        "timestamp_ms": 1787724540657,
+        "title": "SCR-005 - 99_final_screen",
+        "trigger_event": "",
+        "trigger_reason": "FORCE_REQUEST",
+        "uuid": "11d65cfd-9a13-4304-ad57-9d7bd9288082",
+        "window": ""
+      }
+    ],
+    "sha256": "fcd3e78d6706ac3b48547af9109f30d5d7c601ad938cba5f0f40c1cc9765b822",
+    "survived_force_stop": false,
+    "ui_hierarchies": [
+      {
+        "state_id": "STATE-001",
+        "xml": "<?xml version='1.0' encoding='UTF-8' standalone='yes' ?><hierarchy rotation=\"0\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.widget.FrameLayout\" package=\"ai.agribid.esurvey_farmer\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,0][1080,2400]\" drawing-order=\"0\" hint=\"\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.widget.LinearLayout\" package=\"ai.agribid.esurvey_farmer\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,0][1080,2400]\" drawing-order=\"1\" hint=\"\"><node index=\"0\" text=\"\" resource-id=\"android:id/content\" class=\"android.widget.FrameLayout\" package=\"ai.agribid.esurvey_farmer\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,0][1080,2400]\" drawing-order=\"2\" hint=\"\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.widget.FrameLayout\" package=\"ai.agribid.esurvey_farmer\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,0][1080,2400]\" drawing-order=\"1\" hint=\"\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.view.View\" package=\"ai.agribid.esurvey_farmer\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,0][1080,2400]\" drawing-order=\"0\" hint=\"\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.view.View\" package=\"ai.agribid.esurvey_farmer\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,0][1080,2400]\" drawing-order=\"0\" hint=\"\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.view.View\" package=\"ai.agribid.esurvey_farmer\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,0][1080,2400]\" drawing-order=\"0\" hint=\"\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.view.View\" package=\"ai.agribid.esurvey_farmer\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,0][1080,2400]\" drawing-order=\"0\" hint=\"\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.view.View\" package=\"ai.agribid.esurvey_farmer\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,662][1080,1803]\" drawing-order=\"0\" hint=\"\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.view.View\" package=\"ai.agribid.esurvey_farmer\" content-desc=\"eSurvey\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[416,919][664,1008]\" drawing-order=\"0\" hint=\"\" /><node index=\"1\" text=\"\" resource-id=\"\" class=\"android.view.View\" package=\"ai.agribid.esurvey_farmer\" content-desc=\"\u092a\u0940\u0915 \u0928\u0941\u0915\u0938\u093e\u0928 \u00b7 \u092e\u0926\u0924 \u00b7 \u0925\u0947\u091f \u0932\u093e\u092d \u0939\u0938\u094d\u0924\u093e\u0902\u0924\u0930\u0923\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[275,1019][805,1071]\" drawing-order=\"0\" hint=\"\" /><node index=\"2\" text=\"9876543210\" resource-id=\"\" class=\"android.widget.EditText\" package=\"ai.agribid.esurvey_farmer\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"true\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[63,1145][1017,1649]\" drawing-order=\"0\" hint=\"\u092e\u094b\u092c\u093e\u0908\u0932 \u0915\u094d\u0930\u092e\u093e\u0902\u0915\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.widget.Button\" package=\"ai.agribid.esurvey_farmer\" content-desc=\"OTP \u092a\u093e\u0920\u0935\u093e\" checkable=\"false\" checked=\"false\" clickable=\"true\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[116,1460][964,1596]\" drawing-order=\"0\" hint=\"\" /></node><node index=\"3\" text=\"\" resource-id=\"\" class=\"android.view.View\" package=\"ai.agribid.esurvey_farmer\" content-desc=\"\u092e\u0939\u093e\u0930\u093e\u0937\u094d\u091f\u094d\u0930 \u0936\u093e\u0938\u0928 \u00b7 SDRF\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[400,1691][680,1740]\" drawing-order=\"0\" hint=\"\" /></node></node></node></node></node></node></node></node></node></hierarchy>"
+      },
+      {
+        "state_id": "STATE-002",
+        "xml": "<?xml version='1.0' encoding='UTF-8' standalone='yes' ?><hierarchy rotation=\"0\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.widget.FrameLayout\" package=\"android\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[28,975][1052,1489]\" drawing-order=\"0\" hint=\"\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.widget.FrameLayout\" package=\"android\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[70,1017][1010,1447]\" drawing-order=\"1\" hint=\"\"><node index=\"0\" text=\"\" resource-id=\"android:id/content\" class=\"android.widget.FrameLayout\" package=\"android\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[70,1017][1010,1447]\" drawing-order=\"1\" hint=\"\"><node index=\"0\" text=\"\" resource-id=\"android:id/parentPanel\" class=\"android.widget.LinearLayout\" package=\"android\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[70,1017][1010,1447]\" drawing-order=\"1\" hint=\"\"><node index=\"0\" text=\"\" resource-id=\"android:id/topPanel\" class=\"android.widget.LinearLayout\" package=\"android\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[70,1017][1010,1135]\" drawing-order=\"1\" hint=\"\"><node index=\"0\" text=\"\" resource-id=\"android:id/title_template\" class=\"android.widget.LinearLayout\" package=\"android\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[70,1017][1010,1135]\" drawing-order=\"1\" hint=\"\"><node index=\"0\" text=\"eSurvey isn't responding\" resource-id=\"android:id/alertTitle\" class=\"android.widget.TextView\" package=\"android\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[133,1064][947,1135]\" drawing-order=\"2\" hint=\"\" /></node></node><node index=\"1\" text=\"\" resource-id=\"android:id/customPanel\" class=\"android.widget.FrameLayout\" package=\"android\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[70,1135][1010,1447]\" drawing-order=\"3\" hint=\"\"><node index=\"0\" text=\"\" resource-id=\"android:id/custom\" class=\"android.widget.FrameLayout\" package=\"android\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[70,1135][1010,1447]\" drawing-order=\"1\" hint=\"\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.widget.LinearLayout\" package=\"android\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[70,1135][1010,1447]\" drawing-order=\"1\" hint=\"\"><node index=\"0\" text=\"Close app\" resource-id=\"android:id/aerr_close\" class=\"android.widget.Button\" package=\"android\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"true\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[70,1174][1010,1300]\" drawing-order=\"1\" hint=\"\" /><node index=\"1\" text=\"Wait\" resource-id=\"android:id/aerr_wait\" class=\"android.widget.Button\" package=\"android\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"true\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[70,1300][1010,1426]\" drawing-order=\"2\" hint=\"\" /></node></node></node></node></node></node></node></hierarchy>"
+      }
+    ],
+    "ui_hierarchy_xml": "<?xml version='1.0' encoding='UTF-8' standalone='yes' ?><hierarchy rotation=\"0\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.widget.FrameLayout\" package=\"ai.agribid.esurvey_farmer\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,0][1080,2400]\" drawing-order=\"0\" hint=\"\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.widget.LinearLayout\" package=\"ai.agribid.esurvey_farmer\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,0][1080,2400]\" drawing-order=\"1\" hint=\"\"><node index=\"0\" text=\"\" resource-id=\"android:id/content\" class=\"android.widget.FrameLayout\" package=\"ai.agribid.esurvey_farmer\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,0][1080,2400]\" drawing-order=\"2\" hint=\"\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.widget.FrameLayout\" package=\"ai.agribid.esurvey_farmer\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,0][1080,2400]\" drawing-order=\"1\" hint=\"\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.view.View\" package=\"ai.agribid.esurvey_farmer\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,0][1080,2400]\" drawing-order=\"0\" hint=\"\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.view.View\" package=\"ai.agribid.esurvey_farmer\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,0][1080,2400]\" drawing-order=\"0\" hint=\"\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.view.View\" package=\"ai.agribid.esurvey_farmer\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,0][1080,2400]\" drawing-order=\"0\" hint=\"\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.view.View\" package=\"ai.agribid.esurvey_farmer\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,0][1080,2400]\" drawing-order=\"0\" hint=\"\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.view.View\" package=\"ai.agribid.esurvey_farmer\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"false\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[0,662][1080,1803]\" drawing-order=\"0\" hint=\"\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.view.View\" package=\"ai.agribid.esurvey_farmer\" content-desc=\"eSurvey\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[416,919][664,1008]\" drawing-order=\"0\" hint=\"\" /><node index=\"1\" text=\"\" resource-id=\"\" class=\"android.view.View\" package=\"ai.agribid.esurvey_farmer\" content-desc=\"\u092a\u0940\u0915 \u0928\u0941\u0915\u0938\u093e\u0928 \u00b7 \u092e\u0926\u0924 \u00b7 \u0925\u0947\u091f \u0932\u093e\u092d \u0939\u0938\u094d\u0924\u093e\u0902\u0924\u0930\u0923\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[275,1019][805,1071]\" drawing-order=\"0\" hint=\"\" /><node index=\"2\" text=\"9876543210\" resource-id=\"\" class=\"android.widget.EditText\" package=\"ai.agribid.esurvey_farmer\" content-desc=\"\" checkable=\"false\" checked=\"false\" clickable=\"true\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[63,1145][1017,1649]\" drawing-order=\"0\" hint=\"\u092e\u094b\u092c\u093e\u0908\u0932 \u0915\u094d\u0930\u092e\u093e\u0902\u0915\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.widget.Button\" package=\"ai.agribid.esurvey_farmer\" content-desc=\"OTP \u092a\u093e\u0920\u0935\u093e\" checkable=\"false\" checked=\"false\" clickable=\"true\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[116,1460][964,1596]\" drawing-order=\"0\" hint=\"\" /></node><node index=\"3\" text=\"\" resource-id=\"\" class=\"android.view.View\" package=\"ai.agribid.esurvey_farmer\" content-desc=\"\u092e\u0939\u093e\u0930\u093e\u0937\u094d\u091f\u094d\u0930 \u0936\u093e\u0938\u0928 \u00b7 SDRF\" checkable=\"false\" checked=\"false\" clickable=\"false\" enabled=\"true\" focusable=\"true\" focused=\"false\" scrollable=\"false\" long-clickable=\"false\" password=\"false\" selected=\"false\" bounds=\"[400,1691][680,1740]\" drawing-order=\"0\" hint=\"\" /></node></node></node></node></node></node></node></node></node></hierarchy>",
+    "yara_matches": []
+  },
+  "emails": [],
+  "exported_activities": [],
+  "exported_receivers": [],
+  "exported_services": [],
+  "family_classification": "Unknown",
+  "final_risk_score": 8.57,
+  "fraud_workflow": {
+    "chain_confidence": 0.0,
+    "fraud_sequence_detected": false,
+    "sequence_label": "PRECONDITIONS_ONLY",
+    "stage_count": 1,
+    "stages": [
+      {
+        "confidence": 1.0,
+        "description": "The analysis sandbox granted runtime permissions the application declared, so no permission dialog was shown. Harness action, not application behaviour.",
+        "end_ms": 9,
+        "evidence_ids": [
+          "investigation_sandbox.grant.runtime_permission_0",
+          "investigation_sandbox.grant.runtime_permission_1",
+          "investigation_sandbox.grant.runtime_permission_2",
+          "investigation_sandbox.grant.runtime_permission_3",
+          "investigation_sandbox.grant.runtime_permission_4",
+          "investigation_sandbox.grant.runtime_permission_5",
+          "investigation_sandbox.grant.runtime_permission_6",
+          "investigation_sandbox.grant.runtime_permission_7",
+          "investigation_sandbox.grant.runtime_permission_8",
+          "investigation_sandbox.grant.runtime_permission_9"
+        ],
+        "hook_names": [
+          "sandbox.grant.runtime_permission"
+        ],
+        "is_precondition": true,
+        "label": "Runtime Permissions Granted by Sandbox",
+        "start_ms": 0,
+        "technique_id": "T1401"
+      }
+    ],
+    "total_events_analyzed": 12
+  },
+  "frs_breakdown": {
+    "axes_excluded": [
+      "dynamic"
+    ],
+    "axes_used": {
+      "banking_impact": 0.308,
+      "correlation": 0.308,
+      "stei": 0.385
+    },
+    "banking_impact": 20.0,
+    "concealed_payload": false,
+    "correlation": 0.0,
+    "dynamic": 0.0,
+    "dynamic_available": true,
+    "dynamic_conclusive": false,
+    "dynamic_exclusion_reason": "NO_BEHAVIOR_OBSERVED",
+    "dynamic_ran": true,
+    "formula_used": "full_frs",
+    "stei": 6.29,
+    "stei_axes": {
+      "bt": 0.0,
+      "ct": 0.0,
+      "ir": 40.0,
+      "ob": 33.9,
+      "pr": 26.0
+    },
+    "stei_axes_excluded": [],
+    "verdict_floored_for_evasion": false,
+    "verdict_floored_for_incomplete_exercise": false,
+    "verdict_floored_for_static_evidence": false,
+    "verdict_floored_for_visibility": false
+  },
+  "hardcoded_secrets": [
+    "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBCaWdJbnRlZ2Vy"
+  ],
+  "hardcoded_urls_ips": [
+    "Calling updateData inside updateData on the same DataStore instance is not supported\nsince updates made in the parent updateData call will not be visible to the nested\nupdateData call. See https://issuetracker.google.com/issues/241760537 for details.",
+    "Kotlin reflection is not yet supported for synthetic Java properties. Please follow/upvote https://youtrack.jetbrains.com/issue/KT-55980",
+    "This is a bug in DataStore. Please file a bug at: https://issuetracker.google.com/issues/new?component=907884&template=1466542",
+    "http://ns.adobe.com/xap/1.0/\u0000"
+  ],
+  "has_accessibility_abuse": false,
+  "has_reflection": true,
+  "has_sms_read_write": false,
+  "has_system_alert_window": false,
+  "intelligence_report": {
+    "affected_banking_apps": [
+      "Punjab National Bank (PNB ONE)"
+    ],
+    "analysis_note": "Based on static + dynamic + correlation",
+    "banking_impact_assessment": "The application carries a banking impact score of 20.0 based on structural analysis; however, static checks indicate no specific Indian banking target packages were directly flagged, and no regulatory context violations were identified.",
+    "cert_in_recommendations": [
+      "Verify APK source before deployment in enterprise environment",
+      "Monitor device network traffic for connections to flagged URLs",
+      "Run APK in controlled sandbox for dynamic behavioral analysis"
+    ],
+    "confidence": "Low",
+    "customer_advisory_draft": "Download applications exclusively from official app stores like Google Play. Do not grant broad device permissions or share One-Time Passwords (OTPs) with unverified survey apps.",
+    "fraud_objective": "Potential interception or visual manipulation of sensitive OTP entry screens.",
+    "mitre_techniques_used": [
+      "T1437 - Standard Application Layer Protocol"
+    ],
+    "plain_english_narrative": "The application ai.agribid.esurvey_farmer is an unclassified package that returned a risk score of 8.96. Visual analysis detected weak brand color matches and OTP text references related to Punjab National Bank (PNB ONE), though visual detection rules were not triggered. Dynamic analysis observed runtime accessibility events (AccessibilityManager.sendAccessibilityEvent), but no network connections were established during testing.",
+    "recommended_actions": [
+      "Execute extended interactive dynamic testing in a controlled sandbox to monitor for latent network connections or concealed payloads.",
+      "Add package name ai.agribid.esurvey_farmer to internal threat monitoring lists for ongoing observation.",
+      "Review mobile banking gateway logs for anomalous session activity associated with accessibility-based interactions."
+    ]
+  },
+  "investigation_manifest": null,
+  "jadx_enrichment": null,
+  "manifest_findings": [
+    "severity='high' title='App can be installed on a vulnerable unpatched Android version 7.0, [minSdk=24]' description=\"This application can be installed on an older version of android that has multiple unfixed vulnerabilities. These devices won't receive reasonable security updates from Google. Support an Android version => 10, API 29 to receive reasonable security updates.\" component='7.0, 24'",
+    "severity='high' title='Clear text traffic is Enabled For App[android:usesCleartextTraffic=true]' description='The app intends to use cleartext network traffic, such as cleartext HTTP, FTP stacks, DownloadManager, and MediaPlayer. The default value for apps that target API level 27 or lower is \"true\". Apps that target API level 28 or higher default to \"false\". The key reason for avoiding cleartext traffic is the lack of confidentiality, authenticity, and protections against tampering; a network attacker can eavesdrop on transmitted data and also modify it without being detected.' component=''",
+    "severity='warning' title='Application Data can be Backed up [android:allowBackup] flag is missing.' description='The flag [android:allowBackup] should be set to false. By default it is set to true and allows anyone to backup your application data via adb. It allows users who have enabled USB debugging to copy application data off of the device.' component=''",
+    "severity='warning' title='Broadcast Receiver (androidx.profileinstaller.ProfileInstallReceiver) is Protected by a permission, but the protection level of the permission should be checked. <strong>Permission: </strong>android.permission.DUMP [android:exported=true]' description='A Broadcast Receiver is found to be shared with other apps on the device therefore leaving it accessible to any other application on the device. It is protected by a permission which is not defined in the analysed application. As a result, the protection level of the permission should be checked where it is defined. If it is set to normal or dangerous, a malicious application can request and obtain the permission and interact with the component. If it is set to signature, only applications signed with the same certificate can obtain the permission.' component='Broadcast Receiver, androidx.profileinstaller.ProfileInstallReceiver, <strong>Permission: </strong>android.permission.DUMP'"
+  ],
+  "matched_rule": "No specific family signature matched.",
+  "mobsf_scan_hash": "df3fd84a9faf5c2bc1bc34f2d008abfd",
+  "network_security": {},
+  "obfuscation_score": 0.7979,
+  "package_name": "ai.agribid.esurvey_farmer",
+  "providers": [],
+  "receivers": [
+    "androidx.profileinstaller.ProfileInstallReceiver"
+  ],
+  "recommended_action": "MONITOR - Low risk. Approved for deployment under standard monitoring. Re-scan on next version update.",
+  "risk_band": "Safe",
+  "risk_explanation": {
+    "component_evidence": {
+      "banking": [
+        "Unknown family - moderate banking impact assumed (+20)"
+      ],
+      "correlation": [
+        "VT: SHA-256 not present in VirusTotal database"
+      ],
+      "dynamic": [],
+      "stei": [
+        "3 dangerous permission(s) (+26 PR)",
+        "Class.forName / getDeclaredMethod / invoke: reflection detected (+25 OB)",
+        "String entropy 0.80 \u2192 obfuscated strings (+8.9 OB)",
+        "4 hardcoded network indicator(s) (+40 IR)"
+      ]
+    },
+    "evidence_lines": [
+      "3 dangerous permission(s) (+26 PR)",
+      "Class.forName / getDeclaredMethod / invoke: reflection detected (+25 OB)",
+      "String entropy 0.80 \u2192 obfuscated strings (+8.9 OB)",
+      "4 hardcoded network indicator(s) (+40 IR)",
+      "VT: SHA-256 not present in VirusTotal database",
+      "Unknown family - moderate banking impact assumed (+20)",
+      "UI text: 0.05 (1/8 baseline labels reproduced, fuzzy)",
+      "View hierarchy: 0.09 structural similarity (normalised roles) - below the support floor, not counted as corroboration",
+      "Brand colour scheme: 0.48 palette match (4/4 Punjab National Bank (PNB ONE) brand colours reproduced, CIE \u0394E2000)",
+      "Matched UI text: OTP",
+      "Label 'OTP' reproduced as 'OTP \u092a\u093e\u0920\u0935\u093e' (ratio 100.0)",
+      "Brand colour #FFD93025 matched baseline #FFD200 (\u0394E=2.4, high visual match)",
+      "Brand colour #8A000000 matched baseline #941834 (\u0394E=12.9, weak match)",
+      "Brand colour #3333B5E5 matched baseline #003366 (\u0394E=13.7, weak match)",
+      "Brand colour #8A000000 matched baseline #A20E37 (\u0394E=13.8, weak match)"
+    ],
+    "stei_evidence_by_axis": {
+      "bt": [],
+      "ct": [],
+      "ir": [
+        "4 hardcoded network indicator(s) (+40 IR)"
+      ],
+      "ob": [
+        "Class.forName / getDeclaredMethod / invoke: reflection detected (+25 OB)",
+        "String entropy 0.80 \u2192 obfuscated strings (+8.9 OB)"
+      ],
+      "pr": [
+        "3 dangerous permission(s) (+26 PR)"
+      ]
+    }
+  },
+  "services_list": [
+    "androidx.camera.core.impl.MetadataHolderService",
+    "com.baseflow.geolocator.GeolocatorLocationService"
+  ],
+  "sha256": "fcd3e78d6706ac3b48547af9109f30d5d7c601ad938cba5f0f40c1cc9765b822",
+  "suspicious_strings": [
+    "Calling updateData inside updateData on the same DataStore instance is not supported\nsince updates made in the parent updateData call will not be visible to the nested\nupdateData call. See https://issuetracker.google.com/issues/241760537 for details.",
+    "Kotlin reflection is not yet supported for synthetic Java properties. Please follow/upvote https://youtrack.jetbrains.com/issue/KT-55980",
+    "This is a bug in DataStore. Please file a bug at: https://issuetracker.google.com/issues/new?component=907884&template=1466542",
+    "http://ns.adobe.com/xap/1.0/\u0000"
+  ],
+  "targets_indian_banks": false,
+  "threat_correlation": {
+    "available": true,
+    "campaign": null,
+    "correlation_confidence": 0.6666666666666666,
+    "ioc_reputation": [],
+    "known_family": null,
+    "malicious_ips": [],
+    "otx_pulses": [],
+    "sha256_detections": 0,
+    "sha256_total": 0,
+    "sources_queried": [
+      "VirusTotal",
+      "AlienVault OTX"
+    ],
+    "suspicious_domains": [],
+    "threat_score": 0.0,
+    "threat_score_sources": [
+      "VT: SHA-256 not present in VirusTotal database"
+    ],
+    "vt_detection_ratio": 0.0,
+    "vt_family": null,
+    "vt_hash_in_database": false,
+    "vt_malicious_vendors": []
+  },
+  "threat_scenario_table": [
+    {
+      "c2_risk": "Medium",
+      "confidence": 74,
+      "credential_theft_risk": "Medium",
+      "evidence": "Class.forName / getDeclaredMethod / invoke detected",
+      "indicator": "Java Reflection APIs",
+      "overlay_risk": "Low",
+      "persistence_risk": "Medium",
+      "threat_scenario": "Anti-Analysis / Hidden Class Invocation"
+    },
+    {
+      "c2_risk": "Critical",
+      "confidence": 80,
+      "credential_theft_risk": "Medium",
+      "evidence": "4 hardcoded endpoint(s): Calling updateData inside updateData on the same DataStore i\u2026",
+      "indicator": "Hardcoded C2 Infrastructure",
+      "overlay_risk": "Low",
+      "persistence_risk": "Medium",
+      "threat_scenario": "Command & Control Beaconing"
+    }
+  ],
+  "trackers": [],
+  "vide": {
+    "available": true,
+    "corpus_compare": {
+      "attribution": {
+        "ambiguous": false,
+        "candidates": [],
+        "margin": 0.0
+      },
+      "bank": "",
+      "banking_shape_score": 0.0,
+      "capability": "",
+      "color_matches": [],
+      "confidence": 0.0,
+      "detected": false,
+      "evidence_lines": [
+        "VIDE: no corpus baselines loaded"
+      ],
+      "forensics": {},
+      "institution_display": "",
+      "institution_id": "",
+      "matched_strings": [],
+      "ranked": [],
+      "rule_id": "VIDE-F001",
+      "scores": {
+        "color": 0.0,
+        "string_containment": 0.0,
+        "structural": 0.0
+      },
+      "suspect_signatures": []
+    },
+    "critical_visual_cluster": false,
+    "detection_threshold": 0.2,
+    "error": "",
+    "extracted_profile": {
+      "asset_hashes": [
+        "8cab86e754b48739",
+        "5eca0280bd38a688",
+        "5ced2ab774853050",
+        "5080b07eb486ba05",
+        "7442cda653acbacd",
+        "8d5ad29f693741b3",
+        "d70fdf67d9547949",
+        "0fe2ba6159913e22",
+        "239d602c9c65f156",
+        "3990d0047a49ab79",
+        "500419896d42ee08",
+        "39aa138b792f6c1e",
+        "9ad2a7ae746b1293",
+        "6603eec06d9b8a40",
+        "d87483d4eeeeeecb",
+        "e78ecdfaaf02a10c"
+      ],
+      "colors": [
+        "#0cffffff",
+        "#1f000000",
+        "#24000000",
+        "#29000000",
+        "#3333b5e5",
+        "#36ffffff",
+        "#8a000000",
+        "#b3ffffff",
+        "#e6616161",
+        "#e6ffffff",
+        "#ff000000",
+        "#ff008577",
+        "#ff1d873b",
+        "#ff303f9f",
+        "#ff3f51b5",
+        "#ff424242",
+        "#ff80cbc4",
+        "#ff9e9e9e",
+        "#ffd93025",
+        "#ffff4081",
+        "#ffff5722",
+        "#ffff7043"
+      ],
+      "source": "apktool_layout+web_bundle",
+      "strings": [
+        "%1$s \u0438\u043c\u0430 \u043f\u0440\u043e\u0431\u043b\u0435\u043c\u0430 \u0441\u0430 Google Play \u0443\u0441\u043b\u0443\u0433\u0430\u043c\u0430. \u041f\u0440\u043e\u0431\u0430\u0458\u0442\u0435 \u043f\u043e\u043d\u043e\u0432\u043e.",
+        "%1$s \u043d\u0435 \u043c\u043e\u0436\u0435 \u0434\u0430 \u0441\u0435 \u043f\u043e\u043a\u0440\u0435\u043d\u0435 \u0430\u043a\u043e \u043d\u0435 \u0430\u0436\u0443\u0440\u0438\u0440\u0430\u0442\u0435 Google Play \u0443\u0441\u043b\u0443\u0433\u0435.",
+        "%1$s \u043d\u0435\u045b\u0435 \u0444\u0443\u043d\u043a\u0446\u0438\u043e\u043d\u0438\u0441\u0430\u0442\u0438 \u0430\u043a\u043e \u043d\u0435 \u043e\u043c\u043e\u0433\u0443\u045b\u0438\u0442\u0435 Google Play \u0443\u0441\u043b\u0443\u0433\u0435.",
+        "9876543210",
+        "AMR-WB",
+        "Alt+",
+        "An array of source files must be passed with any new Howl.",
+        "Apple",
+        "Chunk size is not a multiple of nbrChannels",
+        "Close app",
+        "Ctrl+",
+        "Decoding audio data failed.",
+        "Deleting object",
+        "Function+",
+        "Menu+",
+        "Meta+",
+        "No audio support.",
+        "No codec support for selected audio sources.",
+        "Non-string found in selected audio sources - ignoring.",
+        "OTP \u092a\u093e\u0920\u0935\u093e",
+        "Rcv",
+        "Shift+",
+        "Sym+",
+        "Wait",
+        "androidx.startup",
+        "delete",
+        "eSurvey",
+        "eSurvey isn't responding",
+        "enter",
+        "recorder stopped",
+        "t add audio to the pool if we don",
+        "t loaded, we must wait to get the audio",
+        "t support promises, and thus don",
+        "t supported, don",
+        "use strict",
+        "\u0410\u0436\u0443\u0440\u0438\u0440\u0430\u0458",
+        "\u0410\u0436\u0443\u0440\u0438\u0440\u0430\u0458\u0442\u0435 Google Play \u0443\u0441\u043b\u0443\u0433\u0435",
+        "\u0412\u0438\u0434\u0435\u043e",
+        "\u0413\u043b\u0430\u0441\u043e\u0432\u043d\u0430 \u043f\u0440\u0435\u0442\u0440\u0430\u0433\u0430",
+        "\u0413\u043e\u0442\u043e\u0432\u043e",
+        "\u0413\u0440\u0435\u0448\u043a\u0430 Google Play \u0443\u0441\u043b\u0443\u0433\u0430",
+        "\u0414\u043e\u043b\u0430\u0437\u043d\u0438 \u043f\u043e\u0437\u0438\u0432",
+        "\u0414\u043e\u0441\u0442\u0443\u043f\u043d\u043e\u0441\u0442 Google Play \u0443\u0441\u043b\u0443\u0433\u0430",
+        "\u0418\u0434\u0438\u0442\u0435 \u043d\u0430\u0433\u043e\u0440\u0435",
+        "\u0418\u043d\u0441\u0442\u0430\u043b\u0438\u0440\u0430\u0458",
+        "\u041a\u043e\u043f\u0438\u0440\u0430\u0458",
+        "\u041d\u0438\u0458\u0435 \u043f\u043e\u0434\u0435\u0448\u0435\u043d\u043e",
+        "\u041e\u0431\u0440\u0438\u0448\u0438\u0442\u0435 \u0443\u043f\u0438\u0442",
+        "\u041e\u0434\u0431\u0438\u0458",
+        "\u041e\u0434\u0433\u043e\u0432\u043e\u0440\u0438",
+        "\u041e\u043c\u043e\u0433\u0443\u045b\u0438",
+        "\u041e\u043c\u043e\u0433\u0443\u045b\u0438\u0442\u0435 Google Play \u0443\u0441\u043b\u0443\u0433\u0435",
+        "\u041e\u0442\u0432\u043e\u0440\u0438 \u043d\u0430 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0443",
+        "\u041f\u043e\u0437\u0438\u0432 \u0458\u0435 \u0443 \u0442\u043e\u043a\u0443",
+        "\u041f\u043e\u0448\u0430\u0459\u0438\u0442\u0435 \u0443\u043f\u0438\u0442",
+        "\u041f\u0440\u0435\u043a\u0438\u043d\u0438 \u0432\u0435\u0437\u0443",
+        "\u041f\u0440\u0435\u0442\u0440\u0430\u0436\u0438\u0442\u0435",
+        "\u041f\u0440\u0435\u0443\u0437\u043c\u0438\u0442\u0435 Google Play \u0443\u0441\u043b\u0443\u0433\u0435",
+        "\u041f\u0440\u043e\u0432\u0435\u0440\u0430\u0432\u0430 \u0441\u0435 \u0434\u043e\u043b\u0430\u0437\u043d\u0438 \u043f\u043e\u0437\u0438\u0432",
+        "\u0442\u0430\u0441\u0442\u0435\u0440 \u0437\u0430 \u0440\u0430\u0437\u043c\u0430\u043a",
+        "\u092a\u0940\u0915 \u0928\u0941\u0915\u0938\u093e\u0928 \u00b7 \u092e\u0926\u0924 \u00b7 \u0925\u0947\u091f \u0932\u093e\u092d \u0939\u0938\u094d\u0924\u093e\u0902\u0924\u0930\u0923",
+        "\u092e\u0939\u093e\u0930\u093e\u0937\u094d\u091f\u094d\u0930 \u0936\u093e\u0938\u0928 \u00b7 SDRF",
+        "\u092e\u094b\u092c\u093e\u0908\u0932 \u0915\u094d\u0930\u092e\u093e\u0902\u0915"
+      ],
+      "view_sequence": [
+        "LinearLayout",
+        "TextView",
+        "TextView",
+        "androidx.appcompat.view.menu.ActionMenuItemView",
+        "ImageView",
+        "androidx.appcompat.view.menu.ListMenuItemView",
+        "ImageView",
+        "LinearLayout",
+        "TextView",
+        "TextView",
+        "ImageView",
+        "ImageView",
+        "FrameLayout",
+        "TextView",
+        "androidx.appcompat.view.menu.ListMenuItemView",
+        "ImageView",
+        "LinearLayout",
+        "RelativeLayout",
+        "TextView",
+        "TextView",
+        "ImageView",
+        "RelativeLayout",
+        "ImageView",
+        "ImageView",
+        "ImageView",
+        "TextView",
+        "TextView",
+        "LinearLayout",
+        "TextView",
+        "ImageView",
+        "LinearLayout",
+        "ImageView",
+        "LinearLayout",
+        "ImageView",
+        "LinearLayout",
+        "ImageView",
+        "ImageView",
+        "LinearLayout",
+        "TextView",
+        "LinearLayout",
+        "Button",
+        "LinearLayout",
+        "androidx.preference.internal.PreferenceImageView",
+        "LinearLayout",
+        "ImageView",
+        "TextView",
+        "LinearLayout",
+        "ImageView",
+        "TextView",
+        "RelativeLayout",
+        "LinearLayout",
+        "ImageView",
+        "RelativeLayout",
+        "LinearLayout",
+        "FrameLayout",
+        "FrameLayout",
+        "DateTimeView",
+        "TextView",
+        "LinearLayout",
+        "ImageView",
+        "RelativeLayout",
+        "ImageView",
+        "LinearLayout",
+        "ImageView",
+        "RelativeLayout",
+        "ImageView",
+        "LinearLayout",
+        "FrameLayout",
+        "FrameLayout",
+        "DateTimeView",
+        "TextView",
+        "LinearLayout",
+        "ImageView",
+        "FrameLayout",
+        "LinearLayout",
+        "LinearLayout",
+        "FrameLayout",
+        "FrameLayout",
+        "TextView",
+        "ImageView",
+        "LinearLayout",
+        "FrameLayout",
+        "ImageView",
+        "ImageView",
+        "LinearLayout",
+        "LinearLayout",
+        "TextView",
+        "DateTimeView",
+        "TextView",
+        "LinearLayout",
+        "TextView",
+        "TextView",
+        "LinearLayout",
+        "LinearLayout",
+        "ImageView",
+        "LinearLayout",
+        "LinearLayout",
+        "FrameLayout",
+        "FrameLayout",
+        "DateTimeView",
+        "TextView",
+        "LinearLayout",
+        "ImageView",
+        "DateTimeView",
+        "LinearLayout",
+        "FrameLayout",
+        "androidx.preference.internal.PreferenceImageView",
+        "RelativeLayout",
+        "TextView",
+        "TextView",
+        "LinearLayout",
+        "FrameLayout",
+        "LinearLayout",
+        "FrameLayout",
+        "FrameLayout",
+        "View",
+        "View",
+        "View",
+        "View",
+        "View",
+        "View",
+        "View",
+        "EditText",
+        "Button",
+        "View",
+        "FrameLayout",
+        "FrameLayout",
+        "FrameLayout",
+        "LinearLayout",
+        "LinearLayout",
+        "LinearLayout",
+        "TextView",
+        "FrameLayout",
+        "FrameLayout",
+        "LinearLayout",
+        "Button",
+        "Button"
+      ]
+    },
+    "findings": [],
+    "forensic_breakdown": {
+      "color_scheme": {
+        "exact_matches": 0,
+        "matched_count": 4,
+        "matches": [
+          {
+            "baseline_hex": "#FFD200",
+            "delta_e": 2.4,
+            "exact": false,
+            "score": 1.0,
+            "suspect_hex": "#FFD93025",
+            "verdict": "high visual match"
+          },
+          {
+            "baseline_hex": "#941834",
+            "delta_e": 12.93,
+            "exact": false,
+            "score": 0.3496,
+            "suspect_hex": "#8A000000",
+            "verdict": "weak match"
+          },
+          {
+            "baseline_hex": "#003366",
+            "delta_e": 13.74,
+            "exact": false,
+            "score": 0.2941,
+            "suspect_hex": "#3333B5E5",
+            "verdict": "weak match"
+          },
+          {
+            "baseline_hex": "#A20E37",
+            "delta_e": 13.81,
+            "exact": false,
+            "score": 0.2888,
+            "suspect_hex": "#8A000000",
+            "verdict": "weak match"
+          }
+        ],
+        "score": 0.4831,
+        "target_count": 4
+      },
+      "confidence": 0.1756,
+      "detected": false,
+      "institution_display": "Punjab National Bank (PNB ONE)",
+      "institution_id": "demo_pnb_one",
+      "over_threshold": false,
+      "threshold": 0.2,
+      "tier": "none",
+      "tier_label": "Below detection threshold",
+      "ui_text": {
+        "matched_count": 1,
+        "matched_strings": [
+          "OTP"
+        ],
+        "reworded": [
+          {
+            "baseline": "OTP",
+            "ratio": 100.0,
+            "suspect": "OTP \u092a\u093e\u0920\u0935\u093e"
+          }
+        ],
+        "score": 0.054,
+        "target_count": 8
+      },
+      "view_hierarchy": {
+        "matched_signatures": [],
+        "score": 0.0949,
+        "suspect_signatures": []
+      }
+    },
+    "matched_baseline": null,
+    "overlay_payloads": [],
+    "signer_impersonation": {
+      "debug_signed": false,
+      "detected": false,
+      "evidence_lines": [],
+      "institution_id": "",
+      "package_name": "ai.agribid.esurvey_farmer",
+      "rule_id": "CH06-SIGNER-IMPERSONATION",
+      "signer_sha256": ""
+    },
+    "similarity_score": 0.1756,
+    "status": "OK",
+    "suspect_ast": {
+      "children": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "children": [
+                            {
+                              "children": [
+                                {
+                                  "children": [
+                                    {
+                                      "children": [
+                                        {
+                                          "children": [
+                                            {
+                                              "role": "OTHER",
+                                              "tag": "View",
+                                              "text": "eSurvey"
+                                            },
+                                            {
+                                              "role": "OTHER",
+                                              "tag": "View",
+                                              "text": "\u092a\u0940\u0915 \u0928\u0941\u0915\u0938\u093e\u0928 \u00b7 \u092e\u0926\u0924 \u00b7 \u0925\u0947\u091f \u0932\u093e\u092d \u0939\u0938\u094d\u0924\u093e\u0902\u0924\u0930\u0923"
+                                            },
+                                            {
+                                              "children": [
+                                                {
+                                                  "role": "BUTTON",
+                                                  "tag": "Button",
+                                                  "text": "OTP \u092a\u093e\u0920\u0935\u093e"
+                                                }
+                                              ],
+                                              "role": "INPUT",
+                                              "tag": "EditText",
+                                              "text": "9876543210"
+                                            },
+                                            {
+                                              "role": "OTHER",
+                                              "tag": "View",
+                                              "text": "\u092e\u0939\u093e\u0930\u093e\u0937\u094d\u091f\u094d\u0930 \u0936\u093e\u0938\u0928 \u00b7 SDRF"
+                                            }
+                                          ],
+                                          "role": "OTHER",
+                                          "tag": "View"
+                                        }
+                                      ],
+                                      "role": "OTHER",
+                                      "tag": "View"
+                                    }
+                                  ],
+                                  "role": "OTHER",
+                                  "tag": "View"
+                                }
+                              ],
+                              "role": "OTHER",
+                              "tag": "View"
+                            }
+                          ],
+                          "role": "OTHER",
+                          "tag": "View"
+                        }
+                      ],
+                      "role": "CONTAINER",
+                      "tag": "FrameLayout"
+                    }
+                  ],
+                  "role": "CONTAINER",
+                  "tag": "FrameLayout"
+                }
+              ],
+              "role": "CONTAINER",
+              "tag": "LinearLayout"
+            }
+          ],
+          "role": "CONTAINER",
+          "tag": "FrameLayout"
+        },
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "children": [
+                        {
+                          "children": [
+                            {
+                              "children": [
+                                {
+                                  "role": "TEXT",
+                                  "tag": "TextView",
+                                  "text": "eSurvey isn't responding"
+                                }
+                              ],
+                              "role": "CONTAINER",
+                              "tag": "LinearLayout"
+                            }
+                          ],
+                          "role": "CONTAINER",
+                          "tag": "LinearLayout"
+                        },
+                        {
+                          "children": [
+                            {
+                              "children": [
+                                {
+                                  "children": [
+                                    {
+                                      "role": "BUTTON",
+                                      "tag": "Button",
+                                      "text": "Close app"
+                                    },
+                                    {
+                                      "role": "BUTTON",
+                                      "tag": "Button",
+                                      "text": "Wait"
+                                    }
+                                  ],
+                                  "role": "CONTAINER",
+                                  "tag": "LinearLayout"
+                                }
+                              ],
+                              "role": "CONTAINER",
+                              "tag": "FrameLayout"
+                            }
+                          ],
+                          "role": "CONTAINER",
+                          "tag": "FrameLayout"
+                        }
+                      ],
+                      "role": "CONTAINER",
+                      "tag": "LinearLayout"
+                    }
+                  ],
+                  "role": "CONTAINER",
+                  "tag": "FrameLayout"
+                }
+              ],
+              "role": "CONTAINER",
+              "tag": "FrameLayout"
+            }
+          ],
+          "role": "CONTAINER",
+          "tag": "FrameLayout"
+        }
+      ],
+      "role": "CONTAINER",
+      "tag": "app"
+    },
+    "suspect_profile_summary": {
+      "ast_depth": 12,
+      "ast_node_count": 27,
+      "sources": "apktool_layout+web_bundle",
+      "string_count": 63,
+      "view_node_count": 137
+    },
+    "ui_hierarchy_integrated": true,
+    "vide_compare": {
+      "capability": "",
+      "confidence": 0.1756,
+      "detected": false,
+      "evidence_lines": [
+        "UI text: 0.05 (1/8 baseline labels reproduced, fuzzy)",
+        "View hierarchy: 0.09 structural similarity (normalised roles) - below the support floor, not counted as corroboration",
+        "Brand colour scheme: 0.48 palette match (4/4 Punjab National Bank (PNB ONE) brand colours reproduced, CIE \u0394E2000)",
+        "Matched UI text: OTP",
+        "Label 'OTP' reproduced as 'OTP \u092a\u093e\u0920\u0935\u093e' (ratio 100.0)",
+        "Brand colour #FFD93025 matched baseline #FFD200 (\u0394E=2.4, high visual match)",
+        "Brand colour #8A000000 matched baseline #941834 (\u0394E=12.9, weak match)",
+        "Brand colour #3333B5E5 matched baseline #003366 (\u0394E=13.7, weak match)",
+        "Brand colour #8A000000 matched baseline #A20E37 (\u0394E=13.8, weak match)"
+      ],
+      "forensics": {
+        "color_scheme": {
+          "exact_matches": 0,
+          "matched_count": 4,
+          "matches": [
+            {
+              "baseline_hex": "#FFD200",
+              "delta_e": 2.4,
+              "exact": false,
+              "score": 1.0,
+              "suspect_hex": "#FFD93025",
+              "verdict": "high visual match"
+            },
+            {
+              "baseline_hex": "#941834",
+              "delta_e": 12.93,
+              "exact": false,
+              "score": 0.3496,
+              "suspect_hex": "#8A000000",
+              "verdict": "weak match"
+            },
+            {
+              "baseline_hex": "#003366",
+              "delta_e": 13.74,
+              "exact": false,
+              "score": 0.2941,
+              "suspect_hex": "#3333B5E5",
+              "verdict": "weak match"
+            },
+            {
+              "baseline_hex": "#A20E37",
+              "delta_e": 13.81,
+              "exact": false,
+              "score": 0.2888,
+              "suspect_hex": "#8A000000",
+              "verdict": "weak match"
+            }
+          ],
+          "score": 0.4831,
+          "target_count": 4
+        },
+        "confidence": 0.1756,
+        "institution_display": "Punjab National Bank (PNB ONE)",
+        "institution_id": "demo_pnb_one",
+        "over_threshold": false,
+        "threshold": 0.2,
+        "tier": "none",
+        "tier_label": "Below detection threshold",
+        "ui_text": {
+          "matched_count": 1,
+          "matched_strings": [
+            "OTP"
+          ],
+          "reworded": [
+            {
+              "baseline": "OTP",
+              "ratio": 100.0,
+              "suspect": "OTP \u092a\u093e\u0920\u0935\u093e"
+            }
+          ],
+          "score": 0.054,
+          "target_count": 8
+        },
+        "view_hierarchy": {
+          "matched_signatures": [],
+          "score": 0.0949,
+          "suspect_signatures": []
+        }
+      },
+      "institution_display": "",
+      "institution_id": "",
+      "matched_strings": [
+        "OTP"
+      ],
+      "rule_id": "VIDE-F001",
+      "scores": {
+        "color_match": 0.4831,
+        "string_jaccard": 0.054,
+        "tree_similarity": 0.0949
+      }
+    },
+    "visual_impersonation_confidence": 0.17563341051987666,
+    "visual_impersonation_detected": false,
+    "visual_impersonation_institution": "",
+    "visual_impersonation_tier": "none",
+    "visual_impersonation_tier_label": "Below detection threshold"
+  }
+}

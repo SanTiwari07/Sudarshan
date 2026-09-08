@@ -84,7 +84,7 @@ function ScreenshotTile({
 
   if (failed) {
     return (
-      <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50/50 p-3 text-center text-[11px] text-amber-900">
+      <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50/50 p-3 text-center text-[13px] text-amber-900">
         Could not load {screenshotDescription(entry)}
       </div>
     );
@@ -95,11 +95,11 @@ function ScreenshotTile({
       type="button"
       onClick={onZoom}
       disabled={!src && loading}
-      className="group text-left rounded-md border border-slate-200 overflow-hidden bg-white hover:border-slate-350 hover:shadow-xs transition-all duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-500 disabled:opacity-70"
+      className="group text-left rounded-md border border-slate-200 overflow-hidden bg-white hover:border-slate-400 hover:shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-all duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-500 disabled:opacity-70"
     >
       <div className="aspect-[9/16] w-full max-h-[240px] bg-slate-50 relative overflow-hidden">
         {loading && (
-          <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center text-[10px] text-slate-450 font-mono">
+          <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center text-[13px] text-slate-450 font-mono">
             LOADING…
           </div>
         )}
@@ -112,23 +112,23 @@ function ScreenshotTile({
           />
         )}
         <div className="absolute top-1.5 left-1.5 flex flex-wrap gap-1">
-          <span className="text-[9px] font-mono font-bold px-1 py-0.2 rounded bg-slate-900/80 text-white">
+          <span className="text-[13px] font-mono font-semibold px-1 py-0.2 rounded bg-slate-900/80 text-white">
             {String(index + 1).padStart(2, '0')}
           </span>
           {evidenceId && (
-            <span className="text-[9px] font-mono font-bold px-1 py-0.2 rounded bg-blue-700 text-white">{evidenceId}</span>
+            <span className="text-[13px] font-mono font-semibold px-1 py-0.2 rounded bg-blue-700 text-white">{evidenceId}</span>
           )}
           {mitre && (
-            <span className="text-[9px] font-mono font-bold px-1 py-0.2 rounded bg-slate-900/90 text-white">{mitre}</span>
+            <span className="text-[13px] font-mono font-semibold px-1 py-0.2 rounded bg-slate-900/90 text-white">{mitre}</span>
           )}
         </div>
       </div>
       <div className="p-2 border-t border-slate-150 space-y-0.5 bg-slate-50/20">
-        <div className="flex items-center justify-between gap-2 text-[9px] text-slate-500 font-mono">
+        <div className="flex items-center justify-between gap-2 text-[13px] text-slate-500 font-mono">
           <span>{time}</span>
-          <span className="font-bold text-blue-800 uppercase tracking-wider truncate">{stage}</span>
+          <span className="font-semibold text-blue-800 truncate">{stage}</span>
         </div>
-        <div className="text-[11px] font-bold text-slate-800 line-clamp-1 leading-tight">{description}</div>
+        <div className="text-[13px] font-semibold text-slate-800 line-clamp-1 leading-tight">{description}</div>
       </div>
     </button>
   );
@@ -183,7 +183,7 @@ function EmptyScreenshotState({
   return (
     <div className="space-y-3">
       <div className="rounded-md border border-slate-200 bg-slate-50/40 p-3.5">
-        <p className="text-xs font-bold uppercase tracking-wider text-slate-900">{copy.title}</p>
+        <p className="text-xs font-semibold text-slate-900">{copy.title}</p>
         <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">{copy.body}</p>
       </div>
       {showDiagnostics && (
@@ -255,7 +255,7 @@ export default function ScreenshotGallery({
       />
       <div className="p-4 sm:p-5 space-y-4">
         {entries.some((e) => visualFromEntry(e)) && (
-          <div className="flex flex-wrap gap-2 text-[11px]">
+          <div className="flex flex-wrap gap-2 text-[13px]">
             <select
               className="border border-slate-200 rounded px-2 py-1 bg-white"
               value={qualityFilter}
@@ -313,13 +313,13 @@ export default function ScreenshotGallery({
               })}
             </div>
             {visibleEntries.length > 0 && (
-              <p className="text-[11px] text-slate-500">Captured during sandbox execution.</p>
+              <p className="text-[13px] text-slate-500">Captured during sandbox execution.</p>
             )}
           </>
         )}
 
         {visibleEntries.length > 0 && capturing && (
-          <p className="text-[10px] text-slate-500 flex items-center gap-1">
+          <p className="text-[13px] text-slate-500 flex items-center gap-1">
             <Loader2 className="h-3 w-3 animate-spin" />
             Listening for new captures… ({capturedCount}/{expected || '?'})
           </p>

@@ -33,17 +33,17 @@ export default function ThreatEvidenceExplorer({ groups }: { groups: Group[] }) 
             <div key={g.group} className="px-4 sm:px-5 py-4">
               <button
                 type="button"
-                className="flex items-center gap-2 text-xs font-bold text-slate-800 w-full text-left"
+                className="flex items-center gap-2 text-xs font-semibold text-slate-800 w-full text-left"
                 onClick={() => setExpanded((e) => ({ ...e, [g.group]: !open }))}
               >
                 {open ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
                 {g.group}
-                <span className="text-slate-400 font-normal">({g.items.length})</span>
+                <span className="text-slate-500 font-normal">({g.items.length})</span>
               </button>
               {open && (
                 <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200">
                   <table className="w-full min-w-[640px] text-xs">
-                    <thead className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase tracking-wide text-slate-500">
+                    <thead className="border-b border-slate-200 bg-slate-50 text-[13px] font-medium tracking-[0.01em] text-slate-500">
                       <tr>
                         <th className="px-3 py-2 text-left font-semibold w-[38%]">Finding</th>
                         <th className="px-3 py-2 text-left font-semibold">Source / detail</th>
@@ -62,7 +62,7 @@ export default function ThreatEvidenceExplorer({ groups }: { groups: Group[] }) 
                                 type="button"
                                 onClick={() => !disabled && openEvidence(item.id)}
                                 disabled={disabled}
-                                className="text-[11px] font-semibold text-blue-700 hover:text-blue-900 disabled:text-slate-400 disabled:cursor-default"
+                                className="text-[13px] font-semibold text-blue-700 hover:text-blue-900 disabled:text-slate-500 disabled:cursor-default"
                               >
                                 {disabled ? '-' : 'Open'}
                               </button>

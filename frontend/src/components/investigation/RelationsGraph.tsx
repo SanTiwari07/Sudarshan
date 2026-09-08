@@ -168,7 +168,7 @@ export function RelationsGraph({ data }: { data: FraudCardData }) {
                   x={labelX}
                   y={y + 3.5}
                   textAnchor={anchor}
-                  className="text-[10px]"
+                  className="text-[13px]"
                   fill="#475569"
                   fontFamily="ui-monospace, monospace"
                 >
@@ -184,7 +184,7 @@ export function RelationsGraph({ data }: { data: FraudCardData }) {
             y={cy + 4}
             textAnchor="middle"
             fill="#fff"
-            className="text-[11px]"
+            className="text-[13px]"
             fontFamily="ui-monospace, monospace"
           >
             APK
@@ -192,7 +192,7 @@ export function RelationsGraph({ data }: { data: FraudCardData }) {
         </svg>
       </div>
 
-      <div className="px-4 py-2 border-t border-slate-100 flex flex-wrap gap-4 text-[11px] text-slate-500">
+      <div className="px-4 py-2 border-t border-slate-100 flex flex-wrap gap-4 text-[13px] text-slate-500">
         <span className="flex items-center gap-1.5">
           <span className="inline-block w-2.5 h-2.5 rounded-full bg-slate-700" />
           observed at runtime ({observedCount})

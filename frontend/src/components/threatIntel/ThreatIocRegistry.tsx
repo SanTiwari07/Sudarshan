@@ -46,7 +46,7 @@ export default function ThreatIocRegistry({
     };
     const cls = map[severity] || 'bg-slate-100 text-slate-700 border-slate-200';
     return (
-      <span className={`px-2 py-0.5 text-[10px] font-bold rounded border ${cls}`}>{severity.toUpperCase()}</span>
+      <span className={`px-2 py-0.5 text-[13px] font-semibold rounded border ${cls}`}>{severity.toUpperCase()}</span>
     );
   };
 
@@ -55,7 +55,7 @@ export default function ThreatIocRegistry({
       <SectionHeader icon={<Database className="h-4 w-4" />} title="IOC registry" subtitle="Filtered by graph selection when active" />
       <div className="p-4 bg-slate-50 border-b border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="relative">
-          <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+          <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
           <input
             type="text"
             value={search}
@@ -68,7 +68,7 @@ export default function ThreatIocRegistry({
           />
         </div>
         <div className="flex items-center gap-2">
-          <Filter className="h-3.5 w-3.5 text-slate-400" />
+          <Filter className="h-3.5 w-3.5 text-slate-500" />
           <select
             value={severityFilter}
             onChange={(e) => {
@@ -102,14 +102,14 @@ export default function ThreatIocRegistry({
         </select>
       </div>
       {paginatedIocs.length === 0 ? (
-        <div className="p-8 text-center text-slate-400 text-xs">
+        <div className="p-8 text-center text-slate-500 text-xs">
           <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto mb-2 opacity-80" />
           No indicators matched your filters.
         </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left text-slate-600">
-            <thead className="sticky top-0 z-10 bg-slate-100 text-slate-700 uppercase font-semibold text-[10px] tracking-wider border-b border-slate-200 shadow-sm">
+            <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 text-[13px] font-medium tracking-[0.01em] text-slate-500">
               <tr>
                 <th className="px-4 py-2.5">Indicator</th>
                 <th className="px-4 py-2.5">Type</th>
@@ -130,7 +130,7 @@ export default function ThreatIocRegistry({
                     </div>
                   </td>
                   <td className="px-4 py-2.5">
-                    <span className="px-2 py-0.5 text-[10px] bg-slate-100 border border-slate-200 rounded">{ioc.type}</span>
+                    <span className="px-2 py-0.5 text-[13px] bg-slate-100 border border-slate-200 rounded">{ioc.type}</span>
                   </td>
                   <td className="px-4 py-2.5">{severityBadge(ioc.severity)}</td>
                   <td className="px-4 py-2.5 text-slate-500">{ioc.source}</td>

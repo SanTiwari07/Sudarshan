@@ -36,6 +36,7 @@ scored as zero.
 
 from __future__ import annotations
 
+import inspect
 import logging
 import re
 from dataclasses import dataclass, field
@@ -585,9 +586,29 @@ class DeviceStateProbe:
         self,
         adb: Callable[..., Any],
         package_name: str = "",
+        dump_hierarchy: Optional[Callable[[], Any]] = None,
     ) -> None:
         self._adb = adb
         self.package_name = package_name
+        # Optional fast path for reading the hierarchy, injected on the same
+        # principle as `adb`: the probe still owns no transport. Callers pass
+        # the persistent device channel's dump, which answers over a connection
+        # that is already open instead of spawning `uiautomator dump`. None
+        # keeps the original ADB-only behaviour.
+        self._dump_hierarchy = dump_hierarchy
+
+    async def _channel_dump(self) -> str:
+        """Hierarchy XML from the injected fast path, or "" when there is none."""
+        if self._dump_hierarchy is None:
+            return ""
+        try:
+            result = self._dump_hierarchy()
+            if inspect.isawaitable(result):
+                result = await result
+            return result or ""
+        except Exception as exc:                 # noqa: BLE001
+            logger.debug("[Probe] channel dump failed: %s", exc)
+            return ""
 
     async def _run(self, *args: str) -> Tuple[bool, str]:
         try:
@@ -673,6 +694,12 @@ class DeviceStateProbe:
         That is INCONCLUSIVE upstream, not a failure.
         """
         xml = ui_xml
+        if not xml:
+            # One call over the connection perception already holds open, in
+            # place of a `uiautomator dump` subprocess. This probe runs once
+            # per typed field, so on a login form it was paying the dump cost
+            # twice per field - once to act, once to check.
+            xml = await self._channel_dump()
         if not xml:
             ok, out = await self._run("shell", "uiautomator", "dump", "/dev/tty")
             xml = out if ok else ""

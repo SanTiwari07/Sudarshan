@@ -1,4 +1,14 @@
-"""HTML report sections for visual investigation evidence."""
+"""
+HTML report sections for visual investigation evidence.
+
+Three tiers, three presentations, one alignment grid:
+  executive_key -> full-width plates, image beside a fixed metadata grid
+  technical     -> a correlation table
+  appendix_only -> a compact index of the frames that carry background only
+
+The class names here are the ones defined in report_generator._CSS; nothing in
+this module styles inline, so a palette change lands in one place.
+"""
 
 from __future__ import annotations
 
@@ -26,42 +36,110 @@ def _quality_ok(rec: Dict[str, Any]) -> bool:
     return str(rec.get("quality") or "") in ("A", "B")
 
 
+def _grade(grade: str) -> str:
+    g = str(grade or "").strip().upper()[:1]
+    if not g:
+        return '<span class="muted">not graded</span>'
+    cls = {"A": "grade-a", "B": "grade-b", "C": "grade-c"}.get(g, "grade-b")
+    return f'<span class="grade {cls}">{g}</span>'
+
+
+def _first(rec: Dict[str, Any], *keys: str) -> str:
+    for k in keys:
+        v = rec.get(k)
+        if v not in (None, "", [], {}):
+            return str(v)
+    return ""
+
+
+def _img_data_uri(apk_dir: Optional[Path], filename: str) -> str:
+    """Inline the frame. Reports must survive being emailed as one file."""
+    if not apk_dir or not filename:
+        return ""
+    name = Path(str(filename).replace("\\", "/")).name
+    for candidate in (apk_dir / "screenshots" / name, apk_dir / name):
+        if candidate.is_file():
+            import base64
+
+            try:
+                b64 = base64.b64encode(candidate.read_bytes()).decode("ascii")
+                return f"data:image/png;base64,{b64}"
+            except OSError:
+                return ""
+    return ""
+
+
+def _meta_rows(rec: Dict[str, Any]) -> str:
+    """
+    The fixed metadata grid. Row order never varies between plates, so the
+    labels hold one left edge and the values another straight down the section.
+    """
+    rows: List[Tuple[str, str, bool]] = [
+        ("Lifecycle trigger",
+         _first(rec, "capture_trigger", "trigger_event", "trigger_reason", "stage"), False),
+        ("Screen state",
+         _first(rec, "screen_summary", "visual_observation", "semantic_type"), False),
+        ("Workflow stage", _first(rec, "workflow_stage_label"), False),
+        ("Activity", _first(rec, "activity", "window"), True),
+    ]
+
+    out = ""
+    for label, value, mono in rows:
+        if not value:
+            continue
+        cls = ' class="mono"' if mono else ""
+        out += f"<dt>{_esc(label)}</dt><dd{cls}>{_esc(value[:200])}</dd>"
+
+    corr = _first(rec, "correlation_status")
+    if corr:
+        out += f"<dt>Correlation</dt><dd>{_esc(corr)}</dd>"
+
+    evids = ", ".join(_esc(e) for e in (rec.get("linked_evidence_ids") or []))
+    out += f'<dt>Linked evidence</dt><dd class="mono">{evids or "&mdash;"}</dd>'
+    out += f"<dt>Quality grade</dt><dd>{_grade(rec.get('quality'))}</dd>"
+    return out
+
+
 def build_executive_visual_html(apk_dir: Optional[Path]) -> str:
     records = load_visual_evidence_records(apk_dir)
-    exec_rows = [r for r in records if str(r.get("report_tier") or "") == "executive_key" and _quality_ok(r)]
-    exec_rows.sort(key=lambda r: (0 if r.get("correlation_status") == "causal" else 1, -int(r.get("timestamp_ms") or 0)))
+    exec_rows = [
+        r for r in records
+        if str(r.get("report_tier") or "") == "executive_key" and _quality_ok(r)
+    ]
+    exec_rows.sort(
+        key=lambda r: (0 if r.get("correlation_status") == "causal" else 1,
+                       -int(r.get("timestamp_ms") or 0))
+    )
     exec_rows = exec_rows[:2]
     if not exec_rows:
         return ""
 
     parts = [
         '<section class="section" id="executive-visual-evidence">',
-        '<h2>Executive Visual Evidence</h2>',
-        '<p class="section-lead">High-confidence runtime screenshots corroborating critical findings (max 2).</p>',
-        '<div class="gallery-grid">',
+        '<div class="section-header"><h2>Corroborating Visual Evidence</h2>'
+        f'<span class="section-note">{len(exec_rows)} of the highest-confidence frames</span>'
+        "</div>",
+        '<p class="section-lead">Frames the correlation pass tied directly to a '
+        "recorded finding. The full capture set is in the appendix.</p>",
     ]
     for rec in exec_rows:
         sid = _esc(str(rec.get("screenshot_id") or ""))
         claim = _esc(str(rec.get("investigative_claim") or ""))
-        qual = _esc(str(rec.get("quality") or ""))
-        corr = _esc(str(rec.get("correlation_status") or ""))
-        evids = ", ".join(_esc(e) for e in (rec.get("linked_evidence_ids") or []))
-        fn = str(rec.get("filename") or "")
-        img_name = Path(fn.replace("\\", "/")).name
-        img_path = apk_dir / "screenshots" / img_name if apk_dir else None
-        img_tag = ""
-        if img_path and img_path.is_file():
-            import base64
-
-            b64 = base64.b64encode(img_path.read_bytes()).decode("ascii")
-            img_tag = f'<img src="data:image/png;base64,{b64}" alt="{sid}" style="width:100%;border-radius:8px"/>'
-        parts.append(
-            f'<div class="gallery-card"><div style="padding:12px">{img_tag}</div>'
-            f'<div style="padding:12px"><strong>{sid}</strong> · Quality {qual} · {_esc(corr)}<br/>'
-            f'<p style="margin-top:8px;font-size:13px">{claim}</p>'
-            f'<p style="font-size:12px;color:#666">Supported by: {evids or "-"}</p></div></div>'
+        uri = _img_data_uri(apk_dir, str(rec.get("filename") or ""))
+        figure = (
+            f'<img src="{uri}" alt="Runtime capture {sid}"/>'
+            if uri else '<div class="no-data">Frame not retained</div>'
         )
-    parts.append("</div></section>")
+        parts.append(
+            '<div class="plate">'
+            f'<figure class="plate-figure">{figure}'
+            f"<figcaption>{sid}</figcaption></figure>"
+            '<div class="plate-body">'
+            f'<div class="plate-claim">{claim or "No claim recorded for this frame."}</div>'
+            f'<dl class="plate-meta">{_meta_rows(rec)}</dl>'
+            "</div></div>"
+        )
+    parts.append("</section>")
     return "\n".join(parts)
 
 
@@ -70,26 +148,29 @@ def build_technical_visual_html(apk_dir: Optional[Path]) -> str:
     rows = [
         r for r in records
         if _quality_ok(r)
-        and str(r.get("quality") or "") in ("A", "B")
         and str(r.get("correlation_status") or "") in ("causal", "linked", "temporal")
     ]
     if not rows:
         return ""
     parts = [
         '<section class="section" id="technical-visual-evidence">',
-        "<h2>Visual Evidence (Technical)</h2>",
-        "<table class=\"data-table\"><thead><tr>"
-        "<th>SCR</th><th>Claim</th><th>Quality</th><th>Correlation</th><th>EVID</th><th>Workflow</th></tr></thead><tbody>",
+        '<div class="section-header"><h2>Visual Evidence Correlation</h2>'
+        f'<span class="section-note">{len(rows)} correlated frames</span></div>',
+        '<p class="section-lead">Each frame against the finding it corroborates '
+        "and the strength of that link.</p>",
+        '<table class="data-table"><thead><tr>'
+        "<th>Frame</th><th>Observation</th><th>Grade</th><th>Correlation</th>"
+        "<th>Evidence</th><th>Workflow stage</th></tr></thead><tbody>",
     ]
     for rec in rows:
         parts.append(
             "<tr>"
-            f"<td>{_esc(str(rec.get('screenshot_id') or ''))}</td>"
-            f"<td>{_esc(str(rec.get('investigative_claim') or '')[:200])}</td>"
-            f"<td>{_esc(str(rec.get('quality') or ''))}</td>"
-            f"<td>{_esc(str(rec.get('correlation_status') or ''))}</td>"
-            f"<td>{_esc(', '.join(rec.get('linked_evidence_ids') or []))}</td>"
-            f"<td>{_esc(str(rec.get('workflow_stage_label') or ''))}</td>"
+            f'<td class="col-id">{_esc(str(rec.get("screenshot_id") or ""))}</td>'
+            f'<td>{_esc(str(rec.get("investigative_claim") or "")[:200])}</td>'
+            f"<td>{_grade(rec.get('quality'))}</td>"
+            f'<td>{_esc(str(rec.get("correlation_status") or ""))}</td>'
+            f'<td class="col-id">{_esc(", ".join(rec.get("linked_evidence_ids") or []))}</td>'
+            f'<td>{_esc(str(rec.get("workflow_stage_label") or ""))}</td>'
             "</tr>"
         )
     parts.append("</tbody></table></section>")
@@ -107,12 +188,21 @@ def build_appendix_visual_html(apk_dir: Optional[Path]) -> str:
         return ""
     parts = [
         '<section class="section" id="appendix-visual-evidence">',
-        "<h2>Appendix - Additional Visual Context</h2><ul>",
+        '<div class="section-header"><h2>Additional Visual Context</h2>'
+        f'<span class="section-note">{len(rows)} background frames</span></div>',
+        '<p class="section-lead">Frames retained for completeness. Grade C carries '
+        "background only and corroborates no finding on its own.</p>",
+        '<table class="data-table"><thead><tr>'
+        "<th>Frame</th><th>Observation</th><th>Lifecycle trigger</th>"
+        "</tr></thead><tbody>",
     ]
     for rec in rows:
         parts.append(
-            f"<li><strong>{_esc(str(rec.get('screenshot_id') or ''))}</strong> - "
-            f"{_esc(str(rec.get('investigative_claim') or '')[:160])}</li>"
+            "<tr>"
+            f'<td class="col-id">{_esc(str(rec.get("screenshot_id") or ""))}</td>'
+            f'<td>{_esc(str(rec.get("investigative_claim") or "")[:180])}</td>'
+            f'<td>{_esc(_first(rec, "capture_trigger", "trigger_event", "stage")[:80])}</td>'
+            "</tr>"
         )
-    parts.append("</ul></section>")
+    parts.append("</tbody></table></section>")
     return "\n".join(parts)

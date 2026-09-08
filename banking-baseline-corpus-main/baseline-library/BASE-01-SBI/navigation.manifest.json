@@ -1,0 +1,54 @@
+{
+  "baselineId": "BASE-01-SBI",
+  "entry": "SBI-SPLASH",
+  "nodes": [
+    { "id": "SBI-SPLASH", "route": "/", "type": "system", "status": "implemented" },
+    { "id": "SBI-LOGIN", "route": "/login", "type": "auth", "status": "implemented" },
+    { "id": "SBI-MPIN", "route": "/mpin", "type": "auth", "status": "implemented" },
+    { "id": "SBI-HOME", "route": "/home", "type": "primary", "status": "implemented" },
+    { "id": "SBI-ACCOUNTS", "route": "/accounts", "type": "primary", "status": "implemented" },
+    { "id": "SBI-ACCOUNT_DETAILS", "route": "/accounts/:id", "type": "primary", "status": "implemented" },
+    { "id": "SBI-TXN_HISTORY", "route": "/accounts/:id/transactions", "type": "primary", "status": "implemented" },
+    { "id": "SBI-TRANSFER", "route": "/transfer", "type": "flow", "status": "implemented" },
+    { "id": "SBI-AMOUNT", "route": "/transfer/amount", "type": "flow", "status": "implemented" },
+    { "id": "SBI-REVIEW", "route": "/transfer/review", "type": "flow", "status": "implemented" },
+    { "id": "SBI-CONFIRM", "route": "/transfer/confirm", "type": "flow", "status": "implemented" },
+    { "id": "SBI-RECEIPT", "route": "/transfer/receipt", "type": "flow", "status": "implemented" },
+    { "id": "SBI-SERVICES", "route": "/services", "type": "primary", "status": "implemented" },
+    { "id": "SBI-PROFILE", "route": "/profile", "type": "primary", "status": "implemented" }
+  ],
+  "edges": [
+    { "from": "SBI-SPLASH", "to": "SBI-LOGIN", "trigger": "timeout" },
+    { "from": "SBI-LOGIN", "to": "SBI-MPIN", "trigger": "Login button" },
+    { "from": "SBI-MPIN", "to": "SBI-HOME", "trigger": "PIN completion" },
+    { "from": "SBI-HOME", "to": "SBI-ACCOUNT_DETAILS", "trigger": "Account Summary card tap" },
+    { "from": "SBI-HOME", "to": "SBI-TRANSFER", "trigger": "Transfer Quick Action tap" },
+    { "from": "SBI-HOME", "to": "SBI-SERVICES", "trigger": "Services Quick Action tap" },
+    { "from": "SBI-HOME", "to": "SBI-TXN_HISTORY", "trigger": "Recent Activity View all tap" },
+    { "from": "SBI-ACCOUNTS", "to": "SBI-ACCOUNT_DETAILS", "trigger": "Account card tap" },
+    { "from": "SBI-ACCOUNT_DETAILS", "to": "SBI-TXN_HISTORY", "trigger": "View all transactions button" },
+    { "from": "SBI-TRANSFER", "to": "SBI-AMOUNT", "trigger": "Select Payee card tap" },
+    { "from": "SBI-AMOUNT", "to": "SBI-REVIEW", "trigger": "Continue button" },
+    { "from": "SBI-REVIEW", "to": "SBI-CONFIRM", "trigger": "Confirm button" },
+    { "from": "SBI-CONFIRM", "to": "SBI-RECEIPT", "trigger": "PIN completion" },
+    { "from": "SBI-RECEIPT", "to": "SBI-HOME", "trigger": "Done button" },
+    { "from": "SBI-PROFILE", "to": "SBI-LOGIN", "trigger": "Logout button" }
+  ],
+  "deadEnds": [
+    { "screen": "SBI-LOGIN", "element": "Forgot MPIN? button", "reason": "No route implemented for MPIN recovery" },
+    { "screen": "SBI-LOGIN", "element": "Register link", "reason": "No onboarding route implemented" },
+    { "screen": "SBI-HOME", "element": "Pay Quick Action", "reason": "Not wired, placeholder" },
+    { "screen": "SBI-HOME", "element": "Scan & Pay Quick Action", "reason": "Not wired, placeholder" },
+    { "screen": "SBI-TRANSFER", "element": "Add New Payee button", "reason": "No payee addition flow implemented" },
+    { "screen": "SBI-SERVICES", "element": "Service tiles", "reason": "No individual service screens implemented" },
+    { "screen": "SBI-PROFILE", "element": "Settings item", "reason": "No settings route implemented" },
+    { "screen": "SBI-PROFILE", "element": "Security item", "reason": "No security route implemented" }
+  ],
+  "bottomNavigationCoverage": [
+    { "label": "Home", "route": "/home", "status": "wired" },
+    { "label": "Accounts", "route": "/accounts", "status": "wired" },
+    { "label": "Pay", "route": "/transfer", "status": "wired" },
+    { "label": "Services", "route": "/services", "status": "wired" },
+    { "label": "Profile", "route": "/profile", "status": "wired" }
+  ]
+}

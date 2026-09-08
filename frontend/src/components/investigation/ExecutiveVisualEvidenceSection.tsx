@@ -15,11 +15,11 @@ export default function ExecutiveVisualEvidenceSection({ data }: { data: FraudCa
 
   return (
     <>
-      <div className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm space-y-4">
+      <div className="space-y-4 rounded-[var(--card-radius)] border border-slate-200 bg-white p-5 shadow-[var(--card-elevation)] sm:p-6">
         <div className="flex items-center justify-between border-b border-slate-200 pb-3">
           <div className="flex items-center gap-2">
             <Camera className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
-            <h3 className="text-sm sm:text-base font-extrabold uppercase tracking-wider text-slate-900 font-mono">
+            <h3 className="text-sm sm:text-base font-semibold text-slate-900 font-mono">
               Visual Evidence
             </h3>
           </div>

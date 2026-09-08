@@ -37,7 +37,7 @@ export default function FindingEvidenceDrawer({
       subtitle={`${vm.sections?.evidenceCount ?? 0} observation${(vm.sections?.evidenceCount ?? 0) === 1 ? '' : 's'}`}
       headerExtra={
         vm.sections?.evidenceBasis && vm.sections.evidenceBasis !== 'none' ? (
-          <span className="inline-block mt-2 text-[10px] font-bold uppercase px-2 py-0.5 rounded border border-slate-300 bg-slate-50 text-slate-700">
+          <span className="inline-block mt-2 text-[13px] font-semibold uppercase px-2 py-0.5 rounded border border-slate-300 bg-slate-50 text-slate-700">
             {evidenceBasisBadge(vm.sections.evidenceBasis || '')}
           </span>
         ) : null
@@ -52,7 +52,7 @@ export default function FindingEvidenceDrawer({
               <VisualEvidenceCard key={entry.screenshot_id || entry.id} sha256={data.sha256} entry={entry} />
             ))}
           </div>
-          <p className="text-[11px] text-slate-500 mt-2">
+          <p className="text-[13px] text-slate-500 mt-2">
             Illustrated by: {(illustrated as any[]).map((e: any) => e.screenshot_id || e.id).join(', ')}
           </p>
         </FindingSection>
@@ -70,7 +70,7 @@ export default function FindingEvidenceDrawer({
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <p className="text-sm font-semibold text-slate-900">{item.title}</p>
                 <span
-                  className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border ${
+                  className={`text-[13px] font-semibold uppercase px-1.5 py-0.5 rounded border ${
                     item.category === 'dynamic'
                       ? 'bg-violet-50 text-violet-800 border-violet-200'
                       : 'bg-slate-100 text-slate-700 border-slate-200'
@@ -79,7 +79,7 @@ export default function FindingEvidenceDrawer({
                   {item.category === 'dynamic' ? 'Dynamic' : 'Static'}
                 </span>
               </div>
-              <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[13px]">
                 <div>
                   <dt className="text-slate-500">Source</dt>
                   <dd className="text-slate-800">{item.source}</dd>
@@ -93,24 +93,24 @@ export default function FindingEvidenceDrawer({
                 {item.timestampMs != null && (
                   <div className="col-span-2">
                     <dt className="text-slate-500">Timestamp</dt>
-                    <dd className="text-slate-800 font-mono text-[10px]">{item.timestampMs}</dd>
+                    <dd className="text-slate-800 font-mono text-[13px]">{item.timestampMs}</dd>
                   </div>
                 )}
               </dl>
               {item.rawDescription && (
-                <p className="text-[11px] font-mono text-slate-600 break-words bg-white border border-slate-100 rounded p-2">
+                <p className="text-[13px] font-mono text-slate-600 break-words bg-white border border-slate-100 rounded p-2">
                   {item.rawDescription}
                 </p>
               )}
               <div>
-                <p className="text-[10px] font-semibold uppercase text-slate-500 mb-1">Explanation</p>
+                <p className="text-[13px] font-semibold uppercase text-slate-500 mb-1">Explanation</p>
                 <p className="text-xs text-slate-700 leading-relaxed">{formatEvidenceCardInterpretation(item)}</p>
               </div>
               {item.evidence && (
                 <button
                   type="button"
                   onClick={() => openEvidence(item.evidence!.id)}
-                  className="text-[11px] font-semibold text-blue-700 hover:underline"
+                  className="text-[13px] font-semibold text-blue-700 hover:underline"
                 >
                   Open raw evidence record
                 </button>

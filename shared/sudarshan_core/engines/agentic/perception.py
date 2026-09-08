@@ -74,6 +74,19 @@ FRAUD_EVENT_CATEGORIES: Set[str] = {"overlay", "accessibility", "sms"}
 # Logcat capture line count
 LOGCAT_LINES: int = 40
 
+#: Packages that are soft keyboards. When an IME's input view is shown it owns
+#: the accessibility hierarchy, so `uiautomator dump` returns ITS tree and the
+#: app under test is simply absent from the result. See
+#: PerceptionPipeline._hierarchy_is_the_keyboards for the measured case.
+IME_PACKAGE_MARKERS: Tuple[str, ...] = (
+    "com.google.android.inputmethod",
+    "com.android.inputmethod",
+    "inputmethod.latin",
+    "com.samsung.android.honeyboard",
+    "com.touchtype.swiftkey",
+)
+_IME_PACKAGE_MARKERS = IME_PACKAGE_MARKERS
+
 
 # ─── Observation dataclass ────────────────────────────────────────────────────
 
@@ -240,6 +253,45 @@ _ACTIVITY_PATTERNS = (
 )
 
 
+#: Longest a text node may be and still be read as the caption of the input
+#: below it. A caption names one thing - "Full Name", "Mobile Number", "Date Of
+#: Birth" - and the longest real one seen in the corpus is well inside this.
+_MAX_FIELD_CAPTION_CHARS = 40
+
+
+def _looks_like_field_caption(text: str) -> bool:
+    """
+    Whether a text node can be the caption of the input that follows it.
+
+    The caption walk claims the last non-interactive text node it passed, on
+    the assumption that a form labels a box by putting words above it. On a
+    screen where the boxes carry their labels as HINTS instead, the last text
+    node before the first box is whatever prose the screen opens with - and
+    that prose became the field's identity.
+
+    Measured on the eChallan payload (com.hsjjsjs.android, dropped by Anubis):
+    four inputs, each with text="" and a hint - Full Name, Mobile Number,
+    Mother Name, Date Of Birth - beneath the sentence "After getting challan
+    details you can further go for online payment". That sentence became the
+    caption of the Full Name box, so the walk issued type_text against a
+    non-editable TextView, failed it twice, tried hide_keyboard, a click and a
+    scroll, and ran out of budget on a credential-harvesting form having typed
+    nothing.
+
+    Prose is excluded by length and by ending in sentence punctuation. Nothing
+    here tries to decide whether the words are a GOOD caption - only whether
+    they are shaped like one at all.
+    """
+    cleaned = (text or "").strip()
+    if not cleaned or len(cleaned) > _MAX_FIELD_CAPTION_CHARS:
+        return False
+    # A caption is a noun phrase, not a sentence. Trailing '.', '!' or '?' is
+    # the cheapest reliable tell, and '*' / ':' are ordinary caption garnish.
+    if cleaned.rstrip("*: ").endswith((".", "!", "?")):
+        return False
+    return True
+
+
 def parse_foreground_activity(dumpsys_output: str) -> str:
     """
     Extract the fully-qualified foreground component from `dumpsys activity
@@ -345,6 +397,7 @@ def in_investigation_scope(
     activity: str = "",
     ui_text: str = "",
     screen_type: str = "",
+    companion_packages: Optional[Any] = None,
 ) -> bool:
     """
     Whether the foreground window is somewhere the agent should keep exploring.
@@ -374,6 +427,11 @@ def in_investigation_scope(
     if not foreground_package or not target_package:
         return True
     if foreground_package == target_package:
+        return True
+    # A package the SAMPLE put in front of the victim is a surface of this
+    # investigation, not somewhere the walk wandered. Checked before the
+    # boundary rules below so a payload can never be mistaken for one.
+    if companion_packages and foreground_package in companion_packages:
         return True
     if foreground_package in INVESTIGATION_SCOPE_PACKAGES:
         return True
@@ -575,23 +633,154 @@ class PerceptionPipeline:
             provider.adb, "-s", self.device_serial, *args, timeout=30
         )
 
+    @property
+    def _channel(self):
+        """The persistent device connection, or an unavailable stand-in."""
+        from sudarshan_core.sandbox.device_channel import get_channel
+
+        return get_channel(self.device_serial)
+
     # ── Level 1: UI XML ───────────────────────────────────────────────────────
 
+    async def _reclaim_from_keyboard(self, ui_xml: str) -> str:
+        """
+        If the IME swallowed the hierarchy, put it away and dump again.
+
+        Returns the reclaimed dump, or the original when there was nothing to
+        reclaim - so callers can use this transparently.
+
+        BACK is the dismissal, for the same reason ToolExecutor uses it: while
+        the input view is shown the IME consumes BACK, and with no IME up the
+        same key would navigate the app instead. It is only sent here because
+        the dump has already proved the IME is up.
+        """
+        if not self._hierarchy_is_the_keyboards(ui_xml):
+            return ui_xml
+        logger.info(
+            "[Perception] The soft keyboard owns this hierarchy - %s is absent "
+            "from it. Dismissing and re-dumping, so field lookups and typing "
+            "target the app rather than the IME.",
+            self.package_name,
+        )
+        dismissed = await asyncio.to_thread(self._channel.press, "back")
+        if not dismissed:
+            await self._adb("shell", "input", "keyevent", "KEYCODE_BACK")
+        await asyncio.sleep(0.6)
+
+        regained = await asyncio.to_thread(self._channel.dump_hierarchy)
+        if not regained:
+            ok, out = await self._adb(
+                "shell", "uiautomator", "dump", "/data/local/tmp/ui_dump.xml",
+            )
+            ok, out = await self._adb("shell", "cat", "/data/local/tmp/ui_dump.xml")
+            m = re.search(r"(<\?xml.*)", out or "", re.DOTALL) if ok else None
+            regained = m.group(1) if m else ""
+        if regained and not self._hierarchy_is_the_keyboards(regained):
+            return regained
+        # Still the IME's. Hand back what we have rather than nothing: a poor
+        # observation is recoverable, a missing one ends the cycle.
+        logger.warning(
+            "[Perception] Keyboard still owns the hierarchy after BACK - this "
+            "observation describes the IME, not %s.", self.package_name,
+        )
+        return regained or ui_xml
+
+    def _hierarchy_is_the_keyboards(self, ui_xml: str) -> bool:
+        """
+        Whether this dump belongs to the soft keyboard rather than the app.
+
+        When the IME is up it owns the accessibility hierarchy, and
+        `uiautomator dump` returns ITS tree. Measured live against the eChallan
+        payload (com.hsjjsjs.android): after a field was filled, the entire dump
+        collapsed to one node -
+
+            com.google.android.inputmethod.latin:id/0_resource_name_obfuscated
+
+        - the app's four EditTexts were simply absent. Everything downstream
+        then reads as the app having no fields: the next field lookup fails,
+        `input text` goes to Gboard instead of the form, and the verifier's
+        field snapshot finds nothing and returns FAIL / ui_changed=false. That
+        is exactly the signature in the stored run - two type_text actions,
+        both FAIL, no UI change - on a form that fills correctly by hand.
+
+        Detected by IME package rather than by node count: a legitimately
+        single-node screen exists, and a legitimately busy IME does too.
+        """
+        if not ui_xml:
+            return False
+        packages = set(re.findall(r'package="([^"]+)"', ui_xml))
+        if not packages:
+            return False
+        ime = {p for p in packages if any(m in p for m in _IME_PACKAGE_MARKERS)}
+        if not ime:
+            return False
+        # Decided by "is there ANY app content here", not by whether the TARGET
+        # package is present.
+        #
+        # Keying on the target was wrong on exactly the samples this matters
+        # for. A dropper hands the foreground to its payload - Anubis
+        # (com.tjmonh.android) launches com.hsjjsjs.android, and the credential
+        # form belongs to the payload - so the target is legitimately absent
+        # from a dump that is perfectly good. Pressing BACK there would navigate
+        # AWAY from the form the run exists to observe.
+        #
+        # System UI is excluded too: the status bar and navigation bar appear
+        # in almost every dump and are not app content.
+        non_ime = {
+            p for p in packages - ime
+            if p not in ("com.android.systemui", "android")
+        }
+        return not non_ime
+
     async def _dump_ui_xml(self) -> Optional[str]:
-        """Dump the UI hierarchy XML from the device."""
-        try:
-            await self._adb("shell", "uiautomator", "dump", "/data/local/tmp/ui_dump.xml")
-            ok, output = await self._adb("shell", "cat", "/data/local/tmp/ui_dump.xml")
-            if not ok:
-                return None
-            m = re.search(r"(<\?xml.*)", output, re.DOTALL)
-            return m.group(1) if m else None
-        except asyncio.TimeoutError:
-            logger.warning("[Perception] UI dump timed out")
-            return None
-        except Exception as e:
-            logger.warning(f"[Perception] UI dump error: {e}")
-            return None
+        """
+        Dump the UI hierarchy XML from the device.
+
+        Prefers the persistent channel: one call over a connection that is
+        already open, against `uiautomator dump` + `cat`, which is two adb
+        subprocess spawns plus a device-side file write and read-back on EVERY
+        observation. That pair is the single largest cost in the perception
+        loop and the main reason the explorer managed five actions in ten
+        minutes.
+        """
+        xml = await asyncio.to_thread(self._channel.dump_hierarchy)
+        if not xml:
+            # Channel unavailable, or the agent hiccuped on this one dump. The
+            # subprocess path is slower but always present.
+            try:
+                await self._adb("shell", "uiautomator", "dump", "/data/local/tmp/ui_dump.xml")
+                ok, output = await self._adb("shell", "cat", "/data/local/tmp/ui_dump.xml")
+                if ok:
+                    m = re.search(r"(<\?xml.*)", output, re.DOTALL)
+                    xml = m.group(1) if m else None
+            except asyncio.TimeoutError:
+                logger.warning("[Perception] UI dump timed out")
+            except Exception as e:
+                logger.warning(f"[Perception] UI dump error: {e}")
+
+        # WebViews often hide their accessibility nodes until interacted with.
+        # If we see an empty WebView tag (self-closing), we send a TAB keyevent
+        # to focus it, which forces it to render its accessibility tree, then re-dump.
+        if xml and re.search(r'<node[^>]*class="android\.webkit\.WebView"[^>]*/>', xml):
+            logger.info("[Perception] Detected empty WebView. Sending TAB to wake up accessibility tree...")
+            await self._adb("shell", "input", "keyevent", "KEYCODE_TAB")
+            await asyncio.sleep(1.5)
+            
+            # Re-dump after waking it up
+            xml = await asyncio.to_thread(self._channel.dump_hierarchy)
+            if not xml:
+                try:
+                    await self._adb("shell", "uiautomator", "dump", "/data/local/tmp/ui_dump.xml")
+                    ok, output = await self._adb("shell", "cat", "/data/local/tmp/ui_dump.xml")
+                    if ok:
+                        m = re.search(r"(<\?xml.*)", output, re.DOTALL)
+                        xml = m.group(1) if m else None
+                except Exception:
+                    pass
+
+        if xml:
+            return await self._reclaim_from_keyboard(xml)
+        return None
 
     def _parse_ui_nodes(self, xml_content: str) -> List[UINode]:
         """
@@ -672,11 +861,38 @@ class PerceptionPipeline:
             is_scrollable = elem.attrib.get("scrollable") == "true"
             is_input = elem.attrib.get("class", "") == "android.widget.EditText"
             is_password = elem.attrib.get("password") == "true"
-            field_label = pending_label["text"] if is_input else ""
             # Optional attributes: absent from a standard uiautomator dump,
             # present on some vendor builds. Read defensively - a missing
             # attribute is "not stated", not a default value.
             hint = elem.attrib.get("hint", "").strip()
+            # The field's OWN hint outranks the caption walk.
+            #
+            # The walk claims the last text node it passed, on the assumption
+            # that a form labels a box by putting words above it. That holds for
+            # native layouts. It inverts on a WebView, where the placeholder is
+            # a separate node rendered INSIDE the field's bounds and emitted
+            # AFTER it in document order.
+            #
+            # Measured on the eChallan payload (com.hsjjsjs.android, dropped by
+            # Anubis), whose four inputs each have text="" and a hint:
+            #
+            #   EditText hint='Full Name*'     rid='fullName'  <- got "Challan Details"
+            #   View     text='Full Name*'                        (the card heading)
+            #   EditText hint='Mobile Number*' rid='mb'        <- got "Full Name*"
+            #   View     text='Mobile Number*'
+            #   EditText hint='Mother Name*'   rid='mt'        <- got "Mobile Number*"
+            #
+            # Every field inherited the previous one's placeholder, so the first
+            # box was labelled with the card's heading and the action issued
+            # against it read `type_text "Challan Details"`.
+            #
+            # A hint is an attribute ON the field - the app stating what it
+            # wants in the box. The caption walk is an inference from layout
+            # order. When the field says what it is, believe the field; this is
+            # the same precedence `_Widget.input_caption` already applies in
+            # ui_observation.py. Fields with no hint are unaffected: `hint` is
+            # "" there and the walk still supplies the caption.
+            field_label = (hint or pending_label["text"]) if is_input else ""
             input_type = elem.attrib.get("inputType", "") or elem.attrib.get(
                 "input-type", ""
             )
@@ -700,7 +916,13 @@ class PerceptionPipeline:
             elif checked_attr == "false":
                 checked = False
             area = max(0, (x2 - x1) * (y2 - y1))
-            label = text or desc or res_id
+            # `hint` belongs in this chain, ahead of the resource id. A hinted
+            # input has text="" by definition - the hint IS the visible label -
+            # so without it the role classifier was handed the raw resource id
+            # and asked to make sense of "mb" and "mt". Those are the Mobile
+            # Number and Mother Name boxes on the eChallan payload; with the
+            # hint they classify, without it they do not.
+            label = text or desc or hint or res_id
             classification = classify_semantic_role(
                 label=label,
                 class_name=cls_name,
@@ -758,6 +980,7 @@ class PerceptionPipeline:
                 and not is_input
                 and not is_clickable
                 and not is_checkable
+                and _looks_like_field_caption(own_text)
             ):
                 pending_label["text"] = own_text
 
@@ -815,7 +1038,19 @@ class PerceptionPipeline:
     # ── Level 2: Activity ─────────────────────────────────────────────────────
 
     async def _get_current_activity(self) -> str:
-        """Return the fully-qualified name of the foreground Activity."""
+        """
+        Return the fully-qualified name of the foreground Activity.
+
+        The channel answers this from the on-device agent, which is one call
+        against `dumpsys activity activities` - a subprocess spawn that also
+        dumps every task on the device and hands back kilobytes to parse.
+        """
+        try:
+            current = await asyncio.to_thread(self._channel.current_activity)
+            if current:
+                return current
+        except Exception:                        # noqa: BLE001
+            pass
         try:
             ok, output = await self._adb("shell", "dumpsys", "activity", "activities")
             if ok:
@@ -943,6 +1178,11 @@ class PerceptionPipeline:
         ts = int(time.time() * 1000)
         remote = f"/data/local/tmp/percept_{ts}.png"
         local = f"/tmp/percept_{ts}.png"
+
+        # One call over the open connection, instead of screencap + pull + rm:
+        # three subprocess spawns and a device-side temp file per screenshot.
+        if await asyncio.to_thread(self._channel.screenshot, local):
+            return local
 
         try:
             await self._adb("shell", "screencap", "-p", remote)

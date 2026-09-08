@@ -266,6 +266,15 @@ def test_no_goal_has_zero_completion_triggers(tracker, source_hooks):
             continue    # covered by the test below
         if goal.confirmation is ConfirmationMode.DEVICE_STATE:
             continue    # confirmed by an observation, not a hook
+        if goal.confirmation is ConfirmationMode.BEHAVIOR:
+            # Confirmed by a canonical behaviour, which maps several hooks onto
+            # one meaning and therefore survives a rename. NOT an exemption from
+            # the guard - the goal must still declare a real route, and the
+            # behaviour names are themselves checked against the agent source by
+            # test_behavior_taxonomy.test_every_declared_hook_is_emitted_by_the_agent.
+            if not goal.required_behaviors:
+                stranded.append((goal.stage, goal.name))
+            continue
         live = [h for h in goal.frida_hooks if _is_emitted(h, source_hooks)]
         if not live:
             stranded.append((goal.stage, goal.name))

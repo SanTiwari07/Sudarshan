@@ -150,8 +150,9 @@ export function overallAnalysisConfidence(
   records: InvestigationEvidence[],
   data: FraudCardData,
 ): number {
-  if (records.length === 0) return 0;
-  const avg = records.reduce((s, e) => s + e.confidence, 0) / records.length;
+  const scored = records.filter((e) => typeof e.confidence === 'number');
+  if (scored.length === 0) return 0;
+  const avg = scored.reduce((s, e) => s + (e.confidence as number), 0) / scored.length;
   const scoreBoost = Math.min(15, data.final_risk_score * 0.1);
   return Math.round(Math.min(100, avg * 0.85 + scoreBoost));
 }

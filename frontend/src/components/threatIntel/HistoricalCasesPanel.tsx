@@ -70,7 +70,7 @@ export default function HistoricalCasesPanel({ data }: { data: FraudCardData }) 
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-slate-100 text-[10px] uppercase text-slate-600">
+            <thead className="bg-slate-50 text-[13px] font-medium tracking-[0.01em] text-slate-500">
               <tr>
                 <th className="text-left px-4 py-2">Case</th>
                 <th className="text-right px-4 py-2">Similarity</th>
@@ -83,7 +83,7 @@ export default function HistoricalCasesPanel({ data }: { data: FraudCardData }) 
             <tbody className="divide-y divide-slate-100">
               {rows.map((r) => (
                 <tr key={r.sha256} className="hover:bg-slate-50">
-                  <td className="px-4 py-2 font-mono text-[10px]">{r.sha256.slice(0, 16)}…</td>
+                  <td className="px-4 py-2 font-mono text-[13px]">{r.sha256.slice(0, 16)}…</td>
                   <td className="px-4 py-2 text-right font-mono">{r.similarity}%</td>
                   <td className="px-4 py-2">
                     <Badge label={r.verdict} variant="risk" />

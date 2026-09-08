@@ -1,14 +1,20 @@
-# BOI Hackathon — Demo Login Credential Configuration
+# Demo account configuration
 
-> [!IMPORTANT]
-> **Do not commit `.env` files.** All passwords must be configured in your local `.env` file only. `.env` is listed in `.gitignore` and must never be pushed to version control.
-> This document does not publish credential values. Configure them locally.
+How to configure the demonstration accounts SUDARSHAN seeds at startup, for showing the three RBAC tiers without hand-creating users.
+
+Verified against `backend/app/demo_seed.py` and `backend/app/auth/auth.py` on **2026-08-27**.
+
+> **No credential values are published here, and none should be added.** Configure every password in your local `.env`, which is listed in `.gitignore` and must never be committed.
 
 ---
 
-## Recommended Demo Setup
+## Setup
 
-Copy `.env.example` to `.env` and set the following variables:
+```bash
+cp .env.example .env
+```
+
+Then set, at minimum:
 
 ```env
 ADMIN_USERNAME=admin
@@ -21,45 +27,68 @@ DEMO_ANALYST_USERNAME=analyst1
 DEMO_ANALYST_PASSWORD=<choose a strong password>
 ```
 
-**Fresh database:** Delete `sudarshan.db` (or reset the Docker volume) if `admin` was already created with a different password.
+Demo seeding runs only when `SUDARSHAN_SEED_DEMO_USERS` is truthy (`1`, `true`, `yes`, `on`).
+
+If `admin` already exists in the database with a different password, delete `sudarshan.db` or reset the `dbdata` volume before changing `ADMIN_PASSWORD` — seeding does not overwrite an existing account.
+
+> **Set every `DEMO_*_PASSWORD` explicitly.** `backend/app/demo_seed.py` falls back to hardcoded default passwords when these variables are unset. Those defaults are in the public source tree, so any instance seeded without them has publicly known credentials for a SOC-lead and an analyst account. This is a demonstration convenience and is unsafe on anything reachable beyond localhost.
 
 ---
 
-## Accounts After Startup
+## Accounts after startup
 
-| Role | Username (default) | Password | Case Visibility |
-|------|----------|----------|--------------------|
-| Admin | `admin` (from `ADMIN_USERNAME`) | Set in `ADMIN_PASSWORD` | All cases |
-| SOC Lead | `soclead` (from `DEMO_SOCLEAD_USERNAME`) | Set in `DEMO_SOCLEAD_PASSWORD` | All cases |
-| Analyst | `analyst1` (from `DEMO_ANALYST_USERNAME`) | Set in `DEMO_ANALYST_PASSWORD` | Own cases only |
+| Role | Username source | Password source | Case visibility |
+| :--- | :--- | :--- | :--- |
+| `admin` | `ADMIN_USERNAME` (default `admin`) | `ADMIN_PASSWORD` | All cases, plus role and account administration |
+| `soc_lead` | `DEMO_SOCLEAD_USERNAME` (default `soclead`) | `DEMO_SOCLEAD_PASSWORD` | All cases, verdict override, case assignment, audit log |
+| `analyst` | `DEMO_ANALYST_USERNAME` (default `analyst1`) | `DEMO_ANALYST_PASSWORD` | Own cases only |
 
-Login page: `http://localhost:5173/login`
+Sign in at `http://localhost:5173/login`.
 
-> [!NOTE]
-> If `ADMIN_PASSWORD` is left blank on first boot, a random password is **generated and printed once** to the backend startup log. Capture it from there — it is not shown again.
+> If `ADMIN_PASSWORD` is left blank on first boot, a random password is generated and printed **once** to the backend startup log. Capture it from there; it is not shown again.
 
 ---
 
-## Optional Alternate Usernames
-
-Add to `.env`:
+## Optional alias accounts
 
 ```env
 DEMO_SEED_BOI_ALIASES=true
 ```
 
-This seeds additional alias accounts (`boi_admin`, `boi_soclead`, `boi_analyst`) with passwords specified via the corresponding `DEMO_BOI_*_PASSWORD` environment variables.
+Seeds three additional accounts alongside the ones above:
+
+| Account | Username variable (default) | Password variable |
+| :--- | :--- | :--- |
+| Admin alias | `DEMO_BOI_ADMIN_USERNAME` (`boi_admin`) | `DEMO_BOI_ADMIN_PASSWORD` |
+| SOC lead alias | `DEMO_BOI_SOCLEAD_USERNAME` (`boi_soclead`) | `DEMO_BOI_SOCLEAD_PASSWORD` |
+| Analyst alias | `DEMO_BOI_ANALYST_USERNAME` (`boi_analyst`) | `DEMO_BOI_ANALYST_PASSWORD` |
+
+The same warning applies: each of these has a hardcoded default password in `demo_seed.py`. Set all three explicitly or leave `DEMO_SEED_BOI_ALIASES` off.
 
 ---
 
-## Manual Role Promotion (Admin Only)
+## Promoting a user manually
+
+Roles are never self-assigned. Registration always produces an `analyst`; elevation is an admin operation:
 
 ```http
-PATCH /api/v1/users/{user_id}/role
+PATCH /api/v1/auth/users/{user_id}/role
 Authorization: Bearer <admin token>
 Content-Type: application/json
 
 {"role": "soc_lead"}
 ```
 
-Assignable roles: `analyst`, `soc_lead`, `admin`.
+Assignable roles: `analyst`, `soc_lead`, `admin`. The change is recorded in the audit log with the previous and new role.
+
+Related administrative routes: `PATCH /api/v1/auth/users/{user_id}/active` to deactivate an account, and `POST /api/v1/auth/users/{user_id}/revoke-sessions` to invalidate its tokens. Full reference: [api/ENDPOINTS.md](api/ENDPOINTS.md).
+
+---
+
+## Before any non-local deployment
+
+- Turn demo seeding off: `SUDARSHAN_SEED_DEMO_USERS` unset or false, `DEMO_SEED_BOI_ALIASES` off.
+- Set a real `JWT_SECRET_KEY`; the backend refuses to start without one.
+- Set `SUDARSHAN_ENV=production` and `SANDBOX_CONTAINMENT_STRICT=true` so startup validation fails closed.
+- Control self-registration with `SUDARSHAN_ALLOW_REGISTRATION`.
+- Review the lockout policy: `AUTH_ACCOUNT_LOCK_THRESHOLD`, `AUTH_IP_LOCK_THRESHOLD`, `AUTH_LOCKOUT_WINDOW_MINUTES`.

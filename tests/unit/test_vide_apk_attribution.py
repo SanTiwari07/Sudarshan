@@ -22,18 +22,33 @@ from sudarshan_core.engines.vide.pipeline import safe_run_vide_analysis
 APK_DIR = Path(__file__).resolve().parents[2] / "tests" / "apks" / "VIDE_testapks"
 
 #: APK -> the institution its UI belongs to.
+#:
+#: Keyed on the corpus baseline id rather than on either baseline set's
+#: institution id, because the same bank is registered under two of those: the
+#: corpus entry ``BASE-01-SBI`` and the lab profile ``demo_sbi_yono``. Which one
+#: wins depends only on whether a corpus checkout is present, and both are the
+#: right answer to "which bank is this". :func:`_attributed_baseline` resolves
+#: whichever fired back to the corpus id, so the assertion is about the bank.
 EXPECTED = {
-    "BASE-01-SBI": "demo_sbi_yono",
-    "BASE-02-HDFC": "demo_hdfc_mobile",
-    "BASE-03-ICICI": "demo_icici_imobile",
-    "BASE-04-AXIS": "demo_axis_mobile",
-    "BASE-05-BOB": "demo_bob_world",
-    "BASE-06-PNB": "demo_pnb_one",
-    "BASE-07-BOI": "demo_boi_mobile",
-    "BASE-08-KOTAK": "demo_kotak_811",
-    "BASE-09-INDUS": "demo_indus_mobile",
-    "BASE-10-UNION": "demo_union_vyom",
+    "BASE-01-SBI": "State Bank of India",
+    "BASE-02-HDFC": "HDFC Bank",
+    "BASE-03-ICICI": "ICICI Bank",
+    "BASE-04-AXIS": "Axis Bank",
+    "BASE-05-BOB": "Bank of Baroda",
+    "BASE-06-PNB": "Punjab National Bank",
+    "BASE-07-BOI": "Bank of India",
+    "BASE-08-KOTAK": "Kotak Mahindra Bank",
+    "BASE-09-INDUS": "IndusInd Bank",
+    "BASE-10-UNION": "Union Bank of India",
 }
+
+
+def _attributed_baseline(institution_id: str) -> str:
+    """Corpus baseline id behind an attributed institution id, or the id itself."""
+    for baseline in get_baselines():
+        if baseline.institution_id == institution_id:
+            return (baseline.baseline_id or institution_id).upper()
+    return institution_id.upper()
 
 # Empty, and kept so a future miss is recorded here with its wrong answer rather
 # than the expectation being quietly deleted. BASE-01-SBI lived here until its
@@ -80,7 +95,7 @@ def test_reference_apk_is_attributed_to_its_own_bank(stem):
 
     assert compare["detected"] is True, f"{stem} was not detected at all"
 
-    attributed = compare["institution_id"]
+    attributed = _attributed_baseline(compare["institution_id"])
     if stem in KNOWN_MISATTRIBUTED:
         assert attributed == KNOWN_MISATTRIBUTED[stem], (
             f"{stem} now attributes to {attributed!r}. If that is the correct "
@@ -88,7 +103,9 @@ def test_reference_apk_is_attributed_to_its_own_bank(stem):
         )
         return
 
-    assert attributed == EXPECTED[stem]
+    assert attributed == stem, (
+        f"{stem} ({EXPECTED[stem]}) attributed to {attributed!r}"
+    )
 
 
 @requires_apks

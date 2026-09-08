@@ -88,6 +88,101 @@ export interface SeedResult {
   errors: string[];
 }
 
+export interface AntiEvasionStep {
+  key: string;
+  label: string;
+  ok: boolean;
+  detail: string;
+  duration_ms: number;
+  warnings: string[];
+  errors: string[];
+  data: Record<string, unknown>;
+}
+
+/**
+ * One before/after row.
+ *
+ * `before`, `after` and `delta` are null when the device would not surface the
+ * metric. That is not the same as zero and must never be rendered as zero -
+ * "0 SMS reads" is a claim about the sample, "unavailable" is a claim about
+ * the sandbox.
+ */
+export interface AntiEvasionDelta {
+  key: string;
+  label: string;
+  before: number | null;
+  after: number | null;
+  delta: number | null;
+  observable: boolean;
+  threat_class: boolean;
+  source: 'frida' | 'device' | string;
+  meaning: string;
+}
+
+export interface AntiEvasionSnapshot {
+  captured_at: number;
+  hooks_attached: boolean;
+  telemetry_source: string;
+  metrics: Record<string, number | null>;
+  notes: string[];
+}
+
+/**
+ * What the sequence physically did to the device.
+ *
+ * Reported separately from the verdict: the clock ends and the rows written
+ * are true whether or not the sample reacted, and they are how an analyst
+ * tells a working control from a silent no-op.
+ */
+export interface AntiEvasionApplied {
+  clock_before_ms: number;
+  clock_after_ms: number;
+  clock_shift_hours: number;
+  jobs_forced: number;
+  doze_cycled: boolean;
+  battery_level: number | null;
+  seeded: Record<string, number>;
+  already_present: Record<string, number>;
+}
+
+export type AntiEvasionVerdict =
+  | 'MALWARE_DETONATED'
+  | 'NO_CHANGES_OBSERVED'
+  | 'NO_RUNTIME_TELEMETRY';
+
+export interface AntiEvasionResult {
+  session_id: string;
+  device_serial: string;
+  package_name: string;
+  persona_id: string;
+  verdict: AntiEvasionVerdict | string;
+  summary: string;
+  ok: boolean;
+  steps: AntiEvasionStep[];
+  deltas: AntiEvasionDelta[];
+  before: AntiEvasionSnapshot | null;
+  after: AntiEvasionSnapshot | null;
+  applied_changes: AntiEvasionApplied | null;
+  triggered_keys: string[];
+  warnings: string[];
+  errors: string[];
+  started_at: number;
+  duration_seconds: number;
+}
+
+/** Progress frame pushed on the live stream while the sequence runs. */
+export interface AntiEvasionProgress {
+  phase: 'started' | 'running' | 'finished' | string;
+  index?: number;
+  total_steps?: number;
+  key?: string;
+  label?: string;
+  description?: string;
+  ok?: boolean;
+  detail?: string;
+  steps?: { key: string; label: string; description: string }[];
+}
+
 export interface ResilienceEvent {
   event: string;
   session_id: string;
@@ -170,6 +265,31 @@ export function seedPersona(sessionId: string, personaId: string) {
   return request<SeedResult>(
     `/analysis/${encodeURIComponent(sessionId)}/seed-persona`,
     { method: 'POST', body: JSON.stringify({ persona_id: personaId }) },
+  );
+}
+
+/**
+ * Run the full time-warp + persona sequence.
+ *
+ * Long-running by design - the device work is ~10-15s and the response is only
+ * returned once the closing behaviour snapshot has been taken. Progress
+ * arrives on the event stream meanwhile, so the caller does not have to wait
+ * blind on this promise.
+ */
+export function runAntiEvasion(
+  sessionId: string,
+  packageName = '',
+  personaId = 'default_retail_user',
+) {
+  return request<AntiEvasionResult>(
+    `/analysis/${encodeURIComponent(sessionId)}/autonomous-anti-evasion`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        package_name: packageName,
+        persona_id: personaId,
+      }),
+    },
   );
 }
 

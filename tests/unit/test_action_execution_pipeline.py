@@ -377,17 +377,56 @@ class TestParentClickableRecovery(unittest.TestCase):
 
 
 class TestDispatcherRetryLadder(unittest.TestCase):
-    def test_three_distinct_attempts(self):
+    """
+    The ladder's contract, updated for the strategy-based rungs.
+
+    The previous version of this test asserted the OLD three-rung shape:
+    ``tap`` at attempt 1, ``tap`` again at attempt 2, then None. That shape was
+    the defect, not the contract - all three rungs resolved the element the same
+    way, so a control that could not be found by text was not found by tapping
+    the coordinates the text lookup produced either, and the third attempt
+    repeated the second exactly.
+
+    What is asserted now is the property the old test was reaching for and could
+    not express: each rung must resolve the element by a DIFFERENT means, and
+    the ladder must still be bounded. The specific tool names are no longer
+    pinned, because which rungs an action can offer depends on which identities
+    it carries - and pinning them is what made the old ladder impossible to
+    extend without editing a test that had no opinion about the behaviour.
+    """
+
+    def test_each_rung_resolves_the_element_differently(self):
+        dispatcher = ActionDispatcher()
+        action = {"tool": "click_text", "text": "Affirm", "x": 10, "y": 20,
+                  "_bounds": "[100,1400][980,1700]"}
+
+        strategies, tried, attempt = [], [], 0
+        while True:
+            payload = dispatcher.retry_payload(action, attempt, tried=tried)
+            if payload is None:
+                break
+            attempt += 1
+            tried = payload["_strategies_tried"]
+            strategies.append(payload["_pipeline_debug"]["retry_strategy"])
+
+        self.assertGreater(len(strategies), 1, "the ladder must have rungs")
+        self.assertEqual(
+            len(strategies), len(set(strategies)),
+            f"a rung was repeated: {strategies}",
+        )
+
+    def test_the_ladder_terminates(self):
         dispatcher = ActionDispatcher()
         action = {"tool": "click_text", "text": "Affirm", "x": 10, "y": 20}
-        r1 = dispatcher.retry_payload(action, 1)
-        r2 = dispatcher.retry_payload(action, 2)
-        r3 = dispatcher.retry_payload(action, 3)
-        self.assertEqual(r1["tool"], "tap")
-        self.assertEqual(r2["tool"], "tap")
-        self.assertIsNone(r3)
-        self.assertEqual(r1["_pipeline_debug"]["retry_strategy"], "clickable_parent_or_geometry")
-        self.assertEqual(r2["_pipeline_debug"]["retry_strategy"], "visual_grounding_tap")
+
+        tried, attempt = [], 0
+        while attempt < 50:
+            payload = dispatcher.retry_payload(action, attempt, tried=tried)
+            if payload is None:
+                return
+            attempt += 1
+            tried = payload["_strategies_tried"]
+        self.fail("retry_payload never returned None")
 
 
 if __name__ == "__main__":

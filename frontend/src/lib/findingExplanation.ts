@@ -10,8 +10,9 @@ export type FindingExplanation = {
   evidenceInterpretation: string;
   recommendedAction: string;
   artifactIntro: string;
-  confidenceTierLabel: string;
-  confidenceTierExplanation: string;
+  /** Null when the producing engine reported no confidence for the record. */
+  confidenceTierLabel: string | null;
+  confidenceTierExplanation: string | null;
 };
 
 function hay(evidence: InvestigationEvidence): string {
@@ -347,8 +348,9 @@ export function buildFindingExplanation(
     evidenceInterpretation: evidenceInterpretation(evidence),
     recommendedAction: recommendedAction(evidence),
     artifactIntro: artifactIntro(evidence),
-    confidenceTierLabel: confidenceTierLabel(confidence),
-    confidenceTierExplanation: confidenceTierExplanation(confidence),
+    confidenceTierLabel: confidence != null ? confidenceTierLabel(confidence) : null,
+    confidenceTierExplanation:
+      confidence != null ? confidenceTierExplanation(confidence) : null,
   };
 }
 

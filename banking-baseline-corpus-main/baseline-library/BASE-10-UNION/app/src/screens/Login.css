@@ -1,0 +1,42 @@
+.union-login {
+  padding: var(--space-16);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: var(--color-bg);
+}
+
+.union-login-header {
+  margin-top: 4rem;
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.union-login-header h1 {
+  color: var(--color-primary);
+  margin-bottom: 0.5rem;
+}
+
+.union-login-header p {
+  color: var(--color-text-secondary);
+}
+
+.union-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  background: var(--color-surface);
+  padding: 1.5rem;
+  border-radius: var(--radius-card);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.union-login-submit {
+  margin-top: 1rem;
+}
+
+.union-login-actions {
+  margin-top: 2rem;
+  display: flex;
+  justify-content: center;
+}

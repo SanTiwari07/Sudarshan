@@ -88,11 +88,17 @@ class TestCaseBZeroDynamic:
 
     def test_structural_completeness(self):
         html = build_report(_base())
-        assert "Static Forensic Analysis" in html
+        # Part structure - the dossier's four parts must all be present.
+        for part in ("Part A", "Part B", "Part C", "Appendix"):
+            assert part in html
+        assert "Executive Conclusion" in html
+        assert "Key Findings" in html
+        assert "Forensic Evidence" in html
         assert "Threat Intelligence" in html
-        assert "Dynamic Analysis" in html
-        assert "Recommendations" in html
+        assert "Attack &amp; Behaviour Analysis" in html
+        assert "Recommended Response" in html
         assert "Evidence Ledger" in html
+        assert "Chain of Custody" in html
 
     def test_dynamic_banner_renders(self):
         html = build_report(_base())
@@ -165,7 +171,7 @@ class TestCaseBZeroDynamic:
         r = _base()
         r["frs_breakdown"]["dynamic_ran"] = True
         html = build_report(r)
-        assert "hook-triggering" in html or "goes dormant" in html or "Frida environment" in html
+        assert "no instrumented API fired" in html or "stays dormant" in html
 
 
 # ===========================================================================
@@ -275,7 +281,7 @@ class TestCaseCDualDegraded:
         assert "No MITRE techniques mapped" in self._render()
 
     def test_recommendations_render(self):
-        assert "Recommendations" in self._render()
+        assert "Recommended Response" in self._render()
 
     def test_dynamic_banner_does_not_mention_api_keys(self):
         html = self._render()
@@ -327,7 +333,7 @@ class TestEdgeCases:
         r["risk_band"] = "Safe"
         r["final_risk_score"] = 15.0
         html = build_report(r)
-        assert "LIKELY SAFE" in html
+        assert "NO ADVERSE FINDING" in html
 
     def test_evidence_json_empty_records(self, tmp_path):
         (tmp_path / "evidence.json").write_text(json.dumps({"records": []}), encoding="utf-8")
@@ -345,3 +351,29 @@ class TestEdgeCases:
         html = build_report(_base())
         for tag in ["<!DOCTYPE html>", "<html", "<head>", "<body>", "</html>"]:
             assert tag in html
+
+    def test_masthead_carries_the_mark_and_the_wordmark(self):
+        """
+        The masthead is a logo, a wordmark and a descriptor, and the logo has
+        to travel inside the file: this export is a single document that gets
+        emailed around with no network behind it.
+        """
+        html = build_report(_base())
+        assert 'class="brand-mark" src="data:image/png;base64,' in html
+        assert ">SUDARSHAN<" in html
+        assert "Banking Malware Intelligence" in html
+        assert 'class="brand-mark-fallback"' not in html
+
+    def test_masthead_survives_a_missing_brand_asset(self, monkeypatch):
+        """
+        A brand asset must never take an export down with it. Without the PNG
+        the masthead falls back to a ruled monogram and the report still
+        renders in full.
+        """
+        from sudarshan_core.engines import report_generator as rg
+
+        monkeypatch.setattr(rg.BRAND, "mark_data_uri", lambda small=True: None)
+        html = build_report(_base())
+        assert 'class="brand-mark-fallback"' in html
+        assert ">SUDARSHAN<" in html
+        assert "<!DOCTYPE html>" in html

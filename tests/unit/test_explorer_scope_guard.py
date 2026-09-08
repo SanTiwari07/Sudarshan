@@ -39,13 +39,43 @@ def test_the_sample_itself_is_in_scope():
 
 @pytest.mark.parametrize("pkg", sorted(INVESTIGATION_SCOPE_PACKAGES))
 def test_system_surfaces_the_investigation_needs_are_in_scope(pkg):
-    """Permission dialogs, Settings and the installer are legitimate targets."""
+    """Permission dialogs and the package installer are legitimate targets."""
     assert in_investigation_scope(pkg, TARGET) is True
 
 
-def test_settings_stays_in_scope_so_the_accessibility_goal_is_reachable():
-    """Bouncing off com.android.settings would make that fraud goal impossible."""
-    assert in_investigation_scope("com.android.settings", TARGET, screen_type="ACCESSIBILITY_DIALOG") is True
+def test_settings_not_exploration_state():
+    """
+    An ordinary Settings screen is OUT of scope.
+
+    com.android.settings used to be unconditionally in scope, so that the
+    accessibility goal stayed reachable. That made the out-of-scope recovery
+    path unreachable instead: a measured 300s run answered 55 of 55
+    observations from Settings and never once returned to the sample. Settings
+    is a full application with effectively unbounded UI, and none of it is the
+    sample's own behaviour.
+    """
+    assert in_investigation_scope("com.android.settings", TARGET) is False
+    assert in_investigation_scope(
+        "com.android.settings", TARGET, screen_type="SETTINGS",
+    ) is False
+
+
+@pytest.mark.parametrize("screen_type", [
+    "SYSTEM_PERMISSION",
+    "ACCESSIBILITY_DIALOG",
+    "VPN_REQUEST",
+    "PACKAGE_INSTALLER",
+])
+def test_a_consent_prompt_hosted_by_settings_is_still_in_scope(screen_type):
+    """
+    The accessibility and VPN consent flows are hosted BY Settings.
+
+    They stay reachable because the screen is a prompt the sample raised, which
+    is a property of the screen rather than of the package hosting it.
+    """
+    assert in_investigation_scope(
+        "com.android.settings", TARGET, screen_type=screen_type,
+    ) is True
 
 
 @pytest.mark.parametrize("pkg", [

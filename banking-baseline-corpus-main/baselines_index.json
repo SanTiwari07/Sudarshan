@@ -1,0 +1,96 @@
+﻿{
+    "corpusVersion":  "1.0",
+    "lastUpdated":  "2026-08-13",
+    "baselines":  [
+                      {
+                          "id":  "BASE-01-SBI",
+                          "appName":  "YONO SBI",
+                          "fingerprints":  "baseline-library/BASE-01-SBI/fingerprints.json",
+                          "design":  "baseline-library/BASE-01-SBI/design.md",
+                          "bank":  "State Bank of India",
+                          "meta":  "baseline-library/BASE-01-SBI/app.meta.json",
+                          "navigation":  "baseline-library/BASE-01-SBI/navigation.manifest.json"
+                      },
+                      {
+                          "id":  "BASE-02-HDFC",
+                          "appName":  "HDFC Bank MobileBanking",
+                          "fingerprints":  "baseline-library/BASE-02-HDFC/fingerprints.json",
+                          "design":  "baseline-library/BASE-02-HDFC/design.md",
+                          "bank":  "HDFC Bank",
+                          "meta":  "baseline-library/BASE-02-HDFC/app.meta.json",
+                          "navigation":  "baseline-library/BASE-02-HDFC/navigation.manifest.json"
+                      },
+                      {
+                          "id":  "BASE-03-ICICI",
+                          "appName":  "iMobile Pay",
+                          "fingerprints":  "baseline-library/BASE-03-ICICI/fingerprints.json",
+                          "design":  "baseline-library/BASE-03-ICICI/design.md",
+                          "bank":  "ICICI Bank",
+                          "meta":  "baseline-library/BASE-03-ICICI/app.meta.json",
+                          "navigation":  "baseline-library/BASE-03-ICICI/navigation.manifest.json"
+                      },
+                      {
+                          "id":  "BASE-04-AXIS",
+                          "appName":  "Axis Mobile",
+                          "fingerprints":  "baseline-library/BASE-04-AXIS/fingerprints.json",
+                          "design":  "baseline-library/BASE-04-AXIS/design.md",
+                          "bank":  "Axis Bank",
+                          "meta":  "baseline-library/BASE-04-AXIS/app.meta.json",
+                          "navigation":  "baseline-library/BASE-04-AXIS/navigation.manifest.json"
+                      },
+                      {
+                          "id":  "BASE-05-BOB",
+                          "appName":  "bob World",
+                          "fingerprints":  "baseline-library/BASE-05-BOB/fingerprints.json",
+                          "design":  "baseline-library/BASE-05-BOB/design.md",
+                          "bank":  "Bank of Baroda",
+                          "meta":  "baseline-library/BASE-05-BOB/app.meta.json",
+                          "navigation":  "baseline-library/BASE-05-BOB/navigation.manifest.json"
+                      },
+                      {
+                          "id":  "BASE-06-PNB",
+                          "appName":  "PNB ONE",
+                          "fingerprints":  "baseline-library/BASE-06-PNB/fingerprints.json",
+                          "design":  "baseline-library/BASE-06-PNB/design.md",
+                          "bank":  "Punjab National Bank",
+                          "meta":  "baseline-library/BASE-06-PNB/app.meta.json",
+                          "navigation":  "baseline-library/BASE-06-PNB/navigation.manifest.json"
+                      },
+                      {
+                          "id":  "BASE-07-BOI",
+                          "appName":  "BOI Mobile",
+                          "fingerprints":  "baseline-library/BASE-07-BOI/fingerprints.json",
+                          "design":  "baseline-library/BASE-07-BOI/design.md",
+                          "bank":  "Bank of India",
+                          "meta":  "baseline-library/BASE-07-BOI/app.meta.json",
+                          "navigation":  "baseline-library/BASE-07-BOI/navigation.manifest.json"
+                      },
+                      {
+                          "id":  "BASE-08-KOTAK",
+                          "appName":  "Kotak811",
+                          "fingerprints":  "baseline-library/BASE-08-KOTAK/fingerprints.json",
+                          "design":  "baseline-library/BASE-08-KOTAK/design.md",
+                          "bank":  "Kotak Mahindra Bank",
+                          "meta":  "baseline-library/BASE-08-KOTAK/app.meta.json",
+                          "navigation":  "baseline-library/BASE-08-KOTAK/navigation.manifest.json"
+                      },
+                      {
+                          "id":  "BASE-09-INDUS",
+                          "appName":  "IndusMobile",
+                          "fingerprints":  "baseline-library/BASE-09-INDUS/fingerprints.json",
+                          "design":  "baseline-library/BASE-09-INDUS/design.md",
+                          "bank":  "IndusInd Bank",
+                          "meta":  "baseline-library/BASE-09-INDUS/app.meta.json",
+                          "navigation":  "baseline-library/BASE-09-INDUS/navigation.manifest.json"
+                      },
+                      {
+                          "id":  "BASE-10-UNION",
+                          "appName":  "Vyom",
+                          "fingerprints":  "baseline-library/BASE-10-UNION/fingerprints.json",
+                          "design":  "baseline-library/BASE-10-UNION/design.md",
+                          "bank":  "Union Bank of India",
+                          "meta":  "baseline-library/BASE-10-UNION/app.meta.json",
+                          "navigation":  "baseline-library/BASE-10-UNION/navigation.manifest.json"
+                      }
+                  ]
+}

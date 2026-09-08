@@ -40,6 +40,10 @@ export type ScreenshotManifestEntry = {
   deduplication_status?: string;
   visual_observation?: string;
   runtime_observation?: string;
+  screen_summary?: string;
+  corroboration_summary?: string;
+  semantic_type?: string;
+  observation_source?: string;
 };
 
 export type VisualEvidenceIndex = {
@@ -113,8 +117,20 @@ export function screenshotStageLabel(entry: ScreenshotManifestEntry): string {
   return entry.stage || entry.category || entry.source || 'Runtime capture';
 }
 
+/**
+ * Short human label for a frame, for tiles and headings.
+ *
+ * `screen_summary` leads: it names the KIND of screen and its Activity
+ * ("Bank login screen (LoginActivity)"), which is what a gallery caption is
+ * for. The remaining fallbacks describe the capture rather than the picture
+ * and are kept only for manifests written before that field existed.
+ *
+ * Use `visual_observation` where a full sentence fits - it lists the fields
+ * and controls too, which is too much for a tile.
+ */
 export function screenshotDescription(entry: ScreenshotManifestEntry): string {
   return (
+    entry.screen_summary ||
     entry.label ||
     entry.trigger_event ||
     entry.reason ||

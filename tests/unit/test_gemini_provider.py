@@ -195,6 +195,7 @@ def test_legacy_env_is_primary_only(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "legacy-key")
     monkeypatch.setenv("GEMINI_MODEL", "gemini-2.5-flash")
     monkeypatch.delenv("GEMINI_PRIMARY_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_PRIMARY_MODEL", raising=False)
     monkeypatch.delenv("GEMINI_FALLBACK_API_KEY", raising=False)
     from sudarshan_core.ai.gemini_settings import load_gemini_settings
 

@@ -1,0 +1,65 @@
+{
+  "entries": [
+    {
+      "timestamp": "00:00",
+      "event": "Application launched",
+      "description": "User opens application.",
+      "evidence_moment_id": "",
+      "type": "LAUNCH",
+      "severity": "INFO"
+    },
+    {
+      "timestamp": "03:09",
+      "event": "Runtime permission dialog",
+      "description": "Archive | Uninstall | Force stop | Notifications | About 0 notifications per week | Permissions | Contacts and accounts, Files, Microphone, Music and audio, N | Storage & cache | 3.69 MB used in inter",
+      "evidence_moment_id": "EVM-16f278ba",
+      "type": "SUSPICIOUS_PERMISSION",
+      "severity": "HIGH",
+      "state_id": "STATE-008",
+      "screenshot_ids": [],
+      "evidence_ids": []
+    },
+    {
+      "timestamp": "03:53",
+      "event": "Runtime permission dialog",
+      "description": "Archive | Uninstall | Force stop | Notifications | About 0 notifications per week | Permissions | Contacts and accounts, Files, Microphone, Music and audio, N | Storage & cache | 3.69 MB used in inter",
+      "evidence_moment_id": "EVM-6b480a1c",
+      "type": "SUSPICIOUS_PERMISSION",
+      "severity": "HIGH",
+      "state_id": "STATE-009",
+      "screenshot_ids": [],
+      "evidence_ids": []
+    },
+    {
+      "timestamp": "04:14",
+      "event": "Runtime permission dialog",
+      "description": "Storage & cache | 3.69 MB used in internal storage | Mobile data usage | No data used | Screen time | Less than 1 minute today | App battery usage | No battery use since last full charge | Open by def",
+      "evidence_moment_id": "EVM-1c9eeab0",
+      "type": "SUSPICIOUS_PERMISSION",
+      "severity": "HIGH",
+      "state_id": "STATE-010",
+      "screenshot_ids": [],
+      "evidence_ids": []
+    },
+    {
+      "timestamp": "04:34",
+      "event": "Runtime permission dialog",
+      "description": "Storage & cache | 3.69 MB used in internal storage | Mobile data usage | No data used | Screen time | Less than 1 minute today | App battery usage | No battery use since last full charge | Open by def",
+      "evidence_moment_id": "EVM-e3286898",
+      "type": "SUSPICIOUS_PERMISSION",
+      "severity": "HIGH",
+      "state_id": "EXT-003",
+      "screenshot_ids": [],
+      "evidence_ids": []
+    }
+  ],
+  "narrative": [
+    "00:00\nUser opens application.",
+    "03:09\nArchive | Uninstall | Force stop | Notifications | About 0 notifications per week | Permissions | Contacts and accounts, Files, Microphone, Music and audio, N | Storage & cache | 3.69 MB used in inter",
+    "03:53\nArchive | Uninstall | Force stop | Notifications | About 0 notifications per week | Permissions | Contacts and accounts, Files, Microphone, Music and audio, N | Storage & cache | 3.69 MB used in inter",
+    "04:14\nStorage & cache | 3.69 MB used in internal storage | Mobile data usage | No data used | Screen time | Less than 1 minute today | App battery usage | No battery use since last full charge | Open by def",
+    "04:34\nStorage & cache | 3.69 MB used in internal storage | Mobile data usage | No data used | Screen time | Less than 1 minute today | App battery usage | No battery use since last full charge | Open by def"
+  ],
+  "chain": "Suspicious Permission",
+  "moment_count": 5
+}

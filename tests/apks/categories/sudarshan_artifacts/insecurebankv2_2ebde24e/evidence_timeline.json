@@ -1,0 +1,342 @@
+[
+  {
+    "type": "evidence_moment",
+    "timestamp": "03:09",
+    "evidence_moment_id": "EVM-16f278ba",
+    "event_type": "SUSPICIOUS_PERMISSION",
+    "state_id": "STATE-008",
+    "screenshot_ids": [],
+    "runtime_event_ids": []
+  },
+  {
+    "type": "evidence_moment",
+    "timestamp": "03:53",
+    "evidence_moment_id": "EVM-6b480a1c",
+    "event_type": "SUSPICIOUS_PERMISSION",
+    "state_id": "STATE-009",
+    "screenshot_ids": [],
+    "runtime_event_ids": []
+  },
+  {
+    "type": "evidence_moment",
+    "timestamp": "04:14",
+    "evidence_moment_id": "EVM-1c9eeab0",
+    "event_type": "SUSPICIOUS_PERMISSION",
+    "state_id": "STATE-010",
+    "screenshot_ids": [],
+    "runtime_event_ids": []
+  },
+  {
+    "type": "evidence_moment",
+    "timestamp": "04:34",
+    "evidence_moment_id": "EVM-e3286898",
+    "event_type": "SUSPICIOUS_PERMISSION",
+    "state_id": "EXT-003",
+    "screenshot_ids": [],
+    "runtime_event_ids": []
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "ACT-017",
+    "state_id": "STATE-001",
+    "semantic_role": "PROGRESS",
+    "verified": true
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "ACT-024",
+    "state_id": "STATE-002",
+    "semantic_role": "INPUT",
+    "verified": false
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "ACT-025",
+    "state_id": "STATE-002",
+    "semantic_role": "INPUT",
+    "verified": false
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "ACT-023",
+    "state_id": "STATE-002",
+    "semantic_role": "PROGRESS",
+    "verified": true
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "ACT-052",
+    "state_id": "STATE-003",
+    "semantic_role": "PROGRESS",
+    "verified": true
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "ACT-058",
+    "state_id": "STATE-004",
+    "semantic_role": "INPUT",
+    "verified": false
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "ACT-059",
+    "state_id": "STATE-004",
+    "semantic_role": "INPUT",
+    "verified": false
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "",
+    "state_id": "",
+    "semantic_role": "",
+    "verified": true
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "ACT-098",
+    "state_id": "STATE-005",
+    "semantic_role": "PROGRESS",
+    "verified": true
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "",
+    "state_id": "",
+    "semantic_role": "",
+    "verified": true
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "ACT-099",
+    "state_id": "STATE-005",
+    "semantic_role": "PROGRESS",
+    "verified": true
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "ACT-026",
+    "state_id": "STATE-002",
+    "semantic_role": "PROGRESS",
+    "verified": false
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "ACT-027",
+    "state_id": "STATE-002",
+    "semantic_role": "PROGRESS",
+    "verified": true
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "ACT-168",
+    "state_id": "STATE-006",
+    "semantic_role": "ACCEPT",
+    "verified": true
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "ACT-024",
+    "state_id": "STATE-002",
+    "semantic_role": "INPUT",
+    "verified": true
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "ACT-186",
+    "state_id": "STATE-007",
+    "semantic_role": "ACCEPT",
+    "verified": false
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "",
+    "state_id": "",
+    "semantic_role": "",
+    "verified": false
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "ACT-184",
+    "state_id": "STATE-007",
+    "semantic_role": "ACCEPT",
+    "verified": true
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "ACT-241",
+    "state_id": "STATE-008",
+    "semantic_role": "ACCEPT",
+    "verified": true
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "",
+    "state_id": "",
+    "semantic_role": "",
+    "verified": true
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "ACT-214",
+    "state_id": "STATE-008",
+    "semantic_role": "",
+    "verified": true
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "ACT-377",
+    "state_id": "STATE-009",
+    "semantic_role": "ACCEPT",
+    "verified": true
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "ACT-350",
+    "state_id": "STATE-009",
+    "semantic_role": "",
+    "verified": true
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "ACT-534",
+    "state_id": "STATE-010",
+    "semantic_role": "ACCEPT",
+    "verified": false
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "",
+    "state_id": "",
+    "semantic_role": "",
+    "verified": true
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "",
+    "state_id": "EXT-002",
+    "semantic_role": "",
+    "verified": true
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "",
+    "state_id": "STATE-008",
+    "semantic_role": "",
+    "verified": false
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "",
+    "state_id": "STATE-007",
+    "semantic_role": "",
+    "verified": true
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "",
+    "state_id": "",
+    "semantic_role": "",
+    "verified": true
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "",
+    "state_id": "",
+    "semantic_role": "",
+    "verified": true
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "",
+    "state_id": "EXT-002",
+    "semantic_role": "",
+    "verified": true
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "",
+    "state_id": "",
+    "semantic_role": "",
+    "verified": true
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "ACT-053",
+    "state_id": "STATE-003",
+    "semantic_role": "PROGRESS",
+    "verified": true
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "ACT-025",
+    "state_id": "STATE-002",
+    "semantic_role": "INPUT",
+    "verified": false
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "",
+    "state_id": "STATE-001",
+    "semantic_role": "",
+    "verified": false
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "",
+    "state_id": "STATE-001",
+    "semantic_role": "",
+    "verified": true
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "",
+    "state_id": "",
+    "semantic_role": "",
+    "verified": true
+  },
+  {
+    "type": "action",
+    "timestamp": "ACTION_DISCOVERED",
+    "action_id": "",
+    "state_id": "",
+    "semantic_role": "",
+    "verified": true
+  }
+]

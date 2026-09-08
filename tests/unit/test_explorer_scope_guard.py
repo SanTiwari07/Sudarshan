@@ -45,7 +45,7 @@ def test_system_surfaces_the_investigation_needs_are_in_scope(pkg):
 
 def test_settings_stays_in_scope_so_the_accessibility_goal_is_reachable():
     """Bouncing off com.android.settings would make that fraud goal impossible."""
-    assert in_investigation_scope("com.android.settings", TARGET) is True
+    assert in_investigation_scope("com.android.settings", TARGET, screen_type="ACCESSIBILITY_DIALOG") is True
 
 
 @pytest.mark.parametrize("pkg", [

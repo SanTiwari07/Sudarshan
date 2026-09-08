@@ -170,7 +170,6 @@ services:
       # and every later container reuses it.
       - ./tools:/opt/frida-cache
       - mitmproxy_har:/mitmproxy_har:ro
-    mem_limit: 4g
     cpus: 2.0
     security_opt:
       - "no-new-privileges:true"

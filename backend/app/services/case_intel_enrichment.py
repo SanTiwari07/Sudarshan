@@ -35,7 +35,7 @@ def should_recorrelate_threat_intel(tc: Optional[Dict[str, Any]]) -> bool:
     return (
         (vt_key and "VirusTotal" not in queried_sources)
         or (otx_key and "AlienVault OTX" not in queried_sources)
-        or (abuse_key and "AbuseIPDB" not in queried_sources)
+        or (abuse_key and "AbuseIPDB" not in queried_sources and not tc.get("abuseipdb_checked_empty"))
         or (not tc.get("available") and not queried_sources)
     )
 

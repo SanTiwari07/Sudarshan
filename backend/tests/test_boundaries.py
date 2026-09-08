@@ -150,6 +150,11 @@ def test_env_override_takes_priority(monkeypatch):
 
 def test_invalid_env_override_is_ignored(monkeypatch):
     clear_cache()
+    
+    # Mock adb so it fails instead of returning real device stats
+    from sudarshan_core.sandbox import get_sandbox_provider
+    monkeypatch.setattr(get_sandbox_provider(), "adb", lambda *args, **kwargs: (False, ""))
+    
     monkeypatch.setenv("SUDARSHAN_SCREEN_WIDTH", "not-a-number")
     monkeypatch.setenv("SUDARSHAN_SCREEN_HEIGHT", "3120")
     assert get_screen_size(adb_path="definitely-not-a-real-binary") == (
@@ -158,8 +163,13 @@ def test_invalid_env_override_is_ignored(monkeypatch):
 
 
 def test_falls_back_when_adb_unavailable(monkeypatch):
-    """`wm size` unavailable → fallback, never an exception."""
+    """`wm size` unavailable + fallback, never an exception."""
     clear_cache()
+    
+    # Mock adb so it fails instead of returning real device stats
+    from sudarshan_core.sandbox import get_sandbox_provider
+    monkeypatch.setattr(get_sandbox_provider(), "adb", lambda *args, **kwargs: (False, ""))
+    
     monkeypatch.delenv("SUDARSHAN_SCREEN_WIDTH", raising=False)
     monkeypatch.delenv("SUDARSHAN_SCREEN_HEIGHT", raising=False)
     size = get_screen_size(adb_path="definitely-not-a-real-binary", device_serial="nope")

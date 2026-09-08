@@ -1,0 +1,65 @@
+2026-09-08 02:22:25,059 [INFO] sudarshan_core.engines.evidence_store: [EvidenceStore] [CRITICAL] [EVID-001] AccessibilityService.onAccessibilityEvent  - ATS screen scraping detected on banking UI
+2026-09-08 02:22:26,577 [INFO] sudarshan_core.engines.runtime_lifecycle: [RuntimeLifecycle] runtime_requested QUEUED/orchestrator Dynamic analysis requested for case
+2026-09-08 02:22:26,577 [INFO] sudarshan_core.engines.runtime_lifecycle: [RuntimeLifecycle] runtime_controller_started STARTING/frida_sandbox run_frida_analysis invoked
+2026-09-08 02:22:26,577 [WARNING] sudarshan_core.security.sandbox_containment: [Containment] GUEST_FULL_COMPROMISE_EXPECTED: ROOT_REQUIRED=true and SELinux permissive are required for Frida. Treat the Android guest as fully compromised after each session; never reuse it for trusted workloads.
+2026-09-08 02:22:26,578 [INFO] sudarshan_core.sandbox.provider: [auto] connect/adb: OK C:\Users\sansk\AppData\Local\Android\Sdk\platform-tools\adb.EXE
+2026-09-08 02:22:27,843 [INFO] sudarshan_core.sandbox.provider: [auto] Detected Android devices:
+2026-09-08 02:22:27,843 [INFO] sudarshan_core.sandbox.provider:   [1] Android Studio AVD — emulator-5554 — x86_64 — Android 17 — Pixel_6
+2026-09-08 02:22:27,864 [INFO] sudarshan_core.sandbox.auto: [auto] Selected sandbox: Android Studio AVD (emulator-5554)
+2026-09-08 02:22:27,864 [INFO] sudarshan_core.sandbox.provider: [auto] connect/device_detect: OK emulator-5554
+2026-09-08 02:22:27,892 [INFO] sudarshan_core.sandbox.provider: [auto] connect/online: OK emulator-5554
+2026-09-08 02:22:29,284 [INFO] sudarshan_core.sandbox.provider: [auto] connect/props: OK android=17 api=37 abi=x86_64
+2026-09-08 02:22:29,343 [INFO] sudarshan_core.sandbox.provider: [auto] Root already available on emulator-5554
+2026-09-08 02:22:29,343 [INFO] sudarshan_core.sandbox.provider: [auto] connect/root: OK available
+2026-09-08 02:22:29,395 [INFO] sudarshan_core.sandbox.provider: [auto] connect/selinux: OK Permissive
+2026-09-08 02:22:29,668 [INFO] sudarshan_core.sandbox.provider: [auto] Frida forwarded tcp:27055 -> emulator-5554:27055
+2026-09-08 02:22:29,668 [INFO] sudarshan_core.sandbox.provider: [auto] connect/frida: OK frida agent running (5701 sudarshan_agent_srv)
+2026-09-08 02:22:29,668 [INFO] sudarshan_core.sandbox.provider: [auto] Connected serial=emulator-5554 provider=android_avd transport=emulator ip= android=17 abi=x86_64 root=True frida=True forward=True connect_ms=3091.2
+2026-09-08 02:22:29,668 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Using sandbox provider=auto serial=emulator-5554 android=17 abi=x86_64 root=True frida=True connect_ms=3091.2
+2026-09-08 02:22:29,668 [INFO] sudarshan_core.engines.frida_sandbox: [Pipeline 01] emulator ready — serial=emulator-5554
+2026-09-08 02:22:29,668 [INFO] sudarshan_core.engines.frida_sandbox: [Pipeline 04] Frida device connected — auto
+2026-09-08 02:22:29,669 [INFO] sudarshan_core.engines.runtime_lifecycle: [RuntimeLifecycle] emulator_ready READY/sandbox_provider serial=emulator-5554
+2026-09-08 02:22:29,671 [INFO] sudarshan_core.sandbox.factory: [Sandbox] Using provider=auto adb_host=(auto) adb_port=5555 device_serial=emulator-5554
+2026-09-08 02:22:30,434 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] SELinux mode: Permissive
+2026-09-08 02:22:30,435 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Configured Frida agent verified by SandboxProvider.
+2026-09-08 02:22:30,510 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Target package: com.android.insecurebankv2 (Main Activity: com.android.insecurebankv2.LoginActivity)
+2026-09-08 02:22:30,511 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Artifacts for this sample: D:\Projects\Sudarshan BOI\tests\apks\categories\sudarshan_artifacts\insecurebankv2_2ebde24e
+2026-09-08 02:22:30,525 [INFO] sudarshan_core.engines.frida_sandbox: [Pipeline 02] APK installed — starting adb install
+2026-09-08 02:22:30,525 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] INITIALIZING → INSTALLING (adb install)
+2026-09-08 02:22:31,189 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Retrying install with --bypass-low-target-sdk-block
+2026-09-08 02:22:32,615 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Original APK installed with SDK bypass: insecurebankv2.apk
+2026-09-08 02:22:32,616 [INFO] sudarshan_core.engines.frida_sandbox: [Pipeline 02] APK installed — com.android.insecurebankv2
+2026-09-08 02:22:32,616 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] INSTALLING → VERIFY_INSTALL (pm path verification)
+2026-09-08 02:22:32,616 [INFO] sudarshan_core.engines.runtime_lifecycle: [RuntimeLifecycle] apk_install_completed SUCCESS/adb com.android.insecurebankv2
+2026-09-08 02:22:32,905 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] APK installed: com.android.insecurebankv2 (Derivative Repaired: False)
+2026-09-08 02:22:33,035 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Launcher resolves post-install: com.android.insecurebankv2/.LoginActivity
+2026-09-08 02:22:36,237 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Pre-granted 12 declared permission(s) for com.android.insecurebankv2 before launch - no runtime permission dialog will be shown for these
+2026-09-08 02:23:06,882 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.schemas
+2026-09-08 02:23:06,882 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.tables
+2026-09-08 02:23:06,882 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.types
+2026-09-08 02:23:06,882 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.constraints
+2026-09-08 02:23:06,882 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.defaults
+2026-09-08 02:23:06,883 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.comments
+2026-09-08 02:23:18,369 [INFO] sudarshan_core.engines.permission_orchestrator: [PermissionOrchestrator] No accessibility service declared in 'com.android.insecurebankv2' manifest - this sample does not use accessibility abuse via a bound service.
+2026-09-08 02:23:19,829 [WARNING] sudarshan_core.engines.yara_scanner: [YARAScanner] yara-python not installed. YARA scanning disabled.
+2026-09-08 02:23:19,829 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] YARA rules loaded from D:\Projects\Sudarshan BOI\shared\sudarshan_core\engines\yara_rules
+2026-09-08 02:23:19,834 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Connecting to device emulator-5554
+2026-09-08 02:23:23,492 [INFO] sudarshan_core.sandbox.provider: [auto] Frida forwarded tcp:27055 -> emulator-5554:27055
+2026-09-08 02:23:24,493 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] frida-server port 27055 != USB transport port 27042 - preferring TCP transport
+2026-09-08 02:23:24,820 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] TCP remote device connected: 127.0.0.1:27055
+2026-09-08 02:23:24,820 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Waking up device screen...
+2026-09-08 02:23:27,031 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] VERIFY_INSTALL → RESOLVE_ACTIVITY (launch ladder)
+2026-09-08 02:23:27,031 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] RESOLVE_ACTIVITY → LAUNCHING (issuing launch intents)
+2026-09-08 02:23:27,031 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Launch step 1: am start -W -n com.android.insecurebankv2/com.android.insecurebankv2.LoginActivity
+2026-09-08 02:23:27,126 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Stability monitor: waiting up to 12s for com.android.insecurebankv2 (requires 5s of continuous PID presence, polling every 250ms)
+2026-09-08 02:23:32,399 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] PID 13937 stable for 5.2s (>= 5s required) - process confirmed alive for com.android.insecurebankv2
+2026-09-08 02:23:32,400 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Launch step 'am_start_main_activity' produced stable PID 13937
+2026-09-08 02:23:32,497 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] App launched and stable via 'am_start_main_activity' (PID=13937)
+2026-09-08 02:23:33,112 [ERROR] sudarshan_core.engines.frida_sandbox: [Frida] READINESS_GATE_FAIL: Check 5 FAIL: uiautomator dump failed - UI is not ready. Output: Killed
+2026-09-08 02:23:44,791 [INFO] sudarshan_core.engines.frida_sandbox: [CrashDiag] Full logcat written: D:\Projects\Sudarshan BOI\tests\apks\categories\sudarshan_artifacts\insecurebankv2_2ebde24e\crash_logcat.txt
+2026-09-08 02:23:45,584 [INFO] sudarshan_core.engines.frida_sandbox: [CrashDiag] Tombstone written: D:\Projects\Sudarshan BOI\tests\apks\categories\sudarshan_artifacts\insecurebankv2_2ebde24e\tombstone_tombstone_18
+2026-09-08 02:23:45,585 [INFO] sudarshan_core.engines.frida_sandbox: [CrashDiag] crash_report.json written: D:\Projects\Sudarshan BOI\tests\apks\categories\sudarshan_artifacts\insecurebankv2_2ebde24e\crash_report.json
+2026-09-08 02:23:45,606 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Session cleanup complete
+2026-09-08 02:23:45,607 [INFO] sudarshan_core.engines.runtime_lifecycle: [RuntimeLifecycle] dynamic_analysis_completed FAILED/FridaSession READINESS_GATE_FAIL: Check 5 FAIL: uiautomator dump failed - UI is not ready. Output: Killed error=INSTRUMENTATION_FAILED
+2026-09-08 02:23:45,608 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] launch_timeline.json written (failure path): D:\Projects\Sudarshan BOI\tests\apks\categories\sudarshan_artifacts\insecurebankv2_2ebde24e\launch_timeline.json
+2026-09-08 02:23:47,374 [INFO] sudarshan_core.engines.report_generator: [ReportGen] Report written to D:\Projects\Sudarshan BOI\tests\apks\categories\sudarshan_artifacts\insecurebankv2_2ebde24e\validation_report.html

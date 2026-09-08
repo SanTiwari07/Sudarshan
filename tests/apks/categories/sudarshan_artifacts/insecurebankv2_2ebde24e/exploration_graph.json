@@ -1,83 +1,702 @@
 [
     {
-        "from": "ce3f3c124c6de9f3",
-        "to": "80b2104b028bfd54",
-        "action": "click",
-        "target": "Phone",
-        "goal": "Grant Runtime Permissions",
-        "timestamp": "00:10",
-        "source": "goal_planner",
+        "from": "2f7e37cbc7044503",
+        "to": "3c3608fbff88bf2b",
+        "from_state": "STATE-001",
+        "to_state": "EXT-001",
+        "action": "click_text",
+        "target": "Google app",
+        "goal": "DEEP_EXPLORATION",
+        "timestamp": "00:13",
+        "source": "exploration_engine",
         "frida_events": [
             {
-                "event_id": "ev_1785997438514_6",
-                "timestamp": 1785997438515,
-                "process": "com.android.insecurebankv2",
-                "thread": 11634,
-                "package": "com.android.insecurebankv2",
-                "pid": 11634,
-                "event_type": "FRIDA_EVENT",
-                "category": "accessibility",
-                "severity": "HIGH",
-                "method": "AccessibilityManager.sendAccessibilityEvent",
-                "class": "android.view.accessibility.AccessibilityManager",
-                "arguments": [],
-                "return_value": null,
-                "stacktrace": [
-                    "android.view.View.requestParentSendAccessibilityEvent(View.java:8333)",
-                    "android.view.View.sendAccessibilityEventUncheckedInternal(View.java:8326)",
-                    "android.view.View.sendAccessibilityEventUnchecked(View.java:8297)",
-                    "android.view.View.sendAccessibilityEventInternal(View.java:8274)",
-                    "android.view.View.sendAccessibilityEvent(View.java:8238)",
-                    "com.android.internal.policy.DecorView.sendAccessibilityEvent(DecorView.java:624)"
-                ],
-                "evidence": "AccessibilityManager event dispatched (possible ATS relay)",
-                "ioc": null,
-                "risk_vector": "accessibility",
-                "source": "frida",
-                "hook": "AccessibilityManager.sendAccessibilityEvent",
-                "thread_id": 11634,
-                "process_id": 11634,
-                "stack_trace": [
-                    "android.view.View.requestParentSendAccessibilityEvent(View.java:8333)",
-                    "android.view.View.sendAccessibilityEventUncheckedInternal(View.java:8326)",
-                    "android.view.View.sendAccessibilityEventUnchecked(View.java:8297)",
-                    "android.view.View.sendAccessibilityEventInternal(View.java:8274)",
-                    "android.view.View.sendAccessibilityEvent(View.java:8238)",
-                    "com.android.internal.policy.DecorView.sendAccessibilityEvent(DecorView.java:624)"
-                ],
-                "context": {
-                    "foreground_app": "Unknown",
-                    "current_activity": "Unknown",
-                    "previous_event_id": "ev_1785997436216_4"
+                "event_type": "EVIDENCE_CREATED",
+                "timestamp": 1788816771.586,
+                "session_id": "",
+                "payload": {
+                    "evidence_id": "EVID-003",
+                    "id": "0c7dc15a-f4b7-4d22-a468-15be7411fd6f",
+                    "category": "SCREENSHOT",
+                    "severity": "INFO"
                 },
+                "category": "general",
+                "severity": "INFO",
                 "data": {
-                    "hook": "AccessibilityManager.sendAccessibilityEvent",
-                    "class_name": "android.view.accessibility.AccessibilityManager",
-                    "severity": "HIGH",
-                    "description": "AccessibilityManager event dispatched (possible ATS relay)"
+                    "evidence_id": "EVID-003",
+                    "id": "0c7dc15a-f4b7-4d22-a468-15be7411fd6f",
+                    "category": "SCREENSHOT",
+                    "severity": "INFO"
                 },
-                "type": "FRIDA_EVENT"
+                "type": "EVIDENCE_CREATED"
+            }
+        ]
+    },
+    {
+        "from": "78c68c05b48c3037",
+        "to": "1a2a37bd1de44baa",
+        "from_state": "STATE-002",
+        "to_state": "STATE-003",
+        "action": "click_text",
+        "target": "More options",
+        "goal": "DEEP_EXPLORATION",
+        "timestamp": "00:45",
+        "source": "exploration_engine",
+        "frida_events": []
+    },
+    {
+        "from": "1a2a37bd1de44baa",
+        "to": "ba3de1c8ae2deab3",
+        "from_state": "STATE-003",
+        "to_state": "STATE-004",
+        "action": "click_text",
+        "target": "Preferences",
+        "goal": "DEEP_EXPLORATION",
+        "timestamp": "00:52",
+        "source": "exploration_engine",
+        "frida_events": [
+            {
+                "event_type": "SCREENSHOT_CAPTURED",
+                "timestamp": 1788816817.143,
+                "session_id": "",
+                "payload": {
+                    "screenshot_id": "SCR-006",
+                    "screenshot_uuid": "25ed5257-d6bf-4d57-a0bf-4fdfa616e586",
+                    "filename": "screenshots/0006_perception_vision.png",
+                    "label": "perception_vision",
+                    "category": "ui",
+                    "source": "explorer",
+                    "trigger_event": "",
+                    "reason": "SUSPICIOUS_UI",
+                    "screen_hash": "e4a0abc73c8fdc76"
+                },
+                "category": "general",
+                "severity": "INFO",
+                "data": {
+                    "screenshot_id": "SCR-006",
+                    "screenshot_uuid": "25ed5257-d6bf-4d57-a0bf-4fdfa616e586",
+                    "filename": "screenshots/0006_perception_vision.png",
+                    "label": "perception_vision",
+                    "category": "ui",
+                    "source": "explorer",
+                    "trigger_event": "",
+                    "reason": "SUSPICIOUS_UI",
+                    "screen_hash": "e4a0abc73c8fdc76"
+                },
+                "type": "SCREENSHOT_CAPTURED"
             },
             {
                 "event_type": "EVIDENCE_CREATED",
-                "timestamp": 1785997438.515,
+                "timestamp": 1788816817.143,
                 "session_id": "",
                 "payload": {
                     "evidence_id": "EVID-006",
-                    "id": "ad7da6ce-fb49-4a2e-b34d-8e8bfdf6f529",
-                    "category": "accessibility",
-                    "severity": "HIGH"
+                    "id": "00033663-e2c3-4d8b-9a50-4bad87c51f08",
+                    "category": "SCREENSHOT",
+                    "severity": "INFO"
                 },
                 "category": "general",
                 "severity": "INFO",
                 "data": {
                     "evidence_id": "EVID-006",
-                    "id": "ad7da6ce-fb49-4a2e-b34d-8e8bfdf6f529",
-                    "category": "accessibility",
-                    "severity": "HIGH"
+                    "id": "00033663-e2c3-4d8b-9a50-4bad87c51f08",
+                    "category": "SCREENSHOT",
+                    "severity": "INFO"
+                },
+                "type": "EVIDENCE_CREATED"
+            },
+            {
+                "event_type": "SCREENSHOT_CAPTURED",
+                "timestamp": 1788816817.873,
+                "session_id": "",
+                "payload": {
+                    "screenshot_id": "SCR-007",
+                    "screenshot_uuid": "43f4eb8d-34f1-44f8-a2cc-b1631209f94c",
+                    "filename": "screenshots/0007_state_state-003_bank_logi.png",
+                    "label": "state_state-003_bank_login",
+                    "category": "explorer_state",
+                    "source": "explorer",
+                    "trigger_event": "",
+                    "reason": "SUSPICIOUS_UI",
+                    "screen_hash": "e4a0abc73c8fdc76"
+                },
+                "category": "general",
+                "severity": "INFO",
+                "data": {
+                    "screenshot_id": "SCR-007",
+                    "screenshot_uuid": "43f4eb8d-34f1-44f8-a2cc-b1631209f94c",
+                    "filename": "screenshots/0007_state_state-003_bank_logi.png",
+                    "label": "state_state-003_bank_login",
+                    "category": "explorer_state",
+                    "source": "explorer",
+                    "trigger_event": "",
+                    "reason": "SUSPICIOUS_UI",
+                    "screen_hash": "e4a0abc73c8fdc76"
+                },
+                "type": "SCREENSHOT_CAPTURED"
+            },
+            {
+                "event_type": "EVIDENCE_CREATED",
+                "timestamp": 1788816817.873,
+                "session_id": "",
+                "payload": {
+                    "evidence_id": "EVID-007",
+                    "id": "675acb9f-a517-442f-8f09-2fa0d09dd75a",
+                    "category": "SCREENSHOT",
+                    "severity": "INFO"
+                },
+                "category": "general",
+                "severity": "INFO",
+                "data": {
+                    "evidence_id": "EVID-007",
+                    "id": "675acb9f-a517-442f-8f09-2fa0d09dd75a",
+                    "category": "SCREENSHOT",
+                    "severity": "INFO"
                 },
                 "type": "EVIDENCE_CREATED"
             }
         ]
+    },
+    {
+        "from": "ba3de1c8ae2deab3",
+        "to": "237a19f00addd166",
+        "from_state": "STATE-004",
+        "to_state": "STATE-005",
+        "action": "click_text",
+        "target": "More options",
+        "goal": "Grant Runtime Permissions",
+        "timestamp": "01:11",
+        "source": "goal_planner",
+        "frida_events": []
+    },
+    {
+        "from": "237a19f00addd166",
+        "to": "ba3de1c8ae2deab3",
+        "from_state": "STATE-005",
+        "to_state": "STATE-004",
+        "action": "click_text",
+        "target": "Preferences",
+        "goal": "DEEP_EXPLORATION",
+        "timestamp": "01:18",
+        "source": "exploration_engine",
+        "frida_events": [
+            {
+                "event_type": "SCREENSHOT_CAPTURED",
+                "timestamp": 1788816842.477,
+                "session_id": "",
+                "payload": {
+                    "screenshot_id": "SCR-011",
+                    "screenshot_uuid": "ea1f94b8-d95b-41e5-a65d-b4f84e86640e",
+                    "filename": "screenshots/0011_perception_vision.png",
+                    "label": "perception_vision",
+                    "category": "ui",
+                    "source": "explorer",
+                    "trigger_event": "",
+                    "reason": "SUSPICIOUS_UI",
+                    "screen_hash": "bc1efcb56779b1aa"
+                },
+                "category": "general",
+                "severity": "INFO",
+                "data": {
+                    "screenshot_id": "SCR-011",
+                    "screenshot_uuid": "ea1f94b8-d95b-41e5-a65d-b4f84e86640e",
+                    "filename": "screenshots/0011_perception_vision.png",
+                    "label": "perception_vision",
+                    "category": "ui",
+                    "source": "explorer",
+                    "trigger_event": "",
+                    "reason": "SUSPICIOUS_UI",
+                    "screen_hash": "bc1efcb56779b1aa"
+                },
+                "type": "SCREENSHOT_CAPTURED"
+            },
+            {
+                "event_type": "EVIDENCE_CREATED",
+                "timestamp": 1788816842.477,
+                "session_id": "",
+                "payload": {
+                    "evidence_id": "EVID-010",
+                    "id": "0d98c096-88e2-4b2b-abfd-1476f2a92f40",
+                    "category": "SCREENSHOT",
+                    "severity": "INFO"
+                },
+                "category": "general",
+                "severity": "INFO",
+                "data": {
+                    "evidence_id": "EVID-010",
+                    "id": "0d98c096-88e2-4b2b-abfd-1476f2a92f40",
+                    "category": "SCREENSHOT",
+                    "severity": "INFO"
+                },
+                "type": "EVIDENCE_CREATED"
+            },
+            {
+                "event_type": "SCREENSHOT_CAPTURED",
+                "timestamp": 1788816843.184,
+                "session_id": "",
+                "payload": {
+                    "screenshot_id": "SCR-012",
+                    "screenshot_uuid": "8f419bf9-c24e-44f4-ac48-91e8000ee844",
+                    "filename": "screenshots/0012_state_state-005_unknown.png",
+                    "label": "state_state-005_unknown",
+                    "category": "explorer_state",
+                    "source": "explorer",
+                    "trigger_event": "",
+                    "reason": "SUSPICIOUS_UI",
+                    "screen_hash": "bc1efcb56779b1aa"
+                },
+                "category": "general",
+                "severity": "INFO",
+                "data": {
+                    "screenshot_id": "SCR-012",
+                    "screenshot_uuid": "8f419bf9-c24e-44f4-ac48-91e8000ee844",
+                    "filename": "screenshots/0012_state_state-005_unknown.png",
+                    "label": "state_state-005_unknown",
+                    "category": "explorer_state",
+                    "source": "explorer",
+                    "trigger_event": "",
+                    "reason": "SUSPICIOUS_UI",
+                    "screen_hash": "bc1efcb56779b1aa"
+                },
+                "type": "SCREENSHOT_CAPTURED"
+            },
+            {
+                "event_type": "EVIDENCE_CREATED",
+                "timestamp": 1788816843.184,
+                "session_id": "",
+                "payload": {
+                    "evidence_id": "EVID-011",
+                    "id": "2263283a-eacf-4d9c-a3e4-8de19a1481b9",
+                    "category": "SCREENSHOT",
+                    "severity": "INFO"
+                },
+                "category": "general",
+                "severity": "INFO",
+                "data": {
+                    "evidence_id": "EVID-011",
+                    "id": "2263283a-eacf-4d9c-a3e4-8de19a1481b9",
+                    "category": "SCREENSHOT",
+                    "severity": "INFO"
+                },
+                "type": "EVIDENCE_CREATED"
+            }
+        ]
+    },
+    {
+        "from": "ba3de1c8ae2deab3",
+        "to": "237a19f00addd166",
+        "from_state": "STATE-004",
+        "to_state": "STATE-005",
+        "action": "click_text",
+        "target": "More options",
+        "goal": "Accessibility Abuse",
+        "timestamp": "01:26",
+        "source": "goal_planner",
+        "frida_events": []
+    },
+    {
+        "from": "237a19f00addd166",
+        "to": "78c68c05b48c3037",
+        "from_state": "STATE-005",
+        "to_state": "STATE-002",
+        "action": "click_text",
+        "target": "Restart",
+        "goal": "DEEP_EXPLORATION",
+        "timestamp": "01:33",
+        "source": "exploration_engine",
+        "frida_events": []
+    },
+    {
+        "from": "78c68c05b48c3037",
+        "to": "b0ad03b5d3b2f9b0",
+        "from_state": "STATE-002",
+        "to_state": "STATE-006",
+        "action": "click_text",
+        "target": "Autofill Credentials",
+        "goal": "DEEP_EXPLORATION",
+        "timestamp": "02:11",
+        "source": "exploration_engine",
+        "frida_events": []
+    },
+    {
+        "from": "b0ad03b5d3b2f9b0",
+        "to": "78c68c05b48c3037",
+        "from_state": "STATE-006",
+        "to_state": "STATE-002",
+        "action": "click_text",
+        "target": "OK",
+        "goal": "DEEP_EXPLORATION",
+        "timestamp": "02:18",
+        "source": "exploration_engine",
+        "frida_events": [
+            {
+                "event_type": "SCREENSHOT_CAPTURED",
+                "timestamp": 1788816903.743,
+                "session_id": "",
+                "payload": {
+                    "screenshot_id": "SCR-014",
+                    "screenshot_uuid": "f36bc1da-6acc-49cd-b9ed-db3d81a65ae4",
+                    "filename": "screenshots/0014_state_state-006_bank_logi.png",
+                    "label": "state_state-006_bank_login",
+                    "category": "explorer_state",
+                    "source": "explorer",
+                    "trigger_event": "",
+                    "reason": "SUSPICIOUS_UI",
+                    "screen_hash": "93bcfc44453d59b0"
+                },
+                "category": "general",
+                "severity": "INFO",
+                "data": {
+                    "screenshot_id": "SCR-014",
+                    "screenshot_uuid": "f36bc1da-6acc-49cd-b9ed-db3d81a65ae4",
+                    "filename": "screenshots/0014_state_state-006_bank_logi.png",
+                    "label": "state_state-006_bank_login",
+                    "category": "explorer_state",
+                    "source": "explorer",
+                    "trigger_event": "",
+                    "reason": "SUSPICIOUS_UI",
+                    "screen_hash": "93bcfc44453d59b0"
+                },
+                "type": "SCREENSHOT_CAPTURED"
+            },
+            {
+                "event_type": "EVIDENCE_CREATED",
+                "timestamp": 1788816903.743,
+                "session_id": "",
+                "payload": {
+                    "evidence_id": "EVID-012",
+                    "id": "13fb44e9-00af-4a1e-a9c7-2cdb3df4fec0",
+                    "category": "SCREENSHOT",
+                    "severity": "INFO"
+                },
+                "category": "general",
+                "severity": "INFO",
+                "data": {
+                    "evidence_id": "EVID-012",
+                    "id": "13fb44e9-00af-4a1e-a9c7-2cdb3df4fec0",
+                    "category": "SCREENSHOT",
+                    "severity": "INFO"
+                },
+                "type": "EVIDENCE_CREATED"
+            }
+        ]
+    },
+    {
+        "from": "78c68c05b48c3037",
+        "to": "da62d9f45384ab4e",
+        "from_state": "STATE-002",
+        "to_state": "STATE-007",
+        "action": "type_text",
+        "target": "InsecureBankv2",
+        "goal": "DEEP_EXPLORATION",
+        "timestamp": "02:23",
+        "source": "exploration_engine",
+        "frida_events": []
+    },
+    {
+        "from": "da62d9f45384ab4e",
+        "to": "d0b1b776084ae40c",
+        "from_state": "STATE-007",
+        "to_state": "STATE-008",
+        "action": "click_text",
+        "target": "App info",
+        "goal": "DEEP_EXPLORATION",
+        "timestamp": "03:09",
+        "source": "exploration_engine",
+        "frida_events": []
+    },
+    {
+        "from": "d0b1b776084ae40c",
+        "to": "27bc6168621d198a",
+        "from_state": "STATE-008",
+        "to_state": "EXT-002",
+        "action": "click_text",
+        "target": "Allow app to open supported links",
+        "goal": "DEEP_EXPLORATION",
+        "timestamp": "03:17",
+        "source": "exploration_engine",
+        "frida_events": [
+            {
+                "event_type": "SCREENSHOT_CAPTURED",
+                "timestamp": 1788816961.334,
+                "session_id": "",
+                "payload": {
+                    "screenshot_id": "SCR-018",
+                    "screenshot_uuid": "77bb7611-fad5-4e8a-874a-1d4f86b217ff",
+                    "filename": "screenshots/0018_system_settings_action_28_click_text.png",
+                    "label": "action_28_click_text",
+                    "category": "explorer_action",
+                    "source": "explorer",
+                    "trigger_event": "",
+                    "reason": "EXPLORER_ACTION",
+                    "screen_hash": "cd1ae8ce60657dac"
+                },
+                "category": "general",
+                "severity": "INFO",
+                "data": {
+                    "screenshot_id": "SCR-018",
+                    "screenshot_uuid": "77bb7611-fad5-4e8a-874a-1d4f86b217ff",
+                    "filename": "screenshots/0018_system_settings_action_28_click_text.png",
+                    "label": "action_28_click_text",
+                    "category": "explorer_action",
+                    "source": "explorer",
+                    "trigger_event": "",
+                    "reason": "EXPLORER_ACTION",
+                    "screen_hash": "cd1ae8ce60657dac"
+                },
+                "type": "SCREENSHOT_CAPTURED"
+            },
+            {
+                "event_type": "EVIDENCE_CREATED",
+                "timestamp": 1788816961.334,
+                "session_id": "",
+                "payload": {
+                    "evidence_id": "EVID-015",
+                    "id": "a6fc08cb-c19c-457f-a302-f15390a63b7c",
+                    "category": "SCREENSHOT",
+                    "severity": "INFO"
+                },
+                "category": "general",
+                "severity": "INFO",
+                "data": {
+                    "evidence_id": "EVID-015",
+                    "id": "a6fc08cb-c19c-457f-a302-f15390a63b7c",
+                    "category": "SCREENSHOT",
+                    "severity": "INFO"
+                },
+                "type": "EVIDENCE_CREATED"
+            }
+        ]
+    },
+    {
+        "from": "d0b1b776084ae40c",
+        "to": "27bc6168621d198a",
+        "from_state": "STATE-008",
+        "to_state": "EXT-002",
+        "action": "click_text",
+        "target": "Allow app to open supported links",
+        "goal": "Overlay Detection",
+        "timestamp": "03:35",
+        "source": "goal_planner",
+        "frida_events": []
+    },
+    {
+        "from": "d0b1b776084ae40c",
+        "to": "86a6b16602c82b66",
+        "from_state": "STATE-008",
+        "to_state": "STATE-009",
+        "action": "scroll",
+        "target": "",
+        "goal": "DEEP_EXPLORATION",
+        "timestamp": "03:53",
+        "source": "exploration_engine",
+        "frida_events": []
+    },
+    {
+        "from": "86a6b16602c82b66",
+        "to": "27bc6168621d198a",
+        "from_state": "STATE-009",
+        "to_state": "EXT-002",
+        "action": "click_text",
+        "target": "Allow app to open supported links",
+        "goal": "DEEP_EXPLORATION",
+        "timestamp": "04:00",
+        "source": "exploration_engine",
+        "frida_events": [
+            {
+                "event_type": "SCREENSHOT_CAPTURED",
+                "timestamp": 1788817005.54,
+                "session_id": "",
+                "payload": {
+                    "screenshot_id": "SCR-020",
+                    "screenshot_uuid": "61a24639-51f9-4809-9cb8-8ff4ab66ed0c",
+                    "filename": "screenshots/0020_system_settings_action_33_scroll.png",
+                    "label": "action_33_scroll",
+                    "category": "explorer_action",
+                    "source": "explorer",
+                    "trigger_event": "",
+                    "reason": "EXPLORER_ACTION",
+                    "screen_hash": "38374822260196a5"
+                },
+                "category": "general",
+                "severity": "INFO",
+                "data": {
+                    "screenshot_id": "SCR-020",
+                    "screenshot_uuid": "61a24639-51f9-4809-9cb8-8ff4ab66ed0c",
+                    "filename": "screenshots/0020_system_settings_action_33_scroll.png",
+                    "label": "action_33_scroll",
+                    "category": "explorer_action",
+                    "source": "explorer",
+                    "trigger_event": "",
+                    "reason": "EXPLORER_ACTION",
+                    "screen_hash": "38374822260196a5"
+                },
+                "type": "SCREENSHOT_CAPTURED"
+            },
+            {
+                "event_type": "EVIDENCE_CREATED",
+                "timestamp": 1788817005.54,
+                "session_id": "",
+                "payload": {
+                    "evidence_id": "EVID-017",
+                    "id": "ef54604d-ef38-4e0a-8142-af9a4f304590",
+                    "category": "SCREENSHOT",
+                    "severity": "INFO"
+                },
+                "category": "general",
+                "severity": "INFO",
+                "data": {
+                    "evidence_id": "EVID-017",
+                    "id": "ef54604d-ef38-4e0a-8142-af9a4f304590",
+                    "category": "SCREENSHOT",
+                    "severity": "INFO"
+                },
+                "type": "EVIDENCE_CREATED"
+            }
+        ]
+    },
+    {
+        "from": "86a6b16602c82b66",
+        "to": "3c9d3974cd01b0eb",
+        "from_state": "STATE-009",
+        "to_state": "STATE-010",
+        "action": "scroll",
+        "target": "",
+        "goal": "DEEP_EXPLORATION",
+        "timestamp": "04:14",
+        "source": "exploration_engine",
+        "frida_events": []
+    },
+    {
+        "from": "3c9d3974cd01b0eb",
+        "to": "27bc6168621d198a",
+        "from_state": "EXT-003",
+        "to_state": "EXT-002",
+        "action": "click_text",
+        "target": "Allow app to open supported links",
+        "goal": "Login Flow",
+        "timestamp": "04:41",
+        "source": "goal_planner",
+        "frida_events": []
+    },
+    {
+        "from": "3c9d3974cd01b0eb",
+        "to": "78c68c05b48c3037",
+        "from_state": "EXT-003",
+        "to_state": "STATE-002",
+        "action": "start_activity",
+        "target": "",
+        "goal": "RETURN_TO_TARGET",
+        "timestamp": "04:55",
+        "source": "exploration_engine",
+        "frida_events": []
+    },
+    {
+        "from": "78c68c05b48c3037",
+        "to": "3c9d3974cd01b0eb",
+        "from_state": "STATE-002",
+        "to_state": "EXT-003",
+        "action": "press_back",
+        "target": "",
+        "goal": "BACKTRACK",
+        "timestamp": "05:20",
+        "source": "backtrack",
+        "frida_events": []
+    },
+    {
+        "from": "3c9d3974cd01b0eb",
+        "to": "27bc6168621d198a",
+        "from_state": "EXT-003",
+        "to_state": "EXT-002",
+        "action": "click_text",
+        "target": "Allow app to open supported links",
+        "goal": "Banking Application Detection",
+        "timestamp": "05:28",
+        "source": "goal_planner",
+        "frida_events": []
+    },
+    {
+        "from": "3c9d3974cd01b0eb",
+        "to": "27bc6168621d198a",
+        "from_state": "EXT-003",
+        "to_state": "EXT-002",
+        "action": "click_text",
+        "target": "Allow app to open supported links",
+        "goal": "Banking Application Detection",
+        "timestamp": "05:40",
+        "source": "goal_planner",
+        "frida_events": []
+    },
+    {
+        "from": "3c9d3974cd01b0eb",
+        "to": "78c68c05b48c3037",
+        "from_state": "EXT-003",
+        "to_state": "STATE-002",
+        "action": "start_activity",
+        "target": "",
+        "goal": "RETURN_TO_TARGET",
+        "timestamp": "05:54",
+        "source": "exploration_engine",
+        "frida_events": []
+    },
+    {
+        "from": "78c68c05b48c3037",
+        "to": "1a2a37bd1de44baa",
+        "from_state": "STATE-002",
+        "to_state": "STATE-003",
+        "action": "click_text",
+        "target": "More options",
+        "goal": "Network / C2 Communication",
+        "timestamp": "06:05",
+        "source": "goal_planner",
+        "frida_events": []
+    },
+    {
+        "from": "1a2a37bd1de44baa",
+        "to": "78c68c05b48c3037",
+        "from_state": "STATE-003",
+        "to_state": "STATE-002",
+        "action": "click_text",
+        "target": "Restart",
+        "goal": "DEEP_EXPLORATION",
+        "timestamp": "06:14",
+        "source": "exploration_engine",
+        "frida_events": []
+    },
+    {
+        "from": "78c68c05b48c3037",
+        "to": "3c9d3974cd01b0eb",
+        "from_state": "STATE-002",
+        "to_state": "EXT-003",
+        "action": "press_back",
+        "target": "",
+        "goal": "BACKTRACK",
+        "timestamp": "06:47",
+        "source": "exploration_engine",
+        "frida_events": []
+    },
+    {
+        "from": "3c9d3974cd01b0eb",
+        "to": "27bc6168621d198a",
+        "from_state": "EXT-003",
+        "to_state": "EXT-002",
+        "action": "click_text",
+        "target": "Allow app to open supported links",
+        "goal": "Background Services",
+        "timestamp": "06:55",
+        "source": "goal_planner",
+        "frida_events": []
+    },
+    {
+        "from": "3c9d3974cd01b0eb",
+        "to": "27bc6168621d198a",
+        "from_state": "EXT-003",
+        "to_state": "EXT-002",
+        "action": "click_text",
+        "target": "Allow app to open supported links",
+        "goal": "Background Services",
+        "timestamp": "07:08",
+        "source": "goal_planner",
+        "frida_events": []
     }
 ]

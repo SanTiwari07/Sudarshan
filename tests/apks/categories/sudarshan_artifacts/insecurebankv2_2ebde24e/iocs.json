@@ -9,7 +9,8 @@
     ],
     "yara_matches": [],
     "accessed_files": [
+        "/data/data/com.android.insecurebankv2/shared_prefs/WebViewChromiumPrefs.xml",
         "/data/data/com.android.insecurebankv2/shared_prefs/com.android.insecurebankv2_preferences.xml"
     ],
-    "total_count": 2
+    "total_count": 3
 }

@@ -1,8 +1,35 @@
 {
-    "stages": [],
+    "stages": [
+        {
+            "label": "Runtime Permissions Granted by Sandbox",
+            "technique_id": "T1401",
+            "description": "The analysis sandbox granted runtime permissions the application declared, so no permission dialog was shown. Harness action, not application behaviour.",
+            "start_ms": 0,
+            "end_ms": 11,
+            "evidence_ids": [
+                "investigation_sandbox.grant.runtime_permission_0",
+                "investigation_sandbox.grant.runtime_permission_1",
+                "investigation_sandbox.grant.runtime_permission_2",
+                "investigation_sandbox.grant.runtime_permission_3",
+                "investigation_sandbox.grant.runtime_permission_4",
+                "investigation_sandbox.grant.runtime_permission_5",
+                "investigation_sandbox.grant.runtime_permission_6",
+                "investigation_sandbox.grant.runtime_permission_7",
+                "investigation_sandbox.grant.runtime_permission_8",
+                "investigation_sandbox.grant.runtime_permission_9",
+                "investigation_sandbox.grant.runtime_permission_10",
+                "investigation_sandbox.grant.runtime_permission_11"
+            ],
+            "hook_names": [
+                "sandbox.grant.runtime_permission"
+            ],
+            "confidence": 1.0,
+            "is_precondition": true
+        }
+    ],
     "fraud_sequence_detected": false,
-    "sequence_label": "NONE",
+    "sequence_label": "PRECONDITIONS_ONLY",
     "chain_confidence": 0.0,
-    "total_events_analyzed": 4,
-    "stage_count": 0
+    "total_events_analyzed": 13,
+    "stage_count": 1
 }

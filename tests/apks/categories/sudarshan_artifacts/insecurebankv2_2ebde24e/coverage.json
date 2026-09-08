@@ -1,11 +1,11 @@
 {
-    "screens": 2,
-    "buttons_found": 9,
-    "buttons_clicked": 0,
+    "screens": 10,
+    "buttons_found": 40,
+    "buttons_clicked": 24,
     "forms_found": 2,
-    "forms_completed": 0,
+    "forms_completed": 6,
     "permissions_granted": 0,
     "dialogs_dismissed": 0,
-    "navigation_depth": 1,
-    "coverage_percent": 0
+    "navigation_depth": 27,
+    "coverage_percent": 15
 }

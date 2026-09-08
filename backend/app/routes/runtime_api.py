@@ -26,10 +26,50 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.auth.auth import get_current_user
+from app.case_access import list_scope_analyst_id
+from app.db.database import get_case
 from sudarshan_core.engines.pipeline_state import _ACTIVE_TRACKERS, PipelineStage
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+async def _filter_trackers(user: dict, trackers: list) -> list:
+    scope = list_scope_analyst_id(user)
+    if scope is None:
+        return trackers
+    allowed = []
+    for t in trackers:
+        if not t.case_id:
+            continue
+        row = await get_case(t.case_id)
+        if row and row.get("analyst_id") == scope:
+            allowed.append(t)
+    return allowed
+
+async def _filter_events(user: dict, events: list) -> list:
+    scope = list_scope_analyst_id(user)
+    if scope is None:
+        return events
+    allowed = []
+    for e in events:
+        case_id = e.get("case_id")
+        if not case_id:
+            continue
+        row = await get_case(case_id)
+        if row and row.get("analyst_id") == scope:
+            allowed.append(e)
+    return allowed
+
+async def _check_case_access(user: dict, case_id: str) -> None:
+    if not case_id:
+        return
+    scope = list_scope_analyst_id(user)
+    if scope is None:
+        return
+    row = await get_case(case_id)
+    if row and row.get("analyst_id") != scope:
+        raise HTTPException(status_code=404, detail="Case not found.")
+
 
 # ─── Shared state singletons (populated by analysis workers) ─────────────────
 # These are module-level so they accumulate across requests in the same process.
@@ -181,7 +221,7 @@ async def runtime_health(current_user: dict = Depends(get_current_user)):
     evidence_records = _load_evidence_from_artifacts()
 
     # Aggregate hook stats from registry and active trackers
-    active_trackers = list(_ACTIVE_TRACKERS.values())
+    active_trackers = await _filter_trackers(current_user, list(_ACTIVE_TRACKERS.values()))
     total_installed = sum(t.hook_coverage.total_installed for t in active_trackers) or len(_hook_registry)
     total_events = sum(t.event_counters.received for t in active_trackers) or _pipeline_metrics["events_total"]
 
@@ -245,7 +285,7 @@ async def runtime_status(current_user: dict = Depends(get_current_user)):
     from sudarshan_core.engines.frida_sandbox import get_sandbox_status, _HOOKS_SCRIPT
 
     sandbox = get_sandbox_status()
-    active_trackers = list(_ACTIVE_TRACKERS.values())
+    active_trackers = await _filter_trackers(current_user, list(_ACTIVE_TRACKERS.values()))
     active_count = len([t for t in active_trackers if t.current_stage not in (
         PipelineStage.FAILED, PipelineStage.REPORT_COMPLETE
     )])
@@ -303,17 +343,21 @@ async def runtime_hooks(
     Hook inventory: installed hooks, fire counts, error counts.
     Returns both the in-process registry and any tracker-level data.
     """
+
+    await _check_case_access(current_user, case_id)
     # Merge registry with tracker data
     hooks_out: Dict[str, Any] = {}
+    scope = list_scope_analyst_id(current_user)
+    if scope is None:
+        for name, info in _hook_registry.items():
+            hooks_out[name] = {
+                "installed": info["installed"],
+                "fired": info["fired"],
+                "errors": info["errors"],
+                "last_fired_ts": info.get("last_fired_ts"),
+            }
 
-    # From module registry
-    for name, info in _hook_registry.items():
-        hooks_out[name] = {
-            "installed": info["installed"],
-            "fired": info["fired"],
-            "errors": info["errors"],
-            "last_fired_ts": info.get("last_fired_ts"),
-        }
+    # Module registry merged above conditionally
 
     # From active trackers (richer data)
     for tracker in _ACTIVE_TRACKERS.values():
@@ -346,7 +390,7 @@ async def runtime_events(
     Recent runtime events from the in-process ring buffer.
     Returns the most recent events captured across all sessions.
     """
-    events = list(reversed(_recent_events))  # most recent first
+    events = await _filter_events(current_user, list(reversed(_recent_events)))
 
     if category:
         events = [e for e in events if e.get("category") == category]
@@ -371,7 +415,9 @@ async def runtime_pipeline(
     """
     Full pipeline state machine for all active (or filtered) analysis sessions.
     """
-    trackers = list(_ACTIVE_TRACKERS.values())
+
+    await _check_case_access(current_user, case_id)
+    trackers = await _filter_trackers(current_user, list(_ACTIVE_TRACKERS.values()))
     if case_id:
         trackers = [t for t in trackers if t.case_id == case_id or t.package_name == case_id]
 
@@ -402,7 +448,7 @@ async def runtime_metrics(current_user: dict = Depends(get_current_user)):
     """
     Aggregate runtime metrics: throughput, drop rates, error rates.
     """
-    trackers = list(_ACTIVE_TRACKERS.values())
+    trackers = await _filter_trackers(current_user, list(_ACTIVE_TRACKERS.values()))
     total_generated = sum(t.event_counters.generated for t in trackers)
     total_received = sum(t.event_counters.received for t in trackers)
     total_stored = sum(t.event_counters.stored for t in trackers)
@@ -447,6 +493,8 @@ async def runtime_evidence(
     completed analysis, which is a convenience for a live dashboard and NOT a
     safe default when several analysts are working concurrently.
     """
+
+    await _check_case_access(current_user, case_id)
     records = _load_evidence_from_artifacts(case_id)
 
     if severity:
@@ -471,6 +519,8 @@ async def runtime_diagnostics(
     Comprehensive Runtime Analysis Diagnostics Mode.
     Answers all 15 operational pipeline health questions end-to-end.
     """
+
+    await _check_case_access(current_user, case_id)
     from sudarshan_core.engines.frida_sandbox import get_sandbox_status, _find_adb, get_connected_emulators
 
     sandbox_status = get_sandbox_status()
@@ -479,7 +529,7 @@ async def runtime_diagnostics(
 
     evidence_records = _load_evidence_from_artifacts(case_id) if case_id else _load_evidence_from_artifacts()
 
-    trackers = list(_ACTIVE_TRACKERS.values())
+    trackers = await _filter_trackers(current_user, list(_ACTIVE_TRACKERS.values()))
     active_tracker = None
     if case_id:
         for t in trackers:

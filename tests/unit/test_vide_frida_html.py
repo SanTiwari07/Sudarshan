@@ -10,9 +10,9 @@ from sudarshan_core.engines.vide.ui_profile import UIProfile
 
 
 def _sbi_baseline() -> InstitutionBaseline:
-    from sudarshan_core.engines.vide.baseline_store import load_baselines
+    from sudarshan_core.engines.vide.baseline_store import load_lab_baselines
 
-    return next(b for b in load_baselines() if b.institution_id == "demo_sbi_yono")
+    return next(b for b in load_lab_baselines() if b.institution_id == "demo_sbi_yono")
 
 
 def test_collect_webview_html_from_load_data_event():

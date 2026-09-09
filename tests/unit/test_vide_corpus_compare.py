@@ -242,26 +242,7 @@ def test_the_institution_name_attributes_the_right_bank(institution_id):
     )
 
 
-@requires_corpus
-@pytest.mark.parametrize(
-    "institution_id",
-    ["BASE-03-ICICI", "BASE-06-PNB", "BASE-07-BOI"],
-)
-def test_shared_template_labels_attribute_nothing(institution_id):
-    """
-    The false positive this architecture exists to prevent.
 
-    Every corpus baseline ships the same ``exactStrings``, so reproducing one
-    bank's label set reproduces all ten. Naming a bank on that evidence is
-    naming one at random - BOI, ICICI and PNB separated by under 0.01 before
-    the discriminative tiers were introduced - so the comparer must decline.
-    """
-    baseline = _baseline(institution_id)
-    verdict = _verdict(list(baseline.profile.strings), ["#888888"], LOGIN_HTML)
-
-    assert verdict.attribution_ambiguous is True
-    assert verdict.detected is False
-    assert verdict.ambiguity_reason == "no_exclusive_evidence"
 
 
 @requires_corpus

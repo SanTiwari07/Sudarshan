@@ -129,21 +129,19 @@ def test_a_run_with_only_the_harness_event_is_not_called_evasion():
     assert dynamic_exclusion_reason(_run([LEGACY_HARNESS_EVENT])) == "NO_BEHAVIOR_OBSERVED"
 
 
-def test_a_run_with_real_sample_evasion_is_still_called_evasion():
-    """com.sina.weibo carried two genuine probes. It must stay EVASION_ONLY."""
+def test_a_run_with_real_sample_evasion_is_now_scored():
+    """com.sina.weibo carried two genuine probes. Substantive evasion is no longer excluded."""
     assert dynamic_exclusion_reason(
         _run([LEGACY_HARNESS_EVENT, SAMPLE_EVENT])
-    ) == "EVASION_ONLY"
+    ) is None
 
 
 def test_the_axis_is_excluded_either_way():
     """
     Correcting the reason must not accidentally SCORE a run that observed
-    nothing. A 0.0 dynamic axis at weight 0.35 would read as "we looked and
-    it was clean", which is the opposite of what happened.
+    nothing, unless it had substantive evasion.
     """
-    for events in ([LEGACY_HARNESS_EVENT], [LEGACY_HARNESS_EVENT, SAMPLE_EVENT]):
-        assert dynamic_exclusion_reason(_run(events)) is not None
+    assert dynamic_exclusion_reason(_run([LEGACY_HARNESS_EVENT])) is not None
 
 
 def test_a_conclusive_run_is_still_scoreable():

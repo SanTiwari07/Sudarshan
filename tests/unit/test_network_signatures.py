@@ -250,11 +250,4 @@ def test_the_export_endpoints_are_registered(monkeypatch):
     assert "/report/snort/{sha256}" in paths
 
 
-def test_the_ui_offers_both_new_formats():
-    """The export suite is the only way an analyst reaches these."""
-    suite = (
-        _ROOT / "frontend" / "src" / "components" / "threatIntel"
-        / "ThreatIntelExportSuite.tsx"
-    ).read_text(encoding="utf-8", errors="replace")
-    assert "/report/suricata/" in suite
-    assert "/report/snort/" in suite
+

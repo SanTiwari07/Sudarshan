@@ -144,7 +144,7 @@ _STAGE_RULES: List[_StageRule] = [
         # screen readers can announce it, and both benign corpus samples fired
         # it. It would turn this rule into a detector for "app has a UI".
         trigger_hooks=[
-            "AccessibilityService.onAccessibilityEvent",
+            "AccessibilityNodeInfo.getText",
         ],
         category="accessibility",
         confidence_base=0.85,

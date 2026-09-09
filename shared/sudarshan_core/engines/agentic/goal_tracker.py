@@ -450,7 +450,7 @@ def _build_default_goals() -> List[FraudGoal]:
             # emitted, and both evidence of the service ACTING rather than
             # merely existing.
             frida_hooks=[
-                "AccessibilityService.onAccessibilityEvent",
+                "AccessibilityNodeInfo.getText",
                 "AccessibilityNodeInfo.performAction",
                 "AccessibilityService.dispatchGesture",
             ],

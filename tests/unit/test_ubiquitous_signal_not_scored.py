@@ -78,7 +78,6 @@ def test_real_accessibility_abuse_is_still_scored():
 
     js = (_HOOKS / "banking_trojan.js").read_text(encoding="utf-8", errors="replace")
     for hook in (
-        "AccessibilityService.onAccessibilityEvent",
         "AccessibilityNodeInfo.getText",
         "AccessibilityNodeInfo.performAction",
         "AccessibilityService.dispatchGesture",

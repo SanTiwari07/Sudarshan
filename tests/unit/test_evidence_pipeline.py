@@ -34,7 +34,7 @@ class TestEventBus(unittest.TestCase):
         bus.publish(RuntimeEvent(event_type=EventType.SESSION_STARTED, session_id="S-001"))
 
         # Give background worker time to process
-        time.sleep(0.2)
+        bus.drain()
         self.assertGreaterEqual(len(received), 1)
         self.assertEqual(received[0]["event_type"], EventType.SESSION_STARTED)
 
@@ -49,7 +49,7 @@ class TestEventBus(unittest.TestCase):
         bus.publish(RuntimeEvent(event_type=EventType.UI_ACTION, payload={"action": "click"}))
         bus.publish(RuntimeEvent(event_type=EventType.SCREENSHOT_CAPTURED, payload={"filename": "screen.png"}))
 
-        time.sleep(0.2)
+        bus.drain()
         self.assertEqual(len(typed_received), 1)
         self.assertEqual(typed_received[0]["event_type"], EventType.SCREENSHOT_CAPTURED)
 
@@ -71,7 +71,7 @@ class TestEvidenceStore(unittest.TestCase):
             payload={"url": "https://c2.malware.com/api", "status": "200"}
         ))
 
-        time.sleep(0.3)
+        bus.drain()
         records = store.get_all()
         self.assertGreaterEqual(len(records), 2)
         

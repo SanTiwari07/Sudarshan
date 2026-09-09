@@ -80,9 +80,9 @@ def test_e_signer_impersonation_critical():
 
 
 def test_f_different_package_high_similarity_vide_f001():
-    from sudarshan_core.engines.vide.baseline_store import load_baselines
+    from sudarshan_core.engines.vide.baseline_store import load_lab_baselines
 
-    bl = next(b for b in load_baselines() if b.institution_id == "demo_sbi_yono")
+    bl = next(b for b in load_lab_baselines() if b.institution_id == "demo_sbi_yono")
     p = bl.profile
     suspect = UIProfile(
         source="test",
@@ -94,19 +94,19 @@ def test_f_different_package_high_similarity_vide_f001():
         suspect_profile=suspect,
         package_name="com.unrelated.attacker",
         certificate={"certificate_sha256": "e" * 64},
-        baselines=load_baselines(),
+        baselines=load_lab_baselines(),
     )
     assert vide["vide_compare"]["detected"] is True
 
 
 def test_g_unrelated_no_vide_f001():
     suspect = UIProfile(source="test", strings=["Maps", "Navigation"], view_sequence=["MapView"])
-    from sudarshan_core.engines.vide.baseline_store import load_baselines
+    from sudarshan_core.engines.vide.baseline_store import load_lab_baselines
 
     vide = run_vide_analysis(
         suspect_profile=suspect,
         package_name="com.maps.app",
-        baselines=load_baselines(),
+        baselines=load_lab_baselines(),
     )
     assert vide["vide_compare"]["detected"] is False
 

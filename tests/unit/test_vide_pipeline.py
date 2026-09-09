@@ -1,14 +1,14 @@
 """End-to-end VIDE pipeline (static profile, no network/emulator)."""
 
 from sudarshan_core.engines.risk_engine import calculate_risk_score
-from sudarshan_core.engines.vide.baseline_store import load_baselines
+from sudarshan_core.engines.vide.baseline_store import load_lab_baselines
 from sudarshan_core.engines.vide.pipeline import run_vide_analysis
 from sudarshan_core.engines.vide.ui_profile import UIProfile
 from sudarshan_core.models.schemas import StaticAnalysisFlags
 
 
 def _sbi_like_profile() -> UIProfile:
-    bl = next(b for b in load_baselines() if b.institution_id == "demo_sbi_yono")
+    bl = next(b for b in load_lab_baselines() if b.institution_id == "demo_sbi_yono")
     p = bl.profile
     return UIProfile(
         source="apktool",
@@ -23,7 +23,7 @@ def test_sbi_like_profile_triggers_vide_f001():
         suspect_profile=_sbi_like_profile(),
         package_name="com.attacker.fakebank",
         certificate={"certificate_sha256": "d" * 64},
-        baselines=load_baselines(),
+        baselines=load_lab_baselines(),
     )
     assert vide["visual_impersonation_detected"] is True
     assert vide["vide_compare"]["detected"] is True
@@ -48,7 +48,7 @@ def test_unrelated_profile_no_vide_f001():
     vide = run_vide_analysis(
         suspect_profile=suspect,
         package_name="com.tools.settings",
-        baselines=load_baselines(),
+        baselines=load_lab_baselines(),
     )
     assert vide["visual_impersonation_detected"] is False
     assert vide["vide_compare"]["detected"] is False

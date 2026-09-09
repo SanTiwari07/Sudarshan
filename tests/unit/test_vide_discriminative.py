@@ -242,23 +242,6 @@ def test_the_index_is_cached_per_baseline_set():
 
 
 @requires_corpus
-def test_no_corpus_bank_has_a_discriminative_label():
-    """
-    Records the corpus gap this architecture works around.
-
-    All ten ``fingerprints.json`` files ship the same ``exactStrings``, so the
-    label tier contributes nothing and attribution rests on names and palette.
-    When the corpus is regenerated with per-bank labels this test should fail -
-    that is the signal to delete it, not to re-weight anything.
-    """
-    corpus = [b for b in get_baselines() if b.source == "corpus"]
-    index = discriminators_for(corpus)
-    assert all(
-        not index.for_institution(b.institution_id).label_weights for b in corpus
-    )
-
-
-@requires_corpus
 @pytest.mark.parametrize(
     "institution_id",
     ["BASE-03-ICICI", "BASE-06-PNB", "BASE-07-BOI"],

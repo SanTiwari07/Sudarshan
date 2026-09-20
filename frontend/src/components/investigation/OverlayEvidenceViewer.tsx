@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { Download, FileCode2, ShieldAlert } from 'lucide-react';
 import type { VideOverlayPayload, VideResult } from '../../App';
 import SocCard from '../ui/Card';
@@ -6,7 +6,7 @@ import SectionHeader from '../ui/SectionHeader';
 
 /**
  * Raw HTML overlays intercepted from WebView.loadData / loadDataWithBaseURL at
- * runtime — the actual phishing markup an ATS trojan renders over the real
+ * runtime - the actual phishing markup an ATS trojan renders over the real
  * banking app.
  *
  * The payload is attacker-authored markup. It is displayed as escaped source
@@ -117,7 +117,7 @@ export default function OverlayEvidenceViewer({ vide }: Props) {
     <SocCard>
       <SectionHeader
         icon={<FileCode2 className="h-4 w-4" />}
-        title="Overlay evidence — intercepted WebView payloads"
+        title="Overlay evidence - intercepted WebView payloads"
         subtitle="Raw HTML captured from WebView.loadData / loadDataWithBaseURL at runtime"
         badge={
           <span className="text-[13px] font-semibold px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200">
@@ -142,3 +142,4 @@ export default function OverlayEvidenceViewer({ vide }: Props) {
     </SocCard>
   );
 }
+

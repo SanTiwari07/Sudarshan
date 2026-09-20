@@ -1,4 +1,4 @@
-import SocCard from '../ui/Card';
+﻿import SocCard from '../ui/Card';
 import type { FraudCardData } from '../../App';
 
 /**
@@ -177,7 +177,7 @@ export function MitreMatrix({ data }: { data: FraudCardData }) {
                     target="_blank"
                     rel="noreferrer noopener"
                     className="block border border-slate-200 rounded px-2 py-1.5 bg-white hover:border-slate-400 hover:bg-slate-50 transition-colors"
-                    title={`${entry.id} — ${entry.label}`}
+                    title={`${entry.id} - ${entry.label}`}
                   >
                     <div className="font-mono text-[13px] text-sky-700">
                       {entry.id}
@@ -197,3 +197,4 @@ export function MitreMatrix({ data }: { data: FraudCardData }) {
 }
 
 export default MitreMatrix;
+

@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom';
+﻿import { Link, useLocation } from 'react-router-dom';
 import { FileText, Database, Globe, Sparkles, type LucideIcon } from 'lucide-react';
 import type { FraudCardData } from '../../App';
 import { TYPOGRAPHY } from '../../theme/typography';
@@ -96,7 +96,7 @@ function ScoreRing({
         )}
       </svg>
       <span className="absolute inset-0 flex items-center justify-center font-sans text-[13px] font-semibold tabular-nums tracking-[-0.02em] text-slate-900">
-        {inconclusive ? '—' : formatScore(score)}
+        {inconclusive ? '-' : formatScore(score)}
       </span>
     </div>
   );
@@ -201,3 +201,4 @@ export function CaseBar({ data }: { data: FraudCardData }) {
 }
 
 export default CaseBar;
+

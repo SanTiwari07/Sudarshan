@@ -1,4 +1,4 @@
-import type { FraudCardData } from '../../App';
+﻿import type { FraudCardData } from '../../App';
 import { computeWeightedContribution, getAxesUsed } from '../../lib/scoreLedger';
 import {
   buildStaticCardSummary,
@@ -258,14 +258,14 @@ function InfluenceRowItem({
             of the final score
             {row.contribution >= 0.05 ? (
               <>
-                {' '}— adding{' '}
+                {' '}- adding{' '}
                 <span className="font-medium tabular-nums text-slate-700">
                   {row.contribution.toFixed(1)}
                 </span>{' '}
                 points.
               </>
             ) : (
-              <> — adding nothing, because the axis scored nothing.</>
+              <> - adding nothing, because the axis scored nothing.</>
             )}
           </>
         ) : row.score > 0 ? (
@@ -274,7 +274,7 @@ function InfluenceRowItem({
             <span className="font-medium tabular-nums text-slate-700">
               {row.score.toFixed(1)}
             </span>{' '}
-            out of 100, but excluded — so it added nothing, and its absence is
+            out of 100, but excluded - so it added nothing, and its absence is
             not evidence of safety.
           </>
         ) : (
@@ -397,3 +397,4 @@ export default function RiskInfluenceCard({
     </SocCard>
   );
 }
+

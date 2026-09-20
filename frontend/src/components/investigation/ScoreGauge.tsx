@@ -1,4 +1,4 @@
-import type { FraudCardData } from '../../App';
+﻿import type { FraudCardData } from '../../App';
 import { formatScore } from '../../lib/verdictCopy';
 import { caseSeverity } from '../../theme/severity';
 import { isInconclusive } from '../../lib/decision';
@@ -110,7 +110,7 @@ export default function ScoreGauge({ data }: { data: FraudCardData }) {
             inconclusive ? 'text-slate-400' : tone.text
           }`}
         >
-          {inconclusive ? '—' : formatScore(score)}
+          {inconclusive ? '-' : formatScore(score)}
           {!inconclusive && (
             <span className="ml-0.5 text-[0.875rem] font-normal tracking-[-0.02em] text-slate-400">
               /100
@@ -146,3 +146,4 @@ export default function ScoreGauge({ data }: { data: FraudCardData }) {
     </section>
   );
 }
+

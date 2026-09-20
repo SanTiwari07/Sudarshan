@@ -1,4 +1,4 @@
-import { BarChart2 } from 'lucide-react';
+﻿import { BarChart2 } from 'lucide-react';
 import type { FraudCardData } from '../../App';
 import { TYPOGRAPHY } from '../../theme/typography';
 import { useInvestigationUI } from '../../context/InvestigationUIContext';
@@ -33,7 +33,7 @@ import { extractAppMetadata } from '../../lib/analystCopy';
 /** A fact, or nothing. Placeholders the backend uses for "unknown" are not facts. */
 function factValue(v: unknown): string | null {
   const t = typeof v === 'string' ? v.trim() : typeof v === 'number' ? String(v) : '';
-  return t && t !== '-' && t !== '—' && t !== 'Unknown' && t !== 'N/A' ? t : null;
+  return t && t !== '-' && t !== '-' && t !== 'Unknown' && t !== 'N/A' ? t : null;
 }
 
 
@@ -227,3 +227,4 @@ export default function VerdictBlock({ data }: { data: FraudCardData }) {
     </section>
   );
 }
+

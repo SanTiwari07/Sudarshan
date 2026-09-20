@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useNavigate, useLocation, Location } from 'react-router-dom';
 import {
   LogIn,
@@ -243,7 +243,7 @@ export default function Login() {
           />
           <p className="mt-5 text-[15px] leading-relaxed text-slate-400">
             No verdict arrives on its own. Every score opens onto the thing
-            beneath it — the decompiled call, the captured request, the matched
+            beneath it - the decompiled call, the captured request, the matched
             indicator.
           </p>
         </div>
@@ -404,3 +404,4 @@ export default function Login() {
     </div>
   );
 }
+

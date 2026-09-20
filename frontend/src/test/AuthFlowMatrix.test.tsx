@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, vi, afterEach } from 'vitest';
+﻿import { describe, test, expect, beforeEach, vi, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import App from '../App';
@@ -41,7 +41,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // TEST 1 — Fresh Browser (cleared token -> /login, Upload never appears)
+  // TEST 1 - Fresh Browser (cleared token -> /login, Upload never appears)
   // ---------------------------------------------------------------------------
   test('TEST 1: Fresh Browser - cleared token redirects to /login and Upload never mounts', async () => {
     localStorage.clear();
@@ -62,7 +62,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // TEST 2 — Login (valid credentials -> JWT -> / -> Upload)
+  // TEST 2 - Login (valid credentials -> JWT -> / -> Upload)
   // ---------------------------------------------------------------------------
   test('TEST 2: Login - valid credentials stores JWT, updates auth state and lands on Upload page', async () => {
     const mockResponse = {
@@ -106,7 +106,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // TEST 3 — Invalid Credentials (invalid creds -> stay on /login)
+  // TEST 3 - Invalid Credentials (invalid creds -> stay on /login)
   // ---------------------------------------------------------------------------
   test('TEST 3: Invalid Credentials - failed login stays on /login with error message', async () => {
     global.fetch = vi.fn().mockResolvedValue({
@@ -143,7 +143,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // TEST 4 — Direct Root Access (unauth / -> /login)
+  // TEST 4 - Direct Root Access (unauth / -> /login)
   // ---------------------------------------------------------------------------
   test('TEST 4: Direct Root Access - unauthenticated user accessing / is redirected to /login', async () => {
     render(
@@ -160,7 +160,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // TEST 5 — Technical View (unauth /technical -> /login)
+  // TEST 5 - Technical View (unauth /technical -> /login)
   // ---------------------------------------------------------------------------
   test('TEST 5: Technical View - unauthenticated access to /technical redirects to /login', async () => {
     render(
@@ -175,7 +175,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // TEST 6 — Threat Intelligence (unauth /threat-intel -> /login)
+  // TEST 6 - Threat Intelligence (unauth /threat-intel -> /login)
   // ---------------------------------------------------------------------------
   test('TEST 6: Threat Intelligence - unauthenticated access to /threat-intel redirects to /login', async () => {
     render(
@@ -190,7 +190,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // TEST 7 — Cases (unauth /history -> /login)
+  // TEST 7 - Cases (unauth /history -> /login)
   // ---------------------------------------------------------------------------
   test('TEST 7: Cases - unauthenticated access to /history redirects to /login', async () => {
     render(
@@ -205,7 +205,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // TEST 8 — AI Assistant (unauth /chat -> /login)
+  // TEST 8 - AI Assistant (unauth /chat -> /login)
   // ---------------------------------------------------------------------------
   test('TEST 8: AI Assistant - unauthenticated access to /chat redirects to /login', async () => {
     render(
@@ -220,7 +220,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // TEST 9 — Deep Link (unauth /history/:sha256 -> /login)
+  // TEST 9 - Deep Link (unauth /history/:sha256 -> /login)
   // ---------------------------------------------------------------------------
   test('TEST 9: Deep Link - unauthenticated access to /history/:sha256 redirects to /login', async () => {
     const dummyHash = 'a1b2c3d4e5f67890a1b2c3d4e5f67890a1b2c3d4e5f67890a1b2c3d4e5f67890';
@@ -236,7 +236,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // TEST 10 — Authenticated Deep Link (auth /history/:sha256 -> InvestigationShell -> Case)
+  // TEST 10 - Authenticated Deep Link (auth /history/:sha256 -> InvestigationShell -> Case)
   // ---------------------------------------------------------------------------
   test('TEST 10: Authenticated Deep Link - auth user opening /history/:sha renders InvestigationShell and restores case', async () => {
     localStorage.setItem('sudarshan_token', VALID_TOKEN);
@@ -310,7 +310,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // TEST 11 — Authenticated /login (auth opening /login -> /)
+  // TEST 11 - Authenticated /login (auth opening /login -> /)
   // ---------------------------------------------------------------------------
   test('TEST 11: Authenticated /login - authenticated user attempting to open /login is redirected to /', async () => {
     localStorage.setItem('sudarshan_token', VALID_TOKEN);
@@ -330,7 +330,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // TEST 12 — Refresh (auth refresh -> remain auth)
+  // TEST 12 - Refresh (auth refresh -> remain auth)
   // ---------------------------------------------------------------------------
   test('TEST 12: Refresh - authenticated state persists across page refresh', async () => {
     localStorage.setItem('sudarshan_token', VALID_TOKEN);
@@ -361,7 +361,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // TEST 13 — Logout (logout -> token removed -> /login)
+  // TEST 13 - Logout (logout -> token removed -> /login)
   // ---------------------------------------------------------------------------
   test('TEST 13: Logout - clicking Logout removes token and redirects to /login', async () => {
     localStorage.setItem('sudarshan_token', VALID_TOKEN);
@@ -387,7 +387,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // TEST 14 — Access After Logout (unauth / -> /login)
+  // TEST 14 - Access After Logout (unauth / -> /login)
   // ---------------------------------------------------------------------------
   test('TEST 14: Access After Logout - subsequent navigation after logout redirects to /login', async () => {
     localStorage.setItem('sudarshan_token', VALID_TOKEN);
@@ -422,7 +422,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // TEST 15 — Invalid Token (invalid/expired JWT -> rejected -> cleared -> /login)
+  // TEST 15 - Invalid Token (invalid/expired JWT -> rejected -> cleared -> /login)
   // ---------------------------------------------------------------------------
   test('TEST 15: Invalid Token - expired or malformed token in localStorage is automatically cleared on init', async () => {
     localStorage.setItem('sudarshan_token', EXPIRED_TOKEN);
@@ -462,7 +462,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // TEST 16 — No Protected Content Flash (no Upload UI / sidebar / data flash before auth redirect)
+  // TEST 16 - No Protected Content Flash (no Upload UI / sidebar / data flash before auth redirect)
   // ---------------------------------------------------------------------------
   test('TEST 16: No Protected Content Flash - unauthenticated users see no protected UI elements before redirect', () => {
     localStorage.clear();
@@ -479,7 +479,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // TEST 17 — Existing Upload Flow (functional after login)
+  // TEST 17 - Existing Upload Flow (functional after login)
   // ---------------------------------------------------------------------------
   test('TEST 17: Existing Upload Flow - authenticated user can access upload interface and drop zone', async () => {
     localStorage.setItem('sudarshan_token', VALID_TOKEN);
@@ -496,7 +496,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // TEST 18 — Website URL Flow (functional after login)
+  // TEST 18 - Website URL Flow (functional after login)
   // ---------------------------------------------------------------------------
   test('TEST 18: Website URL Flow - website discovery panel is present and functional when authenticated', async () => {
     localStorage.setItem('sudarshan_token', VALID_TOKEN);
@@ -513,7 +513,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // TEST 19 — Sidebar (unauth: hidden; auth: visible)
+  // TEST 19 - Sidebar (unauth: hidden; auth: visible)
   // ---------------------------------------------------------------------------
   test('TEST 19: Sidebar - sidebar is hidden when unauthenticated and visible when authenticated', async () => {
     const { unmount, container } = render(
@@ -544,7 +544,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // TEST 20 — Browser Back Button (back after logout -> protected page not accessible)
+  // TEST 20 - Browser Back Button (back after logout -> protected page not accessible)
   // ---------------------------------------------------------------------------
   test('TEST 20: Browser Back Button - navigating back to protected page after logout immediately bounces to /login', async () => {
     localStorage.setItem('sudarshan_token', VALID_TOKEN);
@@ -578,3 +578,4 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     });
   });
 });
+

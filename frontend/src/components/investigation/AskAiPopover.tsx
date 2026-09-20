@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Sparkles, Loader2 } from 'lucide-react';
 import { API_BASE, authHeaders } from '../../config';
 
@@ -28,8 +28,8 @@ interface ExplainResponse {
 }
 
 const SOURCE_LABEL: Record<ExplainResponse['source'], string> = {
-  model: 'AI-generated explanation — advisory, not a finding',
-  decoded: 'Decoded locally — exact',
+  model: 'AI-generated explanation - advisory, not a finding',
+  decoded: 'Decoded locally - exact',
   refused: 'Not sent to the model',
   unavailable: 'Explanation unavailable',
 };
@@ -160,3 +160,4 @@ export function AskAiPopover({
 }
 
 export default AskAiPopover;
+

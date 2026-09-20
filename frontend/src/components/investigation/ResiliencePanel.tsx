@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import {
   BatteryMedium,
   CheckCircle2,
@@ -98,7 +98,7 @@ function AssertionMatrix({
       {assertions.incomplete_exercise && (
         <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2">
           <p className="text-xs font-semibold text-amber-900">
-            INCOMPLETE EXERCISE — this run did not exercise the sample
+            INCOMPLETE EXERCISE - this run did not exercise the sample
           </p>
           <p className="mt-1 text-xs leading-relaxed text-amber-900/90">
             No trigger condition was reached and no threat behaviour was observed.
@@ -187,7 +187,7 @@ const VERDICT_STYLE: Record<
   },
   NO_RUNTIME_TELEMETRY: {
     border: 'border-slate-300 bg-slate-50 text-slate-800',
-    title: 'NOT OBSERVED — no hook stream was attached',
+    title: 'NOT OBSERVED - no hook stream was attached',
     icon: <EyeOff className="h-4 w-4 shrink-0 text-slate-600" />,
   },
 };
@@ -277,13 +277,13 @@ function AppliedChangesBlock({ applied }: { applied: AntiEvasionApplied }) {
             ? `${writtenNow
                 .map((row) => `+${row.written} ${SEEDED_LABEL[row.key] ?? row.key}`)
                 .join(' · ')} written by this run`
-            : 'already present from an earlier seed — nothing re-written'}
+            : 'already present from an earlier seed - nothing re-written'}
         </p>
       )}
 
       {held.length === 0 && attempted > 0 && (
         <p className="mt-0.5 text-xs text-red-800">
-          No provider accepted a write — the device history is unchanged.
+          No provider accepted a write - the device history is unchanged.
         </p>
       )}
     </div>
@@ -350,7 +350,7 @@ function AntiEvasionVerdictCard({
             return (
               <span
                 key={d.key}
-                title={`${d.label} — ${d.meaning}`}
+                title={`${d.label} - ${d.meaning}`}
                 className={`inline-flex items-baseline gap-1.5 rounded border px-2 py-1 text-[13px] ${
                   moved && d.threat_class
                     ? 'border-red-400 bg-white/70 font-semibold text-red-800'
@@ -585,7 +585,7 @@ export default function ResiliencePanel({
           </div>
           <p className="mt-1 text-xs text-slate-500">
             Clock +24h in three stages with a Doze cycle, then battery, contacts,
-            call log, bank SMS and camera roll — and a before/after comparison of
+            call log, bank SMS and camera roll - and a before/after comparison of
             runtime behaviour. Seeds a slice of the persona (12 contacts, 10 calls,
             4 SMS, 3 photos): a full 120-row seed costs a process spawn per row and
             takes minutes. Rows the device already has are left alone.
@@ -626,3 +626,4 @@ export default function ResiliencePanel({
     </SocCard>
   );
 }
+

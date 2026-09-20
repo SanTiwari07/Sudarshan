@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Database, Search,
@@ -261,7 +261,7 @@ export default function History() {
                       {c.family_classification && c.family_classification !== 'Unknown' ? (
                         c.family_classification
                       ) : (
-                        <span className="text-slate-500">—</span>
+                        <span className="text-slate-500">-</span>
                       )}
                     </td>
                     <td className={`px-4 py-2.5 ${TYPOGRAPHY.tableCell}`}>
@@ -324,3 +324,4 @@ export default function History() {
     </div>
   );
 }
+

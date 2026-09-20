@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { GitCompare, Palette, Type as TypeIcon, Layers } from 'lucide-react';
 import type { VideAstNode, VideColorMatch, VideResult } from '../../App';
 import SocCard from '../ui/Card';
@@ -19,7 +19,7 @@ type Props = {
 };
 
 function pct(value: number | undefined | null): string {
-  if (value == null || Number.isNaN(value)) return '—';
+  if (value == null || Number.isNaN(value)) return '-';
   return `${Math.round(value * 100)}%`;
 }
 
@@ -130,13 +130,13 @@ export default function VisualDiffViewer({ vide }: Props) {
     return null;
   }
 
-  const bankLabel = corpus.institution_display || corpus.bank || corpus.institution_id || '—';
+  const bankLabel = corpus.institution_display || corpus.bank || corpus.institution_id || '-';
 
   return (
     <SocCard>
       <SectionHeader
         icon={<GitCompare className="h-4 w-4" />}
-        title="Visual Diff — suspect vs banking baseline"
+        title="Visual Diff - suspect vs banking baseline"
         subtitle={
           ambiguous
             ? 'Banking UI shape confirmed; brand attribution inconclusive'
@@ -305,7 +305,7 @@ export default function VisualDiffViewer({ vide }: Props) {
             <p className="text-[13px] font-semibold text-sky-900">
               AI design assessment
               <span className="ml-1.5 font-normal normal-case text-sky-700">
-                advisory — does not affect the verdict
+                advisory - does not affect the verdict
               </span>
             </p>
             {semantic.impersonation_rationale && (
@@ -335,3 +335,4 @@ export default function VisualDiffViewer({ vide }: Props) {
     </SocCard>
   );
 }
+

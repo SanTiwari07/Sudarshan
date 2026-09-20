@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, RotateCw, AlertCircle, CheckCircle2, Clock, Loader2, XCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import type { BatchJob } from '../../types/batch';
@@ -62,7 +62,7 @@ export default function BatchJobRow({ job, onRetry, actionLoading }: BatchJobRow
 
   const renderRisk = () => {
     if (job.status !== 'COMPLETED') {
-      return <span className="text-slate-400 font-mono text-xs">—</span>;
+      return <span className="text-slate-400 font-mono text-xs">-</span>;
     }
     if (!job.risk_band) {
       return <span className="text-slate-400 font-mono text-xs">Analyzed</span>;
@@ -72,7 +72,7 @@ export default function BatchJobRow({ job, onRetry, actionLoading }: BatchJobRow
 
   const renderScore = () => {
     if (job.status !== 'COMPLETED' || job.final_risk_score == null) {
-      return <span className="text-slate-400 font-mono text-xs">—</span>;
+      return <span className="text-slate-400 font-mono text-xs">-</span>;
     }
     return (
       <span className="font-mono font-bold text-sm text-slate-800">
@@ -116,7 +116,7 @@ export default function BatchJobRow({ job, onRetry, actionLoading }: BatchJobRow
         </span>
       );
     }
-    return <span className="text-slate-400 font-mono text-xs">—</span>;
+    return <span className="text-slate-400 font-mono text-xs">-</span>;
   };
 
   const renderAction = () => {
@@ -145,7 +145,7 @@ export default function BatchJobRow({ job, onRetry, actionLoading }: BatchJobRow
         </button>
       );
     }
-    return <span className="text-slate-300 font-mono text-xs">—</span>;
+    return <span className="text-slate-300 font-mono text-xs">-</span>;
   };
 
   return (
@@ -195,3 +195,4 @@ export default function BatchJobRow({ job, onRetry, actionLoading }: BatchJobRow
     </>
   );
 }
+

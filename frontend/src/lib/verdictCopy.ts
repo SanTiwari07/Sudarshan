@@ -1,11 +1,11 @@
-import type { FraudCardData } from '../App';
+﻿import type { FraudCardData } from '../App';
 
 /**
  * Canonical score rendering.
  *
  * The header rendered `8.7` while the hero ring rendered `9` for the same
  * case, two hundred pixels apart. To a reviewer that reads as two different
- * numbers, or as a rounding bug — either way it costs more credibility than
+ * numbers, or as a rounding bug - either way it costs more credibility than
  * the decimal place is worth. Every surface that prints an FRS goes through
  * here.
  */
@@ -178,3 +178,4 @@ export function verdictHeadline(data: FraudCardData): string {
   }
   return 'None of the fraud capabilities SUDARSHAN screens for were found in this application.';
 }
+

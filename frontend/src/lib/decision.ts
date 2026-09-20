@@ -1,4 +1,4 @@
-import type { FraudCardData } from '../App';
+﻿import type { FraudCardData } from '../App';
 
 /**
  * The single source of truth for "what should the bank do about this app".
@@ -142,7 +142,7 @@ export function getDecision(data: FraudCardData): Decision {
       a && a.total_count > 0 ? ` Only ${a.fired_count} of ${a.total_count} trigger conditions were reached.` : '';
     return {
       action: 'INCONCLUSIVE',
-      headline: 'Inconclusive — do not treat as safe',
+      headline: 'Inconclusive - do not treat as safe',
       rationale:
         'The analysis did not exercise all expected behaviour, so the absence of ' +
         'malicious activity is unexplained rather than exonerating.' +
@@ -208,7 +208,7 @@ export function getDecision(data: FraudCardData): Decision {
   if (dynamicWasInconclusive(data)) {
     return {
       action: 'ALLOW WITH CAUTION',
-      headline: 'No threat observed — coverage incomplete',
+      headline: 'No threat observed - coverage incomplete',
       rationale:
         `No malicious behaviour was scored (${score}/100), but runtime analysis was ` +
         'not conclusive, so this result describes what was observed rather than what the ' +
@@ -226,7 +226,7 @@ export function getDecision(data: FraudCardData): Decision {
   if (hasCapability || score >= 10) {
     return {
       action: 'ALLOW WITH CAUTION',
-      headline: 'Monitor — approved with caution',
+      headline: 'Monitor - approved with caution',
       rationale:
         engineAction ||
         `Low aggregate risk (${score}/100), but the application holds capabilities that ` +
@@ -250,3 +250,4 @@ export function getDecision(data: FraudCardData): Decision {
     inconclusive: false,
   };
 }
+

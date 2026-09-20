@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -291,7 +291,7 @@ export default function EvidenceInspectionModal({
                 {screenshotId}
               </span>
               <span className="text-xs text-slate-500 font-mono hidden sm:inline">
-                {timestampText !== '—' ? timestampText : ''}
+                {timestampText !== '-' ? timestampText : ''}
               </span>
               {workflow && (
                 <span className="text-[13px] font-mono uppercase px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 hidden md:inline">
@@ -522,7 +522,7 @@ export default function EvidenceInspectionModal({
                   </div>
                 )}
 
-                {timestampText && timestampText !== '—' && (
+                {timestampText && timestampText !== '-' && (
                   <div>
                     <span className="text-slate-500 block text-[13px] font-medium">Captured Time</span>
                     <span className="text-slate-800 font-mono text-[13px] flex items-center gap-1 mt-0.5">
@@ -699,3 +699,4 @@ export default function EvidenceInspectionModal({
     </div>
   );
 }
+

@@ -39,8 +39,8 @@ type Signal = {
 /**
  * Case signals.
  *
- * These were four full-width banners stacked one under another — runtime
- * limitation, sandbox resilience, visual impersonation, threat intel — each
+ * These were four full-width banners stacked one under another - runtime
+ * limitation, sandbox resilience, visual impersonation, threat intel - each
  * shouting at exactly the same volume as the verdict above them. They are all
  * the same kind of thing: a one-line status with a link to the page that
  * proves it. So they render as one row of tiles, and the page gets its
@@ -167,7 +167,7 @@ function Reading({ reading, className = '' }: { reading: HeroReading; className?
           reading.valueClass ?? 'text-slate-900'
         }`}
       >
-        <span className="block truncate">{reading.value}</span>
+        <span className="block truncate pb-1 -mb-1">{reading.value}</span>
       </p>
       {reading.segments.length > 0 && (
         /* A 2px gap between fills, so neighbouring segments never read as one
@@ -407,3 +407,4 @@ export default function FraudCard({ data }: { data: FraudCardData | null }) {
     </div>
   );
 }
+

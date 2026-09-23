@@ -94,4 +94,4 @@ Future development focuses on advancing from user-space application hooking to u
 
 ## Current Implementation Status
 
-All roadmap initiatives detailed in this document represent **Planned** enhancements. Current operational state remains accurately documented in [`docs/README.md`](../../docs/README.md) and [`docs/DAE_CURRENT_STATE.md`](../../docs/DAE_CURRENT_STATE.md).
+All roadmap initiatives detailed in this document represent **Planned** enhancements. Current operational state remains accurately documented in [`docs/README.md`](../../docs/README.md) and [`docs/architecture/DYNAMIC_ANALYSIS_CURRENT_STATE.md`](../../docs/architecture/DYNAMIC_ANALYSIS_CURRENT_STATE.md).

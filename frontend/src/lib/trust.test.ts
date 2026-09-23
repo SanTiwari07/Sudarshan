@@ -25,11 +25,12 @@ function caseOf(over: Partial<FraudCardData> = {}): FraudCardData {
 }
 
 describe('assessTrust', () => {
-  it('refuses to endorse a floored run, however high the confidence', () => {
+  it('refuses to endorse an evasion or incomplete-exercise run, however high the confidence', () => {
+    // These two floors mean the analysis itself failed — the score cannot be
+    // trusted. assessTrust must return 'unreliable' and refuse any positive framing.
     for (const floor of [
       'verdict_floored_for_incomplete_exercise',
       'verdict_floored_for_evasion',
-      'verdict_floored_for_visibility',
     ] as const) {
       const t = assessTrust(
         caseOf({ confidence: 99, frs_breakdown: { [floor]: true } as FraudCardData['frs_breakdown'] }),
@@ -39,6 +40,17 @@ describe('assessTrust', () => {
       expect(t.answer, floor).toMatch(/^No\b/);
       expect(t.answer, floor).not.toMatch(REASSURING);
     }
+  });
+
+  it('returns provisional (not unreliable) for a visibility floor - score is valid', () => {
+    // verdict_floored_for_visibility raises a band conservatively (Safe→Suspicious)
+    // because a concealed payload was found. The computed score is still valid and
+    // actionable. assessTrust should return 'provisional', not 'unreliable'.
+    const t = assessTrust(
+      caseOf({ confidence: 99, frs_breakdown: { verdict_floored_for_visibility: true } as FraudCardData['frs_breakdown'] }),
+    );
+    expect(t.level).toBe('provisional');
+    expect(t.answer).not.toMatch(REASSURING);
   });
 
   it('counts trigger coverage into the reason when the engine reported it', () => {

@@ -2,7 +2,7 @@
 
 **Baseline:** `e7496bc` · **Date:** 2026-07-31 · **Supersedes** the `82fc55b` edition.
 
-> **Historical artifact.** This is a point-in-time competitive-intelligence report, not platform documentation. Its findings describe the repository as it stood at commit `e7496bc` and are not maintained against later changes. For the current state of the platform see [README.md](README.md), [docs/FEATURE_STATUS.md](docs/FEATURE_STATUS.md) and [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md).
+> **Historical artifact.** This is a point-in-time competitive-intelligence report, not platform documentation. Its findings describe the repository as it stood at commit `e7496bc` and are not maintained against later changes. For the current state of the platform see [README.md](README.md), [docs/features/FEATURE_STATUS.md](docs/features/FEATURE_STATUS.md) and [docs/features/KNOWN_LIMITATIONS.md](docs/features/KNOWN_LIMITATIONS.md).
 
 ---
 

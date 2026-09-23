@@ -5,7 +5,7 @@ Sample inventory for the dynamic pipeline validation runs.
 Verified against `corpus.manifest.json` and `scripts/fetch_validation_corpus.py` on **2026-08-27**.
 
 - Test suite overview: [`../README.md`](../README.md)
-- Validation protocols: [`../../docs/VALIDATION.md`](../../docs/VALIDATION.md)
+- Validation protocols: [`../../docs/operations/VALIDATION.md`](../../docs/operations/VALIDATION.md)
 
 ---
 
@@ -84,7 +84,7 @@ The fixtures in `backend/tests/case_study_fixtures.py` are static regression dat
 
 `VIDE_testapks/` holds ten built baseline applications — `BASE-01-SBI` through `BASE-10-UNION` — used by `scripts/verify_vide_corpus.py` and the VIDE attribution tests.
 
-> All ten currently produce identical fingerprints, and their palettes collide at ΔE 0. Only the bank name distinguishes one from another, so attribution against this set rests almost entirely on the string axis. Treat detection results from it as meaningful and attribution results as provisional. See [KNOWN_LIMITATIONS.md §5.3](../../docs/KNOWN_LIMITATIONS.md).
+> All ten currently produce identical fingerprints, and their palettes collide at ΔE 0. Only the bank name distinguishes one from another, so attribution against this set rests almost entirely on the string axis. Treat detection results from it as meaningful and attribution results as provisional. See [KNOWN_LIMITATIONS.md §5.3](../../docs/features/KNOWN_LIMITATIONS.md).
 
 ---
 

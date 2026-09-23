@@ -105,7 +105,7 @@ $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytes
 # Run live runtime pipeline verification
 $env:PYTHONPATH="backend;shared"; backend\.venv\Scripts\python.exe scripts/verify_runtime_pipeline.py
 
-# Run dynamic APK corpus validation (live sandbox; see docs/VALIDATION.md)
+# Run dynamic APK corpus validation (live sandbox; see docs/operations/VALIDATION.md)
 $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="validation"; python validate_dynamic_pipeline.py
 ```
 

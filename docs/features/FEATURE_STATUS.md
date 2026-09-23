@@ -5,7 +5,7 @@ Implementation status of every significant capability in SUDARSHAN, with the sou
 Verified against the active codebase on **2026-08-27**.
 
 - Platform overview: [`../README.md`](../README.md)
-- Operational boundaries: [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md)
+- Operational boundaries: [`KNOWN_LIMITATIONS.md`](features/KNOWN_LIMITATIONS.md)
 - Route reference: [`api/ENDPOINTS.md`](api/ENDPOINTS.md)
 
 ---
@@ -20,7 +20,7 @@ Verified against the active codebase on **2026-08-27**.
 | **Planned** | Specified but absent from the executable codebase |
 | **Removed** | Present in earlier revisions, deliberately deleted |
 
-No feature here is described as "production-ready". The repository has no CI pipeline, persistence is a single SQLite file, and the queue is in-process — those are deployment properties, not feature properties, and they are recorded in [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md).
+No feature here is described as "production-ready". The repository has no CI pipeline, persistence is a single SQLite file, and the queue is in-process — those are deployment properties, not feature properties, and they are recorded in [KNOWN_LIMITATIONS.md](features/KNOWN_LIMITATIONS.md).
 
 Test paths are relative to the repository root. **2,622 tests collected** across `tests/` and `backend/tests` on 2026-08-27.
 
@@ -55,7 +55,7 @@ Test paths are relative to the repository root. **2,622 tests collected** across
 | Investigation manifest | Implemented | `shared/sudarshan_core/models/manifest.py` | `tests/unit/test_static_dynamic_bridge.py` | Minimal hook profile handed to the dynamic run |
 | Capability profile | Implemented | `shared/sudarshan_core/engines/capability_profile.py` | `tests/unit/test_capability_profile.py` | Declared-capability summary bridging static to runtime |
 | MobSF enrichment | Partially implemented | `shared/sudarshan_core/services/mobsf_client.py` | `tests/unit/test_mobsf_client.py` | Optional. An unreachable `MOBSF_HOST` logs a warning and the pipeline continues; bound it with `MOBSF_MAX_SECONDS` |
-| YARA scanning | Implemented | `shared/sudarshan_core/engines/yara_scanner.py`, `engines/yara_rules/` | `tests/unit/test_yara_scanner.py`, `docs/YARA_RULES.md` | Eight rules in two files, aimed at decrypted runtime strings rather than the packed APK. `yara-python` is a soft dependency; absent, the scanner logs that it is disabled |
+| YARA scanning | Implemented | `shared/sudarshan_core/engines/yara_scanner.py`, `engines/yara_rules/` | `tests/unit/test_yara_scanner.py`, `docs/reference/YARA_RULES.md` | Eight rules in two files, aimed at decrypted runtime strings rather than the packed APK. `yara-python` is a soft dependency; absent, the scanner logs that it is disabled |
 
 ## VIDE — visual impersonation
 

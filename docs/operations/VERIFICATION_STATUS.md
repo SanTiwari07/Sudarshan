@@ -4,7 +4,7 @@ Findings from the **2026-08-14** audit that were proven by running code rather t
 
 A finding here was reproduced at least once. "Still present" means the code path that produced it is unchanged; "resolved" means the code now behaves differently and the reproduction no longer applies.
 
-Maintained views: [BUGS_AND_IMPROVEMENTS.md](BUGS_AND_IMPROVEMENTS.md) · [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md)
+Maintained views: [BUGS_AND_IMPROVEMENTS.md](future/BUGS_AND_IMPROVEMENTS.md) · [docs/features/KNOWN_LIMITATIONS.md](docs/features/KNOWN_LIMITATIONS.md)
 
 ---
 
@@ -28,4 +28,4 @@ Maintained views: [BUGS_AND_IMPROVEMENTS.md](BUGS_AND_IMPROVEMENTS.md) · [docs/
 
 It is not a coverage claim. It records findings that were reproduced by hand with throwaway scripts, which is a different thing from the automated suite (**2,622 tests collected**, 2026-08-27). Nothing here runs on a schedule, and this repository has no CI to run it.
 
-Items marked "still present" are open. They are carried into [BUGS_AND_IMPROVEMENTS.md](BUGS_AND_IMPROVEMENTS.md) with severity and remediation.
+Items marked "still present" are open. They are carried into [BUGS_AND_IMPROVEMENTS.md](future/BUGS_AND_IMPROVEMENTS.md) with severity and remediation.

@@ -20,7 +20,7 @@ HEAD (Latest Local Commit)
 - `frontend/`: React + Vite dashboard
 
 ## 5. Feature Inventory
-Mapped exactly to `docs/FEATURE_STATUS.md`. All 61 capabilities implemented and traced.
+Mapped exactly to `docs/features/FEATURE_STATUS.md`. All 61 capabilities implemented and traced.
 
 ## 6. Feature Verification Matrix
 - Static Analysis (APKTool, JADX, MobSF): **VERIFIED**
@@ -33,7 +33,7 @@ Mapped exactly to `docs/FEATURE_STATUS.md`. All 61 capabilities implemented and 
 - Execution: Autonomous background batch job processed them successfully.
 
 ## 8. Device Compatibility Matrix
-- Recorded in `docs/DEVICE_COMPATIBILITY_MATRIX.md`.
+- Recorded in `docs/features/DEVICE_COMPATIBILITY_MATRIX.md`.
 - Verified agnostic ABI checking and dynamic coordinate generation.
 
 ## 9. Static Analysis Verification

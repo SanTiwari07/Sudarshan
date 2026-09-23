@@ -47,7 +47,7 @@ Method:                  Route decorators, engine constants, Compose definitions
 
 ### Rewritten
 
-Root `README.md`; `docs/README.md` portal; `docs/api/ENDPOINTS.md`; `docs/FEATURE_STATUS.md`; `docs/KNOWN_LIMITATIONS.md`; `docs/CODEBASE_MAP.md`; `docs/HOW_TO_RUN.md`; `docs/CONTRIBUTING.md`; `docs/FEATURE_AUDIT.md`; `docs/BOI_DEMO_CREDENTIALS.md`; `backend/README_FRIDA.md`; `tests/apks/README.md`; and the root audit set — `ARCHITECTURE_DRIFT_REPORT.md`, `CURRENT_STATE.md`, `VERIFICATION_STATUS.md`, `BUGS_AND_IMPROVEMENTS.md`.
+Root `README.md`; `docs/README.md` portal; `docs/api/ENDPOINTS.md`; `docs/features/FEATURE_STATUS.md`; `docs/features/KNOWN_LIMITATIONS.md`; `docs/reference/CODEBASE_MAP.md`; `docs/getting-started/HOW_TO_RUN.md`; `CONTRIBUTING.md`; `docs/features/FEATURE_AUDIT.md`; `docs/operations/DEMO_CREDENTIALS.md`; `backend/README_FRIDA.md`; `tests/apks/README.md`; and the root audit set — `ARCHITECTURE_DRIFT_REPORT.md`, `CURRENT_STATE.md`, `VERIFICATION_STATUS.md`, `BUGS_AND_IMPROVEMENTS.md`.
 
 ### Created
 
@@ -56,12 +56,12 @@ Component READMEs that did not previously exist: `backend/README.md`, `analysis-
 ### Removed
 
 - Invented metrics: the "Project Health Score 7.75 / 10" and its twelve unmethodised component scores in `CURRENT_STATE.md`.
-- Emoji: status glyphs in `docs/DAE_CURRENT_STATE.md`, `docs/01_INTRODUCTION.md` and `researchcompetition.md`.
-- Duplicated route tables in `docs/CODEBASE_MAP.md`, which had drifted from both the code and `api/ENDPOINTS.md`.
+- Emoji: status glyphs in `docs/architecture/DYNAMIC_ANALYSIS_CURRENT_STATE.md`, `docs/01_INTRODUCTION.md` and `researchcompetition.md`.
+- Duplicated route tables in `docs/reference/CODEBASE_MAP.md`, which had drifted from both the code and `api/ENDPOINTS.md`.
 
 ### Documented, not fixed
 
-Code issues found during the audit and recorded rather than changed — see [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md) §7 and [`../BUGS_AND_IMPROVEMENTS.md`](../BUGS_AND_IMPROVEMENTS.md):
+Code issues found during the audit and recorded rather than changed — see [`KNOWN_LIMITATIONS.md`](features/KNOWN_LIMITATIONS.md) §7 and [`../BUGS_AND_IMPROVEMENTS.md`](../BUGS_AND_IMPROVEMENTS.md):
 
 - `/api/v1/report/technical-pdf/{sha256}` declares `response_class=HTMLResponse` but returns `application/pdf`.
 - `ANALYSIS_TIMEOUT_SECONDS` defaults to 600 in the gateway and 300 in the engine, with Compose setting 1200 for both.

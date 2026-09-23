@@ -72,7 +72,7 @@ cd backend && python -m uvicorn app.main:app --reload --port 8000
 cd frontend && npm ci && npm run dev
 ```
 
-Full setup guide, including the sandbox: [`HOW_TO_RUN.md`](HOW_TO_RUN.md).
+Full setup guide, including the sandbox: [`HOW_TO_RUN.md`](getting-started/HOW_TO_RUN.md).
 
 ### Git hooks
 
@@ -214,11 +214,11 @@ Documents that must be updated when behaviour changes:
 | Change | Also update |
 | :--- | :--- |
 | A route added, removed or re-signatured | [`api/ENDPOINTS.md`](api/ENDPOINTS.md) |
-| A feature reaching or leaving working state | [`FEATURE_STATUS.md`](FEATURE_STATUS.md) |
-| A new operational constraint | [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md) |
+| A feature reaching or leaving working state | [`FEATURE_STATUS.md`](features/FEATURE_STATUS.md) |
+| A new operational constraint | [`KNOWN_LIMITATIONS.md`](features/KNOWN_LIMITATIONS.md) |
 | A scoring formula, weight or floor | [`architecture/08_DETERMINISTIC_RISK_ENGINE.md`](architecture/08_DETERMINISTIC_RISK_ENGINE.md) and the README risk section |
-| A new environment variable | `.env.example` and [`HOW_TO_RUN.md`](HOW_TO_RUN.md) |
-| A directory or module moved | [`CODEBASE_MAP.md`](CODEBASE_MAP.md) and the relevant component README |
+| A new environment variable | `.env.example` and [`HOW_TO_RUN.md`](getting-started/HOW_TO_RUN.md) |
+| A directory or module moved | [`CODEBASE_MAP.md`](reference/CODEBASE_MAP.md) and the relevant component README |
 
 ---
 

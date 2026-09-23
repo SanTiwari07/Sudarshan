@@ -1054,9 +1054,9 @@ Exit code 2 means "could not run" and is deliberately distinct from exit code 1,
 | [Documentation portal](docs/README.md) | Entry point and navigation |
 | [Introduction](docs/01_INTRODUCTION.md) | Problem statement, threat model, scope |
 | [System overview](docs/02_SYSTEM_OVERVIEW.md) | Service topology and end-to-end data flow |
-| [Architecture](docs/ARCHITECTURE.md) | Engineering architecture and module map |
+| [Architecture](docs/architecture/SYSTEM_ARCHITECTURE.md) | Engineering architecture and module map |
 | [Current architecture](docs/CURRENT_ARCHITECTURE.md) | Authoritative container topology and formulas |
-| [Codebase map](docs/CODEBASE_MAP.md) | Directory, module and responsibility index |
+| [Codebase map](docs/reference/CODEBASE_MAP.md) | Directory, module and responsibility index |
 | [Static threat intelligence](docs/architecture/03_STATIC_THREAT_INTELLIGENCE.md) | Static pipeline and STEI |
 | [Dynamic analysis engine](docs/architecture/04_DYNAMIC_ANALYSIS_ENGINE.md) | Frida, launch ladder, exploration |
 | [AI investigation engine](docs/architecture/05_AI_INVESTIGATION_ENGINE.md) | Provider failover, RAG, prompt safety |
@@ -1067,14 +1067,14 @@ Exit code 2 means "could not run" and is deliberately distinct from exit code 1,
 | [VIDE](docs/architecture/VIDE.md) | Visual impersonation detection |
 | [Analyst dashboard](docs/dashboard/10_DASHBOARD.md) | Frontend views and workflows |
 | [API endpoints](docs/api/ENDPOINTS.md) | Full REST reference |
-| [Database](docs/DATABASE.md) | Schema and persistence model |
-| [How to run](docs/HOW_TO_RUN.md) | Installation and operations |
-| [Feature status](docs/FEATURE_STATUS.md) | Implementation status matrix with evidence |
-| [Known limitations](docs/KNOWN_LIMITATIONS.md) | Operational boundaries and workarounds |
+| [Database](docs/operations/DATABASE.md) | Schema and persistence model |
+| [How to run](docs/getting-started/HOW_TO_RUN.md) | Installation and operations |
+| [Feature status](docs/features/FEATURE_STATUS.md) | Implementation status matrix with evidence |
+| [Known limitations](docs/features/KNOWN_LIMITATIONS.md) | Operational boundaries and workarounds |
 | [Evaluation strategy](docs/evaluation/11_EVALUATION.md) | Test suites, benchmarks, determinism |
 | [Corpus validation](docs/evaluation/CORPUS_STATIC_VALIDATION.md) | Measured static detection accuracy |
 | [Security incidents](docs/security/) | Sandbox escape remediation and red-team findings |
-| [Contributing](docs/CONTRIBUTING.md) | Development workflow and expectations |
+| [Contributing](../CONTRIBUTING.md) | Development workflow and expectations |
 
 Component-level READMEs: [`backend/`](backend/README.md) · [`analysis-engine/`](analysis-engine/README.md) · [`shared/`](shared/README.md) · [`frontend/`](frontend/README.md) · [`scripts/`](scripts/README.md) · [`tests/`](tests/README.md)
 
@@ -1082,7 +1082,7 @@ Component-level READMEs: [`backend/`](backend/README.md) · [`analysis-engine/`]
 
 ## Limitations
 
-Summarised here; each entry is expanded with impact and workaround in [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md).
+Summarised here; each entry is expanded with impact and workaround in [docs/features/KNOWN_LIMITATIONS.md](docs/features/KNOWN_LIMITATIONS.md).
 
 - **Dormant and trigger-gated malware.** Samples that wait for a C2 command, a targeted bank app in the foreground, an incoming OTP, or an accessibility grant may produce zero weighted events inside the analysis window. The run is marked inconclusive or `INCOMPLETE_EXERCISE` rather than clean.
 - **Sandbox evasion.** A sample that fingerprints the emulator and stops has defeated observation. The evasion floor refuses a `Safe` verdict but cannot recover the behaviour.
@@ -1103,7 +1103,7 @@ Summarised here; each entry is expanded with impact and workaround in [docs/KNOW
 
 ## Development
 
-Contribution workflow, code standards and review expectations: [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).
+Contribution workflow, code standards and review expectations: [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 Changes to scoring weights, BFCI categories or safety floors are model changes: they move existing verdicts and must be validated against the labelled corpus before merge, not adjusted by intuition.
 
@@ -1119,6 +1119,6 @@ MIT — see [LICENSE](LICENSE).
 
 Actively developed. The platform runs end to end: static analysis, dynamic sandbox with deep exploration, deterministic scoring, AI-assisted investigation, reporting and batch operation are all implemented and exercised by the test suite.
 
-It is not a hardened multi-tenant deployment. Persistence is a single SQLite file, the queue is in-process, there is no CI pipeline in this repository, and dynamic analysis depends on a correctly configured host-side emulator. Per-feature status with source evidence is maintained in [docs/FEATURE_STATUS.md](docs/FEATURE_STATUS.md); the boundaries are catalogued in [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md).
+It is not a hardened multi-tenant deployment. Persistence is a single SQLite file, the queue is in-process, there is no CI pipeline in this repository, and dynamic analysis depends on a correctly configured host-side emulator. Per-feature status with source evidence is maintained in [docs/features/FEATURE_STATUS.md](docs/features/FEATURE_STATUS.md); the boundaries are catalogued in [docs/features/KNOWN_LIMITATIONS.md](docs/features/KNOWN_LIMITATIONS.md).
 
 *Prepared for Bank of India and IIT Hyderabad, BOI Hackathon 2026.*

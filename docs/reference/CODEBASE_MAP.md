@@ -101,7 +101,7 @@ backend/
 
 ### Persistence
 
-SQLite through `aiosqlite` with direct SQL — no ORM, and SQLAlchemy is not a dependency. Tables: `users`, `sessions`, `login_attempts`, `cases`, `case_notes`, `case_iocs`, `analysis_jobs`, `analysis_runs`, `analysis_batches`, `analysis_batch_jobs`, `ioc_cache`, `runtime_events`, `chat_messages`, `export_events`, `audit_events`, `discovery_sessions`, `discovery_candidates`. Schema detail: [`DATABASE.md`](DATABASE.md).
+SQLite through `aiosqlite` with direct SQL — no ORM, and SQLAlchemy is not a dependency. Tables: `users`, `sessions`, `login_attempts`, `cases`, `case_notes`, `case_iocs`, `analysis_jobs`, `analysis_runs`, `analysis_batches`, `analysis_batch_jobs`, `ioc_cache`, `runtime_events`, `chat_messages`, `export_events`, `audit_events`, `discovery_sessions`, `discovery_candidates`. Schema detail: [`DATABASE.md`](operations/DATABASE.md).
 
 ---
 

@@ -1,4 +1,4 @@
-﻿import type { FraudCardData } from '../App';
+import type { FraudCardData } from '../App';
 
 /**
  * The single source of truth for "what should the bank do about this app".
@@ -62,8 +62,13 @@ export function isInconclusive(data: FraudCardData): boolean {
     data.verdict === 'INCOMPLETE_EXERCISE' ||
       data.execution_assertions?.incomplete_exercise ||
       frs?.verdict_floored_for_incomplete_exercise ||
-      frs?.verdict_floored_for_evasion ||
-      frs?.verdict_floored_for_visibility,
+      frs?.verdict_floored_for_evasion,
+    // NOTE: verdict_floored_for_visibility and verdict_floored_for_static_evidence
+    // are NOT inconclusive — they conservatively raise a band (Safe→Suspicious)
+    // when the engine cannot certify a clean result, but the computed score is
+    // still valid and should be displayed on the gauge. Only evasion and
+    // incomplete-exercise floors mean the analysis itself did not produce a
+    // reliable answer.
   );
 }
 

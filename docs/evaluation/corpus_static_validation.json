@@ -1,11 +1,11 @@
 {
   "schema_version": "1.0.0",
   "run": {
-    "generated_at": "2026-08-15T20:58:17+00:00",
-    "git_commit": "ce30610",
+    "generated_at": "2026-09-23T11:37:00+00:00",
+    "git_commit": "34300a1",
     "androguard_version": "4.1.4",
-    "python": "3.12.3",
-    "corpus_root": "/corpus"
+    "python": "3.11.9",
+    "corpus_root": "C:\\Projects\\Sudarshan\\test apk"
   },
   "decision_rule": {
     "flagged": "risk_band != 'Safe'  (i.e. Suspicious, High Risk or Critical)",
@@ -274,13 +274,13 @@
       "family_classification": "Unknown",
       "matched_rule": "No specific family signature matched.",
       "ai_confidence": 1.0,
-      "frs": 14.0,
+      "frs": 34.44,
       "band": "Suspicious",
       "verdict": "Suspicious",
       "confidence": 45.0,
       "recommended_action": "QUARANTINE - Further analysis required. Do not approve for enterprise deployment. Monitor network traffic.",
       "flagged": true,
-      "stei": 9.2,
+      "stei": 46.0,
       "stei_axes": {
         "bt": 0.0,
         "ct": 0.0,
@@ -297,7 +297,7 @@
         "dynamic"
       ],
       "floors": {
-        "visibility": true,
+        "visibility": false,
         "evasion": false,
         "static_evidence": false,
         "incomplete_exercise": false
@@ -411,13 +411,13 @@
       "family_classification": "Unknown",
       "matched_rule": "No specific family signature matched.",
       "ai_confidence": 1.0,
-      "frs": 21.57,
+      "frs": 24.73,
       "band": "Suspicious",
       "verdict": "Suspicious",
       "confidence": 45.0,
       "recommended_action": "QUARANTINE - Further analysis required. Do not approve for enterprise deployment. Monitor network traffic.",
       "flagged": true,
-      "stei": 22.82,
+      "stei": 28.52,
       "stei_axes": {
         "bt": 0.0,
         "ct": 25.0,
@@ -487,13 +487,13 @@
       "family_classification": "Anubis",
       "matched_rule": "Accessibility + Webview Injection = Anubis-pattern",
       "ai_confidence": 1.2,
-      "frs": 60.0,
-      "band": "Suspicious",
-      "verdict": "Suspicious",
+      "frs": 70.2,
+      "band": "High Risk",
+      "verdict": "High Risk",
       "confidence": 45.0,
-      "recommended_action": "QUARANTINE - Further analysis required. Do not approve for enterprise deployment. Monitor network traffic.",
+      "recommended_action": "BLOCK & INVESTIGATE - Do not deploy. Submit to dynamic sandbox. Notify SOC lead. Consider customer advisory.",
       "flagged": true,
-      "stei": 61.2,
+      "stei": 76.5,
       "stei_axes": {
         "bt": 0.0,
         "ct": 75.0,
@@ -565,13 +565,13 @@
       "family_classification": "Unknown",
       "matched_rule": "No specific family signature matched.",
       "ai_confidence": 1.0,
-      "frs": 15.32,
+      "frs": 41.04,
       "band": "Suspicious",
       "verdict": "Suspicious",
       "confidence": 45.0,
       "recommended_action": "QUARANTINE - Further analysis required. Do not approve for enterprise deployment. Monitor network traffic.",
       "flagged": true,
-      "stei": 11.57,
+      "stei": 57.88,
       "stei_axes": {
         "bt": 0.0,
         "ct": 0.0,
@@ -588,7 +588,7 @@
         "dynamic"
       ],
       "floors": {
-        "visibility": true,
+        "visibility": false,
         "evasion": false,
         "static_evidence": false,
         "incomplete_exercise": false
@@ -616,6 +616,90 @@
       }
     },
     {
+      "display_name": "Krep_Banking_Malware",
+      "file_name": "Krep_Banking_Malware.apk",
+      "category": "Malware",
+      "label": "malware",
+      "sha256": "9d767c41599325ccd0643d6f432b9075775a85c60df176a845605715be230263",
+      "size_bytes": 824755,
+      "package_name": "krep.itmtd.ywtjexf",
+      "family_classification": "Unknown",
+      "matched_rule": "No specific family signature matched.",
+      "ai_confidence": 1.0,
+      "frs": 35.71,
+      "band": "Suspicious",
+      "verdict": "Suspicious",
+      "confidence": 71.7,
+      "recommended_action": "QUARANTINE - Further analysis required. Do not approve for enterprise deployment. Monitor network traffic.",
+      "flagged": true,
+      "stei": 48.27,
+      "stei_axes": {
+        "bt": 0.0,
+        "ct": 60.0,
+        "ir": 10.0,
+        "ob": 35.3,
+        "pr": 100.0
+      },
+      "axes_used": {
+        "stei": 0.556,
+        "banking_impact": 0.444
+      },
+      "axes_excluded": [
+        "correlation",
+        "dynamic"
+      ],
+      "floors": {
+        "visibility": false,
+        "evasion": false,
+        "static_evidence": false,
+        "incomplete_exercise": false
+      },
+      "permission_count": 24,
+      "permissions": [
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.CALL_PHONE",
+        "android.permission.GET_TASKS",
+        "android.permission.INTERNET",
+        "android.permission.KILL_BACKGROUND_PROCESSES",
+        "android.permission.READ_CALENDAR",
+        "android.permission.READ_CALL_LOG",
+        "android.permission.READ_CONTACTS",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.READ_LOGS",
+        "android.permission.READ_PHONE_STATE",
+        "android.permission.READ_PROFILE",
+        "android.permission.READ_SMS",
+        "android.permission.READ_SYNC_SETTINGS",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.RECEIVE_SMS",
+        "android.permission.RESTART_PACKAGES",
+        "android.permission.SEND_SMS",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.VIBRATE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.WRITE_SMS",
+        "com.android.alarm.permission.SET_ALARM",
+        "com.android.browser.permission.READ_HISTORY_BOOKMARKS"
+      ],
+      "dangerous_apis_found": [
+        "addJavascriptInterface"
+      ],
+      "indian_bank_packages_found": [],
+      "has_accessibility_abuse": false,
+      "has_sms_read_write": true,
+      "has_system_alert_window": true,
+      "targets_indian_banks": false,
+      "has_concealed_payload": false,
+      "obfuscation_score": 0.8431,
+      "invariants": {
+        "dynamic_and_correlation_excluded": true,
+        "weights_sum_to_one": true,
+        "band_is_known": true,
+        "frs_within_range": true,
+        "confidence_within_range": true
+      }
+    },
+    {
       "display_name": "Octo",
       "file_name": "Octo.apk",
       "category": "Malware",
@@ -626,13 +710,13 @@
       "family_classification": "Anubis",
       "matched_rule": "Accessibility + Webview Injection = Anubis-pattern",
       "ai_confidence": 1.2,
-      "frs": 57.33,
-      "band": "Suspicious",
-      "verdict": "Suspicious",
+      "frs": 66.86,
+      "band": "High Risk",
+      "verdict": "High Risk",
       "confidence": 45.0,
-      "recommended_action": "QUARANTINE - Further analysis required. Do not approve for enterprise deployment. Monitor network traffic.",
+      "recommended_action": "BLOCK & INVESTIGATE - Do not deploy. Submit to dynamic sandbox. Notify SOC lead. Consider customer advisory.",
       "flagged": true,
-      "stei": 57.2,
+      "stei": 71.49,
       "stei_axes": {
         "bt": 0.0,
         "ct": 75.0,
@@ -717,13 +801,13 @@
       "family_classification": "Hydra",
       "matched_rule": "Accessibility + System Alert Window = Hydra-pattern",
       "ai_confidence": 1.2,
-      "frs": 53.45,
-      "band": "Suspicious",
-      "verdict": "Suspicious",
+      "frs": 62.29,
+      "band": "High Risk",
+      "verdict": "High Risk",
       "confidence": 45.0,
-      "recommended_action": "QUARANTINE - Further analysis required. Do not approve for enterprise deployment. Monitor network traffic.",
+      "recommended_action": "BLOCK & INVESTIGATE - Do not deploy. Submit to dynamic sandbox. Notify SOC lead. Consider customer advisory.",
       "flagged": true,
-      "stei": 52.98,
+      "stei": 66.23,
       "stei_axes": {
         "bt": 0.0,
         "ct": 65.0,
@@ -803,8 +887,8 @@
       "file_name": "Teabot.apk",
       "category": "Malware",
       "label": "malware",
-      "sha256": "554e71b4e5d2a172707b51edc8e0e22cba40858b69884e75228c12718c47e1ef",
-      "size_bytes": 3132650,
+      "sha256": "8cc4fbe09048f86c10599c56367e8483dec15e006fd9c003bf6481bee10c43c1",
+      "size_bytes": 3120370,
       "package_name": "com.lbugkgtau.iuzdlpqzr",
       "family_classification": "Anubis",
       "matched_rule": "Accessibility + Webview Injection = Anubis-pattern",
@@ -950,6 +1034,67 @@
       "targets_indian_banks": false,
       "has_concealed_payload": false,
       "obfuscation_score": 0.8012,
+      "invariants": {
+        "dynamic_and_correlation_excluded": true,
+        "weights_sum_to_one": true,
+        "band_is_known": true,
+        "frs_within_range": true,
+        "confidence_within_range": true
+      }
+    },
+    {
+      "display_name": "Fossify Calculator",
+      "file_name": "Fossify Calculator.apk",
+      "category": "Safe",
+      "label": "benign",
+      "sha256": "7c5443c22d6d62c67dfe80df33ea9161ff0fa440f92590bcb45d7008b57613ed",
+      "size_bytes": 7047681,
+      "package_name": "org.fossify.math",
+      "family_classification": "Unknown",
+      "matched_rule": "No specific family signature matched.",
+      "ai_confidence": 1.0,
+      "frs": 13.14,
+      "band": "Safe",
+      "verdict": "Safe",
+      "confidence": 71.7,
+      "recommended_action": "MONITOR - Low risk. Approved for deployment under standard monitoring. Re-scan on next version update.",
+      "flagged": false,
+      "stei": 7.65,
+      "stei_axes": {
+        "bt": 0.0,
+        "ct": 0.0,
+        "ir": 100.0,
+        "ob": 53.0,
+        "pr": 0.0
+      },
+      "axes_used": {
+        "stei": 0.556,
+        "banking_impact": 0.444
+      },
+      "axes_excluded": [
+        "correlation",
+        "dynamic"
+      ],
+      "floors": {
+        "visibility": false,
+        "evasion": false,
+        "static_evidence": false,
+        "incomplete_exercise": false
+      },
+      "permission_count": 1,
+      "permissions": [
+        "org.fossify.android.permission.WRITE_GLOBAL_SETTINGS"
+      ],
+      "dangerous_apis_found": [
+        "System.loadLibrary"
+      ],
+      "indian_bank_packages_found": [],
+      "has_accessibility_abuse": false,
+      "has_sms_read_write": false,
+      "has_system_alert_window": false,
+      "targets_indian_banks": false,
+      "has_concealed_payload": false,
+      "obfuscation_score": 0.7679,
       "invariants": {
         "dynamic_and_correlation_excluded": true,
         "weights_sum_to_one": true,
@@ -1195,12 +1340,209 @@
       }
     },
     {
+      "display_name": "AndroGoat",
+      "file_name": "AndroGoat.apk",
+      "category": "Vulnerable",
+      "label": "benign",
+      "sha256": "3e6f6b538b82874dd94c0d8cdadd69ba54d49b59d2c7eb055073892e8a4fc0e0",
+      "size_bytes": 7100535,
+      "package_name": "owasp.sat.agoat",
+      "family_classification": "Unknown",
+      "matched_rule": "No specific family signature matched.",
+      "ai_confidence": 1.0,
+      "frs": 12.07,
+      "band": "Safe",
+      "verdict": "Safe",
+      "confidence": 71.7,
+      "recommended_action": "MONITOR - Low risk. Approved for deployment under standard monitoring. Re-scan on next version update.",
+      "flagged": false,
+      "stei": 5.72,
+      "stei_axes": {
+        "bt": 0.0,
+        "ct": 0.0,
+        "ir": 70.0,
+        "ob": 28.5,
+        "pr": 8.0
+      },
+      "axes_used": {
+        "stei": 0.556,
+        "banking_impact": 0.444
+      },
+      "axes_excluded": [
+        "correlation",
+        "dynamic"
+      ],
+      "floors": {
+        "visibility": false,
+        "evasion": false,
+        "static_evidence": false,
+        "incomplete_exercise": false
+      },
+      "permission_count": 7,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.INTERNET",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "owasp.sat.agoat.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+      ],
+      "dangerous_apis_found": [
+        "Runtime.exec"
+      ],
+      "indian_bank_packages_found": [],
+      "has_accessibility_abuse": false,
+      "has_sms_read_write": false,
+      "has_system_alert_window": false,
+      "targets_indian_banks": false,
+      "has_concealed_payload": false,
+      "obfuscation_score": 0.6166,
+      "invariants": {
+        "dynamic_and_correlation_excluded": true,
+        "weights_sum_to_one": true,
+        "band_is_known": true,
+        "frs_within_range": true,
+        "confidence_within_range": true
+      }
+    },
+    {
+      "display_name": "DamnVulnerableBank",
+      "file_name": "DamnVulnerableBank.apk",
+      "category": "Vulnerable",
+      "label": "benign",
+      "sha256": "76c308fac6a655a3534771777780e004feb1d91be032857768c891b2baf40ba6",
+      "size_bytes": 3784858,
+      "package_name": "com.app.damnvulnerablebank",
+      "family_classification": "Unknown",
+      "matched_rule": "No specific family signature matched.",
+      "ai_confidence": 1.0,
+      "frs": 29.72,
+      "band": "Suspicious",
+      "verdict": "Suspicious",
+      "confidence": 45.0,
+      "recommended_action": "QUARANTINE - Further analysis required. Do not approve for enterprise deployment. Monitor network traffic.",
+      "flagged": true,
+      "stei": 37.5,
+      "stei_axes": {
+        "bt": 0.0,
+        "ct": 0.0,
+        "ir": 50.0,
+        "ob": 100.0,
+        "pr": 0.0
+      },
+      "axes_used": {
+        "stei": 0.556,
+        "banking_impact": 0.444
+      },
+      "axes_excluded": [
+        "correlation",
+        "dynamic"
+      ],
+      "floors": {
+        "visibility": true,
+        "evasion": false,
+        "static_evidence": false,
+        "incomplete_exercise": false
+      },
+      "permission_count": 3,
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ],
+      "dangerous_apis_found": [
+        "Runtime.exec",
+        "System.loadLibrary"
+      ],
+      "indian_bank_packages_found": [],
+      "has_accessibility_abuse": false,
+      "has_sms_read_write": false,
+      "has_system_alert_window": false,
+      "targets_indian_banks": false,
+      "has_concealed_payload": true,
+      "obfuscation_score": 0.8124,
+      "invariants": {
+        "dynamic_and_correlation_excluded": true,
+        "weights_sum_to_one": true,
+        "band_is_known": true,
+        "frs_within_range": true,
+        "confidence_within_range": true
+      }
+    },
+    {
+      "display_name": "InjuredAndroid",
+      "file_name": "InjuredAndroid.apk",
+      "category": "Vulnerable",
+      "label": "benign",
+      "sha256": "b6b8d2dbd7a428b7754e6e537ba5790c35a73253533454e0768dbf1520a7ed15",
+      "size_bytes": 24725001,
+      "package_name": "b3nac.injuredandroid",
+      "family_classification": "Unknown",
+      "matched_rule": "No specific family signature matched.",
+      "ai_confidence": 1.0,
+      "frs": 12.57,
+      "band": "Safe",
+      "verdict": "Safe",
+      "confidence": 71.7,
+      "recommended_action": "MONITOR - Low risk. Approved for deployment under standard monitoring. Re-scan on next version update.",
+      "flagged": false,
+      "stei": 6.63,
+      "stei_axes": {
+        "bt": 0.0,
+        "ct": 0.0,
+        "ir": 80.0,
+        "ob": 52.6,
+        "pr": 0.0
+      },
+      "axes_used": {
+        "stei": 0.556,
+        "banking_impact": 0.444
+      },
+      "axes_excluded": [
+        "correlation",
+        "dynamic"
+      ],
+      "floors": {
+        "visibility": false,
+        "evasion": false,
+        "static_evidence": false,
+        "incomplete_exercise": false
+      },
+      "permission_count": 5,
+      "permissions": [
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.INTERNET",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.READ_PHONE_STATE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
+      "dangerous_apis_found": [
+        "Runtime.exec",
+        "System.loadLibrary"
+      ],
+      "indian_bank_packages_found": [],
+      "has_accessibility_abuse": false,
+      "has_sms_read_write": false,
+      "has_system_alert_window": false,
+      "targets_indian_banks": false,
+      "has_concealed_payload": false,
+      "obfuscation_score": 0.7546,
+      "invariants": {
+        "dynamic_and_correlation_excluded": true,
+        "weights_sum_to_one": true,
+        "band_is_known": true,
+        "frs_within_range": true,
+        "confidence_within_range": true
+      }
+    },
+    {
       "display_name": "InsecureBankv2",
       "file_name": "InsecureBankv2.apk",
       "category": "Vulnerable",
       "label": "benign",
-      "sha256": "b18af2a0e44d7634bbcdf93664d9c78a2695e050393fcfbb5e8b91f902d194a4",
-      "size_bytes": 3462429,
+      "sha256": "59aebd9f473c69a673b18c7ba4400c5beffa18a274693519dc4c0a2f2c3fd36f",
+      "size_bytes": 3470233,
       "package_name": "com.android.insecurebankv2",
       "family_classification": "Unknown",
       "matched_rule": "No specific family signature matched.",
@@ -1266,63 +1608,126 @@
         "frs_within_range": true,
         "confidence_within_range": true
       }
+    },
+    {
+      "display_name": "MSTG-Android-Java",
+      "file_name": "MSTG-Android-Java.apk",
+      "category": "Vulnerable",
+      "label": "benign",
+      "sha256": "fce864e59f05eb64e3d668783b757d66d4fe5022c8811a32af0b33e7d2f3cde5",
+      "size_bytes": 11570963,
+      "package_name": "sg.vp.owasp_mobile.omtg_android",
+      "family_classification": "Unknown",
+      "matched_rule": "No specific family signature matched.",
+      "ai_confidence": 1.0,
+      "frs": 29.72,
+      "band": "Suspicious",
+      "verdict": "Suspicious",
+      "confidence": 45.0,
+      "recommended_action": "QUARANTINE - Further analysis required. Do not approve for enterprise deployment. Monitor network traffic.",
+      "flagged": true,
+      "stei": 37.5,
+      "stei_axes": {
+        "bt": 0.0,
+        "ct": 0.0,
+        "ir": 50.0,
+        "ob": 100.0,
+        "pr": 0.0
+      },
+      "axes_used": {
+        "stei": 0.556,
+        "banking_impact": 0.444
+      },
+      "axes_excluded": [
+        "correlation",
+        "dynamic"
+      ],
+      "floors": {
+        "visibility": true,
+        "evasion": false,
+        "static_evidence": false,
+        "incomplete_exercise": false
+      },
+      "permission_count": 2,
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
+      "dangerous_apis_found": [
+        "System.loadLibrary",
+        "addJavascriptInterface"
+      ],
+      "indian_bank_packages_found": [],
+      "has_accessibility_abuse": false,
+      "has_sms_read_write": false,
+      "has_system_alert_window": false,
+      "targets_indian_banks": false,
+      "has_concealed_payload": true,
+      "obfuscation_score": 0.8195,
+      "invariants": {
+        "dynamic_and_correlation_excluded": true,
+        "weights_sum_to_one": true,
+        "band_is_known": true,
+        "frs_within_range": true,
+        "confidence_within_range": true
+      }
     }
   ],
   "aggregate": {
-    "sample_count": 17,
-    "malware_count": 8,
-    "benign_count": 9,
+    "sample_count": 23,
+    "malware_count": 9,
+    "benign_count": 14,
     "primary": {
       "rule": "band >= Suspicious",
-      "tp": 8,
-      "fp": 0,
+      "tp": 9,
+      "fp": 2,
       "fn": 0,
-      "tn": 9,
-      "precision": 1.0,
+      "tn": 12,
+      "precision": 0.8182,
       "recall": 1.0,
-      "f1": 1.0,
-      "specificity": 1.0,
-      "accuracy": 1.0
+      "f1": 0.9,
+      "specificity": 0.8571,
+      "accuracy": 0.913
     },
     "secondary_high_risk": {
       "rule": "band >= High Risk",
-      "tp": 1,
+      "tp": 4,
       "fp": 0,
-      "fn": 7,
-      "tn": 9,
+      "fn": 5,
+      "tn": 14,
       "precision": 1.0,
-      "recall": 0.125,
-      "f1": 0.2222,
+      "recall": 0.4444,
+      "f1": 0.6154,
       "specificity": 1.0,
-      "accuracy": 0.5882
+      "accuracy": 0.7826
     },
     "score_ranges": {
       "malware_frs": [
-        14.0,
+        24.73,
         70.26
       ],
       "benign_frs": [
         9.16,
-        25.95
+        29.72
       ],
-      "max_benign_frs": 25.95,
-      "min_malware_frs": 14.0,
+      "max_benign_frs": 29.72,
+      "min_malware_frs": 24.73,
       "score_separable": false,
       "separation_source": "risk_band floors, not numeric FRS (ranges overlap)"
     },
     "floors_fired": {
       "visibility": [
-        "Anubis",
+        "DamnVulnerableBank",
         "Drinik",
-        "Hook"
+        "MSTG-Android-Java"
       ],
       "evasion": [],
       "static_evidence": [],
       "incomplete_exercise": []
     },
     "concealment": {
-      "malware": "6/8",
-      "benign": "0/9"
+      "malware": "6/9",
+      "benign": "2/14"
     },
     "family_classification": {
       "Android UnCrackable L4": "Unknown",
@@ -1334,15 +1739,21 @@
       "Drinik": "Unknown",
       "FluBot": "Anubis",
       "Hook": "Unknown",
+      "Krep_Banking_Malware": "Unknown",
       "Octo": "Anubis",
       "SharkBot": "Hydra",
       "Teabot": "Anubis",
       "Amaze File Manager": "Unknown",
+      "Fossify Calculator": "Unknown",
       "KeePassDX Passkey Vault": "Unknown",
       "NewPipe": "Unknown",
       "VLC": "Unknown",
-      "InsecureBankv2": "Unknown"
+      "AndroGoat": "Unknown",
+      "DamnVulnerableBank": "Unknown",
+      "InjuredAndroid": "Unknown",
+      "InsecureBankv2": "Unknown",
+      "MSTG-Android-Java": "Unknown"
     }
   },
-  "results_digest": "1f9cd4c20c23f70ded221dcb2f5505a70c454854c4c66ca7011620d053ea5f6e"
+  "results_digest": "ee2ba7e166802b48c31107782b612c31bdc09f4e01b80368958ade5544e03075"
 }

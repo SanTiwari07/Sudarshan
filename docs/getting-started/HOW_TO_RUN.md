@@ -11,7 +11,7 @@ Target platforms:       Windows 10/11, Linux (Ubuntu 22.04+), macOS 13+
 
 - Platform overview: [`../README.md`](../README.md)
 - Architecture: [`CURRENT_ARCHITECTURE.md`](CURRENT_ARCHITECTURE.md)
-- Boundaries you will hit: [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md)
+- Boundaries you will hit: [`KNOWN_LIMITATIONS.md`](features/KNOWN_LIMITATIONS.md)
 
 ---
 
@@ -118,7 +118,7 @@ The `ADB_SERVER_SOCKET` value written by `docker-compose.yml` is `tcp:host.docke
 
 `analysis-engine/.env` is an optional per-service override. It is gitignored, so a fresh clone does not have one, and Compose declares it `required: false` — a missing file does not abort the stack.
 
-Never commit `.env`. Demo account configuration: [`BOI_DEMO_CREDENTIALS.md`](BOI_DEMO_CREDENTIALS.md).
+Never commit `.env`. Demo account configuration: [`BOI_DEMO_CREDENTIALS.md`](operations/DEMO_CREDENTIALS.md).
 
 ---
 
@@ -322,7 +322,7 @@ PYTHONPATH="backend:shared" JWT_SECRET_KEY=validation \
   python validate_dynamic_pipeline.py            # [--fetch] [--stress 10,20] [--recovery]
 ```
 
-See [`VALIDATION.md`](VALIDATION.md) and [`../tests/apks/README.md`](../tests/apks/README.md).
+See [`VALIDATION.md`](operations/VALIDATION.md) and [`../tests/apks/README.md`](../tests/apks/README.md).
 
 ---
 

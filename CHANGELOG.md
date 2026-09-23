@@ -319,7 +319,7 @@ exploration iteration, 34.3% coverage, five structural states for one
 - **Version corrected**: All docs and `README.md` now state `v2.1.0` (from `backend/app/main.py`); prior docs incorrectly stated `v2.5.0-STABLE`.
 - **Test count corrected**: Verified **583 tests collected** (2026-08-11 live run, 42.63s) via `pytest tests/ backend/tests --collect-only`. Prior `README.md` stated 526; prior `docs/` stated 519.
 - **Indian bank package count corrected**: `08_DETERMINISTIC_RISK_ENGINE.md` and `README.md` updated to state 21 package prefixes (from 47/various); verified against `apk_analyzer.py::INDIAN_BANK_PACKAGES`.
-- **Demo credentials sanitized**: `docs/BOI_DEMO_CREDENTIALS.md` no longer contains plaintext passwords; replaced with `.env` placeholder guidance.
+- **Demo credentials sanitized**: `docs/operations/DEMO_CREDENTIALS.md` no longer contains plaintext passwords; replaced with `.env` placeholder guidance.
 - **CASE_STUDIES.md annotated**: Summary table notes FRS/STEI distinction; Drinik/Xenomorph FRS scores marked "Not re-verified".
 - **BENCHMARKS.md annotated**: Warning added — metrics not re-measured in this audit pass.
 
@@ -384,7 +384,7 @@ exploration iteration, 34.3% coverage, five structural states for one
 - **Full Frida Upgrade (17.16.0 → 17.16.4)**: Standardized Frida client, server, and tooling across the entire repository on Frida `17.16.4`.
 - **Binary Assets & Setup Scripts**: Downloaded and verified official `frida-server-17.16.4-android-x86_64` (SHA256: `7f7b69d5e33b0a3753bbe152369c7a00173636e92d9e4351e96495c3f885d6f9`) in `frida-server-17.16.4-android-x86_64/`. Updated `scripts/setup_dynamic_analysis.py` to push Frida 17.16.4 server binary. Purged obsolete `frida-server-17.16.0-android-x86_64` assets.
 - **Python Dependencies & Docker Images**: Confirmed `frida==17.16.4` and `frida-tools==14.10.4` pinning in `backend/requirements.txt` and `analysis-engine/requirements.txt`.
-- **Documentation Alignment**: Synchronized `README.md`, `docs/PROJECT_CONTEXT.md`, `docs/MIGRATION.md`, `docs/HOW_TO_RUN.md`, `docs/DOCUMENTATION_AUDIT_REPORT.md`, and `docs/02_SYSTEM_OVERVIEW.md`.
+- **Documentation Alignment**: Synchronized `README.md`, `docs/PROJECT_CONTEXT.md`, `docs/operations/MIGRATION.md`, `docs/getting-started/HOW_TO_RUN.md`, `docs/DOCUMENTATION_AUDIT_REPORT.md`, and `docs/02_SYSTEM_OVERVIEW.md`.
 
 ---
 

@@ -5,7 +5,7 @@
 > Findings in this document carry one of two labels:
 >
 > - `[STATIC-VERIFIED]` - Reproducible from the static analysis pipeline ([`risk_engine.py`](../../shared/sudarshan_core/engines/risk_engine.py), native APK analyzer) against the named APK. These results are deterministic and can be re-run at any time.
-> - `[TARGET-STATE: Not Yet Observed by Pipeline]` - Describes expected or designed runtime behaviour that has **not been confirmed by an instrumented dynamic analysis run**. Dynamic BFCI is 0.0 on most corpus samples when dynamic hooks are un-triggered ([`DAE_CURRENT_STATE.md`](../../docs/DAE_CURRENT_STATE.md)). Claims labelled TARGET-STATE are design intent, not measured results.
+> - `[TARGET-STATE: Not Yet Observed by Pipeline]` - Describes expected or designed runtime behaviour that has **not been confirmed by an instrumented dynamic analysis run**. Dynamic BFCI is 0.0 on most corpus samples when dynamic hooks are un-triggered ([`DAE_CURRENT_STATE.md`](../../docs/architecture/DYNAMIC_ANALYSIS_CURRENT_STATE.md)). Claims labelled TARGET-STATE are design intent, not measured results.
 
 ---
 

@@ -4,7 +4,7 @@ Deviations between what earlier documentation described and what the code actual
 
 Original audit **2026-08-14**. Every item re-verified against the active codebase on **2026-08-27**; findings that no longer hold are marked resolved rather than deleted, because the claim each one corrects still appears in older material.
 
-Maintained views: [docs/FEATURE_STATUS.md](docs/FEATURE_STATUS.md) · [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) · [docs/CURRENT_ARCHITECTURE.md](docs/CURRENT_ARCHITECTURE.md)
+Maintained views: [docs/features/FEATURE_STATUS.md](docs/features/FEATURE_STATUS.md) · [docs/features/KNOWN_LIMITATIONS.md](docs/features/KNOWN_LIMITATIONS.md) · [docs/CURRENT_ARCHITECTURE.md](docs/CURRENT_ARCHITECTURE.md)
 
 ---
 
@@ -49,7 +49,7 @@ Maintained views: [docs/FEATURE_STATUS.md](docs/FEATURE_STATUS.md) · [docs/KNOW
 - **OTX hash lookups bypass the cache entirely.** `_otx_check_hash` in `shared/sudarshan_core/services/threat_correlator.py` calls neither `_cached_lookup` nor `_cache_store`, unlike `_otx_check_domain`, `_vt_check_hash`, `_vt_check_url` and the AbuseIPDB path, which all use both.
 - **404 responses are not negatively cached.** `_cache_store` writes only when a lookup produced a payload, so an indicator VirusTotal has never seen is re-queried on every run — the exact case where quota is cheapest to waste.
 
-**Status: confirmed, still current.** See [docs/KNOWN_LIMITATIONS.md §4.1](docs/KNOWN_LIMITATIONS.md).
+**Status: confirmed, still current.** See [docs/features/KNOWN_LIMITATIONS.md §4.1](docs/features/KNOWN_LIMITATIONS.md).
 
 **Severity.** High against a free-tier VirusTotal key (4 requests/minute).
 

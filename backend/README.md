@@ -89,7 +89,7 @@ Path resolution is [`app/db/paths.py`](app/db/paths.py); in Compose it is set ex
 
 Tables: `users`, `sessions`, `login_attempts`, `cases`, `case_notes`, `case_iocs`, `analysis_jobs`, `analysis_runs`, `analysis_batches`, `analysis_batch_jobs`, `ioc_cache`, `runtime_events`, `chat_messages`, `export_events`, `audit_events`, `discovery_sessions`, `discovery_candidates`.
 
-Schema details: [`../docs/DATABASE.md`](../docs/DATABASE.md).
+Schema details: [`../docs/operations/DATABASE.md`](../docs/operations/DATABASE.md).
 
 Adopting a database from an older install:
 

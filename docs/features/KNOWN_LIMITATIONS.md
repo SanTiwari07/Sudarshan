@@ -5,7 +5,7 @@ Operational boundaries of SUDARSHAN as the code stands. Every entry names the co
 Verified against the active codebase on **2026-08-27**.
 
 - Platform overview: [`../README.md`](../README.md)
-- Feature status: [`FEATURE_STATUS.md`](FEATURE_STATUS.md)
+- Feature status: [`FEATURE_STATUS.md`](features/FEATURE_STATUS.md)
 
 ---
 

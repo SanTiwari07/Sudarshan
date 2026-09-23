@@ -2,10 +2,10 @@
 
 # Detection validation - labelled corpus (static-only)
 
-**Generated:** 2026-08-15T20:58:17+00:00  
-**Commit:** `ce30610`  
+**Generated:** 2026-09-23T11:37:00+00:00  
+**Commit:** `34300a1`  
 **androguard:** 4.1.4  
-**Results digest:** `1f9cd4c20c23f70d`
+**Results digest:** `ee2ba7e166802b48`
 
 Regenerate with `python scripts/validate_corpus.py` (needs the corpus and androguard;
 see the module docstring for the container invocation). Narrative and root-cause
@@ -31,7 +31,7 @@ flagged := risk_band != 'Safe'  (i.e. Suspicious, High Risk or Critical)
 
 risk_band is the product's own deploy gate: 'Safe' yields 'MONITOR - Approved for deployment' while 'Suspicious' yields 'QUARANTINE - Do not approve' (risk_engine.py:_get_recommended_action). The band boundary is the decision a consumer acts on, so it is what precision/recall should measure.
 
-**The score ranges overlap** - benign reaches 25.95 while the lowest-scoring trojan sits at 14.0. No numeric FRS threshold separates these classes; separation comes from the band floors. Any single cut-off quoted as a detection threshold would be a fiction.
+**The score ranges overlap** - benign reaches 29.72 while the lowest-scoring trojan sits at 24.73. No numeric FRS threshold separates these classes; separation comes from the band floors. Any single cut-off quoted as a detection threshold would be a fiction.
 
 Positive class = `Malware/`. Negative = `Safe/` + `MAS Crackmes/` + `Vulnerable/`.
 InsecureBankv2 is counted **benign**: it is deliberately *insecure*, not *malicious*,
@@ -45,29 +45,35 @@ and scoring it as malware would inflate recall by rewarding a flag on a training
 | benign | UnCrackable-Level1 | 9.16 | Safe | 71.7 | 0.48 | Unknown | - | - |
 | benign | UnCrackable-Level2 | 10.69 | Safe | 71.7 | 3.25 | Unknown | - | - |
 | benign | UnCrackable-Level3 | 10.69 | Safe | 71.7 | 3.24 | Unknown | - | - |
-| malware | Anubis | 14.00 | Suspicious | 45.0 | 9.20 | Unknown | yes | visibility |
+| malware | Anubis | 34.44 | Suspicious | 45.0 | 46.00 | Unknown | yes | - |
 | malware | Cerberus | 38.74 | Suspicious | 71.7 | 53.73 | Unknown | - | - |
-| malware | Drinik | 21.57 | Suspicious | 45.0 | 22.82 | Unknown | yes | visibility |
-| malware | FluBot | 60.00 | Suspicious | 45.0 | 61.20 | Anubis | yes | - |
-| malware | Hook | 15.32 | Suspicious | 45.0 | 11.57 | Unknown | yes | visibility |
-| malware | Octo | 57.33 | Suspicious | 45.0 | 57.20 | Anubis | yes | - |
-| malware | SharkBot | 53.45 | Suspicious | 45.0 | 52.98 | Hydra | yes | - |
+| malware | Drinik | 24.73 | Suspicious | 45.0 | 28.52 | Unknown | yes | visibility |
+| malware | FluBot | 70.20 | High Risk | 45.0 | 76.50 | Anubis | yes | - |
+| malware | Hook | 41.04 | Suspicious | 45.0 | 57.88 | Unknown | yes | - |
+| malware | Krep_Banking_Malware | 35.71 | Suspicious | 71.7 | 48.27 | Unknown | - | - |
+| malware | Octo | 66.86 | High Risk | 45.0 | 71.49 | Anubis | yes | - |
+| malware | SharkBot | 62.29 | High Risk | 45.0 | 66.23 | Hydra | yes | - |
 | malware | Teabot | 70.26 | High Risk | 73.7 | 76.59 | Anubis | - | - |
 | benign | Amaze File Manager | 14.28 | Safe | 71.7 | 9.70 | Unknown | - | - |
+| benign | Fossify Calculator | 13.14 | Safe | 71.7 | 7.65 | Unknown | - | - |
 | benign | KeePassDX Passkey Vault | 13.07 | Safe | 71.7 | 7.53 | Unknown | - | - |
 | benign | NewPipe | 22.58 | Safe | 71.7 | 24.64 | Unknown | - | - |
 | benign | VLC | 23.01 | Safe | 71.7 | 25.42 | Unknown | - | - |
+| benign | AndroGoat | 12.07 | Safe | 71.7 | 5.72 | Unknown | - | - |
+| benign | DamnVulnerableBank | 29.72 | Suspicious | 45.0 | 37.50 | Unknown | yes | visibility |
+| benign | InjuredAndroid | 12.57 | Safe | 71.7 | 6.63 | Unknown | - | - |
 | benign | InsecureBankv2 | 25.95 | Safe | 71.7 | 30.71 | Unknown | - | - |
+| benign | MSTG-Android-Java | 29.72 | Suspicious | 45.0 | 37.50 | Unknown | yes | visibility |
 
 ## Aggregate
 
 ```
 rule                 : band >= Suspicious
-malware flagged      : 8/8   (missed 0)
-non-malware flagged  : 0/9   false positives
-precision 1.00   recall 1.00   f1 1.00
-malware FRS 14.0-70.26   benign FRS 9.16-25.95
-concealed payload    : malware 6/8, benign 0/9
+malware flagged      : 9/9   (missed 0)
+non-malware flagged  : 2/14   false positives
+precision 0.82   recall 1.00   f1 0.90
+malware FRS 24.73-70.26   benign FRS 9.16-29.72
+concealed payload    : malware 6/9, benign 2/14
 ```
 
 ### At a stricter bar
@@ -75,7 +81,7 @@ concealed payload    : malware 6/8, benign 0/9
 The same corpus measured at `band >= High Risk`:
 
 ```
-tp 1   fn 7   fp 0   recall 0.12
+tp 4   fn 5   fp 0   recall 0.44
 ```
 
 Reported because static-only analysis has a ceiling. Reaching the higher bands
@@ -83,7 +89,7 @@ requires the excluded axes - dynamic instrumentation and threat correlation.
 
 ## Limitations
 
-1. **17 samples is a small corpus.** These figures are measured on this
+1. **23 samples is a small corpus.** These figures are measured on this
    set, not proven at scale.
 2. **The dynamic axis is untested here.** Every run is static-only, so the axis carrying
    the largest weight in a full analysis contributes nothing to these numbers.

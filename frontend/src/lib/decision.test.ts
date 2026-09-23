@@ -93,14 +93,22 @@ describe('getDecision - the false ALLOW regression', () => {
     expect(d.headline).toBe('Review before installing');
   });
 
-  it('treats every safety floor as disqualifying, whatever the score', () => {
-    const floors = [
-      'verdict_floored_for_visibility',
+  it('treats evasion and incomplete-exercise floors as disqualifying', () => {
+    // These two floors mean the analysis itself failed to produce a reliable
+    // answer: either the sandbox was actively sabotaged (evasion) or the trigger
+    // conditions were never reached (incomplete exercise). The score gauge must
+    // show "No score assigned" for both.
+    //
+    // verdict_floored_for_visibility and verdict_floored_for_static_evidence are
+    // NOT inconclusive: they conservatively raise a band from Safe→Suspicious
+    // when the engine cannot certify a clean result, but the computed score is
+    // still valid and should be displayed normally.
+    const disqualifyingFloors = [
       'verdict_floored_for_evasion',
       'verdict_floored_for_incomplete_exercise',
     ] as const;
 
-    for (const floor of floors) {
+    for (const floor of disqualifyingFloors) {
       const data = caseOf({
         risk_band: 'Suspicious',
         final_risk_score: 2,
@@ -110,6 +118,22 @@ describe('getDecision - the false ALLOW regression', () => {
       expect(getDecision(data).action, floor).toBe('INCONCLUSIVE');
       expect(getDecision(data).inconclusive, floor).toBe(true);
     }
+  });
+
+  it('does NOT treat visibility floor as inconclusive - score is valid', () => {
+    // verdict_floored_for_visibility: concealed payload + no sandbox → band raised
+    // Safe→Suspicious, but the STEI score is perfectly valid and must be shown.
+    const data = caseOf({
+      risk_band: 'Suspicious',
+      final_risk_score: 21,
+      frs_breakdown: {
+        verdict_floored_for_visibility: true,
+        stei: 46,
+      } as FraudCardData['frs_breakdown'],
+    });
+    expect(isInconclusive(data)).toBe(false);
+    expect(getDecision(data).action).toBe('REVIEW');
+    expect(getDecision(data).inconclusive).toBe(false);
   });
 
   it('refuses a clean bill of health when the sandbox ran but was inconclusive', () => {

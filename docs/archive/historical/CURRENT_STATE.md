@@ -6,7 +6,7 @@ Original report **2026-08-14**. Re-verified against the active codebase on **202
 
 > The original version of this document carried a "Project Health Score of 7.75 / 10" and a twelve-point breakdown of numeric component scores. Those numbers had no method behind them and nothing regenerated them, so they have been removed rather than carried forward. What follows is limited to statements that can be checked against the repository.
 
-Maintained views: [docs/FEATURE_STATUS.md](docs/FEATURE_STATUS.md) · [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md) · [BUGS_AND_IMPROVEMENTS.md](BUGS_AND_IMPROVEMENTS.md)
+Maintained views: [docs/features/FEATURE_STATUS.md](docs/features/FEATURE_STATUS.md) · [docs/features/KNOWN_LIMITATIONS.md](docs/features/KNOWN_LIMITATIONS.md) · [BUGS_AND_IMPROVEMENTS.md](future/BUGS_AND_IMPROVEMENTS.md)
 
 ---
 
@@ -43,7 +43,7 @@ Maintained views: [docs/FEATURE_STATUS.md](docs/FEATURE_STATUS.md) · [docs/KNOW
 | Risk engine | Working | Deterministic. Axis exclusion and renormalisation, four safety floors, VIDE escalation. A determinism replay test asserts identical evidence yields an identical verdict |
 | Dynamic sandbox | Working, environment-dependent | Requires a rooted host-side emulator with matching frida-server. Degrades to static-only when unreachable, and says so in the verdict |
 | Agentic explorer | Working | 15-stage goal graph. Falls back to a deterministic planner without a Gemini key |
-| Threat intelligence | Constrained | Correlation works; caching is incomplete — OTX hash lookups bypass the cache and 404s are not negatively cached. See [BUGS_AND_IMPROVEMENTS.md](BUGS_AND_IMPROVEMENTS.md) §1.2 and §1.3 |
+| Threat intelligence | Constrained | Correlation works; caching is incomplete — OTX hash lookups bypass the cache and 404s are not negatively cached. See [BUGS_AND_IMPROVEMENTS.md](future/BUGS_AND_IMPROVEMENTS.md) §1.2 and §1.3 |
 | Reporting | Working | PDF, HTML, STIX 2.1, IOC CSV/TXT, YARA, Suricata, Snort, MITRE JSON. The PDF `TypeError` reported in the original audit is fixed |
 | Security and infrastructure | Working, with a documented fail-open | Containment policy, ADB choke point, hardened overlay. Internal service auth is fail-open outside `SUDARSHAN_ENV=production` |
 | Test suite | Large, unenforced | 2,622 tests, no CI. Nothing prevents a regression from being pushed |

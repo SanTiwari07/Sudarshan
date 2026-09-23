@@ -4,7 +4,7 @@ Open defects and improvement candidates, each verified against the active codeba
 
 Original register **2026-08-14**. Re-verified **2026-08-27**; items fixed since are recorded as closed with the change that closed them, so the register also serves as a record of what has been dealt with.
 
-Reproduction detail: [VERIFICATION_STATUS.md](VERIFICATION_STATUS.md). Operational boundaries that are deliberate rather than defects: [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md).
+Reproduction detail: [VERIFICATION_STATUS.md](operations/VERIFICATION_STATUS.md). Operational boundaries that are deliberate rather than defects: [docs/features/KNOWN_LIMITATIONS.md](docs/features/KNOWN_LIMITATIONS.md).
 
 ---
 

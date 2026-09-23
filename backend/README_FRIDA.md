@@ -4,7 +4,7 @@ How to prepare the Android guest and `frida-server` so SUDARSHAN's dynamic analy
 
 Verified against the active codebase on **2026-08-27**.
 
-- Full operations guide: [`../docs/HOW_TO_RUN.md`](../docs/HOW_TO_RUN.md)
+- Full operations guide: [`../docs/getting-started/HOW_TO_RUN.md`](../docs/getting-started/HOW_TO_RUN.md)
 - Engine design: [`../docs/architecture/04_DYNAMIC_ANALYSIS_ENGINE.md`](../docs/architecture/04_DYNAMIC_ANALYSIS_ENGINE.md)
 - Backend service notes: [`README.md`](README.md)
 

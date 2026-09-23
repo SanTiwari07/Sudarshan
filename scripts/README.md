@@ -3,7 +3,7 @@
 Hand-run tooling: environment bootstrap, health and preflight checks, database administration, and the harnesses that regenerate the evaluation artifacts. None of these run automatically — there is no CI workflow in this repository — and none of them are part of the pytest suite.
 
 - Platform overview: [`../README.md`](../README.md)
-- Operations guide: [`../docs/HOW_TO_RUN.md`](../docs/HOW_TO_RUN.md)
+- Operations guide: [`../docs/getting-started/HOW_TO_RUN.md`](../docs/getting-started/HOW_TO_RUN.md)
 
 The directory is mounted read-only into the backend container at `/opt/sudarshan-scripts`, so operator tools can be run inside the running stack.
 

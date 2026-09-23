@@ -6,7 +6,7 @@
 
 Technical reference for the SUDARSHAN Android fraud investigation platform.
 
-[Repository README](../README.md) · [API reference](api/ENDPOINTS.md) · [How to run](HOW_TO_RUN.md) · [Feature status](FEATURE_STATUS.md) · [Known limitations](KNOWN_LIMITATIONS.md)
+[Repository README](../README.md) · [API reference](api/ENDPOINTS.md) · [How to run](getting-started/HOW_TO_RUN.md) · [Feature status](features/FEATURE_STATUS.md) · [Known limitations](features/KNOWN_LIMITATIONS.md)
 
 </div>
 
@@ -22,11 +22,11 @@ Last synchronised against the codebase: **2026-08-27**.
 
 | If you are | Read, in order |
 | :--- | :--- |
-| Evaluating the platform | [Introduction](01_INTRODUCTION.md) → [System overview](02_SYSTEM_OVERVIEW.md) → [Feature status](FEATURE_STATUS.md) → [Known limitations](KNOWN_LIMITATIONS.md) |
-| Deploying or operating it | [How to run](HOW_TO_RUN.md) → [Current architecture](CURRENT_ARCHITECTURE.md) → [Database](DATABASE.md) → [Security](#security) |
+| Evaluating the platform | [Introduction](01_INTRODUCTION.md) → [System overview](02_SYSTEM_OVERVIEW.md) → [Feature status](features/FEATURE_STATUS.md) → [Known limitations](features/KNOWN_LIMITATIONS.md) |
+| Deploying or operating it | [How to run](getting-started/HOW_TO_RUN.md) → [Current architecture](CURRENT_ARCHITECTURE.md) → [Database](operations/DATABASE.md) → [Security](#security) |
 | Integrating against the API | [API endpoints](api/ENDPOINTS.md) → [System overview](02_SYSTEM_OVERVIEW.md) |
-| Working on the code | [Codebase map](CODEBASE_MAP.md) → [Architecture](ARCHITECTURE.md) → the subsystem document for your area → [Contributing](CONTRIBUTING.md) |
-| Investigating a case as an analyst | [Analyst dashboard](dashboard/10_DASHBOARD.md) → [Deterministic risk engine](architecture/08_DETERMINISTIC_RISK_ENGINE.md) → [Known limitations](KNOWN_LIMITATIONS.md) |
+| Working on the code | [Codebase map](reference/CODEBASE_MAP.md) → [Architecture](architecture/SYSTEM_ARCHITECTURE.md) → the subsystem document for your area → [Contributing](../CONTRIBUTING.md) |
+| Investigating a case as an analyst | [Analyst dashboard](dashboard/10_DASHBOARD.md) → [Deterministic risk engine](architecture/08_DETERMINISTIC_RISK_ENGINE.md) → [Known limitations](features/KNOWN_LIMITATIONS.md) |
 
 ---
 
@@ -36,12 +36,12 @@ Last synchronised against the codebase: **2026-08-27**.
 | :--- | :--- |
 | [01 — Introduction](01_INTRODUCTION.md) | Problem statement, threat model, targeted malware families, operational scope |
 | [02 — System overview](02_SYSTEM_OVERVIEW.md) | Service topology, container network, end-to-end data flow |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Engineering architecture: gateway, microservice, database, shared volumes |
+| [ARCHITECTURE.md](architecture/SYSTEM_ARCHITECTURE.md) | Engineering architecture: gateway, microservice, database, shared volumes |
 | [CURRENT_ARCHITECTURE.md](CURRENT_ARCHITECTURE.md) | Authoritative container topology, pipeline stages and scoring formulas |
-| [CODEBASE_MAP.md](CODEBASE_MAP.md) | Directory, module and responsibility index across all four services |
-| [DATABASE.md](DATABASE.md) | SQLite schema, tables, indexes and retention policy |
-| [FEATURE_STATUS.md](FEATURE_STATUS.md) | Implementation status matrix with per-feature source evidence |
-| [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) | Operational boundaries, impact and workarounds |
+| [CODEBASE_MAP.md](reference/CODEBASE_MAP.md) | Directory, module and responsibility index across all four services |
+| [DATABASE.md](operations/DATABASE.md) | SQLite schema, tables, indexes and retention policy |
+| [FEATURE_STATUS.md](features/FEATURE_STATUS.md) | Implementation status matrix with per-feature source evidence |
+| [KNOWN_LIMITATIONS.md](features/KNOWN_LIMITATIONS.md) | Operational boundaries, impact and workarounds |
 | [SUDARSHAN_MASTER.md](SUDARSHAN_MASTER.md) | Consolidated long-form platform reference |
 | [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) | Programme context and design intent |
 
@@ -69,18 +69,18 @@ Last synchronised against the codebase: **2026-08-27**.
 | [DYNAMIC_INVESTIGATION_AUDIT.md](architecture/DYNAMIC_INVESTIGATION_AUDIT.md) | Audit of the investigation path against observed runs |
 | [DYNAMIC_INVESTIGATION_TESTING.md](architecture/DYNAMIC_INVESTIGATION_TESTING.md) | Test strategy for the dynamic path |
 | [DYNAMIC_INVESTIGATION_LIVE_VALIDATION.md](architecture/DYNAMIC_INVESTIGATION_LIVE_VALIDATION.md) | Results of live-device validation runs |
-| [DYNAMIC_ANALYSIS_PORTABILITY.md](DYNAMIC_ANALYSIS_PORTABILITY.md) | Moving the sandbox between hosts and providers |
-| [DAE_CURRENT_STATE.md](DAE_CURRENT_STATE.md) | Resolution state of the dynamic engine's known defects |
+| [DYNAMIC_ANALYSIS_PORTABILITY.md](architecture/DYNAMIC_ANALYSIS_PORTABILITY.md) | Moving the sandbox between hosts and providers |
+| [DAE_CURRENT_STATE.md](architecture/DYNAMIC_ANALYSIS_CURRENT_STATE.md) | Resolution state of the dynamic engine's known defects |
 
 ## Operations
 
 | Document | Purpose |
 | :--- | :--- |
-| [HOW_TO_RUN.md](HOW_TO_RUN.md) | Prerequisites, Docker Compose setup, `start.ps1`, emulator connectivity |
-| [MIGRATION.md](MIGRATION.md) | Upgrade and data migration procedures |
-| [VALIDATION.md](VALIDATION.md) | Determinism replay, ground-truth matrix, pipeline validation |
-| [YARA_RULES.md](YARA_RULES.md) | YARA integration and rule authoring |
-| [BOI_DEMO_CREDENTIALS.md](BOI_DEMO_CREDENTIALS.md) | Demonstration account configuration — placeholders only, never real secrets |
+| [HOW_TO_RUN.md](getting-started/HOW_TO_RUN.md) | Prerequisites, Docker Compose setup, `start.ps1`, emulator connectivity |
+| [MIGRATION.md](operations/MIGRATION.md) | Upgrade and data migration procedures |
+| [VALIDATION.md](operations/VALIDATION.md) | Determinism replay, ground-truth matrix, pipeline validation |
+| [YARA_RULES.md](reference/YARA_RULES.md) | YARA integration and rule authoring |
+| [BOI_DEMO_CREDENTIALS.md](operations/DEMO_CREDENTIALS.md) | Demonstration account configuration — placeholders only, never real secrets |
 
 ## API
 
@@ -111,8 +111,8 @@ Last synchronised against the codebase: **2026-08-27**.
 
 | Document | Purpose |
 | :--- | :--- |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Development setup, testing, review expectations |
-| [CHANGELOG.md](CHANGELOG.md) | Documentation-scoped change history (repository changelog: [../CHANGELOG.md](../CHANGELOG.md)) |
+| [CONTRIBUTING.md](../CONTRIBUTING.md) | Development setup, testing, review expectations |
+| [CHANGELOG.md](../CHANGELOG.md) | Documentation-scoped change history (repository changelog: [../CHANGELOG.md](../CHANGELOG.md)) |
 | [12 — Future work](future/12_FUTURE_WORK.md) | Planned direction; nothing here is implemented |
 | [report/](report/README.md) | LaTeX prototype report sources |
 

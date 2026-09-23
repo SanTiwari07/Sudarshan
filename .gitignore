@@ -187,3 +187,8 @@ apk_details/
 artifacts_qa/
 tests/apks/validation_runs/
 **/sudarshan_artifacts/
+
+# Script Generated Output
+scripts/*.json
+scripts/*.html
+!scripts/corpus_expectations.json

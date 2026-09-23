@@ -8,6 +8,7 @@ bypassed by parallel subprocess wrappers.
 
 from __future__ import annotations
 
+import os
 import subprocess
 from typing import Sequence, Tuple
 
@@ -26,9 +27,18 @@ def run_adb(
     Returns (success, combined stdout+stderr) matching SandboxProvider.adb.
     """
     validate_adb_invocation(args)
+    env = dict(os.environ)
+    if "ADB_SERVER_SOCKET" in env:
+        socket_val = env["ADB_SERVER_SOCKET"].lower()
+        if "host.docker.internal" in socket_val:
+            from sudarshan_core.sandbox.config import is_in_docker
+            if not is_in_docker():
+                del env["ADB_SERVER_SOCKET"]
+
     try:
         result = subprocess.run(
             [adb_binary, *args],
+            env=env,
             capture_output=True,
             text=True,
             encoding="utf-8",

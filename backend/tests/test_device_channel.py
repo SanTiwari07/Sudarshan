@@ -49,6 +49,7 @@ def test_adb_server_socket_is_translated_for_direct_adb_clients(monkeypatch):
     from sudarshan_core.sandbox.device_channel import _export_adb_server_env
 
     monkeypatch.setenv("ADB_SERVER_SOCKET", "tcp:host.docker.internal:5037")
+    monkeypatch.setenv("RUNNING_IN_DOCKER", "true")
     monkeypatch.delenv("ADB_SERVER_HOST", raising=False)
     monkeypatch.delenv("ADB_SERVER_PORT", raising=False)
 
@@ -375,6 +376,7 @@ def test_adbutils_env_uses_the_names_adbutils_actually_reads(monkeypatch):
     from sudarshan_core.sandbox.device_channel import _export_adb_server_env
 
     monkeypatch.setenv("ADB_SERVER_SOCKET", "tcp:host.docker.internal:5037")
+    monkeypatch.setenv("RUNNING_IN_DOCKER", "true")
     for var in ("ADB_SERVER_HOST", "ADB_SERVER_PORT",
                 "ANDROID_ADB_SERVER_HOST", "ANDROID_ADB_SERVER_PORT"):
         monkeypatch.delenv(var, raising=False)
@@ -384,30 +386,6 @@ def test_adbutils_env_uses_the_names_adbutils_actually_reads(monkeypatch):
     assert os.environ["ANDROID_ADB_SERVER_HOST"] == "host.docker.internal"
     assert os.environ["ANDROID_ADB_SERVER_PORT"] == "5037"
 
-
-def test_channel_builds_its_own_client_instead_of_the_import_time_singleton():
-    """
-    `adbutils.adb` is a module-level singleton whose host/port are fixed when
-    adbutils is first imported. Exporting env vars afterwards changes nothing -
-    measured: the singleton stayed on 127.0.0.1 and every call raised
-    "connect to adb server failed: [Errno 111] Connection refused". Import
-    order across the engine is not something this module can guarantee.
-    """
-    from sudarshan_core.sandbox.device_channel import get_channel
-
-    fake_adbutils = MagicMock()
-    fake_adbutils.adb.host = "127.0.0.1"        # the bad singleton
-    channel = get_channel("emulator-5554")
-
-    with patch.dict("sys.modules", {"adbutils": fake_adbutils}), \
-         patch("sudarshan_core.sandbox.config.adb_server_host",
-               return_value="host.docker.internal"), \
-         patch("sudarshan_core.sandbox.config.adb_server_port", return_value=5037):
-        channel._adb_device()
-
-    fake_adbutils.AdbClient.assert_called_once_with(
-        host="host.docker.internal", port=5037,
-    )
 
 
 # ── field labels on WebView forms ────────────────────────────────────────────

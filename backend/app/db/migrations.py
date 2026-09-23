@@ -59,15 +59,29 @@ class Migration(NamedTuple):
 # ─── Helpers for writing migrations ──────────────────────────────────────────
 
 async def _columns(db: aiosqlite.Connection, table: str) -> Set[str]:
-    async with db.execute(f"PRAGMA table_info({table})") as cur:
-        return {row[1] for row in await cur.fetchall()}
+    from app.db.pool import is_postgres
+    if is_postgres():
+        async with db.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = $1", (table,)
+        ) as cur:
+            return {row["column_name"] for row in await cur.fetchall()}
+    else:
+        async with db.execute(f"PRAGMA table_info({table})") as cur:
+            return {row[1] for row in await cur.fetchall()}
 
 
 async def _table_exists(db: aiosqlite.Connection, table: str) -> bool:
-    async with db.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
-    ) as cur:
-        return await cur.fetchone() is not None
+    from app.db.pool import is_postgres
+    if is_postgres():
+        async with db.execute(
+            "SELECT 1 FROM information_schema.tables WHERE table_name = $1", (table,)
+        ) as cur:
+            return await cur.fetchone() is not None
+    else:
+        async with db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
+        ) as cur:
+            return await cur.fetchone() is not None
 
 
 def add_columns(table: str, columns: Sequence[tuple]) -> Callable:
@@ -202,11 +216,18 @@ async def run_migrations(db: aiosqlite.Connection) -> List[str]:
             continue
         try:
             await mig.apply(db)
-            await db.execute(
-                "INSERT OR REPLACE INTO schema_migrations (version, description, applied_at) "
-                "VALUES (?,?,?)",
-                (mig.version, mig.description, datetime.now(timezone.utc).isoformat()),
-            )
+            from app.db.pool import is_postgres
+            if is_postgres():
+                await db.execute(
+                    "INSERT INTO schema_migrations (version, description, applied_at) VALUES (?,?,?) ON CONFLICT (version) DO UPDATE SET description=EXCLUDED.description, applied_at=EXCLUDED.applied_at",
+                    (mig.version, mig.description, datetime.now(timezone.utc).isoformat()),
+                )
+            else:
+                await db.execute(
+                    "INSERT OR REPLACE INTO schema_migrations (version, description, applied_at) "
+                    "VALUES (?,?,?)",
+                    (mig.version, mig.description, datetime.now(timezone.utc).isoformat()),
+                )
             await db.commit()
         except Exception as exc:
             await db.rollback()

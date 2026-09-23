@@ -132,8 +132,8 @@ ALLOWED_ACTIONS: Dict[InvestigationState, FrozenSet[str]] = {
     # read-only tools, so a blocked dialog can still be inspected. Navigation
     # is what stays out; letting the planner swipe or launch an activity here
     # is how a run wanders off mid-dialog and loses the grant it came for.
-    InvestigationState.PERMISSION_ANALYSIS: _READ_ONLY | _PERMISSION_TOOLS | {"click_text"},
-    InvestigationState.PERMISSION_HANDLING: _READ_ONLY | _PERMISSION_TOOLS | {"click_text"},
+    InvestigationState.PERMISSION_ANALYSIS: _READ_ONLY | _PERMISSION_TOOLS | {"click_text", "tap"},
+    InvestigationState.PERMISSION_HANDLING: _READ_ONLY | _PERMISSION_TOOLS | {"click_text", "tap"},
     InvestigationState.SPECIAL_PERMISSION_ANALYSIS: _READ_ONLY | _PERMISSION_TOOLS | {
         "start_activity", "click_text", "tap", "scroll", "press_back",
     },
@@ -241,7 +241,11 @@ ALLOWED_ACTIONS = {
 # an activity here is how a run wanders off mid-dialog and loses the grant it
 # came for" - and they have no `tap`, so they are untouched.
 ALLOWED_ACTIONS = {
-    state: (actions | {"start_activity"} if "tap" in actions else actions)
+    state: (
+        actions | {"start_activity"} 
+        if "tap" in actions and state not in (InvestigationState.PERMISSION_ANALYSIS, InvestigationState.PERMISSION_HANDLING) 
+        else actions
+    )
     for state, actions in ALLOWED_ACTIONS.items()
 }
 

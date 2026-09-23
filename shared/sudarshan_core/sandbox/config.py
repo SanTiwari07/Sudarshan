@@ -70,6 +70,11 @@ def frida_server_port() -> str:
     return raw if raw.isdigit() else DEFAULT_FRIDA_SERVER_PORT
 
 
+def is_in_docker() -> bool:
+    """Detect if the current process is running inside a Docker container."""
+    return os.path.exists("/.dockerenv") or os.environ.get("RUNNING_IN_DOCKER") == "true"
+
+
 def adb_server_host() -> str:
     """
     Host running the ADB server this process talks to, or "" when it is local.
@@ -87,6 +92,11 @@ def adb_server_host() -> str:
     value = raw[4:] if raw.lower().startswith("tcp:") else raw
     host = value.rsplit(":", 1)[0] if ":" in value else value
     host = host.strip().strip("[]")
+    
+    # Prevent .env bleeding to native Windows execution
+    if host.lower() == "host.docker.internal" and not is_in_docker():
+        return ""
+        
     if host.lower() in ("", "127.0.0.1", "localhost", "::1"):
         return ""
     return host

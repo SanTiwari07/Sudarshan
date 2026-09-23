@@ -543,7 +543,12 @@ class AgenticExplorer:
         # a stage does not repeat work that is not idempotent on the device.
         self._procedures_run: set = set()
 
-        self.planner    = AgentPlanner(
+        # Deep exploration state graph (deterministic coverage engine)
+        self.exploration = ExplorationGraph(package_name=package_name)
+
+        planner_mode = os.getenv("SUDARSHAN_PLANNER_MODE", "").lower()
+        
+        agent_planner = AgentPlanner(
             api_key="configured" if gemini_is_configured() else None,
             device_serial=device_serial,
             package_name=package_name,
@@ -552,8 +557,32 @@ class AgenticExplorer:
             adb_path=adb_path,
         )
 
-        # Deep exploration state graph (deterministic coverage engine)
-        self.exploration = ExplorationGraph(package_name=package_name)
+        if planner_mode == "jev":
+            from sudarshan_core.engines.agentic.jev_planner import JevPlanner
+            self.planner = JevPlanner(
+                api_key=os.getenv("TYPESAFE_JEV_API_KEY", ""),
+                device_serial=device_serial,
+                package_name=package_name,
+                action_budget=ACTION_BUDGET,
+                benchmark=self.benchmark,
+                adb_path=adb_path,
+                exploration=self.exploration
+            )
+        elif planner_mode == "hybrid":
+            from sudarshan_core.engines.agentic.jev_planner import JevPlanner
+            from sudarshan_core.engines.agentic.hybrid_planner import HybridPlanner
+            jev_planner = JevPlanner(
+                api_key=os.getenv("TYPESAFE_JEV_API_KEY", ""),
+                device_serial=device_serial,
+                package_name=package_name,
+                action_budget=ACTION_BUDGET,
+                benchmark=self.benchmark,
+                adb_path=adb_path,
+                exploration=self.exploration
+            )
+            self.planner = HybridPlanner(jev_planner, agent_planner)
+        else:
+            self.planner = agent_planner
         self.dispatcher = ActionDispatcher()
         self._stop_reason: Optional[StopReason] = None
 
@@ -3210,11 +3239,16 @@ class AgenticExplorer:
                     #   * periodically regardless, so privileged device-state
                     #     moves (grant_permission, inject_test_sms, ...) still
                     #     get their turn - those can never come from the graph
-                    graph_action = self.exploration.get_next_action(
+                    planner_mode = os.getenv("SUDARSHAN_PLANNER_MODE", "").lower()
+                    is_jev = planner_mode == "jev"
+                    is_hybrid = planner_mode == "hybrid"
+                    
+                    graph_action = None if is_jev else self.exploration.get_next_action(
                         state_id=graph_state.state_id, memory=self.memory,
                     )
                     self._planner_skips = getattr(self, "_planner_skips", 0)
-                    force_planner = self._planner_skips >= PLANNER_CONSULT_EVERY
+                    force_planner = self._planner_skips >= PLANNER_CONSULT_EVERY or is_jev or is_hybrid
+
                     # Two further gates, both of which fall back to the
                     # deterministic path rather than blocking (§P9/§P19):
                     #
@@ -3224,6 +3258,7 @@ class AgenticExplorer:
                     #   * the ONE global deadline - a call started with less
                     #     than its own latency remaining costs that latency and
                     #     produces nothing usable.
+
                     _goal_name = next_goal.name if next_goal else ""
                     _planner_budget_left = (
                         not _goal_name
@@ -3254,7 +3289,14 @@ class AgenticExplorer:
                     else:
                         self._planner_skips += 1
 
-                    action, selected_by = select_canonical_action(graph_action, planner_action)
+                    if is_jev:
+                        action = planner_action
+                        selected_by = "jev_planner" if action else "none"
+                    elif planner_action and planner_action.get("_selected_by") == "jev_planner":
+                        action = planner_action
+                        selected_by = "jev_planner"
+                    else:
+                        action, selected_by = select_canonical_action(graph_action, planner_action)
                 if action is not None:
                     action["_selected_by"] = selected_by
                     pipeline_log(

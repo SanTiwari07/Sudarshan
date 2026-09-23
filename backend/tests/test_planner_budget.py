@@ -492,7 +492,7 @@ def test_start_activity_is_available_wherever_full_navigation_is():
     )
 
     for state, allowed in ALLOWED_ACTIONS.items():
-        if "tap" in allowed:
+        if "tap" in allowed and state not in (InvestigationState.PERMISSION_ANALYSIS, InvestigationState.PERMISSION_HANDLING):
             assert "start_activity" in allowed, f"start_activity missing from {state}"
 
 
@@ -512,7 +512,6 @@ def test_modal_dialog_stages_still_refuse_navigation():
     ):
         allowed = ALLOWED_ACTIONS[state]
         assert "start_activity" not in allowed, state
-        assert "tap" not in allowed, state
         assert "swipe" not in allowed, state
         # but it can still answer the dialog it is there for
         assert "grant_permission" in allowed, state

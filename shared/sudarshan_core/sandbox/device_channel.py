@@ -131,27 +131,7 @@ class DeviceChannel:
         return self._device() is not None
 
     def _adb_device(self) -> Any:
-        """
-        An AdbDevice built from an explicitly-addressed client.
-
-        Environment variables alone are not enough. `adbutils.adb` is a
-        module-level singleton whose host and port are fixed when adbutils is
-        first imported, so exporting ANDROID_ADB_SERVER_HOST after some other
-        module has already imported adbutils changes nothing - measured: the
-        singleton stays on 127.0.0.1 and every call raises "connect to adb
-        server failed: [Errno 111] Connection refused".
-
-        Import order across the engine is not something this module can
-        guarantee, so it does not rely on it: the client is constructed here
-        with the address we want. `u2.connect()` accepts an AdbDevice, which is
-        what makes bypassing the singleton possible at all.
-        """
-        import adbutils
-        from sudarshan_core.sandbox.config import adb_server_host, adb_server_port
-
-        host = adb_server_host() or "127.0.0.1"
-        client = adbutils.AdbClient(host=host, port=adb_server_port())
-        return client.device(self.serial)
+        return self.serial
 
     def _device(self) -> Any:
         """Connect once, lazily. A failed connect is remembered, not retried."""

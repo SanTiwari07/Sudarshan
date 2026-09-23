@@ -135,13 +135,28 @@ async def create_session(
     ip: Optional[str] = None,
     user_agent: Optional[str] = None,
 ) -> None:
+    from app.db.pool import is_postgres
     async with connect() as db:
-        await db.execute(
+        if is_postgres():
+            sql = """
+                INSERT INTO sessions
+                  (jti, user_id, issued_at, expires_at, ip, user_agent, last_seen_at)
+                VALUES (?,?,?,?,?,?,?)
+                ON CONFLICT (jti) DO UPDATE SET
+                  user_id = EXCLUDED.user_id,
+                  issued_at = EXCLUDED.issued_at,
+                  expires_at = EXCLUDED.expires_at,
+                  ip = EXCLUDED.ip,
+                  user_agent = EXCLUDED.user_agent,
+                  last_seen_at = EXCLUDED.last_seen_at
             """
-            INSERT OR REPLACE INTO sessions
-              (jti, user_id, issued_at, expires_at, ip, user_agent, last_seen_at)
-            VALUES (?,?,?,?,?,?,?)
-            """,
+        else:
+            sql = """
+                INSERT OR REPLACE INTO sessions
+                  (jti, user_id, issued_at, expires_at, ip, user_agent, last_seen_at)
+                VALUES (?,?,?,?,?,?,?)
+            """
+        await db.execute(sql,
             (
                 jti, user_id, issued_at.isoformat(), expires_at.isoformat(),
                 ip, (user_agent or "")[:400] or None, issued_at.isoformat(),

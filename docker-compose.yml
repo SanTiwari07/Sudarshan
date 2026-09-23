@@ -35,6 +35,7 @@ services:
       - "8000:8000"
     environment:
       - PYTHONPATH=/app:/opt/sudarshan-core
+      - DATABASE_URL=${DATABASE_URL:-postgresql://sudarshan:sudarshan@postgres:5432/sudarshan}
       - ANALYSIS_ENGINE_URL=http://analysis-engine:8001
       - MOBSF_HOST=http://mobsf:8000
       - MOBSF_API_KEY=${MOBSF_API_KEY:-sudarshan_mobsf_api_key_2026}
@@ -245,7 +246,27 @@ services:
       start_period: 45s
     restart: unless-stopped
 
+  # ── 6. PostgreSQL Database (Production state) ──────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: sudarshan-postgres
+    environment:
+      - POSTGRES_USER=sudarshan
+      - POSTGRES_PASSWORD=sudarshan
+      - POSTGRES_DB=sudarshan
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sudarshan"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   uploads:         # Shared volume for zero-copy file sharing between backend & engine
   mitmproxy_har:   # Shared volume: mitmproxy writes HAR, engine reads it
-  dbdata:          # Authoritative application database. Back up with scripts/db_admin.py backup
+  dbdata:          # Authoritative application database (Legacy SQLite). Back up with scripts/db_admin.py backup
+  pgdata:          # PostgreSQL data volume

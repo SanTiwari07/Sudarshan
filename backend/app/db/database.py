@@ -230,31 +230,12 @@ CREATE TABLE IF NOT EXISTS analysis_batch_jobs (
 """
 
 
-@asynccontextmanager
-async def _connect() -> AsyncIterator[aiosqlite.Connection]:
-    """
-    Open a connection with the pragmas this app depends on.
-
-    These are per-connection in SQLite, so they must be set on every handle:
-      journal_mode=WAL  readers no longer block on a writer
-      busy_timeout      wait for a lock instead of raising 'database is locked'
-                        immediately (the default is 0)
-      foreign_keys=ON   without this the cases.analyst_id REFERENCES clause is
-                        silently unenforced
-    """
-    path = _active_db_path()
-    ensure_parent(Path(path))
-    async with aiosqlite.connect(path) as db:
-        await db.execute("PRAGMA journal_mode=WAL;")
-        await db.execute("PRAGMA busy_timeout=5000;")
-        await db.execute("PRAGMA foreign_keys=ON;")
-        yield db
-
+from app.db.pool import connect, init_pool, is_postgres
 
 # Public alias. New persistence modules (security.py, intel.py) import this
 # rather than reaching for the underscore-prefixed name, so that the pragma
 # setup above stays the single place a connection is configured.
-connect = _connect
+_connect = connect
 
 
 # ─── Additive migrations ──────────────────────────────────────────────────────
@@ -285,6 +266,8 @@ async def init_db() -> Dict[str, Any]:
     """
     from app.db import intel, security
     from app.db.migrations import migration_status, run_migrations
+    
+    await init_pool()
 
     path = _active_db_path()
     async with _connect() as db:
@@ -352,16 +335,43 @@ async def save_case(sha256: str, result: Dict[str, Any], analyst_id: Optional[in
         raw_json = None
 
     async with _connect() as db:
-        await db.execute(
+        if is_postgres():
+            sql = """
+                INSERT INTO cases
+                  (sha256, package_name, app_name, analysis_mode, family_classification,
+                   final_risk_score, risk_band, confidence, dynamic_available,
+                   obfuscation_score, has_reflection, frs_breakdown,
+                   threat_scenario_table, intelligence_report, analyst_id, created_at,
+                   raw_result)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT (sha256) DO UPDATE SET
+                   package_name = EXCLUDED.package_name,
+                   app_name = EXCLUDED.app_name,
+                   analysis_mode = EXCLUDED.analysis_mode,
+                   family_classification = EXCLUDED.family_classification,
+                   final_risk_score = EXCLUDED.final_risk_score,
+                   risk_band = EXCLUDED.risk_band,
+                   confidence = EXCLUDED.confidence,
+                   dynamic_available = EXCLUDED.dynamic_available,
+                   obfuscation_score = EXCLUDED.obfuscation_score,
+                   has_reflection = EXCLUDED.has_reflection,
+                   frs_breakdown = EXCLUDED.frs_breakdown,
+                   threat_scenario_table = EXCLUDED.threat_scenario_table,
+                   intelligence_report = EXCLUDED.intelligence_report,
+                   analyst_id = EXCLUDED.analyst_id,
+                   raw_result = EXCLUDED.raw_result
             """
-            INSERT OR REPLACE INTO cases
-              (sha256, package_name, app_name, analysis_mode, family_classification,
-               final_risk_score, risk_band, confidence, dynamic_available,
-               obfuscation_score, has_reflection, frs_breakdown,
-               threat_scenario_table, intelligence_report, analyst_id, created_at,
-               raw_result)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-            """,
+        else:
+            sql = """
+                INSERT OR REPLACE INTO cases
+                  (sha256, package_name, app_name, analysis_mode, family_classification,
+                   final_risk_score, risk_band, confidence, dynamic_available,
+                   obfuscation_score, has_reflection, frs_breakdown,
+                   threat_scenario_table, intelligence_report, analyst_id, created_at,
+                   raw_result)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """
+        await db.execute(sql,
             (
                 sha256,
                 result.get("package_name"),
@@ -660,12 +670,26 @@ async def save_ioc_cache(
     now = datetime.now(timezone.utc)
     expires = (now + timedelta(hours=ttl_hours)).isoformat()
     async with _connect() as db:
-        await db.execute(
+        if is_postgres():
+            sql = """
+                INSERT INTO ioc_cache
+                  (indicator, ioc_type, reputation, source, threat_score, raw_data, cached_at, expires_at)
+                VALUES (?,?,?,?,?,?,?,?)
+                ON CONFLICT (indicator, ioc_type) DO UPDATE SET
+                  reputation = EXCLUDED.reputation,
+                  source = EXCLUDED.source,
+                  threat_score = EXCLUDED.threat_score,
+                  raw_data = EXCLUDED.raw_data,
+                  cached_at = EXCLUDED.cached_at,
+                  expires_at = EXCLUDED.expires_at
             """
-            INSERT OR REPLACE INTO ioc_cache
-              (indicator, ioc_type, reputation, source, threat_score, raw_data, cached_at, expires_at)
-            VALUES (?,?,?,?,?,?,?,?)
-            """,
+        else:
+            sql = """
+                INSERT OR REPLACE INTO ioc_cache
+                  (indicator, ioc_type, reputation, source, threat_score, raw_data, cached_at, expires_at)
+                VALUES (?,?,?,?,?,?,?,?)
+            """
+        await db.execute(sql,
             (indicator, ioc_type, reputation, source, threat_score,
              json.dumps(raw_data), now.isoformat(), expires),
         )
@@ -694,12 +718,22 @@ async def create_user(username: str, hashed_pw: str, role: str = "analyst") -> i
     """Insert a new user, return the new row id."""
     now = datetime.now(timezone.utc).isoformat()
     async with _connect() as db:
-        cur = await db.execute(
-            "INSERT INTO users (username, hashed_pw, role, created_at) VALUES (?,?,?,?)",
-            (username, hashed_pw, role, now),
-        )
-        await db.commit()
-        return cur.lastrowid
+        from app.db.pool import is_postgres
+        if is_postgres():
+            cur = await db.execute(
+                "INSERT INTO users (username, hashed_pw, role, created_at) VALUES (?,?,?,?) RETURNING id",
+                (username, hashed_pw, role, now),
+            )
+            row = await cur.fetchone()
+            await db.commit()
+            return row["id"] if row else None
+        else:
+            cur = await db.execute(
+                "INSERT INTO users (username, hashed_pw, role, created_at) VALUES (?,?,?,?)",
+                (username, hashed_pw, role, now),
+            )
+            await db.commit()
+            return cur.lastrowid
 
 
 async def update_user_role(user_id: int, role: str) -> None:
@@ -769,12 +803,22 @@ async def username_exists(username: str) -> bool:
 async def add_case_note(sha256: str, text: str, author: str) -> Dict[str, Any]:
     now = datetime.now(timezone.utc).isoformat()
     async with _connect() as db:
-        cur = await db.execute(
-            "INSERT INTO case_notes (sha256, text, author, created_at) VALUES (?,?,?,?)",
-            (sha256, text, author, now),
-        )
+        from app.db.pool import is_postgres
+        if is_postgres():
+            cur = await db.execute(
+                "INSERT INTO case_notes (sha256, text, author, created_at) VALUES (?,?,?,?) RETURNING id",
+                (sha256, text, author, now),
+            )
+            row = await cur.fetchone()
+            row_id = row["id"] if row else None
+        else:
+            cur = await db.execute(
+                "INSERT INTO case_notes (sha256, text, author, created_at) VALUES (?,?,?,?)",
+                (sha256, text, author, now),
+            )
+            row_id = cur.lastrowid
         await db.commit()
-        return {"id": cur.lastrowid, "sha256": sha256, "text": text, "author": author, "created_at": now}
+        return {"id": row_id, "sha256": sha256, "text": text, "author": author, "created_at": now}
 
 
 async def get_case_notes(sha256: str) -> List[Dict[str, Any]]:
@@ -862,12 +906,28 @@ async def load_analysis_job(job_id: str) -> Optional[Dict[str, Any]]:
 
 async def save_discovery_session(session: Dict[str, Any]) -> None:
     async with _connect() as db:
-        await db.execute(
+        if is_postgres():
+            sql = """
+                INSERT INTO discovery_sessions
+                (id, target_url, domain, status, pages_scanned, error, created_at, updated_at, progress_logs)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (id) DO UPDATE SET
+                    target_url = EXCLUDED.target_url,
+                    domain = EXCLUDED.domain,
+                    status = EXCLUDED.status,
+                    pages_scanned = EXCLUDED.pages_scanned,
+                    error = EXCLUDED.error,
+                    created_at = EXCLUDED.created_at,
+                    updated_at = EXCLUDED.updated_at,
+                    progress_logs = EXCLUDED.progress_logs
             """
-            INSERT OR REPLACE INTO discovery_sessions
-            (id, target_url, domain, status, pages_scanned, error, created_at, updated_at, progress_logs)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
+        else:
+            sql = """
+                INSERT OR REPLACE INTO discovery_sessions
+                (id, target_url, domain, status, pages_scanned, error, created_at, updated_at, progress_logs)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """
+        await db.execute(sql,
             (
                 session["id"], session["target_url"], session["domain"], session["status"],
                 session.get("pages_scanned", 0), session.get("error"),
@@ -890,13 +950,35 @@ async def get_discovery_session(session_id: str) -> Optional[Dict[str, Any]]:
 
 async def save_discovery_candidate(candidate: Dict[str, Any]) -> None:
     async with _connect() as db:
-        await db.execute(
+        if is_postgres():
+            sql = """
+                INSERT INTO discovery_candidates
+                (id, session_id, source_url, discovery_url, filename, source_type, package_id, 
+                 download_status, validation_status, sha256, size, storage_path, error, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (id) DO UPDATE SET
+                    session_id = EXCLUDED.session_id,
+                    source_url = EXCLUDED.source_url,
+                    discovery_url = EXCLUDED.discovery_url,
+                    filename = EXCLUDED.filename,
+                    source_type = EXCLUDED.source_type,
+                    package_id = EXCLUDED.package_id,
+                    download_status = EXCLUDED.download_status,
+                    validation_status = EXCLUDED.validation_status,
+                    sha256 = EXCLUDED.sha256,
+                    size = EXCLUDED.size,
+                    storage_path = EXCLUDED.storage_path,
+                    error = EXCLUDED.error,
+                    created_at = EXCLUDED.created_at
             """
-            INSERT OR REPLACE INTO discovery_candidates
-            (id, session_id, source_url, discovery_url, filename, source_type, package_id, 
-             download_status, validation_status, sha256, size, storage_path, error, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
+        else:
+            sql = """
+                INSERT OR REPLACE INTO discovery_candidates
+                (id, session_id, source_url, discovery_url, filename, source_type, package_id, 
+                 download_status, validation_status, sha256, size, storage_path, error, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """
+        await db.execute(sql,
             (
                 candidate["id"], candidate["session_id"], candidate["source_url"],
                 candidate["discovery_url"], candidate.get("filename"), candidate["source_type"],

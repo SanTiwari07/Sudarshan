@@ -68,3 +68,5 @@ beautifulsoup4
 # Python fallback implements the same algorithm - but it is ~100x slower, and
 # the string axis runs over every baseline on every analysis.
 rapidfuzz>=3.6
+SQLAlchemy[asyncio]>=2.0
+asyncpg>=0.29.0

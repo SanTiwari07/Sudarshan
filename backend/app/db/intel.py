@@ -191,8 +191,7 @@ async def record_analysis_run(run: Dict[str, Any]) -> int:
     were written with apk_sha256='unknown' and bfci_score=0.0.
     """
     async with connect() as db:
-        cur = await db.execute(
-            """
+        sql = """
             INSERT INTO analysis_runs
               (package_name, apk_sha256, sha256, run_timestamp, stage_name,
                duration_seconds, bfci_score, bfci_components, mitre_techniques,
@@ -200,34 +199,41 @@ async def record_analysis_run(run: Dict[str, Any]) -> int:
                explorer_mode, is_placeholder, frs_score, stei_score, risk_band,
                dynamic_status, status, started_at, completed_at, analysis_mode)
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?,?)
-            """,
-            (
-                run.get("package_name") or "unknown",
-                run.get("sha256") or "unknown",
-                run.get("sha256"),
-                run.get("run_timestamp") or _now(),
-                run.get("stage_name") or "single",
-                run.get("duration_seconds"),
-                run.get("bfci_score"),
-                json.dumps(run.get("bfci_components") or {}),
-                json.dumps(run.get("mitre_techniques") or []),
-                run.get("ioc_count") or 0,
-                run.get("screenshot_count") or 0,
-                json.dumps(run.get("yara_matches") or []),
-                json.dumps(run.get("anti_analysis") or []),
-                run.get("explorer_mode"),
-                run.get("frs_score"),
-                run.get("stei_score"),
-                run.get("risk_band"),
-                run.get("dynamic_status"),
-                run.get("status") or "COMPLETED",
-                run.get("started_at"),
-                run.get("completed_at") or _now(),
-                run.get("analysis_mode"),
-            ),
+            """
+        params = (
+            run.get("package_name") or "unknown",
+            run.get("sha256") or "unknown",
+            run.get("sha256"),
+            run.get("run_timestamp") or _now(),
+            run.get("stage_name") or "single",
+            run.get("duration_seconds"),
+            run.get("bfci_score"),
+            json.dumps(run.get("bfci_components") or {}),
+            json.dumps(run.get("mitre_techniques") or []),
+            run.get("ioc_count") or 0,
+            run.get("screenshot_count") or 0,
+            json.dumps(run.get("yara_matches") or []),
+            json.dumps(run.get("anti_analysis") or []),
+            run.get("explorer_mode"),
+            run.get("frs_score"),
+            run.get("stei_score"),
+            run.get("risk_band"),
+            run.get("dynamic_status"),
+            run.get("status") or "COMPLETED",
+            run.get("started_at"),
+            run.get("completed_at") or _now(),
+            run.get("analysis_mode"),
         )
+        from app.db.pool import is_postgres
+        if is_postgres():
+            cur = await db.execute(sql + " RETURNING id", params)
+            row = await cur.fetchone()
+            row_id = row["id"] if row else None
+        else:
+            cur = await db.execute(sql, params)
+            row_id = cur.lastrowid
         await db.commit()
-        return cur.lastrowid
+        return row_id
 
 
 def _row_to_run(row: Dict[str, Any]) -> Dict[str, Any]:
@@ -462,17 +468,32 @@ async def append_chat_message(
     sections_used: Optional[List[str]] = None,
 ) -> int:
     async with connect() as db:
-        cur = await db.execute(
-            "INSERT INTO chat_messages (sha256, user_id, role, content, sections_used, created_at) "
-            "VALUES (?,?,?,?,?,?)",
-            (
-                sha256, user_id, role, content,
-                json.dumps(sections_used) if sections_used else None,
-                _now(),
-            ),
-        )
+        from app.db.pool import is_postgres
+        if is_postgres():
+            cur = await db.execute(
+                "INSERT INTO chat_messages (sha256, user_id, role, content, sections_used, created_at) "
+                "VALUES (?,?,?,?,?,?) RETURNING id",
+                (
+                    sha256, user_id, role, content,
+                    json.dumps(sections_used) if sections_used else None,
+                    _now(),
+                ),
+            )
+            row = await cur.fetchone()
+            row_id = row["id"] if row else None
+        else:
+            cur = await db.execute(
+                "INSERT INTO chat_messages (sha256, user_id, role, content, sections_used, created_at) "
+                "VALUES (?,?,?,?,?,?)",
+                (
+                    sha256, user_id, role, content,
+                    json.dumps(sections_used) if sections_used else None,
+                    _now(),
+                ),
+            )
+            row_id = cur.lastrowid
         await db.commit()
-        return cur.lastrowid
+        return row_id
 
 
 async def get_chat_history(
@@ -535,18 +556,24 @@ async def record_export(
     ip: Optional[str] = None,
 ) -> int:
     async with connect() as db:
-        cur = await db.execute(
-            """
+        sql = """
             INSERT INTO export_events
               (sha256, user_id, username, export_type, status, artifact_ref,
                byte_size, ip, created_at)
             VALUES (?,?,?,?,?,?,?,?,?)
-            """,
-            (sha256, user_id, username, export_type, status, artifact_ref,
-             byte_size, ip, _now()),
-        )
+            """
+        params = (sha256, user_id, username, export_type, status, artifact_ref,
+             byte_size, ip, _now())
+        from app.db.pool import is_postgres
+        if is_postgres():
+            cur = await db.execute(sql + " RETURNING id", params)
+            row = await cur.fetchone()
+            row_id = row["id"] if row else None
+        else:
+            cur = await db.execute(sql, params)
+            row_id = cur.lastrowid
         await db.commit()
-        return cur.lastrowid
+        return row_id
 
 
 async def exports_for_case(sha256: str, limit: int = 100) -> List[Dict[str, Any]]:

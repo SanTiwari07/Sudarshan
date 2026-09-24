@@ -23,7 +23,7 @@ function matchesSource(row: InvestigationEvidence, filter: SourceFilter): boolea
   if (filter === 'static') return row.category === 'static' || row.sourceEngine.includes('static');
   if (filter === 'dynamic') return row.category === 'runtime' || row.sourceEngine.includes('dynamic') || row.sourceEngine.includes('frida');
   if (filter === 'intel') return row.category === 'intel' || row.category === 'scenario' || row.sourceEngine.includes('intel');
-  if (filter === 'vide') return row.category === 'visual' || row.sourceEngine.includes('vide');
+  if (filter === 'vide') return (row.category as string) === 'visual' || row.sourceEngine.toLowerCase().includes('vide');
   return true;
 }
 
@@ -101,7 +101,7 @@ function FindingRowMobile({
 
 export default function FindingsRegistryTable({
   bundle,
-  embedded = false,
+  embedded: _embedded = false,
 }: {
   bundle: InvestigationBundle;
   embedded?: boolean;

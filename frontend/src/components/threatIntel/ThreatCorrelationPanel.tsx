@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import type { FraudCardData } from '../../types/case';
 import type { InvestigationBundle } from '../../types/investigation';
 import { useInvestigationUI } from '../../context/InvestigationUIContext';
-import { ArrowRight, ShieldAlert, GitFork, ExternalLink, Network } from 'lucide-react';
+import { ArrowRight, ExternalLink, Network } from 'lucide-react';
 import { IntelCard, IntelCardBody, IntelSectionHeader } from './IntelCard';
 
 export default function ThreatCorrelationPanel({
@@ -30,14 +30,14 @@ export default function ThreatCorrelationPanel({
 
     // From structured bundle evidence records with MITRE or scenarios
     records.forEach((rec) => {
-      if (rec.mitreId || rec.category === 'scenario' || rec.scoreContribution) {
+      if (rec.mitreId || rec.category === 'scenario' || rec.contributionLabel) {
         list.push({
           evidenceId: rec.id,
           evidenceTitle: rec.title,
           techniqueId: rec.mitreId || 'T1417',
           techniqueName: rec.mitreName || 'Mobile Attack Technique',
           scenario: rec.category === 'scenario' ? rec.title : (rec.description || 'Observed Threat Behavior'),
-          contribution: rec.scoreContribution ? `+${rec.scoreContribution}` : '+12.5%',
+          contribution: rec.contributionLabel ? `+${rec.contributionLabel}` : '+12.5%',
           severity: rec.severity || 'medium',
         });
       }
@@ -85,7 +85,7 @@ export default function ThreatCorrelationPanel({
       <IntelCard>
         <IntelSectionHeader
           title="Threat Correlation Chain"
-          badge="EVIDENCE → TECHNIQUE → SCENARIO → RISK"
+          subtitle="EVIDENCE → TECHNIQUE → SCENARIO → RISK"
           icon={<Network className="h-4 w-4 text-blue-600" />}
         />
         <IntelCardBody>
@@ -101,7 +101,7 @@ export default function ThreatCorrelationPanel({
     <IntelCard>
       <IntelSectionHeader
         title="Forensic Threat Correlation"
-        badge="EVIDENCE → TECHNIQUE → SCENARIO → RISK"
+        subtitle="EVIDENCE → TECHNIQUE → SCENARIO → RISK"
         icon={<Network className="h-4 w-4 text-blue-600" />}
       />
       <IntelCardBody>

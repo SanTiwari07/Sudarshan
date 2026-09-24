@@ -28,7 +28,7 @@ export default function ConcealedPayload({ data }: { data: FraudCardData }) {
     ...reflectionApis.slice(0, 2).map((api) => ({ label: api, type: 'api' })),
   ];
 
-  const handleSignalClick = () => {
+  const handleSignalClick = (_sig?: any) => {
     navigate(`/case/${data.sha256}/evidence?section=static`);
   };
 

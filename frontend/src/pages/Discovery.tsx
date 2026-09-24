@@ -1,7 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import UrlDiscoveryArea from '../components/discovery/UrlDiscoveryArea';
 import { Compass, Shield } from 'lucide-react';
-import { TYPOGRAPHY } from '../theme/typography';
 
 export default function Discovery() {
   const navigate = useNavigate();

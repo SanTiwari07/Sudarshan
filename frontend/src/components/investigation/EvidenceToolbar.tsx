@@ -1,4 +1,4 @@
-import { Search, Filter, ShieldAlert, Cpu } from 'lucide-react';
+import { Search, ShieldAlert, Cpu } from 'lucide-react';
 
 export type SeverityFilter = 'all' | 'critical' | 'high' | 'medium' | 'low';
 export type SourceFilter = 'all' | 'static' | 'dynamic' | 'intel' | 'vide';
@@ -29,7 +29,7 @@ export default function EvidenceToolbar({
   sourceFilter = 'all',
   onSourceChange,
   // Backwards compatibility props
-  filter,
+  filter: _filter,
   onFilterChange,
 }: {
   search: string;

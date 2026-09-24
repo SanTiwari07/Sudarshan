@@ -5,12 +5,9 @@ import type { InvestigationBundle } from '../../types/investigation';
 import { useNavigate } from 'react-router-dom';
 import {
   Building2,
-  Eye,
   ShieldAlert,
-  Percent,
   Image as ImageIcon,
   ArrowRight,
-  ExternalLink,
 } from 'lucide-react';
 
 export default function TargetDetailDrawer({
@@ -25,12 +22,15 @@ export default function TargetDetailDrawer({
 
   const vide = data.vide;
   const bankName =
-    vide?.matched_bank ||
+    vide?.visual_impersonation_institution ||
+    vide?.corpus_compare?.institution_display ||
+    vide?.corpus_compare?.bank ||
+    data.intelligence_report?.affected_banking_apps?.[0] ||
     (data as any).target_bank ||
-    data.intelligence_report?.targeted_brand ||
     'Target Financial Institution';
 
-  const similarity = vide?.similarity_score ? Math.round(vide.similarity_score * 100) : null;
+  const simVal = vide?.visual_impersonation_confidence ?? vide?.vide_compare?.confidence;
+  const similarity = simVal ? Math.round(simVal > 1 ? simVal : simVal * 100) : null;
   const screenshots = data.dynamic_analysis?.screenshots || [];
 
   return (
@@ -66,7 +66,7 @@ export default function TargetDetailDrawer({
           <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
             <span className="text-slate-500 font-medium block">Detection Method</span>
             <span className="text-sm font-semibold text-slate-900 mt-0.5 block">
-              {vide?.detection_method || 'VIDE Visual + Layout Matching'}
+              {vide?.visual_impersonation_tier_label || vide?.status || 'VIDE Visual + Layout Matching'}
             </span>
           </div>
           <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">

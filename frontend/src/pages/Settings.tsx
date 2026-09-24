@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Settings as SettingsIcon, Shield, Sliders, Keyboard, User, Check, RefreshCw } from 'lucide-react';
+import { Settings as SettingsIcon, Shield, Sliders, Keyboard, User, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function Settings() {

@@ -10,11 +10,11 @@ export default function TargetCard({ data }: { data: FraudCardData }) {
   const isTargeted = data.targets_indian_banks;
   const vide = data.vide;
   const bankName =
+    vide?.visual_impersonation_institution ||
     vide?.corpus_compare?.institution_display ||
     vide?.corpus_compare?.bank ||
-    vide?.matched_bank ||
-    (data as any).target_bank ||
-    data.intelligence_report?.targeted_brand;
+    data.intelligence_report?.affected_banking_apps?.[0] ||
+    (data as any).target_bank;
 
   if (bankName || isTargeted) {
     const displayName = bankName || 'Indian Financial Institution';

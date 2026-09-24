@@ -9,7 +9,7 @@ import type { FraudCardData } from '../types/case';
 import { API_BASE, authHeaders } from '../config';
 import { useAnalysis } from '../context/AnalysisContext';
 import { useInvestigationUI } from '../context/InvestigationUIContext';
-import { buildCaseQuestions, buildChatGreeting } from '../lib/caseQuestions';
+import { buildChatGreeting } from '../lib/caseQuestions';
 import { TYPOGRAPHY } from '../theme/typography';
 
 /** How long a stream may go silent before the client calls the answer finished. */
@@ -30,17 +30,6 @@ const IDLE_TIMEOUT_MS = 45_000;
  * fast the tokens arrive, and no reader can tell the difference.
  */
 const STREAM_PAINT_MS = 60;
-
-const GROUP_LABEL = {
-  decision: 'The verdict',
-  evidence: 'The evidence',
-  action: 'Next steps',
-  impact: 'Potential Impact',
-  evasion: 'Concealment',
-  network: 'Network Behavior',
-} as const;
-
-const STARTER_KINDS = ['decision', 'evidence', 'action', 'impact', 'evasion', 'network'] as const;
 import { useCaseLinks } from '../hooks/useCaseLinks';
 import type { CaseSection } from '../lib/caseRoutes';
 

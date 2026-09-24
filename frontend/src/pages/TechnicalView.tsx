@@ -26,7 +26,6 @@ import {
 } from '../lib/investigationRuntime';
 import { useAnalysis } from '../context/AnalysisContext';
 import { useRuntimeScreenshots } from '../hooks/useRuntimeScreenshots';
-import { useInvestigationUI } from '../context/InvestigationUIContext';
 import EvidenceSection from '../components/ui/EvidenceSection';
 import AnalysisTabs, { type AnalysisTab } from '../components/investigation/AnalysisTabs';
 import ActivitySummary from '../components/investigation/ActivitySummary';
@@ -1098,7 +1097,6 @@ function SecretsPanel({ data }: { data: FraudCardData }) {
 
 export default function TechnicalView({ data }: { data: FraudCardData | null }) {
   const { investigationBundle, loading } = useAnalysis();
-  const { isForensic } = useInvestigationUI();
   // The gallery renders manifest entries, while bundle.counts.screenshots is
   // derived from dynamic_analysis.screenshots - the two disagree. A header
   // count has to come from the same place as the panel under it.

@@ -2,16 +2,13 @@ import { useInvestigationUI } from '../../context/InvestigationUIContext';
 import DrawerShell from '../ui/DrawerShell';
 import type { FraudCardData, WorkflowStage } from '../../types/case';
 import type { InvestigationBundle } from '../../types/investigation';
-import { TYPOGRAPHY } from '../../theme/typography';
 import {
   Clock,
   Shield,
   Layers,
-  FileCode,
   ArrowRight,
   ExternalLink,
   Activity,
-  CheckCircle2,
 } from 'lucide-react';
 
 export default function WorkflowStageDrawer({

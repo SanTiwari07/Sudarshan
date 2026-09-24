@@ -10,7 +10,6 @@ import {
   LogOut,
   Settings as SettingsIcon,
   CheckCircle2,
-  X,
 } from 'lucide-react';
 import { useAnalysis } from '../../context/AnalysisContext';
 import { useAuth } from '../../context/AuthContext';

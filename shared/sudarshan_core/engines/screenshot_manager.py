@@ -612,6 +612,8 @@ class ScreenshotManager:
             if trigger_evid and self.evidence_store is not None:
                 try:
                     self.evidence_store.attach_screenshot(trigger_evid, rel_path)
+                    if hasattr(self.evidence_store, 'set_screenshot_id'):
+                        self.evidence_store.set_screenshot_id(trigger_evid, scr_id)
                 except Exception as exc:
                     logger.debug(
                         "[ScreenshotManager] attach_screenshot failed: %s", exc
@@ -821,8 +823,8 @@ class ScreenshotManager:
 
     def flush_manifest(self, output_path: Optional[Path] = None) -> int:
         """
-        Write the screenshot manifest to JSON.
-
+        Write the screenshot manifest to JSON atomically.
+        Only includes records whose PNG file actually exists on disk.
         Default path: <artifact_dir>/screenshots/manifest.json (canonical).
         """
         self.wait_pending()
@@ -830,30 +832,54 @@ class ScreenshotManager:
 
         with self._lock:
             snapshot = list(self._manifest)
-
+            
         if output_path is None:
             output_path = self.output_dir / "manifest.json"
 
+        # Verify PNG exists before claiming it in the manifest.
+        verified_snapshot = []
+        for rec in snapshot:
+            local_path = self.output_dir / Path(rec.filename).name
+            if local_path.is_file() and local_path.stat().st_size > 0:
+                verified_snapshot.append(rec)
+            else:
+                logger.warning(
+                    "[ScreenshotManager] Dropping record from manifest, missing or empty PNG: %s",
+                    rec.filename,
+                )
+
         payload = {
             "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "total_screenshots": len(snapshot),
+            "total_screenshots": len(verified_snapshot),
             "skipped_duplicates": self.skipped_duplicates,
             "suppressed_count": self.suppressed_count,
             "reused_count": self.reused_count,
             "policy_statistics": self._policy.get_statistics(),
-            "screenshots": [asdict(r) for r in snapshot],
+            "screenshots": [asdict(r) for r in verified_snapshot],
         }
+        
         try:
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(output_path, "w", encoding="utf-8") as f:
+            temp_path = output_path.with_suffix(".tmp")
+            with open(temp_path, "w", encoding="utf-8") as f:
                 json.dump(payload, f, indent=2, ensure_ascii=False)
+            
+            # Atomic replace
+            os.replace(temp_path, output_path)
+            
             logger.info(
                 "[ScreenshotManager] Manifest flushed: %d screenshots -> %s",
-                len(snapshot), output_path,
+                len(verified_snapshot), output_path,
             )
         except Exception as e:
             logger.error("[ScreenshotManager] Failed to write manifest: %s", e)
-        return len(snapshot)
+            try:
+                if 'temp_path' in locals() and temp_path.exists():
+                    temp_path.unlink()
+            except Exception:
+                pass
+                
+        return len(verified_snapshot)
 
     def get_manifest(self) -> List[ScreenshotRecord]:
         with self._lock:

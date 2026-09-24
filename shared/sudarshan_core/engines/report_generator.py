@@ -2323,6 +2323,33 @@ class ReportGenerator:
         visual_tech = build_technical_visual_html(self.apk_dir)
         visual_appendix = build_appendix_visual_html(self.apk_dir)
 
+        def _build_screenshot_index(apk_dir, report) -> str:
+            screenshots = _load_screenshot_entries(apk_dir, report)
+            if not screenshots:
+                return ""
+            
+            html = (
+                '<div class="section">'
+                + _section_header("", "", "Screenshot Index")
+                + '<table class="data-table"><thead><tr><th>ID</th><th>Label</th><th>Reason</th><th>Time</th></tr></thead><tbody>'
+            )
+            for scr in screenshots:
+                scr_id = _esc(scr.get("screenshot_id", "SCR-???"))
+                label = _esc(scr.get("label") or scr.get("title") or "UI capture")
+                reason = _esc(scr.get("reason", ""))
+                ts = scr.get("timestamp_ms", 0)
+                try:
+                    ts_str = datetime.fromtimestamp(ts/1000.0, timezone.utc).strftime("%H:%M:%S") if ts else ""
+                except:
+                    ts_str = ""
+                
+                html += f'<tr><td class="col-id">{scr_id}</td><td>{label}</td><td>{reason}</td><td class="col-num">{ts_str}</td></tr>'
+            
+            html += '</tbody></table></div>'
+            return html
+
+        scr_index = _build_screenshot_index(self.apk_dir, self.r)
+
         # Part order mirrors the PDF edition exactly, so a reader who has one
         # in front of them can find the same section in the other.
         #
@@ -2368,6 +2395,7 @@ class ReportGenerator:
             + _part("Appendix", "Runtime Screenshots & Visual Evidence",
                     "Frames captured during instrumented execution, each with the "
                     "trigger that produced it and the weight it can carry.")
+            + scr_index
             + gallery
             + visual_appendix
             + _part_end()

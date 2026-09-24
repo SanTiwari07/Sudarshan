@@ -3195,6 +3195,37 @@ class ReportLabPDFGenerator:
         ))
         elements.append(Spacer(1, 6))
 
+        # Screenshot Index
+        idx_data = [[
+            Paragraph("<b>ID</b>", self.table_header),
+            Paragraph("<b>Label</b>", self.table_header),
+            Paragraph("<b>Reason</b>", self.table_header),
+            Paragraph("<b>Time</b>", self.table_header)
+        ]]
+        for scr in self.data.screenshots:
+            if isinstance(scr, dict):
+                scr_id = scr.get("screenshot_id", "SCR-???")
+                label = scr.get("label") or scr.get("title") or "UI capture"
+                reason = scr.get("reason", "")
+                ts = scr.get("timestamp_ms", 0)
+                try:
+                    ts_str = datetime.fromtimestamp(ts/1000.0, timezone.utc).strftime("%H:%M:%S") if ts else ""
+                except:
+                    ts_str = ""
+                idx_data.append([
+                    Paragraph(scr_id, self.table_cell_mono),
+                    Paragraph(label[:50], self.table_cell),
+                    Paragraph(reason[:50], self.table_cell),
+                    Paragraph(ts_str, self.table_cell_mono)
+                ])
+
+        idx_table = Table(idx_data, colWidths=[60, 210, 180, 70])
+        idx_table.setStyle(formal_table_style())
+        elements.append(KeepTogether([
+            Paragraph("Screenshot Index", self.part_header),
+            idx_table
+        ]))
+        elements.append(Spacer(1, 16))
         # Usable frame width is 523.27pt; the plate splits it into a fixed
         # image column and a metadata column, identical for every entry.
         img_col, gap = 168.0, 12.0

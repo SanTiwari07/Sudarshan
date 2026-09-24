@@ -163,6 +163,7 @@ def _scan_disk_screenshots(artifact_dir: Path) -> List[Dict[str, Any]]:
 def _merge_verified_entries(
     sha256: str,
     raw_entries: List[Dict[str, Any]],
+    artifact_dir: Optional[Path] = None,
 ) -> Tuple[List[Dict[str, Any]], List[str]]:
     """Return verified manifest entries plus diagnostic warnings."""
     warnings: List[str] = []
@@ -176,7 +177,7 @@ def _merge_verified_entries(
         rel = str(entry.get("filename") or "")
         if not rel:
             continue
-        if _entry_has_image(sha256, entry):
+        if _entry_has_image(sha256, entry, artifact_dir=artifact_dir):
             verified.append(entry)
             seen_basenames.add(Path(rel).name)
         else:
@@ -249,11 +250,11 @@ def _infer_failure_reason(
     if "install failed" in err_lower or status == "FAILED" and "install" in err_lower:
         return "App terminated immediately"
 
-    if metrics.get("explorer_actions", 0) == 0 and dyn.get("available") and status not in ("FAILED", "INSTALLING"):
-        return "Agentic Explorer performed no UI interaction"
-
     if metrics.get("screenshots_captured", 0) == 0 and err and "screenshot" in err_lower:
         return "Screenshot pipeline failed"
+
+    if metrics.get("explorer_actions", 0) == 0 and dyn.get("available") and status not in ("FAILED", "INSTALLING"):
+        return "Agentic Explorer performed no UI interaction, or no capturable UI state was reached"
 
     if not artifact_dir:
         return "Screenshot pipeline failed - artifact directory not found"
@@ -334,9 +335,9 @@ async def get_screenshot_manifest(
     report_dict = await get_authorized_case(sha256, user)
 
     artifact_dir = _artifact_dir_from_report(report_dict, sha256=sha256)
-    raw_entries = _load_screenshot_manifest_entries(sha256, report_dict)
-    verified, warnings = _merge_verified_entries(sha256, raw_entries)
-    ver_records = load_visual_evidence_records(sha256=sha256) # Need to update this in api_merge.py or just pass sha256 to it? Wait, let's look at api_merge.py
+    raw_entries = _load_screenshot_manifest_entries(sha256, report_dict, artifact_dir=artifact_dir)
+    verified, warnings = _merge_verified_entries(sha256, raw_entries, artifact_dir=artifact_dir)
+    ver_records = load_visual_evidence_records(artifact_dir=artifact_dir, sha256=sha256)
     ver_by_scr = index_visual_evidence_by_scr(ver_records)
 
     verified.sort(key=lambda e: int(e.get("timestamp_ms") or 0))
@@ -377,21 +378,19 @@ async def get_screenshot(
     if not safe_name or safe_name != filename.replace("\\", "/").split("/")[-1]:
         raise HTTPException(status_code=400, detail="Invalid filename.")
 
-    await get_authorized_case(sha256, user)
-
-    object_key = f"evidence/{sha256}/screenshots/{safe_name}"
+    report_dict = await get_authorized_case(sha256, user)
     
-    from sudarshan_core.storage.artifact_storage import get_storage
-    from fastapi.responses import StreamingResponse
-    storage = get_storage()
-    
-    try:
-        # Check if the file exists in storage
-        await storage.get_file(object_key, "/dev/null") # Simple check, can fail if no /dev/null on windows but let's assume it works or we just try to stream
-    except Exception:
-        pass # Stream will just fail or return empty, let's actually just return the streaming response
+    artifact_dir = _artifact_dir_from_report(report_dict, sha256=sha256)
+    if not artifact_dir:
+        raise HTTPException(status_code=404, detail="Artifact directory not found.")
         
-    return StreamingResponse(
-        storage.get_stream(object_key),
+    try:
+        image_path = _resolve_image_path(artifact_dir, filename)
+    except HTTPException as e:
+        raise e
+        
+    from fastapi.responses import FileResponse
+    return FileResponse(
+        str(image_path),
         media_type="image/png" if safe_name.lower().endswith(".png") else "image/jpeg"
     )

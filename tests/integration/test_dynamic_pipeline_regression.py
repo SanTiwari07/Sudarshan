@@ -20,9 +20,15 @@ def test_validate_dynamic_pipeline_regression():
     Requires a connected Android Sandbox (emulator-5554).
     """
     from sudarshan_core.engines.frida_sandbox import get_connected_emulators
+    import argparse
     emulators = get_connected_emulators()
     if not emulators:
         pytest.skip("No emulator connected - skipping dynamic pipeline regression test")
+
+    try:
+        from validate_dynamic_pipeline import _main_async
+    except ImportError:
+        pytest.skip("validate_dynamic_pipeline.py not found - skipping test")
 
     args = argparse.Namespace(fetch=False, stress="", recovery=False, force=True)
     

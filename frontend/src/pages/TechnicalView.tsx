@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import {
   Terminal, Cpu, Search, Lock, Code, Package,
@@ -1614,9 +1615,41 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
    * also the least specific thing on it, and it pushed the tabs down without
    * telling the reader anything they could act on.
    */
+  const records = investigationBundle?.counts.evidenceRecords || 0;
+  
+  const counts = (investigationBundle?.evidenceRecords || []).reduce(
+    (acc, record) => {
+      const sev = record.severity?.toLowerCase();
+      if (sev === 'critical' || sev === 'high') acc.high++;
+      else if (sev === 'medium') acc.medium++;
+      else acc.informational++;
+      return acc;
+    },
+    { high: 0, medium: 0, informational: 0 }
+  );
+
   return (
-    <div className="technical-view">
+    <motion.main
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
+      className="technical-view max-w-[1920px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6"
+    >
+      <div className="flex items-end justify-between border-b border-slate-200 pb-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">EVIDENCE</h1>
+          <div className="flex items-center gap-3 mt-2 text-sm">
+            <span className="font-semibold text-slate-900">{records} records</span>
+            <span className="text-slate-300">|</span>
+            <span className="text-red-700 font-medium">{counts.high} high</span>
+            <span className="text-slate-300">|</span>
+            <span className="text-amber-700 font-medium">{counts.medium} medium</span>
+            <span className="text-slate-300">|</span>
+            <span className="text-blue-700 font-medium">{counts.informational} informational</span>
+          </div>
+        </div>
+      </div>
       <AnalysisTabs tabs={tabs} urlParam="section" />
-    </div>
+    </motion.main>
   );
 }

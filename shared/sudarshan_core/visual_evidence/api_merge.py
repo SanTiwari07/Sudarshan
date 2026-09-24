@@ -11,6 +11,10 @@ logger = logging.getLogger(__name__)
 
 
 def load_visual_evidence_records(artifact_dir: Optional[Path] = None, sha256: Optional[str] = None) -> List[Dict[str, Any]]:
+    """
+    Load visual evidence records from the resolved local artifact_dir.
+    No longer falls back to Cloud Storage fetching to ensure reliable local/docker behavior.
+    """
     if artifact_dir:
         path = Path(artifact_dir) / "visual_evidence.json"
         if path.is_file():
@@ -22,38 +26,7 @@ def load_visual_evidence_records(artifact_dir: Optional[Path] = None, sha256: Op
                 logger.warning("[VisualEvidence] Could not read %s: %s", path, exc)
                 return []
 
-    if not sha256:
-        return []
-        
-    object_key = f"evidence/{sha256}/visual_evidence.json"
-    
-    import asyncio
-    from sudarshan_core.storage.artifact_storage import get_storage
-    import tempfile
-    import os
-    
-    storage = get_storage()
-    fd, temp_path = tempfile.mkstemp(suffix=".json")
-    os.close(fd)
-    
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import nest_asyncio
-            nest_asyncio.apply()
-        loop.run_until_complete(storage.get_file(object_key, temp_path))
-        data = json.loads(Path(temp_path).read_text(encoding="utf-8"))
-    except Exception as exc:
-        logger.debug("[VisualEvidence] Could not read %s: %s", object_key, exc)
-        return []
-    finally:
-        try:
-            os.remove(temp_path)
-        except OSError:
-            pass
-            
-    records = data.get("records")
-    return list(records) if isinstance(records, list) else []
+    return []
 
 
 def index_visual_evidence_by_scr(records: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:

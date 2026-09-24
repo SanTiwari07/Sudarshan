@@ -2575,6 +2575,19 @@ class AgenticExplorer:
                         "AgenticExplorer",
                         f"activity={obs.activity} nodes={obs.ui_node_count}",
                     )
+                    if self.screenshot_manager:
+                        self.screenshot_manager.capture(
+                            label="app_opened",
+                            category="lifecycle",
+                            source="explorer",
+                            reason=ScreenshotReason.LIFECYCLE.value,
+                            activity=obs.activity,
+                            foreground_package=package_of(obs.activity),
+                            layout_hash=obs.screen_hash,
+                            semantic_type=ScreenType.UNKNOWN.value,
+                            transition_event="APP_OPENED",
+                            force=True
+                        )
 
                 # Stage 1 is confirmed by observed foreground state, not by a
                 # Frida hook (hooks cannot fire before the app is running) and
@@ -3500,6 +3513,31 @@ class AgenticExplorer:
                 # perception data we already hold, which costs nothing.
                 before = await self._verification_snapshot(action, obs)
 
+                if self.screenshot_manager is not None and ACTION_EVIDENCE_FRAMES:
+                    try:
+                        self.screenshot_manager.capture_async(
+                            label=f"action_{actions_taken:02d}_{last_action_tool}_before",
+                            category="explorer_action",
+                            source="explorer",
+                            reason="EXPLORER_ACTION",
+                            explorer_action=f"{last_action_tool}:{last_action_target}" if last_action_target else last_action_tool,
+                            activity=obs.activity,
+                            stage=action.get("goal", ""),
+                            state_id=graph_state.state_id,
+                            action_id=action.get("_action_id", ""),
+                            foreground_package=package_of(obs.activity),
+                            layout_hash=obs.screen_hash,
+                            semantic_type=classification.screen_type,
+                            screen_observation=self._screen_observation(
+                                obs, classification,
+                            ),
+                            transition_event="BEFORE_ACTION"
+                        )
+                    except Exception as exc:
+                        logger.debug(
+                            "[AgenticExplorer] per-action pre-capture failed: %s", exc
+                        )
+
                 result, verification, retry_attempts = await self._execute_with_bounded_retries(
                     action, obs,
                 )
@@ -4031,6 +4069,7 @@ class AgenticExplorer:
                             screen_observation=self._screen_observation(
                                 post_obs, post_classification,
                             ),
+                            transition_event="AFTER_ACTION",
                         )
                     except Exception as exc:
                         logger.debug(
@@ -4105,12 +4144,23 @@ class AgenticExplorer:
     async def _finalize(self, actions_taken: int) -> None:
         """
         Cleanup and final metric recording.
-
-        Runs on EVERY exit path, including the wall-clock deadline, and it is
-        deliberately not gated on remaining time: flushing what was collected is
-        bookkeeping, not exploration, and a run that stops without doing it has
-        thrown away the evidence it spent its whole budget gathering (§P11).
         """
+        if self.screenshot_manager is not None and getattr(self, "_first_screen_logged", False):
+            # Final state capture before termination
+            try:
+                self.screenshot_manager.capture_async(
+                    label="final_state",
+                    category="lifecycle",
+                    source="explorer",
+                    reason="LIFECYCLE",
+                    stage="termination",
+                    state_id=self.exploration._current_state_id or "",
+                    foreground_package=self.package_name,
+                    transition_event="FINAL_STATE",
+                )
+            except Exception as exc:
+                logger.debug("[AgenticExplorer] Final state capture failed: %s", exc)
+
         # Charge the final iteration to whichever goal was current, so a goal
         # that was being worked when the run ended is not credited zero time.
         if self._current_goal_name and self._current_goal_started:

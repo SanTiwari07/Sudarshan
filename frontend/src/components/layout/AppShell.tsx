@@ -19,15 +19,17 @@ export default function AppShell({ children }: AppShellProps) {
   }
 
   return (
-    <div className="h-screen min-h-screen flex flex-col bg-surface-page min-w-0 relative overflow-hidden">
+    <div className="h-screen min-h-screen flex bg-surface-page min-w-0 relative overflow-hidden">
       <AppSidebar onLogout={logout} />
-      <AppHeader isAuthed={isAuthed} onLogout={logout} />
-      <main
-        className="flex-1 w-full min-w-0 flex flex-col analyst-main overflow-y-auto transition-[padding] duration-200 ease-out"
-        style={{ paddingLeft: 'calc(var(--app-sidebar-width) + 0.75rem)' }}
+      <div 
+        className="flex-1 flex flex-col min-w-0 transition-[padding] duration-200 ease-out"
+        style={{ paddingLeft: 'var(--app-sidebar-width)' }}
       >
-        {children}
-      </main>
+        <AppHeader isAuthed={isAuthed} />
+        <main className="flex-1 w-full min-w-0 flex flex-col analyst-main overflow-y-auto">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }

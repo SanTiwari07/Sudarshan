@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { motion } from 'motion/react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   Shield, Square, AlertTriangle, CheckCircle2,
@@ -34,9 +35,12 @@ const GROUP_LABEL = {
   decision: 'The verdict',
   evidence: 'The evidence',
   action: 'Next steps',
+  impact: 'Potential Impact',
+  evasion: 'Concealment',
+  network: 'Network Behavior',
 } as const;
 
-const STARTER_KINDS = ['decision', 'evidence', 'action'] as const;
+const STARTER_KINDS = ['decision', 'evidence', 'action', 'impact', 'evasion', 'network'] as const;
 import { useCaseLinks } from '../hooks/useCaseLinks';
 import type { CaseSection } from '../lib/caseRoutes';
 
@@ -1072,7 +1076,12 @@ export default function InvestigationChat({ data }: { data: FraudCardData | null
    * moves.
    */
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <motion.main
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
+      className="flex min-h-0 flex-1 flex-col overflow-hidden"
+    >
       {/*
         One context strip.
 
@@ -1346,6 +1355,6 @@ export default function InvestigationChat({ data }: { data: FraudCardData | null
           Enter to send · Shift+Enter for a new line
         </p>
       </div>
-    </div>
+    </motion.main>
   );
 }

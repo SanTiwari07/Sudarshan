@@ -76,6 +76,8 @@ GEMINI_FIELD_FALLBACK_ENABLED: bool = (
 )
 
 
+from sudarshan_core.engines.agentic.field_semantics import SEMANTIC_REGISTRY, resolve_contextual_ambiguity
+
 @dataclass
 class FieldClassification:
     """
@@ -107,109 +109,6 @@ class FieldClassification:
         }
 
 
-# ─── Deterministic patterns ──────────────────────────────────────────────────
-#
-# Ordered: first hit wins, so the specific patterns lead. The confidence
-# attached to each is the confidence of THAT PATTERN being the right reading of
-# the words, not of the words being present.
-#
-# Ordering rules that matter and are easy to break:
-#   · MPIN before PIN before PASSWORD - "MPIN" contains "PIN", and "login
-#     password" must not be eaten by a bare `pin` pattern.
-#   · POSTAL_CODE before PIN, because "PIN Code" is an Indian postcode and has
-#     nothing to do with a secret.
-#   · Contact before the customer-identifier family. The corpus ships captions
-#     like "Mobile Number / Customer ID" on a single box, and the value that
-#     actually works there is a phone number.
-#   · The identifier family is LAST: "Customer ID", "CRN" and "User ID" all
-#     mean "the thing you log in with" and would otherwise swallow more
-#     specific fields that merely contain the word "id". This ordering is
-#     inherited from the legacy `_KIND_PATTERNS` table and preserving it is
-#     what keeps the existing corpus expectations passing.
-_PATTERNS: List[tuple] = [
-    # ── One-time codes (before password: "OTP password" is an OTP) ─────────
-    (FieldType.EMAIL_OTP,   r"(email\s*otp|otp\s*(sent\s*)?(to\s*)?(your\s*)?e[\s\-_]?mail)", 0.95),
-    (FieldType.OTP,         r"\b(otp|one[\s\-_]?time\s*(password|pin|code)?)\b", 0.95),
-    (FieldType.VERIFICATION_CODE, r"(verification\s*code|verify\s*code|auth(entication)?\s*code|sms\s*code)", 0.9),
-    (FieldType.RECOVERY_CODE, r"(recovery\s*code|backup\s*code)", 0.9),
-
-    # ── Postcode, before PIN claims it ─────────────────────────────────────
-    (FieldType.POSTAL_CODE, r"(pin\s*code|pincode|postal\s*code|\bzip\b|post\s*code)", 0.94),
-
-    # ── Standing secrets ───────────────────────────────────────────────────
-    (FieldType.MPIN,        r"\b(mpin|m[\s\-_]pin)\b", 0.97),
-    (FieldType.CARD_CVV,    r"\b(cvv|cvc|card\s*verification)\b", 0.96),
-    (FieldType.PASSCODE,    r"\b(passcode|pass\s*code)\b", 0.9),
-    (FieldType.PIN,         r"\b(pin|t[\s\-_]?pin|transaction\s*pin|atm\s*pin)\b", 0.9),
-    (FieldType.PASSWORD,    r"(password|passwd|\bpwd\b|\bsecret\b)", 0.93),
-    (FieldType.SECURITY_ANSWER, r"(security\s*(question|answer)|secret\s*(question|answer)|mother'?s?\s*maiden)", 0.9),
-
-    # ── Contact: ahead of the identifier family, see note above ────────────
-    (FieldType.EMAIL,  r"(e[\s\-_]?mail|email)", 0.94),
-    (FieldType.MOBILE, r"(mobile\s*(no|number)?|msisdn)", 0.92),
-    (FieldType.PHONE,  r"(phone|contact\s*(no|number)|telephone)", 0.9),
-
-    # ── Payment rails ──────────────────────────────────────────────────────
-    (FieldType.IFSC,   r"\b(ifsc|ifs\s*code|swift|bic)\b", 0.96),
-    (FieldType.UPI_ID, r"\b(upi\s*(id|address)?|vpa|virtual\s*payment)\b", 0.94),
-
-    # ── Cards ──────────────────────────────────────────────────────────────
-    (FieldType.CARD_EXPIRY, r"(expiry|expiration|valid\s*(thru|till|until)|\bmm\s*/\s*yy)", 0.93),
-    (FieldType.CARD_NUMBER, r"(card\s*(no|num|number)|debit\s*card|credit\s*card)", 0.93),
-
-    # ── Amount, before `account` can see "balance" ─────────────────────────
-    (FieldType.AMOUNT, r"(amount|\bamt\b|balance)", 0.9),
-
-    # ── Counterparty (before the generic account/name patterns) ────────────
-    (FieldType.BENEFICIARY_ACCOUNT, r"(beneficiary|payee|recipient)\s*(a/?c|acct|account)", 0.94),
-    (FieldType.BENEFICIARY_NAME,    r"(beneficiary|payee|recipient)\s*name", 0.94),
-    (FieldType.BENEFICIARY_ACCOUNT, r"\b(beneficiary|payee)\b", 0.7),
-
-    # ── Accounts ───────────────────────────────────────────────────────────
-    (FieldType.ACCOUNT_NUMBER, r"(account\s*(no|num|number)|\bacct\b|\ba/?c\s*(no|number))", 0.92),
-
-    # ── Reference numbers ──────────────────────────────────────────────────
-    (FieldType.EMPLOYEE_ID,      r"(employee\s*(id|code|no)|\bemp\s*id\b|staff\s*id)", 0.93),
-    (FieldType.APPLICATION_ID,   r"(application\s*(id|no|number)|\bapp\s*(id|no)\b)", 0.9),
-    (FieldType.POLICY_NUMBER,    r"(policy\s*(no|number|id))", 0.93),
-    (FieldType.REFERRAL_CODE,    r"(referr?al\s*code|invite\s*code|promo\s*code|coupon)", 0.92),
-    (FieldType.REFERENCE_NUMBER, r"(reference\s*(no|number|id)|\bref\s*(no|number)\b|transaction\s*id|\butr\b)", 0.9),
-
-    # ── Person ─────────────────────────────────────────────────────────────
-    # Parent names lead the person family: every one of these also contains
-    # "name", so the generic FULL_NAME pattern below would swallow them and
-    # the box would be filled with the applicant's own name.
-    (FieldType.MOTHER_NAME,   r"(mother'?s?\s*(name|full\s*name)|\bmaa\s*(ka\s*)?naam\b|mother'?s?\s*/\s*guardian)", 0.95),
-    (FieldType.FATHER_NAME,   r"(father'?s?\s*(name|full\s*name)|\bpita\s*(ka\s*)?naam\b|father'?s?\s*/\s*guardian|parent'?s?\s*name|guardian'?s?\s*name)", 0.95),
-    (FieldType.FIRST_NAME,    r"(first\s*name|given\s*name|fore\s*name)", 0.94),
-    (FieldType.LAST_NAME,     r"(last\s*name|sur\s*name|surname|family\s*name)", 0.94),
-    (FieldType.DATE_OF_BIRTH, r"(date\s*of\s*birth|\bdob\b|birth\s*date|\bd\.?o\.?b\b)", 0.95),
-    (FieldType.FULL_NAME,     r"(full\s*name|your\s*name|name\s*as\s*per|\bname\b)", 0.9),
-
-    # ── Address ────────────────────────────────────────────────────────────
-    (FieldType.CITY,    r"\b(city|town|district)\b", 0.9),
-    (FieldType.STATE,   r"\b(state|province)\b", 0.88),
-    (FieldType.ADDRESS, r"(address|street|locality|landmark)", 0.9),
-
-    # ── Non-credential ─────────────────────────────────────────────────────
-    (FieldType.SEARCH, r"(search|query|\bfind\b)", 0.9),
-    (FieldType.PORT,   r"\bport\b", 0.9),
-    (FieldType.HOST,   r"(server\s*ip|\bip\b|hostname|\bhost\b|\burl\b|endpoint|domain)", 0.88),
-
-    # ── Identifier family: deliberately last ───────────────────────────────
-    (FieldType.CIF,             r"\b(cif|cif\s*(no|number|id))\b", 0.96),
-    (FieldType.CUSTOMER_NUMBER, r"(customer\s*(no|number))", 0.92),
-    (FieldType.CUSTOMER_ID,     r"(customer\s*id|\bcrn\b|client\s*id)", 0.92),
-    (FieldType.LOGIN_ID,        r"(login\s*id|logon\s*id|sign\s*in\s*id)", 0.93),
-    (FieldType.USER_ID,         r"(user\s*id|userid|\buid\b)", 0.93),
-    (FieldType.USERNAME,        r"(user\s*name|username|\blogin\b|\bid\b)", 0.85),
-]
-
-
-def _haystack(*parts: str) -> str:
-    blob = " ".join(p for p in parts if p).lower()
-    return re.sub(r"[_\-./]+", " ", blob)
-
 
 def classify_field(
     *,
@@ -224,98 +123,75 @@ def classify_field(
     index: int = 0,
     screen_type: str = "",
 ) -> FieldClassification:
-    """
-    Deterministic classification of one input field.
-
-    Never raises and never returns None: an unclassifiable field comes back as
-    UNKNOWN/POSITIONAL with low confidence, which is the signal
-    :func:`needs_escalation` reads.
-    """
     evidence: List[str] = []
+    
+    if field_label: evidence.append(f"label={field_label[:60]}")
+    if resource_id: evidence.append(f"resource_id={resource_id[:60]}")
+    if content_desc: evidence.append(f"content_desc={content_desc[:60]}")
+    if hint: evidence.append(f"hint={hint[:60]}")
+    if input_type: evidence.append(f"inputType={input_type}")
+    if is_password: evidence.append("password=true")
 
-    if field_label:
-        evidence.append(f"label={field_label[:60]}")
-    if resource_id:
-        evidence.append(f"resource_id={resource_id[:60]}")
-    if content_desc:
-        evidence.append(f"content_desc={content_desc[:60]}")
-    if hint:
-        evidence.append(f"hint={hint[:60]}")
-    if input_type:
-        evidence.append(f"inputType={input_type}")
-    if is_password:
-        evidence.append("password=true")
+    def _haystack(*parts: str) -> str:
+        blob = " ".join(p for p in parts if p).lower()
+        return re.sub(r"[_\-./]+", " ", blob)
 
     blob = _haystack(field_label, hint, resource_id, content_desc, text, class_name)
-
-    # DECLARED attributes outrank an INFERRED caption.
-    #
-    # `hint`, `resource-id` and `content-desc` belong to the field itself.
-    # `field_label` is a guess - the nearest preceding text node - and on a
-    # form whose captions render INSIDE their fields that guess is off by one:
-    # every field inherits the previous field's caption.
-    #
-    # Measured on a live e-challan form. The "Mother Name" box carries
-    # hint="Mother Name*" and resource-id="mt", but its inferred caption is the
-    # previous field's "Mobile Number*". Everything used to be concatenated
-    # into one blob, so both matched and pattern order decided: the box was
-    # classified MOBILE at 0.92 and received a phone number. The form could
-    # never validate, "Get Details" never advanced, and the run produced no
-    # runtime behaviour at all.
-    #
-    # The caption is NOT discarded - it is the only human-readable name a field
-    # has on the WebView banking corpus, where hint, id and desc are all empty.
-    # It is simply consulted second, which is exactly when it is the best
-    # evidence available.
     declared_blob = _haystack(hint, resource_id, content_desc)
+
     matched_on_declared = False
-    hit = None
+    hit_def = None
+
     if declared_blob.strip():
-        for ftype, pattern, base_conf in _PATTERNS:
-            if re.search(pattern, declared_blob):
-                hit = (ftype, pattern, base_conf)
+        for sdef in SEMANTIC_REGISTRY:
+            if sdef.pattern.search(declared_blob):
+                hit_def = sdef
                 matched_on_declared = True
                 break
-    if hit is None:
-        for ftype, pattern, base_conf in _PATTERNS:
-            if re.search(pattern, blob):
-                hit = (ftype, pattern, base_conf)
+                
+    if hit_def is None:
+        for sdef in SEMANTIC_REGISTRY:
+            if sdef.pattern.search(blob):
+                hit_def = sdef
                 break
 
-    # The platform's own `password` attribute is the strongest single signal
-    # available on a WebView form, where nothing else distinguishes the boxes.
-    # It says "this is masked", not "this is a password" - so we still run the
-    # patterns to separate MPIN/PIN/PASSCODE/OTP from PASSWORD, and only fall
-    # back to PASSWORD when the words add nothing.
-    if hit is not None:
-        ftype, pattern, base_conf = hit
-        conf = base_conf
+    if hit_def is not None:
+        # Contextual disambiguation
+        ftype = hit_def.field_type
+        
+        # Approximate max length from resource id/hint for disambiguation
+        max_length = 0
+        m = re.search(r'(\d{1,2})', declared_blob)
+        if m:
+            max_length = int(m.group(1))
+
+        resolved_ftype = resolve_contextual_ambiguity(ftype, screen_type, input_type, max_length)
+        if resolved_ftype != ftype:
+            evidence.append(f"contextual disambiguation: {ftype.value} -> {resolved_ftype.value}")
+            ftype = resolved_ftype
+            
+        conf = 0.95
         if matched_on_declared:
             evidence.append("matched on the field's own declared attributes")
-        # Two independent signals agreeing is worth more than either.
+            
         if is_password and ftype in {
-            FieldType.PASSWORD, FieldType.PIN, FieldType.MPIN,
-            FieldType.PASSCODE, FieldType.OTP, FieldType.CARD_CVV,
+            FieldType.PASSWORD, FieldType.PIN, FieldType.MPIN, FieldType.TPIN, FieldType.UPI_PIN,
+            FieldType.ATM_PIN, FieldType.CARD_PIN, FieldType.PASSCODE, FieldType.OTP, FieldType.CARD_CVV,
         }:
-            conf = min(0.99, conf + 0.05)
+            conf = min(0.99, conf + 0.04)
             evidence.append("password attribute agrees with label")
-        # ...and disagreeing is worth less. A field the platform masks
-        # whose caption says "Amount" is one of the two signals lying.
         elif is_password and ftype in {
-            FieldType.SEARCH, FieldType.AMOUNT, FieldType.ADDRESS,
-            FieldType.CITY, FieldType.STATE,
+            FieldType.SEARCH, FieldType.AMOUNT, FieldType.ADDRESS, FieldType.CITY, FieldType.STATE,
         }:
             conf = min(conf, 0.45)
             evidence.append("password attribute contradicts label")
+
         return FieldClassification(
             field_type=ftype,
             confidence=conf,
             evidence=evidence,
             source=ClassificationSource.DETERMINISTIC,
-            reason=(
-                f"matched /{pattern}/ on "
-                f"{'declared attributes' if matched_on_declared else 'label and attributes'}"
-            ),
+            reason="Matched semantic registry pattern",
         )
 
     if is_password:
@@ -327,9 +203,6 @@ def classify_field(
             reason="uiautomator password attribute, no distinguishing caption",
         )
 
-    # Nothing matched. On a login form the first input is the identifier - the
-    # right guess for the case that matters, and a wrong guess costs one action
-    # rather than the run. Recorded as POSITIONAL so it stays visibly a guess.
     if index == 0:
         return FieldClassification(
             field_type=FieldType.USERNAME,
@@ -346,6 +219,7 @@ def classify_field(
         source=ClassificationSource.POSITIONAL,
         reason="no signal",
     )
+
 
 
 # ─── Escalation ──────────────────────────────────────────────────────────────

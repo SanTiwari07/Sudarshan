@@ -178,12 +178,9 @@ async def export_html_report(sha256: str, user: dict = Depends(require_analyst))
             detail=f"Report generator unavailable: {e}"
         )
 
-    # Resolve per-sample artifact directory for evidence.json etc.
-    apk_dir: Optional[Path] = None
-    if isinstance(report, dict):
-        artifact_path = report.get("artifact_dir") or report.get("_artifact_dir")
-        if artifact_path:
-            apk_dir = Path(artifact_path)
+    # Resolve per-sample artifact directory robustly
+    from app.artifact_resolve import resolve_artifact_dir
+    apk_dir = resolve_artifact_dir(report, sha256=sha256)
 
     # Normalise: Pydantic model -> dict
     if hasattr(report, "model_dump"):
@@ -233,11 +230,8 @@ async def export_pdf_report(sha256: str, user: dict = Depends(require_analyst)):
             detail=f"PDF generator engine unavailable: {e}"
         )
 
-    apk_dir: Optional[Path] = None
-    if isinstance(report, dict):
-        artifact_path = report.get("artifact_dir") or report.get("_artifact_dir")
-        if artifact_path:
-            apk_dir = Path(artifact_path)
+    from app.artifact_resolve import resolve_artifact_dir
+    apk_dir = resolve_artifact_dir(report, sha256=sha256)
 
     if hasattr(report, "model_dump"):
         report_dict = report.model_dump()

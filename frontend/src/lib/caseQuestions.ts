@@ -20,7 +20,7 @@ export type CaseQuestion = {
   /** The question, as the reader would ask it. */
   text: string;
   /** Grouping for the UI - decision first, then evidence, then action. */
-  kind: 'decision' | 'evidence' | 'action';
+  kind: 'decision' | 'evidence' | 'action' | 'impact' | 'evasion' | 'network';
 };
 
 export function buildCaseQuestions(data: FraudCardData): CaseQuestion[] {
@@ -41,7 +41,7 @@ export function buildCaseQuestions(data: FraudCardData): CaseQuestion[] {
 
   // ── Evidence: only what this case actually has ─────────────────────────
   if (data.fraud_workflow?.fraud_sequence_detected) {
-    q.push({ text: 'What is this app trying to steal?', kind: 'evidence' });
+    q.push({ text: 'What is this app trying to steal?', kind: 'impact' });
     q.push({ text: 'Walk me through the attack step by step.', kind: 'evidence' });
   }
 
@@ -56,15 +56,15 @@ export function buildCaseQuestions(data: FraudCardData): CaseQuestion[] {
   }
 
   if (data.has_sms_read_write) {
-    q.push({ text: 'Did it intercept OTP messages?', kind: 'evidence' });
+    q.push({ text: 'Did it intercept OTP messages?', kind: 'impact' });
   }
 
   if (data.has_accessibility_abuse) {
-    q.push({ text: 'What did it do with accessibility access?', kind: 'evidence' });
+    q.push({ text: 'What did it do with accessibility access?', kind: 'evasion' });
   }
 
   if (data.targets_indian_banks || (data.intelligence_report?.affected_banking_apps ?? []).length) {
-    q.push({ text: 'Which banking apps are targeted?', kind: 'evidence' });
+    q.push({ text: 'Which banking apps are targeted?', kind: 'impact' });
   }
 
   const hasNetwork =
@@ -72,7 +72,7 @@ export function buildCaseQuestions(data: FraudCardData): CaseQuestion[] {
     (data.threat_correlation?.suspicious_domains ?? []).length > 0 ||
     (data.dynamic_analysis?.network_logs ?? []).length > 0;
   if (hasNetwork) {
-    q.push({ text: 'What servers did the app contact?', kind: 'evidence' });
+    q.push({ text: 'What servers did the app contact?', kind: 'network' });
   }
 
   const family = data.family_classification;

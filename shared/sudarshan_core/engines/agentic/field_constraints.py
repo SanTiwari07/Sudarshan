@@ -302,166 +302,25 @@ def _profile_value(
     return candidate
 
 
+
 def generate_value(
     constraints: FieldConstraints,
-    *,
-    seed_token: str = "",
+    profile: Optional[Any] = None,
     rng: Optional[random.Random] = None,
-    profile: Any = None,
+    seed_token: str = "",
 ) -> str:
     """
-    A synthetic value that fits `constraints`.
-
-    `seed_token` is the vault's per-run token, threaded in so the identity a
-    form presents stays internally consistent across the several actions it
-    takes to fill that form - a username and the email built from it have to
-    agree, and a retry has to be able to re-enter what it entered before.
-
-    `profile` is a
-    :class:`~sudarshan_core.engines.agentic.victim_profile.SyntheticVictimProfile`
-    - the coherent citizen the vault is presenting - and supplies the fields it
-    owns. Passed for the FIRST identity a run offers, which is the one that has
-    to look like a person to a validator; None once the vault has rotated,
-    where the point is to present a *different* identity and reusing the
-    profile would defeat that.
-
-    Nothing here produces a value that could authenticate against a real
-    service: identifiers are namespaced to a reserved-TLD analysis domain, card
-    numbers use a non-transactable test BIN, and every digit run outside the
-    profile is random.
+    Generate a deterministic synthetic value satisfying the constraints.
     """
     r = rng or random
-    ft = constraints.field_type
-    token = seed_token or "".join(r.choice(string.ascii_lowercase) for _ in range(6))
+    from sudarshan_core.engines.agentic.synthetic_persona import generate_synthetic_value
+    
+    val = generate_synthetic_value(constraints.field_type)
+    if val:
+        return _fit(val, constraints, r)
 
-    if profile is not None:
-        chosen = _profile_value(constraints, profile)
-        if chosen is not None:
-            return chosen
-
+    # Fallback if somehow not mapped
     exact = constraints.exact_length
-
-    # ── Codes and secrets ───────────────────────────────────────────────────
-    if ft in {
-        FieldType.OTP, FieldType.EMAIL_OTP, FieldType.VERIFICATION_CODE,
-        FieldType.PIN, FieldType.MPIN, FieldType.PASSCODE, FieldType.CARD_CVV,
-    }:
-        n = exact or constraints.max_length or constraints.min_length or 6
-        return _digits(n, r)
-
-    if ft is FieldType.RECOVERY_CODE:
-        n = exact or 8
-        return _fit(
-            "".join(r.choice(string.ascii_uppercase + string.digits) for _ in range(n)),
-            constraints, r,
-        )
-
-    if ft is FieldType.PASSWORD:
-        # Mixed classes so a password policy cannot reject it out of hand,
-        # which would look like a credential failure and stop the walk for the
-        # wrong reason.
-        lo = constraints.min_length or 12
-        hi = constraints.max_length or max(lo, 16)
-        target = max(8, min(lo if lo > 8 else 12, hi))
-        body = "".join(
-            r.choice(string.ascii_letters) for _ in range(max(1, target - 5))
-        )
-        value = f"Pw{body}{_digits(2, r)}!"
-        if constraints.numeric_only:
-            value = _digits(target, r)
-        return _fit(value, constraints, r)
-
-    if ft is FieldType.SECURITY_ANSWER:
-        return _fit(f"answer{token[:4]}", constraints, r)
-
-    # ── Identity ────────────────────────────────────────────────────────────
-    if ft in {
-        FieldType.USERNAME, FieldType.USER_ID, FieldType.LOGIN_ID,
-        FieldType.CUSTOMER_ID, FieldType.CIF,
-    }:
-        # Some banks make the login id numeric-only; honour that rather than
-        # typing letters the keypad will drop.
-        if constraints.numeric_only:
-            return _digits(exact or constraints.max_length or 10, r)
-        return _fit(f"user{token}", constraints, r)
-
-    if ft is FieldType.CUSTOMER_NUMBER:
-        return _digits(exact or 10, r)
-
-    if ft is FieldType.EMAIL:
-        return f"user{token}@sudarshan-analysis.test"
-
-    if ft is FieldType.UPI_ID:
-        return f"user{token}@analysis"
-
-    # ── Contact ─────────────────────────────────────────────────────────────
-    if ft in {FieldType.PHONE, FieldType.MOBILE}:
-        n = exact or constraints.max_length or 10
-        # Leading 9 so Indian-format validators accept the shape.
-        return ("9" + _digits(max(0, n - 1), r))[:n]
-
-    # ── Person ──────────────────────────────────────────────────────────────
-    if ft is FieldType.FULL_NAME:
-        return _fit(f"Analysis {token[:4].title()}", constraints, r)
-    if ft is FieldType.FIRST_NAME:
-        return _fit("Analysis", constraints, r)
-    if ft is FieldType.LAST_NAME:
-        return _fit(token[:5].title() or "Tester", constraints, r)
-    if ft is FieldType.BENEFICIARY_NAME:
-        return _fit(f"Beneficiary {token[:3].title()}", constraints, r)
-    # Distinct from FULL_NAME on purpose: these share a cache key shape with
-    # it, and a form naming the applicant as their own parent fails the
-    # cross-field check the question exists to make.
-    if ft is FieldType.MOTHER_NAME:
-        return _fit(f"Sunita {token[:4].title()}", constraints, r)
-    if ft is FieldType.FATHER_NAME:
-        return _fit(f"Ramesh {token[:4].title()}", constraints, r)
-
-    # ── Demographics ────────────────────────────────────────────────────────
-    if ft is FieldType.DATE_OF_BIRTH:
-        return "01/01/1990"
-    if ft is FieldType.ADDRESS:
-        return _fit("1 Security Lab, Cyber District", constraints, r)
-    if ft is FieldType.CITY:
-        return _fit("Testville", constraints, r)
-    if ft is FieldType.STATE:
-        return _fit("Testland", constraints, r)
-    if ft is FieldType.POSTAL_CODE:
-        return _digits(exact or 6, r)
-
-    # ── Instruments ─────────────────────────────────────────────────────────
-    if ft in {FieldType.ACCOUNT_NUMBER, FieldType.BENEFICIARY_ACCOUNT}:
-        return _digits(exact or constraints.max_length or 12, r)
-    if ft is FieldType.CARD_NUMBER:
-        n = exact or 16
-        return (_SYNTHETIC_CARD_PREFIX + _digits(max(0, n - 4), r))[:n]
-    if ft is FieldType.CARD_EXPIRY:
-        return "12/30"
-    if ft is FieldType.IFSC:
-        # 4 letters + '0' + 6 alphanumerics is the published IFSC shape.
-        return "TEST0" + _digits(6, r)
-
-    # ── Reference numbers ───────────────────────────────────────────────────
-    if ft in {
-        FieldType.EMPLOYEE_ID, FieldType.APPLICATION_ID,
-        FieldType.POLICY_NUMBER, FieldType.REFERENCE_NUMBER,
-    }:
-        return _fit(f"REF{_digits(8, r)}", constraints, r)
-    if ft is FieldType.REFERRAL_CODE:
-        return _fit(f"REFER{token[:4].upper()}", constraints, r)
-
-    # ── Non-credential ──────────────────────────────────────────────────────
-    if ft is FieldType.AMOUNT:
-        return "100"
-    if ft is FieldType.SEARCH:
-        return "search_query"
-    if ft is FieldType.HOST:
-        # Loopback on purpose: exercise the field without repointing the sample
-        # at something it was not already talking to.
-        return "127.0.0.1"
-    if ft is FieldType.PORT:
-        return "8080"
-
     if constraints.numeric_only:
         return _digits(exact or constraints.max_length or 6, r)
-    return _fit(f"t{token}", constraints, r)
+    return _fit("Test", constraints, r)

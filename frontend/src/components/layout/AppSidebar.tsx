@@ -5,7 +5,8 @@ import logoImg from '../../../logo/SUDARSHAN_LOGO_COLOUR.png';
 import { useAuth } from '../../context/AuthContext';
 import { useCaseLinks } from '../../hooks/useCaseLinks';
 import {
-  ENTERPRISE_NAV_END,
+  ENTERPRISE_NAV_MAIN,
+  ENTERPRISE_NAV_BOTTOM,
   isNavActive,
   type NavItem,
 } from '../../layout/navItems';
@@ -164,9 +165,20 @@ export default function AppSidebar({ onLogout }: AppSidebarProps) {
 
       <nav className="flex-1 py-3 space-y-0.5 overflow-y-auto scrollbar-hidden">
         {expanded && (
-          <p className="px-4 pb-1.5 text-[13px] font-medium text-slate-600">Workspace</p>
+          <p className="px-4 pb-1.5 text-[12px] font-bold uppercase tracking-wider text-slate-500">
+            SOC Navigation
+          </p>
         )}
-        {ENTERPRISE_NAV_END.map(renderNavItem)}
+        {ENTERPRISE_NAV_MAIN.map(renderNavItem)}
+
+        <div className="my-2 border-t border-slate-800/80 mx-3" />
+
+        {expanded && (
+          <p className="px-4 pb-1.5 pt-1 text-[12px] font-bold uppercase tracking-wider text-slate-500">
+            System
+          </p>
+        )}
+        {ENTERPRISE_NAV_BOTTOM.map(renderNavItem)}
       </nav>
 
       {/* Account + collapse control */}

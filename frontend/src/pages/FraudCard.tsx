@@ -9,59 +9,81 @@ import RuntimeStatus from '../components/case/RuntimeStatus';
 import EvidenceSummary from '../components/case/EvidenceSummary';
 import AttackWorkflow from '../components/case/AttackWorkflow';
 import KeyFindings from '../components/case/KeyFindings';
+import InvestigationActivity from '../components/case/InvestigationActivity';
 
 export default function FraudCard({ data }: { data: FraudCardData | null }) {
   if (!data) return null;
 
+  const hasConcealed = Boolean(
+    data.frs_breakdown?.concealed_payload ||
+    data.has_reflection ||
+    data.technical_view?.apis_fired?.some((a) =>
+      /classloader|dexclassloader|pathclassloader|reflect|getmethod/i.test(a),
+    ),
+  );
+
   return (
     <motion.main
-      initial={{ opacity: 0, y: 6 }}
+      initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2 }}
-      className="max-w-6xl mx-auto py-8 px-4 sm:px-6 lg:px-8"
+      transition={{ duration: 0.18 }}
+      className="w-[92%] max-w-[1550px] mx-auto py-6 px-2 sm:px-4 space-y-6"
     >
-      <div className="space-y-6">
-        {/* Top Header Section */}
-        <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <CaseHeader data={data} />
-        </section>
+      {/* ROW 1: Case Identity & Investigation Header (12 cols) */}
+      <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+        <CaseHeader data={data} />
+      </section>
 
-        <ConcealedPayload data={data} />
+      {/* ROW 2: Risk Verdict & Execution Sandbox (12 cols: 5 + 4 + 3) */}
+      <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6 items-stretch">
+        <div className="lg:col-span-5 flex">
+          <ScoreGauge data={data} />
+        </div>
+        <div className="lg:col-span-4 flex">
+          <ScoreBreakdown data={data} />
+        </div>
+        <div className="md:col-span-2 lg:col-span-3 flex">
+          <RuntimeStatus data={data} />
+        </div>
+      </section>
 
-        <section>
-          <TargetCard data={data} />
-        </section>
+      {/* ROW 3: Threat Indicators & Target Identity (12 cols) */}
+      <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        {hasConcealed ? (
+          <>
+            <div className="lg:col-span-6 flex">
+              <ConcealedPayload data={data} />
+            </div>
+            <div className="lg:col-span-6 flex">
+              <TargetCard data={data} />
+            </div>
+          </>
+        ) : (
+          <div className="lg:col-span-12 flex">
+            <TargetCard data={data} />
+          </div>
+        )}
+      </section>
 
-        {/* Risk & Score Row */}
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col items-center justify-center min-h-[300px]">
-            <ScoreGauge data={data} />
-          </div>
-          <div className="min-h-[300px]">
-            <ScoreBreakdown data={data} />
-          </div>
-        </section>
+      {/* ROW 4: Attack Sequence & Key Forensic Findings (12 cols: 7 + 5) */}
+      <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        <div className="lg:col-span-7 flex">
+          <AttackWorkflow data={data} />
+        </div>
+        <div className="lg:col-span-5 flex">
+          <KeyFindings data={data} />
+        </div>
+      </section>
 
-        {/* Dynamic Status & Evidence Summary */}
-        <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <RuntimeStatus data={data} />
-          </div>
-          <div>
-            <EvidenceSummary sha256={data.sha256} />
-          </div>
-        </section>
-
-        {/* Workflow & Findings Row */}
-        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div>
-            <AttackWorkflow data={data} />
-          </div>
-          <div>
-            <KeyFindings data={data} />
-          </div>
-        </section>
-      </div>
+      {/* ROW 5: Forensic Evidence Summary & Audit Activity (12 cols: 7 + 5) */}
+      <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        <div className="lg:col-span-7 flex">
+          <EvidenceSummary sha256={data.sha256} />
+        </div>
+        <div className="lg:col-span-5 flex">
+          <InvestigationActivity data={data} />
+        </div>
+      </section>
     </motion.main>
   );
 }

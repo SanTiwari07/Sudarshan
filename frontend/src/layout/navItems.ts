@@ -1,8 +1,12 @@
 import type { LucideIcon } from 'lucide-react';
 import {
-  Database,
-  UploadCloud,
+  FolderGit2,
   Layers,
+  Compass,
+  Globe,
+  History,
+  Settings,
+  UploadCloud,
 } from 'lucide-react';
 
 export type NavItem = {
@@ -17,23 +21,31 @@ export type NavItem = {
 };
 
 /**
- * Workspace navigation.
- *
- * The four investigation views used to live here too, as an "Active case"
- * group: Executive, Technical, Intel, AI Assistant. They now live in the case
- * bar at `/case/:sha256`, named after the question each answers rather than
- * after the job title of whoever is expected to read it.
- *
- * Keeping both would have meant two menus to the same four destinations,
- * disagreeing about what to call them - which is the ambiguity this
- * reorganisation exists to remove.
+ * Enterprise Workspace navigation.
+ * Standardized across the SOC console:
+ * - Cases
+ * - Batch Scan
+ * - Discovery
+ * - Threat Intelligence
+ * - History
+ * [divider]
+ * - Upload APK
+ * - Settings
  */
-export const ENTERPRISE_NAV_END: NavItem[] = [
-  { to: '/history', label: 'Cases', shortLabel: 'Cases', icon: Database, matchPrefix: '/history' },
-  { to: '/batch', label: 'Batch Scan', shortLabel: 'Batch Scan', icon: Layers, matchPrefix: '/batch' },
-  { to: '/', label: 'Upload APK', shortLabel: 'Upload', icon: UploadCloud, matchPrefix: '/' },
+export const ENTERPRISE_NAV_MAIN: NavItem[] = [
+  { to: '/history', label: 'Cases', shortLabel: 'Cases', icon: FolderGit2, matchPrefix: '/history' },
+  { to: '/batch', label: 'Batch Scan', shortLabel: 'Batch', icon: Layers, matchPrefix: '/batch' },
+  { to: '/discovery', label: 'Discovery', shortLabel: 'Discovery', icon: Compass, matchPrefix: '/discovery' },
+  { to: '/threat-intel', label: 'Threat Intelligence', shortLabel: 'Threat Intel', icon: Globe, matchPrefix: '/threat-intel' },
+  { to: '/history', label: 'History', shortLabel: 'History', icon: History, matchPrefix: '/history' },
 ];
 
+export const ENTERPRISE_NAV_BOTTOM: NavItem[] = [
+  { to: '/', label: 'Upload APK', shortLabel: 'Upload', icon: UploadCloud, matchPrefix: '/' },
+  { to: '/settings', label: 'Settings', shortLabel: 'Settings', icon: Settings, matchPrefix: '/settings' },
+];
+
+export const ENTERPRISE_NAV_END: NavItem[] = [...ENTERPRISE_NAV_MAIN, ...ENTERPRISE_NAV_BOTTOM];
 export const ENTERPRISE_NAV: NavItem[] = [...ENTERPRISE_NAV_END];
 
 export function isNavActive(pathname: string, item: NavItem): boolean {

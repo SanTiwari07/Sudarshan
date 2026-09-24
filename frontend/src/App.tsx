@@ -41,6 +41,8 @@ const History = lazyWithRetry(() => import('./pages/History'));
 const InvestigationChat = lazyWithRetry(() => import('./pages/InvestigationChat'));
 const BatchScan = lazyWithRetry(() => import('./pages/BatchScan'));
 const BatchDetail = lazyWithRetry(() => import('./pages/BatchDetail'));
+const Discovery = lazyWithRetry(() => import('./pages/Discovery'));
+const Settings = lazyWithRetry(() => import('./pages/Settings'));
 
 export * from './types/case';
 
@@ -285,6 +287,22 @@ function AppContent() {
               <div className="analyst-page">
                 <BatchDetail />
               </div>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/discovery"
+          element={
+            <RequireAuth label="Threat Discovery">
+              <Discovery />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <RequireAuth label="Settings">
+              <Settings />
             </RequireAuth>
           }
         />

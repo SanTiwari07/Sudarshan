@@ -8,6 +8,7 @@ import SocCard from '../components/ui/Card';
 import AIIntelligenceOverview from '../components/threatIntel/AIIntelligenceOverview';
 import ThreatDnaPanel from '../components/threatIntel/ThreatDnaPanel';
 import IntelligenceSourcesPanel from '../components/threatIntel/IntelligenceSourcesPanel';
+import ThreatCorrelationPanel from '../components/threatIntel/ThreatCorrelationPanel';
 import OperationalRecommendationCard from '../components/threatIntel/OperationalRecommendationCard';
 import ThreatEvidenceExplorer from '../components/threatIntel/ThreatEvidenceExplorer';
 import ThreatIocRegistry from '../components/threatIntel/ThreatIocRegistry';
@@ -76,6 +77,12 @@ function SupportingIntelligence({
       content: <ThreatDnaPanel traits={dna} />,
     });
   }
+
+  tabs.push({
+    id: 'correlation',
+    label: 'Correlation Chain',
+    content: <ThreatCorrelationPanel data={data} bundle={bundle} />,
+  });
 
   tabs.push({
     id: 'sources',

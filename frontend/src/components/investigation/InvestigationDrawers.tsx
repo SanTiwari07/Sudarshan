@@ -6,6 +6,8 @@ import EvidenceDrawer from './EvidenceDrawer';
 import FindingExplanationDrawer from './FindingExplanationDrawer';
 import FindingEvidenceDrawer from './FindingEvidenceDrawer';
 import ScoreInfluenceDetailDrawer from './ScoreInfluenceDetailDrawer';
+import WorkflowStageDrawer from './WorkflowStageDrawer';
+import TargetDetailDrawer from './TargetDetailDrawer';
 
 /**
  * The single mount point for investigation overlays.
@@ -46,6 +48,16 @@ export default function InvestigationDrawers({
       return <FindingEvidenceDrawer data={data} bundle={bundle} rawRuntime={rawRuntime} />;
     case 'score-influence':
       return <ScoreInfluenceDetailDrawer data={data} bundle={bundle} />;
+    case 'workflow-stage':
+      return (
+        <WorkflowStageDrawer
+          data={data}
+          bundle={bundle}
+          stageIndex={activeDrawer.stageIndex}
+        />
+      );
+    case 'target-detail':
+      return <TargetDetailDrawer data={data} bundle={bundle} />;
     default:
       return null;
   }

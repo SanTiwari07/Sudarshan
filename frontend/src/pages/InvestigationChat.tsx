@@ -271,24 +271,16 @@ function autoFormatInvestigationText(text: string): string {
  * to copy - a MITRE technique, an Android permission - gets a quiet mono chip.
  * Neither is a fill, and neither carries a severity colour it has not earned.
  */
+const EVIDENCE_ID = String.raw`EV-[A-Za-z0-9_-]+|STAT-[A-Za-z0-9_-]+|DYN-[A-Za-z0-9_-]+|SCEN-[0-9]+|RULE-[A-Za-z0-9_-]+`;
 const MEASUREMENT = String.raw`\d{1,3}\.\d{1,2}\s*\/\s*100|\d{1,3}\.\d{1,2}%?|\d{1,3}%`;
 const IDENTIFIER = String.raw`T\d{4}(?:\.\d{3})?|[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+`;
-/*
- * Boundaries, not `\b`.
- *
- * The old pattern was wrapped in `\b...\b`, and a trailing `\b` cannot match
- * after a `%` - both sides of that position are non-word characters. So the
- * `\d{1,3}%` alternative never fired: "a 60% confidence rating" went unmarked
- * for as long as the rule has existed. A lookahead for a word character does
- * what the `\b` was meant to do, and the lookbehind stops a version number
- * from being chopped up mid-string.
- */
+
 const HIGHLIGHT_PATTERNS = new RegExp(
-  `(?<![\\w.])(?:${MEASUREMENT}|${IDENTIFIER})(?!\\w)`,
+  `(?<![\\w.])(?:${EVIDENCE_ID}|${MEASUREMENT}|${IDENTIFIER})(?!\\w)`,
   'g'
 );
 
-function highlightKeywords(text: string): React.ReactNode[] {
+function highlightKeywords(text: string, onOpenEvidence?: (id: string) => void): React.ReactNode[] {
   if (!text) return [];
 
   const parts = text.split(HIGHLIGHT_PATTERNS);
@@ -299,21 +291,37 @@ function highlightKeywords(text: string): React.ReactNode[] {
     result.push(part);
     if (i < matches.length) {
       const match = matches[i];
-      const isIdentifier = /^[A-Z]/.test(match);
-      result.push(
-        isIdentifier ? (
-          <code
+      const isEv = /^(?:EV-[A-Za-z0-9_-]+|STAT-[A-Za-z0-9_-]+|DYN-[A-Za-z0-9_-]+|SCEN-[0-9]+|RULE-[A-Za-z0-9_-]+)$/i.test(match);
+      if (isEv && onOpenEvidence) {
+        result.push(
+          <button
             key={i}
-            className="mx-0.5 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[13px] font-medium text-slate-700"
+            type="button"
+            onClick={() => onOpenEvidence(match)}
+            className="inline-flex items-center gap-1 mx-0.5 px-1.5 py-0.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 hover:text-blue-900 border border-blue-200/80 font-mono text-[12px] font-bold transition-all cursor-pointer shadow-2xs group underline decoration-blue-300"
+            title={`Click to inspect evidence record ${match}`}
           >
-            {match}
-          </code>
-        ) : (
-          <span key={i} className="font-medium tabular-nums text-slate-900">
-            {match}
-          </span>
-        )
-      );
+            <span>{match}</span>
+            <ArrowUpRight className="h-3 w-3 opacity-60 group-hover:opacity-100 text-blue-600" />
+          </button>
+        );
+      } else {
+        const isIdentifier = /^[A-Z]/.test(match);
+        result.push(
+          isIdentifier ? (
+            <code
+              key={i}
+              className="mx-0.5 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[13px] font-medium text-slate-700"
+            >
+              {match}
+            </code>
+          ) : (
+            <span key={i} className="font-medium tabular-nums text-slate-900">
+              {match}
+            </span>
+          )
+        );
+      }
     }
   });
 
@@ -322,7 +330,15 @@ function highlightKeywords(text: string): React.ReactNode[] {
 
 // ─── Component 6: MarkdownRenderer ─────────────────────────────────────────────
 
-function MarkdownRenderer({ content, isStreaming }: { content: string; isStreaming?: boolean }) {
+function MarkdownRenderer({
+  content,
+  isStreaming,
+  onOpenEvidence,
+}: {
+  content: string;
+  isStreaming?: boolean;
+  onOpenEvidence?: (id: string) => void;
+}) {
   if (!content) return null;
 
   // Keyed on the text alone: a caret blinking on and off must not re-run the
@@ -396,7 +412,7 @@ function MarkdownRenderer({ content, isStreaming }: { content: string; isStreami
             const itemText = trimmed.replace(/^[*•-]\s*/, '');
             listItems.push(
               <li key={`li-${lIdx}`} className="leading-relaxed my-1">
-                {renderFormattedInline(itemText)}
+                {renderFormattedInline(itemText, onOpenEvidence)}
               </li>
             );
             return;
@@ -420,7 +436,7 @@ function MarkdownRenderer({ content, isStreaming }: { content: string; isStreami
           ) {
             elements.push(
               <Callout key={lIdx} type="warning" title="Analysis Warning">
-                {renderFormattedInline(trimmed)}
+                {renderFormattedInline(trimmed, onOpenEvidence)}
               </Callout>
             );
             return;
@@ -428,7 +444,7 @@ function MarkdownRenderer({ content, isStreaming }: { content: string; isStreami
 
           // Headings
           if (trimmed.startsWith('# ')) {
-            elements.push(<h1 key={lIdx} className="font-sans text-xl font-semibold tracking-[-0.02em] text-slate-900 mt-6 mb-3 border-b border-slate-200 pb-2">{renderFormattedInline(trimmed.slice(2))}</h1>);
+            elements.push(<h1 key={lIdx} className="font-sans text-xl font-semibold tracking-[-0.02em] text-slate-900 mt-6 mb-3 border-b border-slate-200 pb-2">{renderFormattedInline(trimmed.slice(2), onOpenEvidence)}</h1>);
             return;
           }
           /*
@@ -450,21 +466,21 @@ function MarkdownRenderer({ content, isStreaming }: { content: string; isStreami
                 key={lIdx}
                 className="answer-block mt-8 mb-3 max-w-[68ch] font-sans text-[19px] font-semibold tracking-[-0.02em] leading-snug text-slate-900 first:mt-0"
               >
-                {renderFormattedInline(headingTitle)}
+                {renderFormattedInline(headingTitle, onOpenEvidence)}
               </h2>
             );
           }
 
           if (trimmed.startsWith('> [!NOTE]') || trimmed.startsWith('> [!INFO]')) {
-            elements.push(<Callout key={lIdx} type="info" title="Information">{renderFormattedInline(trimmed.replace(/^>\s*\[!(NOTE|INFO)\]\s*/, ''))}</Callout>);
+            elements.push(<Callout key={lIdx} type="info" title="Information">{renderFormattedInline(trimmed.replace(/^>\s*\[!(NOTE|INFO)\]\s*/, ''), onOpenEvidence)}</Callout>);
             return;
           }
           if (trimmed.startsWith('> [!WARNING]')) {
-            elements.push(<Callout key={lIdx} type="warning" title="Warning">{renderFormattedInline(trimmed.replace(/^>\s*\[!WARNING\]\s*/, ''))}</Callout>);
+            elements.push(<Callout key={lIdx} type="warning" title="Warning">{renderFormattedInline(trimmed.replace(/^>\s*\[!WARNING\]\s*/, ''), onOpenEvidence)}</Callout>);
             return;
           }
           if (trimmed.startsWith('> [!CRITICAL]')) {
-            elements.push(<Callout key={lIdx} type="critical" title="Critical Threat">{renderFormattedInline(trimmed.replace(/^>\s*\[!CRITICAL\]\s*/, ''))}</Callout>);
+            elements.push(<Callout key={lIdx} type="critical" title="Critical Threat">{renderFormattedInline(trimmed.replace(/^>\s*\[!CRITICAL\]\s*/, ''), onOpenEvidence)}</Callout>);
             return;
           }
 
@@ -482,7 +498,7 @@ function MarkdownRenderer({ content, isStreaming }: { content: string; isStreami
               key={lIdx}
               className="answer-block my-4 max-w-[68ch] font-normal leading-[1.7] text-slate-700 [text-wrap:pretty]"
             >
-              {renderFormattedInline(trimmed)}
+              {renderFormattedInline(trimmed, onOpenEvidence)}
             </p>
           );
         });
@@ -505,16 +521,28 @@ function MarkdownRenderer({ content, isStreaming }: { content: string; isStreami
   );
 }
 
-function renderFormattedInline(text: string): React.ReactNode {
+function renderFormattedInline(text: string, onOpenEvidence?: (id: string) => void): React.ReactNode {
   const parts = text.split(/(`[^`]+`)/g);
 
   return parts.map((part, i) => {
     if (part.startsWith('`') && part.endsWith('`')) {
       const val = part.slice(1, -1);
+      const isEv = /^(?:EV-[A-Za-z0-9_-]+|STAT-[A-Za-z0-9_-]+|DYN-[A-Za-z0-9_-]+|SCEN-[0-9]+|RULE-[A-Za-z0-9_-]+)$/i.test(val);
+      if (isEv && onOpenEvidence) {
+        return (
+          <button
+            key={i}
+            type="button"
+            onClick={() => onOpenEvidence(val)}
+            className="inline-flex items-center gap-1 mx-0.5 px-1.5 py-0.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 hover:text-blue-900 border border-blue-200/80 font-mono text-[12px] font-bold transition-all cursor-pointer shadow-2xs group underline decoration-blue-300"
+            title={`Click to inspect evidence record ${val}`}
+          >
+            <span>{val}</span>
+            <ArrowUpRight className="h-3 w-3 opacity-60 group-hover:opacity-100 text-blue-600" />
+          </button>
+        );
+      }
       return (
-        // Purple appears nowhere else in this product. A package name is not a
-        // different kind of thing from the sentence around it - it is the same
-        // sentence, in a face you can copy accurately.
         <code key={i} className="mx-0.5 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[13px] font-medium text-slate-700">
           {val}
         </code>
@@ -527,7 +555,7 @@ function renderFormattedInline(text: string): React.ReactNode {
         const boldVal = bPart.slice(2, -2);
         return <strong key={j} className="font-semibold text-slate-950">{boldVal}</strong>;
       }
-      return <span key={j}>{highlightKeywords(bPart)}</span>;
+      return <span key={j}>{highlightKeywords(bPart, onOpenEvidence)}</span>;
     });
   });
 }
@@ -619,10 +647,12 @@ function InvestigationResponseRenderer({
   content,
   isStreaming,
   onSendMessage,
+  onOpenEvidence,
 }: {
   content: string;
   isStreaming?: boolean;
   onSendMessage: (q: string) => void;
+  onOpenEvidence?: (id: string) => void;
 }) {
   if (!content) return null;
 
@@ -658,7 +688,7 @@ function InvestigationResponseRenderer({
 
   return (
     <div className="space-y-4 w-full min-w-0">
-      <MarkdownRenderer content={bodyContent} isStreaming={isStreaming} />
+      <MarkdownRenderer content={bodyContent} isStreaming={isStreaming} onOpenEvidence={onOpenEvidence} />
 
       {followUps.length > 0 && (
         <div className="mt-6 pt-4 border-t border-slate-200/80 space-y-2.5">
@@ -755,7 +785,7 @@ function MessageActions({
 
 export default function InvestigationChat({ data }: { data: FraudCardData | null }) {
   const { investigationBundle } = useAnalysis();
-  const { openLedger } = useInvestigationUI();
+  const { openLedger, openEvidence } = useInvestigationUI();
 
   if (!data) return null;
 
@@ -772,24 +802,49 @@ export default function InvestigationChat({ data }: { data: FraudCardData | null
     ? `Grounded in ${evidenceCount} verified evidence record${evidenceCount === 1 ? '' : 's'} from this case.`
     : '';
 
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content: buildChatGreeting(data),
-      timestamp: new Date(),
-    },
-  ]);
-  const questions = buildCaseQuestions(data);
-  /*
-   * Three openers, one per kind, and only kinds this case actually produced -
-   * a partial run may yield no runtime evidence to ask about, and an opener
-   * pointing at nothing is worse than one fewer card.
-   */
-  const starters = STARTER_KINDS.flatMap((kind) => {
-    const first = questions.find((q) => q.kind === kind);
-    return first ? [{ title: GROUP_LABEL[kind], question: first.text }] : [];
+  const [messages, setMessages] = useState<Message[]>(() => {
+    try {
+      const cached = sessionStorage.getItem(`sudarshan_chat_${data.sha256}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((m: any) => ({
+            ...m,
+            timestamp: new Date(m.timestamp),
+            streaming: false,
+          }));
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return [
+      {
+        id: 'welcome',
+        role: 'assistant',
+        content: buildChatGreeting(data),
+        timestamp: new Date(),
+      },
+    ];
   });
+
+  useEffect(() => {
+    if (data?.sha256 && messages.length > 0) {
+      try {
+        sessionStorage.setItem(`sudarshan_chat_${data.sha256}`, JSON.stringify(messages));
+      } catch {
+        // ignore
+      }
+    }
+  }, [data?.sha256, messages]);
+
+  const starters = [
+    { title: 'Score Calculation', question: 'Explain the risk score calculation' },
+    { title: 'Banking Targets', question: 'What banking targets were identified?' },
+    { title: 'Concealed Payload', question: 'Explain the concealed payload risk' },
+    { title: 'Runtime Summary', question: 'Show runtime evidence summary' },
+    { title: 'SOC Response', question: 'What actions should the SOC take?' },
+  ];
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1097,12 +1152,35 @@ export default function InvestigationChat({ data }: { data: FraudCardData | null
         <p className={TYPOGRAPHY.caption}>
           {ledgerSummary || "Answers cite this case's evidence only."}
         </p>
-        {ledgerSummary && (
-          <button type="button" onClick={() => openLedger('full')} className={TYPOGRAPHY.linkAction}>
-            <BarChart2 className="h-3.5 w-3.5" aria-hidden />
-            How the score was calculated
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {ledgerSummary && (
+            <button type="button" onClick={() => openLedger('full')} className={TYPOGRAPHY.linkAction}>
+              <BarChart2 className="h-3.5 w-3.5" aria-hidden />
+              How the score was calculated
+            </button>
+          )}
+          {messages.length > 1 && (
+            <button
+              type="button"
+              onClick={() => {
+                sessionStorage.removeItem(`sudarshan_chat_${data.sha256}`);
+                setMessages([
+                  {
+                    id: 'welcome',
+                    role: 'assistant',
+                    content: buildChatGreeting(data),
+                    timestamp: new Date(),
+                  },
+                ]);
+              }}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 px-2 py-1 rounded-md hover:bg-slate-100 transition-colors cursor-pointer"
+              title="Reset conversation"
+            >
+              <RotateCcw className="h-3 w-3" />
+              <span>Reset</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/*
@@ -1191,6 +1269,7 @@ export default function InvestigationChat({ data }: { data: FraudCardData | null
                       content={msg.content}
                       isStreaming={msg.streaming}
                       onSendMessage={sendMessage}
+                      onOpenEvidence={openEvidence}
                     />
                   )}
                   {msg.sectionsUsed && msg.sectionsUsed.length > 0 && (
@@ -1242,19 +1321,19 @@ export default function InvestigationChat({ data }: { data: FraudCardData | null
             commit to.
           */}
           {messages.length <= 1 && starters.length > 0 && (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
               {starters.map((card) => (
                 <button
                   key={card.question}
                   type="button"
                   onClick={() => sendMessage(card.question)}
                   disabled={isStreaming}
-                  className="group rounded-xl border border-slate-200 bg-white p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-[transform,border-color,box-shadow] duration-150 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_4px_12px_rgba(15,23,42,0.06)] active:translate-y-0 active:scale-[0.99] disabled:opacity-50 disabled:hover:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  className="group rounded-xl border border-slate-200 bg-white p-3.5 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-[transform,border-color,box-shadow] duration-150 hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-xs active:translate-y-0 active:scale-[0.99] disabled:opacity-50 disabled:hover:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer"
                 >
-                  <span className="block font-sans text-[15px] font-semibold tracking-[-0.01em] text-slate-900">
+                  <span className="block font-sans text-xs font-bold uppercase tracking-wider text-blue-600">
                     {card.title}
                   </span>
-                  <span className="mt-1.5 block font-sans text-[13px] leading-relaxed tracking-[0.01em] text-slate-500">
+                  <span className="mt-1 block font-sans text-[13px] font-medium leading-snug text-slate-800 group-hover:text-slate-950">
                     {card.question}
                   </span>
                 </button>

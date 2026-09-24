@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, Copy, Check } from 'lucide-react';
 import type { FraudCardData } from '../../types/case';
 import { findEvidenceById } from '../../hooks/useInvestigationModel';
 import type { InvestigationBundle } from '../../types/investigation';
@@ -60,13 +60,22 @@ export default function EvidenceDrawer({
   data: FraudCardData;
   bundle: InvestigationBundle;
 }) {
-  const { drawerEvidenceId, closeEvidence, canGoBack } = useInvestigationUI();
+  const { drawerEvidenceId, closeEvidence, canGoBack, openEvidence } = useInvestigationUI();
   const { screenshotManifestEntries } = useAnalysis();
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [thumb, setThumb] = useState<string | null>(null);
   const [artifactsOpen, setArtifactsOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const evidence = drawerEvidenceId ? findEvidenceById(bundle, drawerEvidenceId) : undefined;
+
+  const handleCopyId = () => {
+    if (drawerEvidenceId) {
+      navigator.clipboard.writeText(drawerEvidenceId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   useEffect(() => {
     setArtifactsOpen(false);
@@ -97,14 +106,44 @@ export default function EvidenceDrawer({
     : [];
   const sourceLabel = evidence ? sourceDisplayLabel(evidence) : '';
 
+  const relatedFindings = bundle.evidenceRecords
+    .filter(
+      (r) =>
+        r.id !== drawerEvidenceId &&
+        (r.category === evidence?.category || (evidence?.mitreId && r.mitreId === evidence.mitreId)),
+    )
+    .slice(0, 3);
+
   return (
     <>
       <DrawerShell
         open
         onClose={closeEvidence}
         onBack={canGoBack ? closeEvidence : undefined}
-        title="Evidence"
-        subtitle={<span className={TYPOGRAPHY.codeSm}>{drawerEvidenceId}</span>}
+        title="Evidence Detail"
+        subtitle={
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className={TYPOGRAPHY.codeSm}>{drawerEvidenceId}</span>
+            <button
+              type="button"
+              onClick={handleCopyId}
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 hover:text-slate-800 px-1.5 py-0.5 rounded border border-slate-200 hover:bg-slate-50 transition-colors"
+              title="Copy Evidence ID"
+            >
+              {copied ? (
+                <>
+                  <Check className="h-3 w-3 text-emerald-600" />
+                  <span className="text-emerald-600">Copied</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="h-3 w-3 text-slate-400" />
+                  <span>Copy ID</span>
+                </>
+              )}
+            </button>
+          </div>
+        }
         labelledById="evidence-drawer-title"
         headerExtra={
           evidence && explanation && headline ? (
@@ -297,6 +336,38 @@ export default function EvidenceDrawer({
                     </ul>
                   </div>
                 )}
+              </CollapsibleBlock>
+
+              {relatedFindings.length > 0 && (
+                <section className="border-t border-slate-100 pt-4">
+                  <h3 className={`${TYPOGRAPHY.label} mb-2`}>
+                    Related Forensic Findings ({relatedFindings.length})
+                  </h3>
+                  <div className="space-y-1.5">
+                    {relatedFindings.map((rel) => (
+                      <button
+                        key={rel.id}
+                        type="button"
+                        onClick={() => openEvidence(rel.id)}
+                        className="w-full text-left p-2.5 rounded-lg border border-slate-200 hover:border-blue-300 hover:bg-blue-50/30 flex items-center justify-between text-xs transition-colors group"
+                      >
+                        <div className="min-w-0 pr-2">
+                          <span className="font-mono text-blue-700 font-bold mr-2">{rel.id}</span>
+                          <span className="text-slate-800 font-medium truncate">{rel.title}</span>
+                        </div>
+                        <span className="text-[11px] font-semibold text-blue-600 group-hover:translate-x-0.5 transition-transform shrink-0">
+                          Inspect →
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              <CollapsibleBlock title="Raw Evidence Record JSON">
+                <pre className="p-3 bg-slate-900 text-slate-100 rounded-lg text-[11px] font-mono overflow-x-auto max-h-60 leading-normal">
+                  {JSON.stringify(evidence, null, 2)}
+                </pre>
               </CollapsibleBlock>
 
               {explanation.confidenceTierExplanation && (

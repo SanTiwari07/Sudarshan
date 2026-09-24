@@ -2,7 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { FileText, Database, Globe, Sparkles, type LucideIcon } from 'lucide-react';
 import type { FraudCardData } from '../../types/case';
 import { TYPOGRAPHY } from '../../theme/typography';
-import AnimatedBackground from '../motion/AnimatedBackground';
+import { motion } from 'motion/react';
 import { caseSeverity } from '../../theme/severity';
 import { isInconclusive } from '../../lib/decision';
 import { formatScore } from '../../lib/verdictCopy';
@@ -109,29 +109,34 @@ function CaseTabs({ sha256 }: { sha256: string }) {
   return (
     <nav
       aria-label="Case sections"
-      className="flex min-w-0 items-center overflow-x-auto scrollbar-hidden rounded-full bg-slate-100 p-1"
+      className="flex min-w-0 items-center overflow-x-auto scrollbar-hidden rounded-full bg-slate-100 p-1 border border-slate-200/80"
     >
-      <AnimatedBackground value={active} className="rounded-full bg-slate-900">
-        {CASE_SECTIONS.map((section) => {
-          const Icon = SECTION_ICONS[section];
-          const selected = section === active;
-          return (
-            <Link
-              key={section}
-              data-id={section}
-              aria-current={selected ? 'page' : undefined}
-              to={caseSectionPath(sha256, section)}
-              title={SECTION_LABELS[section].hint}
-              className={`relative flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 font-sans text-[15px] font-semibold tracking-[-0.01em] transition-colors duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                selected ? 'text-white' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Icon className="h-4 w-4 shrink-0" aria-hidden />
-              {SECTION_LABELS[section].label}
-            </Link>
-          );
-        })}
-      </AnimatedBackground>
+      {CASE_SECTIONS.map((section) => {
+        const Icon = SECTION_ICONS[section];
+        const selected = section === active;
+        return (
+          <Link
+            key={section}
+            data-id={section}
+            aria-current={selected ? 'page' : undefined}
+            to={caseSectionPath(sha256, section)}
+            title={SECTION_LABELS[section].hint}
+            className={`relative flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 font-sans text-[14px] font-semibold tracking-[-0.01em] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 z-10 ${
+              selected ? 'text-white' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            {selected && (
+              <motion.div
+                layoutId="active-investigation-tab"
+                className="absolute inset-0 rounded-full bg-slate-900 -z-10 shadow-xs"
+                transition={{ type: 'spring', stiffness: 450, damping: 35 }}
+              />
+            )}
+            <Icon className="h-4 w-4 shrink-0" aria-hidden />
+            <span>{SECTION_LABELS[section].label.toUpperCase()}</span>
+          </Link>
+        );
+      })}
     </nav>
   );
 }

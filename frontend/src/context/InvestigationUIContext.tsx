@@ -61,7 +61,9 @@ export type DrawerRequest =
   | { kind: 'finding-explanation'; id: TechnicalFindingId }
   | { kind: 'finding-evidence'; id: TechnicalFindingId }
   | { kind: 'score-influence'; axis: ScoreInfluenceAxis }
-  | { kind: 'score-ledger'; scope: LedgerScope };
+  | { kind: 'score-ledger'; scope: LedgerScope }
+  | { kind: 'workflow-stage'; stageIndex: number }
+  | { kind: 'target-detail' };
 
 type InvestigationUIContextValue = {
   /** Full stack, oldest first. Only the last entry renders. */
@@ -100,6 +102,8 @@ type InvestigationUIContextValue = {
   influenceAxis: ScoreInfluenceAxis | null;
   openInfluenceDetail: (axis: ScoreInfluenceAxis) => void;
   closeInfluenceDetail: () => void;
+  openWorkflowStage: (stageIndex: number) => void;
+  openTargetDetail: () => void;
 };
 
 const InvestigationUIContext = createContext<InvestigationUIContextValue | null>(null);
@@ -108,6 +112,8 @@ function sameRequest(a: DrawerRequest | undefined, b: DrawerRequest): boolean {
   if (!a || a.kind !== b.kind) return false;
   if (a.kind === 'score-influence' && b.kind === 'score-influence') return a.axis === b.axis;
   if (a.kind === 'score-ledger' && b.kind === 'score-ledger') return a.scope === b.scope;
+  if (a.kind === 'workflow-stage' && b.kind === 'workflow-stage') return a.stageIndex === b.stageIndex;
+  if (a.kind === 'target-detail' && b.kind === 'target-detail') return true;
   if ('id' in a && 'id' in b) return a.id === b.id;
   return false;
 }
@@ -205,6 +211,16 @@ export function InvestigationUIProvider({ children }: { children: React.ReactNod
     }
   }, [closeDrawer, clearEvidenceParam, searchParams]);
 
+  const openWorkflowStage = useCallback(
+    (stageIndex: number) => pushDrawer({ kind: 'workflow-stage', stageIndex }),
+    [pushDrawer],
+  );
+
+  const openTargetDetail = useCallback(
+    () => pushDrawer({ kind: 'target-detail' }),
+    [pushDrawer],
+  );
+
   const value = useMemo(
     () => ({
       drawerStack: stack,
@@ -243,6 +259,9 @@ export function InvestigationUIProvider({ children }: { children: React.ReactNod
       influenceAxis: activeDrawer?.kind === 'score-influence' ? activeDrawer.axis : null,
       openInfluenceDetail,
       closeInfluenceDetail: popAndClearParams,
+
+      openWorkflowStage,
+      openTargetDetail,
     }),
     [
       stack,
@@ -255,6 +274,8 @@ export function InvestigationUIProvider({ children }: { children: React.ReactNod
       openFindingExplanation,
       openFindingEvidence,
       openInfluenceDetail,
+      openWorkflowStage,
+      openTargetDetail,
       timelineFocusMs,
     ],
   );

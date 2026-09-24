@@ -1559,53 +1559,44 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
       ),
     },
     /*
-     * Raw forensics, offered only at the deepest reading level.
-     *
-     * Not a permission boundary - the depth switch is one click away in the
-     * case bar. It keeps a 50,000-line logcat and native binary hardening
-     * tables out of the default view for the nine readers in ten who did not
-     * come for them.
+     * Raw forensics: Logcat, Frida instrumentation events, and native binary hardening.
      */
-    ...(isForensic
-      ? [
-          {
-            id: 'raw',
-            label: 'Raw',
-            anchors: ['logcat', 'frida-events', 'binary-analysis'],
-            content: (
-              <>
-                <EvidenceSection
-                  id="frida-events"
-                  title="Instrumentation events"
-                  subtitle="Unaggregated Frida hook records"
-                  icon={<Terminal className="h-4 w-4" />}
-                >
-                  <DynamicAnalysisPanel data={data} />
-                </EvidenceSection>
+    {
+      id: 'raw',
+      label: 'Raw',
+      anchors: ['logcat', 'frida-events', 'binary-analysis'],
+      content: (
+        <>
+          <EvidenceSection
+            id="frida-events"
+            title="Instrumentation events"
+            subtitle="Unaggregated Frida hook records"
+            icon={<Terminal className="h-4 w-4" />}
+          >
+            <DynamicAnalysisPanel data={data} />
+          </EvidenceSection>
 
-                <EvidenceSection
-                  id="logcat"
-                  title="Logcat"
-                  subtitle="Android system event stream"
-                  icon={<Terminal className="h-4 w-4" />}
-                >
-                  <LogcatInspectorPanel logcat={dyn?.logcat} />
-                </EvidenceSection>
+          <EvidenceSection
+            id="logcat"
+            title="Logcat"
+            subtitle="Android system event stream"
+            icon={<Terminal className="h-4 w-4" />}
+          >
+            <LogcatInspectorPanel logcat={dyn?.logcat} />
+          </EvidenceSection>
 
-                <EvidenceSection
-                  id="binary-analysis"
-                  title="Native binary hardening"
-                  subtitle="NX, stack canary, RELRO, RPATH"
-                  count={(data.binary_analysis ?? []).length}
-                  icon={<Cpu className="h-4 w-4" />}
-                >
-                  <BinaryAnalysisPanel data={data} />
-                </EvidenceSection>
-              </>
-            ),
-          } as AnalysisTab,
-        ]
-      : []),
+          <EvidenceSection
+            id="binary-analysis"
+            title="Native binary hardening"
+            subtitle="NX, stack canary, RELRO, RPATH"
+            count={(data.binary_analysis ?? []).length}
+            icon={<Cpu className="h-4 w-4" />}
+          >
+            <BinaryAnalysisPanel data={data} />
+          </EvidenceSection>
+        </>
+      ),
+    },
   ];
 
   /*

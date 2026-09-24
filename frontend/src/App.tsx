@@ -34,8 +34,11 @@ function lazyWithRetry<T extends React.ComponentType<any>>(
 
 // Lazy views
 const Upload = lazyWithRetry(() => import('./pages/Upload'));
-const UnifiedWorkspace = lazyWithRetry(() => import('./pages/UnifiedWorkspace'));
+const FraudCard = lazyWithRetry(() => import('./pages/FraudCard'));
+const TechnicalView = lazyWithRetry(() => import('./pages/TechnicalView'));
+const ThreatIntelView = lazyWithRetry(() => import('./pages/ThreatIntelView'));
 const History = lazyWithRetry(() => import('./pages/History'));
+const InvestigationChat = lazyWithRetry(() => import('./pages/InvestigationChat'));
 const BatchScan = lazyWithRetry(() => import('./pages/BatchScan'));
 const BatchDetail = lazyWithRetry(() => import('./pages/BatchDetail'));
 
@@ -687,7 +690,7 @@ function AppContent() {
           element={
             <RequireAuth label="Case">
               <InvestigationShell className="case-page">
-                <CaseSectionRoute component={UnifiedWorkspace} />
+                <CaseSectionRoute component={FraudCard} />
               </InvestigationShell>
             </RequireAuth>
           }
@@ -697,7 +700,7 @@ function AppContent() {
           element={
             <RequireAuth label="Evidence">
               <InvestigationShell>
-                <CaseSectionRoute component={UnifiedWorkspace} />
+                <CaseSectionRoute component={TechnicalView} />
               </InvestigationShell>
             </RequireAuth>
           }
@@ -707,7 +710,7 @@ function AppContent() {
           element={
             <RequireAuth label="Intelligence">
               <InvestigationShell>
-                <CaseSectionRoute component={UnifiedWorkspace} />
+                <CaseSectionRoute component={ThreatIntelView} />
               </InvestigationShell>
             </RequireAuth>
           }
@@ -717,7 +720,7 @@ function AppContent() {
           element={
             <RequireAuth label="Ask SUDARSHAN">
               <InvestigationShell className="analyst-page-tight">
-                <CaseSectionRoute component={UnifiedWorkspace} />
+                <CaseSectionRoute component={InvestigationChat} />
               </InvestigationShell>
             </RequireAuth>
           }

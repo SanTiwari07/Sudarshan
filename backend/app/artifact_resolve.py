@@ -96,35 +96,46 @@ def discover_artifact_dir_by_sha256(sha256: str) -> Optional[Path]:
     return None
 
 
+def resolve_case_artifact_dir(sha256: str, stored_artifact_dir: Optional[str] = None) -> Optional[Path]:
+    """
+    Resolve per-sample forensic artifact directories robustly across Docker/host boundaries.
+    """
+    if not sha256 or len(sha256) < 12:
+        return None
+
+    candidates = []
+    if stored_artifact_dir:
+        candidates.extend(_candidate_paths_from_hint(stored_artifact_dir))
+
+    for candidate in candidates:
+        try:
+            if candidate.is_dir():
+                logger.info(f"[ArtifactResolve] Resolved via hint or prefix mapping: {candidate}")
+                return candidate
+        except (OSError, RuntimeError):
+            continue
+
+    discovered = discover_artifact_dir_by_sha256(sha256)
+    if discovered is not None:
+        logger.info(f"[ArtifactResolve] Resolved via SHA256 search: {discovered}")
+        return discovered
+
+    logger.warning(f"[ArtifactResolve] Could not resolve artifact directory for {sha256[:12]}")
+    return None
+
+
 def resolve_artifact_dir(
     report: Optional[Dict[str, Any]] = None,
     *,
     sha256: Optional[str] = None,
 ) -> Optional[Path]:
-    """Return an existing artifact directory for a case report."""
+    """Legacy wrapper for backward compatibility."""
     report = report or {}
     dyn = report.get("dynamic_result") or report.get("dynamic_analysis") or {}
     if not isinstance(dyn, dict):
         dyn = {}
 
     raw_dir = dyn.get("artifact_dir") or report.get("artifact_dir") or report.get("_artifact_dir")
-    if raw_dir:
-        for candidate in _candidate_paths_from_hint(str(raw_dir)):
-            try:
-                if candidate.is_dir():
-                    return candidate
-            except (OSError, RuntimeError):
-                continue
-
     case_sha = sha256 or str(report.get("sha256") or "")
-    if case_sha:
-        discovered = discover_artifact_dir_by_sha256(case_sha)
-        if discovered is not None:
-            logger.info(
-                "[ArtifactResolve] Discovered artifact dir for %s… -> %s",
-                case_sha[:12],
-                discovered,
-            )
-            return discovered
-
-    return None
+    
+    return resolve_case_artifact_dir(case_sha, str(raw_dir) if raw_dir else None)

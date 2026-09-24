@@ -81,39 +81,26 @@ def _resolve_image_path(artifact_dir: Path, filename: str) -> Path:
 def _load_screenshot_manifest_entries(
     sha256: str,
     report: Dict[str, Any],
+    artifact_dir: Optional[Path] = None,
 ) -> List[Dict[str, Any]]:
-    """Mirror report_generator gallery manifest resolution, but fetch from ArtifactStorage."""
-    import asyncio
-    from sudarshan_core.storage.artifact_storage import get_storage
-    import tempfile
-    import os
-    
     entries: List[Dict[str, Any]] = []
     
-    object_key = f"evidence/{sha256}/manifest.json"
-    storage = get_storage()
-    fd, temp_path = tempfile.mkstemp(suffix=".json")
-    os.close(fd)
+    if artifact_dir:
+        for manifest_path in (
+            artifact_dir / "screenshots" / "manifest.json",
+            artifact_dir / "manifest.json",
+            artifact_dir / "screenshots.json"
+        ):
+            if manifest_path.is_file():
+                try:
+                    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+                    shots = data.get("screenshots", [])
+                    if shots:
+                        entries = shots
+                        break
+                except Exception as e:
+                    logger.warning("[Screenshots] Failed to load %s: %s", manifest_path, e)
     
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import nest_asyncio
-            nest_asyncio.apply()
-        loop.run_until_complete(storage.get_file(object_key, temp_path))
-        
-        data = json.loads(Path(temp_path).read_text(encoding="utf-8"))
-        shots = data.get("screenshots", [])
-        if shots:
-            entries = shots
-    except Exception as e:
-        logger.debug("[Screenshots] Failed to load manifest from GCS: %s", e)
-    finally:
-        try:
-            os.remove(temp_path)
-        except OSError:
-            pass
-
     if entries:
         return entries
 
@@ -137,27 +124,17 @@ def _load_screenshot_manifest_entries(
     return entries
 
 
-def _entry_has_image(sha256: str, entry: Dict[str, Any]) -> bool:
+def _entry_has_image(sha256: str, entry: Dict[str, Any], artifact_dir: Optional[Path] = None) -> bool:
     rel = str(entry.get("filename") or "")
     if not rel:
         return False
     
-    safe_name = Path(rel).name
-    object_key = f"evidence/{sha256}/screenshots/{safe_name}"
-    
-    from sudarshan_core.storage.artifact_storage import get_storage
-    import asyncio
-    
-    storage = get_storage()
-    
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import nest_asyncio
-            nest_asyncio.apply()
-        return loop.run_until_complete(storage.exists(object_key))
-    except Exception:
-        return False
+    if artifact_dir:
+        try:
+            return _resolve_image_path(artifact_dir, rel).is_file()
+        except HTTPException:
+            return False
+    return False
 
 
 def _scan_disk_screenshots(artifact_dir: Path) -> List[Dict[str, Any]]:

@@ -59,7 +59,9 @@ FORM_VALUES: Dict[str, str] = {
     "amount":   "100",
     "account":  "000000000000",
     "name":     "Analysis Bot",
+    "mother_name": "Demo Mother",
     "address":  "1 Security Lab, Cyber District",
+    "date_of_birth": "01/01/1990",
     "search":   "search_query",
 }
 
@@ -908,13 +910,21 @@ class ToolExecutor:
         # or rejected, which the walk then read as a refused login.
         field_type = action.get("field_type") or ""
         actual_value = ""
+        
+        from sudarshan_core.engines.agentic.field_taxonomy import coerce_field_type
+
+        # Upgrade a bare planner hint ("mother_name") to the rich type if the
+        # graph did not provide one, so the vault's new generator can build a
+        # proper value for it instead of falling back to the legacy "test".
+        if not field_type or field_type == "UNKNOWN":
+            coerced = coerce_field_type(field_hint.replace(' ', '_'))
+            if coerced.value != "UNKNOWN":
+                field_type = coerced.value
+
         if field_type and field_type != "UNKNOWN":
             try:
                 from sudarshan_core.engines.agentic.field_constraints import (
                     FieldConstraints,
-                )
-                from sudarshan_core.engines.agentic.field_taxonomy import (
-                    coerce_field_type,
                 )
 
                 constraints = FieldConstraints(

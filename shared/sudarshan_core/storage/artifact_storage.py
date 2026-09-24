@@ -4,7 +4,6 @@ import tempfile
 import asyncio
 from pathlib import Path
 from typing import Optional, AsyncGenerator, Any
-from google.cloud import storage
 
 class ArtifactStorage:
     async def put_file(self, local_path: str, object_key: str, content_type: Optional[str] = None) -> str:
@@ -101,6 +100,7 @@ class GCSArtifactStorage(ArtifactStorage):
         if bucket_name is None:
             bucket_name = os.environ["GCS_BUCKET_NAME"]
         self.bucket_name = bucket_name
+        from google.cloud import storage
         self.client = storage.Client()
         self.bucket = self.client.bucket(self.bucket_name)
 

@@ -61,9 +61,7 @@ export type DrawerRequest =
   | { kind: 'finding-explanation'; id: TechnicalFindingId }
   | { kind: 'finding-evidence'; id: TechnicalFindingId }
   | { kind: 'score-influence'; axis: ScoreInfluenceAxis }
-  | { kind: 'score-ledger'; scope: LedgerScope }
-  | { kind: 'technical-evidence' }
-  | { kind: 'ask-ai' };
+  | { kind: 'score-ledger'; scope: LedgerScope };
 
 type InvestigationUIContextValue = {
   /** Full stack, oldest first. Only the last entry renders. */
@@ -102,8 +100,6 @@ type InvestigationUIContextValue = {
   influenceAxis: ScoreInfluenceAxis | null;
   openInfluenceDetail: (axis: ScoreInfluenceAxis) => void;
   closeInfluenceDetail: () => void;
-  openTechnicalEvidence: () => void;
-  openAskAi: () => void;
 };
 
 const InvestigationUIContext = createContext<InvestigationUIContextValue | null>(null);
@@ -195,16 +191,6 @@ export function InvestigationUIProvider({ children }: { children: React.ReactNod
     [pushDrawer],
   );
 
-  const openTechnicalEvidence = useCallback(
-    () => pushDrawer({ kind: 'technical-evidence' }),
-    [pushDrawer],
-  );
-
-  const openAskAi = useCallback(
-    () => pushDrawer({ kind: 'ask-ai' }),
-    [pushDrawer],
-  );
-
   /*
    * Every legacy close pops one level.
    *
@@ -257,9 +243,6 @@ export function InvestigationUIProvider({ children }: { children: React.ReactNod
       influenceAxis: activeDrawer?.kind === 'score-influence' ? activeDrawer.axis : null,
       openInfluenceDetail,
       closeInfluenceDetail: popAndClearParams,
-      
-      openTechnicalEvidence,
-      openAskAi,
     }),
     [
       stack,
@@ -272,8 +255,6 @@ export function InvestigationUIProvider({ children }: { children: React.ReactNod
       openFindingExplanation,
       openFindingEvidence,
       openInfluenceDetail,
-      openTechnicalEvidence,
-      openAskAi,
       timelineFocusMs,
     ],
   );

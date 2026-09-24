@@ -300,7 +300,8 @@ TOOL_REGISTRY: Dict[str, ToolDef] = {
                       description=(
                           "Semantic hint for the field: one of "
                           "'username', 'email', 'password', 'phone', 'otp', "
-                          "'amount', 'account', 'name', 'address', 'search'"
+                          "'amount', 'account', 'name', 'address', 'search', "
+                          "'mother_name', 'date_of_birth'"
                       )),
             ToolParam("x", "int", required=True,
                       description="X coordinate of the input field",

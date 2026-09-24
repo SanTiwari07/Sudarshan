@@ -5,6 +5,7 @@ import { lazy, Suspense, useEffect } from 'react';
 import ErrorBoundary from './components/ErrorBoundary';
 import InvestigationShell from './components/investigation/InvestigationShell';
 import { AnalysisProvider, useAnalysis } from './context/AnalysisContext';
+import { InvestigationUIProvider } from './context/InvestigationUIContext';
 import { caseSectionPath, type CaseSection } from './lib/caseRoutes';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoadingSpinner, ErrorState } from './components/ui/Skeleton';
@@ -316,7 +317,9 @@ export default function App() {
   return (
     <AuthProvider>
       <AnalysisProvider>
-        <AppContent />
+        <InvestigationUIProvider>
+          <AppContent />
+        </InvestigationUIProvider>
       </AnalysisProvider>
     </AuthProvider>
   );

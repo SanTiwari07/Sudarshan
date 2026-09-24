@@ -1,3 +1,4 @@
+import pytest
 import asyncio
 import os
 import sys
@@ -7,6 +8,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from app.db.pool import connect
 from app.db.database import get_case
 
+@pytest.mark.asyncio
 async def test_rollback():
     os.environ["DATABASE_URL"] = "postgresql://sudarshan:sudarshan@localhost:5432/sudarshan"
     

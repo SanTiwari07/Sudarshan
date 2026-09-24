@@ -265,8 +265,33 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── 7. Laya System-1 Decision Engine (Calibrated Action Selection) ─────────
+  laya:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.laya
+    container_name: sudarshan-laya
+    profiles:
+      - laya
+      - full
+    ports:
+      - "8005:8000"
+    environment:
+      - LAYA_CHECKPOINT=${LAYA_CHECKPOINT:-convaiinnovations/laya-typed-decisions}
+      - HF_HUB_ENABLE_HF_TRANSFER=0
+    volumes:
+      - laya_model_cache:/root/.cache/huggingface
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
 volumes:
   uploads:         # Shared volume for zero-copy file sharing between backend & engine
   mitmproxy_har:   # Shared volume: mitmproxy writes HAR, engine reads it
   dbdata:          # Authoritative application database (Legacy SQLite). Back up with scripts/db_admin.py backup
   pgdata:          # PostgreSQL data volume
+  laya_model_cache: # Hugging Face model cache volume for Laya weights

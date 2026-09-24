@@ -33,6 +33,7 @@ async def db(tmp_path, monkeypatch):
     path = tmp_path / "test.db"
     monkeypatch.setenv("SUDARSHAN_DB_PATH", str(path))
     monkeypatch.setenv("JWT_SECRET_KEY", "test-secret-key-for-persistence-tests")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
 
     from app.db import database as dbmod
     monkeypatch.setattr(dbmod, "DB_PATH", str(path))
@@ -95,6 +96,7 @@ async def test_migration_adopts_a_preexisting_legacy_database(tmp_path, monkeypa
 
     monkeypatch.setenv("SUDARSHAN_DB_PATH", str(path))
     monkeypatch.setenv("JWT_SECRET_KEY", "test-secret-key-for-persistence-tests")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
     from app.db import database as dbmod
     monkeypatch.setattr(dbmod, "DB_PATH", str(path))
 
@@ -263,8 +265,10 @@ async def test_login_attempts_never_store_the_password(db):
     async with connect() as conn:
         async with conn.execute("SELECT * FROM login_attempts") as cur:
             row = await cur.fetchone()
-    assert "correct-horse-battery" not in str(row)
-    assert "bad_password" in str(row)
+            
+    row_str = str(dict(row)) if row else ""
+    assert "correct-horse-battery" not in row_str
+    assert "bad_password" in row_str
 
 
 # ─── Audit ────────────────────────────────────────────────────────────────────

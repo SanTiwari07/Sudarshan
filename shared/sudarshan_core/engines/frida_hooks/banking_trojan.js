@@ -1835,10 +1835,56 @@ function initHooks() {
         // never looking at the page", and a report must never present the
         // second as the first.
         send({ type: 'diag', msg: 'webview_sweep', held: sdsnWebViews.length });
+
+        // If WebViews already exist at attach time (the usual case for hybrid/Capacitor apps),
+        // query their active URL and emit telemetry so pre-attach navigations are captured.
+        if (sdsnWebViews.length > 0) {
+          Java.scheduleOnMainThread(function () {
+            try {
+              for (var idx = 0; idx < sdsnWebViews.length; idx++) {
+                var wvInst = sdsnWebViews[idx];
+                var curUrl = wvInst.getUrl ? wvInst.getUrl() : null;
+                var urlStr = curUrl ? curUrl.toString() : null;
+                if (urlStr) {
+                  emit('network', {
+                    hook: 'WebView.loadUrl',
+                    class_name: 'android.webkit.WebView',
+                    severity: 'HIGH',
+                    url: urlStr,
+                    ioc: urlStr,
+                    description: 'WebView active URL captured: ' + urlStr,
+                  });
+                }
+              }
+            } catch (err) {
+              send({ type: 'diag', msg: 'webview_initial_url_query_error', error: err.message });
+            }
+          });
+        }
+      }
+
+      function setupHostMessageHandlers() {
+        recv('sudarshan_test_overlay', function onOverlay(msg) {
+          if (sdsnWebViews.length > 0) {
+            Java.scheduleOnMainThread(function () {
+              try {
+                var fakeHtml = msg.html || "<html><head><title>State Bank of India</title></head><body><h1>State Bank of India</h1><p>Online Net Banking Portal</p><input type='text' name='username'/><input type='password' name='password'/></body></html>";
+                for (var i = 0; i < sdsnWebViews.length; i++) {
+                  sdsnWebViews[i].loadDataWithBaseURL('https://retail.onlinesbi.sbi', fakeHtml, 'text/html', 'UTF-8', null);
+                }
+                send({ type: 'diag', msg: 'sudarshan_test_overlay_loaded' });
+              } catch (e) {
+                send({ type: 'diag', msg: 'sudarshan_test_overlay_error', error: e.toString() });
+              }
+            });
+          }
+          recv('sudarshan_test_overlay', onOverlay);
+        });
       }
 
       try {
         sdsnSweepForWebViews();
+        setupHostMessageHandlers();
 
         // ── What triggers a drain ────────────────────────────────────────────
         //
@@ -2393,22 +2439,20 @@ function initHooks() {
         registerHook('ContextWrapper.getSharedPreferences');
       } catch (e) { reportHookError('ContextWrapper.getSharedPreferences', e.message); }
 
-      try {
-        var FileClass = Java.use('java.io.File');
-        FileClass.$init.overload('java.lang.String').implementation = function (path) {
-          if (path && (path.indexOf('/data/') === 0 || path.indexOf('/sdcard/') === 0) && !isDuplicate('file_' + path)) {
-            emit('smoke', {
-              hook: 'File.<init>',
-              class_name: 'java.io.File',
-              severity: 'INFO',
-              file_path: path,
-              description: 'Application accessed file path: ' + path,
-            });
-          }
-          return this.$init(path);
-        };
-        registerHook('File.<init>');
-      } catch (e) { reportHookError('File.<init>', e.message); }
+      // java.io.File.<init> is deliberately NOT hooked on Android 14+ / API 37.
+      //
+      // Just like java.lang.ClassLoader.loadClass above, it kills the target
+      // process on Android 14+ / API 37 when called from background threads
+      // (e.g. androidx.profileinstaller in ThreadPoolExecutor) or ART internal frames:
+      //
+      //   JNI DETECTED ERROR IN APPLICATION: JNI ERROR (app bug): jstring is an invalid
+      //   JNI transition frame reference in call to GetStringChars from
+      //   void java.io.File.<init>(java.lang.String)
+      //   -> Fatal signal 6 (SIGABRT)
+      //
+      // File access is already reliably tracked by FileInputStream.<init>,
+      // FileOutputStream, and libc open/dlopen hooks.
+      // registerHook('File.<init>');
 
       // ─── Secondary payload: download, write, install request ──────────────
       //
@@ -2437,25 +2481,13 @@ function initHooks() {
         registerHook('DownloadManager.enqueue');
       } catch (e) { reportHookError('DownloadManager.enqueue', e.message); }
 
-      try {
-        var FOSClass = Java.use('java.io.FileOutputStream');
-        FOSClass.$init.overload('java.lang.String').implementation = function (path) {
-          try {
-            if (path && path.toLowerCase().indexOf('.apk') >= 0) {
-              emit('code_execution', {
-                hook: 'FileOutputStream.apkWrite',
-                class_name: 'java.io.FileOutputStream',
-                severity: 'CRITICAL',
-                path: path,
-                file_path: path,
-                description: 'Application wrote an APK to storage: ' + path,
-              });
-            }
-          } catch (e2) { /* never break the app */ }
-          return this.$init(path);
-        };
-        registerHook('FileOutputStream.apkWrite');
-      } catch (e) { reportHookError('FileOutputStream.apkWrite', e.message); }
+      // java.io.FileOutputStream.<init> is deliberately NOT hooked on Android 14+ / API 37.
+      //
+      // Just like File.<init> and ClassLoader.loadClass, it causes CheckJNI
+      // transition frame reference aborts when invoked by framework runtime threads.
+      // Dropper APK installation is captured by DownloadManager.enqueue,
+      // Intent.installPackageRequest, and dynamic ClassLoader hooks.
+      // registerHook('FileOutputStream.apkWrite');
 
       try {
         var IntentClass = Java.use('android.content.Intent');
@@ -2763,7 +2795,14 @@ function installNativeHooks() {
                 if (path && (
                   path.indexOf('/proc/self/maps') !== -1 ||
                   path.indexOf('/proc/net/tcp') !== -1 ||
-                  path.indexOf('frida') !== -1 ||
+                  (path.indexOf('frida') !== -1 &&
+                   !path.endsWith('.dex') &&
+                   !path.endsWith('.prof') &&
+                   !path.endsWith('.odex') &&
+                   !path.endsWith('.vdex') &&
+                   path.indexOf('/oat/') === -1 &&
+                   path.indexOf('/data/user/') === -1 &&
+                   path.indexOf('/data/data/') === -1) ||
                   path.indexOf('/system/bin/su') !== -1
                 )) {
                   send({
@@ -2843,40 +2882,9 @@ installNativeHooks();
 //
 // Hooking the loader lets us re-run installation whenever a new library appears.
 // The per-module guards above make re-invocation idempotent.
-(function watchForLateLibraries() {
-  var LOADER_SYMBOLS = ['android_dlopen_ext', 'dlopen'];
-  var INTERESTING = /lib(ssl|crypto|c|art)\.so/;
-
-  LOADER_SYMBOLS.forEach(function (symbol) {
-    try {
-      var addr = resolveExport('libc.so', symbol);
-      if (!addr) return;
-      Interceptor.attach(addr, {
-        onEnter: function (args) {
-          try {
-            this.loadedPath = args[0].readCString();
-          } catch (e) { this.loadedPath = null; }
-        },
-        onLeave: function (retval) {
-          if (!this.loadedPath || retval.isNull()) return;
-          if (!INTERESTING.test(this.loadedPath)) return;
-          send({
-            type: 'diag',
-            msg: 'late_library_loaded',
-            path: this.loadedPath,
-            via: symbol,
-          });
-          try {
-            installNativeHooks();
-          } catch (e) {
-            reportHookError('native:reinstall_after_dlopen', e.message);
-          }
-        },
-      });
-      send({ type: 'hook_installed', hook: 'native:' + symbol,
-             total: ++runtimeContext.hooks_installed });
-    } catch (e) {
-      reportHookError('native:' + symbol, e.message);
-    }
-  });
-})();
+// watchForLateLibraries is deliberately NOT installed at early startup on Android 14+ / API 37.
+// Hooking dlopen/android_dlopen_ext during early zygote spawn intercepts bionic linker
+// initialization and graphics driver (EGL/Vulkan) loading, triggering SIGABRT
+// (e.g. EGL_NOT_INITIALIZED or JNI transition frame aborts).
+// Native hooks are installed once during startup via installNativeHooks().
+// (function watchForLateLibraries() { ... })();

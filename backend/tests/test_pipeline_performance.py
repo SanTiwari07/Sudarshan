@@ -68,16 +68,14 @@ def test_mobsf_cache_reuse(tmp_path, monkeypatch):
     assert loaded["package_name"] == "com.test"
 
 
-def test_async_analysis_returns_immediately():
+@pytest.mark.asyncio
+async def test_async_analysis_returns_immediately():
     """Async endpoint enqueues without blocking on the full pipeline."""
     from app.workers.analysis_queue import create_job, enqueue
 
-    async def _run():
-        job_id = create_job(sha256_hash="c" * 64, analyst_id=1)
-        assert job_id
-        await enqueue(job_id, "/tmp/x.apk", "x.apk", "c" * 64, analyst_id=1)
-
-    asyncio.run(_run())
+    job_id = create_job(sha256_hash="c" * 64, analyst_id=1)
+    assert job_id
+    await enqueue(job_id, "/tmp/x.apk", "x.apk", "c" * 64, analyst_id=1)
 
 
 def test_independent_static_tasks_parallel_pattern():

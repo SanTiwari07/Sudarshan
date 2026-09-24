@@ -309,63 +309,13 @@ _evidence_scan_cache: Dict[str, Any] = {"at": 0.0, "paths": []}
 _EVIDENCE_SCAN_TTL = float(os.getenv("SUDARSHAN_EVIDENCE_SCAN_TTL", "10.0"))
 
 
-def _scan_evidence_files() -> List[Path]:
-    """Return every evidence.json under the artifact roots, newest first."""
-    now = time.time()
-    if now - _evidence_scan_cache["at"] < _EVIDENCE_SCAN_TTL:
-        return _evidence_scan_cache["paths"]
-
-    found: List[tuple] = []
-    for root in _ARTIFACT_ROOTS:
-        if not root.exists():
-            continue
-        for ev_file in root.rglob("evidence.json"):
-            try:
-                found.append((ev_file.stat().st_mtime, ev_file))
-            except OSError:
-                continue
-
-    paths = [p for _, p in sorted(found, key=lambda t: t[0], reverse=True)]
-    _evidence_scan_cache["at"] = now
-    _evidence_scan_cache["paths"] = paths
-    return paths
-
-
 def _load_evidence_from_artifacts(case_id: Optional[str] = None) -> List[Dict]:
     """
-    Load evidence records for a specific case, or the most recent one.
-
-    `case_id` is matched against the artifact directory name, which
-    frida_sandbox.artifact_dir_for builds as "<sample-stem>_<digest>".
-
-    Without it this returned whichever sample finished LAST, globally - so an
-    analyst looking at case A was shown case B's evidence whenever B completed
-    more recently, and any authenticated caller could read evidence from cases
-    they never submitted. The sibling routes already accept case_id; this one
-    did not.
+    Load evidence records for a specific case.
+    Delegates to the shared evidence_loader which now fetches from ArtifactStorage.
     """
-    candidates = _scan_evidence_files()
-
-    if case_id:
-        needle = case_id.lower()
-        candidates = [
-            p for p in candidates
-            if needle in p.parent.name.lower() or needle in str(p.parent).lower()
-        ]
-
-    best_path = candidates[0] if candidates else None
-    if best_path is None:
-        return []
-
-    try:
-        with open(best_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            if isinstance(data, list):
-                return data
-            return data.get("records", []) if isinstance(data, dict) else []
-    except Exception as e:
-        logger.warning(f"[RuntimeAPI] Could not read evidence.json: {e}")
-        return []
+    from app.evidence_loader import load_evidence_records
+    return load_evidence_records(case_id=case_id)
 
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────

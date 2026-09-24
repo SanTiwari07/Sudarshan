@@ -75,7 +75,7 @@ _ACCESSIBILITY_SIGNALS = re.compile(
 )
 _OVERLAY_SIGNALS = re.compile(
     r"WindowManager\.addView|TYPE_APPLICATION_OVERLAY|TYPE_SYSTEM_ALERT|"
-    r"SYSTEM_ALERT_WINDOW|addView|Overlay",
+    r"SYSTEM_ALERT_WINDOW|\baddView\b|\bOverlay\b|canDrawOverlays|ACTION_MANAGE_OVERLAY_PERMISSION",
     re.IGNORECASE,
 )
 _SMS_RECEIVE_SIGNALS = re.compile(

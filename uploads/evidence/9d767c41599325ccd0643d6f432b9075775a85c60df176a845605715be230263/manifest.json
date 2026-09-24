@@ -1,0 +1,59 @@
+{
+  "sha256": "9d767c41599325ccd0643d6f432b9075775a85c60df176a845605715be230263",
+  "package_name": "krep.itmtd.ywtjexf",
+  "app_name": null,
+  "analysis_mode": "androguard",
+  "manifest_version": "1.0",
+  "generated_at": "2026-09-24T04:08:34.037357+00:00",
+  "stei_score": 0.0,
+  "family_classification": "Unknown",
+  "capability_flags": {
+    "has_accessibility_abuse": false,
+    "has_sms_read_write": true,
+    "has_system_alert_window": true,
+    "has_device_admin": false,
+    "has_dynamic_code_loading": false,
+    "has_reflection": true,
+    "has_native_libraries": false,
+    "targets_indian_banks": false,
+    "indian_bank_packages": [],
+    "obfuscation_score": 0.8431,
+    "recommended_hook_profiles": [
+      "canary",
+      "sms",
+      "overlay",
+      "network"
+    ]
+  },
+  "static_ioc_baseline": {
+    "hardcoded_urls": [
+      "http://yandex.ru"
+    ],
+    "hardcoded_ips": [],
+    "hardcoded_domains": [],
+    "hardcoded_secrets": [],
+    "suspicious_strings": []
+  },
+  "goal_priority_config": {
+    "accessibility_priority": 1,
+    "sms_priority": 1,
+    "overlay_priority": 3,
+    "banking_detection_priority": 4,
+    "network_c2_priority": 5,
+    "persistence_priority": 6,
+    "skip_login_flow": false
+  },
+  "hook_profiles": [
+    "canary",
+    "sms",
+    "overlay",
+    "network"
+  ],
+  "analysis_duration_seconds": 60,
+  "max_explorer_actions": 50,
+  "permissions_count": 24,
+  "dangerous_permissions_count": 0,
+  "activities_count": 0,
+  "services_count": 0,
+  "receivers_count": 0
+}

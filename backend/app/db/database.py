@@ -266,6 +266,7 @@ async def init_db() -> Dict[str, Any]:
     """
     from app.db import intel, security
     from app.db.migrations import migration_status, run_migrations
+    from app.db.artifact_metadata import init_artifact_metadata
     
     await init_pool()
 
@@ -282,7 +283,6 @@ async def init_db() -> Dict[str, Any]:
         await db.execute(_CREATE_ANALYSIS_BATCH_JOBS)
         await security.create_tables(db)
         await intel.create_tables(db)
-        await db.commit()
 
         # Migrations before indexes: an index can reference a column that a
         # migration is about to add, and on a pre-existing table the CREATE
@@ -296,6 +296,9 @@ async def init_db() -> Dict[str, Any]:
         await db.commit()
 
         status = await migration_status(db)
+
+    # Must run outside of _connect since it manages its own transaction via get_db
+    await init_artifact_metadata()
 
     logger.info(
         "[DB] Initialized SQLite at %s (WAL, FK enforced, indexed); "
@@ -841,8 +844,8 @@ async def upsert_analysis_job(job: Dict[str, Any]) -> None:
             """
             INSERT INTO analysis_jobs (
                 job_id, status, sha256, analyst_id, queued_at, started_at,
-                completed_at, result_json, error
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                completed_at, result_json, error, canonical_fingerprint
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(job_id) DO UPDATE SET
                 status=excluded.status,
                 sha256=excluded.sha256,
@@ -850,7 +853,8 @@ async def upsert_analysis_job(job: Dict[str, Any]) -> None:
                 started_at=excluded.started_at,
                 completed_at=excluded.completed_at,
                 result_json=excluded.result_json,
-                error=excluded.error
+                error=excluded.error,
+                canonical_fingerprint=excluded.canonical_fingerprint
             """,
             (
                 job["job_id"],
@@ -862,6 +866,7 @@ async def upsert_analysis_job(job: Dict[str, Any]) -> None:
                 job.get("completed_at"),
                 result_json,
                 job.get("error"),
+                job.get("canonical_fingerprint")
             ),
         )
         await db.commit()
@@ -900,6 +905,173 @@ async def load_analysis_job(job_id: str) -> Optional[Dict[str, Any]]:
     data.setdefault("elapsed_ms", 0)
     data.setdefault("stage_timings", [])
     return data
+
+# ─── Durable Canonical Analysis (Phase 5) ────────────────────────────────────
+
+async def get_canonical_analysis(fingerprint: str) -> Optional[Dict[str, Any]]:
+    async with _connect() as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM canonical_analyses WHERE fingerprint = ?", (fingerprint,)
+        ) as cur:
+            row = await cur.fetchone()
+    if not row:
+        return None
+    data = dict(row)
+    if data.get("result_json"):
+        try:
+            data["result"] = json.loads(data["result_json"])
+        except json.JSONDecodeError:
+            pass
+        data.pop("result_json", None)
+    return data
+
+async def upsert_canonical_analysis(analysis: Dict[str, Any]) -> None:
+    result_json = None
+    if analysis.get("result") is not None:
+        result_json = json.dumps(analysis["result"])
+    async with _connect() as db:
+        await db.execute(
+            """
+            INSERT INTO canonical_analyses (
+                fingerprint, sha256, status, progress_pct, current_stage,
+                result_json, error, claimed_by, claimed_at,
+                lease_expires_at, last_heartbeat_at, attempt_count, max_attempts
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(fingerprint) DO UPDATE SET
+                status=excluded.status,
+                progress_pct=excluded.progress_pct,
+                current_stage=excluded.current_stage,
+                result_json=excluded.result_json,
+                error=excluded.error,
+                claimed_by=excluded.claimed_by,
+                claimed_at=excluded.claimed_at,
+                lease_expires_at=excluded.lease_expires_at,
+                last_heartbeat_at=excluded.last_heartbeat_at,
+                attempt_count=excluded.attempt_count
+            """,
+            (
+                analysis["fingerprint"],
+                analysis["sha256"],
+                analysis["status"],
+                analysis.get("progress_pct", 0),
+                analysis.get("current_stage"),
+                result_json,
+                analysis.get("error"),
+                analysis.get("claimed_by"),
+                analysis.get("claimed_at"),
+                analysis.get("lease_expires_at"),
+                analysis.get("last_heartbeat_at"),
+                analysis.get("attempt_count", 0),
+                analysis.get("max_attempts", 3),
+            ),
+        )
+        await db.commit()
+
+async def update_canonical_analysis(fingerprint: str, updates: Dict[str, Any]) -> None:
+    allowed = {
+        "status", "progress_pct", "current_stage", "error", 
+        "claimed_by", "claimed_at", "lease_expires_at", "last_heartbeat_at", 
+        "attempt_count", "result_json"
+    }
+    safe = {k: v for k, v in updates.items() if k in allowed}
+    if "result" in updates:
+        safe["result_json"] = json.dumps(updates["result"])
+    if not safe:
+        return
+    set_clause = ", ".join(f"{k} = ?" for k in safe)
+    values = list(safe.values()) + [fingerprint]
+    async with _connect() as db:
+        await db.execute(
+            f"UPDATE canonical_analyses SET {set_clause} WHERE fingerprint = ?", values
+        )
+        await db.commit()
+
+async def get_analysis_jobs_by_canonical(fingerprint: str) -> List[Dict[str, Any]]:
+    async with _connect() as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM analysis_jobs WHERE canonical_fingerprint = ?", (fingerprint,)
+        ) as cur:
+            rows = await cur.fetchall()
+    return [dict(r) for r in rows]
+
+async def claim_next_canonical_job(worker_id: str, lease_seconds: int = 900) -> Optional[Dict[str, Any]]:
+    from datetime import timedelta
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
+    lease_expires = (now + timedelta(seconds=lease_seconds)).isoformat()
+
+    async with _connect() as db:
+        from app.db.pool import is_postgres
+        if is_postgres():
+            cur = await db.execute("""
+                UPDATE canonical_analyses
+                SET status = 'PROCESSING',
+                    claimed_by = ?,
+                    claimed_at = ?,
+                    last_heartbeat_at = ?,
+                    lease_expires_at = ?,
+                    attempt_count = attempt_count + 1
+                WHERE fingerprint = (
+                    SELECT fingerprint
+                    FROM canonical_analyses
+                    WHERE status = 'QUEUED' 
+                       OR (status = 'PROCESSING' AND lease_expires_at < ?)
+                       OR (status = 'RETRYING' AND attempt_count < max_attempts)
+                    ORDER BY attempt_count ASC
+                    LIMIT 1
+                    FOR UPDATE SKIP LOCKED
+                )
+                RETURNING fingerprint
+            """, (worker_id, now_iso, now_iso, lease_expires, now_iso))
+            row = await cur.fetchone()
+            if row:
+                await db.commit()
+                return await get_canonical_analysis(row[0])
+            return None
+        else:
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                cur = await db.execute("""
+                    SELECT fingerprint FROM canonical_analyses
+                    WHERE status = 'QUEUED'
+                       OR (status = 'PROCESSING' AND lease_expires_at < ?)
+                       OR (status = 'RETRYING' AND attempt_count < max_attempts)
+                    ORDER BY attempt_count ASC
+                    LIMIT 1
+                """, (now_iso,))
+                row = await cur.fetchone()
+                if row:
+                    fp = row[0]
+                    await db.execute("""
+                        UPDATE canonical_analyses 
+                        SET status = 'PROCESSING', claimed_by = ?, claimed_at = ?, 
+                            last_heartbeat_at = ?, lease_expires_at = ?, attempt_count = attempt_count + 1
+                        WHERE fingerprint = ?
+                    """, (worker_id, now_iso, now_iso, lease_expires, fp))
+                    await db.commit()
+                    return await get_canonical_analysis(fp)
+                else:
+                    await db.rollback()
+                    return None
+            except Exception:
+                await db.rollback()
+                raise
+
+async def heartbeat_canonical_job(fingerprint: str, lease_seconds: int = 900) -> None:
+    from datetime import timedelta
+    now = datetime.now(timezone.utc)
+    lease_expires = (now + timedelta(seconds=lease_seconds)).isoformat()
+    now_iso = now.isoformat()
+    async with _connect() as db:
+        await db.execute("""
+            UPDATE canonical_analyses
+            SET last_heartbeat_at = ?, lease_expires_at = ?
+            WHERE fingerprint = ? AND status = 'PROCESSING'
+        """, (now_iso, lease_expires, fingerprint))
+        await db.commit()
+
 
 
 # ─── Discovery State ────────────────────────────────────────────────────────
@@ -1119,13 +1291,13 @@ async def get_batch_job(job_id: str) -> Optional[Dict[str, Any]]:
     return dict(row) if row else None
 
 
-async def get_batch_jobs(batch_id: str) -> List[Dict[str, Any]]:
+async def get_batch_jobs(batch_id: str, limit: int = 10000, offset: int = 0) -> List[Dict[str, Any]]:
     """Return all jobs for a batch, ordered by queue_position."""
     async with _connect() as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
-            "SELECT * FROM analysis_batch_jobs WHERE batch_id = ? ORDER BY queue_position ASC",
-            (batch_id,),
+            "SELECT * FROM analysis_batch_jobs WHERE batch_id = ? ORDER BY queue_position ASC LIMIT ? OFFSET ?",
+            (batch_id, limit, offset),
         ) as cur:
             rows = await cur.fetchall()
     return [dict(r) for r in rows]
@@ -1226,3 +1398,62 @@ async def get_active_batches() -> List[Dict[str, Any]]:
         ) as cur:
             rows = await cur.fetchall()
     return [dict(r) for r in rows]
+
+async def count_pending_jobs() -> int:
+    async with _connect() as db:
+        async with db.execute("SELECT COUNT(*) FROM analysis_jobs WHERE status IN ('queued', 'QUEUED', 'processing', 'PROCESSING')") as cursor:
+            row = await cursor.fetchone()
+            return row[0] if row else 0
+
+async def count_user_jobs_today(analyst_id: int) -> int:
+    from datetime import datetime, timezone, timedelta
+    start_of_day = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    async with _connect() as db:
+        async with db.execute("SELECT COUNT(*) FROM analysis_jobs WHERE analyst_id = ? AND queued_at >= ?", (analyst_id, start_of_day)) as cursor:
+            row = await cursor.fetchone()
+            return row[0] if row else 0
+
+async def reserve_job_slot_atomically(job_id: str, analyst_id: int, user_quota: int, max_queue: int) -> str:
+    """
+    Atomically checks queue and user quotas, and reserves a job slot if allowed.
+    Returns:
+        "OK" if reserved.
+        "QUEUE_FULL" if system max queue reached.
+        "QUOTA_EXCEEDED" if user quota reached.
+    """
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc).isoformat()
+    start_of_day = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    
+    # First we do a quick read to give the specific error (since atomic insert fails silently on both)
+    q_count = await count_pending_jobs()
+    if q_count >= max_queue:
+        return "QUEUE_FULL"
+    u_count = await count_user_jobs_today(analyst_id)
+    if u_count >= user_quota:
+        return "QUOTA_EXCEEDED"
+        
+    async with _connect() as db:
+        # Atomic insert
+        sql = """
+        INSERT INTO analysis_jobs (job_id, status, analyst_id, queued_at)
+        SELECT ?, 'UPLOADING', ?, ?
+        WHERE (
+            SELECT COUNT(*) FROM analysis_jobs WHERE status IN ('QUEUED', 'PROCESSING', 'UPLOADING')
+        ) < ?
+        AND (
+            SELECT COUNT(*) FROM analysis_jobs WHERE analyst_id = ? AND queued_at >= ?
+        ) < ?
+        """
+        params = (job_id, analyst_id, now, max_queue, analyst_id, start_of_day, user_quota)
+        async with db.execute(sql, params) as cursor:
+            if cursor.rowcount == 0:
+                # One of the limits was hit during the race window
+                # Do a fresh read to return the correct error
+                if await count_pending_jobs() >= max_queue:
+                    return "QUEUE_FULL"
+                return "QUOTA_EXCEEDED"
+                
+        await db.commit()
+    return "OK"
+

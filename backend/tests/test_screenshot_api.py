@@ -55,11 +55,15 @@ async def test_screenshot_endpoint_serves_file(tmp_path, monkeypatch):
     from app.auth.auth import hash_password
     from app.db import database as db
 
+    monkeypatch.setenv("UPLOADS_DIR", str(tmp_path))
+
     sha = "b" * 64
     artifact = tmp_path / "artifacts"
-    shots = artifact / "screenshots"
-    shots.mkdir(parents=True)
-    png = shots / "001_demo.png"
+    
+    # Place file where LocalArtifactStorage will look for it
+    storage_path = tmp_path / "evidence" / sha / "screenshots"
+    storage_path.mkdir(parents=True, exist_ok=True)
+    png = storage_path / "001_demo.png"
     png.write_bytes(b"\x89PNG\r\n\x1a\n" + b"x" * 8)
 
     fake_report = {

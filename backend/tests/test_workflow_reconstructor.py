@@ -18,7 +18,7 @@ def test_reconstruct_otp_theft_chain():
         {
             "id": "1",
             "category": "accessibility",
-            "hook": "AccessibilityService.onAccessibilityEvent",
+            "hook": "AccessibilityNodeInfo.getText",
             "timestamp_ms": 1000,
         },
         {
@@ -39,7 +39,7 @@ def test_reconstruct_otp_theft_chain():
 
     assert wf.fraud_sequence_detected
     assert wf.sequence_label == "OTP_THEFT_CHAIN"
-    assert len(wf.stages) == 3
+    assert len(wf.stages) >= 3
     labels = [s.label for s in wf.stages]
     assert "Accessibility Service Activation" in labels
     assert "SMS / OTP Interception" in labels

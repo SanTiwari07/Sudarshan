@@ -179,10 +179,12 @@ _apktool = ApktoolEngine()
 _jadx = JadxEngine()
 
 # Bound how many analyses run at once. Each one occupies a worker thread and
-# spawns APKTool/JADX subprocesses, and the container is capped at cpus: 2.0 - # without this, concurrent uploads oversubscribe the CPU and every analysis gets
-# slower until they all breach the timeout together.
-MAX_CONCURRENT_ANALYSES = int(os.getenv("MAX_CONCURRENT_ANALYSES", "2"))
-_analysis_slots = asyncio.Semaphore(MAX_CONCURRENT_ANALYSES)
+# spawns APKTool/JADX subprocesses, and the container is capped at cpus: 2.0.
+STATIC_MAX_CONCURRENCY = int(os.getenv("STATIC_MAX_CONCURRENCY", os.getenv("MAX_CONCURRENT_ANALYSES", "5")))
+_analysis_slots = asyncio.Semaphore(STATIC_MAX_CONCURRENCY)
+
+DYNAMIC_MAX_CONCURRENCY = int(os.getenv("DYNAMIC_MAX_CONCURRENCY", "2"))
+_dynamic_slots = asyncio.Semaphore(DYNAMIC_MAX_CONCURRENCY)
 
 # ─── Upload limits ────────────────────────────────────────────────────────────
 # Uploads were previously unbounded: the read loop ran until the stream ended, so
@@ -233,7 +235,7 @@ def _evict_finished_jobs() -> None:
 # ─── Data Contracts ───────────────────────────────────────────────────────────
 
 class AnalyzePathRequest(BaseModel):
-    file_path: str = Field(..., description="Absolute path to APK file in shared volume")
+    object_key: str = Field(..., description="GCS object key for the APK file")
     sha256: Optional[str] = None
     timeout_seconds: Optional[int] = Field(default=DEFAULT_TIMEOUT_SECONDS, description="Per-request analysis timeout in seconds")
 
@@ -292,7 +294,8 @@ async def status():
         },
         "uploads_dir": str(UPLOADS_DIR),
         "default_timeout_seconds": DEFAULT_TIMEOUT_SECONDS,
-        "max_concurrent_analyses": MAX_CONCURRENT_ANALYSES,
+        "static_max_concurrency": STATIC_MAX_CONCURRENCY,
+        "dynamic_max_concurrency": DYNAMIC_MAX_CONCURRENCY,
     }
 
 
@@ -438,17 +441,18 @@ async def _execute_analysis_pipeline(
         # Access is serialised per-device by frida_sandbox.py's internal
         # _device_lock_for. Jobs targeting different devices will run in parallel.
         timer.stage_started("AGENTIC_EXPLORER")
-        dynamic_result = await run_frida_analysis(
-            apk_path=apk_path,
-            package_name=package_name,
-            # Static->dynamic bridge: the explorer needs the declared permission
-            # set to tell expected capability from unexpected at runtime.
-            static_findings={
-                "permissions": permissions,
-                "flags": flags_dict,
-                "app_label": getattr(androguard_output, "app_label", "") or "",
-            },
-        )
+        async with _dynamic_slots:
+            dynamic_result = await run_frida_analysis(
+                apk_path=apk_path,
+                package_name=package_name,
+                # Static->dynamic bridge: the explorer needs the declared permission
+                # set to tell expected capability from unexpected at runtime.
+                static_findings={
+                    "permissions": permissions,
+                    "flags": flags_dict,
+                    "app_label": getattr(androguard_output, "app_label", "") or "",
+                },
+            )
         timer.stage_completed("AGENTIC_EXPLORER")
 
         # 5. mitmproxy HAR Net Ingest
@@ -597,7 +601,28 @@ async def _execute_analysis_pipeline(
     # Truly pre-emptive cancellation needs a process pool; see 03_Backend_Audit.
     async with _analysis_slots:
         try:
-            return await asyncio.wait_for(_run(), timeout=float(timeout_seconds))
+            result = await asyncio.wait_for(_run(), timeout=float(timeout_seconds))
+            
+            # Phase 3 Durable Storage: Upload artifacts and clean up
+            manifest_dir = UPLOADS_DIR / sha256_hash
+            if manifest_dir.exists():
+                try:
+                    from sudarshan_core.storage.artifact_storage import get_storage
+                    storage = get_storage()
+                    
+                    for root, _, files in os.walk(manifest_dir):
+                        for file in files:
+                            local_path = Path(root) / file
+                            rel_path = local_path.relative_to(manifest_dir).as_posix()
+                            object_key = f"evidence/{sha256_hash}/{rel_path}"
+                            await storage.put_file(str(local_path), object_key)
+                    
+                    import shutil
+                    await asyncio.to_thread(shutil.rmtree, manifest_dir, ignore_errors=True)
+                except Exception as e:
+                    logger.error(f"[Engine] Failed to upload artifacts for {sha256_hash}: {e}")
+
+            return result
         except asyncio.TimeoutError:
             logger.error(f"[Engine] Analysis hard timeout exceeded ({timeout_seconds}s) for {sha256_hash}")
             raise HTTPException(
@@ -656,24 +681,51 @@ def _reject_non_apk(head: bytes, filename: Optional[str]) -> None:
 @app.post("/api/v1/analyze")
 async def analyze_path(req: AnalyzePathRequest):
     """
-    Synchronous analysis endpoint - accepts a shared-volume file path.
-    The path must resolve inside UPLOADS_DIR; see _resolve_upload_path.
+    Synchronous analysis endpoint - downloads payload from ArtifactStorage.
     """
-    file_path = _resolve_upload_path(req.file_path)
+    import tempfile
+    import os
+    import sys
+    from pathlib import Path
+    
+    # Add shared to path
+    if str(Path(__file__).resolve().parents[2]) not in sys.path:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+        
+    from sudarshan_core.storage.artifact_storage import get_storage
+    storage = get_storage()
+    fd, temp_path = tempfile.mkstemp(suffix=".apk", prefix="sudarshan_engine_")
+    os.close(fd)
+    
+    try:
+        await storage.get_file(req.object_key, temp_path)
+    except Exception as e:
+        logger.exception(f"Failed to download payload {req.object_key} from ArtifactStorage: {e}")
+        try:
+            os.remove(temp_path)
+        except OSError:
+            pass
+        raise HTTPException(status_code=404, detail="Payload not found.")
 
     sha256_hash = req.sha256
     if not sha256_hash:
         hasher = hashlib.sha256()
-        with open(file_path, "rb") as f:
+        with open(temp_path, "rb") as f:
             while chunk := f.read(HASH_CHUNK_BYTES):
                 hasher.update(chunk)
         sha256_hash = hasher.hexdigest()
 
-    return await _execute_analysis_pipeline(
-        apk_path=str(file_path),
-        sha256_hash=sha256_hash,
-        timeout_seconds=req.timeout_seconds or DEFAULT_TIMEOUT_SECONDS,
-    )
+    try:
+        return await _execute_analysis_pipeline(
+            apk_path=str(temp_path),
+            sha256_hash=sha256_hash,
+            timeout_seconds=req.timeout_seconds or DEFAULT_TIMEOUT_SECONDS,
+        )
+    finally:
+        try:
+            os.remove(temp_path)
+        except OSError:
+            pass
 
 
 @app.post("/api/v1/analyze/upload")
@@ -733,7 +785,7 @@ async def analyze_async(
     # Validate the path up front so a bad request fails fast with 400 rather
     # than becoming a job that reports FAILED later. Same containment rule as
     # the synchronous endpoint - this path used req.file_path unchecked.
-    apk_path = _resolve_upload_path(req.file_path)
+    # apk_path = _resolve_upload_path(req.file_path)
 
     _evict_finished_jobs()
 
@@ -750,9 +802,25 @@ async def analyze_async(
     async def _async_task():
         JOBS[job_id]["status"] = "RUNNING"
         JOBS[job_id]["progress_pct"] = 30
+        
+        import tempfile
+        import os
+        import sys
+        from pathlib import Path
+        
+        # Add shared to path
+        if str(Path(__file__).resolve().parents[2]) not in sys.path:
+            sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+            
+        from sudarshan_core.storage.artifact_storage import get_storage
+        storage = get_storage()
+        fd, temp_path = tempfile.mkstemp(suffix=".apk", prefix="sudarshan_engine_")
+        os.close(fd)
+        
         try:
+            await storage.get_file(req.object_key, temp_path)
             res = await _execute_analysis_pipeline(
-                apk_path=str(apk_path),
+                apk_path=str(temp_path),
                 sha256_hash=req.sha256 or "unknown",
                 timeout_seconds=req.timeout_seconds or DEFAULT_TIMEOUT_SECONDS,
             )
@@ -765,6 +833,10 @@ async def analyze_async(
             JOBS[job_id]["error"] = str(e)
         finally:
             JOBS[job_id]["finished_at"] = time.monotonic()
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
 
     background_tasks.add_task(_async_task)
     return {"job_id": job_id, "status": "QUEUED"}

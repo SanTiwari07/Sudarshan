@@ -37,7 +37,13 @@ _VIEW_ONLY = {"html"}
 
 class ExportLedgerMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception as e:
+            import traceback
+            print(f"CRITICAL ERROR IN MIDDLEWARE: {e}", flush=True)
+            print(traceback.format_exc(), flush=True)
+            raise
 
         try:
             if request.method != "GET":

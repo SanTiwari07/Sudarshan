@@ -1,0 +1,1002 @@
+[
+  {
+    "source_apk": "BASE-01-SBI.apk",
+    "candidate_baseline": "YONO SBI",
+    "string_score": 1.0,
+    "tree_score": 0.13295615275813297,
+    "color_score": 1.0,
+    "combined_score": 0.6965346534653465,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-01-SBI.apk",
+    "candidate_baseline": "HDFC Bank MobileBanking",
+    "string_score": 0.8931941749883141,
+    "tree_score": 0.13295615275813297,
+    "color_score": 0.7527424531854248,
+    "combined_score": 0.5919979367570284,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-01-SBI.apk",
+    "candidate_baseline": "iMobile Pay",
+    "string_score": 0.5585713923229604,
+    "tree_score": 0.13295615275813297,
+    "color_score": 0.2844924338291207,
+    "combined_score": 0.34108631885181084,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-01-SBI.apk",
+    "candidate_baseline": "Axis Mobile",
+    "string_score": 0.41898462720300705,
+    "tree_score": 0.13295615275813297,
+    "color_score": 0.10299117363339168,
+    "combined_score": 0.23987629775489727,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-01-SBI.apk",
+    "candidate_baseline": "bob World",
+    "string_score": 0.5433213344395896,
+    "tree_score": 0.13295615275813297,
+    "color_score": 0.49821075850626173,
+    "combined_score": 0.3884158768677478,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-01-SBI.apk",
+    "candidate_baseline": "PNB ONE",
+    "string_score": 0.4696684587670683,
+    "tree_score": 0.13295615275813297,
+    "color_score": 0.4121288686891071,
+    "combined_score": 0.33743425414445066,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-01-SBI.apk",
+    "candidate_baseline": "BOI Mobile",
+    "string_score": 0.39926518906877145,
+    "tree_score": 0.13295615275813297,
+    "color_score": 0.5995289073061498,
+    "combined_score": 0.3561229559193926,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-01-SBI.apk",
+    "candidate_baseline": "Kotak811",
+    "string_score": 0.5233116600796882,
+    "tree_score": 0.13295615275813297,
+    "color_score": 0.5445913931572878,
+    "combined_score": 0.3920071657865438,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-01-SBI.apk",
+    "candidate_baseline": "IndusMobile",
+    "string_score": 0.6105863783765885,
+    "tree_score": 0.13295615275813297,
+    "color_score": 0.4065825813705185,
+    "combined_score": 0.39241485015861155,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-01-SBI.apk",
+    "candidate_baseline": "Vyom",
+    "string_score": 0.5972857978261507,
+    "tree_score": 0.13295615275813297,
+    "color_score": 0.7115417047257114,
+    "combined_score": 0.4633343987772347,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-02-HDFC.apk",
+    "candidate_baseline": "YONO SBI",
+    "string_score": 0.595900260785187,
+    "tree_score": 0.12929848693259974,
+    "color_score": 0.6492617437460959,
+    "combined_score": 0.4459300106770087,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-02-HDFC.apk",
+    "candidate_baseline": "HDFC Bank MobileBanking",
+    "string_score": 0.8696386702213318,
+    "tree_score": 0.12929848693259974,
+    "color_score": 1.0,
+    "combined_score": 0.6431099385149426,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-02-HDFC.apk",
+    "candidate_baseline": "iMobile Pay",
+    "string_score": 0.5346488752416966,
+    "tree_score": 0.12929848693259974,
+    "color_score": 0.23753010267696545,
+    "combined_score": 0.3184965461923299,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-02-HDFC.apk",
+    "candidate_baseline": "Axis Mobile",
+    "string_score": 0.37858839026514257,
+    "tree_score": 0.12929848693259974,
+    "color_score": 0.12459827991914449,
+    "combined_score": 0.22783939651225307,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-02-HDFC.apk",
+    "candidate_baseline": "bob World",
+    "string_score": 0.41487874838591987,
+    "tree_score": 0.12929848693259974,
+    "color_score": 0.4958473984275852,
+    "combined_score": 0.33516781938767415,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-02-HDFC.apk",
+    "candidate_baseline": "PNB ONE",
+    "string_score": 0.5256155520486527,
+    "tree_score": 0.12929848693259974,
+    "color_score": 0.33545526815385973,
+    "combined_score": 0.33936450828433595,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-02-HDFC.apk",
+    "candidate_baseline": "BOI Mobile",
+    "string_score": 0.43642235891103043,
+    "tree_score": 0.12929848693259974,
+    "color_score": 0.6326624772443555,
+    "combined_score": 0.37798903330191097,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-02-HDFC.apk",
+    "candidate_baseline": "Kotak811",
+    "string_score": 0.3251211416771858,
+    "tree_score": 0.12929848693259974,
+    "color_score": 0.6796429564805788,
+    "combined_score": 0.34521366621742894,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-02-HDFC.apk",
+    "candidate_baseline": "IndusMobile",
+    "string_score": 0.25173222917790716,
+    "tree_score": 0.12929848693259974,
+    "color_score": 0.31000899427100775,
+    "combined_score": 0.2234496106653247,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-02-HDFC.apk",
+    "candidate_baseline": "Vyom",
+    "string_score": 0.6317443691949596,
+    "tree_score": 0.12929848693259974,
+    "color_score": 0.5958016499121307,
+    "combined_score": 0.4469026305824264,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-03-ICICI.apk",
+    "candidate_baseline": "YONO SBI",
+    "string_score": 0.5826079868692461,
+    "tree_score": 0.1309192200557103,
+    "color_score": 0.2703935573269121,
+    "combined_score": 0.34646331109892503,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-03-ICICI.apk",
+    "candidate_baseline": "HDFC Bank MobileBanking",
+    "string_score": 0.8623203677315725,
+    "tree_score": 0.1309192200557103,
+    "color_score": 0.1695326543986075,
+    "combined_score": 0.4331330377117795,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-03-ICICI.apk",
+    "candidate_baseline": "iMobile Pay",
+    "string_score": 0.9796235792001056,
+    "tree_score": 0.1309192200557103,
+    "color_score": 0.8,
+    "combined_score": 0.6376711586995409,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-03-ICICI.apk",
+    "candidate_baseline": "Axis Mobile",
+    "string_score": 0.6994844569755746,
+    "tree_score": 0.1309192200557103,
+    "color_score": 0.17542877120722217,
+    "combined_score": 0.36947270261153403,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-03-ICICI.apk",
+    "candidate_baseline": "bob World",
+    "string_score": 0.630619452524569,
+    "tree_score": 0.1309192200557103,
+    "color_score": 0.7315117351537349,
+    "combined_score": 0.48094744181775995,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-03-ICICI.apk",
+    "candidate_baseline": "PNB ONE",
+    "string_score": 0.7619002772701876,
+    "tree_score": 0.1309192200557103,
+    "color_score": 0.679017784463067,
+    "combined_score": 0.5203362840433404,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-03-ICICI.apk",
+    "candidate_baseline": "BOI Mobile",
+    "string_score": 0.6783804759392456,
+    "tree_score": 0.1309192200557103,
+    "color_score": 0.5590349856769908,
+    "combined_score": 0.45693266381444453,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-03-ICICI.apk",
+    "candidate_baseline": "Kotak811",
+    "string_score": 0.7945693130042079,
+    "tree_score": 0.1309192200557103,
+    "color_score": 0.3986168538550334,
+    "combined_score": 0.46330366568494014,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-03-ICICI.apk",
+    "candidate_baseline": "IndusMobile",
+    "string_score": 0.4796357600560696,
+    "tree_score": 0.1309192200557103,
+    "color_score": 0.7907797607337975,
+    "combined_score": 0.4353709712253758,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-03-ICICI.apk",
+    "candidate_baseline": "Vyom",
+    "string_score": 0.790402461922618,
+    "tree_score": 0.1309192200557103,
+    "color_score": 0.5711270107178651,
+    "combined_score": 0.504764464468012,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-04-AXIS.apk",
+    "candidate_baseline": "YONO SBI",
+    "string_score": 0.6348983728870174,
+    "tree_score": 0.130374479889043,
+    "color_score": 0.2703935573269121,
+    "combined_score": 0.3671888064477001,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-04-AXIS.apk",
+    "candidate_baseline": "HDFC Bank MobileBanking",
+    "string_score": 0.7555145427198867,
+    "tree_score": 0.130374479889043,
+    "color_score": 0.1695326543986075,
+    "combined_score": 0.39022004864877163,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-04-AXIS.apk",
+    "candidate_baseline": "iMobile Pay",
+    "string_score": 0.7749547779440729,
+    "tree_score": 0.130374479889043,
+    "color_score": 0.3861262805629324,
+    "combined_score": 0.45214454927952735,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-04-AXIS.apk",
+    "candidate_baseline": "Axis Mobile",
+    "string_score": 0.9843726023388754,
+    "tree_score": 0.130374479889043,
+    "color_score": 0.9774819257039397,
+    "combined_score": 0.6837505903227001,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-04-AXIS.apk",
+    "candidate_baseline": "bob World",
+    "string_score": 0.5298065047705057,
+    "tree_score": 0.130374479889043,
+    "color_score": 0.6560789520064895,
+    "combined_score": 0.42157340787098974,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-04-AXIS.apk",
+    "candidate_baseline": "PNB ONE",
+    "string_score": 0.3908808215807142,
+    "tree_score": 0.130374479889043,
+    "color_score": 0.7864628044924171,
+    "combined_score": 0.398599097716555,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-04-AXIS.apk",
+    "candidate_baseline": "BOI Mobile",
+    "string_score": 0.43158827685559537,
+    "tree_score": 0.130374479889043,
+    "color_score": 0.40661026872486117,
+    "combined_score": 0.3199189458846185,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-04-AXIS.apk",
+    "candidate_baseline": "Kotak811",
+    "string_score": 0.6926331251582694,
+    "tree_score": 0.130374479889043,
+    "color_score": 0.48854894229882573,
+    "combined_score": 0.4448215535991793,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-04-AXIS.apk",
+    "candidate_baseline": "IndusMobile",
+    "string_score": 0.25173222917790716,
+    "tree_score": 0.130374479889043,
+    "color_score": 0.7039509377165747,
+    "combined_score": 0.3223116940614716,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-04-AXIS.apk",
+    "candidate_baseline": "Vyom",
+    "string_score": 0.5087413845673692,
+    "tree_score": 0.130374479889043,
+    "color_score": 0.43486921898453196,
+    "combined_score": 0.3578449265342457,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-05-BOB.apk",
+    "candidate_baseline": "YONO SBI",
+    "string_score": 0.5501589597550467,
+    "tree_score": 0.1337126600284495,
+    "color_score": 0.2703935573269121,
+    "combined_score": 0.334461404243704,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-05-BOB.apk",
+    "candidate_baseline": "HDFC Bank MobileBanking",
+    "string_score": 0.7789475123652344,
+    "tree_score": 0.1337126600284495,
+    "color_score": 0.1695326543986075,
+    "combined_score": 0.400761599555703,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-05-BOB.apk",
+    "candidate_baseline": "iMobile Pay",
+    "string_score": 0.6400770755225381,
+    "tree_score": 0.1337126600284495,
+    "color_score": 0.7078582593961072,
+    "combined_score": 0.4797948260679994,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-05-BOB.apk",
+    "candidate_baseline": "Axis Mobile",
+    "string_score": 0.5774040385502479,
+    "tree_score": 0.1337126600284495,
+    "color_score": 0.12216351580559606,
+    "combined_score": 0.3083019253814555,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-05-BOB.apk",
+    "candidate_baseline": "bob World",
+    "string_score": 0.953246370922273,
+    "tree_score": 0.1337126600284495,
+    "color_score": 0.7987649831540011,
+    "combined_score": 0.6277892251673669,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-05-BOB.apk",
+    "candidate_baseline": "PNB ONE",
+    "string_score": 0.5591691700504626,
+    "tree_score": 0.1337126600284495,
+    "color_score": 0.4489522710212091,
+    "combined_score": 0.38270516678544464,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-05-BOB.apk",
+    "candidate_baseline": "BOI Mobile",
+    "string_score": 0.5094922555723205,
+    "tree_score": 0.1337126600284495,
+    "color_score": 0.5596852978672068,
+    "combined_score": 0.39051765770568725,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-05-BOB.apk",
+    "candidate_baseline": "Kotak811",
+    "string_score": 0.5319068633394175,
+    "tree_score": 0.1337126600284495,
+    "color_score": 0.4332002899941806,
+    "combined_score": 0.36786224884426943,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-05-BOB.apk",
+    "candidate_baseline": "IndusMobile",
+    "string_score": 0.36150318024859274,
+    "tree_score": 0.1337126600284495,
+    "color_score": 0.5838099738907878,
+    "combined_score": 0.3373531965820914,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-05-BOB.apk",
+    "candidate_baseline": "Vyom",
+    "string_score": 0.5972857978261507,
+    "tree_score": 0.1337126600284495,
+    "color_score": 0.5389234498819228,
+    "combined_score": 0.42044461261089827,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-06-PNB.apk",
+    "candidate_baseline": "YONO SBI",
+    "string_score": 0.6095982355546127,
+    "tree_score": 0.13220815752461323,
+    "color_score": 0.2703935573269121,
+    "combined_score": 0.3577105386871877,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-06-PNB.apk",
+    "candidate_baseline": "HDFC Bank MobileBanking",
+    "string_score": 0.6902017068532353,
+    "tree_score": 0.13220815752461323,
+    "color_score": 0.1695326543986075,
+    "combined_score": 0.36473670147456067,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-06-PNB.apk",
+    "candidate_baseline": "iMobile Pay",
+    "string_score": 0.7428637727790988,
+    "tree_score": 0.13220815752461323,
+    "color_score": 0.19857840326414272,
+    "combined_score": 0.3930629650612898,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-06-PNB.apk",
+    "candidate_baseline": "Axis Mobile",
+    "string_score": 0.46475597634598914,
+    "tree_score": 0.13220815752461323,
+    "color_score": 0.6951521962214546,
+    "combined_score": 0.4059632947273739,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-06-PNB.apk",
+    "candidate_baseline": "bob World",
+    "string_score": 0.5258134688299206,
+    "tree_score": 0.13220815752461323,
+    "color_score": 0.3724767494767441,
+    "combined_score": 0.3497174300347689,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-06-PNB.apk",
+    "candidate_baseline": "PNB ONE",
+    "string_score": 0.9755198044266201,
+    "tree_score": 0.13220815752461323,
+    "color_score": 0.9922584289383518,
+    "combined_score": 0.6845453841388507,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-06-PNB.apk",
+    "candidate_baseline": "BOI Mobile",
+    "string_score": 0.6974053738334395,
+    "tree_score": 0.13220815752461323,
+    "color_score": 0.24517158200071182,
+    "combined_score": 0.38652790016716837,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-06-PNB.apk",
+    "candidate_baseline": "Kotak811",
+    "string_score": 0.5605227446739165,
+    "tree_score": 0.13220815752461323,
+    "color_score": 0.24072064565050794,
+    "combined_score": 0.33066211441580823,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-06-PNB.apk",
+    "candidate_baseline": "IndusMobile",
+    "string_score": 0.7048902598843206,
+    "tree_score": 0.13220815752461323,
+    "color_score": 0.7540517367045629,
+    "combined_score": 0.5167418932634836,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-06-PNB.apk",
+    "candidate_baseline": "Vyom",
+    "string_score": 0.5624764222182901,
+    "tree_score": 0.13220815752461323,
+    "color_score": 0.39001434874117397,
+    "combined_score": 0.3687670112062242,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-07-BOI.apk",
+    "candidate_baseline": "YONO SBI",
+    "string_score": 0.5348101099050648,
+    "tree_score": 0.12929848693259974,
+    "color_score": 0.6586625334881234,
+    "combined_score": 0.42384414776046675,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-07-BOI.apk",
+    "candidate_baseline": "HDFC Bank MobileBanking",
+    "string_score": 0.6757069087067167,
+    "tree_score": 0.12929848693259974,
+    "color_score": 0.6223181105389339,
+    "combined_score": 0.4711167615438301,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-07-BOI.apk",
+    "candidate_baseline": "iMobile Pay",
+    "string_score": 0.7428637727790988,
+    "tree_score": 0.12929848693259974,
+    "color_score": 0.873928783985128,
+    "combined_score": 0.5608821755343314,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-07-BOI.apk",
+    "candidate_baseline": "Axis Mobile",
+    "string_score": 0.4710848197758437,
+    "tree_score": 0.12929848693259974,
+    "color_score": 0.08039309452930268,
+    "combined_score": 0.25378667196907306,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-07-BOI.apk",
+    "candidate_baseline": "bob World",
+    "string_score": 0.4386512243104246,
+    "tree_score": 0.12929848693259974,
+    "color_score": 0.7466330981294231,
+    "combined_score": 0.4073732346829355,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-07-BOI.apk",
+    "candidate_baseline": "PNB ONE",
+    "string_score": 0.5849822580252475,
+    "tree_score": 0.12929848693259974,
+    "color_score": 0.4489522710212091,
+    "combined_score": 0.3914854413918112,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-07-BOI.apk",
+    "candidate_baseline": "BOI Mobile",
+    "string_score": 0.9796064021879908,
+    "tree_score": 0.12929848693259974,
+    "color_score": 0.8198025622272654,
+    "combined_score": 0.6420476718584226,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-07-BOI.apk",
+    "candidate_baseline": "Kotak811",
+    "string_score": 0.5605227446739165,
+    "tree_score": 0.12929848693259974,
+    "color_score": 0.6442747101508521,
+    "combined_score": 0.43053224583368954,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-07-BOI.apk",
+    "candidate_baseline": "IndusMobile",
+    "string_score": 0.737478820438403,
+    "tree_score": 0.12929848693259974,
+    "color_score": 0.5919169863122997,
+    "combined_score": 0.488225245179846,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-07-BOI.apk",
+    "candidate_baseline": "Vyom",
+    "string_score": 0.40127130926552745,
+    "tree_score": 0.12929848693259974,
+    "color_score": 0.8926045284860826,
+    "combined_score": 0.42891412625414155,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-08-KOTAK.apk",
+    "candidate_baseline": "YONO SBI",
+    "string_score": 0.421314744743101,
+    "tree_score": 0.13073713490959665,
+    "color_score": 0.5621623067391438,
+    "combined_score": 0.3548244718003852,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-08-KOTAK.apk",
+    "candidate_baseline": "HDFC Bank MobileBanking",
+    "string_score": 0.6902017068532353,
+    "tree_score": 0.13073713490959665,
+    "color_score": 0.6038038757451306,
+    "combined_score": 0.47278964889593567,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-08-KOTAK.apk",
+    "candidate_baseline": "iMobile Pay",
+    "string_score": 0.6649041858608906,
+    "tree_score": 0.13073713490959665,
+    "color_score": 0.6091903224980302,
+    "combined_score": 0.4640172521872226,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-08-KOTAK.apk",
+    "candidate_baseline": "Axis Mobile",
+    "string_score": 0.5583012260840783,
+    "tree_score": 0.13073713490959665,
+    "color_score": 0.18910917661316792,
+    "combined_score": 0.3163557818052821,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-08-KOTAK.apk",
+    "candidate_baseline": "bob World",
+    "string_score": 0.2579817216354745,
+    "tree_score": 0.13073713490959665,
+    "color_score": 0.7497999525464693,
+    "combined_score": 0.33640067400916596,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-08-KOTAK.apk",
+    "candidate_baseline": "PNB ONE",
+    "string_score": 0.39276990589828337,
+    "tree_score": 0.13073713490959665,
+    "color_score": 0.33303135596491795,
+    "combined_score": 0.2861237985689017,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-08-KOTAK.apk",
+    "candidate_baseline": "BOI Mobile",
+    "string_score": 0.5551135332517744,
+    "tree_score": 0.13073713490959665,
+    "color_score": 0.7324704076492737,
+    "combined_score": 0.45092101243138705,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-08-KOTAK.apk",
+    "candidate_baseline": "Kotak811",
+    "string_score": 0.9819453890413946,
+    "tree_score": 0.13073713490959665,
+    "color_score": 0.9295816785115388,
+    "combined_score": 0.6709315724628014,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-08-KOTAK.apk",
+    "candidate_baseline": "IndusMobile",
+    "string_score": 0.6085572902472363,
+    "tree_score": 0.13073713490959665,
+    "color_score": 0.3587602813887941,
+    "combined_score": 0.37887098366445193,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-08-KOTAK.apk",
+    "candidate_baseline": "Vyom",
+    "string_score": 0.5697688945535813,
+    "tree_score": 0.13073713490959665,
+    "color_score": 0.5518425955426685,
+    "combined_score": 0.41162620392545846,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-09-INDUS.apk",
+    "candidate_baseline": "YONO SBI",
+    "string_score": 0.3872329021636802,
+    "tree_score": 0.13295615275813297,
+    "color_score": 0.3679180625930342,
+    "combined_score": 0.2934073299790772,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-09-INDUS.apk",
+    "candidate_baseline": "HDFC Bank MobileBanking",
+    "string_score": 0.2536073052809706,
+    "tree_score": 0.13295615275813297,
+    "color_score": 0.1695326543986075,
+    "combined_score": 0.19036073917738666,
+    "detected": false,
+    "over_threshold": false
+  },
+  {
+    "source_apk": "BASE-09-INDUS.apk",
+    "candidate_baseline": "iMobile Pay",
+    "string_score": 0.3252740492357649,
+    "tree_score": 0.13295615275813297,
+    "color_score": 0.7426885931395667,
+    "combined_score": 0.36231642144454423,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-09-INDUS.apk",
+    "candidate_baseline": "Axis Mobile",
+    "string_score": 0.24759542121664974,
+    "tree_score": 0.13295615275813297,
+    "color_score": 0.415467717090479,
+    "combined_score": 0.2494397512246262,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-09-INDUS.apk",
+    "candidate_baseline": "bob World",
+    "string_score": 0.21574070413864904,
+    "tree_score": 0.13295615275813297,
+    "color_score": 0.6834910286960308,
+    "combined_score": 0.30370369229481387,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-09-INDUS.apk",
+    "candidate_baseline": "PNB ONE",
+    "string_score": 0.32348911644625794,
+    "tree_score": 0.13295615275813297,
+    "color_score": 0.8597780781210413,
+    "combined_score": 0.3908748195741101,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-09-INDUS.apk",
+    "candidate_baseline": "BOI Mobile",
+    "string_score": 0.34829684404129624,
+    "tree_score": 0.13295615275813297,
+    "color_score": 0.5191212916407986,
+    "combined_score": 0.3156337139920647,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-09-INDUS.apk",
+    "candidate_baseline": "Kotak811",
+    "string_score": 0.5023437031507278,
+    "tree_score": 0.13295615275813297,
+    "color_score": 0.48461710060666807,
+    "combined_score": 0.36862640987730466,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-09-INDUS.apk",
+    "candidate_baseline": "IndusMobile",
+    "string_score": 0.9627333202666541,
+    "tree_score": 0.13295615275813297,
+    "color_score": 0.9437500850251805,
+    "combined_score": 0.6675655028283034,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-09-INDUS.apk",
+    "candidate_baseline": "Vyom",
+    "string_score": 0.3600151938145831,
+    "tree_score": 0.13295615275813297,
+    "color_score": 0.6842642632885173,
+    "combined_score": 0.3616067968133091,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-10-UNION.apk",
+    "candidate_baseline": "YONO SBI",
+    "string_score": 0.5317168396150221,
+    "tree_score": 0.13073713490959665,
+    "color_score": 0.6842515887868261,
+    "combined_score": 0.4295076302610742,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-10-UNION.apk",
+    "candidate_baseline": "HDFC Bank MobileBanking",
+    "string_score": 0.784193744107866,
+    "tree_score": 0.13073713490959665,
+    "color_score": 0.5823531133116981,
+    "combined_score": 0.5050237731894298,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-10-UNION.apk",
+    "candidate_baseline": "iMobile Pay",
+    "string_score": 0.7055733945131212,
+    "tree_score": 0.13073713490959665,
+    "color_score": 0.8893614812133194,
+    "combined_score": 0.5503277253269372,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-10-UNION.apk",
+    "candidate_baseline": "Axis Mobile",
+    "string_score": 0.4658047965733772,
+    "tree_score": 0.13073713490959665,
+    "color_score": 0.09382093889608875,
+    "combined_score": 0.2555351505717319,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-10-UNION.apk",
+    "candidate_baseline": "bob World",
+    "string_score": 0.6536006056777911,
+    "tree_score": 0.13073713490959665,
+    "color_score": 0.7080711522742074,
+    "combined_score": 0.4842160275580271,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-10-UNION.apk",
+    "candidate_baseline": "PNB ONE",
+    "string_score": 0.6324121207945664,
+    "tree_score": 0.13073713490959665,
+    "color_score": 0.5880640851214108,
+    "combined_score": 0.44573886681653807,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-10-UNION.apk",
+    "candidate_baseline": "BOI Mobile",
+    "string_score": 0.3335490140355688,
+    "tree_score": 0.13073713490959665,
+    "color_score": 0.8235690427690429,
+    "combined_score": 0.38506986352484707,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-10-UNION.apk",
+    "candidate_baseline": "Kotak811",
+    "string_score": 0.49776370853837065,
+    "tree_score": 0.13073713490959665,
+    "color_score": 0.5909113875790016,
+    "combined_score": 0.3925913275284575,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-10-UNION.apk",
+    "candidate_baseline": "IndusMobile",
+    "string_score": 0.38533187854833745,
+    "tree_score": 0.13073713490959665,
+    "color_score": 0.7537116769836533,
+    "combined_score": 0.38831866788360714,
+    "detected": true,
+    "over_threshold": true
+  },
+  {
+    "source_apk": "BASE-10-UNION.apk",
+    "candidate_baseline": "Vyom",
+    "string_score": 1.0,
+    "tree_score": 0.13073713490959665,
+    "color_score": 0.9531287471950532,
+    "combined_score": 0.6840401840171222,
+    "detected": true,
+    "over_threshold": true
+  }
+]

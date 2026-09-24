@@ -332,22 +332,25 @@ class TestPDFGeneratorUnit:
         reader = PdfReader(io.BytesIO(pdf_bytes))
         assert len(reader.pages) >= 15
 
-from fastapi.testclient import TestClient
+from httpx import AsyncClient, ASGITransport
+import pytest
 
 class TestPDFExportAPI:
 
-    def test_export_pdf_endpoint(self, sample_case_data, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_export_pdf_endpoint(self, sample_case_data, monkeypatch):
         os.environ["JWT_SECRET_KEY"] = "test-secret-key-1234567890-super-secret-sudarshan"
         from app.main import app
         from app.routes.report import cache_report
-        from auth_helpers import auth_headers_sync
+        from auth_helpers import auth_headers
 
         cache_report(sample_case_data["sha256"], sample_case_data)
 
-        client = TestClient(app)
-        headers = auth_headers_sync("testanalyst", "analyst")
-
-        response = client.get(f"/api/v1/report/pdf/{sample_case_data['sha256']}", headers=headers)
+        headers = await auth_headers("testanalyst", "analyst")
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get(f"/api/v1/report/pdf/{sample_case_data['sha256']}", headers=headers)
+        
         assert response.status_code == 200
         assert response.headers["content-type"] == "application/pdf"
         assert response.content.startswith(b"%PDF-1.")

@@ -162,6 +162,11 @@ def _build_dynamic_analysis_model(dynamic_result: Optional[Dict]) -> Optional[Dy
         bfci_evidence=bfci_ev,
         artifact_dir=dynamic_result.get("artifact_dir"),
         evidence_record_count=int(dynamic_result.get("evidence_record_count", 0) or 0),
+        crash_info=dynamic_result.get("crash_info"),
+        dynamic_status=str(dynamic_result.get("dynamic_status", "NOT_STARTED")),
+        screenshot_status=dynamic_result.get("screenshot_status"),
+        dynamic_coverage=dynamic_result.get("dynamic_coverage", {}),
+        crashes=dynamic_result.get("crashes", []),
     )
 
 
@@ -236,9 +241,11 @@ async def _call_analysis_engine(temp_path: str, sha256_hash: str) -> Optional[Di
     try:
         async with httpx.AsyncClient(timeout=_ENGINE_TIMEOUT_SECONDS) as client:
             from sudarshan_core.security.internal_auth import internal_auth_headers
+            # Assuming artifact key pattern apks/{sha256}.apk since we know it
+            object_key = f"apks/{sha256_hash}.apk"
             resp = await client.post(
                 url,
-                json={"file_path": temp_path, "sha256": sha256_hash},
+                json={"object_key": object_key, "sha256": sha256_hash},
                 headers=internal_auth_headers(),
             )
             if resp.status_code == 200:
@@ -1089,10 +1096,8 @@ async def _receive_apk(file: UploadFile) -> tuple[str, str]:
     temp_path: Optional[str] = None
 
     try:
-        # Written to the volume SHARED with analysis-engine so delegation can
-        # resolve it. Previously this was the container-private /tmp, so every
-        # delegation attempt 400d and the gateway silently ran the pipeline
-        # itself - without APKTool/JADX and without the engine's limits.
+        # We first spool to a local temp file, then we will upload to ArtifactStorage
+        # and remove the local spool file.
         with tempfile.NamedTemporaryFile(delete=False, suffix=".apk", dir=_UPLOADS_DIR) as tmp:
             temp_path = tmp.name
             first = True
@@ -1123,7 +1128,37 @@ async def _receive_apk(file: UploadFile) -> tuple[str, str]:
             if first:
                 raise HTTPException(status_code=400, detail="Empty upload.")
 
-        return temp_path, hasher.hexdigest()
+        sha256 = hasher.hexdigest()
+        
+        # Now upload the spooled file to the durable ArtifactStorage
+        import sys
+        if str(Path(__file__).resolve().parents[2]) not in sys.path:
+            sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+        
+        from sudarshan_core.storage.artifact_storage import get_storage
+        storage = get_storage()
+        object_key = f"apks/{sha256}.apk"
+        await storage.put_file(temp_path, object_key, content_type="application/vnd.android.package-archive")
+
+        from app.db.artifact_metadata import record_artifact
+        await record_artifact(
+            artifact_id=f"apk_{sha256}",
+            artifact_type="original_apk",
+            object_key=object_key,
+            status="VERIFIED",
+            size_bytes=total,
+            sha256=sha256,
+            content_type="application/vnd.android.package-archive"
+        )
+        
+        # Remove the temporary spooled file since it is now in durable storage
+        if temp_path:
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+            
+        return object_key, sha256
 
     except Exception:
         if temp_path:
@@ -1256,7 +1291,45 @@ async def analyze_upload(
     Synchronous APK analysis - waits for full result before returning.
     Requires JWT Bearer token (any analyst role).
     """
-    temp_path, sha256_hash = await _receive_apk(file)
+    from app.db.database import count_pending_jobs, count_user_jobs_today
+    
+    max_queue = int(os.getenv("MAX_QUEUE_DEPTH", "1000"))
+    user_quota = int(os.getenv("USER_QUOTA_PER_DAY", "1000"))
+    
+    import uuid
+    job_id = f"job_{uuid.uuid4().hex[:12]}"
+    
+    from app.db.database import reserve_job_slot_atomically
+    reserve_res = await reserve_job_slot_atomically(
+        job_id=job_id,
+        analyst_id=user.get("id") or 0,
+        user_quota=user_quota,
+        max_queue=max_queue
+    )
+    if reserve_res == "QUEUE_FULL":
+        raise HTTPException(status_code=429, detail="Analysis capacity is full. Please try again later.")
+    elif reserve_res == "QUOTA_EXCEEDED":
+        raise HTTPException(status_code=429, detail=f"Daily quota of {user_quota} analyses exceeded.")
+
+    object_key, sha256_hash = await _receive_apk(file)
+    
+    import tempfile
+    import os
+    from sudarshan_core.storage.artifact_storage import get_storage
+    
+    storage = get_storage()
+    fd, temp_path = tempfile.mkstemp(suffix=".apk", prefix="sudarshan_sync_")
+    os.close(fd)
+    
+    try:
+        await storage.get_file(object_key, temp_path)
+    except Exception as e:
+        logger.exception(f"Failed to download payload from artifact storage: {e}")
+        try:
+            os.remove(temp_path)
+        except OSError:
+            pass
+        raise HTTPException(status_code=500, detail="Failed to retrieve uploaded file from storage.")
 
     try:
         result = await _run_analysis_pipeline(
@@ -1267,12 +1340,20 @@ async def analyze_upload(
         return _build_response(result)
     except Exception as e:
         logger.exception(f"Analysis pipeline failed: {e}")
+        from app.db.database import _connect
+        async with _connect() as db:
+            await db.execute("UPDATE analysis_jobs SET status = 'FAILED', error = ? WHERE job_id = ?", (str(e), job_id))
+            await db.commit()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         try:
             os.remove(temp_path)
         except Exception:
             pass
+        from app.db.database import _connect
+        async with _connect() as db:
+            await db.execute("UPDATE analysis_jobs SET status = 'COMPLETED' WHERE job_id = ? AND status != 'FAILED'", (job_id,))
+            await db.commit()
 
 
 # ─── Async Endpoint ───────────────────────────────────────────────────────────
@@ -1287,27 +1368,45 @@ class AsyncJobResponse(_BM):
 
 
 @router.post("/analyze/async", response_model=AsyncJobResponse, status_code=202)
-@limiter.limit("10/minute")
 async def analyze_upload_async(
     request: Request,
     file: UploadFile = File(...),
     user: dict = Depends(require_analyst),
 ):
-    """
-    Asynchronous APK analysis - returns job_id immediately.
-    Poll GET /api/v1/status/{job_id} to get result.
-    """
-    temp_path, sha256_hash = await _receive_apk(file)
+    try:
+        from app.db.database import reserve_job_slot_atomically
+        
+        max_queue = int(os.getenv("MAX_QUEUE_DEPTH", "1000"))
+        user_quota = int(os.getenv("USER_QUOTA_PER_DAY", "1000"))
+        
+        import uuid
+        job_id = f"job_{uuid.uuid4().hex[:12]}"
+        
+        reserve_res = await reserve_job_slot_atomically(
+            job_id=job_id,
+            analyst_id=user.get("id") or 0,
+            user_quota=user_quota,
+            max_queue=max_queue
+        )
+        if reserve_res == "QUEUE_FULL":
+            raise HTTPException(status_code=429, detail="Analysis queue is full. Please try again later.")
+        elif reserve_res == "QUOTA_EXCEEDED":
+            raise HTTPException(status_code=429, detail=f"Daily quota of {user_quota} analyses exceeded.")
 
-    job_id = create_job(sha256_hash=sha256_hash, analyst_id=user.get("id"))
-    await persist_job(job_id)
-    await enqueue(job_id, temp_path, file.filename, sha256_hash, analyst_id=user.get("id"))
+        object_key, sha256_hash = await _receive_apk(file)
+        # Use the job_id we atomically reserved
+        await enqueue(job_id, object_key, file.filename, sha256_hash, analyst_id=user.get("id"))
 
-    return AsyncJobResponse(
-        job_id=job_id,
-        status="queued",
-        message="Analysis job queued. Poll /api/v1/status/{job_id} for result.",
-    )
+        return AsyncJobResponse(
+            job_id=job_id,
+            status="queued",
+            message="Analysis job queued. Poll /api/v1/status/{job_id} for result.",
+        )
+    except Exception as e:
+        import traceback
+        logger.error(f"Error in analyze_upload_async: {e}")
+        logger.error(traceback.format_exc())
+        raise
 
 
 @router.get("/status/{job_id}")

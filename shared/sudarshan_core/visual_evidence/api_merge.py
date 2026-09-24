@@ -10,17 +10,48 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 
-def load_visual_evidence_records(artifact_dir: Optional[Path]) -> List[Dict[str, Any]]:
-    if not artifact_dir:
+def load_visual_evidence_records(artifact_dir: Optional[Path] = None, sha256: Optional[str] = None) -> List[Dict[str, Any]]:
+    if artifact_dir:
+        path = Path(artifact_dir) / "visual_evidence.json"
+        if path.is_file():
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                records = data.get("records")
+                return list(records) if isinstance(records, list) else []
+            except Exception as exc:
+                logger.warning("[VisualEvidence] Could not read %s: %s", path, exc)
+                return []
+
+    if not sha256:
         return []
-    path = Path(artifact_dir) / "visual_evidence.json"
-    if not path.is_file():
-        return []
+        
+    object_key = f"evidence/{sha256}/visual_evidence.json"
+    
+    import asyncio
+    from sudarshan_core.storage.artifact_storage import get_storage
+    import tempfile
+    import os
+    
+    storage = get_storage()
+    fd, temp_path = tempfile.mkstemp(suffix=".json")
+    os.close(fd)
+    
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import nest_asyncio
+            nest_asyncio.apply()
+        loop.run_until_complete(storage.get_file(object_key, temp_path))
+        data = json.loads(Path(temp_path).read_text(encoding="utf-8"))
     except Exception as exc:
-        logger.warning("[VisualEvidence] Could not read %s: %s", path, exc)
+        logger.debug("[VisualEvidence] Could not read %s: %s", object_key, exc)
         return []
+    finally:
+        try:
+            os.remove(temp_path)
+        except OSError:
+            pass
+            
     records = data.get("records")
     return list(records) if isinstance(records, list) else []
 

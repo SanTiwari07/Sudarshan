@@ -131,7 +131,14 @@ async def test_batch_fifo_order_logic():
     await init_db()
 
     from app.db.database import create_batch, create_batch_job
-    await create_batch(batch_id, created_by=1, total_jobs=3)
+    from auth_helpers import ensure_user
+    
+    # We assign batch to user 1. We must make sure user 1 exists (or at least a user does, and we get their ID)
+    # The simplest is to ensure some user exists and use their ID, but create_batch might just need ANY valid user ID.
+    # Let's ensure a user exists and use their ID.
+    user = await ensure_user("batch_fifo_user")
+    
+    await create_batch(batch_id, created_by=user["id"], total_jobs=3)
 
     job0_id = f"job-0-{uuid.uuid4()}"
     job1_id = f"job-1-{uuid.uuid4()}"
@@ -325,7 +332,7 @@ async def test_batch_cancellation_aborts_active_scanning_and_queued_jobs():
     Test that cancelling a batch cancels both QUEUED and active SCANNING jobs,
     aborts the underlying analysis_queue job, and preserves CANCELLED status.
     """
-    from app.workers.analysis_queue import create_job as create_aq_job, get_job as get_aq_job
+    from app.workers.analysis_queue import create_job as create_aq_job, get_job as get_aq_job, enqueue as enqueue_aq_job
     from app.workers.batch_worker import _finalize_batch
 
     analyst_auth_header = await _get_auth_headers("test_analyst_cancel_active", "analyst")
@@ -346,6 +353,7 @@ async def test_batch_cancellation_aborts_active_scanning_and_queued_jobs():
 
         # Simulate job0 is currently SCANNING with an active analysis_queue job
         aq_job_id = create_aq_job(sha256_hash="fake_hash", analyst_id=1)
+        await enqueue_aq_job(aq_job_id, object_key="fake", filename="fake", sha256_hash="fake_hash", analyst_id=1)
         await update_batch_job(job0_id, {
             "status": "SCANNING",
             "analyst_queue_job_id": aq_job_id,

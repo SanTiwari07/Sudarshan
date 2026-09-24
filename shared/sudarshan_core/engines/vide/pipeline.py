@@ -226,7 +226,7 @@ def collect_webview_html_from_frida_events(dynamic_result: Dict[str, Any]) -> Li
                 continue
             data = wrapper.get("data") if isinstance(wrapper.get("data"), dict) else wrapper
             hook = str(data.get("hook") or wrapper.get("hook") or "")
-            if "loadData" in hook or "loadDataWithBaseURL" in hook:
+            if "loadData" in hook or "loadDataWithBaseURL" in hook or "loadUrl" in hook:
                 html = data.get("html_preview") or data.get("data_preview") or ""
                 if html:
                     html_snippets.append(str(html))

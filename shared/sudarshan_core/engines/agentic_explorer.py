@@ -568,6 +568,16 @@ class AgenticExplorer:
                 adb_path=adb_path,
                 exploration=self.exploration
             )
+        elif planner_mode == "laya":
+            from sudarshan_core.engines.agentic.laya_planner import LayaPlanner
+            self.planner = LayaPlanner(
+                device_serial=device_serial,
+                package_name=package_name,
+                action_budget=ACTION_BUDGET,
+                benchmark=self.benchmark,
+                adb_path=adb_path,
+                exploration=self.exploration
+            )
         elif planner_mode == "hybrid":
             from sudarshan_core.engines.agentic.jev_planner import JevPlanner
             from sudarshan_core.engines.agentic.hybrid_planner import HybridPlanner
@@ -581,6 +591,35 @@ class AgenticExplorer:
                 exploration=self.exploration
             )
             self.planner = HybridPlanner(jev_planner, agent_planner)
+        elif planner_mode == "laya_hybrid":
+            from sudarshan_core.engines.agentic.laya_planner import LayaPlanner
+            from sudarshan_core.engines.agentic.jev_planner import JevPlanner
+            from sudarshan_core.engines.agentic.decision_provider import create_decision_provider
+            
+            laya_planner = LayaPlanner(
+                device_serial=device_serial,
+                package_name=package_name,
+                action_budget=ACTION_BUDGET,
+                benchmark=self.benchmark,
+                adb_path=adb_path,
+                exploration=self.exploration
+            )
+            jev_planner = JevPlanner(
+                api_key=os.getenv("TYPESAFE_JEV_API_KEY", ""),
+                device_serial=device_serial,
+                package_name=package_name,
+                action_budget=ACTION_BUDGET,
+                benchmark=self.benchmark,
+                adb_path=adb_path,
+                exploration=self.exploration
+            )
+            self.planner = create_decision_provider(
+                "laya_hybrid",
+                laya_planner=laya_planner,
+                jev_planner=jev_planner,
+                agent_planner=agent_planner,
+                exploration=self.exploration,
+            )
         else:
             self.planner = agent_planner
         self.dispatcher = ActionDispatcher()
@@ -3241,13 +3280,14 @@ class AgenticExplorer:
                     #     get their turn - those can never come from the graph
                     planner_mode = os.getenv("SUDARSHAN_PLANNER_MODE", "").lower()
                     is_jev = planner_mode == "jev"
-                    is_hybrid = planner_mode == "hybrid"
+                    is_laya = planner_mode == "laya"
+                    is_hybrid = planner_mode in ("hybrid", "laya_hybrid")
                     
-                    graph_action = None if is_jev else self.exploration.get_next_action(
+                    graph_action = None if (is_jev or is_laya) else self.exploration.get_next_action(
                         state_id=graph_state.state_id, memory=self.memory,
                     )
                     self._planner_skips = getattr(self, "_planner_skips", 0)
-                    force_planner = self._planner_skips >= PLANNER_CONSULT_EVERY or is_jev or is_hybrid
+                    force_planner = self._planner_skips >= PLANNER_CONSULT_EVERY or is_jev or is_laya or is_hybrid
 
                     # Two further gates, both of which fall back to the
                     # deterministic path rather than blocking (§P9/§P19):
@@ -3292,9 +3332,12 @@ class AgenticExplorer:
                     if is_jev:
                         action = planner_action
                         selected_by = "jev_planner" if action else "none"
-                    elif planner_action and planner_action.get("_selected_by") == "jev_planner":
+                    elif is_laya:
                         action = planner_action
-                        selected_by = "jev_planner"
+                        selected_by = "laya_planner" if action else "none"
+                    elif planner_action and planner_action.get("_selected_by") in ("jev_planner", "laya_planner"):
+                        action = planner_action
+                        selected_by = planner_action.get("_selected_by")
                     else:
                         action, selected_by = select_canonical_action(graph_action, planner_action)
                 if action is not None:

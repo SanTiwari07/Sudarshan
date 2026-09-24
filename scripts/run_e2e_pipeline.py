@@ -7,10 +7,10 @@ import json
 import sys
 import time
 
-BACKEND = "http://localhost:8000"
+BACKEND = "http://127.0.0.1:8001"
 ADMIN_USER = "admin"
 ADMIN_PASS = "Sudarshan@2026"
-APK_PATH = r"d:\Projects\Sudarshan BOI\test apk\Vulnerable\InsecureBankv2.apk"
+APK_PATH = sys.argv[1] if len(sys.argv) > 1 else r"C:\Projects\Sudarshan\test apk\Malware\Krep_Banking_Malware.apk"
 
 print("=" * 60)
 print("SUDARSHAN - End-to-End Pipeline Test")
@@ -107,7 +107,7 @@ while time.time() - start < max_wait:
                 print(f"\n  AI Narrative (excerpt):")
                 print(f"    {narrative[:400]}...")
 
-        with open(r"d:\Projects\Sudarshan BOI\scripts\pipeline_test_result.json", "w") as f:
+        with open(r"scripts\pipeline_test_result.json", "w") as f:
             json.dump(result, f, indent=2)
         print("\n  Full result saved: scripts/pipeline_test_result.json")
 

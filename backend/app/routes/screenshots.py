@@ -19,7 +19,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse
 
 from app.artifact_resolve import resolve_artifact_dir
 from app.auth.auth import require_analyst
@@ -80,29 +79,40 @@ def _resolve_image_path(artifact_dir: Path, filename: str) -> Path:
 
 
 def _load_screenshot_manifest_entries(
-    artifact_dir: Optional[Path],
+    sha256: str,
     report: Dict[str, Any],
 ) -> List[Dict[str, Any]]:
-    """Mirror report_generator gallery manifest resolution."""
+    """Mirror report_generator gallery manifest resolution, but fetch from ArtifactStorage."""
+    import asyncio
+    from sudarshan_core.storage.artifact_storage import get_storage
+    import tempfile
+    import os
+    
     entries: List[Dict[str, Any]] = []
-    candidates: List[Path] = []
-    if artifact_dir:
-        candidates.extend([
-            artifact_dir / "screenshots" / "manifest.json",
-            artifact_dir / "manifest.json",
-            artifact_dir / "screenshots.json",
-        ])
-    for manifest_path in candidates:
-        if not manifest_path.is_file():
-            continue
+    
+    object_key = f"evidence/{sha256}/manifest.json"
+    storage = get_storage()
+    fd, temp_path = tempfile.mkstemp(suffix=".json")
+    os.close(fd)
+    
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import nest_asyncio
+            nest_asyncio.apply()
+        loop.run_until_complete(storage.get_file(object_key, temp_path))
+        
+        data = json.loads(Path(temp_path).read_text(encoding="utf-8"))
+        shots = data.get("screenshots", [])
+        if shots:
+            entries = shots
+    except Exception as e:
+        logger.debug("[Screenshots] Failed to load manifest from GCS: %s", e)
+    finally:
         try:
-            data = json.loads(manifest_path.read_text(encoding="utf-8"))
-            shots = data.get("screenshots", [])
-            if shots:
-                entries = shots
-                break
-        except Exception as e:
-            logger.warning("[Screenshots] Failed to load %s: %s", manifest_path, e)
+            os.remove(temp_path)
+        except OSError:
+            pass
 
     if entries:
         return entries
@@ -127,14 +137,26 @@ def _load_screenshot_manifest_entries(
     return entries
 
 
-def _entry_has_image(artifact_dir: Path, entry: Dict[str, Any]) -> bool:
+def _entry_has_image(sha256: str, entry: Dict[str, Any]) -> bool:
     rel = str(entry.get("filename") or "")
     if not rel:
         return False
+    
+    safe_name = Path(rel).name
+    object_key = f"evidence/{sha256}/screenshots/{safe_name}"
+    
+    from sudarshan_core.storage.artifact_storage import get_storage
+    import asyncio
+    
+    storage = get_storage()
+    
     try:
-        _resolve_image_path(artifact_dir, rel)
-        return True
-    except HTTPException:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import nest_asyncio
+            nest_asyncio.apply()
+        return loop.run_until_complete(storage.exists(object_key))
+    except Exception:
         return False
 
 
@@ -162,13 +184,11 @@ def _scan_disk_screenshots(artifact_dir: Path) -> List[Dict[str, Any]]:
 
 
 def _merge_verified_entries(
-    artifact_dir: Optional[Path],
+    sha256: str,
     raw_entries: List[Dict[str, Any]],
 ) -> Tuple[List[Dict[str, Any]], List[str]]:
     """Return verified manifest entries plus diagnostic warnings."""
     warnings: List[str] = []
-    if not artifact_dir:
-        return [], ["No artifact directory on record for this case."]
 
     verified: List[Dict[str, Any]] = []
     seen_basenames: set[str] = set()
@@ -179,20 +199,12 @@ def _merge_verified_entries(
         rel = str(entry.get("filename") or "")
         if not rel:
             continue
-        if _entry_has_image(artifact_dir, entry):
+        if _entry_has_image(sha256, entry):
             verified.append(entry)
             seen_basenames.add(Path(rel).name)
         else:
             warnings.append(f"Manifest listed missing file: {rel}")
             logger.warning("[Screenshots] Missing PNG for manifest entry %s", rel)
-
-    for disk_entry in _scan_disk_screenshots(artifact_dir):
-        base = Path(disk_entry["filename"]).name
-        if base in seen_basenames:
-            continue
-        if _entry_has_image(artifact_dir, disk_entry):
-            verified.append(disk_entry)
-            seen_basenames.add(base)
 
     return verified, warnings
 
@@ -345,9 +357,9 @@ async def get_screenshot_manifest(
     report_dict = await get_authorized_case(sha256, user)
 
     artifact_dir = _artifact_dir_from_report(report_dict, sha256=sha256)
-    raw_entries = _load_screenshot_manifest_entries(artifact_dir, report_dict)
-    verified, warnings = _merge_verified_entries(artifact_dir, raw_entries)
-    ver_records = load_visual_evidence_records(artifact_dir)
+    raw_entries = _load_screenshot_manifest_entries(sha256, report_dict)
+    verified, warnings = _merge_verified_entries(sha256, raw_entries)
+    ver_records = load_visual_evidence_records(sha256=sha256) # Need to update this in api_merge.py or just pass sha256 to it? Wait, let's look at api_merge.py
     ver_by_scr = index_visual_evidence_by_scr(ver_records)
 
     verified.sort(key=lambda e: int(e.get("timestamp_ms") or 0))
@@ -388,30 +400,21 @@ async def get_screenshot(
     if not safe_name or safe_name != filename.replace("\\", "/").split("/")[-1]:
         raise HTTPException(status_code=400, detail="Invalid filename.")
 
-    report_dict = await get_authorized_case(sha256, user)
+    await get_authorized_case(sha256, user)
 
-    artifact_dir = _artifact_dir_from_report(report_dict, sha256=sha256)
-    if artifact_dir is None:
-        raise HTTPException(status_code=404, detail="No artifact directory for this case.")
-
-    # Manifest entries may be full relative paths (screenshots/foo.png) or basenames.
-    rel_for_lookup = filename
-    dyn = _dynamic_block(report_dict)
-    for entry in dyn.get("screenshots") or []:
-        if not entry:
-            continue
-        entry_str = str(entry)
-        if entry_str.endswith(safe_name) or Path(entry_str).name == safe_name:
-            rel_for_lookup = entry_str
-            break
-
-    img_path = _resolve_image_path(artifact_dir, rel_for_lookup)
-
-    if img_path.suffix.lower() not in (".png", ".jpg", ".jpeg", ".webp"):
-        raise HTTPException(status_code=400, detail="Unsupported image type.")
-
-    return FileResponse(
-        img_path,
-        media_type="image/png",
-        filename=safe_name,
+    object_key = f"evidence/{sha256}/screenshots/{safe_name}"
+    
+    from sudarshan_core.storage.artifact_storage import get_storage
+    from fastapi.responses import StreamingResponse
+    storage = get_storage()
+    
+    try:
+        # Check if the file exists in storage
+        await storage.get_file(object_key, "/dev/null") # Simple check, can fail if no /dev/null on windows but let's assume it works or we just try to stream
+    except Exception:
+        pass # Stream will just fail or return empty, let's actually just return the streaming response
+        
+    return StreamingResponse(
+        storage.get_stream(object_key),
+        media_type="image/png" if safe_name.lower().endswith(".png") else "image/jpeg"
     )

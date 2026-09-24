@@ -141,6 +141,8 @@ class DynamicAnalysisStatus(str, Enum):
     FRIDA_ATTACH_FAILED = "FRIDA_ATTACH_FAILED"
     PID_NOT_FOUND = "PID_NOT_FOUND"
     INSTRUMENTATION_FAILED = "INSTRUMENTATION_FAILED"
+    CRASHED_BEFORE_EXPLORATION = "CRASHED_BEFORE_EXPLORATION"
+    BACKGROUND_SERVICE_RUNNING = "BACKGROUND_SERVICE_RUNNING"
     RUNTIME_COMPLETED_NO_EVENTS = "RUNTIME_COMPLETED_NO_EVENTS"
     INCONCLUSIVE = "INCONCLUSIVE"
     EVENTS_CAPTURED = "EVENTS_CAPTURED"
@@ -575,6 +577,7 @@ class CrashReport:
     is_launch_logic_issue: bool = False
     is_manifest_issue: bool = False
     is_instrumentation_issue: bool = False
+    is_lmk_issue: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return dataclasses.asdict(self)
@@ -1916,6 +1919,7 @@ def _collect_crash_diagnostics(
         "ActivityNotFoundException", "SecurityException",
         "ResourcesNotFoundException", "PackageManager", "ART",
         "avc: denied", "INSTALL_", "Fatal signal",
+        "lowmemorykiller", "am_proc_died", "am_kill", "min watermark is breached",
     )
     try:
         ok, logcat_raw = _adb(
@@ -2014,7 +2018,7 @@ def _collect_crash_diagnostics(
 
             # Native crash signal
             for line in error_lines:
-                if "Fatal signal" in line or "E/libc" in line:
+                if ("Fatal signal" in line or "E/libc" in line) and package_name in line:
                     if not report.native_stacktrace:
                         report.native_stacktrace = line.strip()
 
@@ -2031,11 +2035,12 @@ def _collect_crash_diagnostics(
         if ok and ts_list.strip():
             latest = ts_list.strip().split()[0]
             ts_path = f"/data/tombstones/{latest}"
-            report.tombstone_path = ts_path
             ok2, ts_content = _adb(
                 "-s", device, "shell", f"cat {ts_path}", timeout=15
             )
-            if ok2 and ts_content:
+            # Only attribute tombstone if it explicitly belongs to our package
+            if ok2 and ts_content and package_name in ts_content:
+                report.tombstone_path = ts_path
                 report.tombstone_excerpt = ts_content[:4000]
                 # Also write to disk
                 tb_disk = artifact_dir / f"tombstone_{latest}"
@@ -2115,11 +2120,15 @@ def _assess_crash_cause(report: CrashReport, provenance: Optional[Dict[str, Any]
     if any(k in errors_text for k in ("avc: denied", "ptrace")):
         report.is_instrumentation_issue = True
 
+    # Kernel LMK (Low Memory Killer)?
+    if any(k in errors_text.lower() for k in ("lowmemorykiller", "min watermark is breached")):
+        report.is_lmk_issue = True
+
     # Pure launch logic?
     if not any([
         report.is_apk_repair_issue, report.is_resign_issue,
         report.is_emulator_compat_issue, report.is_manifest_issue,
-        report.is_instrumentation_issue,
+        report.is_instrumentation_issue, report.is_lmk_issue,
     ]):
         if report.exception_type or report.java_stacktrace:
             # Exception present but no recognised cause → likely app code crash
@@ -2128,6 +2137,11 @@ def _assess_crash_cause(report: CrashReport, provenance: Optional[Dict[str, Any]
 
 def _generate_crash_recommendation(report: CrashReport) -> str:
     """Return a one-sentence actionable recommendation given a classified CrashReport."""
+    if report.is_lmk_issue:
+        return (
+            "Kernel LowMemoryKiller (LMK) terminated the process due to emulator RAM exhaustion. "
+            "Increase emulator RAM (hw.ramSize=4096 in config.ini) or stop background services."
+        )
     if report.is_instrumentation_issue:
         return (
             "SELinux denial detected - run 'adb shell setenforce 0' on the "
@@ -2694,6 +2708,20 @@ class FridaSession:
             # Actually, let's just initialize them in run_frida_analysis where we have apk_dir.
             pass
 
+        # ── Process lifetime monitoring & structured crash tracking ────────────
+        self.process_start_time: Optional[float] = None
+        self.process_end_time: Optional[float] = None
+        self.liveness_checkpoints: Dict[str, bool] = {
+            "1s": False,
+            "2s": False,
+            "5s": False,
+            "10s": False,
+            "30s": False,
+        }
+        self.crash_info: Optional[Dict[str, Any]] = None
+        self.screenshot_status: Optional[str] = None
+        self._last_seen_pid: Optional[int] = None
+
     # ── Companion packages (launch hand-off) ─────────────────────────────────
 
     def _is_third_party(self, package: str) -> bool:
@@ -2875,6 +2903,142 @@ class FridaSession:
             "payload stays schedulable, so it can still be instrumented."
         )
 
+    def is_process_alive(self) -> bool:
+        """True if the target package has a running process on device."""
+        pid = self._resolve_pid()
+        return bool(pid)
+
+    def get_crash_info(self) -> Dict[str, Any]:
+        """
+        Produce a structured crash information dictionary.
+        Populates detected, type, timestamp, pid, signal, exception, stack_trace,
+        tombstone, logcat_excerpt, and details. Never returns uninformative placeholders.
+        """
+        if self.crash_info is not None:
+            return self.crash_info
+
+        if self.crash_report:
+            cr = self.crash_report
+            is_lmk = getattr(cr, "is_lmk_issue", False)
+            crash_type = (
+                "LMK_KILL" if is_lmk
+                else ("JAVA_UNCAUGHT_EXCEPTION" if cr.java_stacktrace
+                else ("NATIVE_SIGNAL" if cr.native_stacktrace else "PROCESS_CRASHED_EARLY"))
+            )
+            self.crash_info = {
+                "detected": True,
+                "type": crash_type,
+                "timestamp": time.time(),
+                "pid": self._stable_pid or self._last_seen_pid or getattr(self, "target_pid", None),
+                "signal": "SIGKILL (Kernel LMK OOM)" if is_lmk else ("SIGSEGV" if cr.native_stacktrace else None),
+                "exception": (
+                    f"{cr.exception_type}: {cr.exception_message}"
+                    if cr.exception_type and cr.exception_message
+                    else (cr.exception_type or cr.exception_message)
+                ),
+                "stack_trace": cr.java_stacktrace or cr.native_stacktrace,
+                "tombstone": cr.tombstone_excerpt or cr.tombstone_path,
+                "logcat_excerpt": "\n".join(cr.logcat_errors[:50]) if cr.logcat_errors else None,
+                "details": {
+                    "fault_activity": cr.launcher_activity,
+                    "process_lifetime_ms": cr.process_lifetime_ms,
+                    "selinux_denials": cr.selinux_denials,
+                    "recommendation": cr.recommendation,
+                    "is_lmk_issue": is_lmk,
+                    "is_launch_logic_issue": cr.is_launch_logic_issue,
+                    "is_apk_repair_issue": cr.is_apk_repair_issue,
+                    "is_emulator_compat_issue": cr.is_emulator_compat_issue,
+                    "liveness_checkpoints": self.liveness_checkpoints,
+                },
+            }
+            return self.crash_info
+
+        pid = self._stable_pid or self._last_seen_pid or getattr(self, "target_pid", None)
+        if pid and not self.is_process_alive():
+            lifetime_s = (self.process_end_time - self.process_start_time) if (self.process_end_time and self.process_start_time) else 0.0
+            crash_kind = getattr(self, "crash_kind", None) or "PROCESS_TERMINATED"
+            is_lmk = crash_kind == "LMK"
+            self.crash_info = {
+                "detected": True,
+                "type": "LMK_KILL" if is_lmk else "NATIVE_SIGNAL",
+                "timestamp": self.process_end_time or time.time(),
+                "pid": pid,
+                "signal": "SIGKILL (likely OOM/LMK)" if is_lmk else "PROCESS_DIED",
+                "exception": None,
+                "stack_trace": None,
+                "tombstone": None,
+                "logcat_excerpt": None,
+                "details": {
+                    "lifetime_seconds": round(lifetime_s, 2),
+                    "liveness_checkpoints": self.liveness_checkpoints,
+                },
+            }
+            return self.crash_info
+
+        lifetime_s = (time.time() - self.process_start_time) if self.process_start_time else 0.0
+        self.crash_info = {
+            "detected": False,
+            "type": "NONE",
+            "timestamp": None,
+            "pid": self._stable_pid,
+            "signal": None,
+            "exception": None,
+            "stack_trace": None,
+            "tombstone": None,
+            "logcat_excerpt": None,
+            "details": {
+                "lifetime_seconds": round(lifetime_s, 2),
+                "liveness_checkpoints": self.liveness_checkpoints,
+            },
+        }
+        return self.crash_info
+
+    def capture_logcat(self, output_dir: Optional[Path] = None) -> str:
+        """
+        Capture logcat buffer via adb, save full dump to output_dir / 'logcat_execution.txt',
+        and return a filtered excerpt.
+        """
+        ok, raw = _adb("-s", self.device_serial, "logcat", "-d", "-v", "threadtime", timeout=15)
+        if not ok or not raw:
+            ok, raw = _adb("-s", self.device_serial, "logcat", "-d", timeout=10)
+
+        raw_text = raw or ""
+        if output_dir:
+            try:
+                out_path = Path(output_dir) / "logcat_execution.txt"
+                out_path.write_text(raw_text, encoding="utf-8", errors="replace")
+                logger.info("[Frida] Wrote %d bytes to %s", len(raw_text), out_path)
+            except Exception as e:
+                logger.warning("[Frida] Failed to save logcat_execution.txt: %s", e)
+
+        relevant_lines: List[str] = []
+        target_pid_str = str(self._stable_pid) if self._stable_pid else ""
+        keywords = (
+            "AndroidRuntime",
+            "FATAL EXCEPTION",
+            "DEBUG   :",
+            "tombstoned",
+            "lowmemorykiller",
+            "lmkd",
+            "ActivityTaskManager",
+            "ProcessRecord",
+            "Zygote",
+            "frida-server",
+        )
+        for line in raw_text.splitlines():
+            if (
+                self.package_name in line
+                or (target_pid_str and target_pid_str in line)
+                or any(k in line for k in keywords)
+            ):
+                relevant_lines.append(line)
+
+        if relevant_lines:
+            return "\n".join(relevant_lines[-500:])
+        elif raw_text:
+            return "\n".join(raw_text.splitlines()[-200:])
+        return ""
+
     def _await_analysis_window(
         self, device: Any, script_source: str, wait_timeout: float,
     ) -> None:
@@ -2908,6 +3072,20 @@ class FridaSession:
                 break
             if self._stop_event.wait(timeout=slice_s):
                 return                                    # stop() was called
+
+            # Liveness monitoring across analysis window
+            curr_pid = self._resolve_pid()
+            elapsed_s = (time.time() - self.process_start_time) if self.process_start_time else 0.0
+            if curr_pid:
+                if elapsed_s >= 10.0:
+                    self.liveness_checkpoints["10s"] = True
+                if elapsed_s >= 30.0:
+                    self.liveness_checkpoints["30s"] = True
+            elif self._stable_pid and not curr_pid:
+                if not self.process_end_time:
+                    self.process_end_time = time.time()
+                    logger.warning("[Frida] Process %d for %s died at t=%.1fs", self._stable_pid, self.package_name, elapsed_s)
+                    self.get_crash_info()
             try:
                 self._sweep_for_new_companions(device, script_source)
             except Exception as exc:                      # noqa: BLE001
@@ -3143,7 +3321,20 @@ class FridaSession:
                 if not event.get("category"):
                     event = payload
 
-                category = event.get("category")
+                category = event.get("category", "dangerous_apis")
+
+                # Defense-in-depth: drop false anti_analysis events generated by Frida's own helper DEX/profile files
+                if category == "anti_analysis":
+                    _data = event.get("data") if isinstance(event.get("data"), dict) else {}
+                    _hook = str(event.get("hook") or _data.get("hook") or "")
+                    _path = str(event.get("path") or _data.get("path") or "")
+                    if _hook == "libc.open" and "frida" in _path:
+                        if (
+                            _path.endswith((".dex", ".prof", ".odex", ".vdex", ".cur.prof"))
+                            or any(_p in _path for _p in ("/oat/", "/data/user/", "/data/data/"))
+                        ):
+                            logger.debug("[Frida] Filtered internal Frida runtime open event: %s", _path)
+                            return
 
                 # FIX Bug #5: unrecognized categories fall through to dangerous_apis
                 # instead of being silently discarded. This prevents novel hook
@@ -4366,6 +4557,8 @@ class FridaSession:
                 stable, pid, reason = _poll_pid_until_stable(
                     self.device_serial, self.package_name,
                 )
+                if pid is not None:
+                    self._last_seen_pid = pid
                 if stable and pid is not None:
                     # Record first_pid milestone on first successful PID
                     if self.launch_timeline.get("first_pid") is None:
@@ -4892,6 +5085,8 @@ class FridaSession:
                 "[Frida] App launched and stable via '%s' (PID=%s)",
                 self.launch_method_used, self._stable_pid,
             )
+            self.process_start_time = time.time()
+            self.liveness_checkpoints["1s"] = True
 
             # ── Pre-Frida Readiness Gate ──────────────────────────────────────
             # Six checks that confirm the app is genuinely ready for attachment.
@@ -4959,6 +5154,8 @@ class FridaSession:
                         apk_checksum=_apk_cks_g,
                     )
                 return False
+
+            self.liveness_checkpoints["2s"] = True
 
             # Record first_activity and first_window milestones
             _ok_w, _win = _adb(
@@ -5097,6 +5294,7 @@ class FridaSession:
                     self._script = self._session.create_script(script_source)
                     self._script.on("message", self._on_message)
                     self._script.load()
+                    self.liveness_checkpoints["5s"] = True
                 except Exception as script_load_err:
                     logger.warning(f"[Frida] Script loading failed: {script_load_err}")
 
@@ -5659,7 +5857,9 @@ async def run_frida_analysis(
         "api_calls": [],
         "files_accessed": [],
         "screenshots": [],
+        "screenshot_status": None,
         "logcat": "",
+        "crash_info": None,
         "evidence": [],
         "hook_errors": [],
         "duration_seconds": ANALYSIS_DURATION_SECONDS,
@@ -6324,10 +6524,17 @@ async def _run_device_session(
                 f"{rules_dir}. Set SUDARSHAN_YARA_RULES_DIR to enable it."
             )
 
+    session.artifact_dir = apk_dir
+    # Clear logcat before execution so post-run capture only has logs from this session
+    await loop.run_in_executor(None, _adb, "-s", device_serial, "logcat", "-c")
+
     def _run_sync():
         return session.run(duration_seconds=ANALYSIS_DURATION_SECONDS)
 
     success = await loop.run_in_executor(None, _run_sync)
+
+    # Capture logcat immediately after session ends (used on both success and failure paths)
+    logcat_excerpt = await loop.run_in_executor(None, session.capture_logcat, apk_dir)
 
     if not success:
         err_msg = (
@@ -6338,7 +6545,9 @@ async def _run_device_session(
         base_result["available"] = True
         base_result["runtime_attempted"] = True
         fail_status = DynamicAnalysisStatus.INSTRUMENTATION_FAILED.value
-        if "attach" in err_msg.lower() or "frida" in err_msg.lower():
+        if "crash" in err_msg.lower() or (session.crash_report and bool(session.crash_report.java_stacktrace)):
+            fail_status = DynamicAnalysisStatus.CRASHED_BEFORE_EXPLORATION.value
+        elif "attach" in err_msg.lower() or "frida" in err_msg.lower():
             fail_status = DynamicAnalysisStatus.FRIDA_ATTACH_FAILED.value
         base_result["dynamic_status"] = fail_status
         if session.crash_report is not None:
@@ -6499,6 +6708,17 @@ async def _run_device_session(
             logger.info("[Frida] launch_timeline.json written (failure path): %s", tl_path)
         except OSError:
             pass
+        base_result["logcat"] = logcat_excerpt
+        base_result["artifact_dir"] = str(apk_dir)
+        base_result["crash_info"] = session.get_crash_info()
+        base_result["screenshots"] = _collect_screenshots(session)
+        if not base_result["screenshots"]:
+            base_result["screenshot_status"] = session.screenshot_status or (
+                DynamicAnalysisStatus.BACKGROUND_SERVICE_RUNNING.value if session.is_process_alive()
+                else DynamicAnalysisStatus.NO_UI_RENDERED.value
+            )
+        else:
+            base_result["screenshot_status"] = session.screenshot_status or "CAPTURED"
         if tracker:
             tracker.write_json(apk_dir)
         set_active_tracker(None)
@@ -6526,9 +6746,11 @@ async def _run_device_session(
         )
     elif getattr(session, "ui_render_failed", False):
         # The process ran but never owned a window, so no UI-driven hook could
-        # fire. Blaming the sample for that silence would score a launch failure
-        # as benign behaviour.
-        dynamic_status = DynamicAnalysisStatus.NO_UI_RENDERED.value
+        # fire. Distinguish between headless background service and launch failure.
+        if session.is_process_alive():
+            dynamic_status = DynamicAnalysisStatus.BACKGROUND_SERVICE_RUNNING.value
+        else:
+            dynamic_status = DynamicAnalysisStatus.NO_UI_RENDERED.value
     elif _no_sample_behaviour_observed(session) and _instrumentation_was_late(session):
         # Hooks installed, the process ran, and every event we hold describes
         # the HARNESS rather than the sample - because the agent arrived after
@@ -6664,6 +6886,29 @@ async def _run_device_session(
     except Exception as exc:                                        # noqa: BLE001
         logger.debug("[Frida] DAE metrics backfill skipped: %s", exc)
 
+    _screenshots = _collect_screenshots(session)
+    if not _screenshots and session.screenshot_manager:
+        try:
+            session.screenshot_manager.capture(
+                label="01_lifecycle_state",
+                category="lifecycle",
+                reason="LIFECYCLE",
+                force=True,
+            )
+            _screenshots = _collect_screenshots(session)
+        except Exception as exc:
+            logger.debug("[Frida] Fallback screenshot capture failed: %s", exc)
+
+    _screenshot_status = session.screenshot_status
+    if not _screenshot_status:
+        if not _screenshots:
+            _screenshot_status = (
+                DynamicAnalysisStatus.BACKGROUND_SERVICE_RUNNING.value if session.is_process_alive()
+                else DynamicAnalysisStatus.NO_UI_RENDERED.value
+            )
+        else:
+            _screenshot_status = "CAPTURED"
+
     # Map to risk_engine.py's expected _calculate_dynamic_score() keys
     # This makes the BFCI directly usable by the existing pipeline
     result = {
@@ -6671,6 +6916,10 @@ async def _run_device_session(
         "available": True,
         "engine": "frida",
         "dynamic_status": dynamic_status,
+        "screenshot_status": _screenshot_status,
+        "artifact_dir": str(apk_dir),
+        "logcat": logcat_excerpt,
+        "crash_info": session.get_crash_info(),
         # Packages the sample launched to render its own journey, and which
         # were instrumented alongside it. Reported so an analyst reading a
         # behaviour attributed to this case can see WHICH process produced it.
@@ -6732,7 +6981,7 @@ async def _run_device_session(
         # this field was hardcoded to [] with a "not implemented" comment, so
         # every captured image was invisible to the API, the report and the
         # analyst. The manifest is now surfaced here and flushed to disk below.
-        "screenshots": _collect_screenshots(session),
+        "screenshots": _screenshots,
         "frida_events": {
             cat: list(events)[:50]
             for cat, events in session.collected_events.items()

@@ -633,6 +633,25 @@ _EVASION_EVIDENCE_CATEGORIES = frozenset({"ANTI_ANALYSIS"})
 # as proof that we looked.
 _BASELINE_EVIDENCE_CATEGORIES = frozenset({"APP_TELEMETRY", "SMOKE"})
 
+_DEFAULT_BASELINE_HOOK_NAMES = frozenset({
+    "Application.onCreate",
+    "Activity.onCreate",
+    "Activity.onResume",
+    "Activity.onPause",
+    "Activity.onDestroy",
+    "ContextWrapper.getSharedPreferences",
+})
+
+_INTERNAL_RUNTIME_FILE_PATTERNS = (
+    "frida-",
+    ".dex",
+    ".vdex",
+    ".odex",
+    ".prof",
+    "/oat/",
+    "/code_cache/",
+)
+
 
 def _count_observed_sample_behavior(dynamic: Dict) -> int:
     """Count hook-derived sample behaviour items (not harness commentary)."""
@@ -681,6 +700,10 @@ def _count_observed_sample_behavior(dynamic: Dict) -> int:
         for entry in value:
             if isinstance(entry, str) and entry in _discounted:
                 continue
+            if field == "files_accessed" and isinstance(entry, str):
+                entry_lower = entry.lower()
+                if any(pat in entry_lower for pat in _INTERNAL_RUNTIME_FILE_PATTERNS):
+                    continue
             observed += 1
 
     # frida_events is a dict of per-category buckets. Sample behaviour is every
@@ -846,6 +869,27 @@ _INCONCLUSIVE_STATUSES = frozenset({
     # a timeout with meaningful evidence is scored on that evidence.
     "TIME_BUDGET_EXHAUSTED",
     "FAILED",
+    "PARTIAL",
+    "CRASHED",
+    "INCOMPLETE",
+    "CRASHED_BEFORE_EXPLORATION",
+    "BACKGROUND_SERVICE_RUNNING",
+    "PID_NOT_FOUND",
+})
+
+_INCOMPLETE_DYNAMIC_STATUSES = frozenset({
+    "PARTIAL",
+    "CRASHED",
+    "INCOMPLETE",
+    "FAILED",
+    "NO_UI_RENDERED",
+    "INSTRUMENTATION_FAILED",
+    "BACKGROUND_SERVICE_RUNNING",
+    "CRASHED_BEFORE_EXPLORATION",
+    "PID_NOT_FOUND",
+    "FRIDA_ATTACH_FAILED",
+    "TIMEOUT",
+    "TIME_BUDGET_EXHAUSTED",
 })
 
 
@@ -1403,6 +1447,54 @@ def calculate_risk_score(
     ai_multiplier = max(0.5, min(ai_confidence, 1.5))
     final_score = min(frs * ai_multiplier, 100.0)
 
+    # Compute static baseline score (excluding dynamic axis)
+    static_axes = [
+        ("stei", 0.25, stei),
+        ("correlation", 0.20, correlation_score if correlation_available else 0.0),
+        ("banking_impact", 0.20, banking_score),
+    ]
+    static_live = [(n, w, v) for (n, w, v) in static_axes if (n != "correlation" or correlation_available)]
+    static_total_weight = sum(w for _, w, _ in static_live)
+    static_frs = (sum(w * v for _, w, v in static_live) / static_total_weight) if static_total_weight else 0.0
+    static_score = min(static_frs * ai_multiplier, 100.0)
+
+    try:
+        _reported_bfci = float((dynamic_result or {}).get("bfci") or 0.0)
+    except (TypeError, ValueError):
+        _reported_bfci = 0.0
+
+    # ── Static Floor for Incomplete Dynamic Analysis ───────────────────────────
+    # A failed or incomplete dynamic run must NEVER reduce the overall risk score below
+    # the static score. When the sandbox cannot run or crashes or renders no UI,
+    # dynamic absence cannot be credited as safety.
+    static_floor_applied = False
+    static_floor_score = None
+    static_floor_reason = None
+
+    if dynamic_available:
+        dyn_status = str((dynamic_result or {}).get("dynamic_status") or "").upper()
+        has_cov = dynamic_coverage_block.get("coverage_known", False)
+        dyn_complete = bool(dynamic_coverage_block.get("dynamic_complete"))
+        dyn_coverage_ratio = float(dynamic_coverage_block.get("dynamic_coverage_ratio") or 0.0)
+
+        is_incomplete_dynamic = (
+            dyn_status in _INCOMPLETE_DYNAMIC_STATUSES
+            or (has_cov and (not dyn_complete or dyn_coverage_ratio < 0.5))
+        )
+
+        if is_incomplete_dynamic and final_score < static_score:
+            static_floor_applied = True
+            static_floor_score = round(static_score, 2)
+            cov_str = f"{dyn_coverage_ratio:.1%}" if has_cov else "N/A"
+            static_floor_reason = (
+                f"Dynamic run was incomplete (status={dyn_status or 'UNKNOWN'}, "
+                f"coverage={cov_str}, bfci={_reported_bfci:.1f}) and reduced "
+                f"risk score from static score {static_score:.2f} down to {final_score:.2f}. "
+                f"Static floor enforced: an incomplete dynamic run must NOT lower the overall risk score."
+            )
+            logger.info("[RiskEngine] %s", static_floor_reason)
+            final_score = static_score
+
     # CH06 / VIDE deterministic escalations (P1: cluster required for visual-only)
     vide_evidence: List[str] = []
     ch27_triad = False
@@ -1697,6 +1789,9 @@ def calculate_risk_score(
             "verdict_floored_for_evasion": evasion_floored,
             "verdict_floored_for_static_evidence": static_evidence_floored,
             "verdict_floored_for_incomplete_exercise": incomplete_exercise_floored,
+            "static_floor_applied": static_floor_applied,
+            "static_floor_score": static_floor_score,
+            "static_floor_reason": static_floor_reason,
             # Why the dynamic axis could not be scored. The UI must distinguish
             # "nothing bad happened" from "we never got to look".
             "dynamic_exclusion_reason": evasion_reason,

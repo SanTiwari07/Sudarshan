@@ -49,38 +49,40 @@ def load_evidence_records(
 ) -> List[Dict[str, Any]]:
     """
     Load evidence records for a case.
-
-    Resolution order:
-      1. Explicit artifact_dir/evidence.json
-      2. case_id matched against artifact directory name
-      3. sha256 matched against path or directory name
-      4. Most recently modified evidence.json (only if no identifiers given)
+    In Phase 3, this fetches from GCS ArtifactStorage.
     """
-    if artifact_dir:
-        path = Path(artifact_dir) / "evidence.json"
-        if path.is_file():
-            return _read_evidence_file(path)
-
-    candidates = _scan_evidence_files()
-
-    if case_id:
-        needle = case_id.lower()
-        candidates = [
-            p for p in candidates
-            if needle in p.parent.name.lower() or needle in str(p.parent).lower()
-        ]
-    elif sha256:
-        needle = sha256.lower()
-        candidates = [
-            p for p in candidates
-            if needle in p.parent.name.lower() or needle in str(p.parent).lower()
-        ]
-
-    best_path = candidates[0] if candidates else None
-    if best_path is None:
+    import asyncio
+    from sudarshan_core.storage.artifact_storage import get_storage
+    import tempfile
+    import os
+    import json
+    
+    if not sha256 and not case_id:
         return []
-
-    return _read_evidence_file(best_path)
+        
+    lookup_sha256 = sha256 or case_id
+    object_key = f"evidence/{lookup_sha256}/evidence.json"
+    
+    storage = get_storage()
+    fd, temp_path = tempfile.mkstemp(suffix=".json")
+    os.close(fd)
+    
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import nest_asyncio
+            nest_asyncio.apply()
+        loop.run_until_complete(storage.get_file(object_key, temp_path))
+        
+        return _read_evidence_file(Path(temp_path))
+    except Exception as e:
+        logger.debug(f"[EvidenceLoader] Could not load evidence.json from {object_key}: {e}")
+        return []
+    finally:
+        try:
+            os.remove(temp_path)
+        except OSError:
+            pass
 
 
 def _read_evidence_file(path: Path) -> List[Dict[str, Any]]:

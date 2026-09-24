@@ -197,18 +197,19 @@ async def create_batch_endpoint(
     now = _now_iso()
 
     # Receive and validate all APKs first (fail early before committing anything)
-    received: List[tuple] = []  # (temp_path, sha256, filename)
+    received: List[tuple] = []  # (object_key, sha256, filename)
     for f in files:
         try:
-            temp_path, sha256 = await _receive_apk(f)
-            received.append((temp_path, sha256, f.filename or "unknown.apk"))
+            object_key, sha256 = await _receive_apk(f)
+            received.append((object_key, sha256, f.filename or "unknown.apk"))
         except HTTPException:
             # Clean up already-received files and re-raise
-            import os
-            for rp, _, _ in received:
+            from sudarshan_core.storage.artifact_storage import get_storage
+            storage = get_storage()
+            for obj_k, _, _ in received:
                 try:
-                    os.remove(rp)
-                except OSError:
+                    await storage.delete(obj_k)
+                except Exception:
                     pass
             raise
 
@@ -219,7 +220,7 @@ async def create_batch_endpoint(
 
     # Create individual job records
     job_rows = []
-    for position, (temp_path, sha256, filename) in enumerate(received):
+    for position, (object_key, sha256, filename) in enumerate(received):
         job_id = str(uuid.uuid4())
         job_data = {
             "job_id": job_id,
@@ -228,7 +229,7 @@ async def create_batch_endpoint(
             "sha256": sha256,
             "queue_position": position,
             "created_at": now,
-            "temp_path": temp_path,
+            "temp_path": object_key,  # Repurposing this DB column for the object key
         }
         await create_batch_job(job_data)
         job_rows.append(job_data)
@@ -284,6 +285,8 @@ async def list_batches_endpoint(
 @router.get("/batches/{batch_id}", response_model=BatchDetailResponse)
 async def get_batch_detail(
     batch_id: str,
+    limit: int = 10000,
+    offset: int = 0,
     user: dict = Depends(require_analyst),
 ):
     """Get full batch details including all job summaries."""
@@ -292,7 +295,7 @@ async def get_batch_detail(
         raise HTTPException(status_code=404, detail=f"Batch {batch_id} not found.")
     _assert_batch_owner(user, batch)
 
-    jobs = await get_batch_jobs(batch_id)
+    jobs = await get_batch_jobs(batch_id, limit, offset)
 
     return BatchDetailResponse(
         **_row_to_batch_summary(batch).model_dump(),
@@ -303,6 +306,8 @@ async def get_batch_detail(
 @router.get("/batches/{batch_id}/jobs", response_model=List[BatchJobSummary])
 async def get_batch_jobs_endpoint(
     batch_id: str,
+    limit: int = 10000,
+    offset: int = 0,
     user: dict = Depends(require_analyst),
 ):
     """Return lightweight job list for a batch (for live polling)."""
@@ -311,7 +316,7 @@ async def get_batch_jobs_endpoint(
         raise HTTPException(status_code=404, detail=f"Batch {batch_id} not found.")
     _assert_batch_owner(user, batch)
 
-    jobs = await get_batch_jobs(batch_id)
+    jobs = await get_batch_jobs(batch_id, limit, offset)
     return [_row_to_job_summary(j) for j in jobs]
 
 

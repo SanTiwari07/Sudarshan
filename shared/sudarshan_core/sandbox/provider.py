@@ -920,5 +920,6 @@ class SandboxProvider(ABC):
 
     def package_installed(self, serial: str, package_name: str) -> bool:
         """Verify a package is installed (used by connection diagnostics)."""
-        ok, out = self.adb_shell(serial, f"pm path {package_name}", timeout=15)
+        import shlex
+        ok, out = self.adb_shell(serial, f"pm path {shlex.quote(package_name)}", timeout=15)
         return ok and bool(out.strip()) and "package:" in out

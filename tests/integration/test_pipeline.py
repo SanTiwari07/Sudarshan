@@ -294,11 +294,11 @@ def test_workflow_reconstructor():
 
         # Simulate an OTP theft chain: accessibility → sms → network
         records = [
-            {"id": "e1", "category": "accessibility", "hook": "AccessibilityService.onAccessibilityEvent",
+            {"id": "e1", "category": "accessibility", "hook": "AccessibilityNodeInfo.getText",
              "timestamp_ms": 1000, "severity": "HIGH", "description": "Screen content scraped"},
-            {"id": "e2", "category": "sms", "hook": "SmsManager.sendTextMessage",
-             "timestamp_ms": 2000, "severity": "CRITICAL", "description": "SMS sent with OTP"},
-            {"id": "e3", "category": "network", "hook": "OkHttpClient.execute",
+            {"id": "e2", "category": "sms", "hook": "SmsMessage.getMessageBody",
+             "timestamp_ms": 2000, "severity": "CRITICAL", "description": "SMS intercepted"},
+            {"id": "e3", "category": "network", "hook": "OkHttp.RealCall.execute",
              "timestamp_ms": 3000, "severity": "HIGH", "description": "HTTP POST to C2 server"},
         ]
 

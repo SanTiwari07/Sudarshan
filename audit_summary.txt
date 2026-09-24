@@ -1,0 +1,490 @@
+backend\app\evidence_loader.py:88: with open(path, "r", encoding="utf-8") as f:
+backend\app\rag\knowledge_base.py:38: with open(path, "r", encoding="utf-8") as f:
+backend\app\routes\batch.py:27: from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+backend\app\routes\batch.py:175: files: List[UploadFile] = File(..., description="One or more .apk files"),
+backend\app\routes\batch.py:210: os.remove(rp)
+backend\app\routes\discovery.py:87: os.remove(temp_path)
+backend\app\routes\runtime_api.py:361: with open(best_path, "r", encoding="utf-8") as f:
+backend\app\routes\screenshots.py:22: from fastapi.responses import FileResponse
+backend\app\routes\screenshots.py:413: return FileResponse(
+backend\app\routes\upload.py:18: import tempfile
+backend\app\routes\upload.py:24: from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Request
+backend\app\routes\upload.py:1065: async def _receive_apk(file: UploadFile) -> tuple[str, str]:
+backend\app\routes\upload.py:1093: # resolve it. Previously this was the container-private /tmp, so every
+backend\app\routes\upload.py:1096: with tempfile.NamedTemporaryFile(delete=False, suffix=".apk", dir=_UPLOADS_DIR) as tmp:
+backend\app\routes\upload.py:1131: os.remove(temp_path)
+backend\app\routes\upload.py:1252: file: UploadFile = File(...),
+backend\app\routes\upload.py:1273: os.remove(temp_path)
+backend\app\routes\upload.py:1293: file: UploadFile = File(...),
+backend\app\services\discovery\downloader.py:2: import tempfile
+backend\app\services\discovery\downloader.py:35: with tempfile.NamedTemporaryFile(delete=False, suffix=".apk", dir=_UPLOADS_DIR, prefix=f"disc_{session_id}_") as tmp:
+backend\app\services\discovery\downloader.py:62: os.remove(temp_path)
+backend\app\services\discovery\validator.py:22: with open(file_path, "rb") as f:
+backend\app\workers\durable_queue.py:99: # However, if the process crashes, temp_path is useless anyway since /tmp is wiped.
+backend\app\workers\durable_queue.py:304: os.remove(temp_path)
+analysis-engine\restart_frida.py:7: os.system("adb shell 'su 0 sh -c \"nohup /data/local/tmp/frida-server -l 127.0.0.1:27042 </dev/null >/dev/null 2>&1 &\"'")
+analysis-engine\restart_frida_no_l.py:7: os.system("adb shell 'su 0 sh -c \"nohup /data/local/tmp/frida-server </dev/null >/dev/null 2>&1 &\"'")
+analysis-engine\app\main.py:16: import tempfile
+analysis-engine\app\main.py:29: from fastapi import FastAPI, File, HTTPException, UploadFile, BackgroundTasks, Query
+analysis-engine\app\main.py:667: with open(file_path, "rb") as f:
+analysis-engine\app\main.py:680: async def analyze_upload(file: UploadFile = File(...)):
+analysis-engine\app\main.py:689: with tempfile.NamedTemporaryFile(delete=False, suffix=".apk", dir=UPLOADS_DIR) as tmp:
+analysis-engine\app\main.py:720: await asyncio.to_thread(os.remove, temp_path)
+shared\sudarshan_core\runtime_paths.py:16: The previous ``Path(f"/tmp/sudarshan_{session_id}")`` in the session manager is
+shared\sudarshan_core\runtime_paths.py:25: import tempfile
+shared\sudarshan_core\runtime_paths.py:60: path = Path(tempfile.gettempdir()) / "sudarshan" / default.name
+shared\sudarshan_core\runtime_paths.py:94: path = Path(tempfile.gettempdir()) / "sudarshan" / safe_component(session_id)
+shared\sudarshan_core\analyzers\apk_analyzer.py:219: with z.open(name) as fh:
+shared\sudarshan_core\analyzers\apk_analyzer.py:233: with z.open(name) as fh:
+shared\sudarshan_core\engines\agentic_explorer.py:4391: with open(
+shared\sudarshan_core\engines\agentic_explorer.py:4412: with open(output_dir / "deep_exploration.json", "w", encoding="utf-8") as f:
+shared\sudarshan_core\engines\agentic_explorer.py:4414: with open(output_dir / "state_graph.mmd", "w", encoding="utf-8") as f:
+shared\sudarshan_core\engines\agentic_explorer.py:4416: with open(output_dir / "victim_journey.json", "w", encoding="utf-8") as f:
+shared\sudarshan_core\engines\agentic_explorer.py:4419: with open(output_dir / "action_pipeline.json", "w", encoding="utf-8") as f:
+shared\sudarshan_core\engines\agentic_explorer.py:4426: with open(output_dir / "exploration_graph.json", "w", encoding="utf-8") as f:
+shared\sudarshan_core\engines\agentic_explorer.py:4431: with open(
+shared\sudarshan_core\engines\agentic_explorer.py:4449: with open(output_dir / "screenshot_manifest.json", "w", encoding="utf-8") as f:
+shared\sudarshan_core\engines\agentic_explorer.py:4472: with open(output_dir / "evidence_timeline.json", "w", encoding="utf-8") as f:
+shared\sudarshan_core\engines\anti_analysis_detector.py:47: with open(output_path, "w", encoding="utf-8") as f:
+shared\sudarshan_core\engines\apktool_engine.py:36: import tempfile
+shared\sudarshan_core\engines\apktool_engine.py:111: with tempfile.TemporaryDirectory(prefix="sudarshan_apktool_") as tmp_dir:
+shared\sudarshan_core\engines\apk_repair.py:30: with open(file_path, "rb") as f:
+shared\sudarshan_core\engines\apk_repair.py:60: os.remove(full_path)
+shared\sudarshan_core\engines\apk_repair.py:82: with open(dex_path, "rb") as f_dex:
+shared\sudarshan_core\engines\apk_repair.py:132: with open(raw_manifest, "rb") as fh:
+shared\sudarshan_core\engines\apk_repair.py:151: return "/tmp/sudarshan_debug.keystore"
+shared\sudarshan_core\engines\apk_repair.py:199: shutil.copy2(unaligned, aligned)
+shared\sudarshan_core\engines\apk_repair.py:247: os.remove(unaligned)
+shared\sudarshan_core\engines\apk_repair.py:443: import tempfile
+shared\sudarshan_core\engines\apk_repair.py:444: out_dir = os.path.join(tempfile.gettempdir(), f"raw_{original_sha256[:8]}")
+shared\sudarshan_core\engines\apk_repair.py:450: with open(original_apk_path, "rb") as f_apk:
+shared\sudarshan_core\engines\apk_repair.py:685: aapt_work_dir = f"/tmp/aapt_{original_sha256[:8]}"
+shared\sudarshan_core\engines\apk_repair.py:690: with open(manifest_xml_file, "w") as f:
+shared\sudarshan_core\engines\apk_repair.py:713: apktool_work_dir = f"/tmp/apktool_build_{original_sha256[:8]}"
+shared\sudarshan_core\engines\apk_repair.py:729: with open(os.path.join(apktool_work_dir, "apktool.yml"), "w") as f:
+shared\sudarshan_core\engines\apk_repair.py:731: with open(os.path.join(apktool_work_dir, "AndroidManifest.xml"), "w") as f:
+shared\sudarshan_core\engines\apk_repair.py:748: with open(os.path.join(out_dir, "AndroidManifest.xml"), "wb") as f_out:
+shared\sudarshan_core\engines\apk_repair.py:754: try: os.remove(p)
+shared\sudarshan_core\engines\apk_repair.py:770: shutil.copy2(unaligned_apk_path, repaired_apk_path)
+shared\sudarshan_core\engines\apk_repair.py:778: try: os.remove(unaligned_apk_path)
+shared\sudarshan_core\engines\apk_repair.py:806: with open(provenance_json_path, "w") as f:
+shared\sudarshan_core\engines\behavior_graph.py:170: with open(output_path, "w", encoding="utf-8") as f:
+shared\sudarshan_core\engines\evidence_store.py:641: with open(output_path, "w", encoding="utf-8") as f:
+shared\sudarshan_core\engines\frida_sandbox.py:1166: from /data/local/tmp/u2.jar) holds that registration for the whole session,
+shared\sudarshan_core\engines\frida_sandbox.py:1216: remote = "/data/local/tmp/sudarshan_lifecycle_ui.xml"
+shared\sudarshan_core\engines\frida_sandbox.py:1498: "uiautomator dump /data/local/tmp/sudarshan_perm_ui.xml",
+shared\sudarshan_core\engines\frida_sandbox.py:1506: "cat /data/local/tmp/sudarshan_perm_ui.xml",
+shared\sudarshan_core\engines\frida_sandbox.py:1930: logcat_path.write_text(logcat_raw, encoding="utf-8", errors="replace")
+shared\sudarshan_core\engines\frida_sandbox.py:2043: tb_disk.write_text(ts_content, encoding="utf-8", errors="replace")
+shared\sudarshan_core\engines\frida_sandbox.py:2066: rpt_path.write_text(
+shared\sudarshan_core\engines\frida_sandbox.py:6030: # it here with a hard-coded legacy `/data/local/tmp/frida-server` probe:
+shared\sudarshan_core\engines\frida_sandbox.py:6495: tl_path.write_text(
+shared\sudarshan_core\engines\frida_sandbox.py:6878: tl_path.write_text(
+shared\sudarshan_core\engines\frida_sandbox.py:6905: with open(apk_dir / "exploration_graph.json", "w", encoding="utf-8") as f:
+shared\sudarshan_core\engines\frida_sandbox.py:6907: with open(apk_dir / "coverage.json", "w", encoding="utf-8") as f:
+shared\sudarshan_core\engines\frida_sandbox.py:6909: with open(apk_dir / "attack_timeline.json", "w", encoding="utf-8") as f:
+shared\sudarshan_core\engines\frida_sandbox.py:6911: with open(apk_dir / "exploration_summary.json", "w", encoding="utf-8") as f:
+shared\sudarshan_core\engines\frida_sandbox.py:6991: with open(apk_dir / "workflow.json", "w", encoding="utf-8") as f:
+shared\sudarshan_core\engines\ioc_collector.py:127: with open(output_path, "w", encoding="utf-8") as f:
+shared\sudarshan_core\engines\jadx_engine.py:36: import tempfile
+shared\sudarshan_core\engines\jadx_engine.py:117: with tempfile.TemporaryDirectory(prefix="sudarshan_jadx_") as tmp_dir:
+shared\sudarshan_core\engines\mitre_mapper.py:144: with open(output_path, "w", encoding="utf-8") as f:
+shared\sudarshan_core\engines\mitre_mapper.py:195: with open(layer_path, "w", encoding="utf-8") as f:
+shared\sudarshan_core\engines\network_capture.py:167: with open(output_path, "w", encoding="utf-8") as f:
+shared\sudarshan_core\engines\permission_orchestrator.py:590: with open(output_path, "w", encoding="utf-8") as f:
+shared\sudarshan_core\engines\replay_engine.py:58: with open(replay_json_path, "r", encoding="utf-8") as f:
+shared\sudarshan_core\engines\replay_engine.py:100: with open(output_path, "w", encoding="utf-8") as f:
+shared\sudarshan_core\engines\report_generator.py:2311: with open(path, "r", encoding="utf-8") as f:
+shared\sudarshan_core\engines\report_generator.py:2397: Path(output_path).write_text(html, encoding="utf-8")
+shared\sudarshan_core\engines\runtime_lifecycle.py:190: path.write_text(
+shared\sudarshan_core\engines\screenshot_manager.py:35: # Primary external storage is empty on some Genymotion/AVD images; /data/local/tmp
+shared\sudarshan_core\engines\screenshot_manager.py:37: REMOTE_CAPTURE_DIR = "/data/local/tmp"
+shared\sudarshan_core\engines\screenshot_manager.py:848: with open(output_path, "w", encoding="utf-8") as f:
+shared\sudarshan_core\engines\session_manager.py:73: # `/tmp/sudarshan_<id>` used to be the default here. That is not a path
+shared\sudarshan_core\engines\session_manager.py:249: tmp.write_text(
+shared\sudarshan_core\engines\ui_explorer.py:128: await self._adb("shell", "uiautomator", "dump", "/data/local/tmp/ui_dump.xml")
+shared\sudarshan_core\engines\ui_explorer.py:129: output = await self._adb("shell", "cat", "/data/local/tmp/ui_dump.xml")
+shared\sudarshan_core\engines\ui_explorer.py:298: remote_path = f"/data/local/tmp/ui_exp_{screen_hash}.png"
+shared\sudarshan_core\engines\ui_explorer.py:336: with open(local_path, "rb") as img_file:
+shared\sudarshan_core\engines\ui_explorer.py:359: os.remove(local_path)
+shared\sudarshan_core\engines\yara_scanner.py:152: with open(output_path, "w", encoding="utf-8") as f:
+shared\sudarshan_core\engines\agentic\action_dispatch.py:345: with open(path, "rb") as fh:
+shared\sudarshan_core\engines\agentic\audit_log.py:205: with open(output_path, "w", encoding="utf-8") as f:
+shared\sudarshan_core\engines\agentic\benchmark.py:205: with open(output_path, "w", encoding="utf-8") as f:
+shared\sudarshan_core\engines\agentic\perception.py:673: "shell", "uiautomator", "dump", "/data/local/tmp/ui_dump.xml",
+shared\sudarshan_core\engines\agentic\perception.py:675: ok, out = await self._adb("shell", "cat", "/data/local/tmp/ui_dump.xml")
+shared\sudarshan_core\engines\agentic\perception.py:751: await self._adb("shell", "uiautomator", "dump", "/data/local/tmp/ui_dump.xml")
+shared\sudarshan_core\engines\agentic\perception.py:752: ok, output = await self._adb("shell", "cat", "/data/local/tmp/ui_dump.xml")
+shared\sudarshan_core\engines\agentic\perception.py:773: await self._adb("shell", "uiautomator", "dump", "/data/local/tmp/ui_dump.xml")
+shared\sudarshan_core\engines\agentic\perception.py:774: ok, output = await self._adb("shell", "cat", "/data/local/tmp/ui_dump.xml")
+shared\sudarshan_core\engines\agentic\perception.py:1179: remote = f"/data/local/tmp/percept_{ts}.png"
+shared\sudarshan_core\engines\agentic\perception.py:1180: local = f"/tmp/percept_{ts}.png"
+shared\sudarshan_core\engines\agentic\planner.py:514: with open(obs.screenshot_path, "rb") as f:
+shared\sudarshan_core\engines\agentic\secondary_payload.py:770: with open(path, "rb") as handle:
+shared\sudarshan_core\engines\agentic\tool_executor.py:659: await self._adb("shell", "uiautomator", "dump", "/data/local/tmp/ui_dump.xml")
+shared\sudarshan_core\engines\agentic\tool_executor.py:660: ok, xml = await self._adb("shell", "cat", "/data/local/tmp/ui_dump.xml")
+shared\sudarshan_core\engines\agentic\tool_executor.py:1272: remote = f"/data/local/tmp/agent_{label}_{ts}.png"
+shared\sudarshan_core\engines\agentic\tool_executor.py:1273: local  = f"/tmp/agent_{label}_{ts}.png"
+shared\sudarshan_core\engines\agentic\victim_profile.py:188: with open(path, "r", encoding="utf-8") as fh:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\deps.py:20: import tempfile
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\deps.py:190: with urllib.request.urlopen(url) as response, \
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\deps.py:191: tempfile.NamedTemporaryFile(delete=False) as archive:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\deps.py:192: shutil.copyfileobj(response, archive)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\deps.py:207: with tarfile.open(archive_path, "r:xz") as tar:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\deps.py:214: f.write_text(f.read_text(encoding="utf-8").replace("@FRIDA_TOOLROOT@", raw_location),
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\deps.py:243: with urllib.request.urlopen(request) as r:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\deps.py:455: symfile.write_text("# No exported symbols.\n", encoding="utf-8")
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\deps.py:459: verfile.write_text("\n".join([
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\deps.py:475: verfile.write_text("\n".join([
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\deps.py:599: manifest_path.write_text("\n".join(manifest_lines) + "\n", encoding="utf-8")
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\deps.py:619: with tempfile.TemporaryDirectory(prefix="frida-deps") as raw_tempdir:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\deps.py:631: (tempdir / "VERSION.txt").write_text(self._params.deps_version + "\n", encoding="utf-8")
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\deps.py:634: with tarfile.open(outfile, "w:xz") as tar:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\deps.py:678: filepath.write_text(new_text, encoding="utf-8")
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\deps.py:705: manifest_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\deps.py:850: with urllib.request.urlopen(request) as r:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\deps.py:961: wrapfile.write_text(new_config, encoding="utf-8")
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\deps.py:1037: with urllib.request.urlopen(request) as r:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\deps.py:1081: shutil.copy(src, dst, follow_symlinks=False)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\devkit.py:11: import tempfile
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\devkit.py:75: header_file.write_text(header_source, encoding="utf-8")
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\devkit.py:79: example_file.write_text(example_source, encoding="utf-8")
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\devkit.py:87: shutil.copy(msvs_asset, output_dir)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\devkit.py:99: shutil.copy(gir_path, self.output_dir / gir_name)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\devkit.py:260: combined_dir = Path(tempfile.mkdtemp(prefix="devkit"))
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\devkit.py:264: scratch_dir = Path(tempfile.mkdtemp(prefix="devkit"))
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\devkit.py:275: shutil.move(object_path, combined_dir / object_name)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\devkit.py:290: with tempfile.NamedTemporaryFile() as renames_file:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\devkit.py:346: with header.open(encoding="utf-8") as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\env.py:230: wrapper.write_text(make_pkg_config_wrapper(pkg_config, pkg_config_path, pkg_config_libdir), encoding="utf-8")
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\env.py:258: with machine_file.open("w", encoding="utf-8") as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\env_android.py:129: dst.write_text(patched, encoding="utf-8")
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\env_generic.py:7: import tempfile
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\env_generic.py:54: with tempfile.TemporaryDirectory() as raw_prober_dir:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson_configure.py:237: shutil.copy(SCRIPTS_DIR / "BSDmakefile", builddir)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson_configure.py:238: (builddir / "Makefile").write_text(generate_out_of_tree_makefile(sourcedir), encoding="utf-8")
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson_configure.py:240: (builddir / "make.bat").write_text(generate_out_of_tree_make_bat(sourcedir), encoding="utf-8")
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson_configure.py:242: (builddir / "frida-env.dat").write_bytes(pickle.dumps({
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\mkfatmacho.py:37: with open(output_path, "wb") as output_file:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\mkfatmacho.py:48: shutil.copyfileobj(input_file, output_file)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\post-process-oabi.py:8: import tempfile
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\post-process-oabi.py:35: with urllib.request.urlopen(arm64e_sdk_url) as response, \
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\post-process-oabi.py:36: tempfile.NamedTemporaryFile(suffix=".tar.xz") as archive:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\post-process-oabi.py:37: shutil.copyfileobj(response, archive)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\post-process-oabi.py:41: with tempfile.TemporaryDirectory() as patched_artifact_dir:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\post-process-oabi.py:44: with tempfile.TemporaryDirectory() as artifact_extracted_dir, \
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\post-process-oabi.py:45: tempfile.TemporaryDirectory() as arm64e_extracted_dir:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\post-process-oabi.py:49: with tarfile.open(arm64e_artifact_path, "r:xz") as arm64e_tar:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\post-process-oabi.py:53: with tarfile.open(artifact_path, "r:xz") as tar:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\post-process-oabi.py:59: with tarfile.open(patched_artifact_file, "w:xz") as patched_tar:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\post-process-oabi.py:63: shutil.copy(patched_artifact_file, artifact_path)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\post-process-oabi.py:78: with tempfile.TemporaryDirectory() as oabi_dir, tempfile.TemporaryDirectory() as nabi_dir:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\post-process-oabi.py:83: shutil.copy(Path(nabi_dir) / "aarch64_sysv.S.o", dst)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\post-process-oabi.py:84: with dst.open("rb+") as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\sync-from-upstream.py:109: os.remove(patches_path)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\sync-from-upstream.py:163: with open(path, "r", encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\sync-from-upstream.py:174: with open(path, "w", encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\build.py:3246: with open(filename, 'wb') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\coredata.py:677: with open(f, encoding='utf-8') as rf:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\coredata.py:678: with open(copy, 'w', encoding='utf-8') as wf:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\coredata.py:1151: with open(fname, encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\coredata.py:1257: with open(filename, 'w', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\coredata.py:1265: with open(filename, 'w', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\coredata.py:1290: tempfilename = filename + '~'
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\coredata.py:1295: shutil.copyfile(filename, prev_filename)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\coredata.py:1296: with open(tempfilename, 'wb') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\coredata.py:1300: os.replace(tempfilename, filename)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\mcompile.py:43: with path_to_intro.open(encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\mconf.py:89: with open(opfile, 'rb') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\mconf.py:104: with open(opfile, 'rb') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\mdevenv.py:5: import tempfile
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\mdevenv.py:105: shutil.copy(gdb_helper, str(destdir / os.path.basename(gdb_helper)))
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\mdevenv.py:133: with gdbinit_path.open('r+', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\mdevenv.py:138: gdbinit_path.write_text(gdbinit_line, encoding='utf-8')
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\mdevenv.py:176: with open(options.dump, "w", encoding='utf-8') as output:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\mdevenv.py:213: tmprc = tempfile.NamedTemporaryFile(mode='w')
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\mdist.py:17: import tempfile
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\mdist.py:62: with open(hashname, 'w', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\mdist.py:153: with tempfile.TemporaryFile() as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\mdist.py:208: shutil.copytree(sub_src_root, sub_distdir)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\mdist.py:249: with lzma.open(xzname, 'wb') as xf, open(tarname, 'rb') as tf:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\mdist.py:250: shutil.copyfileobj(tf, xf)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\mdist.py:253: with gzip.open(gzname, 'wb') as zf, open(tarname, 'rb') as tf:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\mdist.py:254: shutil.copyfileobj(tf, zf)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\mesondata.py:24: path.write_text(data, encoding='utf-8')
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\minstall.py:301: os.remove(*args, **kwargs)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\minstall.py:313: shutil.copy(*args, **kwargs)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\minstall.py:317: shutil.copy2(*args, **kwargs)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\minstall.py:321: shutil.copyfile(*args, **kwargs)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\minstall.py:325: shutil.copystat(*args, **kwargs)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\minstall.py:854: with open(os.path.join(log_dir, 'install-log.txt'), 'w', encoding='utf-8') as lf:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\mintro.py:526: with open(get_info_file(infodir, kind), encoding='utf-8') as fp:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\mintro.py:594: with open(tmp_file, 'w', encoding='utf-8') as fp:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\mintro.py:664: with open(tmp_file, 'w', encoding='utf-8') as fp:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\mlog.py:189: self.log_file = open(os.path.join(logdir, self._LOG_FNAME), 'w', encoding='utf-8')
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\msetup.py:7: import argparse, datetime, glob, json, os, platform, shutil, sys, tempfile, time
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\msetup.py:80: with tempfile.TemporaryDirectory() as d:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\msetup.py:83: restore.append((shutil.copy(filename, d), filename))
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\msetup.py:105: shutil.move(b, f)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\msetup.py:148: with open(os.path.join(build_dir, '.gitignore'), 'w', encoding='utf-8') as ofile:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\msetup.py:150: with open(os.path.join(build_dir, '.hgignore'), 'w', encoding='utf-8') as ofile:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\msetup.py:291: with open(fname, 'w', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\msubprojects.py:68: with tarfile.open(path) as tar_archive: # [ignore encoding]
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\msubprojects.py:632: shutil.copyfile(src_path, dst_path)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\mtest.py:494: self.file = open(filename, 'w', encoding='utf-8', errors=errors)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\mtest.py:900: with open(self.filename, 'wb') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\mtest.py:1049: with open(filename, 'r', encoding='utf8', errors='replace') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\mtest.py:1663: with datafile.open('rb') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\optinterpreter.py:80: with open(option_file, encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\programs.py:176: with open(script, encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\rewriter.py:923: with open(fpath, 'w', encoding='utf-8'):
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\rewriter.py:925: with open(fpath, encoding='utf-8') as fp:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\rewriter.py:976: with open(val['path'], 'w', encoding='utf-8') as fp:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\rewriter.py:1030: with open(options.json, encoding='utf-8') as fp:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\ast\interpreter.py:192: with open(absname, encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\backends.py:436: return open(outfileabs_tmp, 'w', encoding='utf-8')
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\backends.py:681: with open(exe_data, 'wb') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\backends.py:688: with open(test_data, 'wb') as datafile:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\backends.py:691: with open(benchmark_data, 'wb') as datafile:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\backends.py:957: with open(pch_file_tmp, 'w', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\backends.py:1317: with open(ifilename, 'w', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\backends.py:1348: with open(filename, 'wb') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\backends.py:1659: with open(install_data_file, 'wb') as ofile:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\ninjabackend.py:501: def detect_vs_dep_prefix(self, tempfilename):
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\ninjabackend.py:513: return open(tempfilename, 'a', encoding='utf-8')
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\ninjabackend.py:518: return open(tempfilename, 'a', encoding='utf-8')
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\ninjabackend.py:522: with open(filename, 'w', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\ninjabackend.py:555: with open(tempfilename, 'ab') as binfile:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\ninjabackend.py:557: return open(tempfilename, 'a', encoding='utf-8')
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\ninjabackend.py:591: tempfilename = outfilename + '~'
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\ninjabackend.py:592: with open(tempfilename, 'w', encoding='utf-8') as outfile:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\ninjabackend.py:605: with self.detect_vs_dep_prefix(tempfilename) as outfile:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\ninjabackend.py:655: os.replace(tempfilename, outfilename)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\ninjabackend.py:671: with open(os.path.join(self.environment.get_build_dir(), 'rust-project.json'),
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\ninjabackend.py:697: with open(os.path.join(builddir, 'compile_commands.json'), 'wb') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\ninjabackend.py:1091: with open(json_abs, 'w', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\ninjabackend.py:1101: with open(pickle_abs, 'wb') as p:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\ninjabackend.py:1407: with open(manifest_fullpath, 'w', encoding='utf-8') as manifest:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\ninjabackend.py:2670: with open(filename, encoding='ascii', errors='ignore') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\ninjabackend.py:3528: os.remove(abs_aliasfile)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\ninjabackend.py:3548: with open(d_file, 'wb') as ofile:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\ninjabackend.py:3750: with src.open(encoding='ascii', errors='ignore') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\vs2010backend.py:290: with open(Vs2010Backend.get_regen_stampfile(build_dir), 'w', encoding='utf-8'):
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\vs2010backend.py:415: with open(sln_filename_tmp, 'w', encoding='utf-8-sig') as ofile:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\vs2010backend.py:964: with open(ofname_tmp, 'w', encoding='utf-8') as of:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\vs2010backend.py:2033: with open(rulefile, 'w', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\backend\xcodebackend.py:214: with open(tmpname, 'w', encoding='utf-8') as ofile:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\cargo\interpreter.py:57: with open(filename, 'rb') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\cmake\executor.py:135: proc = S.Popen(cmd, stdout=S.PIPE, stderr=S.PIPE, cwd=str(build_dir), env=env)  # TODO [PYTHON_37]: drop Path conversion
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\cmake\executor.py:178: proc = S.Popen(cmd, stdout=S.PIPE, stderr=S.STDOUT, cwd=str(build_dir), env=env)  # TODO [PYTHON_37]: drop Path conversion
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\cmake\fileapi.py:51: query_file.write_text(json.dumps(query, indent=2), encoding='utf-8')
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\cmake\fileapi.py:75: debug_json.write_text(json.dumps(index, indent=2), encoding='utf-8')
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\cmake\toolchain.py:60: self.toolchain_file.write_text(self.generate(), encoding='utf-8')
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\cmake\toolchain.py:61: self.cmcache_file.write_text(self.generate_cache(), encoding='utf-8')
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\cmake\toolchain.py:218: cmake_file.write_text(cmake_content, encoding='utf-8')
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\cmake\toolchain.py:222: temp_toolchain_file.write_text(CMakeToolchain._print_vars(self.variables), encoding='utf-8')
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\compilers\compilers.py:810: with open(srcname, 'w', encoding='utf-8') as ofile:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\compilers\cs.py:83: with open(source_name, 'w', encoding='utf-8') as ofile:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\compilers\cs.py:90: pc = subprocess.Popen(self.exelist + self.get_always_args() + [src], cwd=work_dir)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\compilers\cs.py:98: pe = subprocess.Popen(cmdlist, cwd=work_dir)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\compilers\cuda.py:528: with open(source_name, 'w', encoding='utf-8') as ofile:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\compilers\d.py:444: with open(source_name, 'w', encoding='utf-8') as ofile:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\compilers\d.py:446: pc = subprocess.Popen(self.exelist + self.get_output_args(output_name) + self._get_target_arch_args() + [source_name], cwd=work_dir)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\compilers\detect.py:19: import tempfile
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\compilers\detect.py:368: with tempfile.NamedTemporaryFile(suffix='.c') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\compilers\detect.py:1136: # We cannot use NamedTemporaryFile on windows, its documented
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\compilers\detect.py:1139: o, f = tempfile.mkstemp('.d')
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\compilers\detect.py:1173: # We cannot use NamedTemporaryFile on windows, its documented
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\compilers\detect.py:1176: o, f = tempfile.mkstemp('.d')
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\compilers\detect.py:1221: with tempfile.NamedTemporaryFile(suffix='.swift') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\compilers\detect.py:1224: outhandle, outfile = tempfile.mkstemp('.out')
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\compilers\java.py:79: with open(source_name, 'w', encoding='utf-8') as ofile:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\compilers\java.py:87: pc = subprocess.Popen(self.exelist + [src], cwd=work_dir)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\compilers\java.py:94: pe = subprocess.Popen(cmdlist, cwd=work_dir)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\compilers\rust.py:77: with open(source_name, 'w', encoding='utf-8') as ofile:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\compilers\swift.py:119: with open(source_name, 'w', encoding='utf-8') as ofile:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\compilers\swift.py:122: pc = subprocess.Popen(self.exelist + extra_flags + ['-emit-executable', '-o', output_name, src], cwd=work_dir)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\compilers\mixins\clike.py:219: with open(file_to_check, 'rb') as fd:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\compilers\mixins\clike.py:295: with open(source_name, 'w', encoding='utf-8') as ofile:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\compilers\mixins\clike.py:899: with open(p.output_name, 'rb') as o:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\dependencies\cmake.py:595: cm_file.write_text(cmake_txt, encoding='utf-8')
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\dependencies\cuda.py:207: with open(version_file_path, encoding='utf-8') as version_file:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\dependencies\pkgconfig.py:525: with open(la_file, encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\interpreter\interpreter.py:984: with open(meson_filename, "w", encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\interpreter\interpreter.py:1216: with open(option_file, 'rb') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\interpreter\interpreter.py:2469: with open(absname, encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\interpreter\interpreter.py:2757: with open(dst_tmp, 'w', encoding=file_encoding) as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\interpreter\interpreter.py:2760: shutil.copymode(inputs_abs[0], dst_tmp)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\interpreter\interpreter.py:2764: with open(depfile, encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\interpreter\interpreter.py:2774: shutil.copy2(inputs_abs[0], ofile_abs)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\interpreterbase\interpreterbase.py:100: with open(mesonfile, encoding='utf-8') as mf:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\interpreterbase\interpreterbase.py:138: with open(parent / 'meson.build', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\modules\cmake.py:327: with open(infile, encoding='utf-8') as fin:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\modules\cmake.py:341: with open(outfile_tmp, "w", encoding='utf-8') as fout:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\modules\cmake.py:344: shutil.copymode(infile, outfile_tmp)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\modules\dlang.py:58: with open(config_path, encoding='utf-8') as ofile:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\modules\dlang.py:87: with open(config_path, 'w', encoding='utf-8') as ofile:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\modules\external_project.py:202: output = open(log_filename, 'w', encoding='utf-8')
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\modules\fs.py:249: with open(path, encoding=encoding) as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\modules\gnome.py:938: with open(gir_filelist_filename, 'w', encoding='utf-8') as gir_filelist:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\modules\gnome.py:2116: with open(fname, 'w', encoding='utf-8') as ofile:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\modules\hotdoc.py:320: with open(hotdoc_config_path, 'w', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\modules\keyval.py:31: with open(path_to_config, encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\modules\pkgconfig.py:496: with open(fname, 'w', encoding='utf-8') as ofile:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\modules\python.py:400: with open(pycompile, 'wb') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\modules\python.py:411: with open(os.path.join(self.interpreter.environment.get_scratch_dir(), manifest), 'w', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\modules\qt.py:575: shutil.copy2(infile_abs, outfile_abs)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\clangformat.py:31: fname.write_bytes(original)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\cleantrees.py:28: with open(args[0], 'rb') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\cmake_run_ctgt.py:72: out_file.write_bytes(res.stdout)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\cmake_run_ctgt.py:98: shutil.copyfile(str(generated), str(expected))
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\copy.py:16: shutil.copy2(args[0], args[1])
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\coverage.py:103: with open(llvm_cov_shim_path, 'w', encoding='utf-8') as llvm_cov_bat:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\coverage.py:107: with open(llvm_cov_shim_path, 'w', encoding='utf-8') as llvm_cov_sh:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\depfixer.py:452: with open('META-INF/MANIFEST.MF', 'r+', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\depscan.py:34: with open(pickle_file, 'rb') as pf:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\depscan.py:149: with open(self.outfile, 'w', encoding='utf-8') as ofile:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\depscan.py:195: with open(jsonfile, encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\env2mfile.py:227: with open(tmpfilename, 'w', encoding='utf-8') as ofile:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\externalproject.py:28: with open(self.depfile, 'w', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\externalproject.py:39: with open(self.stampfile, 'w', encoding='utf-8'):
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\externalproject.py:74: output = open(log_filename, 'w', encoding='utf-8')
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\gettext.py:30: with open(linguas, encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\gtkdochelper.py:117: shutil.copyfile(f, os.path.join(abs_out, os.path.basename(f)))
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\gtkdochelper.py:127: shutil.copyfile(f_abs, os.path.join(htmldir, os.path.basename(f_abs)))
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\gtkdochelper.py:209: shutil.move(os.path.join(htmldir, f'{module}.devhelp2'),
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\gtkdochelper.py:216: shutil.copytree(source, final_destination)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\hotdochelper.py:39: shutil.copytree(source_dir, installdir)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\itstool.py:9: import tempfile
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\itstool.py:30: with tempfile.TemporaryDirectory(prefix=os.path.basename(in_fname), dir=build_dir) as tmp_dir:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\itstool.py:47: shutil.copy(mo_file, tmp_mo_fname)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\meson_exe.py:56: p = subprocess.Popen(cmd_args, env=child_env, cwd=exe.workdir,
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\meson_exe.py:84: with open(exe.capture, 'rb') as cur:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\meson_exe.py:89: with open(exe.capture, 'wb') as output:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\meson_exe.py:106: with open(options.unpickle, 'rb') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\pycompile.py:41: with open(data_file, 'rb') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\regen_checker.py:41: with open(dumpfile, 'rb') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\regen_checker.py:44: with open(coredata_file, 'rb') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\run_tool.py:21: with fname.open(encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\scanbuild.py:8: import tempfile
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\scanbuild.py:20: scandir = tempfile.mkdtemp(dir=str(privdir))
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\symbolextractor.py:31: with open(outfilename, 'w', encoding='utf-8'):
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\symbolextractor.py:36: with open(outfilename, encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\symbolextractor.py:42: with open(outfilename, 'w', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\symbolextractor.py:53: with open(TOOL_WARNING_FILE, 'w', encoding='utf-8'):
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\symbolextractor.py:303: with open(TOOL_WARNING_FILE, 'w', encoding='utf-8'):
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\vcstagger.py:16: with open(infile, encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\vcstagger.py:19: with open(outfile, encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\vcstagger.py:24: with open(outfile, 'w', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\scripts\yasm.py:21: with open(options.depfile, 'wb') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\templates\mesontemplates.py:69: open('meson.build', 'w', encoding='utf-8').write(content)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\templates\sampleimpl.py:62: with open(source_name, 'w', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\templates\sampleimpl.py:65: with open('meson.build', 'w', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\templates\sampleimpl.py:86: with open(lib_name, 'w', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\templates\sampleimpl.py:88: with open(test_name, 'w', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\templates\sampleimpl.py:90: with open('meson.build', 'w', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\templates\sampleimpl.py:100: with open(source_name, 'w', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\templates\sampleimpl.py:102: with open('meson.build', 'w', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\templates\sampleimpl.py:133: with open(lib_name, 'w', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\templates\sampleimpl.py:135: with open(test_name, 'w', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\templates\sampleimpl.py:137: with open('meson.build', 'w', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\templates\sampleimpl.py:159: with open(kwargs['header_file'], 'w', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\utils\posix.py:20: self.lockfile = open(self.lockfilename, 'w', encoding='utf-8')
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\utils\universal.py:20: from tempfile import TemporaryDirectory, NamedTemporaryFile
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\utils\universal.py:1329: with open(src, encoding=encoding, newline='') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\utils\universal.py:1337: with open(dst_tmp, 'w', encoding=encoding, newline='') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\utils\universal.py:1341: shutil.copymode(src, dst_tmp)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\utils\universal.py:1398: with open(ofilename_tmp, 'w', encoding='utf-8') as ofile:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\utils\universal.py:1413: with open(dst, 'rb') as f1, open(dst_tmp, 'rb') as f2:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\utils\universal.py:1501: with open(args_file, encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\utils\universal.py:1540: p = subprocess.Popen(args, universal_newlines=True, encoding=encoding, close_fds=False,
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\utils\universal.py:1560: p = subprocess.Popen(args, universal_newlines=False, close_fds=False,
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\utils\universal.py:2102: with NamedTemporaryFile('w', suffix='.bat', encoding='utf-8', delete=False) as bat_file:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\utils\universal.py:2405: with open(filename, 'rb') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\utils\vsenv.py:8: import tempfile
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\utils\vsenv.py:93: bat_file = tempfile.NamedTemporaryFile('w', suffix='.bat', encoding='utf-8', delete=False)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\utils\win32.py:20: self.lockfile = open(self.lockfilename, 'w', encoding='utf-8')
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\wrap\wrap.py:15: import tempfile
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\wrap\wrap.py:113: with open(wrapfile, 'wb') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\wrap\wrap.py:158: with open(fname, 'r', encoding='utf-8') as file:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\wrap\wrap.py:256: with open(self.get_hashfile(subproject_directory), 'w', encoding='utf-8') as file:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\wrap\wrap.py:346: with Path(self.subdir_root, 'wrapdb.json').open('r', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\wrap\wrap.py:361: url = urllib.request.urlopen(f'https://wrapdb.mesonbuild.com/v2/{subp_name}_{version}-{revision}/{subp_name}.wrap')
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\wrap\wrap.py:363: with fname.open('wb') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\wrap\wrap.py:428: with open(main_fname, 'w', encoding='utf-8') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\wrap\wrap.py:615: with open(hashfile, 'r', encoding='utf-8') as file:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\wrap\wrap.py:665: tmpfile = tempfile.NamedTemporaryFile(mode='wb', dir=self.cachedir, delete=False)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\wrap\wrap.py:727: with open(path, 'rb') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\wrap\wrap.py:751: os.remove(tmpfile)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\wrap\wrap.py:793: with tempfile.TemporaryDirectory() as workdir:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\wrap\wrap.py:842: os.remove(dst_file)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\wrap\wrap.py:845: os.remove(dst_file)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\wrap\wrap.py:846: shutil.copy2(src_file, dst_dir)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\wrap\wraptool.py:103: with open(wrapfile, 'wb') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\wrap\wraptool.py:140: shutil.copy(from_path, spdir_name)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\wrap\wraptool.py:146: shutil.copytree(from_path, outputdir, ignore=shutil.ignore_patterns('subprojects'))
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\meson\mesonbuild\wrap\wraptool.py:193: with Path('subprojects/wrapdb.json').open('wb') as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\tomlkit\tomlkit\toml_file.py:31: with open(self._path, encoding="utf-8", newline="") as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\releng\tomlkit\tomlkit\toml_file.py:57: with open(self._path, "w", encoding="utf-8", newline="") as f:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\scripts\fetch-abi-bits.py:12: import tempfile
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\scripts\fetch-abi-bits.py:63: metadata_file.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\scripts\fetch-abi-bits.py:92: with urllib.request.urlopen(f"{base_url}/{headers_stem}.tar.{compression}") as response:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\scripts\fetch-abi-bits.py:100: with tarfile.open(fileobj=BytesIO(tar_blob), mode=f"r:{compression}") as tar:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\scripts\fetch-abi-bits.py:118: with urllib.request.urlopen(f"{base_url}{libs_subpath}/node.lib") as response:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\scripts\fetch-abi-bits.py:122: node_lib.write_bytes(redacted_lib.getvalue())
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\scripts\fetch-abi-bits.py:140: with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", delete=False) as binding_gyp:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\scripts\package.py:18: shutil.copy(binding, intermediate_path)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\scripts\package.py:30: with tarfile.open(outfile, "w:gz") as tar:
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\src\tsc.py:13: shutil.copy(asset, privdir)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\src\tsc.py:20: shutil.copy(asset, srcdir)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\src\tsc.py:40: shutil.copy(srcoutdir / (asset.stem + ".js"), outdir)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\src\tsc.py:41: shutil.copy(srcoutdir / (asset.stem + ".d.ts"), outdir)
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\src\assets\adjust-version.py:15: outpkg.write_text(adjusted_pkg, encoding="utf-8")
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\src\frida_bindgen\cli.py:95: self._output_path.write_text(result, encoding="utf-8")
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\src\frida_bindgen\customization.py:878: "write_bytes": MethodCustomizations(drop=True),
+shared\sudarshan_core\engines\frida_hooks\node_modules\frida\src\frida_bindgen\customization.py:879: "write_bytes_async": MethodCustomizations(js_name="write"),
+shared\sudarshan_core\ingest\apk_record.py:120: out_path.write_text(json.dumps(record, indent=2), encoding="utf-8")
+shared\sudarshan_core\models\manifest.py:170: path.write_text(
+shared\sudarshan_core\sandbox\device_channel.py:14: adb shell uiautomator dump /data/local/tmp/ui_dump.xml
+shared\sudarshan_core\sandbox\device_channel.py:15: adb shell cat /data/local/tmp/ui_dump.xml
+shared\sudarshan_core\sandbox\frida_assets.py:326: with urllib.request.urlopen(request, timeout=timeout) as response:
+shared\sudarshan_core\sandbox\frida_assets.py:328: archive_path.write_bytes(payload)
+shared\sudarshan_core\sandbox\frida_assets.py:338: with lzma.open(archive_path) as compressed:
+shared\sudarshan_core\sandbox\frida_assets.py:339: final_path.write_bytes(compressed.read())
+shared\sudarshan_core\sandbox\provider.py:382: paths.append(f"/data/local/tmp/{name}")
+shared\sudarshan_core\sandbox\provider.py:492: remote = f"/data/local/tmp/{self.config.frida_bin}"
+shared\sudarshan_core\sandbox\provider.py:493: legacy = "/data/local/tmp/frida-server"
+shared\sudarshan_core\sandbox\provider.py:736: f"/data/local/tmp/{bin_name}", port, self.config
+shared\sudarshan_core\sandbox\provider.py:746: status.binary_path = f"/data/local/tmp/{bin_name}"
+shared\sudarshan_core\sandbox\provider.py:747: status.message = f"Started /data/local/tmp/{bin_name} on port {port}"
+shared\sudarshan_core\services\mobsf_client.py:219: with open(apk_path, "rb") as f:
+shared\sudarshan_core\services\mobsf_client.py:387: with open(apk_path, "rb") as f:
+shared\sudarshan_core\services\mobsf_client.py:421: path.write_text(
+shared\sudarshan_core\validation\engineering_report.py:77: json_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+shared\sudarshan_core\validation\engineering_report.py:144: html_path.write_text(html, encoding="utf-8")
+shared\sudarshan_core\validation\recovery.py:96: path.write_text(json.dumps(report.to_dict(), indent=2), encoding="utf-8")
+shared\sudarshan_core\validation\runner.py:230: (run_log_dir / f"{entry.id}.json").write_text(
+shared\sudarshan_core\validation\stress.py:95: path.write_text(json.dumps(report.to_dict(), indent=2), encoding="utf-8")
+shared\sudarshan_core\visual_evidence\linker.py:123: with open(path, "rb") as f:
+shared\sudarshan_core\visual_evidence\linker.py:472: with open(tmp, "w", encoding="utf-8") as f:
+shared\sudarshan_core\visual_evidence\linker.py:807: path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+frontend\update_surfaces.py:8: with open(filepath, 'r', encoding='utf-8') as f:
+frontend\update_surfaces.py:29: with open(filepath, 'w', encoding='utf-8') as f:
+frontend\node_modules\@types\babel__core\index.d.ts:669: * The full path of the resolved file, e.g. `"/tmp/node_modules/@babel/preset-env/lib/index.js"`
+frontend\node_modules\commander\typings\index.d.ts:153: *     --chdir /tmp
+frontend\node_modules\commander\typings\index.d.ts:155: *     // => "/tmp"
+frontend\node_modules\typescript\lib\lib.dom.d.ts:10093: * The **`Document.close()`** method finishes writing to a document, opened with Document.open().
+frontend\node_modules\typescript\lib\lib.dom.d.ts:10334: * The **`Document.open()`** method opens a document for This does come with some side effects.
+frontend\node_modules\typescript\lib\lib.dom.d.ts:10339: open(url: string | URL, name: string, features: string): WindowProxy | null;
+frontend\node_modules\typescript\lib\lib.dom.d.ts:10380: * The **`write()`** method of the Document interface writes text in one or more TrustedHTML or string parameters to a document stream opened by document.open().
+frontend\node_modules\typescript\lib\lib.dom.d.ts:10387: * The **`writeln()`** method of the Document interface writes text in one or more TrustedHTML or string parameters to a document stream opened by document.open(), followed by a newline character.
+frontend\node_modules\typescript\lib\lib.dom.d.ts:36719: * The **`open()`** method of the `Window` interface loads a specified resource into a new or existing browsing context (that is, a tab, a window, or an iframe) under a specified name.
+frontend\node_modules\typescript\lib\lib.dom.d.ts:36723: open(url?: string | URL, target?: string, features?: string): WindowProxy | null;
+frontend\node_modules\typescript\lib\lib.dom.d.ts:37219: * The XMLHttpRequest method **`open()`** initializes a newly-created request, or re-initializes an existing one.
+frontend\node_modules\typescript\lib\lib.dom.d.ts:37224: open(method: string, url: string | URL, async: boolean, username?: string | null, password?: string | null): void;
+frontend\node_modules\typescript\lib\lib.dom.d.ts:38755: * The **`open()`** method of the `Window` interface loads a specified resource into a new or existing browsing context (that is, a tab, a window, or an iframe) under a specified name.
+frontend\node_modules\typescript\lib\lib.dom.d.ts:38759: declare function open(url?: string | URL, target?: string, features?: string): WindowProxy | null;
+frontend\node_modules\typescript\lib\lib.webworker.d.ts:12419: * The XMLHttpRequest method **`open()`** initializes a newly-created request, or re-initializes an existing one.
+frontend\node_modules\typescript\lib\lib.webworker.d.ts:12424: open(method: string, url: string | URL, async: boolean, username?: string | null, password?: string | null): void;
+frontend\node_modules\typescript\lib\typescript.d.ts:1472: export interface CompileOnSaveEmitFileResponse extends Response {
+frontend\node_modules\typescript\lib\typescript.d.ts:2795: open(newText: string | undefined): void;

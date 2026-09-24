@@ -1,0 +1,15 @@
+# SUDARSHAN — Laya Decision Layer Environment Dependencies
+# Isolated requirement set for Laya System-1 inference engine.
+# Python >= 3.10 required (Project environment: Python 3.11.9)
+
+laya==0.3.20
+torch>=2.0.0
+transformers>=4.48.0
+safetensors>=0.4.0
+huggingface_hub>=0.20.0
+numpy>=1.20.0
+
+# Optional server extras (for standalone laya-serve container)
+fastapi>=0.110.0
+uvicorn>=0.27.0
+python-multipart>=0.0.9

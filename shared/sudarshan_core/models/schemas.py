@@ -209,6 +209,11 @@ class DynamicAnalysisResult(BaseModel):
     bfci_evidence: List[str] = Field(default_factory=list)
     artifact_dir: Optional[str] = None
     evidence_record_count: int = 0
+    crash_info: Optional[Dict[str, Any]] = None
+    dynamic_status: str = "NOT_STARTED"
+    screenshot_status: Optional[str] = None
+    dynamic_coverage: Dict[str, Any] = Field(default_factory=dict)
+    crashes: List[Any] = Field(default_factory=list)
 
 
 # ─── Fraud Workflow Reconstruction ───────────────────────────────────────────────────────────────────

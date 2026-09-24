@@ -261,6 +261,13 @@ async def init_pool():
     global DB_POOL, IS_POSTGRES
     db_url = os.getenv("DATABASE_URL")
     
+    if DB_POOL is not None:
+        try:
+            await DB_POOL.close()
+        except Exception:
+            pass
+        DB_POOL = None
+        
     if db_url and db_url.startswith("postgresql"):
         import asyncpg
         IS_POSTGRES = True
@@ -268,7 +275,12 @@ async def init_pool():
         if db_url.startswith("postgresql+asyncpg://"):
             db_url = db_url.replace("postgresql+asyncpg://", "postgresql://")
         
-        DB_POOL = await asyncpg.create_pool(db_url, min_size=1, max_size=20)
+        DB_POOL = await asyncpg.create_pool(
+            db_url, 
+            min_size=int(os.getenv("DB_POOL_MIN", "5")), 
+            max_size=int(os.getenv("DB_POOL_MAX", "20")),
+            command_timeout=float(os.getenv("DB_TIMEOUT", "60.0"))
+        )
         logger.info(f"[DB] Connected to PostgreSQL via asyncpg pool.")
     else:
         IS_POSTGRES = False
@@ -283,7 +295,7 @@ async def connect():
             wrapper = AsyncpgConnectionWrapper(conn, tr)
             try:
                 yield wrapper
-            except Exception:
+            except BaseException:
                 await wrapper.rollback()
                 raise
             else:

@@ -89,7 +89,7 @@ async def _dispatch_and_await_job(batch_id: str, batch_job: dict) -> None:
 
     job_id = batch_job["job_id"]
     sha256 = batch_job.get("sha256", "")
-    temp_path = batch_job.get("temp_path", "")
+    object_key = batch_job.get("temp_path", "")
     filename = batch_job.get("filename", "")
 
     batch = await get_batch(batch_id)
@@ -118,7 +118,7 @@ async def _dispatch_and_await_job(batch_id: str, batch_job: dict) -> None:
     await persist_job(analysis_job_id)
     await enqueue(
         job_id=analysis_job_id,
-        temp_path=temp_path,
+        object_key=object_key,
         filename=filename,
         sha256_hash=sha256,
         analyst_id=analyst_id,

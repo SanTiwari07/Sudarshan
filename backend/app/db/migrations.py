@@ -189,7 +189,58 @@ MIGRATIONS: List[Migration] = [
             "WHERE is_placeholder = 0 AND (apk_sha256 IS NULL OR apk_sha256 = 'unknown')"
         ),
     ),
+    Migration(
+        "0007_durable_queue",
+        "Create canonical_analyses for deduplication and durable worker queueing",
+        # Use an async def to wrap multiple statements, or just do it inside
+        lambda db: _run_0007_migration(db)
+    ),
+    Migration(
+        "0008_queue_indexes",
+        "Add indexes to canonical_analyses and analysis_jobs to speed up queue polling and mapping",
+        lambda db: _run_0008_migration(db)
+    ),
 ]
+
+async def _run_0008_migration(db):
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_canonical_queue ON canonical_analyses(status, attempt_count, lease_expires_at)")
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_analysis_jobs_canonical ON analysis_jobs(canonical_fingerprint)")
+
+async def _run_0007_migration(db):
+    await db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS canonical_analyses (
+            fingerprint TEXT PRIMARY KEY,
+            sha256 TEXT NOT NULL,
+            status TEXT NOT NULL,
+            progress_pct INTEGER DEFAULT 0,
+            current_stage TEXT,
+            result_json TEXT,
+            error TEXT,
+            claimed_by TEXT,
+            claimed_at TEXT,
+            lease_expires_at TEXT,
+            last_heartbeat_at TEXT,
+            attempt_count INTEGER DEFAULT 0,
+            max_attempts INTEGER DEFAULT 3
+        )
+        """
+    )
+    # add_columns logic handles checking if column exists
+    from app.db.pool import is_postgres
+    if is_postgres():
+        # Postgres add column
+        try:
+            await db.execute("ALTER TABLE analysis_jobs ADD COLUMN canonical_fingerprint TEXT")
+        except Exception as e:
+            if "already exists" not in str(e):
+                raise
+    else:
+        # SQLite
+        cur = await db.execute("PRAGMA table_info(analysis_jobs)")
+        columns = [row[1] for row in await cur.fetchall()]
+        if "canonical_fingerprint" not in columns:
+            await db.execute("ALTER TABLE analysis_jobs ADD COLUMN canonical_fingerprint TEXT")
 
 
 # ─── Runner ───────────────────────────────────────────────────────────────────

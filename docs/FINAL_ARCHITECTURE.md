@@ -1,6 +1,6 @@
 # SUDARSHAN Final Architecture
 
-This document describes the finalized architecture of the Sudarshan Hybrid Dynamic Analysis Engine, freezing the state at Phase 7.
+This document describes the finalized architecture of the Sudarshan Hybrid Dynamic Analysis Engine, freezing the state at Phase 7 (Post-10K Readiness Validation).
 
 ## 1. Executive Architecture
 The system integrates deterministic risk aggregation with AI-assisted UI exploration to analyze Android applications for fraudulent behavior in a sandboxed environment.
@@ -133,3 +133,10 @@ Presents the FRS, Evidence, and AI narrative to the Security Operations Center.
 - Jev timeout/failure -> Gemini fallback.
 - Gemini timeout/failure -> Deterministic positional fallback.
 - Out of scope -> Deterministic recovery (`ADB BACK`, `start_activity`).
+
+
+## 22. 10K Scaling Enhancements
+- **Connection Pooling**: PostgreSQL-backed syncpg pooling isolates connections properly to prevent transaction leaking.
+- **Durable Queues**: canonical_analyses schema leverages lease-mechanisms to enable multi-node worker recovery and idempotency.
+- **Quotas and Limits**: Configurable concurrency caps (STATIC_MAX_CONCURRENCY, DYNAMIC_MAX_CONCURRENCY) isolate resources.
+- **Backpressure**: Atomic limits and slowapi rate limits throttle excessive load.

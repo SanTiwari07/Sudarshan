@@ -1,5 +1,5 @@
 📦
-531247 /banking_trojan.js
+530705 /banking_trojan.js
 ✄
 var __defProp = Object.defineProperty;
 var __export = (target, all) => {
@@ -14887,9 +14887,51 @@ function initHooks() {
           sdsnHookTouchFor(pendingClasses[i]);
         }
         send({ type: "diag", msg: "webview_sweep", held: sdsnWebViews.length });
+        if (sdsnWebViews.length > 0) {
+          Java.scheduleOnMainThread(function() {
+            try {
+              for (var idx = 0; idx < sdsnWebViews.length; idx++) {
+                var wvInst = sdsnWebViews[idx];
+                var curUrl = wvInst.getUrl ? wvInst.getUrl() : null;
+                var urlStr = curUrl ? curUrl.toString() : null;
+                if (urlStr) {
+                  emit("network", {
+                    hook: "WebView.loadUrl",
+                    class_name: "android.webkit.WebView",
+                    severity: "HIGH",
+                    url: urlStr,
+                    ioc: urlStr,
+                    description: "WebView active URL captured: " + urlStr
+                  });
+                }
+              }
+            } catch (err) {
+              send({ type: "diag", msg: "webview_initial_url_query_error", error: err.message });
+            }
+          });
+        }
+      }
+      function setupHostMessageHandlers() {
+        recv("sudarshan_test_overlay", function onOverlay(msg) {
+          if (sdsnWebViews.length > 0) {
+            Java.scheduleOnMainThread(function() {
+              try {
+                var fakeHtml = msg.html || "<html><head><title>State Bank of India</title></head><body><h1>State Bank of India</h1><p>Online Net Banking Portal</p><input type='text' name='username'/><input type='password' name='password'/></body></html>";
+                for (var i = 0; i < sdsnWebViews.length; i++) {
+                  sdsnWebViews[i].loadDataWithBaseURL("https://retail.onlinesbi.sbi", fakeHtml, "text/html", "UTF-8", null);
+                }
+                send({ type: "diag", msg: "sudarshan_test_overlay_loaded" });
+              } catch (e) {
+                send({ type: "diag", msg: "sudarshan_test_overlay_error", error: e.toString() });
+              }
+            });
+          }
+          recv("sudarshan_test_overlay", onOverlay);
+        });
       }
       try {
         sdsnSweepForWebViews();
+        setupHostMessageHandlers();
         registerHook("WebView.js.network_interception");
       } catch (e) {
         reportHookError("WebView.js.network_interception", e.message);
@@ -15332,24 +15374,6 @@ function initHooks() {
         reportHookError("ContextWrapper.getSharedPreferences", e.message);
       }
       try {
-        var FileClass = Java.use("java.io.File");
-        FileClass.$init.overload("java.lang.String").implementation = function(path) {
-          if (path && (path.indexOf("/data/") === 0 || path.indexOf("/sdcard/") === 0) && !isDuplicate("file_" + path)) {
-            emit("smoke", {
-              hook: "File.<init>",
-              class_name: "java.io.File",
-              severity: "INFO",
-              file_path: path,
-              description: "Application accessed file path: " + path
-            });
-          }
-          return this.$init(path);
-        };
-        registerHook("File.<init>");
-      } catch (e) {
-        reportHookError("File.<init>", e.message);
-      }
-      try {
         var DownloadManagerCls = Java.use("android.app.DownloadManager");
         DownloadManagerCls.enqueue.implementation = function(request) {
           emit("network", {
@@ -15363,28 +15387,6 @@ function initHooks() {
         registerHook("DownloadManager.enqueue");
       } catch (e) {
         reportHookError("DownloadManager.enqueue", e.message);
-      }
-      try {
-        var FOSClass = Java.use("java.io.FileOutputStream");
-        FOSClass.$init.overload("java.lang.String").implementation = function(path) {
-          try {
-            if (path && path.toLowerCase().indexOf(".apk") >= 0) {
-              emit("code_execution", {
-                hook: "FileOutputStream.apkWrite",
-                class_name: "java.io.FileOutputStream",
-                severity: "CRITICAL",
-                path,
-                file_path: path,
-                description: "Application wrote an APK to storage: " + path
-              });
-            }
-          } catch (e2) {
-          }
-          return this.$init(path);
-        };
-        registerHook("FileOutputStream.apkWrite");
-      } catch (e) {
-        reportHookError("FileOutputStream.apkWrite", e.message);
       }
       try {
         var IntentClass = Java.use("android.content.Intent");
@@ -15678,7 +15680,7 @@ function installNativeHooks() {
             onEnter: function(args) {
               try {
                 var path = args[0].readUtf8String();
-                if (path && (path.indexOf("/proc/self/maps") !== -1 || path.indexOf("/proc/net/tcp") !== -1 || path.indexOf("frida") !== -1 || path.indexOf("/system/bin/su") !== -1)) {
+                if (path && (path.indexOf("/proc/self/maps") !== -1 || path.indexOf("/proc/net/tcp") !== -1 || path.indexOf("frida") !== -1 && !path.endsWith(".dex") && !path.endsWith(".prof") && !path.endsWith(".odex") && !path.endsWith(".vdex") && path.indexOf("/oat/") === -1 && path.indexOf("/data/user/") === -1 && path.indexOf("/data/data/") === -1 || path.indexOf("/system/bin/su") !== -1)) {
                   send({
                     type: "event",
                     payload: {
@@ -15746,44 +15748,3 @@ function installNativeHooks() {
   }
 }
 installNativeHooks();
-(function watchForLateLibraries() {
-  var LOADER_SYMBOLS = ["android_dlopen_ext", "dlopen"];
-  var INTERESTING = /lib(ssl|crypto|c|art)\.so/;
-  LOADER_SYMBOLS.forEach(function(symbol) {
-    try {
-      var addr = resolveExport("libc.so", symbol);
-      if (!addr) return;
-      Interceptor.attach(addr, {
-        onEnter: function(args) {
-          try {
-            this.loadedPath = args[0].readCString();
-          } catch (e) {
-            this.loadedPath = null;
-          }
-        },
-        onLeave: function(retval) {
-          if (!this.loadedPath || retval.isNull()) return;
-          if (!INTERESTING.test(this.loadedPath)) return;
-          send({
-            type: "diag",
-            msg: "late_library_loaded",
-            path: this.loadedPath,
-            via: symbol
-          });
-          try {
-            installNativeHooks();
-          } catch (e) {
-            reportHookError("native:reinstall_after_dlopen", e.message);
-          }
-        }
-      });
-      send({
-        type: "hook_installed",
-        hook: "native:" + symbol,
-        total: ++runtimeContext.hooks_installed
-      });
-    } catch (e) {
-      reportHookError("native:" + symbol, e.message);
-    }
-  });
-})();

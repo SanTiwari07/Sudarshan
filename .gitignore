@@ -151,9 +151,6 @@ powershell.cmd
 audit/
 
 # Test APKs and binaries - never commit malware samples to the repo.
-test apk/
-*.apk
-*.zip
 
 # Banking baseline corpus - a separate repository, checked out here. Both names
 # are resolved at runtime (see engines/vide/corpus_loader.py).
@@ -192,3 +189,11 @@ tests/apks/validation_runs/
 scripts/*.json
 scripts/*.html
 !scripts/corpus_expectations.json
+
+.venv/
+venv/
+__pycache__/
+*.db
+*.sqlite
+*.sqlite3
+artifacts/

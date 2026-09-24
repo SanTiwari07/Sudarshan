@@ -197,3 +197,5 @@ __pycache__/
 *.sqlite
 *.sqlite3
 artifacts/
+
+uploads/

@@ -1,4 +1,4 @@
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 import type { InvestigationBundle } from '../../types/investigation';
 import { LoadingSpinner } from '../ui/Skeleton';
 import FindingsRegistryTable from './FindingsRegistryTable';

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildRelationNodes } from './RelationsGraph';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 
 /**
  * The graph merges three IOC sources onto one canvas. The risk in doing that is

@@ -339,7 +339,7 @@ class TestPDFExportAPI:
 
     @pytest.mark.asyncio
     async def test_export_pdf_endpoint(self, sample_case_data, monkeypatch):
-        os.environ["JWT_SECRET_KEY"] = "test-secret-key-1234567890-super-secret-sudarshan"
+        os.environ["JWT_SECRET_KEY"] = "test_secret_key"
         from app.main import app
         from app.routes.report import cache_report
         from auth_helpers import auth_headers

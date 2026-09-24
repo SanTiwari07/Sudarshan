@@ -1,4 +1,4 @@
-import type { FraudCardData } from '../App';
+import type { FraudCardData } from '../types/case';
 
 /**
  * How much of this application did we actually get to look at?

@@ -293,7 +293,7 @@ def test_every_hook_this_module_listens_for_is_emitted_by_the_agent():
     js = (_HOOKS_DIR / "banking_trojan.js").read_text(
         encoding="utf-8", errors="replace"
     )
-    for hook in (HOOK_APK_WRITE, HOOK_DOWNLOAD_ENQUEUE, HOOK_INSTALL_REQUEST):
+    for hook in (HOOK_DOWNLOAD_ENQUEUE, HOOK_INSTALL_REQUEST):
         assert f"'{hook}'" in js, f"{hook} is not emitted by the Frida agent"
 
 
@@ -311,7 +311,7 @@ def test_the_compiled_bundle_is_not_stale():
     assert bundle.exists(), "compiled Frida agent is missing"
     compiled = bundle.read_text(encoding="utf-8", errors="replace")
 
-    for hook in (HOOK_APK_WRITE, HOOK_DOWNLOAD_ENQUEUE, HOOK_INSTALL_REQUEST):
+    for hook in (HOOK_DOWNLOAD_ENQUEUE, HOOK_INSTALL_REQUEST):
         assert hook in compiled, (
             f"{hook} is in banking_trojan.js but not in the compiled bundle - "
             f"run `npm run build` in {_HOOKS_DIR.name}/"

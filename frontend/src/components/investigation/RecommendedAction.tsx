@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ShieldCheck, ChevronDown, Check, Copy } from 'lucide-react';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 import { getDecision } from '../../lib/decision';
 import { TYPOGRAPHY } from '../../theme/typography';
 

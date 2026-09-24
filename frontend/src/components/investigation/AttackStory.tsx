@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown, ExternalLink, TriangleAlert, SearchX } from 'lucide-react';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 import type { ScreenshotManifestEntry } from '../../lib/screenshotManifest';
 import { buildAttackStory, explainMissingStory, type AttackStage } from '../../lib/attackStory';
 import { SEVERITY } from '../../theme/severity';

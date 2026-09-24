@@ -119,10 +119,8 @@ except ImportError:
     logger.warning("[Frida] workflow_reconstructor not found. Fraud workflow reconstruction disabled.")
 
 try:
-    from sudarshan_core.engines.analysis_history import AnalysisHistory
     from sudarshan_core.engines.report_generator import ReportGenerator
 except ImportError:
-    AnalysisHistory = None
     ReportGenerator = None
     logger.warning("[Frida] Wave 5 reporting modules not found.")
 
@@ -7340,12 +7338,6 @@ async def _run_device_session(
             logger.error(f"[Frida] Failed to write yara_results.json: {e}")
 
     # ── Wave 5: Aggregation & Reporting ────────────────────────────────────────
-    if AnalysisHistory is not None:
-        try:
-            history = AnalysisHistory()
-            history.save_run(result, apk_sha256="unknown", stage_name="single")
-        except Exception as e:
-            logger.error(f"[Frida] Failed to save analysis history: {e}")
             
     if ReportGenerator is not None:
         try:

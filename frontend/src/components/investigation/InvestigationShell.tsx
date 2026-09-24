@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Navigate, useLocation, useParams } from 'react-router-dom';
-import { LoadingSpinner } from '../ui/Skeleton';
+import { LoadingSpinner, ErrorState } from '../ui/Skeleton';
 import { useAnalysis } from '../../context/AnalysisContext';
 import { InvestigationUIProvider } from '../../context/InvestigationUIContext';
 import CaseBar from './CaseBar';
@@ -17,7 +17,7 @@ function InvestigationChrome({
 }) {
   const { sha256: routeSha } = useParams<{ sha256?: string }>();
   const section = activeCaseSection(useLocation().pathname);
-  const { analysisResult, investigationBundle, loading, activeSha256, loadCaseByHash, runtimeEvidenceRaw } =
+  const { analysisResult, investigationBundle, loading, error, activeSha256, loadCaseByHash, runtimeEvidenceRaw } =
     useAnalysis();
 
   const pendingHash = routeSha || activeSha256;
@@ -27,6 +27,14 @@ function InvestigationChrome({
     if (analysisResult?.sha256 === pendingHash) return;
     loadCaseByHash(pendingHash);
   }, [pendingHash, analysisResult?.sha256, loadCaseByHash]);
+
+  if (error) {
+    return (
+      <div className="w-full max-w-5xl mx-auto p-8">
+        <ErrorState title="Case Restore Failed" message={error} />
+      </div>
+    );
+  }
 
   if (!analysisResult) {
     if (loading || pendingHash) {

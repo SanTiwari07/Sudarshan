@@ -1,7 +1,7 @@
-﻿import { describe, test, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, test, expect, beforeEach, vi, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
-import App from '../App';
+import App from '../types/case';
 import { isTokenValid, parseJwt } from '../context/AuthContext';
 import { handle401Response } from '../config';
 
@@ -89,7 +89,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     fireEvent.change(screen.getByPlaceholderText('analyst_name'), {
       target: { value: 'analyst_bob' },
     });
-    fireEvent.change(screen.getByPlaceholderText('••••••••'), {
+    fireEvent.change(screen.getByPlaceholderText('��������'), {
       target: { value: 'SecretPassword123' },
     });
 
@@ -128,7 +128,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     fireEvent.change(screen.getByPlaceholderText('analyst_name'), {
       target: { value: 'wrong_user' },
     });
-    fireEvent.change(screen.getByPlaceholderText('••••••••'), {
+    fireEvent.change(screen.getByPlaceholderText('��������'), {
       target: { value: 'wrong_password' },
     });
 

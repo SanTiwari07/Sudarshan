@@ -1,5 +1,5 @@
 import { Activity, Code, Globe } from 'lucide-react';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 import type { InvestigationBundle } from '../../types/investigation';
 import type { ScoreInfluenceAxis } from '../../lib/scoreInfluenceModel';
 import {

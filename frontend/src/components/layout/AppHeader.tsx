@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { LogIn, Shield, Search, Bell, Share2, Download, FileText, ChevronRight } from 'lucide-react';
+import { LogIn, Shield, Bell, Share2, Download, FileText, ChevronRight } from 'lucide-react';
 import { useAnalysis } from '../../context/AnalysisContext';
 
 type AppHeaderProps = {
@@ -59,18 +59,6 @@ export default function AppHeader({ isAuthed }: AppHeaderProps) {
 
       {/* Center: Global Search */}
       <div className="flex-1 max-w-lg px-4 hidden md:block">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search cases, hashes, package names..."
-            className="w-full rounded-md border border-slate-300 bg-slate-50 py-1.5 pl-9 pr-10 text-sm outline-none transition-colors focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-500"
-          />
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-            <kbd className="hidden sm:inline-block rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-sans font-medium text-slate-400">Ctrl</kbd>
-            <kbd className="hidden sm:inline-block rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-sans font-medium text-slate-400">K</kbd>
-          </div>
-        </div>
       </div>
 
       {/* Right: Actions & User */}

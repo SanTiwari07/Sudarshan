@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import type { FraudCardData } from '../App';
+import type { FraudCardData } from '../types/case';
 import { API_BASE, authHeaders } from '../config';
 import { useInvestigationModel } from '../hooks/useInvestigationModel';
 import type { InvestigationBundle } from '../types/investigation';
@@ -184,11 +184,14 @@ export function AnalysisProvider({ children }: { children: React.ReactNode }) {
     await refreshScreenshotManifest(sha256);
   }, [refreshScreenshotManifest]);
 
+  const lastRequestedSha = React.useRef<string | null>(null);
+
   const loadCaseByHash = useCallback(async (sha256: string): Promise<FraudCardData | null> => {
     if (analysisResult?.sha256 === sha256 && runtimeEvidenceRaw.length > 0) {
       return analysisResult;
     }
 
+    lastRequestedSha.current = sha256;
     setLoading(true);
     setError(null);
     try {
@@ -202,19 +205,29 @@ export function AnalysisProvider({ children }: { children: React.ReactNode }) {
 
       const caseDetail = await res.json();
       const fullData = mapCaseDetailToFraudCard(caseDetail);
+      
+      if (lastRequestedSha.current !== sha256) return null;
+      
       const ev = await fetchRuntimeEvidence(sha256);
+      
+      if (lastRequestedSha.current !== sha256) return null;
       setRuntimeEvidenceRaw(ev);
       await refreshScreenshotManifest(sha256);
+      
+      if (lastRequestedSha.current !== sha256) return null;
       setAnalysisResult(fullData);
       return fullData;
     } catch (err: unknown) {
+      if (lastRequestedSha.current !== sha256) return null;
       const msg = err instanceof Error ? err.message : 'Error restoring case data';
       setError(msg);
       return null;
     } finally {
-      setLoading(false);
+      if (lastRequestedSha.current === sha256) {
+        setLoading(false);
+      }
     }
-  }, [refreshScreenshotManifest, setAnalysisResult]);
+  }, [refreshScreenshotManifest, setAnalysisResult, analysisResult, runtimeEvidenceRaw]);
 
   useEffect(() => {
     if (activeSha256 && !analysisResult) {

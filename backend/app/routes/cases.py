@@ -93,7 +93,7 @@ async def change_case_status(
     existing = await get_case(sha256)
     if not existing:
         raise HTTPException(status_code=404, detail="Case not found")
-    assert_case_visible(user, existing)
+    await assert_case_visible(user, existing)
 
     if req.status not in CASE_STATUSES:
         raise HTTPException(
@@ -133,7 +133,7 @@ async def change_case_verdict(
     existing = await get_case(sha256)
     if not existing:
         raise HTTPException(status_code=404, detail="Case not found")
-    assert_case_visible(user, existing)
+    await assert_case_visible(user, existing)
 
     if req.verdict not in ANALYST_VERDICTS:
         raise HTTPException(
@@ -216,7 +216,7 @@ async def case_iocs_endpoint(sha256: str, user: dict = Depends(require_analyst))
     existing = await get_case(sha256)
     if not existing:
         raise HTTPException(status_code=404, detail="Case not found")
-    assert_case_visible(user, existing)
+    await assert_case_visible(user, existing)
 
     iocs = await iocs_for_case(sha256)
     shared = await shared_indicators(sha256)
@@ -239,7 +239,7 @@ async def get_case_evidence(
     row = await get_case(sha256)
     if not row:
         raise HTTPException(status_code=404, detail=f"Case not found for SHA256 {sha256}.")
-    assert_case_visible(user, row)
+    await assert_case_visible(user, row)
 
     dyn = row.get("dynamic_result") or {}
     artifact_dir = dyn.get("artifact_dir")
@@ -466,7 +466,7 @@ async def get_case_detail(
             status_code=404,
             detail=f"Case not found for SHA256 {sha256}. Analyze the APK first.",
         )
-    assert_case_visible(user, row)
+    await assert_case_visible(user, row)
 
     # Who opened which case is a reportable fact in a fraud investigation.
     await audit_service.record(

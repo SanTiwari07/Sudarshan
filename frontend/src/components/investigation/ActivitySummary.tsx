@@ -1,5 +1,5 @@
 import { ArrowRight } from 'lucide-react';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 import type { InvestigationCounts } from '../../types/investigation';
 import { TYPOGRAPHY } from '../../theme/typography';
 

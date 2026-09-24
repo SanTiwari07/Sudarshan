@@ -8,7 +8,7 @@ import {
   ScrollText,
   Terminal,
 } from 'lucide-react';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 import type { RuntimeScreenshotMeta } from '../../lib/screenshotManifest';
 import { formatScreenshotTime, inferFailureReasonFromCase } from '../../lib/screenshotManifest';
 import type { ScreenshotUxState } from '../../lib/investigationRuntime';

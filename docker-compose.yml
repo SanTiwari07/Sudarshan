@@ -93,7 +93,7 @@ services:
       #       python /opt/sudarshan-scripts/db_admin.py adopt /app/sudarshan.db
       # or from the host, with SUDARSHAN_DB_PATH pointed at the volume.
       # Pick up the banking baseline corpus
-      - ./banking-baseline-corpus-main:/opt/banking-baseline-corpus-main:ro
+      - ./VIDE:/opt/VIDE:ro
       - dbdata:/app/data
       - ./scripts:/opt/sudarshan-scripts:ro
     extra_hosts:
@@ -196,7 +196,7 @@ services:
       # purpose: the engine downloads the ABI-matched binary here on first use
       # and every later container reuses it.
       - ./tools:/opt/frida-cache
-      - ./banking-baseline-corpus-main:/opt/banking-baseline-corpus-main:ro
+      - ./VIDE:/opt/VIDE:ro
       - mitmproxy_har:/mitmproxy_har:ro
     cpus: 2.0
     security_opt:

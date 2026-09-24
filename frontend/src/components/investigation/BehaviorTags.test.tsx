@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { deriveBehaviorTags } from './BehaviorTags';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 
 /**
  * The tags compress a whole analysis into a few words, which is exactly why

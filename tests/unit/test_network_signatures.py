@@ -241,7 +241,7 @@ def test_the_export_endpoints_are_registered(monkeypatch):
     record_secondary_apk(): fully tested, never reachable.
     """
     # The backend refuses to import without a secret, by design.
-    monkeypatch.setenv("JWT_SECRET_KEY", "test-only-not-a-real-secret")
+    monkeypatch.setenv("JWT_SECRET_KEY", "test_secret_key")
     sys.path.insert(0, str(_ROOT / "backend"))
     from app.routes.report import router
 

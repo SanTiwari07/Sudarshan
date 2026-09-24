@@ -313,10 +313,16 @@ def generate_value(
     Generate a deterministic synthetic value satisfying the constraints.
     """
     r = rng or random
+
+    if profile is not None:
+        chosen = _profile_value(constraints, profile)
+        if chosen is not None:
+            return chosen
+
     from sudarshan_core.engines.agentic.synthetic_persona import generate_synthetic_value
     
     val = generate_synthetic_value(constraints.field_type)
-    if val:
+    if val and not (constraints.numeric_only and not val.isdigit()):
         return _fit(val, constraints, r)
 
     # Fallback if somehow not mapped

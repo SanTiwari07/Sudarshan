@@ -5,7 +5,7 @@ import {
   Shield, Square, AlertTriangle, CheckCircle2,
   Copy, CopyCheck, Info, AlertOctagon, Terminal, ArrowUpRight, BarChart2, HelpCircle, RotateCcw, ArrowUp
 } from 'lucide-react';
-import type { FraudCardData } from '../App';
+import type { FraudCardData } from '../types/case';
 import { API_BASE, authHeaders } from '../config';
 import { useAnalysis } from '../context/AnalysisContext';
 import { useInvestigationUI } from '../context/InvestigationUIContext';

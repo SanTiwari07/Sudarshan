@@ -1,4 +1,4 @@
-import type { FraudCardData, ThreatCorrelation } from '../App';
+import type { FraudCardData, ThreatCorrelation } from '../types/case';
 import type { IntelApiPayload } from './threatIntelModel';
 
 export type ProviderUiStatus = 'available' | 'no_result' | 'unavailable' | 'error' | 'loading';

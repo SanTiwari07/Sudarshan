@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MANIFEST = Path(__file__).resolve().parents[3] / "tests" / "apks" / "corpus.manifest.json"
+DEFAULT_MANIFEST = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "apks" / "corpus.manifest.json"
 CORPUS_ROOT = DEFAULT_MANIFEST.parent
 
 

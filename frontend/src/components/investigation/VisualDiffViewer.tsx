@@ -1,6 +1,6 @@
-﻿import { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { GitCompare, Palette, Type as TypeIcon, Layers } from 'lucide-react';
-import type { VideAstNode, VideColorMatch, VideResult } from '../../App';
+import type { VideAstNode, VideColorMatch, VideResult } from '../../types/case';
 import SocCard from '../ui/Card';
 import SectionHeader from '../ui/SectionHeader';
 
@@ -43,14 +43,14 @@ function ColorRow({ match }: { match: VideColorMatch }) {
   return (
     <li className="flex items-center justify-between gap-3 py-1.5 border-b border-slate-100 last:border-0">
       <Swatch hex={match.baseline} label="baseline" />
-      <span className="text-slate-500 text-[13px] shrink-0">→</span>
+      <span className="text-slate-500 text-[13px] shrink-0">?</span>
       <Swatch hex={match.suspect} label="suspect" />
       <span
         className={`text-[13px] font-medium shrink-0 ${
           match.score >= 0.9 ? 'text-rose-700' : 'text-amber-700'
         }`}
       >
-        {exact ? 'exact' : `Δ${match.distance}`} · {pct(match.score)}
+        {exact ? 'exact' : `?${match.distance}`} � {pct(match.score)}
       </span>
     </li>
   );
@@ -71,7 +71,7 @@ function AstTree({ node, depth = 0 }: { node: VideAstNode; depth?: number }) {
             className="text-slate-500 hover:text-slate-700 text-[13px] w-3 shrink-0"
             aria-label={open ? 'Collapse' : 'Expand'}
           >
-            {open ? '▾' : '▸'}
+            {open ? '?' : '?'}
           </button>
         ) : (
           <span className="w-3 shrink-0" />
@@ -80,7 +80,7 @@ function AstTree({ node, depth = 0 }: { node: VideAstNode; depth?: number }) {
         {node.tag && <span className="text-[13px] text-slate-500">{node.tag}</span>}
         {node.text && (
           <span className="text-[13px] text-slate-500 truncate max-w-[180px]" title={node.text}>
-            “{node.text}”
+            �{node.text}�
           </span>
         )}
       </div>

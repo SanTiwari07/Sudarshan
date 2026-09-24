@@ -12,7 +12,7 @@ from app.db.artifact_metadata import init_artifact_metadata, record_artifact
 
 @pytest.fixture
 def multinode_env(monkeypatch, tmp_path):
-    os.environ["DATABASE_URL"] = "postgresql://sudarshan:sudarshan@localhost:5432/sudarshan"
+    os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
     
     shared_storage_dir = tmp_path / "shared_gcs_bucket"
     shared_storage_dir.mkdir()

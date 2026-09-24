@@ -31,7 +31,7 @@ sys.path.insert(0, str(_ROOT / "shared"))
 # Load .env file
 load_dotenv(dotenv_path=_ROOT / ".env")
 if not os.environ.get("JWT_SECRET_KEY"):
-    os.environ["JWT_SECRET_KEY"] = "sudarshan_test_jwt_secret_key_1234567890_test"
+    os.environ["JWT_SECRET_KEY"] = "test_secret_key"
 
 from sudarshan_core.engines.bfci_scorer import calculate_bfci_v2, BFCI_WEIGHTS
 from sudarshan_core.engines.event_bus import EventType, RuntimeEvent, RuntimeEventBus

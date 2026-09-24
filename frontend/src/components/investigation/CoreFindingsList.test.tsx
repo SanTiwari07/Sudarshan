@@ -7,7 +7,7 @@ import FindingExplanationDrawer from './FindingExplanationDrawer';
 import FindingEvidenceDrawer from './FindingEvidenceDrawer';
 import { InvestigationUIProvider } from '../../context/InvestigationUIContext';
 import { AnalysisProvider } from '../../context/AnalysisContext';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 import { buildInvestigationBundle } from '../../hooks/useInvestigationModel';
 
 const data: FraudCardData = {

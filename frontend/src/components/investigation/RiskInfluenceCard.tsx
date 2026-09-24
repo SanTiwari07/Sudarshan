@@ -1,4 +1,4 @@
-﻿import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 import { computeWeightedContribution, getAxesUsed } from '../../lib/scoreLedger';
 import {
   buildStaticCardSummary,

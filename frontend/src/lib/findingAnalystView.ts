@@ -1,4 +1,4 @@
-import type { FraudCardData } from '../App';
+import type { FraudCardData } from '../types/case';
 import type { InvestigationEvidence } from '../types/investigation';
 import { riskRecommendedAction } from './analystCopy';
 

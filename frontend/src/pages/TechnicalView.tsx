@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { TYPOGRAPHY } from '../theme/typography';
 import { caseSectionPath } from '../lib/caseRoutes';
-import type { FraudCardData } from '../App';
+import type { FraudCardData } from '../types/case';
 import VisualImpersonationPanel from '../components/investigation/VisualImpersonationPanel';
 import VisualDiffViewer from '../components/investigation/VisualDiffViewer';
 import OverlayEvidenceViewer from '../components/investigation/OverlayEvidenceViewer';

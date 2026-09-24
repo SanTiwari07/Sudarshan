@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, ArrowRight, RefreshCw } from 'lucide-react';
-import type { FraudCardData } from '../App';
+import type { FraudCardData } from '../types/case';
 import { useAnalysis } from '../context/AnalysisContext';
 import { useIntelPayload } from '../hooks/useIntelPayload';
 import SocCard from '../components/ui/Card';

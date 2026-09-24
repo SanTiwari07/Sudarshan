@@ -49,7 +49,6 @@ EXECUTION_HOOKS = (
     "Runtime.exec",
     "ProcessBuilder.start",
     "libc.execve",
-    "FileOutputStream.apkWrite",
 )
 
 #: Hooks every app - or every app with native code - triggers.

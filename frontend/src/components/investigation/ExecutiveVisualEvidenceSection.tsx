@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 import { useAnalysis } from '../../context/AnalysisContext';
 import { executiveVisualEntries } from '../../lib/visualEvidence';
 import VisualEvidenceCard from './VisualEvidenceCard';

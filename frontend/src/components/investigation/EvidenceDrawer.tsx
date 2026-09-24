@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 import { findEvidenceById } from '../../hooks/useInvestigationModel';
 import type { InvestigationBundle } from '../../types/investigation';
 import { useInvestigationUI } from '../../context/InvestigationUIContext';

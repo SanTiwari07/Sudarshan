@@ -1,5 +1,5 @@
 
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 
 /**
  * Capability tags for the persistent header.

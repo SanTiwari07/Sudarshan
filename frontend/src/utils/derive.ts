@@ -1,6 +1,6 @@
 // Pure presentation & data export utility helpers for Sudarshan BOI
 
-import type { FraudCardData } from '../App';
+import type { FraudCardData } from '../types/case';
 import type { LedgerLine } from '../types/investigation';
 
 // ─── Export Helpers ─────────────────────────────────────────────────────────────

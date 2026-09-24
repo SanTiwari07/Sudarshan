@@ -13,7 +13,7 @@ def install_and_import():
 
 pdfplumber = install_and_import()
 
-pdf_path = Path(r"d:\Projects\Sudarshan BOI\artifacts_qa\sudarshan_investigation_report_qa.pdf")
+pdf_path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("artifacts_qa/sudarshan_investigation_report_qa.pdf")
 
 def inspect_pdf():
     print(f"Inspecting {pdf_path.name} for visual defects...\n")

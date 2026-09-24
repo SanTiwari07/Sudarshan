@@ -33,7 +33,7 @@ sys.path.insert(0, str(root_dir / "shared"))
 sys.path.insert(0, str(root_dir / "backend"))
 
 if not os.environ.get("JWT_SECRET_KEY"):
-    os.environ["JWT_SECRET_KEY"] = "sudarshan_selftest_jwt_secret_key_1234567890"
+    os.environ["JWT_SECRET_KEY"] = "test_secret_key"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("pipeline_verifier")

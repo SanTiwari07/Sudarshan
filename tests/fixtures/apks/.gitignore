@@ -1,0 +1,4 @@
+# APK binaries are not committed (licensing / size). Keep manifest + docs.
+*.apk
+*.aab
+!corpus.manifest.json

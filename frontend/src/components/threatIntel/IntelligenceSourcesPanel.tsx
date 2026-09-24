@@ -1,6 +1,6 @@
 import { Database, Info } from 'lucide-react';
 import type { IntelApiPayload } from '../../lib/threatIntelModel';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 import type { InvestigationBundle } from '../../types/investigation';
 import { IntelCard, IntelCardBody, IntelSectionHeader } from './IntelCard';
 import { INTEL } from './intelTokens';

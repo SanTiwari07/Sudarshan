@@ -1,0 +1,48 @@
+{
+  "entry_id": "multi_activity",
+  "category": "multi_activity",
+  "label": "Multi-Activity APK",
+  "apk_path": "D:\\Projects\\Sudarshan BOI\\tests\\apks\\categories\\insecurebankv2.apk",
+  "status": "FAIL",
+  "skipped": false,
+  "skip_reason": "",
+  "launch_success": false,
+  "launch_time_ms": 655307.0,
+  "frida_attach_time_ms": null,
+  "dynamic_status": "INSTRUMENTATION_FAILED",
+  "explorer_used": "",
+  "explorer_coverage": {},
+  "permission_dialogs_found": 0,
+  "runtime_events": 0,
+  "screenshots_count": 0,
+  "evidence_objects": 0,
+  "workflow_nodes": 0,
+  "risk_score": 8.89,
+  "html_success": true,
+  "pdf_success": true,
+  "failures": [
+    "READINESS_GATE_FAIL: Check 5 FAIL: uiautomator dump failed - UI is not ready. Output: Killed"
+  ],
+  "recovery_attempts": [],
+  "timings": {
+    "analysis_seconds": 667.6116035999985,
+    "total_seconds": 668.1304228999979
+  },
+  "coverage": {
+    "activities_discovered": 0,
+    "activities_visited": 0,
+    "fragments_visited": 0,
+    "permission_dialogs_found": 0,
+    "permission_dialogs_handled": 0,
+    "unique_screens": 0,
+    "explorer_depth": 0,
+    "runtime_apis_hooked": 0,
+    "accessibility_callbacks": 0,
+    "network_requests": 0,
+    "security_events": 0,
+    "coverage_percent": 0.0,
+    "hook_fire_total": 0
+  },
+  "screenshot_validation": [],
+  "artifact_dir": "D:\\Projects\\Sudarshan BOI\\tests\\apks\\categories\\sudarshan_artifacts\\insecurebankv2_2ebde24e"
+}

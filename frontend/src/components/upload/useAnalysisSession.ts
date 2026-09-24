@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 import { API_BASE } from '../../config';
 import { getToken } from '../../pages/Login';
 import { resolvePipelineUi, type BackendPipelineState } from './backendPipelineStages';

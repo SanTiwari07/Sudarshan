@@ -3,7 +3,7 @@ import SocCard from '../ui/Card';
 import SectionHeader from '../ui/SectionHeader';
 import { History } from 'lucide-react';
 import { API_BASE, authHeaders } from '../../config';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 import { scoreCaseSimilarity, type HistoricalCaseRow } from '../../lib/threatIntelModel';
 import Badge from '../ui/Badge';
 

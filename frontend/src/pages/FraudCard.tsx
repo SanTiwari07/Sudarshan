@@ -1,4 +1,4 @@
-import type { FraudCardData } from '../App';
+import type { FraudCardData } from '../types/case';
 import { motion } from 'motion/react';
 import CaseHeader from '../components/case/CaseHeader';
 import TargetCard from '../components/case/TargetCard';

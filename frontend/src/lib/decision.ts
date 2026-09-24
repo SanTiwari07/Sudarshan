@@ -1,4 +1,4 @@
-import type { FraudCardData } from '../App';
+import type { FraudCardData } from '../types/case';
 
 /**
  * The single source of truth for "what should the bank do about this app".

@@ -10,7 +10,7 @@ from app.db.database import get_case
 
 @pytest.mark.asyncio
 async def test_rollback():
-    os.environ["DATABASE_URL"] = "postgresql://sudarshan:sudarshan@localhost:5432/sudarshan"
+    os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
     
     sha256 = "fail_txn_test"
     try:

@@ -8,7 +8,7 @@ from app.db.pool import init_pool
 from app.db.database import init_db, list_users, create_user
 
 async def main():
-    os.environ["DATABASE_URL"] = "postgresql://sudarshan:sudarshan@localhost:5432/sudarshan"
+    os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
     
     # Wait for postgres to be ready
     import asyncpg

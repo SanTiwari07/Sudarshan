@@ -1,4 +1,4 @@
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 
 export default function ScoreBreakdown({ data }: { data: FraudCardData }) {
   const breakdown = data.frs_breakdown;

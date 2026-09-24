@@ -1,5 +1,5 @@
 import { Calendar, Clock } from 'lucide-react';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 import { caseSeverity } from '../../theme/severity';
 import { isInconclusive } from '../../lib/decision';
 

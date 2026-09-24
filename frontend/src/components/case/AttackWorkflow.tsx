@@ -1,5 +1,5 @@
 import { AlertCircle } from 'lucide-react';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 
 export default function AttackWorkflow({ data }: { data: FraudCardData }) {
   const stages = data.fraud_workflow?.stages || [];

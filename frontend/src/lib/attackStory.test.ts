@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { FraudCardData, WorkflowStage } from '../App';
+import type { FraudCardData, WorkflowStage } from '../types/case';
 import type { ScreenshotManifestEntry } from './screenshotManifest';
 import { buildAttackStory, explainMissingStory } from './attackStory';
 

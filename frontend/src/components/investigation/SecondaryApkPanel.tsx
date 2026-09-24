@@ -1,6 +1,6 @@
 
 import SocCard from '../ui/Card';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 
 /**
  * Secondary payloads: the second APK a dropper fetched.

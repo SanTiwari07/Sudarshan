@@ -1,5 +1,5 @@
 import { Building, ShieldAlert } from 'lucide-react';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 
 export default function TargetCard({ data }: { data: FraudCardData }) {
   const isTargeted = data.targets_indian_banks;

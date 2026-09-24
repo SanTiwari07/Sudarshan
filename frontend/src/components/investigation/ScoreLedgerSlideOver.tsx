@@ -17,7 +17,7 @@ import {
   PieChart,
   ShieldAlert,
 } from 'lucide-react';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 import type { InvestigationBundle } from '../../types/investigation';
 import Badge from '../ui/Badge';
 import { getRiskStyle } from '../../theme/colors';

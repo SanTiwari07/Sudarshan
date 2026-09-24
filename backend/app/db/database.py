@@ -525,8 +525,8 @@ def _case_filter_sql(
     params: list = []
 
     if analyst_id is not None:
-        clauses.append("analyst_id = ?")
-        params.append(analyst_id)
+        clauses.append("(analyst_id = ? OR sha256 IN (SELECT sha256 FROM analysis_jobs WHERE analyst_id = ?))")
+        params.extend([analyst_id, analyst_id])
 
     if q:
         needle = f"%{q.strip().lower()}%"

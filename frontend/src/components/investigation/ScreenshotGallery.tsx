@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 import type { InvestigationBundle } from '../../types/investigation';
 import { useAnalysis } from '../../context/AnalysisContext';
 import SocCard from '../ui/Card';

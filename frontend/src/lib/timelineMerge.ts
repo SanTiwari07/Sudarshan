@@ -1,4 +1,4 @@
-import type { FraudCardData } from '../App';
+import type { FraudCardData } from '../types/case';
 import type { ScreenshotManifestEntry } from './screenshotManifest';
 import type { TimelineEvent } from '../types/investigation';
 import { isTimelineEligibleVisual, visualFromEntry } from './visualEvidence';

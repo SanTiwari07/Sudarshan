@@ -1,0 +1,1945 @@
+<USER_REQUEST>
+# ================================================================
+# SUDARSHAN — COMPLETE MULTI-AGENT CODEBASE AUDIT, CLEANUP,
+# REORGANIZATION, VIDE RENAME, TEST CLEANUP & PORTABILITY
+# STRICT FEATURE-PRESERVATION MODE
+# ================================================================
+
+You are working directly on the LOCAL SUDARSHAN repository.
+
+Repository:
+C:\Projects\Sudarshan
+
+This is an existing cybersecurity / Android malware-analysis platform.
+
+YOUR TASK IS NOT TO REWRITE SUDARSHAN.
+
+YOUR TASK IS TO:
+
+1. Audit the complete repository.
+2. Understand the actual current architecture.
+3. Identify duplicate code.
+4. Identify obsolete/legacy code.
+5. Identify dead code.
+6. Identify unnecessary scripts.
+7. Identify unnecessary/duplicate/legacy tests.
+8. Identify temporary/debug/scratch files.
+9. Organize the repository professionally.
+10. Organize all documentation.
+11. Organize generated artifacts.
+12. Organize test fixtures.
+13. Rename `banking-baseline-corpus-main/` to `VIDE/`.
+14. Update every valid reference affected by the rename.
+15. Make the entire codebase portable.
+16. Remove developer-specific hardcoded paths.
+17. Remove developer-specific hardcoded usernames.
+18. Remove hardcoded machine-specific configuration.
+19. Remove hardcoded secrets and credentials.
+20. Make paths configurable/portable.
+21. Make service URLs configurable where appropriate.
+22. Make ports configurable where appropriate.
+23. Make external tools configurable/discoverable.
+24. Make Android/ADB/Frida configuration portable.
+25. Make frontend/backend communication configurable.
+26. Ensure another developer can clone and run the project without editing source code.
+27. Preserve EVERY working production feature.
+28. Run tests before and after cleanup.
+29. Perform a final multi-agent regression audit.
+
+===============================================================
+                         ABSOLUTE RULE
+===============================================================
+
+FEATURE PRESERVATION > CLEANUP.
+
+A smaller repository with broken functionality is a FAILURE.
+
+A slightly larger repository with all working functionality preserved
+is preferable.
+
+NEVER delete production code simply because:
+
+- it looks old
+- it has an old filename
+- it was created in an earlier phase
+- it came from a merged feature branch
+- another file looks similar
+- it has few tests
+- it is not immediately obvious where it is used
+
+NEVER assume:
+
+"feature branch merged = feature code should be deleted"
+
+The correct rule is:
+
+FEATURE BRANCH MERGED
+        ↓
+PRODUCTION IMPLEMENTATION STAYS
+        ↓
+ONLY DEAD / OBSOLETE / DUPLICATE IMPLEMENTATION MAY BE REMOVED
+        ↓
+ONLY AFTER DEPENDENCY VERIFICATION
+
+If uncertain:
+
+KEEP IT.
+
+If agents disagree:
+
+KEEP IT.
+
+If deletion could affect a feature:
+
+DO NOT DELETE.
+
+===============================================================
+                     CURRENT FEATURES TO PROTECT
+===============================================================
+
+Treat all of the following as potentially production-critical.
+
+Do not remove them unless dependency analysis proves a specific
+implementation is genuinely obsolete:
+
+- Static Threat Intelligence
+- APK Analyzer
+- Androguard
+- APK Repair
+- APKTool
+- JADX
+- MobSF
+- VIDE
+- Dynamic Analysis Engine
+- Frida
+- Android sandbox
+- ADB integration
+- AgenticExplorer
+- Perception
+- ScreenClassifier
+- ScreenGraph
+- ActionDispatcher
+- ActionVerifier
+- ExecutionAssertionMatrix
+- RuntimeEventBus
+- EvidenceStore
+- ScreenshotManager
+- WorkflowReconstructor
+- STEI
+- BFCI
+- FRS
+- Threat Correlation
+- Gemini
+- RAG
+- Ollama fallback
+- JWT authentication
+- RBAC
+- asynchronous analysis
+- batch analysis
+- case management
+- report generation
+- STIX export
+- IOC export
+- frontend dashboard
+- deployment functionality
+- security controls
+- test infrastructure
+
+===============================================================
+                       MULTI-AGENT MODE
+===============================================================
+
+Use multiple specialized agents.
+
+NO SINGLE AGENT may independently decide to delete production code.
+
+Create the following logical agents.
+
+---------------------------------------------------------------
+AGENT 1 — ARCHITECTURE AUDITOR
+---------------------------------------------------------------
+
+Understand the actual current architecture.
+
+Inspect recursively:
+
+backend/
+analysis-engine/
+frontend/
+shared/
+scripts/
+tests/
+VIDE/
+deploy/
+tools/
+docs/
+
+Determine:
+
+- entrypoints
+- service boundaries
+- runtime execution paths
+- API relationships
+- frontend/backend relationships
+- backend/analysis-engine relationships
+- shared-core dependencies
+- DAE dependencies
+- VIDE dependencies
+- database dependencies
+- Docker dependencies
+- deployment dependencies
+- configuration dependencies
+
+Produce:
+
+docs/audits/ARCHITECTURE_AUDIT.md
+
+DO NOT DELETE ANYTHING.
+
+---------------------------------------------------------------
+AGENT 2 — DUPLICATE CODE AUDITOR
+---------------------------------------------------------------
+
+Search for:
+
+- duplicate classes
+- duplicate functions
+- duplicate utilities
+- duplicate analyzers
+- duplicate engines
+- duplicate API handlers
+- duplicate scoring logic
+- duplicate report generators
+- duplicate Frida logic
+- duplicate dynamic-analysis logic
+- duplicate UI exploration logic
+- copied implementations
+- old implementations that appear to have replacements
+
+For every candidate:
+
+FILE A
+FILE B
+FUNCTION / CLASS
+PURPOSE
+CALLERS
+IMPORTERS
+RUNTIME USE
+TEST USE
+CANONICAL IMPLEMENTATION
+RECOMMENDATION
+
+Possible recommendations:
+
+KEEP A
+KEEP B
+MERGE
+DELETE A
+DELETE B
+REQUIRES REVIEW
+
+Similarity alone is NOT sufficient for deletion.
+
+---------------------------------------------------------------
+AGENT 3 — LEGACY / DEAD CODE AUDITOR
+---------------------------------------------------------------
+
+Search for:
+
+*_old.py
+*_legacy.py
+*_backup.py
+*_v1.py
+*_v2.py
+*_new.py
+*_final.py
+*_old/
+*_legacy/
+backup directories
+deprecated modules
+abandoned prototypes
+migration leftovers
+unused compatibility layers
+abandoned experiments
+unreachable code
+
+Inspect:
+
+- imports
+- callers
+- dynamic imports
+- subprocess usage
+- configuration
+- Docker
+- scripts
+- tests
+- documentation
+- git history where useful
+
+For each candidate determine:
+
+PATH
+PURPOSE
+CURRENT REFERENCES
+RUNTIME USAGE
+TEST USAGE
+REPLACEMENT
+GIT HISTORY
+SAFE TO DELETE?
+
+Do not delete automatically.
+
+---------------------------------------------------------------
+AGENT 4 — TEST AUDITOR
+---------------------------------------------------------------
+
+Audit ALL test locations.
+
+Inspect:
+
+tests/
+backend/tests/
+analysis-engine tests
+frontend tests
+security tests
+dynamic tests
+sandbox tests
+VIDE tests
+integration tests
+unit tests
+
+Classify each test:
+
+CURRENT_REQUIRED
+REGRESSION
+DUPLICATE
+LEGACY
+EXPERIMENTAL
+DEBUG
+TEMPORARY
+OBSOLETE
+BROKEN
+ENVIRONMENT_DEPENDENT
+
+Do NOT delete a test just because it fails.
+
+Determine why it fails.
+
+Possible causes:
+
+- real regression
+- changed API
+- stale expectation
+- missing fixture
+- environment issue
+- broken test
+- obsolete feature
+- flaky test
+
+If a scratch test contains unique useful regression coverage:
+
+convert it into a proper test under:
+
+tests/regression/
+
+then delete the scratch file.
+
+The final test suite must be clean and meaningful.
+
+---------------------------------------------------------------
+AGENT 5 — DOCUMENTATION AUDITOR
+---------------------------------------------------------------
+
+Audit:
+
+README
+docs/
+architecture documents
+feature documents
+reports
+phase reports
+audit reports
+current-state documents
+
+Find:
+
+- duplicate documentation
+- contradictory documentation
+- stale paths
+- stale architecture
+- stale feature claims
+- stale test counts
+- stale versions
+- developer-specific paths
+- local file:// links
+- obsolete commands
+
+Classify:
+
+AUTHORITATIVE
+HISTORICAL
+DUPLICATE
+OBSOLETE
+NEEDS MERGE
+
+Do not blindly delete historical information.
+
+---------------------------------------------------------------
+AGENT 6 — SECURITY AUDITOR
+---------------------------------------------------------------
+
+Search the entire repository for:
+
+- API keys
+- tokens
+- passwords
+- secrets
+- credentials
+- private keys
+- cloud credentials
+- Gemini keys
+- database passwords
+- authentication tokens
+- hardcoded secrets
+
+Inspect:
+
+.env
+.env.example
+Python
+TypeScript
+JavaScript
+JSON
+YAML
+TOML
+PowerShell
+Dockerfiles
+scripts
+tests
+docs
+logs
+reports
+
+NEVER print actual secret values.
+
+If a secret is found:
+
+report:
+
+SECRET FOUND
+LOCATION
+TYPE
+
+Do not expose the secret value.
+
+If a real secret was previously committed to Git:
+
+recommend rotation.
+
+---------------------------------------------------------------
+AGENT 7 — PORTABILITY AUDITOR
+---------------------------------------------------------------
+
+THIS AGENT IS CRITICAL.
+
+The final repository must work for developers other than the
+original developer.
+
+Search EVERYTHING for machine-specific assumptions.
+
+Search for:
+
+C:\
+D:\
+E:\
+F:\
+
+C:/ 
+D:/
+file:///
+file:///C:
+file:///D:
+
+/home/
+/Users/
+/opt/
+/mnt/
+
+developer usernames
+
+specific computer names
+
+specific drive layouts
+
+specific IP addresses
+
+specific emulator serials
+
+specific Android SDK paths
+
+specific ADB paths
+
+specific Frida paths
+
+specific model directories
+
+specific database paths
+
+specific upload paths
+
+specific artifact paths
+
+specific cloud project IDs
+
+specific bucket names
+
+specific deployment URLs
+
+specific hostnames
+
+specific ports
+
+specific API endpoints
+
+specific Docker host paths
+
+Also search for:
+
+localhost
+127.0.0.1
+192.168.*
+10.*
+172.16.* through 172.31.*
+
+IMPORTANT:
+
+localhost and 127.0.0.1 are NOT automatically errors.
+
+They can be valid development defaults.
+
+Determine whether each occurrence is:
+
+- local development default
+- test configuration
+- production configuration
+- documentation example
+- hardcoded application dependency
+
+If it should be configurable, make it configurable.
+
+===============================================================
+                 ZERO MACHINE-SPECIFIC HARDCODING
+===============================================================
+
+The repository must NOT depend on the original developer's machine.
+
+BAD:
+
+APK_PATH = "D:\\Projects\\Sudarshan\\uploads"
+
+BAD:
+
+ADB_PATH = "C:\\Users\\USERNAME\\AppData\\Local\\Android\\Sdk\\platform-tools\\adb.exe"
+
+BAD:
+
+MODEL_PATH = "D:\\Ollama\\Models"
+
+BAD:
+
+DATABASE = "C:\\Projects\\Sudarshan\\sudarshan.db"
+
+BAD:
+
+API_URL = "http://192.168.1.10:8000"
+
+BAD:
+
+DEVICE_SERIAL = "emulator-5554"
+
+BAD:
+
+file:///d:/Projects/Sudarshan/...
+
+GOOD:
+
+Use centralized configuration.
+
+Use environment variables.
+
+Use repository-relative paths.
+
+Use pathlib.
+
+Use auto-discovery where appropriate.
+
+===============================================================
+                     CENTRAL CONFIGURATION
+===============================================================
+
+Do NOT scatter machine-specific configuration throughout the codebase.
+
+Find the existing configuration architecture first.
+
+If appropriate, create or improve a centralized configuration module.
+
+For example:
+
+backend/app/core/config.py
+
+BUT:
+
+Do not blindly create a new system if an existing configuration layer
+already exists.
+
+Centralize appropriate configuration such as:
+
+- environment
+- backend host
+- backend port
+- analysis-engine host
+- analysis-engine port
+- database URL
+- data directory
+- upload directory
+- artifact directory
+- Gemini configuration
+- Ollama configuration
+- MobSF configuration
+- ADB configuration
+- Android SDK configuration
+- Frida configuration
+- sandbox configuration
+- frontend API URL
+- CORS origins
+- external service URLs
+
+===============================================================
+                       ENVIRONMENT
+===============================================================
+
+Use:
+
+.env.example
+
+as the public configuration template.
+
+Never commit real secrets.
+
+Possible variables may include:
+
+GEMINI_API_KEY=
+OLLAMA_BASE_URL=
+OLLAMA_MODEL=
+BACKEND_HOST=
+BACKEND_PORT=
+ANALYSIS_ENGINE_HOST=
+ANALYSIS_ENGINE_PORT=
+MOBSF_URL=
+ADB_PATH=
+ANDROID_HOME=
+ANDROID_SDK_ROOT=
+FRIDA_SERVER_PATH=
+SUDARSHAN_DATA_DIR=
+SUDARSHAN_UPLOAD_DIR=
+SUDARSHAN_ARTIFACT_DIR=
+DATABASE_URL=
+FRONTEND_API_URL=
+CORS_ALLOW_ORIGINS=
+
+Do not blindly impose these exact variable names if the project already
+has a configuration convention.
+
+Use the existing architecture where possible.
+
+The important requirement is:
+
+NO SOURCE-CODE EDITING REQUIRED AFTER CLONING.
+
+===============================================================
+                         PATH HANDLING
+===============================================================
+
+Python code:
+
+Prefer pathlib.Path.
+
+Avoid:
+
+"C:\\..."
+"D:\\..."
+
+Avoid manual filesystem string concatenation.
+
+Use repository-root resolution.
+
+Use environment-provided paths for external locations.
+
+The code must not assume:
+
+C:\Projects\Sudarshan
+
+or:
+
+D:\Projects\Sudarshan
+
+or:
+
+/home/sanskar/Sudarshan
+
+or:
+
+/Users/sanskar/Sudarshan
+
+===============================================================
+                    DOCUMENTATION LINKS
+===============================================================
+
+Search all Markdown and documentation for:
+
+file:///
+file:///C:
+file:///D:
+d:/Projects
+C:/Users
+C:\\
+D:\\
+
+Replace internal repository links with relative links.
+
+BAD:
+
+[file](file:///d:/Projects/Sudarshan/shared/example.py)
+
+GOOD:
+
+[file](../shared/example.py)
+
+Documentation must work:
+
+- on GitHub
+- after cloning to another Windows drive
+- on Linux
+- on macOS
+
+===============================================================
+                        API URL AUDIT
+===============================================================
+
+Search frontend and backend for:
+
+http://localhost:
+http://127.0.0.1:
+http://192.168.
+http://10.
+http://172.
+
+Determine whether each URL is:
+
+- development default
+- test mock
+- legitimate public service
+- internal service
+- production endpoint
+- hardcoded application dependency
+
+Make internal application endpoints configurable where appropriate.
+
+Frontend API URLs should not be hardcoded directly into React
+components.
+
+Use the framework's environment/configuration mechanism.
+
+For Vite, use the appropriate VITE_* configuration.
+
+Example:
+
+VITE_API_BASE_URL=
+
+Do not change legitimate external/public URLs unnecessarily.
+
+===============================================================
+                     EXTERNAL SERVICES
+===============================================================
+
+Audit integrations such as:
+
+- Gemini
+- Ollama
+- MobSF
+- VirusTotal
+- OTX
+- AbuseIPDB
+- ADB
+- Frida
+- Genymotion
+- Android Studio
+- Docker
+- cloud services
+- threat intelligence services
+
+For every integration determine:
+
+SERVICE
+URL
+AUTHENTICATION
+CONFIGURATION SOURCE
+DEFAULT
+REQUIRED?
+OPTIONAL?
+FALLBACK
+
+No personal endpoint.
+
+No personal credential.
+
+No personal cloud resource hardcoded into source.
+
+===============================================================
+                         VIDE RENAME
+===============================================================
+
+Rename:
+
+banking-baseline-corpus-main/
+
+TO:
+
+VIDE/
+
+This is REQUIRED.
+
+Before renaming, search the ENTIRE repository for:
+
+banking-baseline-corpus-main
+banking-baseline
+baseline-corpus
+VIDE
+vide
+visual impersonation
+baseline registry
+baseline corpus
+
+Do not blindly replace every occurrence of "vide".
+
+Update only semantically correct references.
+
+After rename:
+
+OLD:
+banking-baseline-corpus-main/
+
+NEW:
+VIDE/
+
+Update:
+
+- Python
+- TypeScript
+- JavaScript
+- JSON
+- YAML
+- TOML
+- PowerShell
+- Bash
+- Docker
+- tests
+- scripts
+- documentation
+- configuration
+
+Then search again for:
+
+banking-baseline-corpus-main
+
+There should be no stale active reference.
+
+===============================================================
+                         VIDE RULE
+===============================================================
+
+VIDE is a production capability.
+
+Do NOT treat it as disposable data.
+
+Preserve:
+
+- baseline data
+- visual profiles
+- baseline registry
+- assets
+- signer metadata
+- analysis logic
+- tests
+- required reference data
+
+Do not remove VIDE functionality during cleanup.
+
+Use:
+
+VIDE/
+
+as the repository-level name.
+
+Do not rename internal Python packages unnecessarily if that creates
+risk.
+
+===============================================================
+                  REPOSITORY ORGANIZATION
+===============================================================
+
+Target conceptual structure:
+
+Sudarshan/
+│
+├── .github/
+├── .githooks/
+│
+├── backend/
+├── analysis-engine/
+├── frontend/
+├── shared/
+├── VIDE/
+│
+├── scripts/
+│   ├── setup/
+│   ├── validation/
+│   ├── maintenance/
+│   └── reporting/
+│
+├── tests/
+│   ├── unit/
+│   ├── integration/
+│   ├── security/
+│   ├── dynamic/
+│   ├── sandbox/
+│   ├── vide/
+│   ├── regression/
+│   └── fixtures/
+│       ├── apks/
+│       ├── manifests/
+│       └── data/
+│
+├── docs/
+│   ├── README.md
+│   ├── 01_INTRODUCTION.md
+│   ├── 02_SYSTEM_OVERVIEW.md
+│   ├── 03_STATIC_THREAT_INTELLIGENCE.md
+│   ├── 04_DYNAMIC_ANALYSIS_ENGINE.md
+│   ├── ARCHITECTURE.md
+│   ├── CURRENT_ARCHITECTURE.md
+│   ├── CODEBASE_MAP.md
+│   ├── FEATURE.md
+│   ├── FEATURE_STATUS.md
+│   ├── KNOWN_LIMITATIONS.md
+│   ├── HOW_TO_RUN.md
+│   ├── architecture/
+│   ├── audits/
+│   ├── reports/
+│   ├── security/
+│   ├── operations/
+│   └── reference/
+│
+├── deploy/
+├── tools/
+│
+├── artifacts/
+│   ├── logs/
+│   ├── reports/
+│   ├── benchmarks/
+│   └── generated/
+│
+├── README.md
+├── LICENSE
+├── SECURITY.md
+├── CONTRIBUTING.md
+├── CHANGELOG.md
+├── AGENTS.md
+├── .gitignore
+├── .env.example
+├── pyproject.toml
+└── pytest.ini
+
+IMPORTANT:
+
+Do not force this exact structure if the current architecture requires
+another location.
+
+Do not move production directories unnecessarily.
+
+The goal is organization, not pointless refactoring.
+
+===============================================================
+                       ROOT CLEANUP
+===============================================================
+
+Audit root-level files.
+
+Candidates include:
+
+scratch_audit.py
+scratch_audit_extractor.py
+scratch_audit2.py
+scratch_experiments.py
+scratch_experiments_safe.py
+scratch_merge.py
+scratch_poll.py
+scratch_test.py
+scratch_test2.py
+scratch_test3.py
+scratch_test4.py
+
+These are CANDIDATES only.
+
+For each:
+
+- inspect
+- search references
+- determine purpose
+- determine whether unique logic exists
+- determine whether it is still needed
+
+If a scratch file contains useful regression logic:
+
+move that logic into a proper test.
+
+Then delete the scratch file.
+
+===============================================================
+                     TEST ORGANIZATION
+===============================================================
+
+The final tests should be logically organized.
+
+Use where appropriate:
+
+tests/
+├── unit/
+├── integration/
+├── security/
+├── dynamic/
+├── sandbox/
+├── vide/
+├── regression/
+└── fixtures/
+
+Do not duplicate the same test across multiple locations.
+
+Preserve important regression tests.
+
+Do not delete tests just to make the test count smaller.
+
+===============================================================
+                  GENERATED FILE CLEANUP
+===============================================================
+
+Audit:
+
+engine_log_*
+step_A_logcat
+result_*.json
+benchmark results
+runtime dumps
+temporary reports
+generated outputs
+
+Classify each:
+
+TEMPORARY
+GENERATED
+FIXTURE
+RESEARCH DATA
+PRODUCTION DATA
+
+Temporary/generated:
+
+delete or move to:
+
+artifacts/
+
+Fixtures:
+
+tests/fixtures/
+
+Required reference data:
+
+VIDE/ or appropriate data location.
+
+===============================================================
+                     DATABASE CLEANUP
+===============================================================
+
+Inspect:
+
+sudarshan
+*.db
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+
+If these are local runtime databases:
+
+do not commit them.
+
+Ensure the application can initialize a clean database.
+
+Do NOT remove database schema/code.
+
+===============================================================
+                   CACHE / IDE CLEANUP
+===============================================================
+
+Audit:
+
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+.idea/
+.vscode/
+
+Remove generated/personal state from Git.
+
+Keep shared project-level IDE configuration only if intentionally
+version-controlled.
+
+===============================================================
+                    DOCUMENTATION STRUCTURE
+===============================================================
+
+Use ONE authoritative document per major topic.
+
+docs/
+
+01_INTRODUCTION.md
+02_SYSTEM_OVERVIEW.md
+03_STATIC_THREAT_INTELLIGENCE.md
+04_DYNAMIC_ANALYSIS_ENGINE.md
+
+ARCHITECTURE.md
+CURRENT_ARCHITECTURE.md
+CODEBASE_MAP.md
+FEATURE.md
+FEATURE_STATUS.md
+KNOWN_LIMITATIONS.md
+HOW_TO_RUN.md
+
+Historical audits:
+
+docs/audits/
+
+Historical reports:
+
+docs/reports/
+
+Architecture references:
+
+docs/architecture/
+
+Security documentation:
+
+docs/security/
+
+Operational documentation:
+
+docs/operations/
+
+Do not leave duplicate "final" versions.
+
+Do not create:
+
+FINAL_FINAL.md
+ARCHITECTURE_NEW.md
+ARCHITECTURE_FINAL_2.md
+
+===============================================================
+                  FEATURE STATUS AUDIT
+===============================================================
+
+Create/update:
+
+docs/FEATURE_STATUS.md
+
+Audit:
+
+1. Static Threat Intelligence
+2. APK Analyzer
+3. APK Repair
+4. APKTool
+5. JADX
+6. MobSF
+7. VIDE
+8. Dynamic Analysis Engine
+9. Frida
+10. Android Sandbox
+11. AgenticExplorer
+12. Perception
+13. ScreenClassifier
+14. ScreenGraph
+15. ActionDispatcher
+16. ActionVerifier
+17. Execution Assertions
+18. Runtime EventBus
+19. Evidence Store
+20. Screenshot Manager
+21. Workflow Reconstruction
+22. STEI
+23. BFCI
+24. FRS
+25. Threat Correlation
+26. Gemini
+27. RAG
+28. Ollama fallback
+29. JWT
+30. RBAC
+31. Async analysis
+32. Batch analysis
+33. Case management
+34. Report generation
+35. STIX export
+36. IOC export
+37. Frontend dashboard
+
+For each feature:
+
+STATUS
+PRIMARY SOURCE
+DEPENDENCIES
+TESTS
+DOCUMENTATION
+KNOWN LIMITATIONS
+
+Allowed statuses:
+
+IMPLEMENTED
+PARTIAL
+EXPERIMENTAL
+PLANNED
+DEPRECATED
+
+Do not mark something IMPLEMENTED based only on documentation.
+
+Verify the actual source code.
+
+===============================================================
+                  DELETION SAFETY MATRIX
+===============================================================
+
+Before deleting production code create:
+
+docs/audits/DELETION_SAFETY_MATRIX.md
+
+Columns:
+
+FILE
+TYPE
+FEATURE
+IMPORTERS
+CALLERS
+RUNTIME USE
+TEST USE
+CONFIG USE
+REPLACEMENT
+ARCHITECTURE AGENT
+DUPLICATE AGENT
+LEGACY AGENT
+SECURITY AGENT
+FINAL DECISION
+
+Allowed:
+
+KEEP
+MOVE
+MERGE
+DELETE
+REQUIRES REVIEW
+
+If uncertain:
+
+KEEP.
+
+===============================================================
+                       VETO RULE
+===============================================================
+
+For production code:
+
+At least TWO independent agents must agree it is dead/obsolete.
+
+Security/runtime agent must not veto.
+
+If disagreement:
+
+KEEP.
+
+For tests:
+
+The Test Auditor must identify it as obsolete/duplicate/debug/
+temporary.
+
+If another agent identifies regression value:
+
+KEEP.
+
+===============================================================
+                    BASELINE BEFORE CHANGES
+===============================================================
+
+Before modifications:
+
+Run:
+
+git status
+git branch --show-current
+git log --oneline -20
+
+Record:
+
+- tracked file count
+- Python file count
+- frontend source count
+- test count
+- collected tests
+- passed
+- failed
+- skipped
+- errors
+- backend import status
+- analysis-engine status
+- frontend build status
+
+Create:
+
+docs/audits/PRE_CLEANUP_BASELINE.md
+
+===============================================================
+                         PHASE 0
+===============================================================
+
+READ ONLY.
+
+Do not:
+
+- delete
+- rename
+- move
+- refactor
+- modify production code
+
+Run all agents.
+
+Generate:
+
+ARCHITECTURE_AUDIT.md
+DUPLICATE_CODE_AUDIT.md
+LEGACY_CODE_AUDIT.md
+TEST_AUDIT.md
+DOCUMENTATION_AUDIT.md
+SECURITY_AUDIT.md
+PORTABILITY_AUDIT.md
+REPOSITORY_ORGANIZATION_PLAN.md
+
+===============================================================
+                         PHASE 1
+===============================================================
+
+Combine all reports.
+
+Create:
+
+docs/audits/CLEANUP_MASTER_PLAN.md
+
+Every candidate must be categorized:
+
+KEEP
+MOVE
+RENAME
+MERGE
+DELETE
+REQUIRES REVIEW
+
+Nothing uncertain gets deleted.
+
+===============================================================
+                         PHASE 2
+===============================================================
+
+Perform SAFE structural moves first.
+
+Move:
+
+- reports
+- audits
+- documentation
+- test fixtures
+- generated artifacts
+- scripts
+
+Update references.
+
+Validate after each major move.
+
+===============================================================
+                         PHASE 3
+===============================================================
+
+Rename:
+
+banking-baseline-corpus-main/
+
+to:
+
+VIDE/
+
+Update all references.
+
+Immediately validate:
+
+- imports
+- file paths
+- baseline loading
+- tests
+- scripts
+- Docker
+- documentation
+
+===============================================================
+                         PHASE 4
+===============================================================
+
+PORTABILITY CLEANUP.
+
+Remove:
+
+- absolute developer paths
+- personal usernames
+- drive-letter assumptions
+- hardcoded local database paths
+- hardcoded upload paths
+- hardcoded artifact paths
+- hardcoded external binary paths
+- hardcoded emulator IDs
+- hardcoded personal IPs
+- hardcoded service URLs where configuration is appropriate
+
+Implement centralized configuration.
+
+Use:
+
+- environment variables
+- repository-relative paths
+- pathlib
+- auto-discovery
+
+===============================================================
+                         PHASE 5
+===============================================================
+
+DUPLICATE CODE CONSOLIDATION.
+
+Only consolidate verified duplicates.
+
+Preserve canonical implementations.
+
+Update references.
+
+Run tests.
+
+===============================================================
+                         PHASE 6
+===============================================================
+
+LEGACY CLEANUP.
+
+Delete only confirmed obsolete code.
+
+Never delete uncertain production code.
+
+===============================================================
+                         PHASE 7
+===============================================================
+
+TEST CLEANUP.
+
+Remove only confirmed:
+
+- duplicate tests
+- temporary tests
+- debug tests
+- obsolete tests
+- tests for removed functionality
+
+Convert useful scratch tests into proper regression tests.
+
+===============================================================
+                         PHASE 8
+===============================================================
+
+DOCUMENTATION CONSOLIDATION.
+
+Update:
+
+README
+docs/
+FEATURE_STATUS
+CURRENT_ARCHITECTURE
+CODEBASE_MAP
+HOW_TO_RUN
+KNOWN_LIMITATIONS
+
+Remove stale paths.
+
+Remove personal machine references.
+
+Replace internal file:// links with relative links.
+
+===============================================================
+                         PHASE 9
+===============================================================
+
+Update .gitignore.
+
+Include appropriate:
+
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.idea/
+.env
+*.db
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+artifacts/
+runtime outputs
+generated reports
+uploads
+
+Do NOT ignore required fixtures/source files.
+
+===============================================================
+                         PHASE 10
+===============================================================
+
+VALIDATION.
+
+Run:
+
+- Python syntax validation
+- backend imports
+- backend tests
+- shared/core tests
+- dynamic-analysis tests
+- sandbox tests
+- VIDE tests
+- security tests
+- integration tests
+- frontend build
+- TypeScript checks
+- Docker configuration validation
+
+Then search again for:
+
+C:\
+D:\
+file:///
+developer username
+banking-baseline-corpus-main
+hardcoded credentials
+hardcoded API keys
+personal project paths
+old paths
+obsolete references
+
+===============================================================
+                         PHASE 11
+===============================================================
+
+CLEAN-MACHINE PORTABILITY TEST.
+
+Pretend the repository is cloned to:
+
+D:\AnotherDeveloper\Sudarshan
+
+or an equivalent Linux/macOS directory.
+
+The source code must NOT need editing.
+
+Only configuration/environment setup should be necessary.
+
+Verify:
+
+- backend starts
+- frontend starts
+- analysis-engine starts
+- shared modules import
+- VIDE loads
+- tests run
+- configuration resolves
+- paths resolve
+- API communication works
+
+If practical, perform the test from a second repository location.
+
+===============================================================
+                         PHASE 12
+===============================================================
+
+FINAL MULTI-AGENT READ-ONLY AUDIT.
+
+All agents inspect the FINAL repository.
+
+Answer:
+
+1. Did any production feature disappear?
+2. Did any API disappear?
+3. Did any DAE component disappear?
+4. Did any VIDE component disappear?
+5. Did any regression test disappear?
+6. Did any import break?
+7. Did any path break?
+8. Did any service configuration become machine-specific?
+9. Did any secret remain?
+10. Did any developer-specific path remain?
+11. Are there stale references to the old VIDE directory?
+12. Are there duplicate implementations remaining?
+13. Are there unnecessary tests remaining?
+14. Are there obvious legacy files remaining?
+15. Can another developer run the repository without source edits?
+
+If any feature regression is detected:
+
+STOP.
+
+Investigate.
+
+Restore the affected implementation.
+
+Do not declare success until resolved.
+
+===============================================================
+                   FINAL REPORT
+===============================================================
+
+Create:
+
+docs/audits/FINAL_REPOSITORY_CLEANUP_REPORT.md
+
+Include:
+
+# 1. EXECUTIVE SUMMARY
+
+# 2. REPOSITORY BEFORE
+
+- file count
+- directory count
+- test count
+- major clutter
+
+# 3. REPOSITORY AFTER
+
+- file count
+- directory count
+- test count
+
+# 4. VIDE RENAME
+
+OLD:
+banking-baseline-corpus-main
+
+NEW:
+VIDE
+
+List updated references.
+
+# 5. DELETED FILES
+
+| File | Reason | Evidence | Agents |
+
+# 6. MOVED FILES
+
+| Old | New | Reason |
+
+# 7. CONSOLIDATED CODE
+
+| Old Implementation | Canonical Implementation | Reason |
+
+# 8. REMOVED TESTS
+
+| Test | Reason | Replacement |
+
+# 9. PRESERVED FEATURES
+
+List every major feature confirmed intact.
+
+# 10. PORTABILITY IMPROVEMENTS
+
+List:
+
+- removed absolute paths
+- removed drive-letter assumptions
+- removed personal usernames
+- removed file:// developer links
+- centralized configuration
+- environment variables
+- repository-relative paths
+- service configuration
+- device discovery
+- external tool discovery
+
+# 11. SECURITY IMPROVEMENTS
+
+Do not print secret values.
+
+List:
+
+- secrets removed
+- credentials moved to environment
+- sensitive files ignored
+- unsafe configuration removed
+
+# 12. DOCUMENTATION CHANGES
+
+# 13. .gitignore CHANGES
+
+# 14. TESTS BEFORE VS AFTER
+
+| Metric | Before | After |
+
+# 15. BUILD VALIDATION
+
+Backend:
+PASS/FAIL
+
+Analysis Engine:
+PASS/FAIL
+
+Frontend:
+PASS/FAIL
+
+VIDE:
+PASS/FAIL
+
+Dynamic Analysis:
+PASS/FAIL
+
+Docker:
+PASS/FAIL
+
+# 16. PORTABILITY VALIDATION
+
+Different repository path:
+PASS/FAIL
+
+# 17. REMAINING TECHNICAL DEBT
+
+# 18. MANUAL REVIEW ITEMS
+
+===============================================================
+                    FINAL SUCCESS CHECKLIST
+===============================================================
+
+Do not declare COMPLETE unless:
+
+[ ] banking-baseline-corpus-main renamed to VIDE
+
+[ ] old directory references removed
+
+[ ] production features preserved
+
+[ ] no required production module deleted
+
+[ ] duplicate code audited
+
+[ ] legacy code audited
+
+[ ] unnecessary tests audited
+
+[ ] important regression tests preserved
+
+[ ] scratch files cleaned
+
+[ ] generated files cleaned
+
+[ ] documentation organized
+
+[ ] reports organized
+
+[ ] audits organized
+
+[ ] test fixtures organized
+
+[ ] local database handled correctly
+
+[ ] Python caches removed
+
+[ ] IDE state handled correctly
+
+[ ] .env protected
+
+[ ] no secrets exposed
+
+[ ] no developer-specific paths in active source
+
+[ ] no developer-specific paths in active documentation
+
+[ ] no personal file:// links
+
+[ ] no hardcoded drive-letter paths
+
+[ ] no hardcoded usernames
+
+[ ] no hardcoded credentials
+
+[ ] no hardcoded API keys
+
+[ ] service URLs configurable where appropriate
+
+[ ] ports configurable where appropriate
+
+[ ] database configurable
+
+[ ] upload directory configurable
+
+[ ] artifact directory configurable
+
+[ ] ADB configurable/discoverable
+
+[ ] Android SDK configurable/discoverable
+
+[ ] Frida configurable/discoverable
+
+[ ] emulator/device selection configurable/discoverable
+
+[ ] frontend API configurable
+
+[ ] backend configuration centralized
+
+[ ] Docker configuration portable
+
+[ ] repository-relative documentation links
+
+[ ] backend tests pass
+
+[ ] shared/core tests pass
+
+[ ] DAE tests pass
+
+[ ] VIDE tests pass
+
+[ ] security tests pass
+
+[ ] integration tests pass
+
+[ ] frontend builds
+
+[ ] imports work
+
+[ ] final multi-agent audit passes
+
+[ ] no unexplained test regression
+
+[ ] no unexplained feature regression
+
+===============================================================
+                    FINAL PRINCIPLE
+===============================================================
+
+DO NOT OPTIMIZE FOR THE FEWEST FILES.
+
+OPTIMIZE FOR:
+
+CLEAN
++
+PORTABLE
++
+MAINTAINABLE
++
+UNDERSTANDABLE
++
+SECURE
++
+REPRODUCIBLE
++
+FEATURE-COMPLETE
+
+The final repository must be usable by a developer who has NEVER used
+the original developer's computer.
+
+They should NOT need:
+
+- original Windows username
+- original drive letter
+- original project directory
+- original emulator serial
+- original IP address
+- original API key
+- original database
+- original model directory
+- original cloud configuration
+
+They should only need:
+
+1. Clone repository.
+2. Install documented dependencies.
+3. Copy .env.example to .env.
+4. Configure their own environment.
+5. Follow HOW_TO_RUN.md.
+6. Start the system.
+
+NO SOURCE CODE EDITING SHOULD BE REQUIRED JUST BECAUSE THE REPOSITORY
+WAS CLONED TO ANOTHER COMPUTER.
+
+===============================================================
+                         START NOW
+===============================================================
+
+START WITH PHASE 0.
+
+READ ONLY.
+
+DO NOT DELETE ANYTHING.
+
+DO NOT RENAME ANYTHING.
+
+DO NOT MOVE ANYTHING.
+
+DO NOT MODIFY PRODUCTION CODE.
+
+FIRST:
+
+1. Inspect the entire repository.
+2. Run the multi-agent audits.
+3. Generate all audit reports.
+4. Generate the cleanup master plan.
+5. Generate the deletion safety matrix.
+
+ONLY AFTER THE AUDIT AND MASTER PLAN ARE COMPLETE:
+
+begin structural changes.
+
+If there is uncertainty:
+
+KEEP THE FILE.
+
+If agents disagree:
+
+KEEP THE FILE.
+
+If a feature might break:
+
+DO NOT DELETE THE FILE.
+
+FEATURE PRESERVATION ALWAYS WINS.
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-09-24T23:27:33+05:30.
+</ADDITIONAL_METADATA>
+<USER_SETTINGS_CHANGE>
+The user changed setting `Model Selection` from None to Gemini 3.1 Pro (High). No need to comment on this change if the user doesn't ask about it. If reporting what model you are, please use a human readable name instead of the exact string.
+</USER_SETTINGS_CHANGE>

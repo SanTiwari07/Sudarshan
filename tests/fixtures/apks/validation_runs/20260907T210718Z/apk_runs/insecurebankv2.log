@@ -1,0 +1,359 @@
+2026-09-08 02:37:49,752 [INFO] sudarshan_core.engines.runtime_lifecycle: [RuntimeLifecycle] runtime_requested QUEUED/orchestrator Dynamic analysis requested for case
+2026-09-08 02:37:49,752 [INFO] sudarshan_core.engines.runtime_lifecycle: [RuntimeLifecycle] runtime_controller_started STARTING/frida_sandbox run_frida_analysis invoked
+2026-09-08 02:37:49,752 [WARNING] sudarshan_core.security.sandbox_containment: [Containment] GUEST_FULL_COMPROMISE_EXPECTED: ROOT_REQUIRED=true and SELinux permissive are required for Frida. Treat the Android guest as fully compromised after each session; never reuse it for trusted workloads.
+2026-09-08 02:37:49,752 [INFO] sudarshan_core.sandbox.provider: [auto] connect/adb: OK C:\Users\sansk\AppData\Local\Android\Sdk\platform-tools\adb.EXE
+2026-09-08 02:37:50,922 [INFO] sudarshan_core.sandbox.provider: [auto] Detected Android devices:
+2026-09-08 02:37:50,922 [INFO] sudarshan_core.sandbox.provider:   [1] Android Studio AVD — emulator-5554 — x86_64 — Android 17 — Pixel_6
+2026-09-08 02:37:50,943 [INFO] sudarshan_core.sandbox.auto: [auto] Selected sandbox: Android Studio AVD (emulator-5554)
+2026-09-08 02:37:50,943 [INFO] sudarshan_core.sandbox.provider: [auto] connect/device_detect: OK emulator-5554
+2026-09-08 02:37:50,973 [INFO] sudarshan_core.sandbox.provider: [auto] connect/online: OK emulator-5554
+2026-09-08 02:37:51,714 [INFO] sudarshan_core.sandbox.provider: [auto] connect/props: OK android=17 api=37 abi=x86_64
+2026-09-08 02:37:51,829 [INFO] sudarshan_core.sandbox.provider: [auto] Root already available on emulator-5554
+2026-09-08 02:37:51,829 [INFO] sudarshan_core.sandbox.provider: [auto] connect/root: OK available
+2026-09-08 02:37:51,979 [INFO] sudarshan_core.sandbox.provider: [auto] connect/selinux: OK Permissive
+2026-09-08 02:37:52,282 [INFO] sudarshan_core.sandbox.provider: [auto] Frida forwarded tcp:27055 -> emulator-5554:27055
+2026-09-08 02:37:52,282 [INFO] sudarshan_core.sandbox.provider: [auto] connect/frida: OK frida agent running (5701 sudarshan_agent_srv)
+2026-09-08 02:37:52,282 [INFO] sudarshan_core.sandbox.provider: [auto] Connected serial=emulator-5554 provider=android_avd transport=emulator ip= android=17 abi=x86_64 root=True frida=True forward=True connect_ms=2529.9
+2026-09-08 02:37:52,282 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Using sandbox provider=auto serial=emulator-5554 android=17 abi=x86_64 root=True frida=True connect_ms=2529.9
+2026-09-08 02:37:52,282 [INFO] sudarshan_core.engines.frida_sandbox: [Pipeline 01] emulator ready — serial=emulator-5554
+2026-09-08 02:37:52,282 [INFO] sudarshan_core.engines.frida_sandbox: [Pipeline 04] Frida device connected — auto
+2026-09-08 02:37:52,282 [INFO] sudarshan_core.engines.runtime_lifecycle: [RuntimeLifecycle] emulator_ready READY/sandbox_provider serial=emulator-5554
+2026-09-08 02:37:52,285 [INFO] sudarshan_core.sandbox.factory: [Sandbox] Using provider=auto adb_host=(auto) adb_port=5555 device_serial=emulator-5554
+2026-09-08 02:37:52,958 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] SELinux mode: Permissive
+2026-09-08 02:37:52,958 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Configured Frida agent verified by SandboxProvider.
+2026-09-08 02:37:53,014 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Target package: com.android.insecurebankv2 (Main Activity: com.android.insecurebankv2.LoginActivity)
+2026-09-08 02:37:53,015 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Artifacts for this sample: D:\Projects\Sudarshan BOI\tests\apks\categories\sudarshan_artifacts\insecurebankv2_2ebde24e
+2026-09-08 02:37:53,028 [INFO] sudarshan_core.engines.frida_sandbox: [Pipeline 02] APK installed — starting adb install
+2026-09-08 02:37:53,028 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] INITIALIZING → INSTALLING (adb install)
+2026-09-08 02:37:53,450 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Retrying install with --bypass-low-target-sdk-block
+2026-09-08 02:37:54,375 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Original APK installed with SDK bypass: insecurebankv2.apk
+2026-09-08 02:37:54,376 [INFO] sudarshan_core.engines.frida_sandbox: [Pipeline 02] APK installed — com.android.insecurebankv2
+2026-09-08 02:37:54,376 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] INSTALLING → VERIFY_INSTALL (pm path verification)
+2026-09-08 02:37:54,376 [INFO] sudarshan_core.engines.runtime_lifecycle: [RuntimeLifecycle] apk_install_completed SUCCESS/adb com.android.insecurebankv2
+2026-09-08 02:37:54,605 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] APK installed: com.android.insecurebankv2 (Derivative Repaired: False)
+2026-09-08 02:37:54,738 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Launcher resolves post-install: com.android.insecurebankv2/.LoginActivity
+2026-09-08 02:37:57,784 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Pre-granted 12 declared permission(s) for com.android.insecurebankv2 before launch - no runtime permission dialog will be shown for these
+2026-09-08 02:39:04,221 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.schemas
+2026-09-08 02:39:04,221 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.tables
+2026-09-08 02:39:04,221 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.types
+2026-09-08 02:39:04,221 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.constraints
+2026-09-08 02:39:04,221 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.defaults
+2026-09-08 02:39:04,221 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.comments
+2026-09-08 02:39:14,171 [INFO] sudarshan_core.engines.permission_orchestrator: [PermissionOrchestrator] No accessibility service declared in 'com.android.insecurebankv2' manifest - this sample does not use accessibility abuse via a bound service.
+2026-09-08 02:39:14,703 [WARNING] sudarshan_core.engines.yara_scanner: [YARAScanner] yara-python not installed. YARA scanning disabled.
+2026-09-08 02:39:14,703 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] YARA rules loaded from D:\Projects\Sudarshan BOI\shared\sudarshan_core\engines\yara_rules
+2026-09-08 02:39:14,708 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Connecting to device emulator-5554
+2026-09-08 02:39:15,520 [INFO] sudarshan_core.sandbox.provider: [auto] Frida forwarded tcp:27055 -> emulator-5554:27055
+2026-09-08 02:39:16,520 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] frida-server port 27055 != USB transport port 27042 - preferring TCP transport
+2026-09-08 02:39:16,676 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] TCP remote device connected: 127.0.0.1:27055
+2026-09-08 02:39:16,676 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Waking up device screen...
+2026-09-08 02:39:18,922 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] VERIFY_INSTALL → RESOLVE_ACTIVITY (launch ladder)
+2026-09-08 02:39:18,922 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] RESOLVE_ACTIVITY → LAUNCHING (issuing launch intents)
+2026-09-08 02:39:18,922 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Launch step 1: am start -W -n com.android.insecurebankv2/com.android.insecurebankv2.LoginActivity
+2026-09-08 02:39:20,288 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Stability monitor: waiting up to 12s for com.android.insecurebankv2 (requires 5s of continuous PID presence, polling every 250ms)
+2026-09-08 02:39:25,541 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] PID 27446 stable for 5.1s (>= 5s required) - process confirmed alive for com.android.insecurebankv2
+2026-09-08 02:39:25,541 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Launch step 'am_start_main_activity' produced stable PID 27446
+2026-09-08 02:39:31,956 [WARNING] sudarshan_core.engines.frida_sandbox: [Frida] Launch step 'am_start_main_activity' produced PID 27446 but com.android.insecurebankv2 never owned the foreground window within 6s - trying the next launch strategy
+2026-09-08 02:39:31,957 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Launch step 1b: MAIN/LAUNCHER intent for com.android.insecurebankv2
+2026-09-08 02:39:33,370 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Stability monitor: waiting up to 12s for com.android.insecurebankv2 (requires 5s of continuous PID presence, polling every 250ms)
+2026-09-08 02:39:38,791 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] PID 27446 stable for 5.3s (>= 5s required) - process confirmed alive for com.android.insecurebankv2
+2026-09-08 02:39:38,792 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Launch step 'main_launcher_intent' produced stable PID 27446
+2026-09-08 02:39:44,820 [WARNING] sudarshan_core.engines.frida_sandbox: [Frida] Launch step 'main_launcher_intent' produced PID 27446 but com.android.insecurebankv2 never owned the foreground window within 6s - trying the next launch strategy
+2026-09-08 02:39:44,820 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Launch step 2: resolve LAUNCHER activity for com.android.insecurebankv2
+2026-09-08 02:39:44,897 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Resolved launcher activity: com.android.insecurebankv2/.LoginActivity
+2026-09-08 02:39:46,174 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Stability monitor: waiting up to 12s for com.android.insecurebankv2 (requires 5s of continuous PID presence, polling every 250ms)
+2026-09-08 02:39:51,457 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] PID 27446 stable for 5.1s (>= 5s required) - process confirmed alive for com.android.insecurebankv2
+2026-09-08 02:39:51,457 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Launch step 'resolved_launcher_activity' produced stable PID 27446
+2026-09-08 02:39:57,794 [WARNING] sudarshan_core.engines.frida_sandbox: [Frida] Launch step 'resolved_launcher_activity' produced PID 27446 but com.android.insecurebankv2 never owned the foreground window within 6s - trying the next launch strategy
+2026-09-08 02:39:57,794 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Launch step 3: trying all exported activities for com.android.insecurebankv2
+2026-09-08 02:40:08,209 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Launch step 3: trying exported activity com.android.insecurebankv2.ViewStatement
+2026-09-08 02:40:11,097 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Stability monitor: waiting up to 12s for com.android.insecurebankv2 (requires 5s of continuous PID presence, polling every 250ms)
+2026-09-08 02:40:16,481 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] PID 27446 stable for 5.3s (>= 5s required) - process confirmed alive for com.android.insecurebankv2
+2026-09-08 02:40:16,482 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Launch step 'exported_activity:com.android.insecurebankv2.ViewStatement' produced stable PID 27446
+2026-09-08 02:40:16,679 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] App launched and stable via 'exported_activity:com.android.insecurebankv2.ViewStatement' (PID=27446)
+2026-09-08 02:40:21,676 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] LAUNCHING → ATTACH_FRIDA (attaching to stable PID)
+2026-09-08 02:40:21,984 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Attached to com.android.insecurebankv2 (pid=27446, attempt 1)
+2026-09-08 02:40:22,156 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] ATTACH_FRIDA → VERIFY_HOOKS (canary received)
+2026-09-08 02:40:22,156 [INFO] sudarshan_core.engines.pipeline_state: [PIPELINE_STATE] {"case_id": "com.android.insecurebankv2", "package_name": "com.android.insecurebankv2", "stage": "QUEUED", "duration_ms": 0.01, "total_elapsed_s": 0.0, "status": "OK", "detail": "Analysis enqueued"}
+2026-09-08 02:40:22,156 [INFO] sudarshan_core.engines.frida_sandbox: [Frida Canary] Script load canary received: script_loaded_v4_frida17
+2026-09-08 02:40:22,162 [INFO] sudarshan_core.engines.frida_sandbox: [Frida DIAG] {'type': 'diag', 'msg': 'java_bridge_ready', 'source': 'frida-java-bridge'}
+2026-09-08 02:40:22,179 [INFO] sudarshan_core.engines.frida_sandbox: [Frida DIAG] {'type': 'diag', 'msg': 'java_gate_passed', 'ts': 1788815422068}
+2026-09-08 02:40:22,179 [INFO] sudarshan_core.engines.frida_sandbox: [Frida DIAG] {'type': 'diag', 'msg': 'deoptimizeEverything_skipped_api34_plus', 'sdk_int': 37, 'ts': 1788815422068}
+2026-09-08 02:40:22,187 [INFO] sudarshan_core.engines.frida_sandbox: [Frida DIAG] {'type': 'diag', 'msg': 'deoptimizeBootImage_success', 'ts': 1788815422078}
+2026-09-08 02:40:22,193 [INFO] sudarshan_core.engines.frida_sandbox: [Frida DIAG] {'type': 'diag', 'msg': 'package_detected', 'package': 'com.android.insecurebankv2'}
+2026-09-08 02:40:22,420 [WARNING] sudarshan_core.engines.frida_sandbox: [Frida] Hook failed: OkHttp - java.lang.ClassNotFoundException: Didn't find class "okhttp3.internal.connection.RealCall" on path: DexPathList[[zip file "/data/app/~~RWWrd07L_lRUvuMQ_EIsFg==/com.android.insecurebankv2-omtjomKWRjRRM2IsbM2RAA==/base.apk"],nativeLibraryDirectories=[/data/app/~~RWWrd07L_lRUvuMQ_EIsFg==/com.android.insecurebankv2-omtjomKWRjRRM2IsbM2RAA==/lib/x86_64, /system/lib64, /system_ext/lib64]]
+2026-09-08 02:40:22,421 [WARNING] sudarshan_core.engines.frida_sandbox: [Frida] Hook failed: Retrofit.OkHttpCall.execute - java.lang.ClassNotFoundException: Didn't find class "retrofit2.OkHttpCall" on path: DexPathList[[zip file "/data/app/~~RWWrd07L_lRUvuMQ_EIsFg==/com.android.insecurebankv2-omtjomKWRjRRM2IsbM2RAA==/base.apk"],nativeLibraryDirectories=[/data/app/~~RWWrd07L_lRUvuMQ_EIsFg==/com.android.insecurebankv2-omtjomKWRjRRM2IsbM2RAA==/lib/x86_64, /system/lib64, /system_ext/lib64]]
+2026-09-08 02:40:22,449 [INFO] sudarshan_core.engines.frida_sandbox: [Pipeline 10] RuntimeEvent emitted — category=anti_analysis hook=Build.<static fields>
+2026-09-08 02:40:22,473 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] SUDARSHAN Frida hooks v4 (Frida17-native) loaded - 69 hooks installed, 2 errors
+2026-09-08 02:40:22,481 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] App launched successfully via 'exported_activity:com.android.insecurebankv2.ViewStatement'
+2026-09-08 02:40:22,482 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] OPEN: waiting up to 8s for com.android.insecurebankv2 to finish starting...
+2026-09-08 02:40:23,058 [INFO] sudarshan_core.engines.evidence_store: [EvidenceStore] [HIGH] [EVID-001] Build.<static fields>  - Emulator-identifying Build fields replaced: FINGERPRINT="google/sdk_gphone16k_x8
+2026-09-08 02:40:23,059 [WARNING] sudarshan_core.engines.anti_analysis_detector: [AntiAnalysis] Detected evasion attempt: unknown via Build.<static fields>
+2026-09-08 02:40:25,705 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] App window settled.
+2026-09-08 02:40:26,375 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Screenshot captured: 01_app_opened
+2026-09-08 02:40:26,375 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] ANALYSE: monitoring com.android.insecurebankv2 for 300s...
+2026-09-08 02:40:26,375 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] VERIFY_HOOKS → CAPTURE_RUNTIME (exploration window)
+2026-09-08 02:40:30,790 [INFO] sudarshan_core.engines.agentic_explorer: [AgenticExplorer] 12 permission(s) were pre-granted before launch - no runtime dialog will appear for them, so what the sample would have requested cannot be observed this run.
+2026-09-08 02:40:30,791 [INFO] sudarshan_core.engines.agentic_explorer: [Investigation] Plan for com.android.insecurebankv2 (UNKNOWN): BOOTSTRAP -> APP_LAUNCH -> INITIAL_OBSERVATION -> PERMISSION_ANALYSIS -> POST_PERMISSION_EXPLORATION -> NETWORK_ANALYSIS -> FINAL_OBSERVATION -> COMPLETE
+2026-09-08 02:40:30,791 [WARNING] sudarshan_core.engines.agentic.goal_tracker: [GoalTracker] 'Runtime Reflection' (stage 11) is UNSUPPORTED - The Frida agent emits no reflection hook. Method.invoke / Class.forName cannot be hooked usefully - the Android framework reflects on every app, so the signal would complete for every sample. Reflection is reported from static analysis (apk_analyzer.REFLECTION_APIS) instead.
+2026-09-08 02:40:30,791 [WARNING] sudarshan_core.engines.agentic.goal_tracker: [GoalTracker] 'Deep Links' (stage 12) is UNSUPPORTED - The Frida agent emits no deep-link event. Uri.parse / Intent.getData fire for every app on every launch and cannot distinguish a deep link from ordinary navigation. Declared intent-filter URIs are reported from the manifest instead.
+2026-09-08 02:40:30,791 [WARNING] sudarshan_core.engines.agentic.goal_tracker: [GoalTracker] 'Broadcast Receivers' (stage 13) is UNSUPPORTED - The Frida agent hooks no BroadcastReceiver. This IS a hookable signal (onReceive carrying the action string) and is the best candidate for closing a real gap - see the agent hook backlog. Not added blind: it needs an emulator run to verify before it can be a completion trigger.
+2026-09-08 02:40:32,212 [INFO] sudarshan_core.engines.agentic.planner: [Planner] Gemini transport enabled via provider manager
+2026-09-08 02:40:32,213 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] AgenticExplorer selected.
+2026-09-08 02:40:32,213 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] CAPTURE_RUNTIME → START_EXPLORER (AgenticExplorer)
+2026-09-08 02:40:32,213 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] ANALYSE: adaptive window - starting budget 300s, hard maximum 900s
+2026-09-08 02:40:32,214 [INFO] sudarshan_core.engines.investigation_controller: [Investigation] Transition: BOOTSTRAP -> INITIAL_OBSERVATION (target app launched by Frida session before explorer start)
+2026-09-08 02:40:32,215 [INFO] sudarshan_core.engines.runtime_lifecycle: [RuntimeLifecycle] explorer_started RUNNING/AgenticExplorer interactive stage=INITIAL_OBSERVATION
+2026-09-08 02:40:35,616 [INFO] sudarshan_core.engines.agentic.perception: [Perception] Screenshot captured (reason: no_actionable_nodes (found 0, threshold 1))
+2026-09-08 02:40:35,983 [INFO] sudarshan_core.engines.agentic.device_properties: [DeviceProps] Device resolution: 1080x2400
+2026-09-08 02:40:35,984 [INFO] sudarshan_core.engines.agentic.perception: [Perception] Grounding recovered 2 nodes via xml_structure_recovery
+2026-09-08 02:40:35,984 [INFO] sudarshan_core.engines.runtime_lifecycle: [RuntimeLifecycle] first_screen_observed OK/AgenticExplorer activity=com.android.insecurebankv2/.FilePrefActivity nodes=2
+2026-09-08 02:40:35,985 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:40:35.985] STATE_DETECTED state_id=STATE-001 semantic_type=UNKNOWN ownership=TARGET_APP foreground_package=com.android.insecurebankv2 actions=2
+2026-09-08 02:40:35,985 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:40:35.985] ACTION_DISCOVERED action_id=ACT-001 state_id=STATE-001 semantic_role=PROGRESS source=xml_structure_recovery text=Preferences clickable=<re.Match object; span=(0, 8), match='TextView'> bounds=[586,385][1017,448]
+2026-09-08 02:40:35,985 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:40:35.985] ACTION_DISCOVERED action_id=ACT-002 state_id=STATE-001 semantic_role=PROGRESS source=xml_structure_recovery text=Restart clickable=<re.Match object; span=(0, 8), match='TextView'> bounds=[586,513][1017,576]
+2026-09-08 02:40:36,104 [INFO] sudarshan_core.engines.agentic_explorer: [Investigation] Stage: INITIAL_OBSERVATION  Screen: UNKNOWN  Goal: Launch Application
+2026-09-08 02:40:41,758 [INFO] sudarshan_core.ai.gemini_provider: [Gemini] Manager initialised mode=primary_only primary_model=gemini-3.6-flash cooldown_seconds=60.0
+2026-09-08 02:40:41,758 [INFO] sudarshan_core.ai.gemini_provider: [Gemini] Primary request started provider=primary model=gemini-3.6-flash attempt=1 stream=False
+2026-09-08 02:40:41,759 [INFO] google_genai.models: AFC is enabled with max remote calls: 10.
+2026-09-08 02:40:42,048 [INFO] httpx: HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent "HTTP/1.1 400 Bad Request"
+2026-09-08 02:40:42,049 [INFO] sudarshan_core.ai.gemini_provider: [Gemini] Primary request failed: auth_failed provider=primary model=gemini-3.6-flash failure_type=auth_failed http_status=400 attempt=1
+2026-09-08 02:40:42,049 [WARNING] sudarshan_core.ai.gemini_provider: [Gemini] primary error: ClientError: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'API key not valid. Please pass a valid API key.', 'status': 'INVALID_ARGUMENT', 'details': [{'@type': 'type.googleapis.com/google.rpc.ErrorInfo', 'reason': 'API_KEY_INVALID', 'domain': 'googleapis.com', 'metadata': {'service': 'generativelanguage.googleapis.com'}}, {'@type': 'type.googleapis.com/google.rpc.LocalizedMessage', 'locale': 'en-US', 'message': 'API key not valid. Please pass a valid API key.'}]}}
+2026-09-08 02:40:42,049 [INFO] sudarshan_core.ai.gemini_provider: [Gemini] Primary provider entering cooldown provider=primary model=gemini-3.6-flash failure_type=auth_failed cooldown_seconds=60.0 circuit=OPEN
+2026-09-08 02:40:42,049 [ERROR] sudarshan_core.ai.gemini_provider: [Gemini] All providers failed latency_ms=291 Gemini providers failed (auth_failed): 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'API key not valid. Please pass a valid API key.', 'status': 'INVALID_ARGUMENT', 'details': [{'@type': 'type.googleapis.com/google.rpc.ErrorInfo', 'reason': 'API_KEY_INVALID', 'domain': 'googleapis.com', 'metadata': {'service': 'generativelanguage.googleapis.com'}}, {'@type': 'type.googleapis.com/google.rpc.LocalizedMessage', 'locale': 'en-US', 'message': 'API key not valid. Please pass a valid API key.'}]}}
+2026-09-08 02:40:42,050 [WARNING] sudarshan_core.engines.agentic.planner: [Planner] LLM API error: LLM API error: GeminiAllProvidersFailed
+2026-09-08 02:40:42,050 [INFO] sudarshan_core.engines.agentic.planner: [Planner] Activating FallbackPlanner
+2026-09-08 02:40:42,443 [INFO] sudarshan_core.engines.agentic.planner: [FallbackPlanner] No match - scrolling down (attempt 1)
+2026-09-08 02:40:42,443 [INFO] sudarshan_core.engines.agentic.exploration_engine: [Explorer] Current state: STATE-001 type=UNKNOWN
+2026-09-08 02:40:42,443 [INFO] sudarshan_core.engines.agentic.exploration_engine: [Explorer] Actionable elements found: 2
+2026-09-08 02:40:42,443 [INFO] sudarshan_core.engines.agentic.exploration_engine: [Explorer] Selected action: Preferences (role=PROGRESS priority=133)
+2026-09-08 02:40:42,444 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:40:42.444] ACTION_SELECTED state=STATE-001 action=Preferences tool=click_text source=exploration_graph
+2026-09-08 02:40:42,444 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:40:42.444] ACTION_SELECTED action_id=ACT-001 priority=133 selected_by=exploration_graph semantic_role=PROGRESS text=Preferences
+2026-09-08 02:40:42,444 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:40:42.444] ACTION_DISPATCHED action_id=ACT-001 tool=click_text attempt=1
+2026-09-08 02:40:42,444 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:40:42.444] EXECUTOR method=click_text attempt=1
+2026-09-08 02:40:42,444 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_TAP x=801 y=416
+2026-09-08 02:40:42,444 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell input tap 801 416
+2026-09-08 02:40:42,512 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=
+2026-09-08 02:40:43,326 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:40:43.326] ACTION_EXECUTED action_id=ACT-001 adb_rc=0 x=801 y=416
+2026-09-08 02:40:43,934 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'
+2026-09-08 02:40:44,015 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=mCurrentFocus=null
+  mFocusedApp=ActivityRecord{211978345 u0 com.android.insecurebankv2/.FilePrefActivity t114}
+2026-09-08 02:40:44,373 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'
+2026-09-08 02:40:44,467 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=mCurrentFocus=null
+  mFocusedApp=ActivityRecord{211978345 u0 com.android.insecurebankv2/.FilePrefActivity t114}
+2026-09-08 02:40:44,826 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'
+2026-09-08 02:40:44,897 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=mCurrentFocus=null
+  mFocusedApp=ActivityRecord{211978345 u0 com.android.insecurebankv2/.FilePrefActivity t114}
+2026-09-08 02:40:49,109 [INFO] sudarshan_core.engines.agentic.perception: [Perception] Grounding recovered 2 nodes via xml_structure_recovery
+2026-09-08 02:40:49,110 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:40:49.110] POST_ACTION_UNCHANGED action_id=ACT-001 remaining=2
+2026-09-08 02:40:49,110 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:40:49.110] ACTION_DISPATCHED attempt=2 strategy=text_after_geometry
+2026-09-08 02:40:49,110 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell uiautomator dump /data/local/tmp/ui_dump.xml
+2026-09-08 02:40:51,263 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=ERROR: null root node returned by UiTestAutomationBridge.
+2026-09-08 02:40:51,263 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell cat /data/local/tmp/ui_dump.xml
+2026-09-08 02:40:51,321 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=<?xml version='1.0' encoding='UTF-8' standalone='yes' ?><hierarchy rotation="0"><node index="0" text="" resource-id="" class="android.widget.FrameLayout" package="com.android.insecurebankv2" content-d
+2026-09-08 02:40:51,321 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_TAP x=801 y=416
+2026-09-08 02:40:51,321 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell input tap 801 416
+2026-09-08 02:40:51,416 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=
+2026-09-08 02:40:52,838 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'
+2026-09-08 02:40:52,916 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=mCurrentFocus=null
+  mFocusedApp=ActivityRecord{211978345 u0 com.android.insecurebankv2/.FilePrefActivity t114}
+2026-09-08 02:40:53,274 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'
+2026-09-08 02:40:53,347 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=mCurrentFocus=null
+  mFocusedApp=ActivityRecord{211978345 u0 com.android.insecurebankv2/.FilePrefActivity t114}
+2026-09-08 02:40:53,712 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'
+2026-09-08 02:40:53,785 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=mCurrentFocus=null
+  mFocusedApp=ActivityRecord{211978345 u0 com.android.insecurebankv2/.FilePrefActivity t114}
+2026-09-08 02:40:56,238 [INFO] sudarshan_core.engines.agentic.perception: [Perception] Grounding recovered 2 nodes via xml_structure_recovery
+2026-09-08 02:40:56,238 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:40:56.238] ACTION_DISPATCHED attempt=3 strategy=visual_grounding_tap
+2026-09-08 02:40:56,238 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_TAP x=801 y=416
+2026-09-08 02:40:56,238 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell input tap 801 416
+2026-09-08 02:40:56,311 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=
+2026-09-08 02:40:57,721 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'
+2026-09-08 02:40:57,793 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=mCurrentFocus=null
+  mFocusedApp=ActivityRecord{211978345 u0 com.android.insecurebankv2/.FilePrefActivity t114}
+2026-09-08 02:40:58,144 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'
+2026-09-08 02:40:58,218 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=mCurrentFocus=null
+  mFocusedApp=ActivityRecord{211978345 u0 com.android.insecurebankv2/.FilePrefActivity t114}
+2026-09-08 02:40:58,581 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'
+2026-09-08 02:40:58,663 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=mCurrentFocus=null
+  mFocusedApp=ActivityRecord{211978345 u0 com.android.insecurebankv2/.FilePrefActivity t114}
+2026-09-08 02:41:01,133 [INFO] sudarshan_core.engines.agentic.perception: [Perception] Grounding recovered 2 nodes via xml_structure_recovery
+2026-09-08 02:41:01,133 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:41:01.133] POST_ACTION_OBSERVE state_id=STATE-001
+2026-09-08 02:41:01,134 [INFO] sudarshan_core.engines.agentic_explorer: [AgenticExplorer] IN_APP_FRAME state=STATE-001 semantic=UNKNOWN activity=com.android.insecurebankv2/.FilePrefActivity
+2026-09-08 02:41:01,134 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:41:01.134] ACTION_EXECUTION_FAILED action_id=ACT-001 attempts=3
+2026-09-08 02:41:01,135 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'
+2026-09-08 02:41:01,216 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=mCurrentFocus=null
+  mFocusedApp=ActivityRecord{211978345 u0 com.android.insecurebankv2/.FilePrefActivity t114}
+2026-09-08 02:41:01,216 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'
+2026-09-08 02:41:01,312 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=mCurrentFocus=null
+  mFocusedApp=ActivityRecord{211978345 u0 com.android.insecurebankv2/.FilePrefActivity t114}
+2026-09-08 02:41:01,312 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:41:01.312] OBSERVATION_REUSED activity=com.android.insecurebankv2/.FilePrefActivity nodes=2
+2026-09-08 02:41:01,312 [INFO] sudarshan_core.engines.agentic.goal_tracker: [GoalTracker] 'Launch Application' → COMPLETED (foreground package confirmed 2x)
+2026-09-08 02:41:01,313 [INFO] sudarshan_core.engines.agentic_explorer: [AgenticExplorer] [Verifier] action=click_text(Preferences) expected=screen_changed observed=screen_unchanged result=INCONCLUSIVE
+2026-09-08 02:41:01,313 [INFO] sudarshan_core.engines.agentic_explorer: [Investigation] Stage: INITIAL_OBSERVATION  Screen: UNKNOWN  Goal: Grant Runtime Permissions
+2026-09-08 02:41:01,315 [INFO] sudarshan_core.ai.gemini_provider: [Gemini] Primary in cooldown; no fallback configured provider=primary model=gemini-3.6-flash cooldown_remaining_s=40.7 circuit=OPEN
+2026-09-08 02:41:01,315 [WARNING] sudarshan_core.engines.agentic.planner: [Planner] LLM API error: LLM API error: GeminiAllProvidersFailed
+2026-09-08 02:41:01,315 [INFO] sudarshan_core.engines.agentic.planner: [Planner] Activating FallbackPlanner
+2026-09-08 02:41:01,316 [INFO] sudarshan_core.engines.agentic.planner: [FallbackPlanner] No match - scrolling down (attempt 2)
+2026-09-08 02:41:01,316 [INFO] sudarshan_core.engines.agentic.exploration_engine: [Explorer] Current state: STATE-001 type=UNKNOWN
+2026-09-08 02:41:01,316 [INFO] sudarshan_core.engines.agentic.exploration_engine: [Explorer] Actionable elements found: 1
+2026-09-08 02:41:01,316 [INFO] sudarshan_core.engines.agentic.exploration_engine: [Explorer] Selected action: Restart (role=PROGRESS priority=118)
+2026-09-08 02:41:01,316 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:41:01.316] ACTION_SELECTED state=STATE-001 action=Restart tool=click_text source=exploration_graph
+2026-09-08 02:41:01,317 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:41:01.317] ACTION_SELECTED action_id=ACT-002 priority=118 selected_by=exploration_graph semantic_role=PROGRESS text=Restart
+2026-09-08 02:41:01,317 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:41:01.317] ACTION_DISPATCHED action_id=ACT-002 tool=click_text attempt=1
+2026-09-08 02:41:01,317 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:41:01.317] EXECUTOR method=click_text attempt=1
+2026-09-08 02:41:01,317 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_TAP x=801 y=544
+2026-09-08 02:41:01,318 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell input tap 801 544
+2026-09-08 02:41:01,421 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=
+2026-09-08 02:41:02,235 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:41:02.235] ACTION_EXECUTED action_id=ACT-002 adb_rc=0 x=801 y=544
+2026-09-08 02:41:02,844 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'
+2026-09-08 02:41:02,931 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=mCurrentFocus=null
+  mFocusedApp=ActivityRecord{211978345 u0 com.android.insecurebankv2/.FilePrefActivity t114}
+2026-09-08 02:41:03,282 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'
+2026-09-08 02:41:03,364 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=mCurrentFocus=null
+  mFocusedApp=ActivityRecord{211978345 u0 com.android.insecurebankv2/.FilePrefActivity t114}
+2026-09-08 02:41:03,720 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'
+2026-09-08 02:41:03,992 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=mCurrentFocus=null
+  mFocusedApp=ActivityRecord{211978345 u0 com.android.insecurebankv2/.FilePrefActivity t114}
+2026-09-08 02:41:07,927 [INFO] sudarshan_core.engines.agentic.perception: [Perception] Grounding recovered 2 nodes via xml_structure_recovery
+2026-09-08 02:41:07,928 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:41:07.928] POST_ACTION_UNCHANGED action_id=ACT-002 remaining=2
+2026-09-08 02:41:07,928 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:41:07.928] ACTION_DISPATCHED attempt=2 strategy=text_after_geometry
+2026-09-08 02:41:07,928 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell uiautomator dump /data/local/tmp/ui_dump.xml
+2026-09-08 02:41:10,438 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=ERROR: null root node returned by UiTestAutomationBridge.
+2026-09-08 02:41:10,438 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell cat /data/local/tmp/ui_dump.xml
+2026-09-08 02:41:10,503 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=<?xml version='1.0' encoding='UTF-8' standalone='yes' ?><hierarchy rotation="0"><node index="0" text="" resource-id="" class="android.widget.FrameLayout" package="com.android.insecurebankv2" content-d
+2026-09-08 02:41:10,503 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_TAP x=801 y=544
+2026-09-08 02:41:10,503 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell input tap 801 544
+2026-09-08 02:41:16,434 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell uiautomator dump /data/local/tmp/ui_dump.xml
+2026-09-08 02:41:18,623 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=ERROR: null root node returned by UiTestAutomationBridge.
+2026-09-08 02:41:18,623 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell cat /data/local/tmp/ui_dump.xml
+2026-09-08 02:41:18,676 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=<?xml version='1.0' encoding='UTF-8' standalone='yes' ?><hierarchy rotation="0"><node index="0" text="" resource-id="" class="android.widget.FrameLayout" package="com.android.insecurebankv2" content-d
+2026-09-08 02:41:18,676 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_TAP x=801 y=544
+2026-09-08 02:41:18,676 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell input tap 801 544
+2026-09-08 02:41:18,743 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=
+2026-09-08 02:41:20,167 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'
+2026-09-08 02:41:20,240 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=mCurrentFocus=null
+  mFocusedApp=ActivityRecord{211978345 u0 com.android.insecurebankv2/.FilePrefActivity t114}
+2026-09-08 02:41:20,590 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'
+2026-09-08 02:41:20,675 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=mCurrentFocus=null
+  mFocusedApp=ActivityRecord{211978345 u0 com.android.insecurebankv2/.FilePrefActivity t114}
+2026-09-08 02:41:21,029 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'
+2026-09-08 02:41:21,098 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=mCurrentFocus=null
+  mFocusedApp=ActivityRecord{211978345 u0 com.android.insecurebankv2/.FilePrefActivity t114}
+2026-09-08 02:41:23,521 [INFO] sudarshan_core.engines.agentic.perception: [Perception] Grounding recovered 2 nodes via xml_structure_recovery
+2026-09-08 02:41:23,521 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:41:23.521] ACTION_DISPATCHED attempt=3 strategy=visual_grounding_tap
+2026-09-08 02:41:23,521 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_TAP x=801 y=544
+2026-09-08 02:41:23,521 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell input tap 801 544
+2026-09-08 02:41:23,588 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=
+2026-09-08 02:41:25,008 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'
+2026-09-08 02:41:25,085 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=mCurrentFocus=null
+  mFocusedApp=ActivityRecord{211978345 u0 com.android.insecurebankv2/.FilePrefActivity t114}
+2026-09-08 02:41:25,444 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'
+2026-09-08 02:41:25,520 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=mCurrentFocus=null
+  mFocusedApp=ActivityRecord{211978345 u0 com.android.insecurebankv2/.FilePrefActivity t114}
+2026-09-08 02:41:25,881 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'
+2026-09-08 02:41:25,990 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=mCurrentFocus=null
+  mFocusedApp=ActivityRecord{211978345 u0 com.android.insecurebankv2/.FilePrefActivity t114}
+2026-09-08 02:41:28,528 [INFO] sudarshan_core.engines.agentic.perception: [Perception] Grounding recovered 2 nodes via xml_structure_recovery
+2026-09-08 02:41:28,528 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:41:28.528] POST_ACTION_OBSERVE state_id=STATE-001
+2026-09-08 02:41:28,528 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:41:28.528] ACTION_EXECUTION_FAILED action_id=ACT-002 attempts=3
+2026-09-08 02:41:28,529 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'
+2026-09-08 02:41:28,607 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=mCurrentFocus=null
+  mFocusedApp=ActivityRecord{211978345 u0 com.android.insecurebankv2/.FilePrefActivity t114}
+2026-09-08 02:41:28,607 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'
+2026-09-08 02:41:28,682 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=mCurrentFocus=null
+  mFocusedApp=ActivityRecord{211978345 u0 com.android.insecurebankv2/.FilePrefActivity t114}
+2026-09-08 02:41:28,683 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:41:28.683] OBSERVATION_REUSED activity=com.android.insecurebankv2/.FilePrefActivity nodes=2
+2026-09-08 02:41:28,683 [INFO] sudarshan_core.engines.agentic_explorer: [AgenticExplorer] [Verifier] action=click_text(Restart) expected=screen_changed observed=screen_unchanged result=INCONCLUSIVE
+2026-09-08 02:41:28,683 [INFO] sudarshan_core.engines.investigation_controller: [Investigation] Transition: INITIAL_OBSERVATION -> APP_LAUNCH (stage made no progress)
+2026-09-08 02:41:28,684 [INFO] sudarshan_core.engines.agentic_explorer: [Investigation] Stage: APP_LAUNCH  Screen: UNKNOWN  Goal: Grant Runtime Permissions
+2026-09-08 02:41:28,685 [INFO] sudarshan_core.ai.gemini_provider: [Gemini] Primary in cooldown; no fallback configured provider=primary model=gemini-3.6-flash cooldown_remaining_s=13.4 circuit=OPEN
+2026-09-08 02:41:28,685 [WARNING] sudarshan_core.engines.agentic.planner: [Planner] LLM API error: LLM API error: GeminiAllProvidersFailed
+2026-09-08 02:41:28,685 [INFO] sudarshan_core.engines.agentic.planner: [Planner] Activating FallbackPlanner
+2026-09-08 02:41:28,685 [WARNING] sudarshan_core.engines.agentic.planner: [FallbackPlanner] Loop detected on screen 5eef60 - triggering backtrack action (1/2)
+2026-09-08 02:41:28,686 [INFO] sudarshan_core.engines.agentic.exploration_engine: [Explorer] At target root STATE-001 - not backtracking (back would leave the app, not traverse it)
+2026-09-08 02:41:28,686 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:41:28.686] ACTION_SELECTED state=STATE-001 action=press_back tool=press_back source=planner
+2026-09-08 02:41:28,686 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:41:28.686] ACTION_SELECTED priority=0 selected_by=planner
+2026-09-08 02:41:28,686 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:41:28.686] ACTION_DISPATCHED tool=press_back attempt=1
+2026-09-08 02:41:28,686 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:41:28.686] EXECUTOR method=press_back attempt=1
+2026-09-08 02:41:28,686 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell input keyevent 4
+2026-09-08 02:41:32,211 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell input keyevent 4
+2026-09-08 02:41:36,219 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell input keyevent 4
+2026-09-08 02:41:39,226 [WARNING] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] press_back failed after 2 retries: Timed out after 3s
+2026-09-08 02:41:39,226 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:41:39.226] ACTION_EXECUTE_FAILED error=Timed out after 3s attempt=1
+2026-09-08 02:41:39,840 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'
+2026-09-08 02:41:40,234 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=mCurrentFocus=null
+  mFocusedApp=ActivityRecord{211978345 u0 com.android.insecurebankv2/.FilePrefActivity t114}
+2026-09-08 02:41:40,593 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'
+2026-09-08 02:41:40,925 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=mCurrentFocus=null
+  mFocusedApp=ActivityRecord{211978345 u0 com.android.insecurebankv2/.FilePrefActivity t114}
+2026-09-08 02:41:41,282 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'
+2026-09-08 02:41:41,453 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=mCurrentFocus=null
+  mFocusedApp=ActivityRecord{211978345 u0 com.android.insecurebankv2/.FilePrefActivity t114}
+2026-09-08 02:41:41,453 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:41:41.453] ACTION_EXECUTION_FAILED attempts=2
+2026-09-08 02:41:44,320 [INFO] sudarshan_core.engines.agentic.perception: [Perception] Grounding recovered 2 nodes via xml_structure_recovery
+2026-09-08 02:41:44,320 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:41:44.320] POST_ACTION_OBSERVE state_id=STATE-001
+2026-09-08 02:41:44,320 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:41:44.320] ACTION_EXECUTION_FAILED attempts=2
+2026-09-08 02:41:44,321 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'
+2026-09-08 02:41:44,416 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=mCurrentFocus=null
+  mFocusedApp=ActivityRecord{211978345 u0 com.android.insecurebankv2/.FilePrefActivity t114}
+2026-09-08 02:41:44,416 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_CMD adb -s emulator-5554 shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'
+2026-09-08 02:41:44,497 [INFO] sudarshan_core.engines.agentic.tool_executor: [ToolExecutor] ADB_RESULT ok=True rc=0 out=mCurrentFocus=null
+  mFocusedApp=ActivityRecord{211978345 u0 com.android.insecurebankv2/.FilePrefActivity t114}
+2026-09-08 02:41:44,497 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:41:44.497] OBSERVATION_REUSED activity=com.android.insecurebankv2/.FilePrefActivity nodes=2
+2026-09-08 02:41:44,497 [INFO] sudarshan_core.engines.agentic_explorer: [AgenticExplorer] [Verifier] action=press_back expected=screen_changed observed=screen_unchanged result=INCONCLUSIVE
+2026-09-08 02:41:44,497 [INFO] sudarshan_core.engines.investigation_controller: [Investigation] Transition: APP_LAUNCH -> PERMISSION_ANALYSIS (stage made no progress)
+2026-09-08 02:41:44,497 [INFO] sudarshan_core.engines.agentic_explorer: [Investigation] Stage: PERMISSION_ANALYSIS  Screen: UNKNOWN  Goal: Grant Runtime Permissions
+2026-09-08 02:41:44,498 [INFO] sudarshan_core.ai.gemini_provider: [Gemini] Primary cooldown expired; probing on next request provider=primary model=gemini-3.6-flash circuit=DEGRADED
+2026-09-08 02:41:44,498 [INFO] sudarshan_core.ai.gemini_provider: [Gemini] Primary request started provider=primary model=gemini-3.6-flash attempt=1 stream=False
+2026-09-08 02:41:44,498 [INFO] google_genai.models: AFC is enabled with max remote calls: 10.
+2026-09-08 02:41:44,615 [INFO] httpx: HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent "HTTP/1.1 400 Bad Request"
+2026-09-08 02:41:44,616 [INFO] sudarshan_core.ai.gemini_provider: [Gemini] Primary request failed: auth_failed provider=primary model=gemini-3.6-flash failure_type=auth_failed http_status=400 attempt=1
+2026-09-08 02:41:44,616 [WARNING] sudarshan_core.ai.gemini_provider: [Gemini] primary error: ClientError: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'API key not valid. Please pass a valid API key.', 'status': 'INVALID_ARGUMENT', 'details': [{'@type': 'type.googleapis.com/google.rpc.ErrorInfo', 'reason': 'API_KEY_INVALID', 'domain': 'googleapis.com', 'metadata': {'service': 'generativelanguage.googleapis.com'}}, {'@type': 'type.googleapis.com/google.rpc.LocalizedMessage', 'locale': 'en-US', 'message': 'API key not valid. Please pass a valid API key.'}]}}
+2026-09-08 02:41:44,616 [INFO] sudarshan_core.ai.gemini_provider: [Gemini] Primary provider entering cooldown provider=primary model=gemini-3.6-flash failure_type=auth_failed cooldown_seconds=60.0 circuit=OPEN
+2026-09-08 02:41:44,616 [ERROR] sudarshan_core.ai.gemini_provider: [Gemini] All providers failed latency_ms=118 Gemini providers failed (auth_failed): 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'API key not valid. Please pass a valid API key.', 'status': 'INVALID_ARGUMENT', 'details': [{'@type': 'type.googleapis.com/google.rpc.ErrorInfo', 'reason': 'API_KEY_INVALID', 'domain': 'googleapis.com', 'metadata': {'service': 'generativelanguage.googleapis.com'}}, {'@type': 'type.googleapis.com/google.rpc.LocalizedMessage', 'locale': 'en-US', 'message': 'API key not valid. Please pass a valid API key.'}]}}
+2026-09-08 02:41:44,616 [WARNING] sudarshan_core.engines.agentic.planner: [Planner] LLM API error: LLM API error: GeminiAllProvidersFailed
+2026-09-08 02:41:44,617 [INFO] sudarshan_core.engines.agentic.planner: [Planner] Activating FallbackPlanner
+2026-09-08 02:41:44,617 [WARNING] sudarshan_core.engines.agentic.planner: [FallbackPlanner] Loop detected on screen 5eef60 - triggering backtrack action (2/2)
+2026-09-08 02:41:44,617 [INFO] sudarshan_core.engines.agentic.exploration_engine: [Explorer] At target root STATE-001 - not backtracking (back would leave the app, not traverse it)
+2026-09-08 02:41:44,617 [INFO] sudarshan_core.engines.agentic.action_dispatch: [02:41:44.617] ACTION_SELECTED state=STATE-001 action=press_back tool=press_back source=planner
+2026-09-08 02:41:44,617 [WARNING] sudarshan_core.engines.agentic_explorer: [Investigation] Rejected 'press_back' - not permitted in PERMISSION_ANALYSIS (allowed: capture_logcat, click_text, deny_permission, dump_ui, grant_permission, take_screenshot)
+2026-09-08 02:41:47,644 [INFO] sudarshan_core.engines.agentic.perception: [Perception] Grounding recovered 2 nodes via xml_structure_recovery
+2026-09-08 02:41:47,645 [INFO] sudarshan_core.engines.agentic_explorer: [Investigation] Stage: PERMISSION_ANALYSIS  Screen: UNKNOWN  Goal: Grant Runtime Permissions
+2026-09-08 02:41:47,646 [INFO] sudarshan_core.ai.gemini_provider: [Gemini] Primary in cooldown; no fallback configured provider=primary model=gemini-3.6-flash cooldown_remaining_s=57.0 circuit=OPEN
+2026-09-08 02:41:47,646 [WARNING] sudarshan_core.engines.agentic.planner: [Planner] LLM API error: LLM API error: GeminiAllProvidersFailed
+2026-09-08 02:41:47,646 [INFO] sudarshan_core.engines.agentic.planner: [Planner] Activating FallbackPlanner
+2026-09-08 02:41:47,647 [WARNING] sudarshan_core.engines.agentic.planner: [FallbackPlanner] 4 consecutive failures with no progress (2 backtrack attempt(s) made) - signalling stop.
+2026-09-08 02:41:47,647 [INFO] sudarshan_core.engines.agentic.exploration_engine: [Explorer] At target root STATE-001 - not backtracking (back would leave the app, not traverse it)
+2026-09-08 02:41:47,647 [INFO] sudarshan_core.engines.agentic_explorer: [AgenticExplorer] STOP reason=EXPLORATION_COMPLETE states=1 actions_taken=8 explored=0 failed=2 pending=0 current_state=STATE-001
+2026-09-08 02:41:47,647 [INFO] sudarshan_core.engines.agentic_explorer: [AgenticExplorer] Completed. Actions=8, Screens=1, GoalsCompleted=1/15
+2026-09-08 02:41:49,826 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Screenshot captured: 99_final_screen
+2026-09-08 02:41:49,826 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] CLOSE: force-stopping com.android.insecurebankv2
+2026-09-08 02:41:51,731 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] com.android.insecurebankv2 stopped.
+2026-09-08 02:41:51,733 [INFO] sudarshan_core.engines.agentic.audit_log: [AuditLog] Flushed 8 entries → D:\Projects\Sudarshan BOI\tests\apks\categories\sudarshan_artifacts\insecurebankv2_2ebde24e\audit_log.json
+2026-09-08 02:41:51,734 [INFO] sudarshan_core.engines.agentic.benchmark: [Benchmark] Flushed metrics → D:\Projects\Sudarshan BOI\tests\apks\categories\sudarshan_artifacts\insecurebankv2_2ebde24e\benchmark.json
+2026-09-08 02:41:51,739 [INFO] sudarshan_core.engines.agentic_explorer: [AgenticExplorer] Artifacts flushed to D:\Projects\Sudarshan BOI\tests\apks\categories\sudarshan_artifacts\insecurebankv2_2ebde24e
+2026-09-08 02:41:51,740 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Session cleanup complete
+2026-09-08 02:41:51,740 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Analysis complete: BFCI=0.0 components={'accessibility': 0.0, 'sms': 0.0, 'overlay': 0.0, 'banking': 0.0, 'network': 0.0, 'persistence': 0.0}
+2026-09-08 02:41:51,741 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] launch_timeline.json written: D:\Projects\Sudarshan BOI\tests\apks\categories\sudarshan_artifacts\insecurebankv2_2ebde24e\launch_timeline.json
+2026-09-08 02:41:51,748 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Wrote AI Exploration telemetry files successfully.
+2026-09-08 02:41:51,899 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] START_EXPLORER → COLLECT_EVIDENCE (flushing evidence store)
+2026-09-08 02:41:51,901 [INFO] sudarshan_core.engines.evidence_store: [EvidenceStore] Flushed 6 records → D:\Projects\Sudarshan BOI\tests\apks\categories\sudarshan_artifacts\insecurebankv2_2ebde24e\evidence.json
+2026-09-08 02:41:51,901 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Evidence store flushed: 6 records written to evidence.json
+2026-09-08 02:41:51,901 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] COLLECT_EVIDENCE → BUILD_WORKFLOW (workflow reconstruction)
+2026-09-08 02:41:51,902 [INFO] sudarshan_core.engines.workflow_reconstructor: [WorkflowReconstructor] Reconstruction complete: 1 stages, sequence=PRECONDITIONS_ONLY, confidence=0%
+2026-09-08 02:41:51,902 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Fraud workflow: PRECONDITIONS_ONLY (1 stages, confidence=0%)
+2026-09-08 02:41:52,042 [INFO] sudarshan_core.engines.ioc_collector: [IOCCollector] Flushed 3 IOCs → D:\Projects\Sudarshan BOI\tests\apks\categories\sudarshan_artifacts\insecurebankv2_2ebde24e\iocs.json
+2026-09-08 02:41:52,123 [INFO] sudarshan_core.engines.screenshot_manager: [ScreenshotManager] Manifest flushed: 5 screenshots -> D:\Projects\Sudarshan BOI\tests\apks\categories\sudarshan_artifacts\insecurebankv2_2ebde24e\screenshots\manifest.json
+2026-09-08 02:41:52,125 [INFO] sudarshan_core.engines.screenshot_manager: [ScreenshotManager] Manifest flushed: 5 screenshots -> D:\Projects\Sudarshan BOI\tests\apks\categories\sudarshan_artifacts\insecurebankv2_2ebde24e\screenshots.json
+2026-09-08 02:41:52,125 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Screenshot manifest flushed: 5 image(s)
+2026-09-08 02:41:52,376 [INFO] sudarshan_core.visual_evidence.linker: [VisualEvidence] Wrote 5 record(s) -> D:\Projects\Sudarshan BOI\tests\apks\categories\sudarshan_artifacts\insecurebankv2_2ebde24e\visual_evidence.json
+2026-09-08 02:41:52,379 [INFO] sudarshan_core.visual_evidence.linker: [VisualEvidence] Updated evidence.json screenshot links
+2026-09-08 02:41:52,379 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] BUILD_WORKFLOW → GENERATE_REPORT (artifact flush complete)
+2026-09-08 02:41:52,380 [INFO] sudarshan_core.engines.permission_orchestrator: [PermissionOrchestrator] Flushed 0 actions → D:\Projects\Sudarshan BOI\tests\apks\categories\sudarshan_artifacts\insecurebankv2_2ebde24e\permissions.json
+2026-09-08 02:41:52,381 [INFO] sudarshan_core.engines.anti_analysis_detector: [AntiAnalysisDetector] Flushed 1 detections → D:\Projects\Sudarshan BOI\tests\apks\categories\sudarshan_artifacts\insecurebankv2_2ebde24e\anti_analysis.json
+2026-09-08 02:41:53,361 [INFO] sudarshan_core.engines.analysis_history: [AnalysisHistory] Saved run for com.android.insecurebankv2 (BFCI: 0.0)
+2026-09-08 02:41:53,382 [INFO] sudarshan_core.engines.report_generator: [ReportGen] Report written to D:\Projects\Sudarshan BOI\tests\apks\categories\sudarshan_artifacts\insecurebankv2_2ebde24e\report.html
+2026-09-08 02:41:53,382 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] GENERATE_REPORT → COMPLETE (dynamic session finished)
+2026-09-08 02:41:53,382 [INFO] sudarshan_core.engines.runtime_lifecycle: [RuntimeLifecycle] dynamic_analysis_completed COMPLETED/FridaSession status=EVENTS_CAPTURED events=1
+2026-09-08 02:41:53,382 [INFO] sudarshan_core.engines.runtime_lifecycle: [RuntimeLifecycle] dynamic_result_persisted SUCCESS/artifact_store D:\Projects\Sudarshan BOI\tests\apks\categories\sudarshan_artifacts\insecurebankv2_2ebde24e
+2026-09-08 02:41:53,389 [INFO] sudarshan_core.engines.report_generator: [ReportGen] Report written to D:\Projects\Sudarshan BOI\tests\apks\categories\sudarshan_artifacts\insecurebankv2_2ebde24e\validation_report.html

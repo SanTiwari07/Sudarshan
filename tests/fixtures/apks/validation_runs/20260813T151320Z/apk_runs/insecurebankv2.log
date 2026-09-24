@@ -1,0 +1,25 @@
+2026-08-13 20:43:42,948 [WARNING] sudarshan_core.security.sandbox_containment: [Containment] GUEST_FULL_COMPROMISE_EXPECTED: ROOT_REQUIRED=true and SELinux permissive are required for Frida. Treat the Android guest as fully compromised after each session; never reuse it for trusted workloads.
+2026-08-13 20:43:42,949 [INFO] sudarshan_core.sandbox.provider: [auto] connect/adb: OK C:\Users\sansk\AppData\Local\Android\Sdk\platform-tools\adb.EXE
+2026-08-13 20:43:43,856 [INFO] sudarshan_core.sandbox.provider: [auto] Detected Android devices:
+2026-08-13 20:43:43,856 [INFO] sudarshan_core.sandbox.provider:   [1] Android Studio AVD — emulator-5554 — x86_64 — Android 17 — Pixel_6
+2026-08-13 20:43:44,091 [INFO] sudarshan_core.sandbox.auto: [auto] Selected sandbox: Android Studio AVD (emulator-5554)
+2026-08-13 20:43:44,110 [INFO] sudarshan_core.sandbox.provider: [auto] connect/device_detect: OK emulator-5554
+2026-08-13 20:43:44,143 [INFO] sudarshan_core.sandbox.provider: [auto] connect/online: OK emulator-5554
+2026-08-13 20:43:45,167 [INFO] sudarshan_core.sandbox.provider: [auto] connect/props: OK android=17 api=37 abi=x86_64
+2026-08-13 20:43:45,556 [INFO] sudarshan_core.sandbox.provider: [auto] Root already available on emulator-5554
+2026-08-13 20:43:45,556 [INFO] sudarshan_core.sandbox.provider: [auto] connect/root: OK available
+2026-08-13 20:43:45,646 [INFO] sudarshan_core.sandbox.provider: [auto] connect/selinux: OK Permissive
+2026-08-13 20:43:45,807 [INFO] sudarshan_core.sandbox.provider: [auto] Frida forwarded tcp:27042 -> emulator-5554:27042
+2026-08-13 20:43:45,807 [INFO] sudarshan_core.sandbox.provider: [auto] connect/frida: OK frida agent running (13455)
+2026-08-13 20:43:45,808 [INFO] sudarshan_core.sandbox.provider: [auto] Connected serial=emulator-5554 provider=android_avd transport=emulator ip= android=17 abi=x86_64 root=True frida=True forward=True connect_ms=2859.5
+2026-08-13 20:43:45,808 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Using sandbox provider=auto serial=emulator-5554 android=17 abi=x86_64 root=True frida=True connect_ms=2859.5
+2026-08-13 20:43:45,808 [INFO] sudarshan_core.engines.frida_sandbox: [Pipeline 01] emulator ready — serial=emulator-5554
+2026-08-13 20:43:45,808 [INFO] sudarshan_core.engines.frida_sandbox: [Pipeline 04] Frida device connected — auto
+2026-08-13 20:43:45,811 [INFO] sudarshan_core.sandbox.factory: [Sandbox] Using provider=auto adb_host=(auto) adb_port=5555 device_serial=emulator-5554
+2026-08-13 20:43:46,568 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] SELinux mode: Permissive
+2026-08-13 20:43:46,771 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Configured Frida agent verified by SandboxProvider.
+2026-08-13 20:43:46,834 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Target package: com.android.insecurebankv2 (Main Activity: com.android.insecurebankv2.LoginActivity)
+2026-08-13 20:43:47,062 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Artifacts for this sample: D:\Projects\Sudarshan BOI\tests\apks\categories\sudarshan_artifacts\insecurebankv2_2ebde24e
+2026-08-13 20:43:47,062 [INFO] sudarshan_core.engines.frida_sandbox: [Pipeline 02] APK installed — starting adb install
+2026-08-13 20:43:47,063 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] INITIALIZING → INSTALLING (adb install)
+2026-08-13 20:43:48,243 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Retrying install with --bypass-low-target-sdk-block

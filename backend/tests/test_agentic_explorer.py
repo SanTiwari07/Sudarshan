@@ -2,7 +2,7 @@
 SUDARSHAN - Agentic Explorer Smoke Test + Unit Tests
 ======================================================
 Run with:
-    cd "d:/Projects/Sudarshan BOI/backend"
+    cd backend/
     python tests/test_agentic_explorer.py
 
 Exit code 0 = all passed.

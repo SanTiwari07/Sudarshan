@@ -1,5 +1,5 @@
-﻿import { BarChart2 } from 'lucide-react';
-import type { FraudCardData } from '../../App';
+import { BarChart2 } from 'lucide-react';
+import type { FraudCardData } from '../../types/case';
 import { TYPOGRAPHY } from '../../theme/typography';
 import { useInvestigationUI } from '../../context/InvestigationUIContext';
 import DownloadReportButton from './DownloadReportButton';
@@ -72,7 +72,7 @@ function ApkIdentity({ data }: { data: FraudCardData }) {
     const subject = clean(cert.subject) ?? clean(cert.issuer);
     if (!subject) return null;
     const cn = subject.match(/CN=([^,]+)/i)?.[1]?.trim();
-    return cn || (subject.length > 40 ? `${subject.slice(0, 40)}…` : subject);
+    return cn || (subject.length > 40 ? `${subject.slice(0, 40)}�` : subject);
   })();
 
   const perms = data.all_permissions?.length ?? 0;
@@ -96,7 +96,7 @@ function ApkIdentity({ data }: { data: FraudCardData }) {
   push(
     'Permissions',
     perms > 0
-      ? `${perms}${dangerous > 0 ? ` · ${dangerous} dangerous` : ''}`
+      ? `${perms}${dangerous > 0 ? ` � ${dangerous} dangerous` : ''}`
       : null,
   );
   push('Components', components > 0 ? String(components) : null);

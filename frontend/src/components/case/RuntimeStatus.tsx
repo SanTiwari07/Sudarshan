@@ -1,5 +1,5 @@
 import { Activity, AlertCircle, CheckCircle2, HelpCircle } from 'lucide-react';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 import { Link } from 'react-router-dom';
 
 export default function RuntimeStatus({ data }: { data: FraudCardData }) {

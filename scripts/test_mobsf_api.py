@@ -7,12 +7,12 @@ Tests the complete MobSF pipeline: upload → scan → report → parse
 import json
 import sys
 import time
-import requests
+import requests`nfrom pathlib import Path
 
 HOST = "http://localhost:8008"
 API_KEY = "sudarshan_mobsf_api_key_2026"
 HEADERS = {"Authorization": API_KEY}
-APK_PATH = r"d:\Projects\Sudarshan BOI\test apk\Vulnerable\InsecureBankv2.apk"
+APK_PATH = Path(__file__).parent.parent / "tests" / "fixtures" / "Vulnerable" / "InsecureBankv2.apk"
 
 
 def print_step(step: int, label: str, status: str, detail: str = ""):

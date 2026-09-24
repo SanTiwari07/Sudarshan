@@ -23,7 +23,11 @@ class SemanticDefinition:
 # 100+ types based on user's comprehensive list
 SEMANTIC_REGISTRY = [
     SemanticDefinition(FieldType.PHONE, ["phone", "phone number", "phone no", "mobile", "mobile number", "mobile no", "contact number", "telephone"], ["phone"]),
+    SemanticDefinition(FieldType.EMAIL_OTP, ["email otp", "email code"]),
     SemanticDefinition(FieldType.EMAIL, ["email", "email address", "email id", "e-mail", "mail address"], ["textEmailAddress"]),
+    SemanticDefinition(FieldType.PASSWORD, ["login password", "password", "pass word", "passwd", "pwd"], ["textPassword", "numberPassword"]),
+    SemanticDefinition(FieldType.PASSCODE, ["passcode", "pass code"], ["textPassword", "numberPassword"]),
+    SemanticDefinition(FieldType.SECURITY_ANSWER, ["security answer", "security question answer", "secret answer"], ["text"]),
     SemanticDefinition(FieldType.USERNAME, ["username", "user name", "login", "login name", "profile username"]),
     SemanticDefinition(FieldType.USER_ID, ["user id", "userid", "login id"]),
     SemanticDefinition(FieldType.CUSTOMER_ID, ["customer id", "client id"]),
@@ -39,18 +43,15 @@ SEMANTIC_REGISTRY = [
     SemanticDefinition(FieldType.POSTAL_CODE, ["postal code", "postcode", "area code"], ["number", "text"]),
     SemanticDefinition(FieldType.ZIP_CODE, ["zip", "zip code", "zipcode"], ["number", "text"]),
     SemanticDefinition(FieldType.PIN, ["pin"], ["numberPassword", "number", "textPassword"]),
-    
-    SemanticDefinition(FieldType.PASSWORD, ["password", "pass word", "passwd", "pwd"], ["textPassword", "numberPassword"]),
-    SemanticDefinition(FieldType.PASSCODE, ["passcode", "pass code"], ["textPassword", "numberPassword"]),
-    
     SemanticDefinition(FieldType.OTP, ["otp", "one time password", "verification code", "verify code", "sms code", "security code", "auth code"], ["number", "text"]),
     
+    SemanticDefinition(FieldType.BENEFICIARY_NAME, ["beneficiary name", "payee name", "recipient name"], ["textPersonName"]),
     SemanticDefinition(FieldType.FIRST_NAME, ["first name", "firstname", "given name"], ["textPersonName"]),
     SemanticDefinition(FieldType.LAST_NAME, ["last name", "lastname", "surname", "family name"], ["textPersonName"]),
-    SemanticDefinition(FieldType.MOTHER_NAME, ["mother name", "mother's name"], ["textPersonName"]),
-    SemanticDefinition(FieldType.MOTHER_MAIDEN_NAME, ["mother maiden name", "mother's maiden name", "maiden name"], ["textPersonName"]),
-    SemanticDefinition(FieldType.FATHER_NAME, ["father name", "father's name", "parent name"], ["textPersonName"]),
-    SemanticDefinition(FieldType.GUARDIAN_NAME, ["guardian name", "legal guardian"], ["textPersonName"]),
+    SemanticDefinition(FieldType.MOTHER_NAME, ["mother name", "mother's name", "mothers name", "mother's full name", "mothers full name"], ["textPersonName"]),
+    SemanticDefinition(FieldType.MOTHER_MAIDEN_NAME, ["mother maiden name", "mother's maiden name", "mothers maiden name", "maiden name"], ["textPersonName"]),
+    SemanticDefinition(FieldType.FATHER_NAME, ["father name", "father's name", "fathers name", "parent name", "parent's name", "parents name"], ["textPersonName"]),
+    SemanticDefinition(FieldType.GUARDIAN_NAME, ["guardian name", "guardian's name", "guardians name", "legal guardian"], ["textPersonName"]),
     SemanticDefinition(FieldType.SPOUSE_NAME, ["spouse name", "husband name", "wife name"], ["textPersonName"]),
     SemanticDefinition(FieldType.FULL_NAME, ["name", "full name", "your name"], ["textPersonName"]),
     
@@ -68,6 +69,11 @@ SEMANTIC_REGISTRY = [
     SemanticDefinition(FieldType.VOTER_ID, ["voter id", "voter card", "epic"], ["text"]),
     SemanticDefinition(FieldType.DRIVING_LICENSE, ["driving license", "driving licence", "dl number"], ["text"]),
     
+        SemanticDefinition(FieldType.EMPLOYEE_ID, ["employee id", "emp id"]),
+    SemanticDefinition(FieldType.POLICY_NUMBER, ["policy number", "policy no"]),
+    SemanticDefinition(FieldType.REFERRAL_CODE, ["referral code", "referral"]),
+    SemanticDefinition(FieldType.RECOVERY_CODE, ["recovery code"]),
+    SemanticDefinition(FieldType.BENEFICIARY_ACCOUNT, ["beneficiary account", "beneficiary account number", "payee account"], ["number"]),
     SemanticDefinition(FieldType.ACCOUNT_NUMBER, ["account number", "account no", "bank account number", "acct", "a/c"], ["number"]),
     SemanticDefinition(FieldType.ACCOUNT_HOLDER_NAME, ["account holder", "account holder name", "account name"], ["textPersonName"]),
     SemanticDefinition(FieldType.IFSC, ["ifsc", "ifsc code"], ["text"]),
@@ -78,9 +84,6 @@ SEMANTIC_REGISTRY = [
     SemanticDefinition(FieldType.CARD_CVV, ["cvv", "cvc", "security code"], ["numberPassword", "number"]),
     
     SemanticDefinition(FieldType.UPI_ID, ["upi id", "upi address", "vpa", "virtual payment address"], ["textEmailAddress"]),
-    
-    SemanticDefinition(FieldType.BENEFICIARY_NAME, ["beneficiary name", "payee name", "recipient name"], ["textPersonName"]),
-    SemanticDefinition(FieldType.BENEFICIARY_ACCOUNT, ["beneficiary account", "payee account"], ["number"]),
     
     SemanticDefinition(FieldType.AMOUNT, ["amount", "payment amount", "transfer amount"], ["numberDecimal", "number"]),
     SemanticDefinition(FieldType.SEARCH_QUERY, ["search", "query", "find", "look up"], ["text", "textWebEditText"]),

@@ -1,5 +1,5 @@
 import { Compass } from 'lucide-react';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 import type { AnalystAction, IntelApiPayload } from '../../lib/threatIntelModel';
 import SocCard from '../ui/Card';
 import SectionHeader from '../ui/SectionHeader';

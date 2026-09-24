@@ -15,7 +15,7 @@ async def worker(worker_id):
         return True
 
 async def main():
-    os.environ["DATABASE_URL"] = "postgresql://sudarshan:sudarshan@localhost:5432/sudarshan"
+    os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
     
     # We will spawn 100 concurrent workers. 
     # Since pool size max is 20, they should wait and succeed without errors.

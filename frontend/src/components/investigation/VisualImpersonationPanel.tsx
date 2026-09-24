@@ -1,4 +1,4 @@
-import type { FraudCardData, VideResult } from '../../App';
+import type { FraudCardData, VideResult } from '../../types/case';
 import SocCard from '../ui/Card';
 import SectionHeader from '../ui/SectionHeader';
 import {

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import SocCard from '../ui/Card';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 
 /**
  * Blast-radius graph: the sample at the centre, everything it touches around it.

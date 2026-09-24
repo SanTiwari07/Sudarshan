@@ -4,7 +4,7 @@ import {
   hasObfuscationSignal,
   isFindingDetected,
 } from './technicalFindings';
-import type { FraudCardData } from '../App';
+import type { FraudCardData } from '../types/case';
 
 const base = {
   technical_view: { permissions_fired: [], strings_fired: [], apis_fired: [], matched_rule: '', decoded_manifest_excerpts: [] },

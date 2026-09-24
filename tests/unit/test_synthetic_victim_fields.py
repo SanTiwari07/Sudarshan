@@ -158,7 +158,7 @@ def test_banking_captions_resolve_to_specific_types(caption, expected):
 
 def test_pin_code_is_a_postcode_not_a_secret():
     """"PIN Code" is an Indian postcode. Typing a secret there is nonsense."""
-    assert classify_field(field_label="PIN Code").field_type is FieldType.POSTAL_CODE
+    assert classify_field(field_label="PIN Code").field_type is FieldType.PIN_CODE
     assert classify_field(field_label="Enter PIN").field_type is FieldType.PIN
 
 
@@ -359,7 +359,7 @@ def test_card_number_uses_a_non_transactable_test_bin():
 def test_generated_values_are_not_real_financial_credentials():
     """Every identity is namespaced to the analysis domain or randomly generated."""
     assert _value_for("Email address").endswith("@sudarshan-analysis.test")
-    assert _value_for("UPI ID").endswith("@analysis")
+    assert _value_for("UPI ID").endswith("@invalid")
     assert _value_for("IFSC Code").startswith("TEST0")
 
 

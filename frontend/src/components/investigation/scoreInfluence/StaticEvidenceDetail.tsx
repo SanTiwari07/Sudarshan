@@ -1,6 +1,6 @@
 import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
-import type { FraudCardData } from '../../../App';
+import type { FraudCardData } from '../../../types/case';
 import {
   buildStaticInfluenceView,
   buildFrsAxisTransparency,

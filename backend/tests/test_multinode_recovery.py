@@ -13,7 +13,7 @@ from sudarshan_core.storage.artifact_storage import get_storage
 @pytest.mark.asyncio
 async def test_multinode_recovery(monkeypatch, tmp_path):
     # Setup DB
-    os.environ["DATABASE_URL"] = "postgresql://sudarshan:sudarshan@localhost:5432/sudarshan"
+    os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
     await init_db()
     
     # We simulate a "shared object storage" (like GCS) using a shared directory for LocalArtifactStorage

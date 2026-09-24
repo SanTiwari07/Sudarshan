@@ -32,7 +32,7 @@ async def db(tmp_path, monkeypatch):
     """A fresh, fully-migrated database, isolated per test."""
     path = tmp_path / "test.db"
     monkeypatch.setenv("SUDARSHAN_DB_PATH", str(path))
-    monkeypatch.setenv("JWT_SECRET_KEY", "test-secret-key-for-persistence-tests")
+    monkeypatch.setenv("JWT_SECRET_KEY", "test_secret_key")
     monkeypatch.delenv("DATABASE_URL", raising=False)
 
     from app.db import database as dbmod
@@ -95,7 +95,7 @@ async def test_migration_adopts_a_preexisting_legacy_database(tmp_path, monkeypa
     conn.close()
 
     monkeypatch.setenv("SUDARSHAN_DB_PATH", str(path))
-    monkeypatch.setenv("JWT_SECRET_KEY", "test-secret-key-for-persistence-tests")
+    monkeypatch.setenv("JWT_SECRET_KEY", "test_secret_key")
     monkeypatch.delenv("DATABASE_URL", raising=False)
     from app.db import database as dbmod
     monkeypatch.setattr(dbmod, "DB_PATH", str(path))

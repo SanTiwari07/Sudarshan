@@ -4,7 +4,7 @@ import type {
   VideForensicBreakdown,
   VideForensicSwatch,
   VideResult,
-} from '../App';
+} from '../types/case';
 
 /** Short labels for lab baselines shipped in sudarshan_core/data/ui_baselines. */
 export const VIDE_BASELINE_SHORT_NAMES = ['SBI', 'HDFC', 'ICICI'];

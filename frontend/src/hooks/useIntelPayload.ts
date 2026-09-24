@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { FraudCardData } from '../App';
+import type { FraudCardData } from '../types/case';
 import { API_BASE, authHeaders } from '../config';
 import type { IntelApiPayload } from '../lib/threatIntelModel';
 import {

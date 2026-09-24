@@ -1,5 +1,5 @@
 import { Sparkles, Info } from 'lucide-react';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 import {
   buildOverallAssessmentParagraphs,
   buildCustomerAndBankingImpact,

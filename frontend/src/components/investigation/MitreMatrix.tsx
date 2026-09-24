@@ -1,5 +1,5 @@
-﻿import SocCard from '../ui/Card';
-import type { FraudCardData } from '../../App';
+import SocCard from '../ui/Card';
+import type { FraudCardData } from '../../types/case';
 
 /**
  * MITRE ATT&CK Mobile techniques, grouped by tactic.

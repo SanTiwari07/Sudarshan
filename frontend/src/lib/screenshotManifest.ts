@@ -1,6 +1,6 @@
 import { API_BASE, authHeaders } from '../config';
 import { screenshotBasename } from './screenshots';
-import type { FraudCardData } from '../App';
+import type { FraudCardData } from '../types/case';
 
 export type ScreenshotManifestEntry = {
   screenshot_id: string;

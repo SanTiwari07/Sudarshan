@@ -213,7 +213,7 @@ def test_the_explainer_cannot_reach_the_risk_engine():
 # ── the endpoint must be wired ───────────────────────────────────────────────
 
 def test_the_explain_endpoint_is_registered(monkeypatch):
-    monkeypatch.setenv("JWT_SECRET_KEY", "test-only-not-a-real-secret")
+    monkeypatch.setenv("JWT_SECRET_KEY", "test_secret_key")
     sys.path.insert(0, str(_ROOT / "backend"))
     from app.routes.report import router
 

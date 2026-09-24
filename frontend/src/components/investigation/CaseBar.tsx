@@ -1,6 +1,6 @@
-﻿import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { FileText, Database, Globe, Sparkles, type LucideIcon } from 'lucide-react';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 import { TYPOGRAPHY } from '../../theme/typography';
 import AnimatedBackground from '../motion/AnimatedBackground';
 import { caseSeverity } from '../../theme/severity';

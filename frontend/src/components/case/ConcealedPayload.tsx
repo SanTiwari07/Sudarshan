@@ -1,5 +1,5 @@
 import { AlertOctagon, ChevronRight } from 'lucide-react';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 import { Link } from 'react-router-dom';
 
 export default function ConcealedPayload({ data }: { data: FraudCardData }) {

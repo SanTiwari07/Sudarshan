@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { FraudCardData } from '../App';
+import type { FraudCardData } from '../types/case';
 import { assessTrust } from './trust';
 
 /**

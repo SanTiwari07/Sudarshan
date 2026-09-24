@@ -1,4 +1,4 @@
-import type { FraudCardData } from '../App';
+import type { FraudCardData } from '../types/case';
 import { getVideUiState, resolveVideFromData } from './videUi';
 
 export type TechnicalFindingSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';

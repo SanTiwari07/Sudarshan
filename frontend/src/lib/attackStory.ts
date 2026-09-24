@@ -1,4 +1,4 @@
-import type { FraudCardData, WorkflowStage } from '../App';
+import type { FraudCardData, WorkflowStage } from '../types/case';
 import type { ScreenshotManifestEntry } from './screenshotManifest';
 
 /**

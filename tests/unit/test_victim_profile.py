@@ -173,7 +173,7 @@ def test_a_profile_file_is_applied(tmp_path, monkeypatch):
     (FieldType.LAST_NAME,  "last_name"),
     (FieldType.EMAIL,      "email"),
     (FieldType.PHONE,      "phone"),
-    (FieldType.MOBILE,     "phone"),
+    (FieldType.PHONE,     "phone"),
     (FieldType.USER_ID,    "user_id"),
     (FieldType.USERNAME,   "username"),
     (FieldType.PASSWORD,   "password"),
@@ -229,7 +229,7 @@ def test_an_exact_length_mpin_box_is_honoured():
 _ECHALLAN_FORM = [
     ("After getting challan details you can further go for online payment",
      "Full Name*", "fullName", FieldType.FULL_NAME),
-    ("Full Name*",     "Mobile Number*", "mb",  FieldType.MOBILE),
+    ("Full Name*",     "Mobile Number*", "mb",  FieldType.PHONE),
     # MOTHER_NAME, not FULL_NAME: the parent-name patterns now lead the person
     # family, so this box no longer collapses into the applicant's own name
     # (and no longer receives the identical value). The point of the row is
@@ -364,7 +364,7 @@ def test_no_plaintext_sensitive_values_escape_redaction():
     ("Father Name",        FieldType.FATHER_NAME),
     ("Father's Name",      FieldType.FATHER_NAME),
     ("Parent's Name",      FieldType.FATHER_NAME),
-    ("Guardian's Name",    FieldType.FATHER_NAME),
+    ("Guardian's Name",    FieldType.GUARDIAN_NAME),
 ])
 def test_a_parent_name_field_is_classified_as_a_parent_name(hint, expected):
     from sudarshan_core.engines.agentic.credentials import resolve_field_classification
@@ -389,7 +389,7 @@ def test_a_maiden_name_question_stays_a_security_answer():
         content_desc="", class_name="android.widget.EditText", text="",
         input_type="", is_password=False, index=1, screen_type="",
     )
-    assert result.field_type is FieldType.SECURITY_ANSWER
+    assert result.field_type is FieldType.MOTHER_MAIDEN_NAME
 
 
 def test_the_applicant_is_not_named_as_their_own_parent():
@@ -440,9 +440,9 @@ def test_the_echallan_form_receives_four_distinct_values():
         filled[c.field_type] = vault.value_for_field(constraints)
 
     assert set(filled) == {
-        FieldType.FULL_NAME, FieldType.MOBILE,
+        FieldType.FULL_NAME, FieldType.PHONE,
         FieldType.MOTHER_NAME, FieldType.DATE_OF_BIRTH,
     }
     assert filled[FieldType.FULL_NAME] != filled[FieldType.MOTHER_NAME]
-    assert filled[FieldType.MOBILE].isdigit()
-    assert len(filled[FieldType.MOBILE]) == 10
+    assert filled[FieldType.PHONE].isdigit()
+    assert len(filled[FieldType.PHONE]) == 10

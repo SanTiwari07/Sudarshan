@@ -1,4 +1,4 @@
-import type { FraudCardData } from '../App';
+import type { FraudCardData } from '../types/case';
 import type { LedgerScope } from '../types/investigation';
 import { computeWeightedContribution, getAxesUsed } from './scoreLedger';
 

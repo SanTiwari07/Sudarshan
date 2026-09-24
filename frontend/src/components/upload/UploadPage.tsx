@@ -6,7 +6,7 @@ import UploadDropZone from './UploadDropZone';
 import PipelineStepper, { type PipelineStage } from './PipelineStepper';
 import CompletionScreen from './progress/CompletionScreen';
 import { useAnalysisSession } from './useAnalysisSession';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 import { getToken } from '../../pages/Login';
 import { API_BASE } from '../../config';
 import type { StageStatus } from './pipelineStages';

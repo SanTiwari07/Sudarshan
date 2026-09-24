@@ -1313,6 +1313,11 @@ async def analyze_upload(
 
     object_key, sha256_hash = await _receive_apk(file)
     
+    from app.db.database import _connect
+    async with _connect() as db:
+        await db.execute("UPDATE analysis_jobs SET sha256 = ? WHERE job_id = ?", (sha256_hash, job_id))
+        await db.commit()
+    
     import tempfile
     import os
     from sudarshan_core.storage.artifact_storage import get_storage
@@ -1368,6 +1373,7 @@ class AsyncJobResponse(_BM):
 
 
 @router.post("/analyze/async", response_model=AsyncJobResponse, status_code=202)
+@limiter.limit("10/minute")
 async def analyze_upload_async(
     request: Request,
     file: UploadFile = File(...),

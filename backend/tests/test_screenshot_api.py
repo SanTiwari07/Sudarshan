@@ -61,7 +61,7 @@ async def test_screenshot_endpoint_serves_file(tmp_path, monkeypatch):
     artifact = tmp_path / "artifacts"
     
     # Place file where LocalArtifactStorage will look for it
-    storage_path = tmp_path / "evidence" / sha / "screenshots"
+    storage_path = artifact / "screenshots"
     storage_path.mkdir(parents=True, exist_ok=True)
     png = storage_path / "001_demo.png"
     png.write_bytes(b"\x89PNG\r\n\x1a\n" + b"x" * 8)

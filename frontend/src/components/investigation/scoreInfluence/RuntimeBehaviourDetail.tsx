@@ -1,4 +1,4 @@
-import type { FraudCardData } from '../../../App';
+import type { FraudCardData } from '../../../types/case';
 import type { InvestigationBundle } from '../../../types/investigation';
 import { buildFrsAxisTransparency, buildRuntimeInfluenceView } from '../../../lib/scoreInfluenceModel';
 import { useInvestigationUI } from '../../../context/InvestigationUIContext';

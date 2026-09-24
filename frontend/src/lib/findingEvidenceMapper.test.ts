@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { FraudCardData } from '../App';
+import type { FraudCardData } from '../types/case';
 import { buildTechnicalFindingViewModel } from './buildTechnicalFindingViewModel';
 import {
   computeEvidenceBasis,

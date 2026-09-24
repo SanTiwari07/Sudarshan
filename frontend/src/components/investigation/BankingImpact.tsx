@@ -1,5 +1,5 @@
 import { Landmark } from 'lucide-react';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 import { buildCustomerAndBankingImpact } from '../../lib/executiveIntelligence';
 import { TYPOGRAPHY } from '../../theme/typography';
 import { SEVERITY, caseSeverity } from '../../theme/severity';

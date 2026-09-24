@@ -14,7 +14,7 @@ from app.db.database import (
 
 @pytest.mark.asyncio
 async def test_dedup():
-    os.environ["DATABASE_URL"] = "postgresql://sudarshan:sudarshan@localhost:5432/sudarshan"
+    os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
     await init_db()
     
     sha256 = "test_dedup_sha256"

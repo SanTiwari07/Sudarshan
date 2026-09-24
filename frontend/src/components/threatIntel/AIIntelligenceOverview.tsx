@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 import type { InvestigationBundle } from '../../types/investigation';
 import type { AnalystAction, IntelApiPayload } from '../../lib/threatIntelModel';
 import {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 import AiExplanation from './AiExplanation';
 import { narrativeSource } from '../../lib/executiveIntelligence';
 

@@ -1,4 +1,4 @@
-﻿import type { FraudCardData } from '../../App';
+import type { FraudCardData } from '../../types/case';
 import { formatScore } from '../../lib/verdictCopy';
 import { caseSeverity } from '../../theme/severity';
 import { isInconclusive } from '../../lib/decision';

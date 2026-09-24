@@ -1,0 +1,28 @@
+{
+  "scenarios": [
+    {
+      "name": "adb_disconnect",
+      "success": true,
+      "detail": "devices after reconnect: ['192.168.56.101:5555']",
+      "recovery_attempted": "adb connect"
+    },
+    {
+      "name": "post_adb_reconnect",
+      "success": false,
+      "detail": "INSTRUMENTATION_FAILED err=CRASH_BEFORE_STABLE: com.android.insecurebankv2 never appeared in the process list within 12s \u2014 launch failed or package name mismatch. exception_type=None, recommendation=Application crashed before becoming stable. Inspect crash_logcat.txt in the artifact directory for the full error context.",
+      "recovery_attempted": "full pipeline re-run"
+    },
+    {
+      "name": "frida_restart",
+      "success": true,
+      "detail": "Started /data/local/tmp/sudarshan_agent_srv on port 27055",
+      "recovery_attempted": "ensure_frida(restart_if_needed=True)"
+    },
+    {
+      "name": "post_frida_restart",
+      "success": false,
+      "detail": "INSTRUMENTATION_FAILED err=CRASH_BEFORE_STABLE: com.android.insecurebankv2 never appeared in the process list within 12s \u2014 launch failed or package name mismatch. exception_type=None, recommendation=Application crashed before becoming stable. Inspect crash_logcat.txt in the artifact directory for the full error context.",
+      "recovery_attempted": "full pipeline re-run"
+    }
+  ]
+}

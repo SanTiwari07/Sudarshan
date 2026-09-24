@@ -1,0 +1,44 @@
+2026-08-05 17:18:51,541 [INFO] sudarshan_core.sandbox.provider: [genymotion] connect/adb: OK C:\Users\sansk\AppData\Local\Android\Sdk\platform-tools\adb.EXE
+2026-08-05 17:18:51,571 [INFO] sudarshan_core.sandbox.provider: [genymotion] connect/device_detect: OK 192.168.56.101:5555
+2026-08-05 17:18:51,600 [INFO] sudarshan_core.sandbox.provider: [genymotion] connect/online: OK 192.168.56.101:5555
+2026-08-05 17:18:51,812 [INFO] sudarshan_core.sandbox.provider: [genymotion] connect/props: OK android=11 api=30 abi=x86_64
+2026-08-05 17:18:53,409 [INFO] sudarshan_core.sandbox.provider: [genymotion] Root verified on 192.168.56.101:5555 (whoami=root)
+2026-08-05 17:18:53,410 [INFO] sudarshan_core.sandbox.provider: [genymotion] connect/root: OK whoami=root
+2026-08-05 17:18:53,471 [INFO] sudarshan_core.sandbox.provider: [genymotion] connect/selinux: OK Permissive
+2026-08-05 17:18:53,539 [INFO] sudarshan_core.sandbox.provider: [genymotion] connect/frida: OK frida agent running (root           1893      1 11890024 134716 poll_schedule_timeout 7d0187ab3a0a S sudarshan_agent_srv)
+2026-08-05 17:18:53,539 [INFO] sudarshan_core.sandbox.provider: [genymotion] Connected serial=192.168.56.101:5555 ip=192.168.56.101 android=11 abi=x86_64 root=True frida=True connect_ms=1998.7
+2026-08-05 17:18:53,539 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Using sandbox provider=genymotion serial=192.168.56.101:5555 android=11 abi=x86_64 root=True frida=True connect_ms=1998.7
+2026-08-05 17:18:54,620 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] SELinux mode: Permissive
+2026-08-05 17:18:54,620 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Configured Frida agent verified by SandboxProvider.
+2026-08-05 17:18:54,620 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Target package: com.android.insecurebankv2 (Main Activity: None)
+2026-08-05 17:18:54,621 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Artifacts for this sample: D:\Projects\Sudarshan BOI\tests\apks\categories\sudarshan_artifacts\insecurebankv2_2ebde24e
+2026-08-05 17:18:54,622 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] INITIALIZING → INSTALLING (adb install)
+2026-08-05 17:18:55,295 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Original APK installed successfully: insecurebankv2.apk
+2026-08-05 17:18:55,295 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] INSTALLING → VERIFY_INSTALL (pm path verification)
+2026-08-05 17:18:55,379 [WARNING] sudarshan_core.engines.frida_sandbox: [Frida] Install reported success but pm path missing - reinstalling once
+2026-08-05 17:18:56,655 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Original APK installed successfully: insecurebankv2.apk
+2026-08-05 17:18:56,656 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] APK installed: com.android.insecurebankv2 (Derivative Repaired: False)
+2026-08-05 17:19:14,749 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.schemas
+2026-08-05 17:19:14,750 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.tables
+2026-08-05 17:19:14,750 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.types
+2026-08-05 17:19:14,750 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.constraints
+2026-08-05 17:19:14,750 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.defaults
+2026-08-05 17:19:14,750 [INFO] alembic.runtime.plugins: setup plugin alembic.autogenerate.comments
+2026-08-05 17:19:24,859 [INFO] sudarshan_core.engines.permission_orchestrator: [PermissionOrchestrator] No accessibility service declared in 'com.android.insecurebankv2' manifest - this sample does not use accessibility abuse via a bound service.
+2026-08-05 17:19:24,865 [WARNING] sudarshan_core.engines.frida_sandbox: [Frida] YARA scanning DISABLED - no .yar/.yara rules found in D:\Projects\Sudarshan BOI\shared\sudarshan_core\engines\yara_rules. Set SUDARSHAN_YARA_RULES_DIR to enable it.
+2026-08-05 17:19:24,867 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Connecting to device 192.168.56.101:5555
+2026-08-05 17:19:29,900 [WARNING] sudarshan_core.engines.frida_sandbox: [Frida] No reachable frida-server on 192.168.56.101:5555 via ports [27055, 27042]. Check that frida-server is running on the device and that its port matches SUDARSHAN_FRIDA_PORT.
+2026-08-05 17:19:29,900 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Available devices: ['local', 'socket', 'socket@127.0.0.1:27055', 'barebone', 'socket@:27055', '192.168.56.101:5555', 'socket@127.0.0.1:27042', 'socket@:27042']
+2026-08-05 17:19:29,901 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Waking up device screen...
+2026-08-05 17:19:33,133 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] VERIFY_INSTALL → RESOLVE_ACTIVITY (launch ladder)
+2026-08-05 17:19:33,134 [INFO] sudarshan_core.engines.dae_pipeline: [DAE] RESOLVE_ACTIVITY → LAUNCHING (issuing launch intents)
+2026-08-05 17:19:33,134 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Launch step 1b: MAIN/LAUNCHER intent for com.android.insecurebankv2
+2026-08-05 17:19:33,193 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Stability monitor: waiting up to 12s for com.android.insecurebankv2 (requires 5s of continuous PID presence, polling every 250ms)
+2026-08-05 17:19:45,432 [ERROR] sudarshan_core.engines.frida_sandbox: [Frida] Stability timeout: com.android.insecurebankv2 never appeared in the process list within 12s - launch failed or package name mismatch
+2026-08-05 17:19:45,432 [ERROR] sudarshan_core.engines.frida_sandbox: [Frida] Launch step 'main_launcher_intent' failed: com.android.insecurebankv2 never appeared in the process list within 12s - launch failed or package name mismatch - collecting crash diagnostics
+2026-08-05 17:19:45,838 [INFO] sudarshan_core.engines.frida_sandbox: [CrashDiag] Tombstone written: D:\Projects\Sudarshan BOI\tests\apks\categories\sudarshan_artifacts\insecurebankv2_2ebde24e\tombstone_tombstone_00
+2026-08-05 17:19:45,839 [INFO] sudarshan_core.engines.frida_sandbox: [CrashDiag] crash_report.json written: D:\Projects\Sudarshan BOI\tests\apks\categories\sudarshan_artifacts\insecurebankv2_2ebde24e\crash_report.json
+2026-08-05 17:19:45,839 [ERROR] sudarshan_core.engines.frida_sandbox: [Frida] Application crashed during step1b_main_launcher_intent - NOT attaching Frida. See crash_report.json for details.
+2026-08-05 17:19:45,839 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] Session cleanup complete
+2026-08-05 17:19:45,840 [INFO] sudarshan_core.engines.frida_sandbox: [Frida] launch_timeline.json written (failure path): D:\Projects\Sudarshan BOI\tests\apks\categories\sudarshan_artifacts\insecurebankv2_2ebde24e\launch_timeline.json
+2026-08-05 17:19:45,866 [INFO] sudarshan_core.engines.report_generator: [ReportGen] Report written to D:\Projects\Sudarshan BOI\tests\apks\categories\sudarshan_artifacts\insecurebankv2_2ebde24e\validation_report.html

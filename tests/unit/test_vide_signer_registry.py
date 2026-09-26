@@ -44,12 +44,30 @@ def test_schema_metadata_keys_are_not_read_as_packages():
 # ── the rule ───────────────────────────────────────────────────────────────
 
 
-def test_official_package_with_unknown_signer_is_impersonation():
-    result = check_signer_impersonation("com.sbi.lotus", RELEASE_CERT)
+def test_official_package_with_unknown_signer_and_provisioned_registry_is_impersonation():
+    """With fingerprints provisioned, an unknown signer fires the rule."""
+    result = check_signer_impersonation(
+        "com.sbi.lotus",
+        RELEASE_CERT,
+        registry={"com.sbi.lotus": ["ff" * 32]},  # provisioned, but RELEASE_CERT != ff*32
+        metadata={"com.sbi.lotus": {"display_name": "YONO SBI", "bank": "State Bank of India", "baseline_id": "BASE-01-SBI"}},
+    )
     assert result.detected is True
     assert result.rule_id == "CH06-SIGNER-IMPERSONATION"
     assert result.institution_id == "BASE-01-SBI"
     assert any("claims the identity" in line for line in result.evidence_lines)
+
+
+def test_official_package_with_no_provisioned_fingerprints_is_undetermined():
+    """Empty allowlist → we cannot verify OR disprove → undetermined, not impersonation.
+
+    Genuine bank apps would be falsely flagged at FRS ≥ 92 if this returned
+    detected=True before any fingerprints are provisioned.
+    """
+    result = check_signer_impersonation("com.sbi.lotus", RELEASE_CERT)
+    # The live registry has no fingerprints yet - result must be undetermined.
+    assert result.detected is False
+    assert any("undetermined" in line for line in result.evidence_lines)
 
 
 def test_unregistered_package_is_not_impersonation():
@@ -67,17 +85,25 @@ def test_allowlisted_signer_is_not_impersonation():
     assert result.evidence_lines == []
 
 
-def test_packages_with_no_provisioned_signer_still_enforce_the_rule():
-    """An empty allowlist is a decision, not missing data.
+def test_packages_with_no_provisioned_signer_are_undetermined_not_impersonation():
+    """An empty allowlist means 'not yet provisioned' - undetermined, not a finding.
 
-    The loader used to drop these entries, which silently disabled CH06 for
-    exactly the packages whose canonical signer is unknown - the case where the
-    claim cannot be checked any other way.
+    The old behaviour treated an empty allowlist as conclusive impersonation,
+    which meant every genuine bank app (which has the right package name but no
+    fingerprints on file yet) would be scored at FRS ≥ 92.
     """
     registry = {"com.axis.mobile": []}
     result = check_signer_impersonation("com.axis.mobile", RELEASE_CERT, registry=registry)
+    assert result.detected is False
+    assert any("undetermined" in line for line in result.evidence_lines)
+
+
+def test_packages_with_provisioned_signer_and_unknown_cert_are_impersonation():
+    """Once fingerprints ARE provisioned, an unknown signer fires the rule."""
+    registry = {"com.axis.mobile": ["ff" * 32]}  # non-empty: rule is live
+    result = check_signer_impersonation("com.axis.mobile", RELEASE_CERT, registry=registry)
     assert result.detected is True
-    assert any("cannot be verified" in line for line in result.evidence_lines)
+    assert any("claims the identity" in line for line in result.evidence_lines)
 
 
 def test_empty_allowlists_survive_loading(tmp_path):

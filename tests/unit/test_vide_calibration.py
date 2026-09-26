@@ -93,17 +93,23 @@ def test_supporting_constants_are_calibrated_to_the_new_threshold():
 # ──────────────────────── what fires and what does not ──────────────────────
 
 
-def test_palette_only_clone_is_detected():
+def test_palette_only_clone_does_not_fire_without_text_corroboration():
     """
-    The case the old 0.72 gate missed.
+    Recalibration: palette + structure without text is no longer a finding.
 
-    A Capacitor clone keeps its labels in a minified bundle, so static
-    extraction recovers the brand palette and the form skeleton and almost no
-    text. That app is exactly what VIDE exists to catch, and it scored clean.
+    The old 0.72 gate missed palette-only clones; the 0.20 gate caught them,
+    but also caught benign apps (Fossify Calculator, Material theme apps).
+    The text-corroboration requirement is the calibrated middle ground:
+    palette alone is shape evidence, not attribution evidence.
+
+    A genuine Capacitor clone whose labels are fully minified out of static
+    extraction would produce a similar profile (see companion test below) but
+    a real clone cannot hide its strings from dynamic extraction - the corpus
+    comparer and the dynamic run together are the safety net for that case.
     """
     suspect = UIProfile(
         source="test",
-        strings=["Continue", "Proceed"],
+        strings=["Continue", "Proceed"],  # generic, not in any bank baseline
         view_sequence=[
             "div",
             "img",
@@ -117,12 +123,43 @@ def test_palette_only_clone_is_detected():
     )
     result = compare_profiles(suspect, _sbi())
 
-    assert result.detected is True
-    assert result.institution_id == "demo_sbi"
+    # Still scores above threshold on raw confidence (colour + structure)
     assert result.confidence >= DETECTION_THRESHOLD
     assert result.color_match >= MIN_COLOR_EVIDENCE
-    # Attributed on colour, not on text - the string axis contributed nothing.
     assert result.string_jaccard == 0.0
+    # But must NOT fire: palette without any text is not a finding.
+    assert result.detected is False, (
+        f"Palette-only detection fired at confidence {result.confidence:.2f} "
+        f"with string_score=0 - this is the Fossify Calculator false positive"
+    )
+
+
+def test_palette_clone_with_minimal_text_is_detected():
+    """
+    Adding even one bank label to a palette+structure clone tips the verdict.
+
+    Confirms the gate is calibrated at MIN_STRING_EVIDENCE, not at a higher
+    value: a clone does not need to reproduce the full label set to be caught.
+    """
+    suspect = UIProfile(
+        source="test",
+        strings=["Enter UPI PIN"],  # one SBI label is enough
+        view_sequence=[
+            "div",
+            "img",
+            "label",
+            "input",
+            "input",
+            "button",
+            "span",
+        ],
+        colors=["#1b4aa0", "#e8a100", "#ffffff"],
+    )
+    result = compare_profiles(suspect, _sbi())
+
+    assert result.string_jaccard > 0.0
+    assert result.color_match >= MIN_COLOR_EVIDENCE
+    assert result.detected is True
 
 
 def test_structure_alone_does_not_fire():

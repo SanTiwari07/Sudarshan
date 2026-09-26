@@ -70,6 +70,18 @@ MIN_COLOR_EVIDENCE = 0.10
 # skeleton, so it establishes shape and cannot establish identity.
 MIN_STRUCTURE_EVIDENCE = 0.10
 
+# Colour-and-layout alone must NOT fire without text corroboration.
+#
+# Material Design and bank brand palettes overlap heavily (purple #6200EE is the
+# default Material 3 primary; orange #EB6E1F is used by at least three banks and
+# by thousands of unrelated apps). A calculator that uses Material colours and
+# has a numeric-keypad layout therefore scores legitimate string = 0, structure
+# moderate, colour moderate - and without this gate would be reported as a bank
+# clone at moderate confidence despite having zero matching bank text.
+# The guard says: at least one candidate label must be reproduced before the
+# colour axis is allowed to push confidence past the threshold.
+MIN_STRING_FOR_COLOR_DETECTION = MIN_STRING_EVIDENCE  # same floor, explicit alias
+
 
 def _tree_similarity(a: Sequence[str], b: Sequence[str]) -> float:
     """
@@ -148,7 +160,15 @@ def compare_profiles(
         string_score >= MIN_STRING_EVIDENCE or color_score >= MIN_COLOR_EVIDENCE
     )
     structural_support = tree_score >= MIN_STRUCTURE_EVIDENCE
-    detected = over_threshold and has_evidence and not official
+    # Colour-only detections require text corroboration.
+    #
+    # Colour and layout are shared between banking apps and many unrelated apps
+    # (Material Design palettes, generic form layouts). Firing on palette alone -
+    # when string_score is below the floor - produces false positives on any app
+    # that happens to use a brand-like colour scheme. Text is the discriminating
+    # signal; without it, colour is only shape evidence.
+    color_only = string_score < MIN_STRING_FOR_COLOR_DETECTION and color_score >= MIN_COLOR_EVIDENCE
+    detected = over_threshold and has_evidence and not official and not color_only
 
     color_matches = list(color_result["matches"])  # type: ignore[arg-type]
 

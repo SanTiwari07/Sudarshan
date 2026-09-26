@@ -134,6 +134,15 @@ MIN_SHAPE_EVIDENCE = 0.15
 # constant restores the spread, so the guard can guard again.
 ATTRIBUTION_MARGIN = 0.15
 
+# Palette-only detections require text corroboration (mirrors compare.VIDE gate).
+#
+# The corpus comparer can reach DETECTION_THRESHOLD from colour + structure alone
+# for apps that happen to use a bank-like palette (e.g. Material 3 purple
+# #6200EE, Material orange). Without this guard, a benign calculator is detected
+# at moderate confidence with 0/N baseline strings matched. Text must be present
+# before colour evidence is allowed to drive the verdict.
+MIN_STRING_FOR_CORPUS_DETECTION = 0.01  # at least 1 % string containment required
+
 _NORMALISE = re.compile(r"[^a-z0-9]+")
 
 
@@ -594,6 +603,11 @@ def compare_against_corpus(
         shape >= MIN_SHAPE_EVIDENCE
         and best.confidence >= DETECTION_THRESHOLD
         and not ambiguous
+        # Colour + structure without any string match is not a finding.
+        # Palette-only confidence ≥ threshold triggers for benign apps that use
+        # bank-like colour schemes (Material 3 defaults, stock themes). Text
+        # must be present before the verdict fires.
+        and best.string_containment >= MIN_STRING_FOR_CORPUS_DETECTION
     )
 
     # Ordered as an analyst reads a clone report: what it is, which bank, and

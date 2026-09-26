@@ -9,10 +9,11 @@ certificate fingerprints that are allowed to make the claim. Anything else
 signed under that package name is impersonation, which is rule
 ``CH06-SIGNER-IMPERSONATION``.
 
-An **empty** allowlist is a deliberate state, not missing data - see the
-``_comment`` block in ``data/bank_signer_registry.json``. It means no canonical
-fingerprint has been provisioned, so no signer can be verified and every claim
-on that package is rejected.
+An **empty** allowlist means no canonical fingerprint has been provisioned yet.
+Until fingerprints are provisioned, the identity claim cannot be verified but
+also cannot be disproved, so the check returns ``undetermined`` - not a
+finding. Only non-empty registries (or a self-evidently debug-signed APK) make
+a conclusive impersonation finding.
 """
 
 from __future__ import annotations
@@ -213,10 +214,27 @@ def check_signer_impersonation(
     if signer and signer in allowed:
         return result
 
+    # ── Empty allowlist: no fingerprints provisioned yet ─────────────────────
+    # We cannot confirm the signer is genuine, but we also cannot prove it is
+    # not - an unverifiable claim is undetermined, not impersonation. The rule
+    # fires only once real fingerprints are in the registry.
+    # Exception: a debug-signed APK is conclusive regardless - it provably did
+    # not come from the bank's release pipeline.
+    if not allowed:
+        if not result.debug_signed:
+            result.evidence_lines.append(
+                f"Package {package_name} claims {identity} but no canonical "
+                f"signing certificate is provisioned for this package - "
+                f"CH06 undetermined (provision fingerprints to enable the rule)"
+            )
+            return result
+        # Fall through to the detection block: debug-signed is conclusive.
+
     if not signer:
-        # No fingerprint to compare. Say so rather than asserting a finding on
-        # absent evidence - unless the certificate itself is self-evidently a
-        # debug key, which is conclusive without a fingerprint.
+        # Non-empty allowlist but no fingerprint to compare. Say so rather than
+        # asserting a finding on absent evidence - unless the certificate itself
+        # is self-evidently a debug key, which is conclusive without a
+        # fingerprint.
         if not result.debug_signed:
             result.evidence_lines.append(
                 f"Package {package_name} claims {identity} but no signer "
@@ -240,8 +258,8 @@ def check_signer_impersonation(
         )
     else:
         result.evidence_lines.append(
-            "No canonical signing certificate is provisioned for this package, "
-            "so the identity claim cannot be verified and is rejected"
+            "APK is signed with a debug/test keystore - it did not come from "
+            "the bank's release pipeline (no canonical certificate provisioned yet)"
         )
     if result.debug_signed:
         result.evidence_lines.append(

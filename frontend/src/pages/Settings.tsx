@@ -1,6 +1,75 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Settings as SettingsIcon, Shield, Sliders, Keyboard, User, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import PageHeader from '../components/ui/PageHeader';
+
+const RISK_WEIGHTS = [
+  ['CT', 'Capability', 0.3],
+  ['BT', 'Banking target', 0.25],
+  ['PR', 'Permissions', 0.15],
+  ['OB', 'Obfuscation', 0.15],
+  ['IR', 'Infrastructure', 0.15],
+] as const;
+
+const SHORTCUTS = [
+  ['Open command palette', 'Ctrl + K'],
+  ['Close slide-over or dialog', 'Esc'],
+  ['Send investigation prompt', 'Enter'],
+  ['New line in prompt', 'Shift + Enter'],
+] as const;
+
+function Panel({ icon: Icon, title, children }: { icon: typeof User; title: string; children: ReactNode }) {
+  return (
+    <section className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+      <div className="flex items-center gap-2.5 mb-5">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+          <Icon className="h-4 w-4" />
+        </span>
+        <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Toggle({
+  checked,
+  onChange,
+  title,
+  description,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  title: string;
+  description: string;
+}) {
+  return (
+    <label className="flex items-center justify-between gap-6 py-4 first:pt-0 last:pb-0 cursor-pointer">
+      <div>
+        <span className="text-[15px] font-medium text-slate-900 block">{title}</span>
+        <span className="text-sm text-slate-500 mt-0.5 block">{description}</span>
+      </div>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="peer sr-only"
+      />
+      <span
+        aria-hidden
+        className={`relative h-6 w-11 shrink-0 rounded-full transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-blue-500 peer-focus-visible:ring-offset-2 ${
+          checked ? 'bg-blue-600' : 'bg-slate-300'
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+            checked ? 'translate-x-5' : ''
+          }`}
+        />
+      </span>
+    </label>
+  );
+}
 
 export default function Settings() {
   const { user, role } = useAuth();
@@ -14,189 +83,102 @@ export default function Settings() {
   };
 
   return (
-    <div className="w-[92%] max-w-[1550px] mx-auto py-8 px-4 sm:px-6 space-y-8">
-      {/* Header */}
-      <div>
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700">
-            <SettingsIcon className="h-6 w-6" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">
-              Settings & Preferences
-            </h1>
-            <p className="text-sm text-slate-500 mt-0.5">
-              Configure analyst workspace preferences, review deterministic engine safety thresholds, and reference keyboard shortcuts.
-            </p>
-          </div>
-        </div>
-      </div>
+    <div className="page-frame">
+      <PageHeader
+        icon={SettingsIcon}
+        title="Settings"
+        description="Your profile, workspace preferences, and how Sudarshan calculates risk."
+      />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Operator Profile & UI Preferences */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         <div className="lg:col-span-2 space-y-6">
-          {/* Operator Profile */}
-          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-            <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
-              <User className="h-4 w-4 text-slate-500" />
-              <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
-                Analyst Session Profile
-              </h2>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
-                <span className="text-slate-500 font-medium block">Active Identity</span>
-                <span className="text-sm font-semibold text-slate-900 mt-0.5 block">{user || 'SOC Analyst'}</span>
-              </div>
-              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
-                <span className="text-slate-500 font-medium block">Assigned RBAC Role</span>
-                <span className="text-sm font-semibold text-blue-700 mt-0.5 block uppercase tracking-wide">
-                  {role || 'SOC_ANALYST'}
+          <Panel icon={User} title="Profile">
+            <div className="flex items-center gap-4">
+              <span className="h-14 w-14 rounded-2xl bg-blue-600 flex items-center justify-center text-white text-xl font-semibold">
+                {(user || 'A')[0].toUpperCase()}
+              </span>
+              <div className="min-w-0">
+                <p className="text-lg font-semibold text-slate-900 truncate">{user || 'SOC Analyst'}</p>
+                <span className="mt-1 inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 capitalize">
+                  {(role || 'analyst').replace('_', ' ')}
                 </span>
               </div>
             </div>
-          </div>
+          </Panel>
 
-          {/* Workbench Display Options */}
-          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-            <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
-              <Sliders className="h-4 w-4 text-slate-500" />
-              <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
-                Investigation Console Preferences
-              </h2>
+          <Panel icon={Sliders} title="Workspace preferences">
+            <div className="divide-y divide-slate-100">
+              <Toggle
+                checked={autoExpandDrawers}
+                onChange={setAutoExpandDrawers}
+                title="Open evidence automatically"
+                description="Slide the evidence panel open when you select a finding or evidence reference."
+              />
+              <Toggle
+                checked={soundAlerts}
+                onChange={setSoundAlerts}
+                title="Sound on critical verdict"
+                description="Play a short alert when an analysis finishes with a critical banking-trojan verdict."
+              />
             </div>
-
-            <div className="space-y-4 text-xs">
-              <label className="flex items-center justify-between p-3 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors cursor-pointer">
-                <div>
-                  <span className="font-semibold text-slate-900 block text-sm">
-                    Auto-slide evidence drawer on row selection
-                  </span>
-                  <span className="text-slate-500 mt-0.5 block">
-                    Automatically open forensic slide-over panel when clicking any finding or evidence reference.
-                  </span>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={autoExpandDrawers}
-                  onChange={(e) => setAutoExpandDrawers(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                />
-              </label>
-
-              <label className="flex items-center justify-between p-3 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors cursor-pointer">
-                <div>
-                  <span className="font-semibold text-slate-900 block text-sm">
-                    Critical Severity Audio Ping
-                  </span>
-                  <span className="text-slate-500 mt-0.5 block">
-                    Play discrete acoustic notification when a critical banking trojan verdict is reached.
-                  </span>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={soundAlerts}
-                  onChange={(e) => setSoundAlerts(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                />
-              </label>
-
-              <div className="pt-2 flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold text-xs hover:bg-blue-700 transition-colors shadow-sm"
-                >
-                  {savedFeedback ? (
-                    <>
-                      <Check className="h-4 w-4 text-emerald-200" />
-                      <span>Preferences Saved</span>
-                    </>
-                  ) : (
-                    <span>Save Preferences</span>
-                  )}
-                </button>
-              </div>
+            <div className="mt-6 pt-5 border-t border-slate-100 flex justify-end">
+              <button
+                type="button"
+                onClick={handleSave}
+                className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-blue-600 text-white font-semibold text-sm hover:bg-blue-700 transition-colors shadow-sm"
+              >
+                {savedFeedback ? (
+                  <>
+                    <Check className="h-4 w-4" />
+                    <span>Saved</span>
+                  </>
+                ) : (
+                  <span>Save preferences</span>
+                )}
+              </button>
             </div>
-          </div>
+          </Panel>
         </div>
 
-        {/* Right Column: Deterministic Engine Principles & Keyboard Shortcuts */}
         <div className="space-y-6">
-          {/* Deterministic Architecture Notice */}
-          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-            <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-100">
-              <Shield className="h-4 w-4 text-blue-600" />
-              <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                Deterministic Risk Authority
-              </h2>
-            </div>
-            <p className="text-xs text-slate-600 leading-relaxed">
-              Numerical risk scores and fraud bands are governed exclusively by the Deterministic Risk Engine. Static Threat Evidence Index (STEI) and Behavioral Fraud Component Index (BFCI) formulas are mathematically auditable:
+          <Panel icon={Shield} title="How risk is scored">
+            <p className="text-sm text-slate-600 leading-relaxed">
+              Risk scores come only from the deterministic risk engine. Each factor below
+              contributes a fixed share of the final score.
             </p>
-            <ul className="mt-3 space-y-1.5 text-xs text-slate-700">
-              <li className="flex items-center gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-blue-600" />
-                <span><strong>CT</strong> (Capability): 0.30 weight</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-blue-600" />
-                <span><strong>BT</strong> (Banking Target): 0.25 weight</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-blue-600" />
-                <span><strong>PR</strong> (Permissions): 0.15 weight</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-blue-600" />
-                <span><strong>OB</strong> (Obfuscation): 0.15 weight</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-blue-600" />
-                <span><strong>IR</strong> (Infrastructure): 0.15 weight</span>
-              </li>
+            <ul className="mt-4 space-y-3">
+              {RISK_WEIGHTS.map(([code, name, weight]) => (
+                <li key={code}>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-700">
+                      <span className="font-mono text-xs font-semibold text-slate-500 mr-2">{code}</span>
+                      {name}
+                    </span>
+                    <span className="font-semibold text-slate-900 tabular-nums">{Math.round(weight * 100)}%</span>
+                  </div>
+                  <div className="mt-1.5 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                    <div className="h-full rounded-full bg-blue-500" style={{ width: `${weight * 100 / 0.3}%` }} />
+                  </div>
+                </li>
+              ))}
             </ul>
-            <p className="mt-3 text-[11px] text-slate-500 italic border-t border-slate-100 pt-2">
-              Note: AI provides narrative and explainability assistance but is strictly prohibited from mutating deterministic risk scores.
+            <p className="mt-5 text-[13px] text-slate-500 leading-snug rounded-xl bg-slate-50 p-3">
+              AI writes the narrative and explanations, but it can never change a risk score.
             </p>
-          </div>
+          </Panel>
 
-          {/* Keyboard Shortcuts Reference */}
-          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-            <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-100">
-              <Keyboard className="h-4 w-4 text-slate-500" />
-              <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                Keyboard Shortcuts
-              </h2>
+          <Panel icon={Keyboard} title="Keyboard shortcuts">
+            <div className="space-y-3">
+              {SHORTCUTS.map(([label, keys]) => (
+                <div key={label} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-slate-600">{label}</span>
+                  <kbd className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 font-mono text-xs font-semibold text-slate-700 whitespace-nowrap">
+                    {keys}
+                  </kbd>
+                </div>
+              ))}
             </div>
-            <div className="space-y-2.5 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-600">Open Command Palette</span>
-                <kbd className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 font-mono text-[11px] font-semibold text-slate-700">
-                  Ctrl + K
-                </kbd>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-slate-600">Close Slide-over / Modal</span>
-                <kbd className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 font-mono text-[11px] font-semibold text-slate-700">
-                  Escape
-                </kbd>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-slate-600">Send Investigation Prompt</span>
-                <kbd className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 font-mono text-[11px] font-semibold text-slate-700">
-                  Enter
-                </kbd>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-slate-600">Prompt Newline</span>
-                <kbd className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 font-mono text-[11px] font-semibold text-slate-700">
-                  Shift + Enter
-                </kbd>
-              </div>
-            </div>
-          </div>
+          </Panel>
         </div>
       </div>
     </div>

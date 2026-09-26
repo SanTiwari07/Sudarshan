@@ -1301,6 +1301,7 @@ class ReportLabPDFGenerator:
         self.body_style = ParagraphStyle(
             "BodyDark", fontName="Times-Roman", fontSize=9, leading=12,
             textColor=ink, spaceAfter=6, rightIndent=prose_indent,
+            alignment=4,
         )
         # Prose that has to span the full text block - a document notice ruled
         # across the page, a caption under a full-width table.

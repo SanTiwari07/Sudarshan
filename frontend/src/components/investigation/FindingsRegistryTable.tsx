@@ -38,7 +38,7 @@ function WhyMattersCell({ evidence }: { evidence: InvestigationEvidence }) {
   const generic = text === GENERIC_SUMMARY;
   return (
     <p
-      className={`${TYPOGRAPHY.bodySmall} break-words break-all ${
+      className={`${TYPOGRAPHY.bodySmall} break-words ${
         generic ? 'text-slate-500' : 'text-slate-600'
       }`}
     >
@@ -58,7 +58,7 @@ function FindingCell({ row }: { row: InvestigationEvidence }) {
           </span>
         )}
       </div>
-      <p className={`${TYPOGRAPHY.bodySmall} font-semibold text-slate-900 leading-snug break-words break-all`}>
+      <p className={`${TYPOGRAPHY.bodySmall} font-semibold text-slate-900 leading-snug break-words`}>
         {row.title}
       </p>
     </div>

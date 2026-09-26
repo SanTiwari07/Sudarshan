@@ -98,7 +98,7 @@ export default function ThreatDnaPanel({ traits }: { traits: DnaTrait[] }) {
       <IntelCardBody>
         {/* Three across on a wide console, so a run with few observed
             behaviours does not stretch each row across the full width. */}
-        <div className="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 items-stretch">
           {BEHAVIOUR_ORDER.map((behaviour) => {
             const trait = resolveTrait(traits, behaviour.aliases);
             const observation: DnaObservation = trait?.observation ?? 'not_observed';
@@ -110,26 +110,27 @@ export default function ThreatDnaPanel({ traits }: { traits: DnaTrait[] }) {
               : behaviour.explanation;
 
             return (
-              <div key={behaviour.key} className="space-y-2">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="font-sans text-[14px] font-medium tracking-[-0.005em] text-slate-900">
-                      {behaviour.label}
-                    </div>
-                    <p className={`${INTEL.caption} mt-0.5`}>{behaviour.explanation}</p>
-                  </div>
-                  <span
-                    className={`${INTEL.caption} flex shrink-0 items-center gap-1.5 font-medium ${
-                      detected ? 'text-slate-700' : 'text-slate-400'
-                    }`}
-                  >
-                    <span
-                      aria-hidden
-                      className={`h-1.5 w-1.5 rounded-full ${observationDot(observation)}`}
-                    />
-                    {observationLabel(observation)}
-                  </span>
+              <div
+                key={behaviour.key}
+                className={`h-full rounded-xl border p-4 space-y-2 min-w-0 ${
+                  detected ? 'border-slate-200 bg-white' : 'border-slate-100 bg-slate-50/60'
+                }`}
+              >
+                <div className="font-sans text-[15px] font-semibold tracking-[-0.005em] text-slate-900">
+                  {behaviour.label}
                 </div>
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                    detected ? 'bg-slate-900/5 text-slate-800' : 'bg-slate-100 text-slate-500'
+                  }`}
+                >
+                  <span
+                    aria-hidden
+                    className={`h-1.5 w-1.5 rounded-full ${observationDot(observation)}`}
+                  />
+                  {observationLabel(observation)}
+                </span>
+                <p className={`${INTEL.caption}`}>{behaviour.explanation}</p>
                 <p className={`${INTEL.caption} leading-relaxed`}>{detail}</p>
               </div>
             );

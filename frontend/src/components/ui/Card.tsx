@@ -68,7 +68,7 @@ export function SocCard({
       onClick={onClick}
       data-severity={severity}
       data-rank={rank}
-      className={`border rounded-xl overflow-hidden ${RANK_SURFACE[rank]} ${accent} ${className}`}
+      className={`border rounded-2xl overflow-hidden ${RANK_SURFACE[rank]} ${accent} ${className}`}
     >
       {children}
     </div>

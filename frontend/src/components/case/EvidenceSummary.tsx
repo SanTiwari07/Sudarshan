@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import CardTitle from '../ui/CardTitle';
 import { Database, ChevronRight, Cpu, Activity, Globe, Eye, ShieldAlert } from 'lucide-react';
 import { useAnalysis } from '../../context/AnalysisContext';
 
@@ -71,13 +72,8 @@ export default function EvidenceSummary({ sha256 }: { sha256: string }) {
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs h-full flex flex-col justify-between">
       <div>
         <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-1.5">
-            <Database className="h-3.5 w-3.5 text-blue-600" />
-            <h2 className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
-              FORENSIC EVIDENCE SUMMARY
-            </h2>
-          </div>
-          <span className="text-xs font-mono font-bold text-slate-900 bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-200">
+          <CardTitle icon={Database} title="Evidence collected" tone="blue" info="How many pieces of evidence were collected from each source. Click a source to open those records on the Evidence tab." infoAlign="left" />
+          <span className="text-xs font-semibold bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-full whitespace-nowrap">
             {totalRecords} Total Records
           </span>
         </div>
@@ -95,7 +91,7 @@ export default function EvidenceSummary({ sha256 }: { sha256: string }) {
                   <Icon className="h-3.5 w-3.5 text-slate-500 group-hover:text-blue-600 transition-colors" />
                   <ChevronRight className="h-3.5 w-3.5 text-slate-400 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all" />
                 </div>
-                <div className="font-mono text-xl font-bold text-slate-900 group-hover:text-blue-700 transition-colors">
+                <div className="text-2xl font-semibold tracking-[-0.02em] tabular-nums text-slate-900 group-hover:text-blue-700 transition-colors">
                   {cat.count}
                 </div>
                 <div className="text-[11px] font-semibold text-slate-700 group-hover:text-slate-900 truncate mt-0.5">

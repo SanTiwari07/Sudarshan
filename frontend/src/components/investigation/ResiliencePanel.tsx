@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import {
   BatteryMedium,
   CheckCircle2,
@@ -25,9 +25,9 @@ import type {
 } from '../../lib/resilience';
 
 const PRIORITY_STYLE: Record<string, string> = {
-  CRITICAL: 'bg-red-50 text-red-800 border-red-200',
-  HIGH: 'bg-amber-50 text-amber-900 border-amber-200',
-  MEDIUM: 'bg-slate-50 text-slate-700 border-slate-200',
+  CRITICAL: 'bg-red-50/50 text-red-900 border-red-200/70',
+  HIGH: 'bg-amber-50/50 text-amber-900 border-amber-200/70',
+  MEDIUM: 'bg-slate-50/50 text-slate-800 border-slate-200/70',
 };
 
 /**
@@ -89,23 +89,25 @@ function AssertionMatrix({
   return (
     <div>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <h4 className="text-sm font-semibold text-slate-900">Execution assertion matrix</h4>
+        <h4 className="text-sm font-semibold text-slate-900">Execution Triggers</h4>
         <span className="text-xs text-slate-600">
-          {assertions.fired_count}/{assertions.total_count} trigger conditions reached
+          {assertions.fired_count}/{assertions.total_count} triggers activated
         </span>
       </div>
 
       {assertions.incomplete_exercise && (
-        <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2">
-          <p className="text-xs font-semibold text-amber-900">
-            INCOMPLETE EXERCISE - this run did not exercise the sample
-          </p>
-          <p className="mt-1 text-xs leading-relaxed text-amber-900/90">
-            No trigger condition was reached and no threat behaviour was observed.
-            Absence of evidence is not evidence of absence: a trojan waiting on a
-            target app, an OTP, an accessibility grant or a dormancy timer produces
-            exactly this result. Confidence is reduced by 50%.
-          </p>
+        <div className="mb-3 rounded-md border border-amber-200 bg-amber-50/50 px-3 py-2.5 shadow-sm">
+          <div className="flex items-start gap-2">
+            <ShieldAlert className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-xs font-semibold text-amber-900">
+                Incomplete Analysis: The sample remained dormant
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-amber-800/90">
+                We didn't observe any malicious behavior, but that doesn't necessarily mean it's safe. Many banking trojans wait for a specific trigger—like an OTP SMS, a targeted banking app opening, or an accessibility permission—before waking up. Our confidence in this scan is lower because no triggers fired.
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
@@ -418,11 +420,11 @@ function SuggestionsDrawer({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="mb-2 flex w-full items-center justify-between gap-2 text-left"
+        className="mb-2 flex w-full items-center justify-between gap-2 text-left hover:bg-slate-50 rounded p-1 -ml-1 transition-colors"
       >
         <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
           <Lightbulb className="h-4 w-4 text-amber-500" />
-          Forensic suggestions ({suggestions.length})
+          Recommended Actions ({suggestions.length})
         </span>
         <ChevronDown
           className={`h-4 w-4 text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`}
@@ -434,18 +436,27 @@ function SuggestionsDrawer({
           {suggestions.map((s) => (
             <li
               key={s.suggestion_id}
-              className={`rounded-md border px-3 py-2 ${
+              className={`rounded-md border px-3 py-2.5 shadow-sm transition-colors ${
                 PRIORITY_STYLE[s.priority] ?? PRIORITY_STYLE.MEDIUM
               }`}
             >
               <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold">
-                    [{s.priority}] {s.title}
-                  </p>
-                  <p className="mt-1 text-xs leading-relaxed opacity-90">{s.rationale}</p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm ${
+                      s.priority === 'CRITICAL' ? 'bg-red-200/50 text-red-900' :
+                      s.priority === 'HIGH' ? 'bg-amber-200/50 text-amber-900' :
+                      'bg-slate-200/50 text-slate-700'
+                    }`}>
+                      {s.priority}
+                    </span>
+                    <p className="text-xs font-semibold">
+                      {s.title}
+                    </p>
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed opacity-90 text-slate-700">{s.rationale}</p>
                   {s.threat_context && (
-                    <p className="mt-1 text-xs italic opacity-75">{s.threat_context}</p>
+                    <p className="mt-1 text-[11px] font-medium text-slate-500">{s.threat_context}</p>
                   )}
                 </div>
                 {executable.has(s.action?.type) && (
@@ -538,15 +549,15 @@ export default function ResiliencePanel({
             hand, in the right order, before the observation window closed. */}
         <div>
           <h4 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-slate-900">
-            <Zap className="h-4 w-4 text-amber-500" />
-            Autonomous anti-evasion
+            <Zap className="h-4 w-4 text-indigo-500" />
+            Automated Evasion Tests
           </h4>
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => r.antiEvade(persona)}
               disabled={r.busy !== null}
-              className="inline-flex items-center gap-1.5 rounded bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 shadow-sm transition-colors"
             >
               {r.busy === 'anti-evasion' ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -554,8 +565,8 @@ export default function ResiliencePanel({
                 <Zap className="h-3.5 w-3.5" />
               )}
               {r.busy === 'anti-evasion'
-                ? 'Running sequence…'
-                : 'Run autonomous anti-evasion (time warp + synthetic persona)'}
+                ? 'Running tests…'
+                : 'Run Automated Evasion Tests (Time Skip & Fake Data)'}
             </button>
             <select
               value={persona}
@@ -583,12 +594,8 @@ export default function ResiliencePanel({
               ))}
             </select>
           </div>
-          <p className="mt-1 text-xs text-slate-500">
-            Clock +24h in three stages with a Doze cycle, then battery, contacts,
-            call log, bank SMS and camera roll - and a before/after comparison of
-            runtime behaviour. Seeds a slice of the persona (12 contacts, 10 calls,
-            4 SMS, 3 photos): a full 120-row seed costs a process spawn per row and
-            takes minutes. Rows the device already has are left alone.
+          <p className="mt-1.5 text-xs text-slate-500 leading-relaxed max-w-4xl">
+            Fast-forwards the device clock by 24 hours to bypass timers, and simulates a real user by adding fake contacts, calls, messages, and photos. This helps wake up malware that checks if the device is a real phone before attacking.
           </p>
 
           {(r.busy === 'anti-evasion' || (!r.antiEvasion && r.antiEvasionSteps.length > 0)) && (

@@ -265,6 +265,8 @@ class CaseSummary(BaseModel):
     sha256: str
     package_name: Optional[str] = None
     app_name: Optional[str] = None
+    version_name: Optional[str] = None
+    apk_size: Optional[str] = None
     analysis_mode: Optional[str] = None
     family_classification: Optional[str] = None
     final_risk_score: Optional[float] = None
@@ -349,6 +351,8 @@ def _case_detail_from_row(row: Dict[str, Any]) -> CaseDetail:
         sha256=row["sha256"],
         package_name=row.get("package_name"),
         app_name=row.get("app_name"),
+        version_name=row.get("version_name"),
+        apk_size=row.get("apk_size"),
         analysis_mode=row.get("analysis_mode"),
         family_classification=row.get("family_classification"),
         final_risk_score=row.get("final_risk_score"),
@@ -437,6 +441,8 @@ async def list_all_cases(
             sha256=r["sha256"],
             package_name=r.get("package_name"),
             app_name=r.get("app_name"),
+            version_name=r.get("version_name"),
+            apk_size=r.get("apk_size"),
             analysis_mode=r.get("analysis_mode"),
             family_classification=r.get("family_classification"),
             final_risk_score=r.get("final_risk_score"),

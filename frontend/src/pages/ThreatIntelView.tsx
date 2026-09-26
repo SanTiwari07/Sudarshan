@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, ArrowRight, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Globe, RefreshCw } from 'lucide-react';
 import type { FraudCardData } from '../types/case';
 import { useAnalysis } from '../context/AnalysisContext';
 import { useIntelPayload } from '../hooks/useIntelPayload';
@@ -17,6 +17,7 @@ import ThreatSimilarityPanel from '../components/threatIntel/ThreatSimilarityPan
 import HistoricalCasesPanel from '../components/threatIntel/HistoricalCasesPanel';
 import EvidenceConfidenceMeter from '../components/threatIntel/EvidenceConfidenceMeter';
 import ThreatIntelPageShell from '../components/threatIntel/ThreatIntelPageShell';
+import PageHeader from '../components/ui/PageHeader';
 import AnalysisTabs, { type AnalysisTab } from '../components/investigation/AnalysisTabs';
 import { INTEL } from '../components/threatIntel/intelTokens';
 import { TYPOGRAPHY } from '../theme/typography';
@@ -177,20 +178,21 @@ export default function ThreatIntelView({ data }: { data: FraudCardData | null }
 
   return (
     <ThreatIntelPageShell>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 pb-4">
-        <div>
-          <h2 className={TYPOGRAPHY.h2}>Threat intelligence</h2>
-          <p className={TYPOGRAPHY.caption}>Banking threat comparison for the active case</p>
-        </div>
-        <button
-          type="button"
-          onClick={fetchIntelligence}
-          className={`inline-flex items-center justify-center gap-2 ${TYPOGRAPHY.buttonSm} border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 shadow-sm transition-colors`}
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
-      </div>
+      <PageHeader
+        icon={Globe}
+        title="Threat intelligence"
+        description="How this app compares with known Android banking malware, what matched, and what to do about it."
+        actions={
+          <button
+            type="button"
+            onClick={fetchIntelligence}
+            className="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        }
+      />
 
       {loading && !intel ? (
         <ThreatIntelSkeleton />
@@ -252,7 +254,7 @@ export default function ThreatIntelView({ data }: { data: FraudCardData | null }
             One column below xl, in the original order, because a 400px rail
             beside a table is not a layout on a laptop.
           */}
-          <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(340px,400px)]">
+          <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(340px,420px)]">
             {/*
               The recommendation is first in the DOM and moved right only at
               xl. Source order is what a screen reader and a stacked phone

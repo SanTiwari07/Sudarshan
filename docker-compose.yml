@@ -219,11 +219,16 @@ services:
     # loopback so it is not exposed on the LAN.
     ports:
       - "127.0.0.1:${MITMPROXY_PORT:-8085}:8080"    # Proxy port - point Genymotion/AVD to this
+    # The image entrypoint drops to the unprivileged `mitmproxy` user (via gosu)
+    # before running mitmdump, but the named volume is created root-owned, so the
+    # HAR write at shutdown failed with EACCES. Hand the volume over while still
+    # root, then re-enter the stock entrypoint so the privilege drop still happens.
     command: >
-      mitmdump
+      sh -c "chown mitmproxy:mitmproxy /har &&
+      exec /usr/local/bin/docker-entrypoint.sh mitmdump
       --listen-host 0.0.0.0
       --listen-port 8080
-      --set hardump=/har/dump.har
+      --set hardump=/har/dump.har"
     volumes:
       - mitmproxy_har:/har
     restart: unless-stopped

@@ -70,7 +70,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (storedToken && isTokenValid(storedToken)) {
       const payload = parseJwt(storedToken);
       setToken(storedToken);
-      setUser(payload?.sub || payload?.username || storedUser || 'analyst');
+      // `sub` is the numeric user id; prefer a human name when one exists.
+      setUser(payload?.username || storedUser || payload?.sub || 'analyst');
       setRole(payload?.role || storedRole || 'analyst');
       setStatus('AUTHENTICATED');
     } else {

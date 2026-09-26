@@ -64,7 +64,7 @@ export const TYPOGRAPHY = {
 
   // BADGES - the only place uppercase survives, and the smallest thing here.
   badge:
-    'font-sans text-[13px] font-semibold uppercase tracking-[0.06em] inline-flex items-center px-2 py-0.5 rounded border',
+    'font-sans text-[12px] font-semibold uppercase tracking-[0.05em] inline-flex items-center whitespace-nowrap px-2.5 py-0.5 rounded-full border',
   badgePill:
     'font-sans text-[13px] font-semibold uppercase tracking-[0.06em] inline-flex items-center px-2.5 py-0.5 rounded-full border',
 

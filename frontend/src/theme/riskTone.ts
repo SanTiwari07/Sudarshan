@@ -2,7 +2,7 @@
  * One meaning, two palettes: one for marks, one for text.
  *
  * A colour that is legible as a 3px tick is not necessarily legible as a word,
- * and the gap is not small. The amber the gauge draws with, `#f59e0b`, sits at
+ * and the gap is not small. The amber the gauge draws with, `#7c3aed`, sits at
  * 2.15:1 against white - it fails WCAG AA even at large-text sizes, where the
  * bar is only 3:1. Painting "Moderate" in the same amber as its meter would
  * have produced a label a lot of readers simply cannot read.
@@ -33,7 +33,7 @@ export type RiskTone = {
 
 export const RISK_TONES = {
   good: { mark: '#059669', bar: 'bg-emerald-600', text: 'text-emerald-700' },
-  caution: { mark: '#f59e0b', bar: 'bg-amber-500', text: 'text-amber-700' },
+  caution: { mark: '#7c3aed', bar: 'bg-amber-500', text: 'text-amber-700' },
   bad: { mark: '#dc2626', bar: 'bg-red-600', text: 'text-red-700' },
   /** No reading, or a reading the run did not earn. */
   neutral: { mark: '#94a3b8', bar: 'bg-slate-400', text: 'text-slate-500' },

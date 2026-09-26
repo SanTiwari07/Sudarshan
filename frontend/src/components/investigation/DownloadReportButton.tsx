@@ -2,7 +2,15 @@ import { useState } from 'react';
 import { Download } from 'lucide-react';
 import { API_BASE, downloadAuthed } from '../../config';
 
-export default function DownloadReportButton({ sha256, className }: { sha256: string; className?: string }) {
+export default function DownloadReportButton({
+  sha256,
+  className,
+  label = 'Download Executive Report',
+}: {
+  sha256: string;
+  className?: string;
+  label?: string;
+}) {
   const [downloading, setDownloading] = useState(false);
 
   const downloadReport = async () => {
@@ -30,8 +38,8 @@ export default function DownloadReportButton({ sha256, className }: { sha256: st
         'inline-flex items-center justify-center gap-2.5 px-6 py-3 bg-blue-700 hover:bg-blue-800 text-white text-xs sm:text-sm font-mono font-semibold rounded-lg shadow-sm transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-60'
       }
     >
-      <Download className="h-4 w-4 sm:h-5 sm:w-5" />
-      {downloading ? 'Preparing Report…' : 'Download Executive Report'}
+      <Download className="h-4 w-4" />
+      {downloading ? 'Preparing PDF…' : label}
     </button>
   );
 }

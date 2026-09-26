@@ -3,7 +3,6 @@ import { motion } from 'motion/react';
 import CaseHeader from '../components/case/CaseHeader';
 import TargetCard from '../components/case/TargetCard';
 import ConcealedPayload from '../components/case/ConcealedPayload';
-import ScoreGauge from '../components/investigation/ScoreGauge';
 import ScoreBreakdown from '../components/case/ScoreBreakdown';
 import RuntimeStatus from '../components/case/RuntimeStatus';
 import EvidenceSummary from '../components/case/EvidenceSummary';
@@ -27,22 +26,19 @@ export default function FraudCard({ data }: { data: FraudCardData | null }) {
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.18 }}
-      className="w-[92%] max-w-[1550px] mx-auto py-6 px-2 sm:px-4 space-y-6"
+      className="w-full min-w-0 space-y-6"
     >
       {/* ROW 1: Case Identity & Investigation Header (12 cols) */}
-      <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+      <section className="bg-white rounded-2xl border border-slate-200/80 p-6 sm:p-7 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
         <CaseHeader data={data} />
       </section>
 
-      {/* ROW 2: Risk Verdict & Execution Sandbox (12 cols: 5 + 4 + 3) */}
-      <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6 items-stretch">
-        <div className="lg:col-span-5 flex">
-          <ScoreGauge data={data} />
-        </div>
-        <div className="lg:col-span-4 flex">
+      {/* ROW 2: what drove the score, and whether the app was run */}
+      <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        <div className="lg:col-span-7 flex min-w-0 [&>*]:flex-1 [&>*]:min-w-0">
           <ScoreBreakdown data={data} />
         </div>
-        <div className="md:col-span-2 lg:col-span-3 flex">
+        <div className="lg:col-span-5 flex min-w-0 [&>*]:flex-1 [&>*]:min-w-0">
           <RuntimeStatus data={data} />
         </div>
       </section>
@@ -51,36 +47,36 @@ export default function FraudCard({ data }: { data: FraudCardData | null }) {
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         {hasConcealed ? (
           <>
-            <div className="lg:col-span-6 flex">
+            <div className="lg:col-span-6 flex min-w-0 [&>*]:flex-1 [&>*]:min-w-0">
               <ConcealedPayload data={data} />
             </div>
-            <div className="lg:col-span-6 flex">
+            <div className="lg:col-span-6 flex min-w-0 [&>*]:flex-1 [&>*]:min-w-0">
               <TargetCard data={data} />
             </div>
           </>
         ) : (
-          <div className="lg:col-span-12 flex">
+          <div className="lg:col-span-12 flex min-w-0 [&>*]:flex-1 [&>*]:min-w-0">
             <TargetCard data={data} />
           </div>
         )}
       </section>
 
-      {/* ROW 4: Attack Sequence & Key Forensic Findings (12 cols: 7 + 5) */}
+      {/* ROW 4: Key findings lead - they are the answer - with the attack sequence beside them */}
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-        <div className="lg:col-span-7 flex">
-          <AttackWorkflow data={data} />
-        </div>
-        <div className="lg:col-span-5 flex">
+        <div className="lg:col-span-7 flex min-w-0 [&>*]:flex-1 [&>*]:min-w-0">
           <KeyFindings data={data} />
+        </div>
+        <div className="lg:col-span-5 flex min-w-0 [&>*]:flex-1 [&>*]:min-w-0">
+          <AttackWorkflow data={data} />
         </div>
       </section>
 
       {/* ROW 5: Forensic Evidence Summary & Audit Activity (12 cols: 7 + 5) */}
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-        <div className="lg:col-span-7 flex">
+        <div className="lg:col-span-7 flex min-w-0 [&>*]:flex-1 [&>*]:min-w-0">
           <EvidenceSummary sha256={data.sha256} />
         </div>
-        <div className="lg:col-span-5 flex">
+        <div className="lg:col-span-5 flex min-w-0 [&>*]:flex-1 [&>*]:min-w-0">
           <InvestigationActivity data={data} />
         </div>
       </section>

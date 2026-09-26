@@ -15,6 +15,8 @@ import { TYPOGRAPHY } from '../../theme/typography';
 import StaticEvidenceDetail from './scoreInfluence/StaticEvidenceDetail';
 import RuntimeBehaviourDetail from './scoreInfluence/RuntimeBehaviourDetail';
 import ThreatIntelligenceDetail from './scoreInfluence/ThreatIntelligenceDetail';
+import VisualImpersonationPanel from './VisualImpersonationPanel';
+import { resolveVideFromData, getVideUiState, videConfidenceValue } from '../../lib/videUi';
 
 const AXIS_META: Record<
   ScoreInfluenceAxis,
@@ -59,6 +61,19 @@ export default function ScoreInfluenceDetailDrawer({
     headerScore = v.includedInFrs && v.observedScore != null ? `${v.observedScore.toFixed(1)} / 100` : 'Not included';
     headerInfluence = v.influence;
     tagline = v.tagline;
+  } else if (axis === 'vide') {
+    const vide = resolveVideFromData(data);
+    const state = getVideUiState(vide);
+    if (state === 'missing' || state === 'unavailable') {
+      headerScore = 'Not included';
+      headerInfluence = 'No influence';
+      tagline = 'VIDE analysis was not completed for this case.';
+    } else {
+      const conf = videConfidenceValue(vide);
+      headerScore = conf != null ? `${Math.round(conf * 100)}% match` : 'Analyzed';
+      headerInfluence = state === 'detected' ? 'Strong influence' : 'Minimal influence';
+      tagline = state === 'detected' ? 'Visual impersonation detected against lab baselines.' : 'No significant visual impersonation detected.';
+    }
   } else {
     const v = buildThreatInfluenceView(data, threatMerged);
     headerScore = v.axisIncluded ? `${v.score.toFixed(0)} / 100` : 'Not included';
@@ -93,6 +108,11 @@ export default function ScoreInfluenceDetailDrawer({
     >
       {axis === 'static' && <StaticEvidenceDetail data={data} />}
       {axis === 'dynamic' && <RuntimeBehaviourDetail data={data} bundle={bundle} />}
+      {axis === 'vide' && (
+        <div className="p-4 sm:p-5">
+          <VisualImpersonationPanel data={data} />
+        </div>
+      )}
       {axis === 'threat_intel' && (
         <ThreatIntelligenceDetail
           data={data}

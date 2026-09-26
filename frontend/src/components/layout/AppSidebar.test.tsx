@@ -55,13 +55,13 @@ describe('AppSidebar hover preview', () => {
   it('starts expanded, with labels visible', () => {
     draw();
     expect(screen.getByText('Cases')).toBeInTheDocument();
-    expect(rail().className).toMatch(/w-56/);
+    expect(rail().className).toMatch(/w-60/);
   });
 
   it('collapses to an icon rail on an explicit click', () => {
     draw();
     fireEvent.click(collapse());
-    expect(rail().className).toMatch(/w-14/);
+    expect(rail().className).toMatch(/w-16/);
     expect(screen.queryByText('Cases')).not.toBeInTheDocument();
   });
 
@@ -70,7 +70,7 @@ describe('AppSidebar hover preview', () => {
     fireEvent.click(collapse());
     fireEvent.mouseEnter(rail());
     expect(screen.getByText('Cases')).toBeInTheDocument();
-    expect(rail().className).toMatch(/w-56/);
+    expect(rail().className).toMatch(/w-60/);
   });
 
   it('does not reflow the page while previewing', () => {
@@ -82,7 +82,7 @@ describe('AppSidebar hover preview', () => {
 
     fireEvent.mouseEnter(rail());
     expect(document.documentElement.style.getPropertyValue('--app-sidebar-width')).toBe(before);
-    expect(before).toBe('3.5rem');
+    expect(before).toBe('4rem');
   });
 
   it('waits before closing, so crossing the rail does not flash it', () => {

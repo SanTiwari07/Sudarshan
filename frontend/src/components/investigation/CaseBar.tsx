@@ -109,7 +109,7 @@ function CaseTabs({ sha256 }: { sha256: string }) {
   return (
     <nav
       aria-label="Case sections"
-      className="flex min-w-0 items-center overflow-x-auto scrollbar-hidden rounded-full bg-slate-100 p-1 border border-slate-200/80"
+      className="flex min-w-0 items-center overflow-x-auto scrollbar-hidden rounded-xl bg-slate-100 p-1"
     >
       {CASE_SECTIONS.map((section) => {
         const Icon = SECTION_ICONS[section];
@@ -121,19 +121,19 @@ function CaseTabs({ sha256 }: { sha256: string }) {
             aria-current={selected ? 'page' : undefined}
             to={caseSectionPath(sha256, section)}
             title={SECTION_LABELS[section].hint}
-            className={`relative flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 font-sans text-[14px] font-semibold tracking-[-0.01em] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 z-10 ${
-              selected ? 'text-white' : 'text-slate-600 hover:text-slate-900'
+            className={`relative flex items-center gap-2 whitespace-nowrap rounded-lg px-4 h-9 font-sans text-sm font-semibold tracking-[-0.01em] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 z-10 ${
+              selected ? 'text-slate-900' : 'text-slate-500 hover:text-slate-900'
             }`}
           >
             {selected && (
               <motion.div
                 layoutId="active-investigation-tab"
-                className="absolute inset-0 rounded-full bg-slate-900 -z-10 shadow-xs"
+                className="absolute inset-0 rounded-lg bg-white -z-10 shadow-sm"
                 transition={{ type: 'spring', stiffness: 450, damping: 35 }}
               />
             )}
-            <Icon className="h-4 w-4 shrink-0" aria-hidden />
-            <span>{SECTION_LABELS[section].label.toUpperCase()}</span>
+            <Icon className={`h-4 w-4 shrink-0 ${selected ? 'text-blue-600' : ''}`} aria-hidden />
+            <span>{SECTION_LABELS[section].label}</span>
           </Link>
         );
       })}
@@ -160,7 +160,7 @@ export function CaseBar({ data }: { data: FraudCardData }) {
    * covers all the way to the edge.
    */
   return (
-    <div className="sticky -top-3 z-40 -mx-4 -mt-3 mb-6 border-b border-slate-200 bg-white px-4 pb-3 pt-3 shadow-[0_1px_3px_rgba(15,23,42,0.06)] sm:-top-4 sm:-mt-4 sm:pt-4">
+    <div className="sticky -top-5 sm:-top-6 lg:-top-8 z-30 -mx-4 sm:-mx-6 lg:-mx-8 -mt-5 sm:-mt-6 lg:-mt-8 mb-6 border-b border-slate-200/70 bg-white px-4 sm:px-6 lg:px-8 py-3">
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
         {/* Who this case is. */}
         <Link

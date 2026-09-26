@@ -1,9 +1,10 @@
 ﻿import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  Database, Search,
-  RefreshCw, XCircle, Clock, UploadCloud, ChevronRight,
+  Search, Inbox, FolderOpen, Plus, Smartphone,
+  RefreshCw, XCircle, UploadCloud, ChevronRight,
 } from 'lucide-react';
+import PageHeader from '../components/ui/PageHeader';
 import { getToken } from './Login';
 import { API_BASE } from '../config';
 import { useAnalysis } from '../context/AnalysisContext';
@@ -11,7 +12,6 @@ import Badge from '../components/ui/Badge';
 import CopyButton from '../components/ui/CopyButton';
 import { fmtDate } from '../utils/derive';
 import { formatScore } from '../lib/verdictCopy';
-import { getRiskAccent } from '../theme/colors';
 import { TYPOGRAPHY } from '../theme/typography';
 
 interface CaseSummary {
@@ -37,7 +37,7 @@ interface CaseListResponse {
 }
 
 const BANDS = [
-  { value: 'all', label: 'All bands' },
+  { value: 'all', label: 'All cases' },
   { value: 'critical', label: 'Critical' },
   { value: 'high risk', label: 'High risk' },
   { value: 'suspicious', label: 'Suspicious' },
@@ -45,6 +45,25 @@ const BANDS = [
 ];
 
 const LIMIT = 15;
+
+type Tone = { dot: string; bar: string; tile: string };
+
+const BAND_TONE: Record<string, Tone> = {
+  all: { dot: 'bg-blue-500', bar: 'bg-blue-500', tile: 'bg-blue-50 text-blue-600' },
+  critical: { dot: 'bg-red-500', bar: 'bg-red-500', tile: 'bg-red-50 text-red-600' },
+  'high risk': { dot: 'bg-orange-500', bar: 'bg-orange-500', tile: 'bg-orange-50 text-orange-600' },
+  suspicious: { dot: 'bg-amber-400', bar: 'bg-amber-400', tile: 'bg-amber-50 text-amber-600' },
+  safe: { dot: 'bg-emerald-500', bar: 'bg-emerald-500', tile: 'bg-emerald-50 text-emerald-600' },
+};
+
+function toneFor(band: string | null | undefined): Tone {
+  const b = (band || '').toLowerCase();
+  if (b.includes('critical')) return BAND_TONE.critical;
+  if (b.includes('high')) return BAND_TONE['high risk'];
+  if (b.includes('suspicious')) return BAND_TONE.suspicious;
+  if (b.includes('safe')) return BAND_TONE.safe;
+  return { dot: 'bg-slate-400', bar: 'bg-slate-400', tile: 'bg-slate-100 text-slate-500' };
+}
 
 export default function History() {
   const navigate = useNavigate();
@@ -58,6 +77,8 @@ export default function History() {
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState(searchParams.get('q') || '');
   const [filter, setFilter] = useState<string>('all');
+  const [reloadKey, setReloadKey] = useState(0);
+  const [bandCounts, setBandCounts] = useState<Record<string, number>>({});
 
   /**
    * Debounced so a typed query is one request per pause, not one per keystroke.
@@ -116,7 +137,33 @@ export default function History() {
 
     run();
     return () => { cancelled = true; };
-  }, [page, appliedSearch, filter, navigate]);
+  }, [page, appliedSearch, filter, navigate, reloadKey]);
+
+  /*
+   * Per-band totals for the summary tiles. One `limit=1` request per band -
+   * the server already counts, so this costs five tiny queries rather than
+   * pulling the whole registry to count client-side.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    const token = getToken();
+    if (!token) return;
+    Promise.all(
+      BANDS.map(async (b) => {
+        const params = new URLSearchParams({ limit: '1', offset: '0' });
+        if (b.value !== 'all') params.set('band', b.value);
+        const res = await fetch(`${API_BASE}/cases?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data: CaseListResponse = await res.json();
+        return [b.value, data.total] as const;
+      }),
+    )
+      .then((pairs) => { if (!cancelled) setBandCounts(Object.fromEntries(pairs)); })
+      .catch(() => { /* tiles fall back to a dash */ });
+    return () => { cancelled = true; };
+  }, [reloadKey]);
 
   const handleCaseClick = async (sha256: string) => {
     await loadCaseByHash(sha256);
@@ -124,177 +171,221 @@ export default function History() {
   };
 
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
+  const filtered = Boolean(appliedSearch) || filter !== 'all';
 
   return (
-    <div className="w-full min-w-0 max-w-[1600px] mx-auto space-y-4">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className={TYPOGRAPHY.h1}>Case registry</h1>
-          <p className={`${TYPOGRAPHY.caption} mt-0.5`}>
-            {total} {total === 1 ? 'case' : 'cases'}
-            {appliedSearch || filter !== 'all' ? ' matching the current filter' : ' analysed'}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => navigate('/')}
-          className={`${TYPOGRAPHY.button} bg-blue-700 text-white hover:bg-blue-800 px-4 py-2`}
-        >
-          <UploadCloud className="h-4 w-4" aria-hidden />
-          Upload APK
-        </button>
-      </header>
+    <div className="page-frame">
+      <PageHeader
+        icon={FolderOpen}
+        title="Cases"
+        description="Every app Sudarshan has analysed, with its verdict and risk score. Open a case to see the evidence behind it."
+        actions={
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-blue-600 text-sm font-semibold text-white shadow-sm shadow-blue-600/20 hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="h-4 w-4" aria-hidden />
+            New analysis
+          </button>
+        }
+      />
 
-      <div className="flex flex-col sm:flex-row gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" aria-hidden />
-          <input
-            type="search"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search hash, package, app name or family"
-            aria-label="Search cases"
-            className={`w-full pl-9 pr-3 py-2 rounded-md border border-slate-300 bg-white ${TYPOGRAPHY.body} focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
-          />
-        </div>
-
-        {/* Bands as a segmented control: five mutually exclusive options are
-            faster to hit than a select, and the current one stays visible. */}
-        <div
-          role="group"
-          aria-label="Filter by risk band"
-          className="inline-flex rounded-md border border-slate-300 bg-white overflow-hidden shrink-0"
-        >
-          {BANDS.map(b => (
+      {/* Band summary. Each tile doubles as the filter for that band. */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+        {BANDS.map((b) => {
+          const tone = BAND_TONE[b.value];
+          const active = filter === b.value;
+          return (
             <button
               key={b.value}
               type="button"
               onClick={() => setFilter(b.value)}
-              aria-pressed={filter === b.value}
-              className={`px-3 py-2 text-[15px] font-medium border-r border-slate-200 last:border-r-0 transition-colors ${
-                filter === b.value
-                  ? 'bg-slate-900 text-white'
-                  : 'text-slate-600 hover:bg-slate-50'
+              aria-pressed={active}
+              className={`group text-left rounded-2xl border bg-white p-4 transition-all ${
+                active
+                  ? 'border-blue-500 ring-4 ring-blue-500/10'
+                  : 'border-slate-200/80 hover:border-slate-300 hover:shadow-sm'
               }`}
             >
-              {b.label}
+              <div className="flex items-center gap-2">
+                <span className={`h-2 w-2 rounded-full ${tone.dot}`} aria-hidden />
+                <span className="text-[13px] font-medium text-slate-500">{b.label}</span>
+              </div>
+              <p className="mt-2 text-[28px] font-semibold tracking-[-0.03em] text-slate-900 tabular-nums leading-none">
+                {bandCounts[b.value] ?? '–'}
+              </p>
             </button>
-          ))}
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setPage(p => p)}
-          disabled={loading}
-          className="p-2 rounded-md border border-slate-300 bg-white hover:bg-slate-50 transition-colors disabled:opacity-50 shrink-0"
-          title="Refresh"
-          aria-label="Refresh"
-        >
-          <RefreshCw className={`h-4 w-4 text-slate-500 ${loading ? 'animate-spin' : ''}`} aria-hidden />
-        </button>
+          );
+        })}
       </div>
 
       {error && (
-        <div className={`flex items-center gap-2 px-4 py-3 rounded-md bg-red-50 border border-red-200 text-red-700 ${TYPOGRAPHY.bodySmall}`}>
+        <div className={`flex items-center gap-2 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-700 ${TYPOGRAPHY.bodySmall}`}>
           <XCircle className="h-4 w-4 shrink-0" aria-hidden />
           {error}
         </div>
       )}
 
-      <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+      <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+        {/* Toolbar */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 border-b border-slate-100">
+          <div className="relative flex-1">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" aria-hidden />
+            <input
+              type="search"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search by app name, package, family or SHA-256"
+              aria-label="Search cases"
+              className="w-full h-10 pl-10 pr-3 rounded-xl border border-slate-200 bg-slate-50/60 text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-colors"
+            />
+          </div>
+          <p className="text-sm text-slate-500 whitespace-nowrap">
+            {total} {total === 1 ? 'case' : 'cases'}
+            {filtered ? ' match' : ''}
+          </p>
+          <button
+            type="button"
+            onClick={() => setReloadKey(k => k + 1)}
+            disabled={loading}
+            className="h-10 w-10 flex items-center justify-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition-colors disabled:opacity-50 shrink-0"
+            title="Refresh"
+            aria-label="Refresh"
+          >
+            <RefreshCw className={`h-4 w-4 text-slate-500 ${loading ? 'animate-spin' : ''}`} aria-hidden />
+          </button>
+        </div>
+
         {loading && cases.length === 0 ? (
-          <div className={`flex items-center justify-center py-16 text-slate-500 gap-3 ${TYPOGRAPHY.caption}`}>
+          <div className="flex items-center justify-center py-20 text-sm text-slate-500 gap-3">
             <RefreshCw className="h-5 w-5 animate-spin" aria-hidden />
             Loading cases
           </div>
         ) : cases.length === 0 ? (
-          <div className={`py-16 text-center text-slate-500 ${TYPOGRAPHY.caption}`}>
-            <Database className="h-8 w-8 mx-auto mb-2 opacity-40" aria-hidden />
-            <p>No cases found{appliedSearch ? ` matching “${appliedSearch}”` : ''}.</p>
+          <div className="py-20 px-6 text-center">
+            <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+              <Inbox className="h-7 w-7" aria-hidden />
+            </span>
+            <p className="mt-4 text-base font-semibold text-slate-900">
+              {filtered ? 'No matching cases' : 'No cases yet'}
+            </p>
+            <p className="mt-1 text-sm text-slate-500 max-w-sm mx-auto">
+              {filtered
+                ? 'Try a different search term or risk band.'
+                : 'Upload an APK and its case file will appear here when the analysis finishes.'}
+            </p>
+            {!filtered && (
+              <button
+                type="button"
+                onClick={() => navigate('/')}
+                className="mt-5 inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
+              >
+                <UploadCloud className="h-4 w-4" aria-hidden />
+                Upload an APK
+              </button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead>
-                <tr>
-                  <th className={`px-4 py-2.5 text-left ${TYPOGRAPHY.tableHeader}`}>Application</th>
-                  <th className={`px-4 py-2.5 text-left ${TYPOGRAPHY.tableHeader}`}>Band</th>
-                  <th className={`px-4 py-2.5 text-right ${TYPOGRAPHY.tableHeader}`}>Score</th>
-                  <th className={`px-4 py-2.5 text-left ${TYPOGRAPHY.tableHeader}`}>Family</th>
-                  <th className={`px-4 py-2.5 text-left ${TYPOGRAPHY.tableHeader}`}>Analysis</th>
-                  <th className={`px-4 py-2.5 text-left hidden xl:table-cell ${TYPOGRAPHY.tableHeader}`}>SHA-256</th>
-                  <th className={`px-4 py-2.5 text-left hidden md:table-cell ${TYPOGRAPHY.tableHeader}`}>
-                    <Clock className="h-3.5 w-3.5 inline mr-1" aria-hidden />Scanned
-                  </th>
-                  <th className="px-4 py-2.5" />
+              <thead className="bg-slate-50/70">
+                <tr className="text-left text-xs font-semibold uppercase tracking-[0.06em] text-slate-500">
+                  <th className="px-5 py-3">Application</th>
+                  <th className="px-4 py-3">Verdict</th>
+                  <th className="px-4 py-3">Risk score</th>
+                  <th className="px-4 py-3">Family</th>
+                  <th className="px-4 py-3 hidden lg:table-cell">Coverage</th>
+                  <th className="px-4 py-3 hidden 2xl:table-cell">SHA-256</th>
+                  <th className="px-4 py-3 hidden md:table-cell">Scanned</th>
+                  <th className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {cases.map(c => (
-                  <tr
-                    key={c.sha256}
-                    className={`hover:bg-slate-50 transition-colors cursor-pointer group border-l-2 ${
-                      getRiskAccent(c.risk_band).bar
-                    }`}
-                    onClick={() => handleCaseClick(c.sha256)}
-                  >
-                    {/* Identity leads. The hash is a lookup key, not a name. */}
-                    <td className="px-4 py-2.5 min-w-[14rem]">
-                      <div className={`${TYPOGRAPHY.h3} truncate`}>
-                        {c.app_name || c.package_name || 'Unnamed'}
-                      </div>
-                      {c.app_name && c.package_name && (
-                        <div className={`${TYPOGRAPHY.codeSm} text-slate-500 truncate`}>
-                          {c.package_name}
+                {cases.map(c => {
+                  const tone = toneFor(c.risk_band);
+                  const score = c.final_risk_score ?? 0;
+                  return (
+                    <tr
+                      key={c.sha256}
+                      className="hover:bg-blue-50/40 transition-colors cursor-pointer group"
+                      onClick={() => handleCaseClick(c.sha256)}
+                    >
+                      {/* Identity leads. The hash is a lookup key, not a name. */}
+                      <td className="px-5 py-3.5 min-w-[16rem]">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tone.tile}`}>
+                            <Smartphone className="h-5 w-5" aria-hidden />
+                          </span>
+                          <div className="min-w-0">
+                            <div className="text-[15px] font-semibold text-slate-900 truncate">
+                              {c.app_name || c.package_name || 'Unnamed'}
+                            </div>
+                            {c.package_name && c.package_name !== c.app_name && (
+                              <div className="font-mono text-xs text-slate-500 truncate">{c.package_name}</div>
+                            )}
+                          </div>
                         </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <Badge label={c.risk_band || 'Safe'} variant="risk" />
-                    </td>
-                    <td className="px-4 py-2.5 text-right">
-                      <span className="font-sans text-sm font-semibold text-slate-900 tabular-nums tracking-[-0.02em]">
-                        {formatScore(c.final_risk_score)}
-                      </span>
-                    </td>
-                    <td className={`px-4 py-2.5 ${TYPOGRAPHY.tableCell}`}>
-                      {c.family_classification && c.family_classification !== 'Unknown' ? (
-                        c.family_classification
-                      ) : (
-                        <span className="text-slate-500">-</span>
-                      )}
-                    </td>
-                    <td className={`px-4 py-2.5 ${TYPOGRAPHY.tableCell}`}>
-                      {c.dynamic_available ? 'Static + runtime' : 'Static only'}
-                    </td>
-                    <td className="px-4 py-2.5 hidden xl:table-cell">
-                      <span
-                        className={`flex items-center gap-1 ${TYPOGRAPHY.hash}`}
-                        onClick={e => e.stopPropagation()}
-                      >
-                        {c.sha256.slice(0, 16)}…
-                        <CopyButton value={c.sha256} />
-                      </span>
-                    </td>
-                    <td className={`px-4 py-2.5 ${TYPOGRAPHY.caption} hidden md:table-cell whitespace-nowrap`}>
-                      {fmtDate(c.created_at)}
-                    </td>
-                    <td className="px-4 py-2.5 text-right">
-                      <ChevronRight
-                        className="h-4 w-4 text-slate-300 group-hover:text-blue-600 transition-colors inline"
-                        aria-hidden
-                      />
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <Badge label={c.risk_band || 'Safe'} variant="risk" />
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-3 min-w-[9rem]">
+                          <span className="text-[15px] font-semibold text-slate-900 tabular-nums w-9">
+                            {formatScore(c.final_risk_score)}
+                          </span>
+                          <span className="h-1.5 flex-1 max-w-[6rem] rounded-full bg-slate-100 overflow-hidden">
+                            <span
+                              className={`block h-full rounded-full ${tone.bar}`}
+                              style={{ width: `${Math.min(100, Math.max(0, score))}%` }}
+                            />
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5 text-sm text-slate-700">
+                        {c.family_classification && c.family_classification !== 'Unknown' ? (
+                          c.family_classification
+                        ) : (
+                          <span className="text-slate-400">Unclassified</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5 hidden lg:table-cell">
+                        <span className={`inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium rounded-full px-2.5 py-1 ${
+                          c.dynamic_available ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-100 text-slate-600'
+                        }`}>
+                          {c.dynamic_available ? 'Static + runtime' : 'Static only'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 hidden 2xl:table-cell">
+                        <span
+                          className="flex items-center gap-1 font-mono text-xs text-slate-500"
+                          onClick={e => e.stopPropagation()}
+                        >
+                          {c.sha256.slice(0, 12)}…
+                          <CopyButton value={c.sha256} />
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-sm text-slate-500 hidden md:table-cell whitespace-nowrap">
+                        {fmtDate(c.created_at)}
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <ChevronRight
+                          className="h-4 w-4 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all inline"
+                          aria-hidden
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
 
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-200 bg-slate-50/60">
-            <span className={TYPOGRAPHY.caption}>
+          <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100">
+            <span className="text-sm text-slate-500">
               {page * LIMIT + 1}–{Math.min((page + 1) * LIMIT, total)} of {total}
             </span>
             <div className="flex items-center gap-2">
@@ -302,18 +393,18 @@ export default function History() {
                 type="button"
                 onClick={() => setPage(p => Math.max(0, p - 1))}
                 disabled={page === 0}
-                className={`${TYPOGRAPHY.buttonSm} border border-slate-300 bg-white disabled:opacity-40 hover:bg-slate-100`}
+                className="h-9 px-3 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 disabled:opacity-40 hover:bg-slate-50"
               >
                 Previous
               </button>
-              <span className={TYPOGRAPHY.caption}>
-                Page {page + 1} of {totalPages}
+              <span className="text-sm text-slate-500 px-1">
+                {page + 1} / {totalPages}
               </span>
               <button
                 type="button"
                 onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                 disabled={page >= totalPages - 1}
-                className={`${TYPOGRAPHY.buttonSm} border border-slate-300 bg-white disabled:opacity-40 hover:bg-slate-100`}
+                className="h-9 px-3 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 disabled:opacity-40 hover:bg-slate-50"
               >
                 Next
               </button>
@@ -324,4 +415,3 @@ export default function History() {
     </div>
   );
 }
-

@@ -20,7 +20,7 @@ export const COLORS = {
       text: 'text-red-600',
       textDark: 'text-red-700',
       border: 'border-red-200',
-      badge: 'bg-red-600 text-white',
+      badge: 'bg-red-50 text-red-700 border-red-200',
     },
     high: {
       bg: 'bg-orange-500',
@@ -28,7 +28,7 @@ export const COLORS = {
       text: 'text-orange-500',
       textDark: 'text-orange-700',
       border: 'border-orange-200',
-      badge: 'bg-orange-500 text-white',
+      badge: 'bg-orange-50 text-orange-700 border-orange-200',
     },
     suspicious: {
       bg: 'bg-amber-500',
@@ -36,7 +36,7 @@ export const COLORS = {
       text: 'text-amber-600',
       textDark: 'text-amber-800',
       border: 'border-amber-200',
-      badge: 'bg-amber-400 text-gray-900',
+      badge: 'bg-amber-50 text-amber-800 border-amber-200',
     },
     safe: {
       bg: 'bg-emerald-600',
@@ -44,7 +44,7 @@ export const COLORS = {
       text: 'text-emerald-600',
       textDark: 'text-emerald-700',
       border: 'border-emerald-200',
-      badge: 'bg-emerald-600 text-white',
+      badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     },
     unknown: {
       bg: 'bg-slate-500',
@@ -52,7 +52,7 @@ export const COLORS = {
       text: 'text-slate-600',
       textDark: 'text-slate-700',
       border: 'border-slate-200',
-      badge: 'bg-slate-500 text-white',
+      badge: 'bg-slate-100 text-slate-700 border-slate-200',
     },
   },
 

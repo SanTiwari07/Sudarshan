@@ -1,7 +1,9 @@
+import CardTitle from '../ui/CardTitle';
 import type { FraudCardData } from '../../types/case';
 import { useInvestigationUI } from '../../context/InvestigationUIContext';
 import type { ScoreInfluenceAxis } from '../../lib/scoreInfluenceModel';
 import { Calculator, ChevronRight, Activity, Cpu, Globe2, Building2 } from 'lucide-react';
+import { BarChart3 } from 'lucide-react';
 
 export default function ScoreBreakdown({ data }: { data: FraudCardData }) {
   const { openLedger, openInfluenceDetail } = useInvestigationUI();
@@ -52,9 +54,7 @@ export default function ScoreBreakdown({ data }: { data: FraudCardData }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs h-full flex flex-col justify-between">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
-          SCORE INFLUENCE BREAKDOWN
-        </h2>
+        <CardTitle icon={BarChart3} title="What drove the score" tone="violet" info="How many points each area of evidence added to the final score. A longer bar means that area contributed more. Click a row to see the findings behind it." infoAlign="left" />
         <button
           type="button"
           onClick={() => openLedger('full')}
@@ -70,7 +70,7 @@ export default function ScoreBreakdown({ data }: { data: FraudCardData }) {
         {rawAxes.map((axis) => {
           const Icon = axis.icon;
           const displayVal = axis.value > 0 ? `+${axis.value.toFixed(1)}` : '0.0';
-          const pct = Math.min(100, Math.max(4, (axis.value / 100) * 100));
+          const pct = axis.value > 0 ? Math.min(100, Math.max(4, (axis.value / 100) * 100)) : 0;
 
           return (
             <button
@@ -87,7 +87,7 @@ export default function ScoreBreakdown({ data }: { data: FraudCardData }) {
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="font-mono text-xs font-bold text-slate-900">{displayVal}</span>
+                  <span className="text-sm font-semibold tabular-nums text-slate-900">{displayVal}</span>
                   <ChevronRight className="h-3.5 w-3.5 text-slate-400 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all" />
                 </div>
               </div>

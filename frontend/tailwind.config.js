@@ -1,3 +1,5 @@
+import colors from 'tailwindcss/colors';
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
@@ -7,6 +9,12 @@ export default {
   theme: {
     extend: {
       colors: {
+        // No yellow anywhere. Warning / medium / suspicious tones used to be
+        // amber, which read as a generic template colour and washed out on
+        // white. Remapping the palette here moves every one of those call
+        // sites to violet at once and keeps them consistent.
+        amber: colors.violet,
+        yellow: colors.violet,
         surface: {
           page: 'var(--surface-page)',
           card: 'var(--surface-card)',

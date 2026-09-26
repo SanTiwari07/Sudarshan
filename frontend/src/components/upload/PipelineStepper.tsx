@@ -31,9 +31,69 @@ type PipelineStepperProps = {
   stages: readonly PipelineStage[];
   /** Per-stage status. `undefined` renders the at-rest state. */
   statusOf: (index: number) => StageStatus | undefined;
+  /** Stack the stages as a timeline, for a narrow side column. */
+  vertical?: boolean;
 };
 
-export default function PipelineStepper({ stages, statusOf }: PipelineStepperProps) {
+export default function PipelineStepper({ stages, statusOf, vertical = false }: PipelineStepperProps) {
+  if (vertical) {
+    return (
+      <ol className="relative" role="list">
+        {stages.map((stage, index) => {
+          const status = statusOf(index);
+          const Icon = ICONS[stage.icon] ?? ScanSearch;
+          const isLast = index === stages.length - 1;
+
+          const node =
+            status === 'complete'
+              ? 'bg-blue-600 text-white'
+              : status === 'active'
+                ? 'bg-white text-blue-600 ring-2 ring-blue-600 shadow-[0_0_0_6px_rgba(37,99,235,0.12)]'
+                : status === 'error'
+                  ? 'bg-red-50 text-red-600 ring-1 ring-red-300'
+                  : 'bg-slate-100 text-slate-500';
+
+          return (
+            <li key={stage.title} className="relative flex gap-4 pb-6 last:pb-0">
+              {!isLast && (
+                <span
+                  className={`absolute left-[17px] top-10 bottom-1 w-px transition-colors duration-500 ${
+                    status === 'complete' ? 'bg-blue-600' : 'bg-slate-200'
+                  }`}
+                  aria-hidden
+                />
+              )}
+              <span
+                className={`relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-300 ${node}`}
+              >
+                {status === 'complete' ? (
+                  <Check className="h-4 w-4" aria-hidden />
+                ) : (
+                  <Icon className="h-4 w-4" aria-hidden />
+                )}
+              </span>
+              <div className="min-w-0 pt-1">
+                <p
+                  className={`text-[15px] font-semibold leading-tight ${
+                    status === 'active' ? 'text-blue-700' : 'text-slate-900'
+                  }`}
+                >
+                  {stage.title}
+                  {status === 'active' && (
+                    <span className="ml-2 inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700 align-middle">
+                      Running
+                    </span>
+                  )}
+                </p>
+                <p className="mt-0.5 text-[13px] text-slate-500 leading-snug">{stage.description}</p>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    );
+  }
+
   return (
     <ol className="flex flex-col sm:flex-row sm:items-start gap-x-0 gap-y-3" role="list">
       {stages.map((stage, index) => {

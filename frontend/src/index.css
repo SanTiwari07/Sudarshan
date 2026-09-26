@@ -19,7 +19,7 @@
     --color-border-dark: #1f2937;
 
     /* Global Surface System */
-    --surface-page: #f8fafc;       /* Clean neutral slate-50 background */
+    --surface-page: #f4f6fa;       /* Cool neutral canvas; cards read as white on it */
     --surface-card: #ffffff;       /* Primary card surface */
     --surface-secondary: #f1f5f9;  /* slate-100 for secondary inner areas */
     --surface-active: #e2e8f0;     /* slate-200 for active states */
@@ -44,6 +44,16 @@
     --card-gap: 16px;      /* gap between sibling cards */
     --bar-height: 4px;     /* progress and confidence tracks */
     --card-elevation: 0 1px 2px rgba(15, 23, 42, 0.03);
+  }
+
+  /* Hide scrollbars globally but keep functionality */
+  * {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+  
+  *::-webkit-scrollbar {
+    display: none;
   }
 
   body {
@@ -109,14 +119,20 @@
 @layer components {
   /* Unified Portal Grid and Layout Constraints (Full desktop usage) */
   .analyst-main {
-    @apply p-3 sm:p-4 min-h-0 bg-surface-page;
+    @apply px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 min-h-0 bg-surface-page;
+  }
+
+  /* Standard page frame: one width and one vertical rhythm for every
+     workspace page, so moving between them never shifts the layout. */
+  .page-frame {
+    @apply w-full min-w-0 max-w-[1600px] mx-auto space-y-6;
   }
 
   /*
    * Reference views keep the full width - tables want it.
    */
   .analyst-page {
-    @apply w-full min-w-0 max-w-[1920px] mx-auto space-y-4;
+    @apply w-full min-w-0 max-w-[1600px] mx-auto space-y-6;
   }
 
   /*
@@ -128,7 +144,7 @@
    * bank manager is here for - sat marooned in whitespace beside it.
    */
   .case-page {
-    @apply w-full min-w-0 max-w-[1280px] mx-auto space-y-4;
+    @apply w-full min-w-0 max-w-[1600px] mx-auto space-y-4;
   }
 
   .technical-view {

@@ -1626,7 +1626,7 @@ export default function TechnicalView({ data }: { data: FraudCardData | null }) 
     >
       <div className="flex items-end justify-between border-b border-slate-200 pb-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">EVIDENCE</h1>
+          <h1 className="text-2xl sm:text-[28px] font-semibold text-slate-900 tracking-[-0.025em]">Evidence</h1>
           <div className="flex items-center gap-3 mt-2 text-sm">
             <span className="font-semibold text-slate-900">{records} records</span>
             <span className="text-slate-300">|</span>

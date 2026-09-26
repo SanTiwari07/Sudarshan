@@ -171,9 +171,7 @@ function AppContent() {
           path="/"
           element={
             <RequireAuth label="Upload">
-              <div className="w-full flex-1 flex flex-col justify-center min-h-0">
-                <Upload onAnalysisComplete={setAnalysisResult} />
-              </div>
+              <Upload onAnalysisComplete={setAnalysisResult} />
             </RequireAuth>
           }
         />

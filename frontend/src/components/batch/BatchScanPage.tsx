@@ -11,6 +11,7 @@ import {
   X,
 } from 'lucide-react';
 import { SocCard } from '../ui/Card';
+import PageHeader from '../ui/PageHeader';
 import BatchProgressBar from './BatchProgressBar';
 import BatchJobRow from './BatchJobRow';
 import BatchHistory from './BatchHistory';
@@ -179,53 +180,54 @@ export default function BatchScanPage() {
   const currentScanningJob = batch?.jobs?.find((j) => j.status === 'SCANNING');
 
   return (
-    <div className="w-full min-w-0 space-y-4">
+    <div className="page-frame">
+      <PageHeader
+        icon={Layers}
+        title="Batch scan"
+        description="Queue 2 to 50 APKs at once. Each one runs through the full pipeline in turn and is saved as its own case."
+        actions={
+          <>
+            {showBatchProgress && activeTab === 'scan' && (
+              <button
+                type="button"
+                onClick={resetNewBatch}
+                className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700 transition-colors cursor-pointer"
+              >
+                <PlusCircle className="w-4 h-4" />
+                New batch
+              </button>
+            )}
+            <div role="tablist" aria-label="Batch view" className="inline-flex rounded-xl bg-slate-200/60 p-1">
+              {([
+                ['scan', 'New scan', Layers],
+                ['history', 'Past batches', History],
+              ] as const).map(([key, label, Icon]) => (
+                <button
+                  key={key}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === key}
+                  onClick={() => {
+                    setActiveTab(key);
+                    if (key === 'scan' && isTerminal) resetNewBatch();
+                  }}
+                  className={`inline-flex items-center gap-2 h-8 px-3.5 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
+                    activeTab === key
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </>
+        }
+      />
+
       {/* The scale claim, before the queue that backs it up. */}
       <BatchFleetSummary />
-
-      {/* Navigation Tabs */}
-        <div className="flex border-b border-slate-200 justify-between items-center">
-          <div className="flex space-x-2">
-            <button
-              onClick={() => {
-                setActiveTab('scan');
-                if (isTerminal) {
-                  resetNewBatch();
-                }
-              }}
-              className={`px-5 py-3 ${TYPOGRAPHY.button} border-b-2 transition-colors flex items-center gap-2 cursor-pointer ${
-                activeTab === 'scan'
-                  ? 'border-blue-600 text-blue-700 bg-blue-50/50'
-                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-              }`}
-            >
-              <Layers className="w-4 h-4" />
-              <span>Batch scan</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('history')}
-              className={`px-5 py-3 ${TYPOGRAPHY.button} border-b-2 transition-colors flex items-center gap-2 cursor-pointer ${
-                activeTab === 'history'
-                  ? 'border-blue-600 text-blue-700 bg-blue-50/50'
-                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-              }`}
-            >
-              <History className="w-4 h-4" />
-              <span>History</span>
-            </button>
-          </div>
-
-          {showBatchProgress && activeTab === 'scan' && (
-            <button
-              type="button"
-              onClick={resetNewBatch}
-              className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors cursor-pointer"
-            >
-              <PlusCircle className="w-3.5 h-3.5" />
-              <span>New Batch</span>
-            </button>
-          )}
-        </div>
 
         {activeTab === 'history' ? (
           <SocCard className="p-6 sm:p-8 border-slate-200/80 shadow-sm">
@@ -371,21 +373,7 @@ export default function BatchScanPage() {
           </div>
         ) : (
           /* MULTI-FILE UPLOAD ZONE */
-          <SocCard className="p-8 sm:p-10 lg:p-12 border-slate-200/80 shadow-sm space-y-8">
-            <div className="text-center max-w-xl mx-auto">
-              <div className="inline-flex items-center justify-center p-3 bg-blue-50 rounded-2xl mb-3 text-blue-600">
-                <Layers className="w-8 h-8" />
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900 font-mono tracking-tight">
-                Enterprise Batch Scan
-              </h1>
-              <p className="text-sm text-slate-500 mt-2">
-                Analyze multiple suspicious APKs in one controlled FIFO queue.
-                Each APK is analyzed sequentially through the authoritative
-                Sudarshan pipeline and saved as an independent Case.
-              </p>
-            </div>
-
+          <SocCard className="p-5 sm:p-7 rounded-2xl border-slate-200/80 shadow-[0_1px_3px_rgba(15,23,42,0.04)] space-y-6">
             {/* Drop Zone */}
             <div
               onDragOver={(e) => {
@@ -394,7 +382,7 @@ export default function BatchScanPage() {
               }}
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-slate-300 bg-surface-secondary hover:border-blue-500 hover:bg-blue-50/30 transition-all rounded-2xl p-8 sm:p-12 text-center cursor-pointer group"
+              className="border-2 border-dashed border-slate-300 bg-slate-50/60 hover:border-blue-400 hover:bg-blue-50/40 transition-all rounded-2xl px-6 py-14 text-center cursor-pointer group"
             >
               <input
                 ref={fileInputRef}
@@ -404,15 +392,16 @@ export default function BatchScanPage() {
                 className="hidden"
                 onChange={(e) => handleFileSelect(e.target.files)}
               />
-              <UploadCloud className="w-12 h-12 text-slate-400 group-hover:text-blue-600 transition-colors mx-auto mb-3" />
-              <p className="text-base font-bold text-slate-800 group-hover:text-blue-900 transition-colors">
-                Drag & drop multiple APKs here
+              <span className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm ring-1 ring-slate-200 group-hover:scale-105 transition-transform">
+                <UploadCloud className="w-8 h-8 stroke-[1.75]" />
+              </span>
+              <p className="text-xl font-semibold text-slate-900 tracking-[-0.015em]">
+                Drop several APKs here
               </p>
-              <p className="text-xs text-slate-500 mt-1">
-                or <span className="text-blue-600 font-semibold underline">browse from your computer</span>
-              </p>
-              <p className="text-[13px] text-slate-400 mt-3 font-mono">
-                Supports 2 to 50 .apk files per batch • Up to 200MB each
+              <p className="text-sm text-slate-500 mt-1.5">
+                or <span className="text-blue-600 font-semibold group-hover:underline">browse your files</span>
+                <span className="mx-2 text-slate-300">·</span>
+                2 to 50 files, up to 200 MB each
               </p>
             </div>
 
@@ -500,7 +489,7 @@ export default function BatchScanPage() {
                   ) : (
                     <>
                       <Play className="w-4 h-4 fill-white" />
-                      <span>Start Enterprise Batch Scan ({selectedFiles.length} APKs)</span>
+                      <span>Start batch scan ({selectedFiles.length} APKs)</span>
                     </>
                   )}
                 </button>

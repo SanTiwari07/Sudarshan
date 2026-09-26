@@ -1,4 +1,5 @@
 import { Activity, HelpCircle, Camera, Network, ShieldCheck, ChevronRight } from 'lucide-react';
+import CardTitle from '../ui/CardTitle';
 import type { FraudCardData } from '../../types/case';
 import { useNavigate } from 'react-router-dom';
 
@@ -21,10 +22,7 @@ export default function RuntimeStatus({ data }: { data: FraudCardData }) {
         className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs h-full flex flex-col justify-between hover:border-blue-400 hover:shadow-md transition-all cursor-pointer group"
       >
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[11px] font-bold uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
-            <Activity className="h-3.5 w-3.5 text-slate-400" />
-            Runtime Sandbox Status
-          </span>
+          <CardTitle icon={Activity} title="Sandbox run" tone="sky" info="Whether the app was actually launched on an instrumented Android emulator. Hooks: sensitive actions intercepted. Screenshots: screens captured. Network: connections it made. Coverage: how much of the app was explored. 'Failed' or 'Unavailable' means only static evidence was used." infoAlign="right" />
           <span className="text-[11px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
             SKIPPED
           </span>
@@ -99,10 +97,7 @@ export default function RuntimeStatus({ data }: { data: FraudCardData }) {
     >
       <div>
         <div className="flex items-center justify-between mb-3">
-          <span className="text-[11px] font-bold uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
-            <Activity className="h-3.5 w-3.5 text-indigo-500" />
-            Runtime Sandbox
-          </span>
+          <CardTitle icon={Activity} title="Sandbox run" tone="sky" info="Whether the app was actually launched on an instrumented Android emulator. Hooks: sensitive actions intercepted. Screenshots: screens captured. Network: connections it made. Coverage: how much of the app was explored. 'Failed' or 'Unavailable' means only static evidence was used." infoAlign="right" />
           <span
             className={`text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded border ${badgeColor}`}
           >
@@ -116,36 +111,36 @@ export default function RuntimeStatus({ data }: { data: FraudCardData }) {
 
         {/* Dense Metrics Grid */}
         <div className="grid grid-cols-2 gap-2 text-xs">
-          <div className="p-2 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-between">
-            <span className="text-slate-500 text-[11px] font-medium flex items-center gap-1">
+          <div className="p-3 rounded-xl bg-slate-50 flex flex-col gap-1.5 min-w-0">
+            <span className="text-slate-500 text-xs font-medium flex items-center gap-1.5 truncate">
               <Activity className="h-3 w-3 text-slate-400" />
               Hooks
             </span>
-            <span className="font-mono font-bold text-slate-900">{hookCount}</span>
+            <span className="text-lg font-semibold tabular-nums text-slate-900 leading-none">{hookCount}</span>
           </div>
 
-          <div className="p-2 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-between">
-            <span className="text-slate-500 text-[11px] font-medium flex items-center gap-1">
+          <div className="p-3 rounded-xl bg-slate-50 flex flex-col gap-1.5 min-w-0">
+            <span className="text-slate-500 text-xs font-medium flex items-center gap-1.5 truncate">
               <Camera className="h-3 w-3 text-slate-400" />
               Screenshots
             </span>
-            <span className="font-mono font-bold text-slate-900">{screenshotCount}</span>
+            <span className="text-lg font-semibold tabular-nums text-slate-900 leading-none">{screenshotCount}</span>
           </div>
 
-          <div className="p-2 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-between">
-            <span className="text-slate-500 text-[11px] font-medium flex items-center gap-1">
+          <div className="p-3 rounded-xl bg-slate-50 flex flex-col gap-1.5 min-w-0">
+            <span className="text-slate-500 text-xs font-medium flex items-center gap-1.5 truncate">
               <Network className="h-3 w-3 text-slate-400" />
               Network
             </span>
-            <span className="font-mono font-bold text-slate-900">{networkCount}</span>
+            <span className="text-lg font-semibold tabular-nums text-slate-900 leading-none">{networkCount}</span>
           </div>
 
-          <div className="p-2 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-between">
-            <span className="text-slate-500 text-[11px] font-medium flex items-center gap-1">
+          <div className="p-3 rounded-xl bg-slate-50 flex flex-col gap-1.5 min-w-0">
+            <span className="text-slate-500 text-xs font-medium flex items-center gap-1.5 truncate">
               <ShieldCheck className="h-3 w-3 text-slate-400" />
               Coverage
             </span>
-            <span className="font-mono font-bold text-slate-900">
+            <span className="text-lg font-semibold tabular-nums text-slate-900 leading-none">
               {coverageRatio !== undefined ? `${Math.round(coverageRatio * 100)}%` : 'N/A'}
             </span>
           </div>

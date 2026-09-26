@@ -925,9 +925,9 @@ async def _run_analysis_pipeline(
         "sha256": sha256_hash,
         "package_name": package_name,
         "dangerous_apis_found_raw": flags_dict.get("dangerous_apis_found", []),
-        "app_name": mobsf_report.get("app_name") if mobsf_report else None,
-        "version_name": mobsf_report.get("version_name") if mobsf_report else None,
-        "apk_size": mobsf_report.get("size") if mobsf_report else None,
+        "app_name": mobsf_report.get("app_name") if mobsf_report else (androguard_output.app_label if androguard_output else None),
+        "version_name": mobsf_report.get("version_name") if mobsf_report else (androguard_output.version_name if androguard_output else None),
+        "apk_size": mobsf_report.get("size") if mobsf_report else (androguard_output.apk_size if androguard_output else None),
         "analysis_mode": analysis_mode,
         "family_classification": family_class,
         "base_score": risk_result["base_score"],
@@ -1005,6 +1005,9 @@ async def _run_analysis_pipeline(
             "decompiled_class_count": jadx_result.decompiled_class_count if jadx_result and jadx_result.available else 0,
         } if jadx_result else None,
     }
+
+    from datetime import datetime, timezone
+    result["created_at"] = datetime.now(timezone.utc).isoformat()
 
     # ── Persist to DB ─────────────────────────────────────────────────────────
     timer.set_orchestrator_stage(OrchestratorStage.PERSISTING)
@@ -1225,6 +1228,9 @@ def _build_response(result: Dict[str, Any], job_id: Optional[str] = None) -> Ana
         sha256=result["sha256"],
         package_name=result["package_name"],
         app_name=result.get("app_name"),
+        version_name=result.get("version_name"),
+        apk_size=result.get("apk_size"),
+        created_at=result.get("created_at"),
         analysis_mode=result["analysis_mode"],
         job_id=job_id,
         family_classification=result["family_classification"],

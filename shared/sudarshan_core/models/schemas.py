@@ -48,6 +48,8 @@ class AndroguardOutput(BaseModel):
     #
     # Defaults to "" so every existing construction site stays valid.
     app_label: str = ""
+    version_name: Optional[str] = None
+    apk_size: Optional[str] = None
 
 
 # ─── Fraud Card Views ─────────────────────────────────────────────────────────
@@ -283,7 +285,10 @@ class AnalysisResponse(BaseModel):
     sha256: str
     package_name: str
     app_name: Optional[str] = None
+    version_name: Optional[str] = None
+    apk_size: Optional[str] = None
     analysis_mode: str = "androguard"  # "mobsf" | "androguard"
+    created_at: Optional[str] = None
 
     # Async job tracking
     job_id: Optional[str] = None

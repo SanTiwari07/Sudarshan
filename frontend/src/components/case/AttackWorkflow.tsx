@@ -1,4 +1,5 @@
 import { AlertCircle, GitCommit, ChevronRight, Clock } from 'lucide-react';
+import CardTitle from '../ui/CardTitle';
 import type { FraudCardData } from '../../types/case';
 import { useInvestigationUI } from '../../context/InvestigationUIContext';
 
@@ -9,13 +10,12 @@ export default function AttackWorkflow({ data }: { data: FraudCardData }) {
   if (stages.length === 0) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs h-full flex flex-col justify-between">
-        <h2 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-4">
-          ATTACK WORKFLOW RECONSTRUCTION
-        </h2>
+        <div className="mb-4"><CardTitle icon={GitCommit} title="Attack sequence" tone="orange" info="When several findings link together into an attack (for example: ask for permissions, show a fake login screen, then send the stolen data out), the steps are shown here in order." infoAlign="right" /></div>
         <div className="flex flex-col items-center justify-center py-8 text-center my-auto">
           <AlertCircle className="h-8 w-8 text-slate-300 mb-2" />
-          <p className="text-xs text-slate-500 max-w-[260px] leading-relaxed">
-            No causal multi-stage workflow sequence reconstructed from dynamic or static telemetry.
+          <p className="text-sm font-medium text-slate-700">No attack sequence found</p>
+          <p className="text-xs text-slate-500 max-w-[280px] leading-relaxed mt-1">
+            The evidence did not link into a multi-step attack chain, so each finding is assessed on its own.
           </p>
         </div>
         <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-400">
@@ -28,11 +28,8 @@ export default function AttackWorkflow({ data }: { data: FraudCardData }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs h-full flex flex-col justify-between">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
-          <GitCommit className="h-3.5 w-3.5 text-blue-600" />
-          ATTACK WORKFLOW RECONSTRUCTION
-        </h2>
-        <span className="text-[11px] font-mono font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+        <CardTitle icon={GitCommit} title="Attack sequence" tone="orange" info="When several findings link together into an attack (for example: ask for permissions, show a fake login screen, then send the stolen data out), the steps are shown here in order." infoAlign="right" />
+        <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full whitespace-nowrap">
           {stages.length} Stages Identified
         </span>
       </div>
@@ -51,7 +48,7 @@ export default function AttackWorkflow({ data }: { data: FraudCardData }) {
               className="w-full text-left flex items-start gap-3.5 p-2.5 rounded-xl border border-transparent hover:border-blue-200 hover:bg-blue-50/30 transition-all cursor-pointer group relative z-10 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <div className="relative mt-0.5 shrink-0">
-                <div className="h-7 w-7 rounded-full border-2 border-white bg-slate-900 group-hover:bg-blue-600 text-white flex items-center justify-center font-mono text-xs font-bold shadow-xs transition-colors">
+                <div className="h-7 w-7 rounded-full border-2 border-white bg-slate-900 group-hover:bg-blue-600 text-white flex items-center justify-center text-xs font-bold tabular-nums shadow-xs transition-colors">
                   {idx + 1}
                 </div>
               </div>
@@ -63,7 +60,7 @@ export default function AttackWorkflow({ data }: { data: FraudCardData }) {
                   </span>
                   <div className="flex items-center gap-1.5 shrink-0">
                     {stage.technique_id && (
-                      <span className="font-mono text-[10px] font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200">
+                      <span className="font-mono text-[11px] font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded whitespace-nowrap">
                         {stage.technique_id}
                       </span>
                     )}

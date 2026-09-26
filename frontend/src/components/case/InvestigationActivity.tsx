@@ -1,4 +1,5 @@
 import { Clock, CheckCircle2 } from 'lucide-react';
+import CardTitle from '../ui/CardTitle';
 import type { FraudCardData } from '../../types/case';
 import { useAnalysis } from '../../context/AnalysisContext';
 
@@ -40,9 +41,7 @@ export default function InvestigationActivity({ data }: { data: FraudCardData })
   if (activities.length === 0) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs h-full flex flex-col justify-between">
-        <h2 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-4">
-          RECENT INVESTIGATION ACTIVITY
-        </h2>
+        <div className="mb-4"><CardTitle icon={Clock} title="Activity log" tone="slate" info="An audit trail of each analysis step and its result, so the verdict can be reviewed and trusted later." infoAlign="right" /></div>
         <div className="my-auto py-8 text-center text-slate-400">
           <Clock className="h-8 w-8 mx-auto mb-2 text-slate-300" />
           <p className="text-xs">No recent audit events for this case.</p>
@@ -58,11 +57,8 @@ export default function InvestigationActivity({ data }: { data: FraudCardData })
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs h-full flex flex-col justify-between">
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
-            <Clock className="h-3.5 w-3.5 text-slate-400" />
-            INVESTIGATION ACTIVITY LOG
-          </h2>
-          <span className="text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-semibold flex items-center gap-1">
+          <CardTitle icon={Clock} title="Activity log" tone="slate" info="An audit trail of each analysis step and its result, so the verdict can be reviewed and trusted later." infoAlign="right" />
+          <span className="text-xs text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1 whitespace-nowrap">
             <CheckCircle2 className="h-3 w-3" />
             Audited
           </span>
@@ -73,7 +69,7 @@ export default function InvestigationActivity({ data }: { data: FraudCardData })
 
           {activities.slice(0, 4).map((act, idx) => (
             <div key={idx} className="flex items-start gap-3 relative z-10 text-xs">
-              <div className="h-6 w-6 rounded-full border-2 border-white bg-slate-200 text-slate-600 flex items-center justify-center font-mono text-[10px] font-bold shrink-0 mt-0.5 shadow-2xs">
+              <div className="h-6 w-6 rounded-full border-2 border-white bg-slate-200 text-slate-600 flex items-center justify-center text-[11px] font-bold tabular-nums shrink-0 mt-0.5 shadow-2xs">
                 {idx + 1}
               </div>
               <div className="min-w-0 flex-1">

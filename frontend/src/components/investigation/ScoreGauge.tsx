@@ -1,3 +1,4 @@
+import CardTitle from '../ui/CardTitle';
 import type { FraudCardData } from '../../types/case';
 import { formatScore } from '../../lib/verdictCopy';
 import { caseSeverity } from '../../theme/severity';
@@ -58,10 +59,7 @@ export default function ScoreGauge({ data }: { data: FraudCardData }) {
       className="w-full h-full flex flex-col items-center justify-between p-5 rounded-2xl border border-slate-200 bg-white shadow-xs hover:border-blue-400 hover:shadow-md transition-all cursor-pointer group text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
     >
       <div className="w-full flex items-center justify-between mb-1">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-          <ShieldAlert className="h-3.5 w-3.5 text-slate-400 group-hover:text-blue-600 transition-colors" />
-          Deterministic Risk Score
-        </span>
+        <CardTitle icon={ShieldAlert} title="Risk score" tone="blue" info="The app's overall fraud risk from 0 to 100. It is calculated by a fixed-rule engine from the static, sandbox and threat-intelligence evidence, so the same app always gets the same score. Higher means more dangerous. Click to see how it was calculated." infoAlign="left" />
         <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider ${token.bg} ${token.fg} ${token.border} border`}>
           {token.label}
         </span>
@@ -98,8 +96,8 @@ export default function ScoreGauge({ data }: { data: FraudCardData }) {
       </div>
 
       <div className="w-full pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-        <span className="text-slate-500 font-medium">Final deterministic verdict</span>
-        <span className="inline-flex items-center gap-1 font-semibold text-blue-600 group-hover:text-blue-700 transition-colors">
+        <span className="text-slate-500 font-medium truncate">Final verdict</span>
+        <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap font-semibold text-blue-600 group-hover:text-blue-700 transition-colors">
           <Calculator className="h-3.5 w-3.5" />
           <span>How this was calculated</span>
           <ChevronRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />

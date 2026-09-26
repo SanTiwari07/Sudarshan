@@ -452,10 +452,25 @@ def analyze_apk(apk_path: str) -> AndroguardOutput:
         logger.debug("[apk_analyzer] Could not resolve app label: %s", exc)
         app_label = ""
 
+    apk_size = None
+    try:
+        size_bytes = os.path.getsize(apk_path)
+        apk_size = f"{size_bytes / (1024 * 1024):.1f} MB"
+    except Exception:
+        pass
+
+    version_name = None
+    try:
+        version_name = a.get_androidversion_name()
+    except Exception:
+        pass
+
     return AndroguardOutput(
         package_name=package_name if package_name else "Unknown",
         permissions=permissions if permissions else [],
         flags=flags,
         suspicious_strings=strings_fired[:50],
         app_label=app_label,
+        version_name=version_name,
+        apk_size=apk_size,
     )

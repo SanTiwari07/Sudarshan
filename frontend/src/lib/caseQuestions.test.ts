@@ -142,9 +142,9 @@ describe('buildCaseQuestions - always present', () => {
     }
   });
 
-  it('groups every question into decide / evidence / act', () => {
+  it('assigns every question one of the declared kinds', () => {
     for (const q of buildCaseQuestions(caseOf({ has_sms_read_write: true }))) {
-      expect(['decision', 'evidence', 'action']).toContain(q.kind);
+      expect(['decision', 'evidence', 'action', 'impact', 'evasion', 'network']).toContain(q.kind);
     }
   });
 

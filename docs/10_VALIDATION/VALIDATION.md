@@ -1,7 +1,7 @@
 # SUDARSHAN — Empirical Validation & System Verification
 
 > **Classification:** AUTHORITATIVE  
-> **Source Reference:** `docs/operations/VALIDATION.md`  
+> **Source Reference:** `docs/10_VALIDATION/VALIDATION.md`  
 
 ---
 

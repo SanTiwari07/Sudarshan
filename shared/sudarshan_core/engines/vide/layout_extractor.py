@@ -23,7 +23,7 @@ import hashlib
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Iterable, List, Set, Tuple
+from typing import Optional, Iterable, List, Set, Tuple
 
 from sudarshan_core.engines.vide.dex_strings import mine_from_decode_dir
 from sudarshan_core.engines.vide.js_bundle import extract_ui_strings
@@ -121,8 +121,36 @@ def _parse_colors_xml(path: Path) -> List[str]:
             continue
         text = (child.text or "").strip()
         if text.startswith("#"):
-            colors.append(text.lower())
+            rgb = android_color_to_rgb_hex(text)
+            if rgb:
+                colors.append(rgb)
     return colors
+
+
+def android_color_to_rgb_hex(value: str) -> Optional[str]:
+    """
+    Normalise an Android resource colour to ``#rrggbb``.
+
+    Android writes alpha FIRST (``#ARGB`` / ``#AARRGGBB``); CSS writes it last.
+    color_match.parse_hex follows CSS, so passing ``#FF6200EE`` (Material
+    purple) through unchanged read it as orange ``#FF6200`` and "matched" a
+    bank's orange brand colour at dE 3.2. Fully transparent colours carry no
+    visible brand identity and are dropped.
+    """
+    digits = value.strip().lstrip("#").lower()
+    if not digits or any(c not in "0123456789abcdef" for c in digits):
+        return None
+    if len(digits) == 4:          # #ARGB
+        if digits[0] == "0":
+            return None
+        digits = digits[1:]
+    elif len(digits) == 8:        # #AARRGGBB
+        if digits[:2] == "00":
+            return None
+        digits = digits[2:]
+    if len(digits) == 3:
+        digits = "".join(c * 2 for c in digits)
+    return f"#{digits}" if len(digits) == 6 else None
 
 
 def _walk_layout(node: ET.Element, seq: List[str], strings: Set[str], string_table: dict[str, str]) -> None:

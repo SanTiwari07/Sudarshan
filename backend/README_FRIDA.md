@@ -4,8 +4,8 @@ How to prepare the Android guest and `frida-server` so SUDARSHAN's dynamic analy
 
 Verified against the active codebase on **2026-08-27**.
 
-- Full operations guide: [`../docs/getting-started/HOW_TO_RUN.md`](../docs/getting-started/HOW_TO_RUN.md)
-- Engine design: [`../docs/architecture/04_DYNAMIC_ANALYSIS_ENGINE.md`](../docs/architecture/04_DYNAMIC_ANALYSIS_ENGINE.md)
+- Full operations guide: [`../docs/06_OPERATIONS/HOW_TO_RUN.md`](../docs/06_OPERATIONS/HOW_TO_RUN.md)
+- Engine design: [`../docs/02_ANALYSIS/DYNAMIC_ANALYSIS.md`](../docs/02_ANALYSIS/DYNAMIC_ANALYSIS.md)
 - Backend service notes: [`README.md`](README.md)
 
 The Android guest runs on the **host**, never inside a container. The analysis engine reaches it through the host ADB server.
@@ -186,7 +186,7 @@ Then:
 FRS = 0.25·STEI + 0.35·Dynamic + 0.20·Correlation + 0.20·BankingImpact
 ```
 
-renormalised over whichever axes have data. Full derivation: [`../docs/architecture/08_DETERMINISTIC_RISK_ENGINE.md`](../docs/architecture/08_DETERMINISTIC_RISK_ENGINE.md).
+renormalised over whichever axes have data. Full derivation: [`../docs/03_RISK/RISK_ENGINE.md`](../docs/03_RISK/RISK_ENGINE.md).
 
 ---
 

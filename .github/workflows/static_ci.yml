@@ -1,4 +1,4 @@
-﻿name: Static Tests & Linting
+name: Static Tests & Linting
 
 on:
   push:
@@ -58,6 +58,12 @@ jobs:
 
       - name: Type check
         run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
 
       - name: Build
         run: npx vite build

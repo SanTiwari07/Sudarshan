@@ -37,7 +37,7 @@ function allocateIntegerPoints(
     return { id: w.id, floor, frac: exact - floor };
   });
 
-  let allocated = entries.reduce((s, e) => s + e.floor, 0);
+  const allocated = entries.reduce((s, e) => s + e.floor, 0);
   const remainder = Math.max(0, Math.round(total) - allocated);
   entries.sort((a, b) => b.frac - a.frac);
   for (let i = 0; i < remainder; i += 1) {

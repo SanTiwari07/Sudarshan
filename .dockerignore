@@ -1,9 +1,32 @@
 .git/
-test apk/
 .venv/
 backend/.venv/
-node_modules/
-__pycache__/
+**/node_modules/
+**/__pycache__/
 *.pyc
-sudarshan_artifacts/
-uploads/
+.env
+.env.*
+!.env.example
+.sudarshan_sandbox.env
+.idea/
+.vscode/
+.pytest_cache/
+
+# Runtime state that must never be baked into an image
+**/*.db
+**/*.db-wal
+**/*.db-shm
+**/sudarshan_artifacts/
+**/uploads/
+backend/data/
+data/
+
+# Test corpora and generated output - not needed by any image
+Test APK/
+test apk/
+tests/
+**/validation_runs/
+banking-baseline-corpus-main/
+docs/
+frontend/dist/
+backend/*.apk

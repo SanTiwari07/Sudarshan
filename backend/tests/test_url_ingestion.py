@@ -1,3 +1,4 @@
+import io
 import asyncio
 import hashlib
 import os
@@ -21,15 +22,16 @@ s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.bind(("", 0))
 TEST_PORT = s.getsockname()[1]
 s.close()
-VALID_APK_PATH = Path("test_artifact_pytest.apk")
-
-def create_valid_apk():
-    with zipfile.ZipFile(VALID_APK_PATH, "w") as z:
+def create_valid_apk() -> bytes:
+    # Built in memory: writing it to the CWD left test_artifact_pytest.apk in
+    # the repository root after every run.
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
         z.writestr("AndroidManifest.xml", b"<manifest></manifest>")
         z.writestr("classes.dex", b"DEX")
+    return buf.getvalue()
 
-create_valid_apk()
-VALID_APK_BYTES = VALID_APK_PATH.read_bytes()
+VALID_APK_BYTES = create_valid_apk()
 VALID_APK_SHA256 = hashlib.sha256(VALID_APK_BYTES).hexdigest()
 
 mock_app = FastAPI()

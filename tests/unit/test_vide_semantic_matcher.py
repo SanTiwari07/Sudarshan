@@ -120,10 +120,10 @@ def test_disabled_by_env(monkeypatch):
 @requires_corpus
 def test_missing_api_key_degrades_quietly(monkeypatch):
     monkeypatch.setenv("VIDE_SEMANTIC_MATCHING", "true")
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
-    monkeypatch.delenv("GEMINI_PRIMARY_API_KEY", raising=False)
-    monkeypatch.delenv("GEMINI_FALLBACK_API_KEY", raising=False)
+    # Empty rather than deleted: a deleted variable is refilled from the
+    # developer's .env by the settings loader, turning this into a live call.
+    for key in ("GEMINI_API_KEY", "GOOGLE_API_KEY", "GEMINI_PRIMARY_API_KEY", "GEMINI_FALLBACK_API_KEY"):
+        monkeypatch.setenv(key, "")
     result = asyncio.run(compare_semantics(UIProfile(source="t"), _hdfc()))
     assert result.status == STATUS_NO_KEY
     assert result.semantic_match is False

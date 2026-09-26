@@ -22,8 +22,12 @@ export default function ThreatCorrelationPanel({
       techniqueId: string;
       techniqueName: string;
       scenario: string;
-      contribution: string;
+      // Only a contribution the deterministic engine attributed. Never
+      // invented here: a made-up percentage reads as a score.
+      contribution: string | null;
       severity: string;
+      // Whether evidenceId names a real record the drawer can open.
+      hasRecord: boolean;
     }> = [];
 
     const records = bundle?.evidenceRecords || [];
@@ -34,11 +38,12 @@ export default function ThreatCorrelationPanel({
         list.push({
           evidenceId: rec.id,
           evidenceTitle: rec.title,
-          techniqueId: rec.mitreId || 'T1417',
-          techniqueName: rec.mitreName || 'Mobile Attack Technique',
+          techniqueId: rec.mitreId || '—',
+          techniqueName: rec.mitreName || 'Not mapped to ATT&CK',
           scenario: rec.category === 'scenario' ? rec.title : (rec.description || 'Observed Threat Behavior'),
-          contribution: rec.contributionLabel ? `+${rec.contributionLabel}` : '+12.5%',
+          contribution: rec.contributionLabel ? `+${rec.contributionLabel}` : null,
           severity: rec.severity || 'medium',
+          hasRecord: true,
         });
       }
     });
@@ -55,25 +60,13 @@ export default function ThreatCorrelationPanel({
         list.push({
           evidenceId: matchingRec?.id || row.evidence || `SCEN-${idx + 1}`,
           evidenceTitle: row.indicator,
-          techniqueId: 'T1437',
-          techniqueName: 'Application Layer Credential Access',
+          techniqueId: matchingRec?.mitreId || '—',
+          techniqueName: matchingRec?.mitreName || 'Not mapped to ATT&CK',
           scenario: row.threat_scenario,
-          contribution: row.credential_theft_risk === 'HIGH' ? '+25.0%' : '+15.0%',
+          contribution: matchingRec?.contributionLabel ? `+${matchingRec.contributionLabel}` : null,
           severity: row.confidence > 0.7 ? 'critical' : 'high',
+          hasRecord: Boolean(matchingRec),
         });
-      });
-    }
-
-    // Fallback if none generated yet
-    if (list.length === 0 && data.targets_indian_banks) {
-      list.push({
-        evidenceId: 'EV-VIDE-01',
-        evidenceTitle: 'Visual Bank Impersonation',
-        techniqueId: 'T1411',
-        techniqueName: 'Input Injection & Phishing Overlay',
-        scenario: 'Credential Harvesting via Fake Banking Interface',
-        contribution: '+30.0%',
-        severity: 'critical',
       });
     }
 
@@ -106,7 +99,7 @@ export default function ThreatCorrelationPanel({
       />
       <IntelCardBody>
         <p className="text-xs text-slate-500 mb-4 font-normal">
-          End-to-end causal chain linking raw forensic evidence to MITRE ATT&amp;CK techniques, operational fraud scenarios, and deterministic risk score contributions.
+          Links forensic evidence to MITRE ATT&amp;CK techniques and fraud scenarios. A risk impact is shown only where the deterministic engine attributed one.
         </p>
 
         <div className="space-y-3">
@@ -119,7 +112,8 @@ export default function ThreatCorrelationPanel({
                 {/* Node 1: Evidence */}
                 <button
                   type="button"
-                  onClick={() => openEvidence(item.evidenceId)}
+                  onClick={() => item.hasRecord && openEvidence(item.evidenceId)}
+                  disabled={!item.hasRecord}
                   className="text-left p-2 rounded-lg bg-white border border-slate-200 group-hover:border-blue-300 hover:bg-blue-50/50 transition-colors cursor-pointer"
                   title="Click to inspect evidence record"
                 >
@@ -167,7 +161,7 @@ export default function ThreatCorrelationPanel({
                         Risk Impact
                       </div>
                       <div className="font-mono text-xs font-bold text-red-900">
-                        {item.contribution}
+                        {item.contribution ?? 'Not scored'}
                       </div>
                     </div>
                     <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-white text-red-700 border border-red-200">

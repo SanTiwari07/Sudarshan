@@ -69,8 +69,6 @@ export default function UrlDiscoveryArea({ onAnalyzeCandidate, disabled }: UrlDi
   useEffect(() => {
     if (!sessionId) return;
 
-    let intervalId: ReturnType<typeof setInterval>;
-
     const poll = async () => {
       try {
         const [statusRes, resultsRes] = await Promise.all([
@@ -103,8 +101,8 @@ export default function UrlDiscoveryArea({ onAnalyzeCandidate, disabled }: UrlDi
       }
     };
 
+    const intervalId = setInterval(poll, 2000);
     poll(); // initial
-    intervalId = setInterval(poll, 2000);
 
     return () => clearInterval(intervalId);
   }, [sessionId]);

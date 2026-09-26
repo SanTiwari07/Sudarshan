@@ -381,7 +381,9 @@ docker compose up -d
 | :--- | :--- | :--- |
 | `SUDARSHAN_ENV` | `development` | Deployment environment (`development` or `production`). |
 | `JWT_SECRET_KEY` | *None (Mandatory)* | Secret key for signing JWT tokens. Refuses startup if empty. |
-| `DATABASE_URL` | *None* | Connection string for PostgreSQL 15. Falls back to SQLite if unset. |
+| `DATABASE_URL` | Compose: `postgresql://sudarshan:${POSTGRES_PASSWORD}@postgres:5432/sudarshan` | PostgreSQL connection string. Outside Compose, SQLite is used when unset. |
+| `POSTGRES_PASSWORD` | *None (Mandatory for Compose)* | Password for the bundled PostgreSQL service; Compose refuses to start without it. |
+| `MOBSF_API_KEY` | *None (Mandatory for Compose)* | Shared MobSF API key; the former hard-coded default was removed. |
 | `SUDARSHAN_DB_PATH` | `/app/data/sudarshan.db` | Explicit SQLite file path. |
 | `ANALYSIS_ENGINE_URL` | `http://analysis-engine:8001`| Internal endpoint for analysis engine container. |
 | `ANALYSIS_ENGINE_INTERNAL_TOKEN` | *None* | Shared secret gating inter-container REST calls. |
@@ -418,10 +420,10 @@ SUDARSHAN enforces rigorous automated test coverage across all subsystems:
 # Set JWT secret for test harness
 $env:JWT_SECRET_KEY="test_key_for_testing_123456789012345678901234567890"
 
-# Run backend API and gateway tests (871 tests)
+# Run backend API and gateway tests
 .venv\Scripts\python -m pytest backend/tests -v
 
-# Run engine, VIDE, and core unit tests (1,958 tests)
+# Run engine, VIDE, and core unit tests
 .venv\Scripts\python -m pytest tests/unit -v
 
 # Run full repository test suite
@@ -429,10 +431,10 @@ $env:JWT_SECRET_KEY="test_key_for_testing_123456789012345678901234567890"
 ```
 
 ### Verified Test Execution Status
-- **Total Tests Collected:** **2,841 tests**
-- **Unit & Core Tests:** 1,934 passed, 24 skipped (require hardware)
-- **Backend API Tests:** 869 passed, 2 skipped, 22 subtests passed
-- **Pass Rate:** **100% of runnable tests passing** (0 failures).
+Measured 2026-09-26 (see `FINAL_RELEASE_AUDIT.md`), full `pytest` run including the live-emulator integration test:
+- **Collected:** 2,860 · **Passed:** 2,833 · **Failed:** 0 · **Skipped:** 27 (optional deps / absent reference APKs / 1 known-broken explorer test)
+- **Frontend (vitest):** 250 passed · `tsc` clean · ESLint 0 errors
+- CI runs `tests/unit` and `backend/tests` only; `tests/integration` needs a connected device.
 
 ---
 

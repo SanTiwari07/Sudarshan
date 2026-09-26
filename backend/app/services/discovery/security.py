@@ -56,20 +56,39 @@ def resolve_and_get_ip(url: str) -> str:
         
     return safe_ip
 
-class SSRFSafeAsyncClient(httpx.AsyncClient):
+class _SSRFSafeTransport(httpx.AsyncHTTPTransport):
     """
-    An httpx.AsyncClient that checks the URL against an IP denylist before fetching.
-    By overriding `send`, we ensure that all requests, including streams and 
-    automatically followed redirects, are intercepted and validated.
+    Validates and IP-pins EVERY request the client sends, including each hop
+    of a followed redirect.
+
+    This used to live in AsyncClient.send(), which httpx calls once per
+    top-level request - redirects are followed further down the stack without
+    re-entering send(). A public URL answering 302 -> http://127.0.0.1/ (or the
+    cloud metadata address) was therefore fetched unchecked. The transport is
+    the one layer every hop passes through.
     """
-    async def send(self, request: httpx.Request, *args, **kwargs):
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
         safe_ip = resolve_and_get_ip(str(request.url))
         parsed = urlparse(str(request.url))
-        
-        # Preserve original host for SNI / Host header
-        if "host" not in request.headers:
-            request.headers["host"] = parsed.hostname
-            
-        request.url = request.url.copy_with(host=safe_ip)
-        
-        return await super().send(request, *args, **kwargs)
+        extensions = dict(request.extensions)
+        if parsed.scheme == "https" and parsed.hostname:
+            # Connect to the pinned IP but present/verify the real hostname in
+            # TLS; without it every HTTPS handshake failed.
+            extensions["sni_hostname"] = parsed.hostname
+        pinned = httpx.Request(
+            request.method,
+            request.url.copy_with(host=safe_ip),
+            headers=request.headers,  # keeps the original Host header
+            stream=request.stream,
+            extensions=extensions,
+        )
+        return await super().handle_async_request(pinned)
+
+
+class SSRFSafeAsyncClient(httpx.AsyncClient):
+    """An httpx.AsyncClient whose every request - redirects included - is SSRF-checked."""
+
+    def __init__(self, *args, **kwargs):
+        kwargs.pop("transport", None)
+        super().__init__(*args, transport=_SSRFSafeTransport(), **kwargs)

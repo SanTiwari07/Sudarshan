@@ -599,17 +599,18 @@ async def stream_events(websocket: WebSocket, session_id: str) -> None:
 
     Authenticated by a ``token`` query parameter rather than a header: the
     browser WebSocket API cannot set Authorization on the handshake, so the
-    bearer token has to travel in the URL. It is validated with the same
-    decoder as every REST route before the socket is accepted.
+    bearer token has to travel in the URL. It goes through the same session,
+    revocation and account checks as every REST route before the socket is
+    accepted - a signature check alone would let a logged-out token stream.
     """
     token = websocket.query_params.get("token", "")
     if not token:
         await websocket.close(code=4401, reason="Authentication required")
         return
     try:
-        from app.auth.auth import _decode_token
+        from app.auth.auth import authenticate_token
 
-        _decode_token(token)
+        await authenticate_token(token)
     except Exception:  # noqa: BLE001
         await websocket.close(code=4401, reason="Invalid or expired token")
         return

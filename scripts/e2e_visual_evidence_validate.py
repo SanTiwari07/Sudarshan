@@ -18,10 +18,10 @@ APK = ROOT / "backend/test_sample.apk"
 SHA = "b18af2a0e44d7634bbcdf93664d9c78a2695e050393fcfbb5e8b91f902d194a4"
 BASE = os.environ.get("SUDARSHAN_API", "http://127.0.0.1:8000/api/v1")
 
+# Credentials come from the environment - never from the repository.
 CREDS = [
-    ("admin", "BOI@Admin2026!"),
-    ("analyst1", "Sudarshan@Analyst2026"),
-    ("soclead", "Sudarshan@SOC2026"),
+    (os.environ.get("SUDARSHAN_E2E_USER", os.environ.get("ADMIN_USERNAME", "admin")),
+     os.environ.get("SUDARSHAN_E2E_PASSWORD", os.environ.get("ADMIN_PASSWORD", ""))),
 ]
 
 
@@ -30,7 +30,7 @@ def login(client: httpx.Client) -> str:
         r = client.post(f"{BASE}/auth/login", json={"username": user, "password": pw})
         if r.status_code == 200:
             return r.json()["access_token"]
-    raise SystemExit("Could not login with known demo credentials")
+    raise SystemExit("Login failed - set SUDARSHAN_E2E_USER / SUDARSHAN_E2E_PASSWORD")
 
 
 def sha256_file(path: Path) -> str:

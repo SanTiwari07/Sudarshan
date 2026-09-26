@@ -1,7 +1,10 @@
 """
-BOI Hackathon demo accounts - idempotent startup seed.
+Optional RBAC demo accounts - idempotent startup seed.
 
-Enable with SUDARSHAN_SEED_DEMO_USERS=true (see .env.example).
+Enable with SUDARSHAN_SEED_DEMO_USERS=true (see .env.example). Every password
+must come from the environment: there are no defaults, because a default
+password in a public repository is a published credential. Refused outright
+when SUDARSHAN_ENV=production.
 Does not reset passwords for existing users.
 """
 
@@ -49,46 +52,36 @@ async def seed_demo_users() -> None:
     """Create soclead / analyst1 (and optional boi_* aliases) for RBAC demos."""
     if not _truthy("SUDARSHAN_SEED_DEMO_USERS"):
         return
+    if os.getenv("SUDARSHAN_ENV", "").strip().lower() == "production":
+        logger.error(
+            "[DemoSeed] SUDARSHAN_SEED_DEMO_USERS is set in production - refusing "
+            "to create demo accounts."
+        )
+        return
 
     soc_user = os.getenv("DEMO_SOCLEAD_USERNAME", "soclead").strip()
-    soc_pass = os.getenv("DEMO_SOCLEAD_PASSWORD", "Sudarshan@SOC2026").strip()
+    soc_pass = os.getenv("DEMO_SOCLEAD_PASSWORD", "").strip()
     analyst_user = os.getenv("DEMO_ANALYST_USERNAME", "analyst1").strip()
-    analyst_pass = os.getenv("DEMO_ANALYST_PASSWORD", "Sudarshan@Analyst2026").strip()
+    analyst_pass = os.getenv("DEMO_ANALYST_PASSWORD", "").strip()
 
-    # Primary demo path: analyst accounts first, then promote SOC lead.
-    if await username_exists(soc_user):
-        user = await get_user_by_username(soc_user)
-        if user and user.get("role") != "soc_lead":
-            await update_user_role(user["id"], "soc_lead")
-            logger.info("[DemoSeed] Promoted %r to soc_lead", soc_user)
-    else:
-        hashed = hash_password(soc_pass)
-        uid = await create_user(soc_user, hashed, role="analyst")
-        await update_user_role(uid, "soc_lead")
-        logger.info("[DemoSeed] Created %r and promoted to soc_lead", soc_user)
-
+    await _ensure_user(soc_user, soc_pass, "soc_lead")
     await _ensure_user(analyst_user, analyst_pass, "analyst")
 
     if _truthy("DEMO_SEED_BOI_ALIASES"):
         await _ensure_user(
             os.getenv("DEMO_BOI_ADMIN_USERNAME", "boi_admin").strip(),
-            os.getenv("DEMO_BOI_ADMIN_PASSWORD", "Sudarshan@Admin2026").strip(),
+            os.getenv("DEMO_BOI_ADMIN_PASSWORD", "").strip(),
             "admin",
         )
         await _ensure_user(
             os.getenv("DEMO_BOI_SOCLEAD_USERNAME", "boi_soclead").strip(),
-            os.getenv("DEMO_BOI_SOCLEAD_PASSWORD", "Sudarshan@SOC2026").strip(),
+            os.getenv("DEMO_BOI_SOCLEAD_PASSWORD", "").strip(),
             "soc_lead",
         )
         await _ensure_user(
             os.getenv("DEMO_BOI_ANALYST_USERNAME", "boi_analyst").strip(),
-            os.getenv("DEMO_BOI_ANALYST_PASSWORD", "Sudarshan@Analyst2026").strip(),
+            os.getenv("DEMO_BOI_ANALYST_PASSWORD", "").strip(),
             "analyst",
         )
 
-    logger.info(
-        "[DemoSeed] Demo users ready. Admin: use ADMIN_USERNAME/ADMIN_PASSWORD from .env "
-        "(default admin). SOC: %s | Analyst: %s",
-        soc_user,
-        analyst_user,
-    )
+    logger.info("[DemoSeed] Demo users processed. SOC: %s | Analyst: %s", soc_user, analyst_user)

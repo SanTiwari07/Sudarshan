@@ -3,7 +3,7 @@
 Hand-run tooling: environment bootstrap, health and preflight checks, database administration, and the harnesses that regenerate the evaluation artifacts. None of these run automatically — there is no CI workflow in this repository — and none of them are part of the pytest suite.
 
 - Platform overview: [`../README.md`](../README.md)
-- Operations guide: [`../docs/getting-started/HOW_TO_RUN.md`](../docs/getting-started/HOW_TO_RUN.md)
+- Operations guide: [`../docs/06_OPERATIONS/HOW_TO_RUN.md`](../docs/06_OPERATIONS/HOW_TO_RUN.md)
 
 The directory is mounted read-only into the backend container at `/opt/sudarshan-scripts`, so operator tools can be run inside the running stack.
 
@@ -48,10 +48,10 @@ The labelled corpus contains live banking trojans, is gitignored, and is never p
 
 | Script | Purpose |
 | :--- | :--- |
-| `validate_corpus.py` | Static-only detection validation. Regenerates [`../docs/evaluation/CORPUS_STATIC_VALIDATION.md`](../docs/evaluation/CORPUS_STATIC_VALIDATION.md) and its JSON artifact. `--check` fails if results moved; `--only <category>` scopes the run |
+| `validate_corpus.py` | Static-only detection validation. Regenerates [`../docs/99_HISTORY/legacy_docs/reference/evaluation/CORPUS_STATIC_VALIDATION.md`](../docs/99_HISTORY/legacy_docs/reference/evaluation/CORPUS_STATIC_VALIDATION.md) and its JSON artifact. `--check` fails if results moved; `--only <category>` scopes the run |
 | `fetch_validation_corpus.py` | Fetches the open-source validation APKs listed in `tests/apks/corpus.manifest.json` |
 | `virustotal_crosscheck.py` | Scores the labelled corpus with the static engine and cross-checks against VirusTotal. `--rate` bounds requests per minute |
-| `validate_static_only_frs.py` | Verifies the static-only FRS values asserted in `docs/evaluation/CASE_STUDIES.md`, including that `correlation_result=None` and `{"available": False}` produce identical axis exclusion |
+| `validate_static_only_frs.py` | Verifies the static-only FRS values asserted in `docs/99_HISTORY/legacy_docs/reference/evaluation/CASE_STUDIES.md`, including that `correlation_result=None` and `{"available": False}` produce identical axis exclusion |
 | `validate_yara_rules.py` | Measures the YARA rule set against the labelled corpus (`--rules`, `--corpus`) |
 
 `validate_corpus.py` exit codes are deliberately distinct: `0` ran and invariants hold, `1` ran and something regressed, `2` could not run because the corpus or Androguard is absent. "Not run" must never be read as "passed".

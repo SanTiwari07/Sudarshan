@@ -50,7 +50,7 @@ function ColorRow({ match }: { match: VideColorMatch }) {
           match.score >= 0.9 ? 'text-rose-700' : 'text-amber-700'
         }`}
       >
-        {exact ? 'exact' : `?${match.distance}`} � {pct(match.score)}
+        {exact ? 'exact' : `Δ${match.distance}`} · {pct(match.score)}
       </span>
     </li>
   );
@@ -80,7 +80,7 @@ function AstTree({ node, depth = 0 }: { node: VideAstNode; depth?: number }) {
         {node.tag && <span className="text-[13px] text-slate-500">{node.tag}</span>}
         {node.text && (
           <span className="text-[13px] text-slate-500 truncate max-w-[180px]" title={node.text}>
-            �{node.text}�
+            “{node.text}”
           </span>
         )}
       </div>

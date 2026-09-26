@@ -450,7 +450,10 @@ async def shared_indicators(
                     SELECT indicator, ioc_type FROM case_iocs WHERE sha256 = ?
               )
             GROUP BY indicator, ioc_type
-            HAVING case_count >= ? AND case_count <= ?
+            -- The aggregate is repeated rather than the alias: SQLite accepts an
+            -- alias in HAVING, PostgreSQL does not (column case_count does
+            -- not exist), which made /cases/{sha}/iocs a 500 on Postgres.
+            HAVING COUNT(DISTINCT sha256) >= ? AND COUNT(DISTINCT sha256) <= ?
             ORDER BY case_count DESC, indicator
             """,
             (sha256, min_cases, prevalence_cap),

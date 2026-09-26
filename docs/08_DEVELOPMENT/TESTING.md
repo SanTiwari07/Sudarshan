@@ -9,11 +9,11 @@
 
 Run unit and backend tests using the virtual environment:
 ```bash
-# Run backend test suite (871 tests)
+# Run backend test suite
 $env:JWT_SECRET_KEY="test_key_for_testing_123456789012345678901234567890"
 .venv\Scripts\python -m pytest backend/tests -v
 
-# Run shared core & engine unit tests (1,958 tests)
+# Run shared core & engine unit tests
 .venv\Scripts\python -m pytest tests/unit -v
 
 # Run full repository test suite

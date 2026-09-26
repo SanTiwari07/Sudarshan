@@ -176,7 +176,27 @@ async def get_current_user(
             detail="Authentication required. Provide Bearer token.",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    payload = _decode_token(creds.credentials)
+    user = await authenticate_token(creds.credentials)
+
+    # Published for middleware that runs after the route and needs to know who
+    # the caller was - the export ledger, specifically. Without this, recording
+    # an export would mean decoding the token a second time.
+    try:
+        request.state.user = user
+    except Exception:  # noqa: BLE001
+        pass
+
+    return user
+
+
+async def authenticate_token(token: str) -> dict:
+    """
+    Run every check `get_current_user` performs on a raw bearer token.
+
+    Shared with the WebSocket handshake, which cannot use the HTTP dependency
+    but must still honour logout, session revocation and disabled accounts.
+    """
+    payload = _decode_token(token)
 
     jti = payload.get("jti")
     if not jti:
@@ -212,15 +232,6 @@ async def get_current_user(
 
     user = dict(user)
     user["_jti"] = jti
-
-    # Published for middleware that runs after the route and needs to know who
-    # the caller was - the export ledger, specifically. Without this, recording
-    # an export would mean decoding the token a second time.
-    try:
-        request.state.user = user
-    except Exception:  # noqa: BLE001
-        pass
-
     return user
 
 

@@ -5,7 +5,7 @@ The container that actually performs analysis. It decompiles the APK, drives the
 The app is declared in [`app/main.py`](app/main.py) as `Sudarshan APK Analysis Engine Microservice`, version **2.3.0**, and listens on port **8001**.
 
 - Platform overview: [`../README.md`](../README.md)
-- Dynamic analysis design: [`../docs/architecture/04_DYNAMIC_ANALYSIS_ENGINE.md`](../docs/architecture/04_DYNAMIC_ANALYSIS_ENGINE.md)
+- Dynamic analysis design: [`../docs/02_ANALYSIS/DYNAMIC_ANALYSIS.md`](../docs/02_ANALYSIS/DYNAMIC_ANALYSIS.md)
 
 > This service has **no authentication of its own** and is deliberately **not published** in `docker-compose.yml`. The backend reaches it at `http://analysis-engine:8001` on the internal Compose network. Do not expose port 8001.
 
@@ -148,4 +148,4 @@ python scripts/preflight.py --container
 
 ### Loose Frida probe scripts
 
-`test_frida*.py`, `restart_frida.py` and `restart_frida_no_l.py` in this directory are hand-run diagnostic probes from dynamic-analysis debugging — attach-by-name, attach-by-PID, spawn, TCP-first transport. They are **not** part of the pytest suite and are not exercised by CI. The maintained tests live in [`../tests/`](../tests/README.md) and [`../backend/tests/`](../backend/README.md).
+Hand-run Frida diagnostic probes that used to live in this directory were removed in the release cleanup; the maintained tests live in [`../tests/`](../tests/README.md) and [`../backend/tests/`](../backend/README.md).

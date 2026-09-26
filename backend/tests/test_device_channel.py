@@ -123,7 +123,10 @@ def test_shell_distinguishes_no_channel_from_command_failure():
     from sudarshan_core.sandbox.device_channel import get_channel
 
     channel = get_channel("emulator-5554")
-    assert channel.shell("echo hi") is None          # not connected
+    # Force "no channel" - a real emulator-5554 attached to the test host
+    # would otherwise answer and turn this into an environment check.
+    with patch.object(channel, "_device", return_value=None):
+        assert channel.shell("echo hi") is None      # not connected
 
     device = MagicMock()
     result = MagicMock()

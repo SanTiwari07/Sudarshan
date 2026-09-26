@@ -300,10 +300,14 @@ async def init_db() -> Dict[str, Any]:
     # Must run outside of _connect since it manages its own transaction via get_db
     await init_artifact_metadata()
 
+    if is_postgres():
+        # `path` is the unused SQLite location; naming it here made the logs
+        # claim SQLite while every query went to PostgreSQL.
+        path = "postgresql (DATABASE_URL)"
     logger.info(
-        "[DB] Initialized SQLite at %s (WAL, FK enforced, indexed); "
-        "migrations %d/%d applied%s",
-        path, len(status["applied"]), status["total"],
+        "[DB] Initialized %s; migrations %d/%d applied%s",
+        path if is_postgres() else f"SQLite at {path} (WAL, FK enforced, indexed)",
+        len(status["applied"]), status["total"],
         f" (+{len(applied)} this boot)" if applied else "",
     )
     if status["unknown"]:

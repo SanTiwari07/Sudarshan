@@ -646,16 +646,21 @@ async def _run_analysis_pipeline(
             network_security_data = mobsf_report.get("network_security", {})
             trackers_data = mobsf_report.get("trackers", [])
             emails_data = mobsf_report.get("emails", [])[:50]
+            _dropped = 0
             for mf in mobsf_report.get("manifest_analysis", []):
                 try:
                     manifest_findings.append(ManifestFinding(**mf))
-                except Exception:
-                    pass
+                except Exception:  # noqa: BLE001
+                    _dropped += 1
             for cf in mobsf_report.get("code_analysis", {}).get("findings", []):
                 try:
                     code_findings.append(CodeFinding(**cf))
-                except Exception:
-                    pass
+                except Exception:  # noqa: BLE001
+                    _dropped += 1
+            if _dropped:
+                # A schema mismatch must be visible: silently dropping MobSF
+                # findings makes the report look cleaner than the scan was.
+                logger.warning("[Upload] %d MobSF finding(s) did not match the schema and were dropped", _dropped)
             logger.info(f"MobSF analysis complete: pkg={package_name}")
         elif androguard_output:
             logger.warning("MobSF failed - using Androguard primary output")

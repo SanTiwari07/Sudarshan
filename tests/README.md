@@ -3,7 +3,7 @@
 Engine-level tests for `sudarshan_core`: risk scoring, sandbox providers, the agentic explorer, VIDE, evidence handling and the dynamic pipeline. Gateway and API tests live in [`../backend/tests/`](../backend/README.md).
 
 - Platform overview: [`../README.md`](../README.md)
-- Evaluation methodology: [`../docs/evaluation/11_EVALUATION.md`](../docs/evaluation/11_EVALUATION.md)
+- Evaluation methodology: [`../docs/10_VALIDATION/VALIDATION.md`](../docs/10_VALIDATION/VALIDATION.md)
 
 ---
 
@@ -29,7 +29,7 @@ docker compose exec backend python -m pytest tests/ backend/tests -q
 
 Select a subset with `-k` against the full invocation rather than passing a bare file path.
 
-**2,622 tests collected** on 2026-08-27 with no collection errors:
+**2,860 tests collected** on 2026-09-26 with no collection errors:
 
 | Path | Collected |
 | :--- | ---: |

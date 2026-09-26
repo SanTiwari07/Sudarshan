@@ -22,7 +22,7 @@ export function parseJwt(token: string): { exp?: number; sub?: string; role?: st
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
-    let base64Url = parts[1];
+    const base64Url = parts[1];
     let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
     while (base64.length % 4) {
       base64 += '=';
@@ -117,15 +117,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    */
   const logout = useCallback(() => {
     const stored = localStorage.getItem('sudarshan_token');
-    if (stored) {
-      void fetch(`${API_BASE}/auth/logout`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${stored}` },
-      }).catch(() => {
-        /* best-effort: the session expires on its own */
-      });
-    }
+    // Local state goes first so nothing below can leave the browser signed in.
     clearLocalAuth();
+    if (stored) {
+      try {
+        Promise.resolve(
+          fetch(`${API_BASE}/auth/logout`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${stored}` },
+          }),
+        ).catch(() => {
+          /* best-effort: the session expires on its own */
+        });
+      } catch {
+        /* best-effort: the session expires on its own */
+      }
+    }
   }, [clearLocalAuth]);
 
   /**

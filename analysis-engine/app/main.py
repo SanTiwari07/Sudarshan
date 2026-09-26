@@ -116,7 +116,8 @@ class _InternalServiceAuthMiddleware(BaseHTTPMiddleware):
                     },
                 )
             return await call_next(request)
-        if request.headers.get(HEADER_NAME) != expected:
+        import hmac
+        if not hmac.compare_digest(request.headers.get(HEADER_NAME, ""), expected):
             return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
         return await call_next(request)
 

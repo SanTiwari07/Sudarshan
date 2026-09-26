@@ -1,7 +1,7 @@
 # SUDARSHAN — Threat Model & Attack Surface
 
 > **Classification:** AUTHORITATIVE  
-> **Reference:** `docs/99_HISTORY/INCIDENTS/P0_RED_TEAM_PENETRATION_REPORT.md`  
+> **Reference:** `docs/99_HISTORY/legacy_docs/security/INCIDENTS/P0_RED_TEAM_PENETRATION_REPORT.md`  
 
 ---
 

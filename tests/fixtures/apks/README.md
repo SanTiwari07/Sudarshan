@@ -5,7 +5,7 @@ Sample inventory for the dynamic pipeline validation runs.
 Verified against `corpus.manifest.json` and `scripts/fetch_validation_corpus.py` on **2026-08-27**.
 
 - Test suite overview: [`../README.md`](../README.md)
-- Validation protocols: [`../../docs/operations/VALIDATION.md`](../../docs/operations/VALIDATION.md)
+- Validation protocols: [`../../docs/10_VALIDATION/VALIDATION.md`](../../../docs/10_VALIDATION/VALIDATION.md)
 
 ---
 
@@ -84,7 +84,7 @@ The fixtures in `backend/tests/case_study_fixtures.py` are static regression dat
 
 `VIDE_testapks/` holds ten built baseline applications — `BASE-01-SBI` through `BASE-10-UNION` — used by `scripts/verify_vide_corpus.py` and the VIDE attribution tests.
 
-> All ten currently produce identical fingerprints, and their palettes collide at ΔE 0. Only the bank name distinguishes one from another, so attribution against this set rests almost entirely on the string axis. Treat detection results from it as meaningful and attribution results as provisional. See [KNOWN_LIMITATIONS.md §5.3](../../docs/features/KNOWN_LIMITATIONS.md).
+> All ten currently produce identical fingerprints, and their palettes collide at ΔE 0. Only the bank name distinguishes one from another, so attribution against this set rests almost entirely on the string axis. Treat detection results from it as meaningful and attribution results as provisional. See [KNOWN_LIMITATIONS.md §5.3](../../../docs/05_SECURITY/KNOWN_SECURITY_LIMITATIONS.md).
 
 ---
 
@@ -109,6 +109,6 @@ A live sandbox is required — a rooted emulator with a matching `frida-server`.
 
 ## Relationship to the labelled malware corpus
 
-This corpus is **not** the labelled corpus behind the published detection figures. That one lives outside the repository, is resolved through `SUDARSHAN_LABELLED_CORPUS_DIR`, holds live banking trojans, and is driven by `scripts/validate_corpus.py` — see [`../../docs/evaluation/CORPUS_STATIC_VALIDATION.md`](../../docs/evaluation/CORPUS_STATIC_VALIDATION.md).
+This corpus is **not** the labelled corpus behind the published detection figures. That one lives outside the repository, is resolved through `SUDARSHAN_LABELLED_CORPUS_DIR`, holds live banking trojans, and is driven by `scripts/validate_corpus.py` — see [`../../docs/99_HISTORY/legacy_docs/reference/evaluation/CORPUS_STATIC_VALIDATION.md`](../../../docs/99_HISTORY/legacy_docs/reference/evaluation/CORPUS_STATIC_VALIDATION.md).
 
 This corpus exercises the **pipeline**: launch paths, permission behaviour, WebView handling, crash recovery, exploration coverage. That one measures **detection accuracy**. Do not report a result from one as a result from the other.

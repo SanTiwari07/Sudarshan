@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, vi, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
-import App from '../types/case';
+import App from '../App';
 import { isTokenValid, parseJwt } from '../context/AuthContext';
 import { handle401Response } from '../config';
 
@@ -33,6 +33,14 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     localStorage.clear();
     sessionStorage.clear();
     vi.restoreAllMocks();
+    // Every test gets a well-formed network stub; a bare vi.fn() returns
+    // undefined and crashes any component that calls fetch(...).then().
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+      text: async () => '',
+    }) as unknown as typeof fetch;
   });
 
   afterEach(() => {
@@ -89,7 +97,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     fireEvent.change(screen.getByPlaceholderText('analyst_name'), {
       target: { value: 'analyst_bob' },
     });
-    fireEvent.change(screen.getByPlaceholderText('��������'), {
+    fireEvent.change(screen.getByPlaceholderText('••••••••'), {
       target: { value: 'SecretPassword123' },
     });
 
@@ -128,7 +136,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     fireEvent.change(screen.getByPlaceholderText('analyst_name'), {
       target: { value: 'wrong_user' },
     });
-    fireEvent.change(screen.getByPlaceholderText('��������'), {
+    fireEvent.change(screen.getByPlaceholderText('••••••••'), {
       target: { value: 'wrong_password' },
     });
 
@@ -539,7 +547,7 @@ describe('SUDARSHAN Authentication & Routing Flow Test Matrix (20/20)', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole('complementary', { name: /Sidebar Navigation/i })).toBeInTheDocument();
+      expect(screen.getByRole('complementary', { name: /primary navigation/i })).toBeInTheDocument();
     });
   });
 

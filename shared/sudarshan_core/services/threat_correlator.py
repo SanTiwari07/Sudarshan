@@ -17,7 +17,9 @@ Results are cached per-hash for the session.
 import asyncio
 import hashlib
 import logging
+import time
 import os
+import re
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -41,10 +43,15 @@ def _load_env_if_needed():
         ]
         for env_file in candidate_paths:
             if env_file.exists():
-                load_dotenv(dotenv_path=env_file, override=True)
+                # override=False: the process environment (Compose, the
+                # hardened overlay, CI, tests) must outrank a .env file. With
+                # override=True the first key lookup silently replaced every
+                # already-set variable - SUDARSHAN_ENV, MOBSF_HOST, model
+                # names - with whatever the mounted .env happened to hold.
+                load_dotenv(dotenv_path=env_file, override=False)
                 break
-    except Exception:
-        pass
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("[Correlator] .env load skipped: %s", exc)
 
 # The .env walk-up stats up to six paths and may re-parse the file with
 # override=True. These getters are called INSIDE the per-URL, per-domain and
@@ -95,9 +102,37 @@ def configure_ioc_cache(getter, setter) -> None:
     logger.info("[Correlator] Persistent IOC cache enabled")
 
 
-async def _cached_lookup(indicator: str, ioc_type: str):
-    if _cache_get is None or not indicator:
+# In-process fallback for when no persistent cache is injected. The analysis
+# engine - which is where correlation actually runs for every upload - has no
+# app.db, so without this every analysis re-queried every provider, including
+# the 404/"unknown" answers the persistent cache was built to remember.
+_MEM_CACHE: Dict[tuple, tuple] = {}
+_MEM_CACHE_TTL_SECONDS = 24 * 3600
+_MEM_CACHE_MAX = 5000
+
+
+def _mem_get(indicator: str, ioc_type: str):
+    hit = _MEM_CACHE.get((indicator, ioc_type))
+    if not hit:
         return None
+    expires, payload = hit
+    if expires < time.monotonic():
+        _MEM_CACHE.pop((indicator, ioc_type), None)
+        return None
+    return payload
+
+
+def _mem_put(indicator: str, ioc_type: str, payload: Dict[str, Any]) -> None:
+    if len(_MEM_CACHE) >= _MEM_CACHE_MAX:
+        _MEM_CACHE.pop(next(iter(_MEM_CACHE)))  # oldest insertion
+    _MEM_CACHE[(indicator, ioc_type)] = (time.monotonic() + _MEM_CACHE_TTL_SECONDS, payload)
+
+
+async def _cached_lookup(indicator: str, ioc_type: str):
+    if not indicator:
+        return None
+    if _cache_get is None:
+        return _mem_get(indicator, ioc_type)
     try:
         row = await _cache_get(indicator, ioc_type)
         if row:
@@ -109,7 +144,10 @@ async def _cached_lookup(indicator: str, ioc_type: str):
 
 
 async def _cache_store(indicator: str, ioc_type: str, payload: Dict[str, Any]) -> None:
-    if _cache_put is None or not indicator or not payload:
+    if not indicator or not payload:
+        return
+    if _cache_put is None:
+        _mem_put(indicator, ioc_type, payload)
         return
     try:
         await _cache_put(
@@ -397,6 +435,40 @@ def extract_dynamic_urls(dynamic_result: Optional[Dict[str, Any]] = None) -> Lis
 
 # ─── Main Correlator ─────────────────────────────────────────────────────────
 
+_URL_TOKEN_RE = re.compile(r"https?://[^\s\"'<>()\[\]{}]+", re.IGNORECASE)
+_IP_TOKEN_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+
+
+def _indicator_from_string(value: str) -> Optional[str]:
+    """
+    The URL or IP inside an extracted string, or None.
+
+    Static analysis records the whole DEX string that CONTAINS a URL - e.g.
+    ") Please report to Google or use https://goo.gle/compose-feedback" - and
+    those sentences were sent to VirusTotal verbatim, burning URL quota on
+    lookups that can never match and leaking arbitrary app text.
+    """
+    if not value:
+        return None
+    m = _URL_TOKEN_RE.search(value)
+    if m:
+        return m.group(0).rstrip(".,;:'\"")
+    m = _IP_TOKEN_RE.search(value)
+    if m:
+        return m.group(0)
+    token = value.strip()
+    return token if token and " " not in token and "." in token else None
+
+
+def _indicators(values: List[str]) -> List[str]:
+    out: List[str] = []
+    for v in values or []:
+        ind = _indicator_from_string(v)
+        if ind and ind not in out:
+            out.append(ind)
+    return out
+
+
 async def correlate(
     sha256: str,
     urls: List[str],
@@ -418,8 +490,9 @@ async def correlate(
     result = _empty_result()
 
     # Combine static and dynamic URLs, tracking origin
+    urls = _indicators(urls)
     all_urls = list(urls)
-    dyn_set = set(dynamic_urls or [])
+    dyn_set = set(_indicators(list(dynamic_urls or [])))
     for d_url in dyn_set:
         if d_url not in all_urls:
             all_urls.append(d_url)

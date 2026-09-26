@@ -182,7 +182,7 @@ apk_details/
 # Scoped deliberately rather than ignoring "*.png": frontend/logo/ holds the
 # three real Sudarshan brand assets and must stay tracked.
 artifacts_qa/
-tests/apks/validation_runs/
+**/validation_runs/
 **/sudarshan_artifacts/
 
 # Script Generated Output
@@ -199,3 +199,6 @@ __pycache__/
 artifacts/
 
 uploads/
+
+# Gradle build caches (never source)
+**/.gradle/

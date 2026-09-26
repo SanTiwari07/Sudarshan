@@ -446,8 +446,20 @@ def test_dynamic_analysis(apk_path: str):
 
         if result.get("available"):
             _assert(result.get("canary_received"), "Frida canary received (hooks loaded)")
-            _assert(result.get("dynamic_status") in ("EVENTS_CAPTURED", "NO_BEHAVIOR_OBSERVED"),
-                    "Dynamic status is valid", result.get("dynamic_status"))
+            # Any declared status is a valid, honest outcome - e.g. a legacy
+            # sample whose spawn-gated launch falls back reports
+            # INSTRUMENTED_TOO_LATE. What must never happen is an inconclusive
+            # run being scored as a clean dynamic axis.
+            from sudarshan_core.engines.frida_sandbox import DynamicAnalysisStatus
+            from sudarshan_core.engines.risk_engine import (
+                _INCONCLUSIVE_STATUSES, dynamic_exclusion_reason,
+            )
+            status = result.get("dynamic_status")
+            _assert(status in {s.value for s in DynamicAnalysisStatus} | {"NO_BEHAVIOR_OBSERVED"},
+                    "Dynamic status is valid", status)
+            if status in _INCONCLUSIVE_STATUSES:
+                _assert(dynamic_exclusion_reason(result) is not None,
+                        "Inconclusive run is excluded from scoring", status)
 
     except Exception as e:
         _assert(False, "Dynamic analysis pipeline", str(e))

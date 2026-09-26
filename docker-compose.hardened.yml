@@ -3,7 +3,7 @@
 #
 # Removes dev bind-mounts, enables read-only rootfs, drops capabilities, and
 # applies seccomp. Dynamic analysis still requires a host-side Genymotion VM on
-# a private host-only NIC (see docs/security/P0_SANDBOX_ESCAPE_INCIDENT.md).
+# a private host-only NIC (see docs/99_HISTORY/legacy_docs/security/INCIDENTS/P0_SANDBOX_ESCAPE_INCIDENT.md).
 
 services:
   backend:
@@ -18,7 +18,10 @@ services:
       - SUDARSHAN_ENV=production
       - SANDBOX_CONTAINMENT_STRICT=true
       - SUDARSHAN_DB_PATH=/app/data/sudarshan.db
-    volumes:
+    # !override REPLACES the base list. Compose merges volume lists by target,
+    # so without it ./backend:/app and ./shared stayed mounted read-write and
+    # this overlay silently ran the dev bind-mounts it claims to remove.
+    volumes: !override
       - uploads:/app/uploads
       - ./.env:/app/.env:ro
       # Mandatory here, not merely convenient. `read_only: true` below makes
@@ -26,14 +29,17 @@ services:
       # created and startup fails on init_db().
       - dbdata:/app/data
       - ./scripts:/opt/sudarshan-scripts:ro
+      - ./VIDE:/opt/VIDE:ro
     # Dev bind-mounts removed - image-baked code only.
 
   analysis-engine:
     read_only: true
     tmpfs:
       - /tmp:size=512M,mode=1777
+    # no-new-privileges is already set in docker-compose.yml; repeating it here
+    # made the merged config invalid ("items at 0 and 1 are equal"), so the
+    # hardened overlay could not be started at all.
     security_opt:
-      - no-new-privileges:true
       - seccomp:deploy/security/seccomp-analysis-engine.json
     cap_drop:
       - ALL
@@ -41,10 +47,15 @@ services:
       - SUDARSHAN_ENV=production
       - SANDBOX_CONTAINMENT_STRICT=true
       - FRIDA_LISTEN_HOST=127.0.0.1
-    volumes:
+    # !override: see backend. Also drops the host ~/.android mount and the
+    # writable ./tools bind mount from the malware-executing container.
+    volumes: !override
       - uploads:/app/uploads
       - ./.env:/app/.env:ro
       - mitmproxy_har:/mitmproxy_har:ro
+      - ./VIDE:/opt/VIDE:ro
+      # Named volume instead of the writable host ./tools bind mount.
+      - frida_cache:/opt/frida-cache
     # Do NOT mount ~/.android in production - host keystore exposure.
 
   mitmproxy:
@@ -53,3 +64,6 @@ services:
   mobsf:
     ports:
       - "127.0.0.1:8008:8000"
+
+volumes:
+  frida_cache:

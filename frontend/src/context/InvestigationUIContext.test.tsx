@@ -15,6 +15,7 @@ import { InvestigationUIProvider, useInvestigationUI } from './InvestigationUICo
  */
 
 function useUI(initialEntry = '/fraud-card') {
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- renderHook callback runs inside a test component
   return renderHook(() => useInvestigationUI(), {
     wrapper: ({ children }) => (
       <MemoryRouter initialEntries={[initialEntry]}>

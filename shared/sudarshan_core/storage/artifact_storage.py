@@ -100,7 +100,14 @@ class GCSArtifactStorage(ArtifactStorage):
         if bucket_name is None:
             bucket_name = os.environ["GCS_BUCKET_NAME"]
         self.bucket_name = bucket_name
-        from google.cloud import storage
+        try:
+            from google.cloud import storage
+        except ImportError as exc:  # pragma: no cover - depends on the image
+            raise RuntimeError(
+                "ARTIFACT_STORAGE=gcs requires the google-cloud-storage package, "
+                "which is not in backend/ or analysis-engine/requirements.txt. "
+                "Install it in both images before enabling GCS storage."
+            ) from exc
         self.client = storage.Client()
         self.bucket = self.client.bucket(self.bucket_name)
 

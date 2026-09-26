@@ -3,7 +3,7 @@
 React 18 single-page application. It is the analyst's working surface: upload a sample, watch the pipeline, read the case, inspect the evidence behind each finding, question the AI investigator, and export the report.
 
 - Platform overview: [`../README.md`](../README.md)
-- UI design notes: [`../docs/dashboard/10_DASHBOARD.md`](../docs/dashboard/10_DASHBOARD.md)
+- UI design notes: [`../docs/99_HISTORY/legacy_docs/reference/dashboard/10_DASHBOARD.md`](../docs/99_HISTORY/legacy_docs/reference/dashboard/10_DASHBOARD.md)
 
 ---
 

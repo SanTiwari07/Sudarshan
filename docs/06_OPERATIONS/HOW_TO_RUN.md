@@ -102,7 +102,8 @@ ABUSEIPDB_API_KEY=
 
 # ── Services ──
 MOBSF_HOST=http://mobsf:8000
-MOBSF_API_KEY=
+MOBSF_API_KEY=                  # REQUIRED by docker-compose.yml (no default)
+POSTGRES_PASSWORD=              # REQUIRED by docker-compose.yml (no default)
 MITMPROXY_PORT=8085
 SUDARSHAN_DB_PATH=/app/data/sudarshan.db
 

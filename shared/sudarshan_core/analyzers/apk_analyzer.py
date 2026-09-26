@@ -137,8 +137,8 @@ def _detects_accessibility_service(apk) -> bool:
             details = apk.get_element("service", "permission", name=svc) or ""
             if "BIND_ACCESSIBILITY_SERVICE" in str(details).upper():
                 return True
-    except Exception:
-        pass
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[APKAnalyzer] accessibility check (service permission) failed: %s", exc)
 
     # 2. Declared intent-filter actions
     try:
@@ -146,8 +146,8 @@ def _detects_accessibility_service(apk) -> bool:
             for action in apk.get_intent_filters("service", svc).get("action", []):
                 if "accessibilityservice" in action.lower():
                     return True
-    except Exception:
-        pass
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[APKAnalyzer] accessibility check (intent filters) failed: %s", exc)
 
     # 3. Raw manifest substring match
     try:

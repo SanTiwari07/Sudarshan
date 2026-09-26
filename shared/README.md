@@ -91,7 +91,7 @@ Scoring is the authority on `base_score`, `final_risk_score`, `risk_band` and `v
 
 ### VIDE
 
-[`engines/vide/`](sudarshan_core/engines/vide/) detects visual impersonation of banking brands by comparing the suspect's UI against baselines on three axes — string containment, view-hierarchy structure and CIEDE2000 ΔE colour distance — plus a fail-closed signer registry. Detection threshold is `0.20` in both `compare.py` and `corpus_compare.py`; the fuzzy string axis matches at `82.0`. See [`../docs/architecture/VIDE.md`](../docs/architecture/VIDE.md).
+[`engines/vide/`](sudarshan_core/engines/vide/) detects visual impersonation of banking brands by comparing the suspect's UI against baselines on three axes — string containment, view-hierarchy structure and CIEDE2000 ΔE colour distance — plus a fail-closed signer registry. Detection threshold is `0.20` in both `compare.py` and `corpus_compare.py`; the fuzzy string axis matches at `82.0`. See [`../docs/02_ANALYSIS/VISUAL_IMPERSONATION.md`](../docs/02_ANALYSIS/VISUAL_IMPERSONATION.md).
 
 ### Reporting
 

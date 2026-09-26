@@ -28,13 +28,13 @@ Audience:                Core contributors, module developers, security research
 
 | Path | Contents | README |
 | :--- | :--- | :--- |
-| `backend/` | FastAPI gateway, auth, persistence, workers, AI layer | [`../backend/README.md`](../backend/README.md) |
-| `analysis-engine/` | Analysis microservice and its container | [`../analysis-engine/README.md`](../analysis-engine/README.md) |
-| `shared/sudarshan_core/` | Domain layer both services consume | [`../shared/README.md`](../shared/README.md) |
-| `frontend/` | React 18 analyst dashboard | [`../frontend/README.md`](../frontend/README.md) |
-| `tests/` | Engine-level pytest suite | [`../tests/README.md`](../tests/README.md) |
-| `backend/tests/` | Gateway pytest suite | [`../backend/README.md`](../backend/README.md) |
-| `scripts/` | Operational and validation tooling | [`../scripts/README.md`](../scripts/README.md) |
+| `backend/` | FastAPI gateway, auth, persistence, workers, AI layer | [`../backend/README.md`](backend/README.md) |
+| `analysis-engine/` | Analysis microservice and its container | [`../analysis-engine/README.md`](analysis-engine/README.md) |
+| `shared/sudarshan_core/` | Domain layer both services consume | [`../shared/README.md`](shared/README.md) |
+| `frontend/` | React 18 analyst dashboard | [`../frontend/README.md`](frontend/README.md) |
+| `tests/` | Engine-level pytest suite | [`../tests/README.md`](tests/README.md) |
+| `backend/tests/` | Gateway pytest suite | [`../backend/README.md`](backend/README.md) |
+| `scripts/` | Operational and validation tooling | [`../scripts/README.md`](scripts/README.md) |
 | `docs/` | This documentation portal | [`README.md`](README.md) |
 
 Anything that decides something — what a sample is, what it did, what it scores — belongs in `shared/sudarshan_core/`, not in a service. That is the whole reason the package exists: the gateway and the engine must not be able to disagree.
@@ -72,7 +72,7 @@ cd backend && python -m uvicorn app.main:app --reload --port 8000
 cd frontend && npm ci && npm run dev
 ```
 
-Full setup guide, including the sandbox: [`HOW_TO_RUN.md`](getting-started/HOW_TO_RUN.md).
+Full setup guide, including the sandbox: [`HOW_TO_RUN.md`](docs/06_OPERATIONS/HOW_TO_RUN.md).
 
 ### Git hooks
 
@@ -91,7 +91,7 @@ powershell -File scripts/enable-githooks.ps1     # or: git config core.hooksPath
 - **Runtime.** The backend image is Python 3.11-slim; the analysis-engine image is Python 3.12. `shared/pyproject.toml` declares `requires-python = ">=3.11"`. Do not use syntax newer than 3.11.
 - **Type hints** on every function signature.
 - **PEP 8** formatting. No formatter is configured in this repository, so match the surrounding file rather than reformatting it.
-- **Pydantic v2** (`BaseModel`) for API parameters and internal domain contracts — see [`schemas.py`](../shared/sudarshan_core/models/schemas.py).
+- **Pydantic v2** (`BaseModel`) for API parameters and internal domain contracts — see [`schemas.py`](shared/sudarshan_core/models/schemas.py).
 - **Dependencies** are pinned per service in `backend/requirements.txt` and `analysis-engine/requirements.txt`. `shared/pyproject.toml` deliberately declares none; duplicating them would reintroduce the drift the shared package exists to remove.
 
 ### TypeScript and React
@@ -156,7 +156,7 @@ Frontend: `cd frontend && npm test` (Vitest).
 | API and auth | `backend/tests/test_boundaries.py`, `test_hackathon_security_hardening.py`, `test_batch.py`, `test_prompt_injection.py` |
 | Reporting | `backend/tests/test_report_generator.py`, `test_pdf_generator.py` |
 
-Full inventory: [`../tests/README.md`](../tests/README.md).
+Full inventory: [`../tests/README.md`](tests/README.md).
 
 ---
 
@@ -213,12 +213,12 @@ Documents that must be updated when behaviour changes:
 
 | Change | Also update |
 | :--- | :--- |
-| A route added, removed or re-signatured | [`api/ENDPOINTS.md`](api/ENDPOINTS.md) |
-| A feature reaching or leaving working state | [`FEATURE_STATUS.md`](features/FEATURE_STATUS.md) |
-| A new operational constraint | [`KNOWN_LIMITATIONS.md`](features/KNOWN_LIMITATIONS.md) |
-| A scoring formula, weight or floor | [`architecture/08_DETERMINISTIC_RISK_ENGINE.md`](architecture/08_DETERMINISTIC_RISK_ENGINE.md) and the README risk section |
-| A new environment variable | `.env.example` and [`HOW_TO_RUN.md`](getting-started/HOW_TO_RUN.md) |
-| A directory or module moved | [`CODEBASE_MAP.md`](reference/CODEBASE_MAP.md) and the relevant component README |
+| A route added, removed or re-signatured | [`api/ENDPOINTS.md`](docs/07_API/API_REFERENCE.md) |
+| A feature reaching or leaving working state | [`FEATURE_STATUS.md`](docs/10_VALIDATION/FEATURE_STATUS.md) |
+| A new operational constraint | [`KNOWN_LIMITATIONS.md`](docs/05_SECURITY/KNOWN_SECURITY_LIMITATIONS.md) |
+| A scoring formula, weight or floor | [`architecture/08_DETERMINISTIC_RISK_ENGINE.md`](docs/03_RISK/RISK_ENGINE.md) and the README risk section |
+| A new environment variable | `.env.example` and [`HOW_TO_RUN.md`](docs/06_OPERATIONS/HOW_TO_RUN.md) |
+| A directory or module moved | [`CODEBASE_MAP.md`](docs/01_ARCHITECTURE/CODEBASE_MAP.md) and the relevant component README |
 
 ---
 

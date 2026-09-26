@@ -205,6 +205,23 @@ def label_weights(baseline_label_sets: Sequence[Sequence[str]]) -> Dict[str, flo
     }
 
 
+def _has_word(value: str) -> bool:
+    """True when ``value`` carries at least one alphabetic token of 2+ letters."""
+    return any(len(t) >= 2 and t.isalpha() for t in _TOKEN_RE.findall((value or "").lower()))
+
+
+def _word_candidates(candidates: Sequence[str]) -> List[str]:
+    """
+    Candidates that can stand for a UI label.
+
+    Token-set ratio scores a subset at 100, so a bare ``"6"`` or ``"5"`` from a
+    calculator's string table "reproduced" ``"Enter 6-Digit MPIN"`` and
+    ``"Get up to 5,00,000 instantly"`` at ratio 100 and pushed a benign app over
+    the VIDE threshold. A string with no word in it cannot reproduce a label.
+    """
+    return [c for c in candidates if c and c.strip() and _has_word(c)]
+
+
 def fuzzy_containment(
     targets: Sequence[str],
     candidates: Sequence[str],
@@ -227,7 +244,7 @@ def fuzzy_containment(
     wanted = [t for t in targets if t and t.strip()]
     if not wanted:
         return 0.0, [], []
-    pool = [c for c in candidates if c and c.strip()]
+    pool = _word_candidates(candidates)
     if not pool:
         return 0.0, [], []
 
@@ -267,7 +284,7 @@ def shares_any(
     threshold: float = MATCH_THRESHOLD,
 ) -> int:
     """Count of entries in ``a`` that have a fuzzy counterpart in ``b``."""
-    pool = [s for s in b if s and s.strip()]
+    pool = _word_candidates(b)
     if not pool:
         return 0
     hits = 0

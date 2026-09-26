@@ -63,8 +63,8 @@ function PayloadCard({ payload, index }: { payload: VideOverlayPayload; index: n
             {payload.hook || payload.source || 'WebView payload'}
           </p>
           <p className="text-[13px] text-slate-500 font-mono truncate">
-            {payload.sha256?.slice(0, 24)}� � {formatBytes(payload.length ?? 0)}
-            {payload.truncated ? ' � truncated' : ''}
+            {payload.sha256?.slice(0, 24)}… · {formatBytes(payload.length ?? 0)}
+            {payload.truncated ? ' · truncated' : ''}
           </p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">

@@ -14,7 +14,7 @@ docker compose -f docker-compose.yml up -d
 ### PostgreSQL Activation
 In `.env`, set:
 ```ini
-DATABASE_URL=postgresql://sudarshan:sudarshan@postgres:5432/sudarshan
+POSTGRES_PASSWORD=<strong password>   # Compose derives DATABASE_URL from it
 SUDARSHAN_ENV=production
 JWT_SECRET_KEY=<generate_secure_random_hex_64>
 ANALYSIS_ENGINE_INTERNAL_TOKEN=<generate_internal_token>

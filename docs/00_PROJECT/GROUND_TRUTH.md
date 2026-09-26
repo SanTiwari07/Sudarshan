@@ -91,7 +91,7 @@ graph TB
 | `sudarshan-analysis-engine` | 8001 | *Unexposed* | APK analysis, Frida & ADB driver | Internal service token (`ANALYSIS_ENGINE_INTERNAL_TOKEN`) |
 | `sudarshan-mobsf` | 8000 | `8008` | Optional Mobile Security Framework | API Key (`MOBSF_API_KEY`) |
 | `sudarshan-mitmproxy` | 8080 | `8085` | Transparent HTTPS proxy & HAR dump | Localhost loopback binding |
-| `sudarshan-postgres` | 5432 | `5432` | Production persistence layer | Username/Password credentials |
+| `sudarshan-postgres` | 5432 | `127.0.0.1:5432` | Default persistence layer in Compose | `POSTGRES_PASSWORD` (required) |
 | `sudarshan-laya` | 8000 | `8005` | System-1 calibrated decision engine | Optional profile (`--profile laya`) |
 
 ---
@@ -177,6 +177,6 @@ VIDE evaluates impersonation across 4 independent axes:
 
 1. **Relational Database:** Dual-engine architecture.
    - Development default: SQLite (`/app/data/sudarshan.db`).
-   - Production mode: PostgreSQL 15 (`DATABASE_URL=postgresql://sudarshan:sudarshan@postgres:5432/sudarshan`).
+   - Production mode: PostgreSQL 15 (`DATABASE_URL` built by Compose from `POSTGRES_PASSWORD`; the Compose stack uses PostgreSQL by default).
 2. **Shared Volume (`uploads`):** Zero-copy file sharing between backend gateway and analysis engine. File paths are strictly validated to prevent filesystem traversal.
 3. **Artifact Storage:** Extensible storage abstraction (`shared/sudarshan_core/storage/artifact_storage.py`) supporting local filesystem and cloud object storage.

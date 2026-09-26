@@ -316,6 +316,9 @@ async def _process_batch(batch_id: str) -> None:
 
 _pending_batches: "asyncio.Queue[str]" = asyncio.Queue()
 _active_batch_ids: set = set()
+# Strong references to running batch tasks. The event loop only keeps weak
+# references, so a bare create_task() could be garbage-collected mid-batch.
+_batch_tasks: set = set()
 
 
 async def _main_worker_loop() -> None:
@@ -368,7 +371,9 @@ async def _main_worker_loop() -> None:
                 finally:
                     _active_batch_ids.discard(bid)
 
-            asyncio.create_task(_run_batch(batch_id), name=f"batch-{batch_id[:8]}")
+            _task = asyncio.create_task(_run_batch(batch_id), name=f"batch-{batch_id[:8]}")
+            _batch_tasks.add(_task)
+            _task.add_done_callback(_batch_tasks.discard)
             _pending_batches.task_done()
 
         except asyncio.CancelledError:
@@ -402,6 +407,10 @@ async def stop_batch_worker() -> None:
             await _worker_task
         except asyncio.CancelledError:
             pass
+    for _task in list(_batch_tasks):
+        _task.cancel()
+    if _batch_tasks:
+        await asyncio.gather(*_batch_tasks, return_exceptions=True)
     logger.info("[BatchWorker] Batch worker stopped")
 
 

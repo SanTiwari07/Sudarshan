@@ -22,7 +22,7 @@ Verified against the active codebase on **2026-08-27**.
 
 No feature here is described as "production-ready". The repository has no CI pipeline, persistence is a single SQLite file, and the queue is in-process — those are deployment properties, not feature properties, and they are recorded in [KNOWN_LIMITATIONS.md](../05_SECURITY/KNOWN_SECURITY_LIMITATIONS.md).
 
-Test paths are relative to the repository root. **2,841 tests collected** across `tests/` and `backend/tests` on 2026-08-27.
+Test paths are relative to the repository root. **2,860 tests collected** (2,833 passed, 27 skipped, 0 failed on 2026-09-26) across `tests/` and `backend/tests` on 2026-08-27.
 
 ---
 
@@ -55,7 +55,7 @@ Test paths are relative to the repository root. **2,841 tests collected** across
 | Investigation manifest | Implemented | `shared/sudarshan_core/models/manifest.py` | `tests/unit/test_static_dynamic_bridge.py` | Minimal hook profile handed to the dynamic run |
 | Capability profile | Implemented | `shared/sudarshan_core/engines/capability_profile.py` | `tests/unit/test_capability_profile.py` | Declared-capability summary bridging static to runtime |
 | MobSF enrichment | Partially implemented | `shared/sudarshan_core/services/mobsf_client.py` | `tests/unit/test_mobsf_client.py` | Optional. An unreachable `MOBSF_HOST` logs a warning and the pipeline continues; bound it with `MOBSF_MAX_SECONDS` |
-| YARA scanning | Implemented | `shared/sudarshan_core/engines/yara_scanner.py`, `engines/yara_rules/` | `tests/unit/test_yara_scanner.py`, `docs/reference/YARA_RULES.md` | Eight rules in two files, aimed at decrypted runtime strings rather than the packed APK. `yara-python` is a soft dependency; absent, the scanner logs that it is disabled |
+| YARA scanning | Implemented | `shared/sudarshan_core/engines/yara_scanner.py`, `engines/yara_rules/` | `tests/unit/test_yara_scanner.py`, `docs/99_HISTORY/legacy_docs/reference/YARA_RULES.md` | Eight rules in two files, aimed at decrypted runtime strings rather than the packed APK. `yara-python` is a soft dependency; absent, the scanner logs that it is disabled |
 
 ## VIDE — visual impersonation
 
@@ -218,7 +218,7 @@ Test paths are relative to the repository root. **2,841 tests collected** across
 | Feature | Status | Implementation | Evidence | Notes |
 | :--- | :--- | :--- | :--- | :--- |
 | Docker Compose stack | Implemented | `docker-compose.yml` | — | frontend, backend, analysis-engine, mitmproxy, mobsf |
-| Hardened production overlay | Implemented | `docker-compose.hardened.yml`, `deploy/security/seccomp-analysis-engine.json` | `docs/security/P0_SANDBOX_ESCAPE_INCIDENT.md` | Read-only rootfs, `cap_drop: ALL`, seccomp, no dev bind-mounts |
+| Hardened production overlay | Implemented | `docker-compose.hardened.yml`, `deploy/security/seccomp-analysis-engine.json` | `docs/99_HISTORY/legacy_docs/security/INCIDENTS/P0_SANDBOX_ESCAPE_INCIDENT.md` | Read-only rootfs, `cap_drop: ALL`, seccomp, no dev bind-mounts |
 | Windows one-command bootstrap | Implemented | `start.ps1` | — | `-Detach` and `-SkipSandbox` variants |
 | Preflight checks | Implemented | `scripts/preflight.py`, `shared/sudarshan_core/preflight.py` | `backend/tests/test_frida_preflight.py` | `--container`, `--strict`, `--json` |
 | Database migrations | Implemented | `backend/app/db/migrations.py` | `backend/tests/test_persistence_layer.py` | Additive only |

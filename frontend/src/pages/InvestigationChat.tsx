@@ -328,14 +328,15 @@ function MarkdownRenderer({
   isStreaming?: boolean;
   onOpenEvidence?: (id: string) => void;
 }) {
-  if (!content) return null;
-
   // Keyed on the text alone: a caret blinking on and off must not re-run the
-  // whole formatting pass over the answer behind it.
+  // whole formatting pass over the answer behind it. Computed before the empty
+  // check so the hook order never depends on the content.
   const blocks = useMemo(
-    () => autoFormatInvestigationText(content).split(/(```[\s\S]*?```)/g),
+    () => (content ? autoFormatInvestigationText(content).split(/(```[\s\S]*?```)/g) : []),
     [content]
   );
+
+  if (!content) return null;
 
   return (
     <div className="w-full min-w-0 space-y-3 font-sans text-[16px] leading-[1.7] text-slate-700">
@@ -773,10 +774,16 @@ function MessageActions({
 // ─── Main InvestigationChat Component ───────────────────────────────────────────
 
 export default function InvestigationChat({ data }: { data: FraudCardData | null }) {
+  // The null check lives in this wrapper so the body's hooks always run in the
+  // same order; returning early above them crashed React ("Rendered more hooks
+  // than during the previous render") the moment a case finished loading.
+  if (!data) return null;
+  return <InvestigationChatBody data={data} />;
+}
+
+function InvestigationChatBody({ data }: { data: FraudCardData }) {
   const { investigationBundle } = useAnalysis();
   const { openLedger, openEvidence } = useInvestigationUI();
-
-  if (!data) return null;
 
   /*
    * The grounding strip.

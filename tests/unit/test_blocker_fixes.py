@@ -127,6 +127,9 @@ def test_adb_bootstrap_device_serial_overrides(monkeypatch, capsys):
     
     monkeypatch.setenv("ADB_HOST", "192.168.56.101")
     monkeypatch.setenv("DEVICE_SERIAL", "192.168.56.200:5555")
+    # ANDROID_DEVICE_SERIAL outranks DEVICE_SERIAL; a local .env loaded by an
+    # earlier import must not decide this test's target.
+    monkeypatch.delenv("ANDROID_DEVICE_SERIAL", raising=False)
     monkeypatch.setenv("SANDBOX_PROVIDER", "genymotion")
     monkeypatch.setattr(mod, "check_tcp", lambda h, p, t=3: False)
     

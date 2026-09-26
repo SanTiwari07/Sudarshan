@@ -2584,7 +2584,7 @@ class AgenticExplorer:
                             activity=obs.activity,
                             foreground_package=package_of(obs.activity),
                             layout_hash=obs.screen_hash,
-                            semantic_type=ScreenType.UNKNOWN.value,
+                            semantic_type=ScreenType.UNKNOWN,
                             transition_event="APP_OPENED",
                             force=True
                         )
@@ -4134,7 +4134,7 @@ class AgenticExplorer:
             # Record unexpected crashes into explorer_error so they appear in
             # the result dict rather than being silently swallowed.
             err_msg = f"{type(e).__name__}: {e}"
-            logger.error(f"[AgenticExplorer] Fatal loop error: {err_msg}")
+            logger.error(f"[AgenticExplorer] Fatal loop error: {err_msg}", exc_info=True)
             self.audit_log.record_system_event("fatal_error", err_msg)
             # Attach to the explorer so frida_sandbox.py can surface it.
             self.explorer_error = err_msg  # type: ignore[attr-defined]

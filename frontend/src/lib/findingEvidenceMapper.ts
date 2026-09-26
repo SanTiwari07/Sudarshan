@@ -230,7 +230,7 @@ export function mapFindingEvidence(
 ): MappedEvidenceItem[] {
   const keywords = FINDING_KEYWORDS[findingId];
   const runtimeCats = RUNTIME_CATEGORIES[findingId];
-  let items: MappedEvidenceItem[] = [];
+  const items: MappedEvidenceItem[] = [];
 
   items.push(...filterBundle(bundle, keywords, runtimeCats));
   items.push(...manifestCodeRows(data, keywords));

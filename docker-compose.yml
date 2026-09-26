@@ -35,10 +35,10 @@ services:
       - "8000:8000"
     environment:
       - PYTHONPATH=/app:/opt/sudarshan-core
-      - DATABASE_URL=${DATABASE_URL:-postgresql://sudarshan:sudarshan@postgres:5432/sudarshan}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://sudarshan:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@postgres:5432/sudarshan}
       - ANALYSIS_ENGINE_URL=http://analysis-engine:8001
       - MOBSF_HOST=http://mobsf:8000
-      - MOBSF_API_KEY=${MOBSF_API_KEY:-sudarshan_mobsf_api_key_2026}
+      - MOBSF_API_KEY=${MOBSF_API_KEY:?MOBSF_API_KEY must be set in .env}
       - ANALYSIS_ENGINE_INTERNAL_TOKEN=${ANALYSIS_ENGINE_INTERNAL_TOKEN:-}
       - SANDBOX_PROVIDER=${SANDBOX_PROVIDER:-auto}
       # Genymotion exposes each VM at its own TCP endpoint on the host-only
@@ -101,6 +101,10 @@ services:
     depends_on:
       analysis-engine:
         condition: service_healthy
+      # init_pool() connects at startup; without this the backend races
+      # Postgres on a cold `up` and exits before the database accepts TCP.
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
   # ── 3. Analysis Engine Container (Ubuntu 24.04 + Java 17 + Python 3.12) ────
@@ -144,7 +148,7 @@ services:
       - AUTO_CONNECT=${AUTO_CONNECT:-true}
       - ROOT_REQUIRED=${ROOT_REQUIRED:-true}
       - MOBSF_HOST=http://mobsf:8000
-      - MOBSF_API_KEY=${MOBSF_API_KEY:-sudarshan_mobsf_api_key_2026}
+      - MOBSF_API_KEY=${MOBSF_API_KEY:?MOBSF_API_KEY must be set in .env}
       - ANALYSIS_ENGINE_INTERNAL_TOKEN=${ANALYSIS_ENGINE_INTERNAL_TOKEN:-}
       # The engine now performs the analysis, so it needs the same AI
       # credentials the backend has. Without them ui_explorer and the agentic
@@ -240,7 +244,7 @@ services:
     ports:
       - "127.0.0.1:8008:8000"
     environment:
-      - MOBSF_API_KEY=${MOBSF_API_KEY:-sudarshan_mobsf_api_key_2026}
+      - MOBSF_API_KEY=${MOBSF_API_KEY:?MOBSF_API_KEY must be set in .env}
     healthcheck:
       # /api_docs requires auth and may redirect (302/401), which fails curl -f.
       # The root URL (/) always returns 200 once Django is up - use that.
@@ -257,10 +261,12 @@ services:
     container_name: sudarshan-postgres
     environment:
       - POSTGRES_USER=sudarshan
-      - POSTGRES_PASSWORD=sudarshan
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
       - POSTGRES_DB=sudarshan
+    # Loopback only: the backend reaches it as postgres:5432 on the compose
+    # network; the host binding exists for local admin tools, not the LAN.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
@@ -297,6 +303,6 @@ services:
 volumes:
   uploads:         # Shared volume for zero-copy file sharing between backend & engine
   mitmproxy_har:   # Shared volume: mitmproxy writes HAR, engine reads it
-  dbdata:          # Authoritative application database (Legacy SQLite). Back up with scripts/db_admin.py backup
-  pgdata:          # PostgreSQL data volume
+  dbdata:          # SQLite database, used only when DATABASE_URL is not PostgreSQL. Back up with scripts/db_admin.py backup
+  pgdata:          # PostgreSQL data volume (the default database in this stack)
   laya_model_cache: # Hugging Face model cache volume for Laya weights

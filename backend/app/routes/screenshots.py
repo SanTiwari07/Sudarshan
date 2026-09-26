@@ -365,7 +365,7 @@ async def get_screenshot_manifest(
     }
 
 
-@router.get("/screenshots/{sha256}/{filename}")
+@router.get("/screenshots/{sha256}/{filename:path}")
 async def get_screenshot(
     sha256: str,
     filename: str,
@@ -375,7 +375,7 @@ async def get_screenshot(
         raise HTTPException(status_code=400, detail="Invalid SHA256.")
 
     safe_name = Path(filename).name
-    if not safe_name or safe_name != filename.replace("\\", "/").split("/")[-1]:
+    if not safe_name or ".." in filename.split("/"):
         raise HTTPException(status_code=400, detail="Invalid filename.")
 
     report_dict = await get_authorized_case(sha256, user)

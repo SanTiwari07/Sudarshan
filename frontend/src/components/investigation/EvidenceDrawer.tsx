@@ -365,7 +365,7 @@ export default function EvidenceDrawer({
               )}
 
               <CollapsibleBlock title="Raw Evidence Record JSON">
-                <pre className="p-3 bg-slate-900 text-slate-100 rounded-lg text-[11px] font-mono overflow-x-auto max-h-60 leading-normal">
+                <pre className="p-3 bg-slate-50 border border-slate-200 text-slate-800 rounded-lg text-xs font-mono overflow-x-auto max-h-60 leading-normal">
                   {JSON.stringify(evidence, null, 2)}
                 </pre>
               </CollapsibleBlock>

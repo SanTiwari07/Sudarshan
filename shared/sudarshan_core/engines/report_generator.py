@@ -1753,6 +1753,122 @@ def _build_dynamic(r: Dict, evidence_json: Optional[Dict], idx: _FindingIndex) -
     return html
 
 
+def _build_vide(r: Dict, idx: _FindingIndex) -> str:
+    """
+    Visual Impersonation Detection (VIDE) section in Technical Analysis.
+    Compares suspect app UI layout and color against verified banking baselines.
+    """
+    vide = _get(r, "vide_result") or _get(r, "vide_analysis") or _get(r, "vide") or {}
+    detected = bool(_get(vide, "visual_impersonation_detected") or _get(vide, "detected"))
+    inst = _get(vide, "visual_impersonation_institution") or _get(vide, "institution") or _get(vide, "institution_display") or ""
+    conf = float(_get(vide, "visual_impersonation_confidence") or _get(vide, "confidence", default=0.0) or 0.0)
+    tier = str(_get(vide, "visual_impersonation_tier_label") or _get(vide, "tier_label") or "High similarity")
+    status = str(_get(vide, "status", default="OK") or "OK")
+    available = bool(_get(vide, "available", default=True))
+    breakdown = _get(vide, "forensic_breakdown") or {}
+
+    html = '<div class="section">' + _section_header(
+        "", "", "Visual Impersonation Detection (VIDE)",
+        "Deterministic UI fingerprint & brand resemblance analysis against baseline fixtures"
+    )
+
+    if not available or status == "NOT_AVAILABLE":
+        html += (
+            '<div class="callout callout-info mt8">'
+            '<strong>[VIDE-STATUS: NOT AVAILABLE]</strong> Visual impersonation analysis state: NOT_AVAILABLE.'
+            '</div></div>'
+        )
+        return html
+
+    if not detected and conf < 0.2:
+        html += (
+            '<div class="callout callout-info mt8">'
+            '<strong>[VIDE-STATUS: CLEAN / NO IMPERSONATION DETECTED]</strong> '
+            'UI fingerprint does not match any registered banking baseline above threshold.'
+            '</div></div>'
+        )
+        return html
+
+    # Finding identifier
+    fid = idx.next("VIDE", f"Visual impersonation: {inst or 'Target Bank'}")
+    sev_class = "sev-critical" if conf >= 0.8 else "sev-high"
+
+    # Component metrics
+    text_data = _get(breakdown, "ui_text") or {}
+    text_score = float(_get(text_data, "score", default=0.0) or 0.0)
+    matched_strings = _get(text_data, "matched_strings") or []
+    
+    vh_data = _get(breakdown, "view_hierarchy") or {}
+    vh_score = float(_get(vh_data, "score", default=0.0) or 0.0)
+    
+    color_data = _get(breakdown, "color_scheme") or {}
+    color_score = float(_get(color_data, "score", default=0.0) or 0.0)
+    color_matches = _get(color_data, "matches") or []
+
+    html += (
+        f'<div class="finding mt8">'
+        f'<div class="finding-id">[{fid}]</div>'
+        f'<div class="finding-body">'
+        f'<div class="finding-title">Impersonation of {_esc(inst or "Banking Institution")}'
+        f'<span class="sev {sev_class}">{tier.upper()}</span></div>'
+        f'<div class="finding-desc">'
+        f'The application UI fingerprint exhibits severe structural and stylistic congruence with '
+        f'<strong>{_esc(inst)}</strong> (Confidence: <strong>{conf:.1%}</strong>). '
+        f'Visual impersonation detection is deterministic and compares UI layout, color palettes, and textual strings.'
+        f'</div>'
+        f'</div></div>'
+    )
+
+    html += (
+        f'<div class="grid-3 mt12">'
+        f'<div class="info-card"><div class="info-key">Target Institution</div>'
+        f'<div class="info-val">{_esc(inst or "Unknown")}</div></div>'
+        f'<div class="info-card"><div class="info-key">Confidence Score</div>'
+        f'<div class="info-val">{conf:.2f} ({tier})</div></div>'
+        f'<div class="info-card"><div class="info-key">Rule Verification</div>'
+        f'<div class="info-val"><span class="sev {sev_class}">VIDE-F001 MATCH</span></div></div>'
+        f'</div>'
+    )
+
+    html += (
+        f'<div class="grid-3 mt8">'
+        f'<div class="info-card"><div class="info-key">UI Text Match (40% wt.)</div>'
+        f'<div class="info-val">{text_score:.1%} ({len(matched_strings)} strings)</div></div>'
+        f'<div class="info-card"><div class="info-key">View Hierarchy (35% wt.)</div>'
+        f'<div class="info-val">{vh_score:.1%}</div></div>'
+        f'<div class="info-card"><div class="info-key">Brand Color Match (25% wt.)</div>'
+        f'<div class="info-val">{color_score:.1%}</div></div>'
+        f'</div>'
+    )
+
+    if matched_strings:
+        html += '<div class="mt12"><h4>Matched UI Brand Strings</h4><div class="perm-grid mt4">'
+        for s in matched_strings:
+            html += f'<span class="perm-tag perm-danger">{_esc(s)}</span>'
+        html += '</div></div>'
+
+    if color_matches:
+        html += '<div class="mt12"><h4>Brand Palette Forensic Matches</h4>'
+        html += '<table class="table-compact mt4"><thead><tr><th>Baseline Color</th><th>Suspect Color</th><th>Delta E</th><th>Verdict</th></tr></thead><tbody>'
+        for m in color_matches:
+            b_hex = m.get("baseline_hex", "")
+            s_hex = m.get("suspect_hex", "")
+            de = m.get("delta_e", 0.0)
+            verdict = m.get("verdict", "")
+            html += (
+                f'<tr>'
+                f'<td><span style="display:inline-block;width:12px;height:12px;background:{b_hex};border:1px solid #888;margin-right:6px;vertical-align:middle;border-radius:2px;"></span>{b_hex}</td>'
+                f'<td><span style="display:inline-block;width:12px;height:12px;background:{s_hex};border:1px solid #888;margin-right:6px;vertical-align:middle;border-radius:2px;"></span>{s_hex}</td>'
+                f'<td>&Delta;E = {de:.2f}</td>'
+                f'<td>{_esc(verdict)}</td>'
+                f'</tr>'
+            )
+        html += '</tbody></table></div>'
+
+    html += '</div>'
+    return html
+
+
 def _load_screenshot_entries(
     apk_dir: Optional[Path],
     report: Optional[Dict[str, Any]] = None,
@@ -2380,6 +2496,7 @@ class ReportGenerator:
             + _build_threat_scenario_table(self.r, idx)
             + _build_threat_intel(self.r, idx)
             + _build_dynamic(self.r, evidence_json, idx)
+            + _build_vide(self.r, idx)
             + visual_tech
             + _part_end()
 

@@ -20,6 +20,8 @@ from sudarshan_core.engines.vide.baseline_store import get_baselines
 from sudarshan_core.engines.vide.pipeline import safe_run_vide_analysis
 
 APK_DIR = Path(__file__).resolve().parents[2] / "tests" / "apks" / "VIDE_testapks"
+if not APK_DIR.is_dir() or not any(APK_DIR.glob("*.apk")):
+    APK_DIR = Path(__file__).resolve().parents[2] / "tests" / "apks"
 
 #: APK -> the institution its UI belongs to.
 #:

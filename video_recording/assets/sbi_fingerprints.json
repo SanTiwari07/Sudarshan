@@ -1,0 +1,73 @@
+﻿{
+  "bank": "State Bank of India",
+  "screens": [
+    {
+      "screenId": "SBI-LOGIN",
+      "structuralSignature": "AUTH_FORM_VERTICAL_PRIMARY_CTA",
+      "regionOrder": [
+        "HEADER",
+        "PRIMARY_CONTENT",
+        "FOOTER_CTA"
+      ],
+      "exactStrings": [
+        "Password",
+        "Login",
+        "Username",
+        "Enter username",
+        "Enter password",
+        "YONO SBI",
+        "Forgot MPIN?",
+        "New user? Register"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#1B4AA0",
+        "colorSecondary": "#2E9E4B"
+      }
+    },
+    {
+      "screenId": "SBI-MPIN",
+      "structuralSignature": "PINPAD_NUMERIC_ENTRY",
+      "regionOrder": [
+        "HEADER",
+        "PIN_INPUT",
+        "NUMERIC_KEYPAD"
+      ],
+      "exactStrings": [
+        "Forgot MPIN?",
+        "Enter MPIN"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#1B4AA0",
+        "colorSecondary": "#2E9E4B"
+      }
+    },
+    {
+      "screenId": "SBI-HOME",
+      "structuralSignature": "DASHBOARD_CARD_GRID_QUICKACTIONS",
+      "regionOrder": [
+        "STATUS",
+        "HEADER",
+        "ACCOUNT_CARD",
+        "QUICK_ACTIONS",
+        "RECENT_TRANSACTIONS",
+        "BOTTOM_NAV"
+      ],
+      "exactStrings": [
+        "Recent Activity",
+        "YONO SBI",
+        "Available Balance",
+        "Transfer",
+        "Pay",
+        "Scan & Pay",
+        "Services",
+        "View all"
+      ],
+      "brandTokens": {
+        "colorPrimary": "#1B4AA0",
+        "colorSecondary": "#2E9E4B"
+      }
+    }
+  ],
+  "appName": "YONO SBI",
+  "baselineId": "BASE-01-SBI"
+}

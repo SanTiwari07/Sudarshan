@@ -17,7 +17,9 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parents[3] / "shared"))
+for p in [Path(__file__).resolve().parents[2] / "shared", Path("/opt/sudarshan-core"), Path(__file__).resolve().parents[1] / "shared"]:
+    if p.is_dir() and str(p) not in sys.path:
+        sys.path.insert(0, str(p))
 
 from sudarshan_core.engines.report_generator import build_report
 

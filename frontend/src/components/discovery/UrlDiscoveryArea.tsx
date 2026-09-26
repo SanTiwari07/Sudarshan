@@ -163,15 +163,15 @@ export default function UrlDiscoveryArea({ onAnalyzeCandidate, disabled }: UrlDi
             ) : null}
           </div>
 
-          <div className="space-y-1 bg-slate-900 rounded-md p-3 font-mono text-[13px] text-slate-300 h-32 overflow-y-auto">
+          <div className="space-y-1 bg-slate-50 border border-slate-200 rounded-md p-3 font-mono text-xs text-slate-700 h-32 overflow-y-auto">
             {sessionStatus.progress_logs.map((log, i) => (
               <div key={i}>{log}</div>
             ))}
             {isBusy && (
               <div className="animate-pulse flex gap-1 mt-1.5">
-                <div className="w-1.5 h-1.5 bg-slate-500 rounded-full"></div>
-                <div className="w-1.5 h-1.5 bg-slate-500 rounded-full animation-delay-200"></div>
-                <div className="w-1.5 h-1.5 bg-slate-500 rounded-full animation-delay-400"></div>
+                <div className="w-1.5 h-1.5 bg-slate-400 rounded-full"></div>
+                <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animation-delay-200"></div>
+                <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animation-delay-400"></div>
               </div>
             )}
           </div>

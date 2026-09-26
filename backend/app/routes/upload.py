@@ -235,17 +235,25 @@ _ENGINE_TIMEOUT_SECONDS: float = float(
 )
 
 
-async def _call_analysis_engine(temp_path: str, sha256_hash: str) -> Optional[Dict[str, Any]]:
+async def _call_analysis_engine(temp_path: str, sha256_hash: str, skip_dynamic: bool = False, object_key: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """Call containerized analysis-engine microservice via REST over Docker network."""
     url = f"{ANALYSIS_ENGINE_URL}/api/v1/analyze"
     try:
         async with httpx.AsyncClient(timeout=_ENGINE_TIMEOUT_SECONDS) as client:
             from sudarshan_core.security.internal_auth import internal_auth_headers
-            # Assuming artifact key pattern apks/{sha256}.apk since we know it
-            object_key = f"apks/{sha256_hash}.apk"
+            if not object_key:
+                try:
+                    from app.db.artifact_metadata import get_artifact
+                    art = await get_artifact(f"apk_{sha256_hash}")
+                    if art and art.get("object_key"):
+                        object_key = art["object_key"]
+                except Exception:
+                    pass
+            if not object_key:
+                object_key = f"apks/{sha256_hash}.apk"
             resp = await client.post(
                 url,
-                json={"object_key": object_key, "sha256": sha256_hash},
+                json={"object_key": object_key, "sha256": sha256_hash, "skip_dynamic": skip_dynamic},
                 headers=internal_auth_headers(),
             )
             if resp.status_code == 200:
@@ -536,6 +544,8 @@ async def _run_analysis_pipeline(
     sha256_hash: str,
     analyst_id: Optional[int] = None,
     job_id: Optional[str] = None,
+    skip_dynamic: bool = False,
+    object_key: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Full analysis pipeline. Returns a dict that can be serialised as AnalysisResponse.
@@ -548,7 +558,7 @@ async def _run_analysis_pipeline(
 
     timer.stage_started("ENGINE_DELEGATION", "analysis-engine microservice")
     timer.set_orchestrator_stage(OrchestratorStage.ANALYSIS_ENGINE)
-    engine_result = await _call_analysis_engine(temp_path, sha256_hash)
+    engine_result = await _call_analysis_engine(temp_path, sha256_hash, skip_dynamic=skip_dynamic, object_key=object_key)
     timer.stage_completed("ENGINE_DELEGATION")
 
     if engine_result:
@@ -767,7 +777,17 @@ async def _run_analysis_pipeline(
     frida_status = get_sandbox_status()
     timer.set_orchestrator_stage(OrchestratorStage.DYNAMIC_ANALYSIS)
 
-    if frida_status["ready"]:
+    if skip_dynamic:
+        logger.info(f"Skipping dynamic analysis per user request (skip_dynamic=True).")
+        dynamic_result = {
+            "available": False,
+            "runtime_requested": False,
+            "runtime_attempted": False,
+            "engine": "frida",
+            "dynamic_status": "SKIPPED_BY_USER",
+            "error": "Dynamic analysis skipped by user request",
+        }
+    elif frida_status["ready"]:
         logger.info("Frida sandbox ready - running dynamic behavioral analysis")
         timer.stage_started("AGENTIC_EXPLORER", "Frida sandbox and Agentic Explorer")
         try:
@@ -1295,6 +1315,7 @@ def _build_response(result: Dict[str, Any], job_id: Optional[str] = None) -> Ana
 @limiter.limit("10/minute")
 async def analyze_upload(
     request: Request,
+    skip_dynamic: bool = False,
     file: UploadFile = File(...),
     user: dict = Depends(require_analyst),
 ):
@@ -1352,6 +1373,8 @@ async def analyze_upload(
             temp_path=temp_path,
             sha256_hash=sha256_hash,
             analyst_id=user.get("id"),
+            skip_dynamic=skip_dynamic,
+            object_key=object_key,
         )
         return _build_response(result)
     except Exception as e:
@@ -1387,6 +1410,7 @@ class AsyncJobResponse(_BM):
 @limiter.limit("10/minute")
 async def analyze_upload_async(
     request: Request,
+    skip_dynamic: bool = False,
     file: UploadFile = File(...),
     user: dict = Depends(require_analyst),
 ):
@@ -1412,7 +1436,15 @@ async def analyze_upload_async(
 
         object_key, sha256_hash = await _receive_apk(file)
         # Use the job_id we atomically reserved
-        await enqueue(job_id, object_key, file.filename, sha256_hash, analyst_id=user.get("id"))
+        await enqueue(
+            job_id,
+            object_key,
+            file.filename,
+            sha256_hash,
+            analyst_id=user.get("id"),
+            skip_dynamic=skip_dynamic,
+            force=True,
+        )
 
         return AsyncJobResponse(
             job_id=job_id,

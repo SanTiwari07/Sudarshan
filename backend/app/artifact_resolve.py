@@ -36,10 +36,14 @@ def _candidate_paths_from_hint(raw_dir: str) -> List[Path]:
         candidates.append((_UPLOADS_DIR / suffix).resolve())
     elif raw_str.startswith("/app/uploads"):
         candidates.append(_UPLOADS_DIR.resolve())
+    elif "/sudarshan_artifacts/" in raw_str:
+        suffix = raw_str.split("/sudarshan_artifacts/", 1)[1]
+        candidates.append((_UPLOADS_DIR / "sudarshan_artifacts" / suffix).resolve())
 
     folder_name = Path(raw_str).name
     if folder_name:
         candidates.append((_UPLOADS_DIR / "sudarshan_artifacts" / folder_name).resolve())
+        candidates.append((_UPLOADS_DIR / "evidence" / folder_name).resolve())
         candidates.append((_UPLOADS_DIR / folder_name).resolve())
 
     seen: set[str] = set()
@@ -65,20 +69,21 @@ def _scan_artifact_directories() -> List[Path]:
         Path(__file__).resolve().parents[2],
     ]
     for root in roots:
-        artifacts_root = root / "sudarshan_artifacts"
-        if not artifacts_root.is_dir():
-            continue
-        try:
-            for child in artifacts_root.iterdir():
-                if not child.is_dir():
-                    continue
-                if (child / "evidence.json").is_file() or (child / "screenshots").is_dir():
-                    try:
-                        found.append((child.stat().st_mtime, child.resolve()))
-                    except OSError:
+        for sub in ("sudarshan_artifacts", "evidence"):
+            artifacts_root = root / sub
+            if not artifacts_root.is_dir():
+                continue
+            try:
+                for child in artifacts_root.iterdir():
+                    if not child.is_dir():
                         continue
-        except OSError as exc:
-            logger.debug("[ArtifactResolve] scan skip %s: %s", artifacts_root, exc)
+                    if (child / "evidence.json").is_file() or (child / "screenshots").is_dir() or (child / "manifest.json").is_file():
+                        try:
+                            found.append((child.stat().st_mtime, child.resolve()))
+                        except OSError:
+                            continue
+            except OSError as exc:
+                logger.debug("[ArtifactResolve] scan skip %s: %s", artifacts_root, exc)
 
     dirs = [p for _, p in sorted(found, key=lambda t: t[0], reverse=True)]
     _SCAN_CACHE["at"] = now
@@ -93,6 +98,15 @@ def discover_artifact_dir_by_sha256(sha256: str) -> Optional[Path]:
     for art in _scan_artifact_directories():
         if needle in str(art).lower():
             return art
+        # Also inspect manifest.json or evidence.json if present
+        for mf in (art / "manifest.json", art / "evidence.json"):
+            if mf.is_file():
+                try:
+                    head = mf.read_text(encoding="utf-8", errors="ignore")[:2048]
+                    if needle in head.lower():
+                        return art
+                except Exception:
+                    pass
     return None
 
 
@@ -102,6 +116,20 @@ def resolve_case_artifact_dir(sha256: str, stored_artifact_dir: Optional[str] = 
     """
     if not sha256 or len(sha256) < 12:
         return None
+
+    # Check direct canonical paths first
+    direct_candidates = [
+        _UPLOADS_DIR / "sudarshan_artifacts" / sha256,
+        _UPLOADS_DIR / "evidence" / sha256,
+        _UPLOADS_DIR / sha256,
+    ]
+    for candidate in direct_candidates:
+        try:
+            if candidate.is_dir() and ((candidate / "evidence.json").is_file() or (candidate / "screenshots").is_dir() or (candidate / "manifest.json").is_file()):
+                logger.info(f"[ArtifactResolve] Resolved via direct canonical directory: {candidate}")
+                return candidate
+        except (OSError, RuntimeError):
+            continue
 
     candidates = []
     if stored_artifact_dir:

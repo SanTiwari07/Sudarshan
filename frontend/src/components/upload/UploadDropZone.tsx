@@ -85,7 +85,7 @@ export default function UploadDropZone({
         }}
         onDragLeave={() => setDragOver(false)}
         onDrop={onDrop}
-        className={`group relative rounded-2xl border-2 border-dashed text-center transition-all duration-200 px-6 py-12 min-h-[280px] flex flex-col justify-center items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
+        className={`group relative rounded-2xl border-2 border-dashed text-center transition-all duration-200 px-4 py-4 sm:py-5 min-h-[125px] sm:min-h-[135px] flex flex-col justify-center items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
           disabled
             ? 'opacity-60 cursor-not-allowed border-slate-200 bg-slate-50'
             : dragOver
@@ -103,20 +103,20 @@ export default function UploadDropZone({
           onChange={(e) => acceptFile(e.target.files?.[0] || null)}
         />
         <div
-          className={`flex h-16 w-16 items-center justify-center rounded-2xl mb-5 transition-all duration-200 ${
+          className={`flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-xl mb-2 sm:mb-2.5 transition-all duration-200 ${
             dragOver
               ? 'bg-blue-600 text-white scale-110'
               : 'bg-white text-blue-600 shadow-sm ring-1 ring-slate-200 group-hover:scale-105'
           }`}
         >
-          <UploadCloud className="h-8 w-8 stroke-[1.75]" aria-hidden />
+          <UploadCloud className="h-5 w-5 sm:h-6 sm:w-6 stroke-[1.75]" aria-hidden />
         </div>
-        <p className="text-xl font-semibold text-slate-900 tracking-[-0.015em]">
+        <p className="text-sm sm:text-base font-semibold text-slate-900 tracking-[-0.015em]">
           {dragOver ? 'Drop to upload' : 'Drop an APK here'}
         </p>
-        <p className="text-sm text-slate-500 mt-1.5">
+        <p className="text-xs text-slate-500 mt-0.5 sm:mt-1">
           or <span className="font-semibold text-blue-600 group-hover:underline">browse your files</span>
-          <span className="mx-2 text-slate-300">·</span>
+          <span className="mx-1.5 text-slate-300">·</span>
           .apk up to 200 MB
         </p>
       </div>

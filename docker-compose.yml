@@ -35,7 +35,7 @@ services:
       - "8000:8000"
     environment:
       - PYTHONPATH=/app:/opt/sudarshan-core
-      - DATABASE_URL=${DATABASE_URL:-postgresql://sudarshan:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@postgres:5432/sudarshan}
+      - DATABASE_URL=postgresql://sudarshan:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@postgres:5432/sudarshan
       - ANALYSIS_ENGINE_URL=http://analysis-engine:8001
       - MOBSF_HOST=http://mobsf:8000
       - MOBSF_API_KEY=${MOBSF_API_KEY:?MOBSF_API_KEY must be set in .env}

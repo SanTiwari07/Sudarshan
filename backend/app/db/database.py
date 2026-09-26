@@ -150,7 +150,26 @@ CREATE TABLE IF NOT EXISTS analysis_jobs (
     started_at      TEXT,
     completed_at    TEXT,
     result_json     TEXT,
-    error           TEXT
+    error           TEXT,
+    canonical_fingerprint TEXT
+);
+"""
+
+_CREATE_CANONICAL_ANALYSES = """
+CREATE TABLE IF NOT EXISTS canonical_analyses (
+    fingerprint      TEXT PRIMARY KEY,
+    sha256           TEXT NOT NULL,
+    status           TEXT NOT NULL,
+    progress_pct     INTEGER DEFAULT 0,
+    current_stage    TEXT,
+    result_json      TEXT,
+    error            TEXT,
+    claimed_by       TEXT,
+    claimed_at       TEXT,
+    lease_expires_at TEXT,
+    last_heartbeat_at TEXT,
+    attempt_count    INTEGER DEFAULT 0,
+    max_attempts     INTEGER DEFAULT 3
 );
 """
 
@@ -277,6 +296,7 @@ async def init_db() -> Dict[str, Any]:
         await db.execute(_CREATE_IOC_CACHE)
         await db.execute(_CREATE_NOTES)
         await db.execute(_CREATE_ANALYSIS_JOBS)
+        await db.execute(_CREATE_CANONICAL_ANALYSES)
         await db.execute(_CREATE_DISCOVERY_SESSIONS)
         await db.execute(_CREATE_DISCOVERY_CANDIDATES)
         await db.execute(_CREATE_ANALYSIS_BATCHES)
@@ -980,7 +1000,7 @@ async def update_canonical_analysis(fingerprint: str, updates: Dict[str, Any]) -
     }
     safe = {k: v for k, v in updates.items() if k in allowed}
     if "result" in updates:
-        safe["result_json"] = json.dumps(updates["result"])
+        safe["result_json"] = json.dumps(updates["result"]) if updates["result"] is not None else None
     if not safe:
         return
     set_clause = ", ".join(f"{k} = ?" for k in safe)

@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, useLocation, Location } from 'react-router-dom';
 import {
   LogIn,
@@ -65,6 +65,7 @@ export default function Login() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState('analyst');
   const [showPw, setShowPw] = useState(false);
   const [capsLock, setCapsLock] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -95,7 +96,7 @@ export default function Login() {
         const res = await fetch(`${API_BASE}/auth/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password }),
+          body: JSON.stringify({ username, password, role }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Registration failed');
@@ -263,7 +264,7 @@ export default function Login() {
           <p className={`${TYPOGRAPHY.caption} mt-1.5`}>
             {isLogin
               ? 'Sessions expire after 12 hours.'
-              : 'Accounts start with the analyst role.'}
+              : 'Select your role carefully.'}
           </p>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-6">
@@ -350,6 +351,32 @@ export default function Login() {
                 </p>
               )}
             </div>
+
+            {!isLogin && (
+              <div>
+                <label htmlFor="role" className={`block ${TYPOGRAPHY.label} mb-1`}>
+                  Role
+                </label>
+                <div className={fieldShell}>
+                  <User className={fieldIcon} aria-hidden />
+                  <select
+                    id="role"
+                    value={role}
+                    onChange={e => setRole(e.target.value)}
+                    className={`${fieldInput} cursor-pointer appearance-none bg-transparent`}
+                  >
+                    <option value="analyst">Analyst</option>
+                    <option value="soc_lead">SOC Lead</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                  <span
+                    aria-hidden
+                    className="absolute -bottom-px left-0 h-0.5 w-full origin-left scale-x-0 rounded-full bg-gradient-to-r from-blue-700 to-sky-400 transition-transform duration-200 group-focus-within:scale-x-100"
+                  />
+                </div>
+              </div>
+            )}
+
 
             <button
               type="submit"

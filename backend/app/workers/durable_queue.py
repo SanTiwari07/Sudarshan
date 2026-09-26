@@ -29,11 +29,12 @@ _wake_event: asyncio.Event = asyncio.Event()
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
-def get_analysis_fingerprint(sha256_hash: str) -> str:
+def get_analysis_fingerprint(sha256_hash: str, skip_dynamic: bool = False) -> str:
     from sudarshan_core.sandbox.config import load_sandbox_config
     config = load_sandbox_config()
     mode = os.getenv("SUDARSHAN_ANALYSIS_MODE", "mobsf").lower()
-    return f"{sha256_hash}-v{sudarshan_core.__version__}-{mode}-f{config.frida_version}"
+    prefix = "nodyn-" if skip_dynamic else ""
+    return f"{prefix}{sha256_hash}-v{sudarshan_core.__version__}-{mode}-f{config.frida_version}"
 
 # ─── Public API (Compatible with old analysis_queue) ─────────────────────────
 
@@ -46,8 +47,16 @@ async def persist_job(job_id: str) -> None:
     """Stub. All persistence is now driven directly by enqueue or the worker."""
     pass
 
-async def enqueue(job_id: str, object_key: str, filename: str, sha256_hash: str, analyst_id: Optional[int] = None) -> None:
-    fingerprint = get_analysis_fingerprint(sha256_hash)
+async def enqueue(
+    job_id: str,
+    object_key: str,
+    filename: str,
+    sha256_hash: str,
+    analyst_id: Optional[int] = None,
+    skip_dynamic: bool = False,
+    force: bool = True,
+) -> None:
+    fingerprint = get_analysis_fingerprint(sha256_hash, skip_dynamic)
     
     # 1. Create the user's specific request ticket
     job_record = {
@@ -56,7 +65,8 @@ async def enqueue(job_id: str, object_key: str, filename: str, sha256_hash: str,
         "sha256": sha256_hash,
         "analyst_id": analyst_id,
         "queued_at": _now_iso(),
-        "canonical_fingerprint": fingerprint
+        "canonical_fingerprint": fingerprint,
+        "skip_dynamic": skip_dynamic
     }
     await upsert_analysis_job(job_record)
     
@@ -64,34 +74,42 @@ async def enqueue(job_id: str, object_key: str, filename: str, sha256_hash: str,
     canonical = await get_canonical_analysis(fingerprint)
     
     if canonical:
-        # Case 1 & 2: Reuse COMPLETED or attach to RUNNING
-        if canonical["status"] in ("COMPLETED", "PROCESSING", "QUEUED"):
-            logger.info(f"[Queue] Deduplicating job {job_id} to existing canonical {fingerprint} ({canonical['status']})")
+        # If currently in-flight, attach to it so multiple workers don't clash on the sandbox
+        if canonical["status"] in ("PROCESSING", "QUEUED"):
+            logger.info(f"[Queue] Attaching job {job_id} to in-flight canonical {fingerprint} ({canonical['status']})")
             return
             
-        # Case 3: Failed but retryable. Let's retry it.
-        if canonical["status"] in ("FAILED", "CANCELLED"):
-            if canonical["attempt_count"] < canonical["max_attempts"]:
-                logger.info(f"[Queue] Retrying failed canonical {fingerprint} for new job {job_id}")
-                await update_canonical_analysis(fingerprint, {
-                    "status": "QUEUED",
-                    "error": None
-                })
-            else:
-                logger.info(f"[Queue] Max retries exhausted for canonical {fingerprint}. Creating new analysis.")
-                # We overwrite the old fingerprint, resetting attempt count
-                canonical = None
-                
-    if not canonical:
-        # Case 4: Brand new analysis (or exhausted retry)
-        await upsert_canonical_analysis({
-            "fingerprint": fingerprint,
-            "sha256": sha256_hash,
-            "status": "QUEUED",
-            "max_attempts": 3,
-        })
-        _pending_objects[fingerprint] = (object_key, filename)
+        if not force and canonical["status"] == "COMPLETED":
+            logger.info(f"[Queue] Deduplicating job {job_id} to existing canonical {fingerprint} (COMPLETED)")
+            return
 
+        # If forced or previous completed/failed/cancelled, re-execute the pipeline!
+        logger.info(f"[Queue] (Re-)Queueing canonical {fingerprint} for job {job_id} (force={force}, prev_status={canonical['status']})")
+        await update_canonical_analysis(fingerprint, {
+            "status": "QUEUED",
+            "progress_pct": 5,
+            "current_stage": "QUEUED",
+            "error": None,
+            "result": None,
+            "attempt_count": 0,
+            "claimed_by": None,
+            "claimed_at": None,
+            "lease_expires_at": None,
+            "last_heartbeat_at": None,
+        })
+        _pending_objects[fingerprint] = (object_key, filename, skip_dynamic)
+        _wake_event.set()
+        return
+
+    # Case: Brand new analysis
+    await upsert_canonical_analysis({
+        "fingerprint": fingerprint,
+        "sha256": sha256_hash,
+        "status": "QUEUED",
+        "max_attempts": 3,
+        "skip_dynamic": skip_dynamic,
+    })
+    _pending_objects[fingerprint] = (object_key, filename, skip_dynamic)
     _wake_event.set()
 
 async def get_job(job_id: str) -> Optional[Dict[str, Any]]:
@@ -230,6 +248,7 @@ async def _worker(worker_id: str):
             
             # Find the file payload.
             file_info = _pending_objects.get(fingerprint)
+            skip_dynamic = canonical.get("skip_dynamic", False)
             if not file_info:
                 from app.db.artifact_metadata import get_artifact
                 art = await get_artifact(f"apk_{sha256}")
@@ -243,7 +262,11 @@ async def _worker(worker_id: str):
                     })
                     continue
                 
-            object_key, filename = file_info
+            if len(file_info) == 3:
+                object_key, filename, skip_dynamic_from_queue = file_info
+                skip_dynamic = skip_dynamic or skip_dynamic_from_queue
+            else:
+                object_key, filename = file_info
             
             import tempfile
             import os
@@ -283,6 +306,8 @@ async def _worker(worker_id: str):
                 sha256_hash=sha256,
                 analyst_id=analyst_id,
                 job_id=fingerprint, # Pass fingerprint so telemetry maps correctly
+                skip_dynamic=skip_dynamic,
+                object_key=object_key,
             )
             pipeline_task = asyncio.create_task(pipeline_coro, name=f"pipeline-{fingerprint[:8]}")
             _active_tasks[fingerprint] = pipeline_task

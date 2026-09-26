@@ -500,24 +500,123 @@ function NetworkCapturePanel({ networkLogs }: { networkLogs?: any[] }) {
 // ─── Logcat Inspector Panel ─────────────────────────────────────────────────────────
 
 function LogcatInspectorPanel({ logcat }: { logcat?: string }) {
+  const [filter, setFilter] = useState('');
+
   if (!logcat || !logcat.trim()) {
     return (
       <SocCard>
-        <SectionHeader icon={<Terminal className="h-4 w-4" />} title="Logcat System Diagnostics" subtitle="Android OS Event Stream" />
-        <div className="p-6 text-center text-xs text-slate-500 font-mono">No logcat telemetry collected</div>
+        <SectionHeader
+          icon={<Terminal className="h-4 w-4" />}
+          title="Logcat System Diagnostics"
+          subtitle="Android OS Event Stream"
+        />
+        <div className="p-6 text-center text-xs text-slate-500 font-mono">
+          No logcat telemetry collected
+        </div>
       </SocCard>
     );
   }
 
+  const lines = logcat.trim().split('\n');
+  const filtered = filter.trim()
+    ? lines.filter((l) => l.toLowerCase().includes(filter.toLowerCase()))
+    : lines;
+  const displayLimit = 1000;
+  const displayed = filtered.slice(0, displayLimit);
+
   return (
     <SocCard>
-      <SectionHeader icon={<Terminal className="h-4 w-4" />} title="Logcat System Diagnostics" subtitle="Monospace Android System Log Inspector" />
-      <div className="p-3 bg-slate-950 font-mono text-[13px] text-slate-200 max-h-60 overflow-y-auto scrollbar-hidden rounded-b-md whitespace-pre-wrap leading-normal border-t border-slate-800">
-        {logcat}
+      <SectionHeader
+        icon={<Terminal className="h-4 w-4" />}
+        title="Logcat System Diagnostics"
+        subtitle="Monospace Android System Log Inspector"
+        action={
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 font-mono text-[11px] font-medium text-slate-600 border border-slate-200">
+              {lines.length} {lines.length === 1 ? 'line' : 'lines'}
+            </span>
+            <CopyButton value={logcat} title="Copy Logcat" />
+          </div>
+        }
+      />
+
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-200/80 bg-slate-50/40">
+        <div className="relative flex-1">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+          <input
+            type="text"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Filter logs by keyword, tag, PID or level..."
+            className="w-full pl-8 pr-3 py-1 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800 placeholder:text-slate-400"
+          />
+        </div>
+        {filter && (
+          <button
+            type="button"
+            onClick={() => setFilter('')}
+            className="text-[11px] text-slate-500 hover:text-slate-800 font-medium px-2 py-1 rounded border border-slate-200 bg-white"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
+      <div className="bg-slate-50/50 max-h-80 overflow-y-auto font-mono text-xs rounded-b-xl border-t border-slate-200 selection:bg-blue-100 selection:text-blue-900">
+        {displayed.length === 0 ? (
+          <div className="p-6 text-center text-xs text-slate-500 font-mono">
+            No log lines matching "{filter}"
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100/80 py-1">
+            {displayed.map((line, idx) => {
+              const isFatal =
+                /\bF\b/.test(line.slice(0, 45)) ||
+                /fatal|SIGSEGV|SIGABRT|CRASH/i.test(line);
+              const isError =
+                !isFatal &&
+                (/\bE\b/.test(line.slice(0, 45)) ||
+                  /error|exception/i.test(line));
+              const isWarn =
+                !isFatal &&
+                !isError &&
+                (/\bW\b/.test(line.slice(0, 45)) || /warn/i.test(line));
+
+              let rowStyle = 'text-slate-700 hover:bg-slate-100/60';
+              if (isFatal) {
+                rowStyle = 'bg-red-50/70 text-red-900 font-medium hover:bg-red-50';
+              } else if (isError) {
+                rowStyle = 'bg-red-50/40 text-red-800 hover:bg-red-50/60';
+              } else if (isWarn) {
+                rowStyle = 'bg-amber-50/40 text-amber-900 hover:bg-amber-50/60';
+              }
+
+              return (
+                <div
+                  key={idx}
+                  className={`flex items-start gap-3 px-3 py-1 transition-colors ${rowStyle}`}
+                >
+                  <span className="select-none text-slate-400 text-right w-8 shrink-0 text-[11px] tabular-nums pt-0.5">
+                    {idx + 1}
+                  </span>
+                  <pre className="flex-1 whitespace-pre-wrap break-all font-mono text-xs leading-relaxed font-normal m-0 p-0">
+                    {line}
+                  </pre>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {filtered.length > displayLimit && (
+          <div className="p-2.5 text-center text-[11px] text-slate-500 bg-slate-100/70 border-t border-slate-200">
+            Showing first {displayLimit} of {filtered.length} lines. Use the filter to search or Copy button for full output.
+          </div>
+        )}
       </div>
     </SocCard>
   );
 }
+
 
 // ─── Dynamic Sandbox Panel ────────────────────────────────────────────────────────
 

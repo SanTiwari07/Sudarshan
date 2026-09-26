@@ -55,7 +55,7 @@ function RouteFallback() {
 
 function AuthLoadingScreen() {
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white">
+    <div className="min-h-screen bg-[var(--surface-page)] flex flex-col items-center justify-center text-slate-800">
       <LoadingSpinner label="Initializing authentication..." />
     </div>
   );

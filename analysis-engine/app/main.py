@@ -239,6 +239,7 @@ class AnalyzePathRequest(BaseModel):
     object_key: str = Field(..., description="GCS object key for the APK file")
     sha256: Optional[str] = None
     timeout_seconds: Optional[int] = Field(default=DEFAULT_TIMEOUT_SECONDS, description="Per-request analysis timeout in seconds")
+    skip_dynamic: bool = Field(default=False, description="Whether to skip dynamic analysis entirely")
 
 
 class JobStatusResponse(BaseModel):
@@ -306,6 +307,7 @@ async def _execute_analysis_pipeline(
     apk_path: str,
     sha256_hash: str,
     timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
+    skip_dynamic: bool = False,
 ) -> Dict[str, Any]:
     """Execute the full static & dynamic analysis pipeline with hard timeout protection."""
     from sudarshan_core.engines.pipeline_timing import PipelineTimer
@@ -441,20 +443,32 @@ async def _execute_analysis_pipeline(
         #
         # Access is serialised per-device by frida_sandbox.py's internal
         # _device_lock_for. Jobs targeting different devices will run in parallel.
-        timer.stage_started("AGENTIC_EXPLORER")
-        async with _dynamic_slots:
-            dynamic_result = await run_frida_analysis(
-                apk_path=apk_path,
-                package_name=package_name,
-                # Static->dynamic bridge: the explorer needs the declared permission
-                # set to tell expected capability from unexpected at runtime.
-                static_findings={
-                    "permissions": permissions,
-                    "flags": flags_dict,
-                    "app_label": getattr(androguard_output, "app_label", "") or "",
-                },
-            )
-        timer.stage_completed("AGENTIC_EXPLORER")
+        dynamic_result: Optional[Dict] = None
+        if skip_dynamic:
+            logger.info("Skipping dynamic analysis per user request (skip_dynamic=True).")
+            dynamic_result = {
+                "available": False,
+                "runtime_requested": False,
+                "runtime_attempted": False,
+                "engine": "frida",
+                "dynamic_status": "SKIPPED_BY_USER",
+                "error": "Dynamic analysis skipped by user request",
+            }
+        else:
+            timer.stage_started("AGENTIC_EXPLORER")
+            async with _dynamic_slots:
+                dynamic_result = await run_frida_analysis(
+                    apk_path=apk_path,
+                    package_name=package_name,
+                    # Static->dynamic bridge: the explorer needs the declared permission
+                    # set to tell expected capability from unexpected at runtime.
+                    static_findings={
+                        "permissions": permissions,
+                        "flags": flags_dict,
+                        "app_label": getattr(androguard_output, "app_label", "") or "",
+                    },
+                )
+            timer.stage_completed("AGENTIC_EXPLORER")
 
         # 5. mitmproxy HAR Net Ingest
         har_path = os.getenv("MITMPROXY_HAR_PATH")
@@ -604,24 +618,56 @@ async def _execute_analysis_pipeline(
         try:
             result = await asyncio.wait_for(_run(), timeout=float(timeout_seconds))
             
-            # Phase 3 Durable Storage: Upload artifacts and clean up
+            # Phase 3 Durable Storage: Upload artifacts and persist canonically
+            canonical_art_dir = UPLOADS_DIR / "sudarshan_artifacts" / sha256_hash
+            canonical_art_dir.mkdir(parents=True, exist_ok=True)
+
+            # 1. Sync dynamic analysis artifacts if present
+            dyn = result.get("dynamic_result") or result.get("dynamic_analysis")
+            if isinstance(dyn, dict) and dyn.get("artifact_dir"):
+                dyn_art_dir = Path(dyn["artifact_dir"])
+                if dyn_art_dir.is_dir() and dyn_art_dir.resolve() != canonical_art_dir.resolve():
+                    import shutil
+                    for item in dyn_art_dir.iterdir():
+                        dest = canonical_art_dir / item.name
+                        if item.is_dir() and not dest.exists():
+                            shutil.copytree(str(item), str(dest))
+                        elif item.is_file() and not dest.exists():
+                            shutil.copy2(str(item), str(dest))
+                    dyn["artifact_dir"] = str(canonical_art_dir)
+
+            # 2. Upload artifacts to durable storage
             manifest_dir = UPLOADS_DIR / sha256_hash
-            if manifest_dir.exists():
-                try:
-                    from sudarshan_core.storage.artifact_storage import get_storage
-                    storage = get_storage()
-                    
+            try:
+                from sudarshan_core.storage.artifact_storage import get_storage
+                storage = get_storage()
+                
+                # Upload canonical artifacts (screenshots, graphs, timeline)
+                for root, _, files in os.walk(canonical_art_dir):
+                    for file in files:
+                        local_path = Path(root) / file
+                        rel_path = local_path.relative_to(canonical_art_dir).as_posix()
+                        object_key = f"evidence/{sha256_hash}/{rel_path}"
+                        await storage.put_file(str(local_path), object_key)
+
+                # Upload manifest dir if separate
+                if manifest_dir.exists():
                     for root, _, files in os.walk(manifest_dir):
                         for file in files:
                             local_path = Path(root) / file
                             rel_path = local_path.relative_to(manifest_dir).as_posix()
                             object_key = f"evidence/{sha256_hash}/{rel_path}"
                             await storage.put_file(str(local_path), object_key)
-                    
+                            dest = canonical_art_dir / rel_path
+                            dest.parent.mkdir(parents=True, exist_ok=True)
+                            if not dest.exists():
+                                import shutil
+                                shutil.copy2(str(local_path), str(dest))
+
                     import shutil
                     await asyncio.to_thread(shutil.rmtree, manifest_dir, ignore_errors=True)
-                except Exception as e:
-                    logger.error(f"[Engine] Failed to upload artifacts for {sha256_hash}: {e}")
+            except Exception as e:
+                logger.error(f"[Engine] Failed to upload artifacts for {sha256_hash}: {e}")
 
             return result
         except asyncio.TimeoutError:
@@ -695,7 +741,13 @@ async def analyze_path(req: AnalyzePathRequest):
         
     from sudarshan_core.storage.artifact_storage import get_storage
     storage = get_storage()
-    fd, temp_path = tempfile.mkstemp(suffix=".apk", prefix="sudarshan_engine_")
+    apks_dir = UPLOADS_DIR / "apks"
+    apks_dir.mkdir(parents=True, exist_ok=True)
+    fd, temp_path = tempfile.mkstemp(
+        suffix=".apk",
+        prefix=f"sudarshan_{(req.sha256 or 'engine')[:16]}_",
+        dir=str(apks_dir),
+    )
     os.close(fd)
     
     try:
@@ -721,6 +773,7 @@ async def analyze_path(req: AnalyzePathRequest):
             apk_path=str(temp_path),
             sha256_hash=sha256_hash,
             timeout_seconds=req.timeout_seconds or DEFAULT_TIMEOUT_SECONDS,
+            skip_dynamic=req.skip_dynamic,
         )
     finally:
         try:
@@ -730,7 +783,10 @@ async def analyze_path(req: AnalyzePathRequest):
 
 
 @app.post("/api/v1/analyze/upload")
-async def analyze_upload(file: UploadFile = File(...)):
+async def analyze_upload(
+    file: UploadFile = File(...),
+    skip_dynamic: bool = False,
+):
     """
     Direct file upload analysis endpoint.
     """
@@ -764,6 +820,7 @@ async def analyze_upload(file: UploadFile = File(...)):
         return await _execute_analysis_pipeline(
             apk_path=temp_path,
             sha256_hash=hasher.hexdigest(),
+            skip_dynamic=skip_dynamic,
         )
     finally:
         # Remove the sample AND the per-analysis manifest directory. The latter
@@ -824,6 +881,7 @@ async def analyze_async(
                 apk_path=str(temp_path),
                 sha256_hash=req.sha256 or "unknown",
                 timeout_seconds=req.timeout_seconds or DEFAULT_TIMEOUT_SECONDS,
+                skip_dynamic=req.skip_dynamic,
             )
             JOBS[job_id]["status"] = "COMPLETED"
             JOBS[job_id]["progress_pct"] = 100

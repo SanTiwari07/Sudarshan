@@ -160,7 +160,7 @@ export function useAnalysisSession(onComplete: (data: FraudCardData) => void) {
     [navigate, applyBackendPipeline],
   );
 
-  const startAnalysis = useCallback(async () => {
+  const startAnalysis = useCallback(async (skipDynamic = false) => {
     if (!file || isBusy) return;
 
     setError(null);
@@ -186,7 +186,8 @@ export function useAnalysisSession(onComplete: (data: FraudCardData) => void) {
 
     try {
       targetProgressRef.current = 5;
-      const asyncRes = await fetch(`${API_BASE}/analyze/async`, {
+      const urlAsync = `${API_BASE}/analyze/async?skip_dynamic=${Boolean(skipDynamic)}`;
+      const asyncRes = await fetch(urlAsync, {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: makeFormData(),
@@ -212,7 +213,8 @@ export function useAnalysisSession(onComplete: (data: FraudCardData) => void) {
         setPhase('analyzing');
         analysisResult = await asyncRes.json();
       } else {
-        const syncRes = await fetch(`${API_BASE}/analyze`, {
+        const urlSync = `${API_BASE}/analyze?skip_dynamic=${Boolean(skipDynamic)}`;
+        const syncRes = await fetch(urlSync, {
           method: 'POST',
           headers: token ? { Authorization: `Bearer ${token}` } : {},
           body: makeFormData(),

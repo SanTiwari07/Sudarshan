@@ -69,7 +69,7 @@ export default function ScoreInfluenceDetailDrawer({
       headerInfluence = 'No influence';
       tagline = 'VIDE analysis was not completed for this case.';
     } else {
-      const conf = videConfidenceValue(vide);
+      const conf = videConfidenceValue(vide!);
       headerScore = conf != null ? `${Math.round(conf * 100)}% match` : 'Analyzed';
       headerInfluence = state === 'detected' ? 'Strong influence' : 'Minimal influence';
       tagline = state === 'detected' ? 'Visual impersonation detected against lab baselines.' : 'No significant visual impersonation detected.';

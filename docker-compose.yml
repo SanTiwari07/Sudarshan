@@ -239,7 +239,7 @@ services:
 
   # ── 5. MobSF Mobile Security Framework Static Engine ────────────────────────
   mobsf:
-    image: opensecurity/mobile-security-framework-mobsf:latest
+    image: opensecurity/mobile-security-framework-mobsf:v4.5.3
     container_name: sudarshan-mobsf
     ports:
       - "127.0.0.1:8008:8000"

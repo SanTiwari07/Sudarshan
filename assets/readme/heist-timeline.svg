@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" width="1200" height="400" role="img" aria-label="Anatomy of a 90-second banking trojan heist: the lure, the disguise, the takeover, the theft">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a0f1f"/>
+      <stop offset="1" stop-color="#140a14"/>
+    </linearGradient>
+    <linearGradient id="fill" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f59e0b"/>
+      <stop offset="1" stop-color="#ef4444"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3.5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="400" rx="18" fill="url(#bg)"/>
+
+  <g font-family="'Segoe UI', Inter, -apple-system, 'Helvetica Neue', Arial, sans-serif">
+    <text x="48" y="54" font-size="15" font-weight="700" letter-spacing="3" fill="#fca5a5">ANATOMY OF A 90-SECOND HEIST</text>
+
+    <!-- stage clock -->
+    <g font-family="'Cascadia Code', Consolas, 'SFMono-Regular', Menlo, monospace" font-size="30" font-weight="700" fill="#fecaca" text-anchor="end">
+      <text x="1152" y="58" opacity="0">T+00:00<animate attributeName="opacity" values="1;1;0;0" keyTimes="0;0.25;0.251;1" dur="14s" repeatCount="indefinite"/></text>
+      <text x="1152" y="58" opacity="0">T+00:30<animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.25;0.251;0.375;0.376;1" dur="14s" repeatCount="indefinite"/></text>
+      <text x="1152" y="58" opacity="0">T+00:45<animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.375;0.376;0.75;0.751;1" dur="14s" repeatCount="indefinite"/></text>
+      <text x="1152" y="58" opacity="0" fill="#ef4444">T+01:30<animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.75;0.751;0.97;1" dur="14s" repeatCount="indefinite"/></text>
+    </g>
+
+    <!-- track -->
+    <rect x="120" y="198" width="960" height="6" rx="3" fill="#1f2937"/>
+    <rect x="120" y="198" width="0" height="6" rx="3" fill="url(#fill)" filter="url(#glow)">
+      <animate attributeName="width" values="0;960;960;0" keyTimes="0;0.75;0.97;1" dur="14s" repeatCount="indefinite"/>
+    </rect>
+    <circle cx="120" cy="201" r="7" fill="#fff" filter="url(#glow)">
+      <animate attributeName="cx" values="120;1080;1080;120" keyTimes="0;0.75;0.97;1" dur="14s" repeatCount="indefinite"/>
+      <animate attributeName="r" values="6;9;6" dur="0.8s" repeatCount="indefinite"/>
+    </circle>
+
+    <!-- nodes -->
+    <g stroke="#475569" stroke-width="2">
+      <circle cx="120" cy="201" r="16" fill="#ef4444">
+        <animate attributeName="fill" values="#ef4444;#ef4444;#1e293b" keyTimes="0;0.97;1" dur="14s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="440" cy="201" r="16" fill="#1e293b">
+        <animate attributeName="fill" values="#1e293b;#1e293b;#ef4444;#ef4444;#1e293b" keyTimes="0;0.25;0.26;0.97;1" dur="14s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="600" cy="201" r="16" fill="#1e293b">
+        <animate attributeName="fill" values="#1e293b;#1e293b;#ef4444;#ef4444;#1e293b" keyTimes="0;0.375;0.385;0.97;1" dur="14s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="1080" cy="201" r="16" fill="#1e293b">
+        <animate attributeName="fill" values="#1e293b;#1e293b;#ef4444;#ef4444;#1e293b" keyTimes="0;0.75;0.76;0.97;1" dur="14s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+    <g font-size="15" font-weight="800" fill="#fff" text-anchor="middle">
+      <text x="120" y="206">1</text><text x="440" y="206">2</text><text x="600" y="206">3</text><text x="1080" y="206">4</text>
+    </g>
+
+    <!-- labels: alternate above / below the track so they never collide -->
+    <g text-anchor="middle">
+      <!-- 1 above -->
+      <g transform="translate(128 96)">
+        <text font-size="13" font-weight="700" fill="#94a3b8" letter-spacing="2" font-family="Consolas, Menlo, monospace">00:00</text>
+        <text y="26" font-size="20" font-weight="800" fill="#f8fafc">💬 The Lure</text>
+        <text y="50" font-size="14" fill="#cbd5e1">“Your KYC expires today.”</text>
+        <text y="70" font-size="14" fill="#cbd5e1">A link. An APK.</text>
+      </g>
+      <!-- 2 below -->
+      <g transform="translate(440 250)">
+        <text font-size="13" font-weight="700" fill="#94a3b8" letter-spacing="2" font-family="Consolas, Menlo, monospace">00:30</text>
+        <text y="26" font-size="20" font-weight="800" fill="#f8fafc">🎭 The Disguise</text>
+        <text y="50" font-size="14" fill="#cbd5e1">A pixel-perfect bank logo asks you</text>
+        <text y="70" font-size="14" fill="#cbd5e1">to “enable Accessibility protection”.</text>
+      </g>
+      <!-- 3 above -->
+      <g transform="translate(606 96)">
+        <text font-size="13" font-weight="700" fill="#94a3b8" letter-spacing="2" font-family="Consolas, Menlo, monospace">00:45</text>
+        <text y="26" font-size="20" font-weight="800" fill="#f8fafc">🔓 The Takeover</text>
+        <text y="50" font-size="14" fill="#cbd5e1">It grants itself overlays and SMS,</text>
+        <text y="70" font-size="14" fill="#cbd5e1">hides its icon, blocks uninstall.</text>
+      </g>
+      <!-- 4 below -->
+      <g transform="translate(1058 250)">
+        <text font-size="13" font-weight="700" fill="#fca5a5" letter-spacing="2" font-family="Consolas, Menlo, monospace">01:30</text>
+        <text y="26" font-size="20" font-weight="800" fill="#fecaca">💸 The Theft</text>
+        <text y="50" font-size="14" fill="#cbd5e1">Fake login grabs the PIN.</text>
+        <text y="70" font-size="14" fill="#cbd5e1">The OTP never reaches you.</text>
+      </g>
+    </g>
+
+    <!-- closing line -->
+    <text x="48" y="370" font-size="17" font-style="italic" fill="#f87171" opacity="0">You find out days later. The money has already moved through mule accounts.
+      <animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.78;0.82;0.97;1" dur="14s" repeatCount="indefinite"/>
+    </text>
+  </g>
+</svg>

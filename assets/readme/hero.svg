@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1200 420" width="1200" height="420" role="img" aria-label="SUDARSHAN — Android banking fraud intelligence">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#050b1a"/>
+      <stop offset="0.55" stop-color="#0b1730"/>
+      <stop offset="1" stop-color="#071022"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#38bdf8" stop-opacity="0.35"/>
+      <stop offset="0.6" stop-color="#2563eb" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#2563eb" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="blade" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#bae6fd"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="title" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#7dd3fc"/>
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#1e3a5f" stroke-opacity="0.35" stroke-width="1"/>
+    </pattern>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <!-- one chakra blade; the wheel is eight rotated copies -->
+    <path id="b" d="M4 -46 C 40 -118, 96 -110, 112 -58 C 88 -84, 52 -88, 20 -42 Z"
+          fill="url(#blade)" fill-opacity="0.22" stroke="url(#blade)" stroke-width="3" stroke-linejoin="round"/>
+    <linearGradient id="scan" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#38bdf8" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#38bdf8" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#38bdf8" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="420" rx="18" fill="url(#bg)"/>
+  <rect width="1200" height="420" rx="18" fill="url(#grid)"/>
+
+  <!-- horizontal scanning beam -->
+  <rect x="0" y="0" width="1200" height="2" fill="url(#scan)" opacity="0.6">
+    <animate attributeName="y" values="20;400;20" dur="7s" repeatCount="indefinite"/>
+  </rect>
+
+  <!-- ===== Chakra ===== -->
+  <g transform="translate(220 210)">
+    <circle r="190" fill="url(#halo)">
+      <animate attributeName="r" values="175;195;175" dur="4s" repeatCount="indefinite"/>
+    </circle>
+
+    <!-- outer dashed orbit (counter-rotating) -->
+    <g>
+      <circle r="150" fill="none" stroke="#38bdf8" stroke-opacity="0.35" stroke-width="1.5" stroke-dasharray="4 10"/>
+      <circle r="150" fill="none" stroke="#7dd3fc" stroke-width="3" stroke-dasharray="40 900" stroke-linecap="round" filter="url(#glow)"/>
+      <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="14s" repeatCount="indefinite"/>
+    </g>
+
+    <!-- the wheel -->
+    <g filter="url(#glow)">
+      <use xlink:href="#b"/>
+      <use xlink:href="#b" transform="rotate(45)"/>
+      <use xlink:href="#b" transform="rotate(90)"/>
+      <use xlink:href="#b" transform="rotate(135)"/>
+      <use xlink:href="#b" transform="rotate(180)"/>
+      <use xlink:href="#b" transform="rotate(225)"/>
+      <use xlink:href="#b" transform="rotate(270)"/>
+      <use xlink:href="#b" transform="rotate(315)"/>
+      <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="9s" repeatCount="indefinite"/>
+    </g>
+
+    <!-- shield (stays still) -->
+    <path d="M0 -44 C 14 -33 30 -31 40 -31 L 40 2 C 40 28 20 43 0 52 C -20 43 -40 28 -40 2 L -40 -31 C -30 -31 -14 -33 0 -44 Z"
+          fill="#0b1730" stroke="#bae6fd" stroke-width="3" filter="url(#glow)"/>
+    <path d="M-15 4 L -4 15 L 17 -9" fill="none" stroke="#34d399" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"
+          stroke-dasharray="50" stroke-dashoffset="50">
+      <animate attributeName="stroke-dashoffset" values="50;0;0;50" keyTimes="0;0.2;0.85;1" dur="4s" repeatCount="indefinite"/>
+    </path>
+  </g>
+
+  <!-- ===== Text ===== -->
+  <g font-family="'Segoe UI', Inter, -apple-system, 'Helvetica Neue', Arial, sans-serif">
+    <g transform="translate(470 108)">
+      <rect x="0" y="-18" width="236" height="28" rx="14" fill="#0f2a4a" stroke="#1e40af"/>
+      <circle cx="18" cy="-4" r="5" fill="#34d399">
+        <animate attributeName="opacity" values="1;0.2;1" dur="1.6s" repeatCount="indefinite"/>
+      </circle>
+      <text x="32" y="1" font-size="13" font-weight="600" fill="#bae6fd" letter-spacing="1.5">SANDBOX ONLINE · WATCHING</text>
+    </g>
+
+    <text x="466" y="198" font-size="88" font-weight="800" letter-spacing="6" fill="url(#title)">SUDARSHAN</text>
+    <text x="470" y="236" font-size="20" font-weight="500" fill="#93c5fd" letter-spacing="3">ANDROID BANKING FRAUD INTELLIGENCE</text>
+
+    <!-- rotating taglines -->
+    <g font-size="24" fill="#e2e8f0" font-weight="400">
+      <text x="470" y="298" opacity="0">It opens the app the scammer sent.
+        <animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.05;0.28;0.33;1" dur="12s" repeatCount="indefinite"/>
+      </text>
+      <text x="470" y="298" opacity="0">It watches what the app does when no one is looking.
+        <animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;0.33;0.38;0.61;0.66;1" dur="12s" repeatCount="indefinite"/>
+      </text>
+      <text x="470" y="298" opacity="0">It tells the bank exactly what to do next.
+        <animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.66;0.71;0.95;1" dur="12s" repeatCount="indefinite"/>
+      </text>
+    </g>
+
+    <!-- stage chips -->
+    <g font-size="14" font-weight="600" letter-spacing="1">
+      <g transform="translate(470 336)">
+        <rect width="128" height="34" rx="8" fill="#0f2a4a" stroke="#1e40af"/>
+        <text x="64" y="22" text-anchor="middle" fill="#bae6fd">DECOMPILE</text>
+        <animate attributeName="opacity" values="1;0.45;0.45;0.45;1" keyTimes="0;0.25;0.5;0.75;1" dur="4s" repeatCount="indefinite"/>
+      </g>
+      <g transform="translate(610 336)">
+        <rect width="128" height="34" rx="8" fill="#0f2a4a" stroke="#1e40af"/>
+        <text x="64" y="22" text-anchor="middle" fill="#bae6fd">DETONATE</text>
+        <animate attributeName="opacity" values="0.45;1;0.45;0.45;0.45" keyTimes="0;0.25;0.5;0.75;1" dur="4s" repeatCount="indefinite"/>
+      </g>
+      <g transform="translate(750 336)">
+        <rect width="128" height="34" rx="8" fill="#0f2a4a" stroke="#1e40af"/>
+        <text x="64" y="22" text-anchor="middle" fill="#bae6fd">CORRELATE</text>
+        <animate attributeName="opacity" values="0.45;0.45;1;0.45;0.45" keyTimes="0;0.25;0.5;0.75;1" dur="4s" repeatCount="indefinite"/>
+      </g>
+      <g transform="translate(890 336)">
+        <rect width="128" height="34" rx="8" fill="#3b0d14" stroke="#ef4444"/>
+        <text x="64" y="22" text-anchor="middle" fill="#fecaca">SCORE</text>
+        <animate attributeName="opacity" values="0.45;0.45;0.45;1;0.45" keyTimes="0;0.25;0.5;0.75;1" dur="4s" repeatCount="indefinite"/>
+      </g>
+    </g>
+  </g>
+</svg>

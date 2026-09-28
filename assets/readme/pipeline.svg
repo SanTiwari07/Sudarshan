@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 380" width="1200" height="380" role="img" aria-label="Sudarshan pipeline: an APK is decompiled, detonated in a sandbox, correlated with threat intelligence and given a deterministic fraud risk score">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#050b1a"/>
+      <stop offset="1" stop-color="#0b1730"/>
+    </linearGradient>
+    <linearGradient id="gauge" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#22c55e"/>
+      <stop offset="0.5" stop-color="#f59e0b"/>
+      <stop offset="1" stop-color="#ef4444"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <path id="flow" d="M110 200 H1030"/>
+  </defs>
+
+  <rect width="1200" height="380" rx="18" fill="url(#bg)"/>
+
+  <g font-family="'Segoe UI', Inter, -apple-system, 'Helvetica Neue', Arial, sans-serif">
+    <text x="40" y="50" font-size="15" font-weight="700" letter-spacing="3" fill="#7dd3fc">WHAT HAPPENS TO A SAMPLE</text>
+
+    <!-- flow line + travelling packets (they slip behind the cards) -->
+    <use href="#flow" stroke="#1e3a5f" stroke-width="3" stroke-dasharray="6 8"/>
+    <g fill="#38bdf8" filter="url(#glow)">
+      <circle r="5"><animateMotion dur="5s" repeatCount="indefinite"><mpath href="#flow"/></animateMotion></circle>
+      <circle r="5"><animateMotion dur="5s" begin="-1.25s" repeatCount="indefinite"><mpath href="#flow"/></animateMotion></circle>
+      <circle r="5"><animateMotion dur="5s" begin="-2.5s" repeatCount="indefinite"><mpath href="#flow"/></animateMotion></circle>
+      <circle r="5"><animateMotion dur="5s" begin="-3.75s" repeatCount="indefinite"><mpath href="#flow"/></animateMotion></circle>
+    </g>
+
+    <!-- APK -->
+    <g transform="translate(34 150)">
+      <path d="M0 0 H52 L72 20 V100 H0 Z" fill="#111827" stroke="#f87171" stroke-width="2"/>
+      <path d="M52 0 V20 H72" fill="none" stroke="#f87171" stroke-width="2"/>
+      <text x="36" y="66" text-anchor="middle" font-size="16" font-weight="800" fill="#fca5a5">APK</text>
+      <text x="36" y="126" text-anchor="middle" font-size="12" fill="#94a3b8">suspicious</text>
+      <animateTransform attributeName="transform" type="translate" values="34 150;34 144;34 150" dur="2s" repeatCount="indefinite"/>
+    </g>
+
+    <!-- stage cards -->
+    <g font-size="13" fill="#cbd5e1" text-anchor="middle">
+      <g transform="translate(150 110)">
+        <rect width="200" height="166" rx="14" fill="#0b1426" stroke="#1e40af" stroke-width="2">
+          <animate attributeName="stroke" values="#38bdf8;#1e40af;#1e40af;#1e40af;#1e40af" keyTimes="0;0.2;0.4;0.6;1" dur="10s" repeatCount="indefinite"/>
+        </rect>
+        <text x="100" y="42" font-size="26">🔬</text>
+        <text x="100" y="74" font-size="17" font-weight="800" fill="#f8fafc" letter-spacing="1.5">DECOMPILE</text>
+        <text x="100" y="102">Tears the app apart</text>
+        <text x="100" y="122">Repairs booby-trapped APKs</text>
+        <text x="100" y="142">Checks: is it a bank clone?</text>
+      </g>
+      <g transform="translate(370 110)">
+        <rect width="200" height="166" rx="14" fill="#0b1426" stroke="#1e40af" stroke-width="2">
+          <animate attributeName="stroke" values="#1e40af;#38bdf8;#1e40af;#1e40af;#1e40af" keyTimes="0;0.2;0.4;0.6;1" dur="10s" repeatCount="indefinite"/>
+        </rect>
+        <text x="100" y="42" font-size="26">💣</text>
+        <text x="100" y="74" font-size="17" font-weight="800" fill="#f8fafc" letter-spacing="1.5">DETONATE</text>
+        <text x="100" y="102">Runs it in a sealed sandbox</text>
+        <text x="100" y="122">Frida watches every hook</text>
+        <text x="100" y="142">An agent taps through screens</text>
+      </g>
+      <g transform="translate(590 110)">
+        <rect width="200" height="166" rx="14" fill="#0b1426" stroke="#1e40af" stroke-width="2">
+          <animate attributeName="stroke" values="#1e40af;#1e40af;#38bdf8;#1e40af;#1e40af" keyTimes="0;0.2;0.4;0.6;1" dur="10s" repeatCount="indefinite"/>
+        </rect>
+        <text x="100" y="42" font-size="26">🌐</text>
+        <text x="100" y="74" font-size="17" font-weight="800" fill="#f8fafc" letter-spacing="1.5">CORRELATE</text>
+        <text x="100" y="102">Hashes &amp; C2 domains vs.</text>
+        <text x="100" y="122">VirusTotal · OTX · AbuseIPDB</text>
+        <text x="100" y="142">Matches known trojan families</text>
+      </g>
+      <g transform="translate(810 110)">
+        <rect width="200" height="166" rx="14" fill="#0b1426" stroke="#1e40af" stroke-width="2">
+          <animate attributeName="stroke" values="#1e40af;#1e40af;#1e40af;#ef4444;#1e40af" keyTimes="0;0.2;0.4;0.6;1" dur="10s" repeatCount="indefinite"/>
+        </rect>
+        <text x="100" y="42" font-size="26">⚖️</text>
+        <text x="100" y="74" font-size="17" font-weight="800" fill="#f8fafc" letter-spacing="1.5">SCORE</text>
+        <text x="100" y="102">A fixed, auditable formula</text>
+        <text x="100" y="122">Same input → same score</text>
+        <text x="100" y="142">No AI in the verdict</text>
+      </g>
+    </g>
+
+    <!-- gauge -->
+    <g transform="translate(1110 215)">
+      <path d="M-62 0 A62 62 0 0 1 62 0" fill="none" stroke="#1f2937" stroke-width="12" stroke-linecap="round"/>
+      <path d="M-62 0 A62 62 0 0 1 62 0" fill="none" stroke="url(#gauge)" stroke-width="12" stroke-linecap="round"
+            stroke-dasharray="195" stroke-dashoffset="195" filter="url(#glow)">
+        <animate attributeName="stroke-dashoffset" values="195;195;8;8;195" keyTimes="0;0.6;0.8;0.97;1" dur="10s" repeatCount="indefinite"/>
+      </path>
+      <text y="-8" text-anchor="middle" font-size="34" font-weight="800" fill="#fecaca" opacity="0">96
+        <animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.78;0.82;0.97;1" dur="10s" repeatCount="indefinite"/>
+      </text>
+      <text y="28" text-anchor="middle" font-size="12" font-weight="700" letter-spacing="2" fill="#94a3b8">FRAUD RISK</text>
+      <g opacity="0">
+        <rect x="-44" y="40" width="88" height="24" rx="12" fill="#450a0a" stroke="#ef4444"/>
+        <text y="57" text-anchor="middle" font-size="12" font-weight="800" letter-spacing="1.5" fill="#fecaca">CRITICAL</text>
+        <animate attributeName="opacity" values="0;0;1;0.4;1;1;0" keyTimes="0;0.8;0.84;0.88;0.92;0.97;1" dur="10s" repeatCount="indefinite"/>
+      </g>
+    </g>
+
+    <text x="40" y="345" font-size="16" fill="#94a3b8">One APK in. One scored, evidence-backed case file out, <tspan fill="#e2e8f0" font-weight="600">usually in a few minutes.</tspan></text>
+  </g>
+</svg>

@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import io
 import tempfile
 import os
 import shutil
@@ -25,15 +26,16 @@ from app.services.discovery.validator import validate_apk
 # Constants
 TEST_PORT = 19999
 TEST_APK_BYTES = b"PK\x03\x04" + os.urandom(1024) # Minimum fake ZIP
-VALID_APK_PATH = Path("test_artifact.apk")
 
-def create_valid_apk():
-    with zipfile.ZipFile(VALID_APK_PATH, "w") as z:
+def create_valid_apk() -> bytes:
+    """Build a minimal APK-shaped zip in memory so nothing is written to the working directory."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
         z.writestr("AndroidManifest.xml", b"<manifest></manifest>")
         z.writestr("classes.dex", b"DEX")
+    return buf.getvalue()
 
-create_valid_apk()
-VALID_APK_BYTES = VALID_APK_PATH.read_bytes()
+VALID_APK_BYTES = create_valid_apk()
 VALID_APK_SHA256 = hashlib.sha256(VALID_APK_BYTES).hexdigest()
 
 # HTTP Server routes using FastAPI

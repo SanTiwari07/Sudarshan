@@ -6,6 +6,20 @@
 
 Welcome to the SUDARSHAN documentation portal. Every document in this directory has been audited and verified against the live executable codebase.
 
+> New here? Read the [project README](../README.md) first. It tells the story (the 90-second heist, the analyst's backlog, and how Sudarshan answers it) and walks through the console with screenshots. Come back here when you want the details.
+
+---
+
+## Choose Your Path
+
+| You are… | You want to… | Read, in this order |
+| :--- | :--- | :--- |
+| 🧑‍💼 **Fraud / SOC lead** | Understand what the platform answers and how far to trust it | [VISION](00_PROJECT/VISION.md) → [FRAUD_RISK_SCORE](03_RISK/FRAUD_RISK_SCORE.md) → [KNOWN_SECURITY_LIMITATIONS](05_SECURITY/KNOWN_SECURITY_LIMITATIONS.md) |
+| 🧪 **Reviewer / judge** | Separate what is implemented from what is planned | [GROUND_TRUTH](00_PROJECT/GROUND_TRUTH.md) → [FEATURE_STATUS](10_VALIDATION/FEATURE_STATUS.md) → [TEST_MATRIX](10_VALIDATION/TEST_MATRIX.md) |
+| 🛠️ **Operator** | Get it running and keep it running | [HOW_TO_RUN](06_OPERATIONS/HOW_TO_RUN.md) → [ENVIRONMENT](06_OPERATIONS/ENVIRONMENT.md) → [SANDBOX_CONTAINMENT](05_SECURITY/SANDBOX_CONTAINMENT.md) → [TROUBLESHOOTING](06_OPERATIONS/TROUBLESHOOTING.md) |
+| 🔬 **Malware analyst** | Know exactly what is hooked, detected and scored | [STATIC_ANALYSIS](02_ANALYSIS/STATIC_ANALYSIS.md) → [FRIDA_INSTRUMENTATION](02_ANALYSIS/FRIDA_INSTRUMENTATION.md) → [VISUAL_IMPERSONATION](02_ANALYSIS/VISUAL_IMPERSONATION.md) → [BFCI](03_RISK/BFCI.md) |
+| 👩‍💻 **Contributor** | Change code without breaking the invariants | [CONTRIBUTING](08_DEVELOPMENT/CONTRIBUTING.md) → [CODEBASE_MAP](01_ARCHITECTURE/CODEBASE_MAP.md) → [DETERMINISM](03_RISK/DETERMINISM.md) → [TESTING](08_DEVELOPMENT/TESTING.md) |
+
 ---
 
 ## Documentation Directory Index

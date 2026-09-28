@@ -12,7 +12,8 @@ import pytest
 
 
 def test_laya_package_installed():
-    import laya
+    # Optional dependency: not part of the base requirements files.
+    laya = pytest.importorskip("laya")
 
     assert hasattr(laya, "__version__")
     assert hasattr(laya, "Router")
@@ -21,8 +22,8 @@ def test_laya_package_installed():
 
 
 def test_torch_and_transformers_available():
-    import torch
-    import transformers
+    torch = pytest.importorskip("torch")
+    transformers = pytest.importorskip("transformers")
 
     assert hasattr(torch, "__version__")
     assert hasattr(transformers, "__version__")

@@ -202,3 +202,6 @@ uploads/
 
 # Gradle build caches (never source)
 **/.gradle/
+
+# Video demo recordings and studio assets
+video_recording/

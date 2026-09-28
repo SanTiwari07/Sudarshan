@@ -23,7 +23,7 @@ jobs:
           if [ -f backend/requirements.txt ]; then pip install -r backend/requirements.txt; fi
           if [ -f analysis-engine/requirements.txt ]; then pip install -r analysis-engine/requirements.txt; fi
           if [ -f shared/pyproject.toml ]; then pip install -e shared/ --no-deps; fi
-          pip install pytest flake8
+          pip install pytest pytest-asyncio pypdf flake8
 
       - name: Run Python compile check
         # analysis-engine requires Frida/Android SDK at runtime; skip it here
@@ -35,6 +35,8 @@ jobs:
         env:
           PYTHONPATH: "backend:shared"
           JWT_SECRET_KEY: "ci_secret_key"
+          # Default is /app/uploads (the container path); the runner can't create /app.
+          UPLOADS_DIR: ${{ runner.temp }}/uploads
         run: |
           pytest tests/unit backend/tests -q
 

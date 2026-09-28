@@ -15,17 +15,17 @@
 [![Frida 17.16.4](https://img.shields.io/badge/Frida-17.16.4-FF6B00?style=for-the-badge)](docs/02_ANALYSIS/FRIDA_INSTRUMENTATION.md)
 [![Tests](https://img.shields.io/badge/tests-2%2C841%20collected-16a34a?style=for-the-badge)](docs/10_VALIDATION/TEST_MATRIX.md)
 
-[**The story**](#-it-starts-with-a-text-message) ·
-[**See it**](#-a-walk-through-the-console) ·
-[**Run it**](#-run-it-yourself) ·
-[**Under the hood**](#-under-the-hood) ·
+[**The story**](#it-starts-with-a-text-message) ·
+[**See it**](#a-walk-through-the-console) ·
+[**Run it**](#run-it-yourself) ·
+[**Under the hood**](#under-the-hood) ·
 [**Docs**](docs/README.md)
 
 </div>
 
 <br>
 
-## 💬 It starts with a text message
+## It starts with a text message
 
 It's 9:47 PM. Your phone buzzes.
 
@@ -43,22 +43,22 @@ That one permission lets the app read everything on your screen and tap buttons 
 
 <br>
 
-## 🕵️ Meanwhile, at the bank
+## Meanwhile, at the bank
 
 A fraud analyst has **50 suspicious APKs** in the queue, and the tools they have don't help much:
 
-| | The tool | What it tells them | What they actually needed |
-|:--:|:--|:--|:--|
-| 🛡️ | Antivirus / VirusTotal | *"0 / 70 engines detected this."* It's a fresh build, so nothing has seen it yet. | Is it dangerous **anyway**? |
-| 📜 | Static analyzers | Ten thousand lines of bytecode and a permission list. | **Which bank** is it after? |
-| 🔧 | Manual reverse engineering | The right answer, after **4–8 hours** per sample. | The answer **in minutes**. |
-| 🤖 | "Just ask an LLM" | A confident verdict that changes each time you ask. | A verdict that **holds up in an audit**. |
+| The tool | What it tells them | What they actually needed |
+|:--|:--|:--|
+| Antivirus / VirusTotal | *"0 / 70 engines detected this."* It's a fresh build, so nothing has seen it yet. | Is it dangerous **anyway**? |
+| Static analyzers | Ten thousand lines of bytecode and a permission list. | **Which bank** is it after? |
+| Manual reverse engineering | The right answer, after **4–8 hours** per sample. | The answer **in minutes**. |
+| "Just ask an LLM" | A confident verdict that changes each time you ask. | A verdict that **holds up in an audit**. |
 
 Every hour spent on the backlog is an hour the trojan keeps spreading.
 
 <br>
 
-## 🌀 Enter Sudarshan
+## Enter Sudarshan
 
 > In Indian tradition, the **Sudarshana Chakra** is a spinning discus that never misses its mark. The name itself means *"auspicious vision"*, or simply *the one that sees clearly*.
 
@@ -67,15 +67,15 @@ Sudarshan is a fraud-intelligence platform for exactly this fight. Give it an AP
 <table>
 <tr>
 <td width="33%" align="center">
-<h3>🎯 Who is targeted?</h3>
+<h3>Who is targeted?</h3>
 Which bank, which app, which customers. It finds visual clones of <b>10 major Indian banks</b> by comparing layouts, colours, text and signing certificates.
 </td>
 <td width="33%" align="center">
-<h3>⚠️ What can it do?</h3>
+<h3>What can it do?</h3>
 OTP interception, fake login overlays, automated transfers, remote control. Every capability is <b>proven with evidence</b>, not guessed.
 </td>
 <td width="33%" align="center">
-<h3>🚨 What do we do now?</h3>
+<h3>What do we do now?</h3>
 A <b>0–100 fraud risk score</b> and a playbook: revoke sessions, block the C2 server, warn customers, export IOCs.
 </td>
 </tr>
@@ -83,32 +83,32 @@ A <b>0–100 fraud risk score</b> and a playbook: revoke sessions, block the C2 
 
 <br>
 
-## ⚙️ How it hunts
+## How it hunts
 
 <p align="center">
   <img src="assets/readme/pipeline.svg" alt="Decompile, Detonate, Correlate, Score" width="100%">
 </p>
 
-1. **🔬 Decompile.** It rips the APK open with Androguard, JADX and APKTool. It even **repairs APKs that were deliberately corrupted** to crash analysis tools. Then it asks whether the app is pretending to be a bank.
-2. **💣 Detonate.** It launches the app inside a **sealed Android sandbox**, with Frida hooks on every sensitive API. An autonomous agent taps through login screens and dialogs to coax out hidden behaviour.
-3. **🌐 Correlate.** It checks hashes and every contacted domain against VirusTotal, AlienVault OTX and AbuseIPDB, and matches behaviour to known trojan families.
-4. **⚖️ Score.** A **deterministic** engine turns all of that evidence into one Fraud Risk Score. Same APK, same score, every time, and every point traces back to a piece of evidence.
+1. **Decompile.** It rips the APK open with Androguard, JADX and APKTool. It even **repairs APKs that were deliberately corrupted** to crash analysis tools. Then it asks whether the app is pretending to be a bank.
+2. **Detonate.** It launches the app inside a **sealed Android sandbox**, with Frida hooks on every sensitive API. An autonomous agent taps through login screens and dialogs to coax out hidden behaviour.
+3. **Correlate.** It checks hashes and every contacted domain against VirusTotal, AlienVault OTX and AbuseIPDB, and matches behaviour to known trojan families.
+4. **Score.** A **deterministic** engine turns all of that evidence into one Fraud Risk Score. Same APK, same score, every time, and every point traces back to a piece of evidence.
 
 <br>
 
-## 🧭 The one rule Sudarshan never breaks
+## The one rule Sudarshan never breaks
 
 <table>
 <tr>
 <td width="50%" valign="top">
 
-### ⚖️ The engine decides
+### The engine decides
 The risk score comes from a **fixed, auditable formula** and nothing else. It is reproducible to the decimal, and safety floors stop a sample from being called *Safe* just because it played dead in the sandbox.
 
 </td>
 <td width="50%" valign="top">
 
-### 🤖 The AI explains
+### The AI explains
 The built-in assistant, **"Ask Sudarshan"**, answers questions like *"Did this app read incoming SMS?"* It answers **only from this case's evidence** and cites the records it used. It can never change the score.
 
 </td>
@@ -119,7 +119,7 @@ The built-in assistant, **"Ask Sudarshan"**, answers questions like *"Did this a
 
 <br>
 
-## 🖥️ A walk through the console
+## A walk through the console
 
 Follow an analyst through one investigation, from sign-in to a signed-off report.
 
@@ -174,7 +174,7 @@ Follow an analyst through one investigation, from sign-in to a signed-off report
 
 <br>
 
-## 🚀 Run it yourself
+## Run it yourself
 
 > [!WARNING]
 > Sudarshan's dynamic engine **runs live malware**. Run it only on a machine you control, with the Android sandbox isolated as described in [Sandbox Containment](docs/05_SECURITY/SANDBOX_CONTAINMENT.md).
@@ -196,16 +196,16 @@ On Windows, one command checks your dependencies and ports, then starts everythi
 .\start.ps1
 ```
 
-📘 Full guide: [How to Run](docs/06_OPERATIONS/HOW_TO_RUN.md) · [Troubleshooting](docs/06_OPERATIONS/TROUBLESHOOTING.md)
+Full guide: [How to Run](docs/06_OPERATIONS/HOW_TO_RUN.md) · [Troubleshooting](docs/06_OPERATIONS/TROUBLESHOOTING.md)
 
 <br>
 
-## 🔭 Under the hood
+## Under the hood
 
 For the curious, the reviewers and the reverse engineers. Click any section to expand it.
 
 <details>
-<summary><b>🏗️ System architecture</b></summary>
+<summary><b>System architecture</b></summary>
 
 <br>
 
@@ -264,7 +264,7 @@ More: [System Architecture](docs/01_ARCHITECTURE/SYSTEM_ARCHITECTURE.md) · [Cod
 </details>
 
 <details>
-<summary><b>⚖️ The Fraud Risk Score, formula by formula</b></summary>
+<summary><b>The Fraud Risk Score, formula by formula</b></summary>
 
 <br>
 
@@ -282,11 +282,11 @@ $$\text{STEI} = 0.60 \times \text{CT} + 0.20 \times \text{BT} + 0.10 \times \tex
 
 | Score | Band | Response |
 |:--|:--|:--|
-| 0 – 19.9 | 🟢 `Safe` | No fraud indicators |
-| 20 – 39.9 | 🔵 `Low` | Standard monitoring |
-| 40 – 59.9 | 🟣 `Medium` | Quarantine for review |
-| 60 – 79.9 | 🟠 `High` | Block and notify customers |
-| 80 – 100 | 🔴 `Critical` | Active trojan: revoke sessions, block C2 |
+| 0 – 19.9 | `Safe` | No fraud indicators |
+| 20 – 39.9 | `Low` | Standard monitoring |
+| 40 – 59.9 | `Medium` | Quarantine for review |
+| 60 – 79.9 | `High` | Block and notify customers |
+| 80 – 100 | `Critical` | Active trojan: revoke sessions, block C2 |
 
 **Safety floors.** A sample can't be called `Safe` if it hid from the sandbox (visibility floor), if strong static evidence exists (static evidence floor), or if it tried to detect the emulator (evasion floor).
 
@@ -296,7 +296,7 @@ More: [Risk Engine](docs/03_RISK/RISK_ENGINE.md) · [STEI](docs/03_RISK/STEI.md)
 </details>
 
 <details>
-<summary><b>🧬 BFCI v2, the behavioural fingerprint</b></summary>
+<summary><b>BFCI v2, the behavioural fingerprint</b></summary>
 
 <br>
 
@@ -316,7 +316,7 @@ More: [BFCI](docs/03_RISK/BFCI.md) · [Frida Instrumentation](docs/02_ANALYSIS/F
 </details>
 
 <details>
-<summary><b>🎭 VIDE, catching the bank look-alikes</b></summary>
+<summary><b>VIDE, catching the bank look-alikes</b></summary>
 
 <br>
 
@@ -333,7 +333,7 @@ More: [Visual Impersonation](docs/02_ANALYSIS/VISUAL_IMPERSONATION.md)
 </details>
 
 <details>
-<summary><b>🤖 The agentic sandbox explorer</b></summary>
+<summary><b>The agentic sandbox explorer</b></summary>
 
 <br>
 
@@ -343,7 +343,7 @@ More: [Agentic Exploration](docs/02_ANALYSIS/AGENTIC_EXPLORATION.md) · [Dynamic
 </details>
 
 <details>
-<summary><b>💬 Ask Sudarshan, the grounded AI assistant</b></summary>
+<summary><b>Ask Sudarshan, the grounded AI assistant</b></summary>
 
 <br>
 
@@ -356,7 +356,7 @@ More: [AI Investigation](docs/04_AI/AI_INVESTIGATION.md) · [Prompt Sanitization
 </details>
 
 <details>
-<summary><b>🦠 Trojan families it knows</b></summary>
+<summary><b>Trojan families it knows</b></summary>
 
 <br>
 
@@ -373,7 +373,7 @@ More: [AI Investigation](docs/04_AI/AI_INVESTIGATION.md) · [Prompt Sanitization
 </details>
 
 <details>
-<summary><b>🔌 API, configuration and tests</b></summary>
+<summary><b>API, configuration and tests</b></summary>
 
 <br>
 
@@ -404,7 +404,7 @@ More: [API Reference](docs/07_API/API_REFERENCE.md) · [Testing](docs/08_DEVELOP
 
 <br>
 
-## 🧱 Honest limits
+## Honest limits
 
 No sandbox catches everything. Here is where Sudarshan's edges are:
 
@@ -416,7 +416,7 @@ See [Known Limitations](docs/05_SECURITY/KNOWN_SECURITY_LIMITATIONS.md).
 
 <br>
 
-## 📚 Keep reading
+## Keep reading
 
 | If you want to… | Start here |
 |:--|:--|

@@ -1,106 +1,90 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 380" width="1200" height="380" role="img" aria-label="Sudarshan pipeline: an APK is decompiled, detonated in a sandbox, correlated with threat intelligence and given a deterministic fraud risk score">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" width="1200" height="300" role="img" aria-label="Pipeline: decompile, detonate, correlate, score">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#050b1a"/>
-      <stop offset="1" stop-color="#0b1730"/>
-    </linearGradient>
-    <linearGradient id="gauge" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#22c55e"/>
-      <stop offset="0.5" stop-color="#f59e0b"/>
-      <stop offset="1" stop-color="#ef4444"/>
-    </linearGradient>
-    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="3" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-    <path id="flow" d="M110 200 H1030"/>
+    <marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L8 4 L0 8" fill="none" stroke="#94a3b8" stroke-width="1.5"/>
+    </marker>
+    <path id="flow" d="M150 150 H1070"/>
   </defs>
 
-  <rect width="1200" height="380" rx="18" fill="url(#bg)"/>
+  <rect x="0.5" y="0.5" width="1199" height="299" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
 
-  <g font-family="'Segoe UI', Inter, -apple-system, 'Helvetica Neue', Arial, sans-serif">
-    <text x="40" y="50" font-size="15" font-weight="700" letter-spacing="3" fill="#7dd3fc">WHAT HAPPENS TO A SAMPLE</text>
+  <g font-family="Inter, 'Segoe UI', -apple-system, 'Helvetica Neue', Arial, sans-serif">
+    <text x="40" y="46" font-size="12" font-weight="600" letter-spacing="1.5" fill="#64748b">WHAT HAPPENS TO A SAMPLE</text>
 
-    <!-- flow line + travelling packets (they slip behind the cards) -->
-    <use href="#flow" stroke="#1e3a5f" stroke-width="3" stroke-dasharray="6 8"/>
-    <g fill="#38bdf8" filter="url(#glow)">
-      <circle r="5"><animateMotion dur="5s" repeatCount="indefinite"><mpath href="#flow"/></animateMotion></circle>
-      <circle r="5"><animateMotion dur="5s" begin="-1.25s" repeatCount="indefinite"><mpath href="#flow"/></animateMotion></circle>
-      <circle r="5"><animateMotion dur="5s" begin="-2.5s" repeatCount="indefinite"><mpath href="#flow"/></animateMotion></circle>
-      <circle r="5"><animateMotion dur="5s" begin="-3.75s" repeatCount="indefinite"><mpath href="#flow"/></animateMotion></circle>
+    <!-- connectors -->
+    <g stroke="#cbd5e1" stroke-width="1.5" marker-end="url(#arrow)">
+      <line x1="150" y1="150" x2="186" y2="150"/>
+      <line x1="380" y1="150" x2="416" y2="150"/>
+      <line x1="610" y1="150" x2="646" y2="150"/>
+      <line x1="840" y1="150" x2="876" y2="150"/>
+      <line x1="1070" y1="150" x2="1082" y2="150"/>
     </g>
+    <circle r="3.5" fill="#2563eb">
+      <animateMotion dur="8s" repeatCount="indefinite" keyPoints="0;1" keyTimes="0;1"><mpath href="#flow"/></animateMotion>
+    </circle>
 
-    <!-- APK -->
-    <g transform="translate(34 150)">
-      <path d="M0 0 H52 L72 20 V100 H0 Z" fill="#111827" stroke="#f87171" stroke-width="2"/>
-      <path d="M52 0 V20 H72" fill="none" stroke="#f87171" stroke-width="2"/>
-      <text x="36" y="66" text-anchor="middle" font-size="16" font-weight="800" fill="#fca5a5">APK</text>
-      <text x="36" y="126" text-anchor="middle" font-size="12" fill="#94a3b8">suspicious</text>
-      <animateTransform attributeName="transform" type="translate" values="34 150;34 144;34 150" dur="2s" repeatCount="indefinite"/>
-    </g>
+    <!-- input -->
+    <rect x="40" y="118" width="110" height="64" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-dasharray="4 3"/>
+    <text x="95" y="146" text-anchor="middle" font-size="13" fill="#0f172a" font-family="'JetBrains Mono', Consolas, Menlo, monospace">sample.apk</text>
+    <text x="95" y="166" text-anchor="middle" font-size="12" fill="#64748b">or a URL</text>
 
     <!-- stage cards -->
-    <g font-size="13" fill="#cbd5e1" text-anchor="middle">
-      <g transform="translate(150 110)">
-        <rect width="200" height="166" rx="14" fill="#0b1426" stroke="#1e40af" stroke-width="2">
-          <animate attributeName="stroke" values="#38bdf8;#1e40af;#1e40af;#1e40af;#1e40af" keyTimes="0;0.2;0.4;0.6;1" dur="10s" repeatCount="indefinite"/>
-        </rect>
-        <text x="100" y="42" font-size="26">🔬</text>
-        <text x="100" y="74" font-size="17" font-weight="800" fill="#f8fafc" letter-spacing="1.5">DECOMPILE</text>
-        <text x="100" y="102">Tears the app apart</text>
-        <text x="100" y="122">Repairs booby-trapped APKs</text>
-        <text x="100" y="142">Checks: is it a bank clone?</text>
-      </g>
-      <g transform="translate(370 110)">
-        <rect width="200" height="166" rx="14" fill="#0b1426" stroke="#1e40af" stroke-width="2">
-          <animate attributeName="stroke" values="#1e40af;#38bdf8;#1e40af;#1e40af;#1e40af" keyTimes="0;0.2;0.4;0.6;1" dur="10s" repeatCount="indefinite"/>
-        </rect>
-        <text x="100" y="42" font-size="26">💣</text>
-        <text x="100" y="74" font-size="17" font-weight="800" fill="#f8fafc" letter-spacing="1.5">DETONATE</text>
-        <text x="100" y="102">Runs it in a sealed sandbox</text>
-        <text x="100" y="122">Frida watches every hook</text>
-        <text x="100" y="142">An agent taps through screens</text>
-      </g>
-      <g transform="translate(590 110)">
-        <rect width="200" height="166" rx="14" fill="#0b1426" stroke="#1e40af" stroke-width="2">
-          <animate attributeName="stroke" values="#1e40af;#1e40af;#38bdf8;#1e40af;#1e40af" keyTimes="0;0.2;0.4;0.6;1" dur="10s" repeatCount="indefinite"/>
-        </rect>
-        <text x="100" y="42" font-size="26">🌐</text>
-        <text x="100" y="74" font-size="17" font-weight="800" fill="#f8fafc" letter-spacing="1.5">CORRELATE</text>
-        <text x="100" y="102">Hashes &amp; C2 domains vs.</text>
-        <text x="100" y="122">VirusTotal · OTX · AbuseIPDB</text>
-        <text x="100" y="142">Matches known trojan families</text>
-      </g>
-      <g transform="translate(810 110)">
-        <rect width="200" height="166" rx="14" fill="#0b1426" stroke="#1e40af" stroke-width="2">
-          <animate attributeName="stroke" values="#1e40af;#1e40af;#1e40af;#ef4444;#1e40af" keyTimes="0;0.2;0.4;0.6;1" dur="10s" repeatCount="indefinite"/>
-        </rect>
-        <text x="100" y="42" font-size="26">⚖️</text>
-        <text x="100" y="74" font-size="17" font-weight="800" fill="#f8fafc" letter-spacing="1.5">SCORE</text>
-        <text x="100" y="102">A fixed, auditable formula</text>
-        <text x="100" y="122">Same input → same score</text>
-        <text x="100" y="142">No AI in the verdict</text>
-      </g>
+    <g>
+      <rect x="190" y="80" width="190" height="140" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5">
+        <animate attributeName="stroke" values="#2563eb;#e2e8f0;#e2e8f0;#e2e8f0" keyTimes="0;0.25;0.5;0.75" calcMode="discrete" dur="8s" repeatCount="indefinite"/>
+      </rect>
+      <text x="210" y="108" font-size="12" fill="#2563eb" font-family="'JetBrains Mono', Consolas, Menlo, monospace">01</text>
+      <text x="210" y="136" font-size="18" font-weight="600" fill="#0f172a">Decompile</text>
+      <text x="210" y="164" font-size="12" fill="#64748b" font-family="'JetBrains Mono', Consolas, Menlo, monospace">androguard · jadx</text>
+      <text x="210" y="184" font-size="12" fill="#64748b" font-family="'JetBrains Mono', Consolas, Menlo, monospace">apktool · apk repair</text>
+      <text x="210" y="204" font-size="12" fill="#64748b" font-family="'JetBrains Mono', Consolas, Menlo, monospace">bank clone check</text>
+    </g>
+    <g>
+      <rect x="420" y="80" width="190" height="140" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5">
+        <animate attributeName="stroke" values="#e2e8f0;#2563eb;#e2e8f0;#e2e8f0" keyTimes="0;0.25;0.5;0.75" calcMode="discrete" dur="8s" repeatCount="indefinite"/>
+      </rect>
+      <text x="440" y="108" font-size="12" fill="#2563eb" font-family="'JetBrains Mono', Consolas, Menlo, monospace">02</text>
+      <text x="440" y="136" font-size="18" font-weight="600" fill="#0f172a">Detonate</text>
+      <text x="440" y="164" font-size="12" fill="#64748b" font-family="'JetBrains Mono', Consolas, Menlo, monospace">android sandbox</text>
+      <text x="440" y="184" font-size="12" fill="#64748b" font-family="'JetBrains Mono', Consolas, Menlo, monospace">frida hooks</text>
+      <text x="440" y="204" font-size="12" fill="#64748b" font-family="'JetBrains Mono', Consolas, Menlo, monospace">ui explorer · mitm</text>
+    </g>
+    <g>
+      <rect x="650" y="80" width="190" height="140" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5">
+        <animate attributeName="stroke" values="#e2e8f0;#e2e8f0;#2563eb;#e2e8f0" keyTimes="0;0.25;0.5;0.75" calcMode="discrete" dur="8s" repeatCount="indefinite"/>
+      </rect>
+      <text x="670" y="108" font-size="12" fill="#2563eb" font-family="'JetBrains Mono', Consolas, Menlo, monospace">03</text>
+      <text x="670" y="136" font-size="18" font-weight="600" fill="#0f172a">Correlate</text>
+      <text x="670" y="164" font-size="12" fill="#64748b" font-family="'JetBrains Mono', Consolas, Menlo, monospace">virustotal · otx</text>
+      <text x="670" y="184" font-size="12" fill="#64748b" font-family="'JetBrains Mono', Consolas, Menlo, monospace">abuseipdb</text>
+      <text x="670" y="204" font-size="12" fill="#64748b" font-family="'JetBrains Mono', Consolas, Menlo, monospace">family rules · iocs</text>
+    </g>
+    <g>
+      <rect x="880" y="80" width="190" height="140" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5">
+        <animate attributeName="stroke" values="#e2e8f0;#e2e8f0;#e2e8f0;#2563eb" keyTimes="0;0.25;0.5;0.75" calcMode="discrete" dur="8s" repeatCount="indefinite"/>
+      </rect>
+      <text x="900" y="108" font-size="12" fill="#2563eb" font-family="'JetBrains Mono', Consolas, Menlo, monospace">04</text>
+      <text x="900" y="136" font-size="18" font-weight="600" fill="#0f172a">Score</text>
+      <text x="900" y="164" font-size="12" fill="#64748b" font-family="'JetBrains Mono', Consolas, Menlo, monospace">fixed formula</text>
+      <text x="900" y="184" font-size="12" fill="#64748b" font-family="'JetBrains Mono', Consolas, Menlo, monospace">0–100 · safety floors</text>
+      <text x="900" y="204" font-size="12" fill="#64748b" font-family="'JetBrains Mono', Consolas, Menlo, monospace">no AI in the verdict</text>
     </g>
 
-    <!-- gauge -->
-    <g transform="translate(1110 215)">
-      <path d="M-62 0 A62 62 0 0 1 62 0" fill="none" stroke="#1f2937" stroke-width="12" stroke-linecap="round"/>
-      <path d="M-62 0 A62 62 0 0 1 62 0" fill="none" stroke="url(#gauge)" stroke-width="12" stroke-linecap="round"
-            stroke-dasharray="195" stroke-dashoffset="195" filter="url(#glow)">
-        <animate attributeName="stroke-dashoffset" values="195;195;8;8;195" keyTimes="0;0.6;0.8;0.97;1" dur="10s" repeatCount="indefinite"/>
-      </path>
-      <text y="-8" text-anchor="middle" font-size="34" font-weight="800" fill="#fecaca" opacity="0">96
-        <animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.78;0.82;0.97;1" dur="10s" repeatCount="indefinite"/>
+    <!-- score ring, same style as the console header -->
+    <g transform="translate(1128 150)">
+      <circle r="34" fill="none" stroke="#e2e8f0" stroke-width="5"/>
+      <circle r="34" fill="none" stroke="#dc2626" stroke-width="5" stroke-linecap="round" transform="rotate(-90)"
+              stroke-dasharray="213.6" stroke-dashoffset="213.6">
+        <animate attributeName="stroke-dashoffset" values="213.6;213.6;8.5;8.5;213.6" keyTimes="0;0.75;0.9;0.98;1" dur="8s" repeatCount="indefinite"/>
+      </circle>
+      <text y="6" text-anchor="middle" font-size="17" font-weight="700" fill="#0f172a" font-family="'JetBrains Mono', Consolas, Menlo, monospace" opacity="0">96
+        <animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.85;0.9;0.98;1" dur="8s" repeatCount="indefinite"/>
       </text>
-      <text y="28" text-anchor="middle" font-size="12" font-weight="700" letter-spacing="2" fill="#94a3b8">FRAUD RISK</text>
-      <g opacity="0">
-        <rect x="-44" y="40" width="88" height="24" rx="12" fill="#450a0a" stroke="#ef4444"/>
-        <text y="57" text-anchor="middle" font-size="12" font-weight="800" letter-spacing="1.5" fill="#fecaca">CRITICAL</text>
-        <animate attributeName="opacity" values="0;0;1;0.4;1;1;0" keyTimes="0;0.8;0.84;0.88;0.92;0.97;1" dur="10s" repeatCount="indefinite"/>
-      </g>
+      <text y="60" text-anchor="middle" font-size="12" font-weight="600" fill="#dc2626" opacity="0">Critical
+        <animate attributeName="opacity" values="0;0;1;1;0" keyTimes="0;0.85;0.9;0.98;1" dur="8s" repeatCount="indefinite"/>
+      </text>
     </g>
 
-    <text x="40" y="345" font-size="16" fill="#94a3b8">One APK in. One scored, evidence-backed case file out, <tspan fill="#e2e8f0" font-weight="600">usually in a few minutes.</tspan></text>
+    <text x="40" y="262" font-size="14" fill="#64748b">One sample in, one scored and evidence-backed case file out, usually within a few minutes.</text>
   </g>
 </svg>

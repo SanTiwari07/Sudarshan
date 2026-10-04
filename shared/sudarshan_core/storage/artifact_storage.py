@@ -30,21 +30,34 @@ class LocalArtifactStorage(ArtifactStorage):
 
     def _resolve(self, object_key: str) -> Path:
         import urllib.parse
-        decoded_key = urllib.parse.unquote(object_key)
-        
+        decoded_key = object_key
+        while True:
+            unquoted = urllib.parse.unquote(decoded_key)
+            if unquoted == decoded_key:
+                break
+            decoded_key = unquoted
+
+        if not decoded_key or not decoded_key.strip():
+            raise ValueError(f"Invalid object key (empty): {object_key}")
+        if "\x00" in decoded_key:
+            raise ValueError(f"Invalid object key (null byte): {object_key}")
         if "\\" in decoded_key:
             raise ValueError(f"Invalid object key (contains backslash): {object_key}")
         if decoded_key.startswith("/") or ":" in decoded_key:
             raise ValueError(f"Invalid object key (absolute path): {object_key}")
-            
-        p = (self.base_dir / decoded_key).resolve()
-        if not p.is_relative_to(self.base_dir):
+        if ".." in decoded_key:
             raise ValueError(f"Invalid object key (path traversal): {object_key}")
-            
+        if "//" in decoded_key:
+            raise ValueError(f"Invalid object key (multiple slashes): {object_key}")
+
         # specifically reject if it's trying to do string manipulation bypasses
         if "uploads_evil" in decoded_key:
             raise ValueError("Invalid object key")
-            
+
+        p = (self.base_dir / decoded_key).resolve()
+        if not p.is_relative_to(self.base_dir):
+            raise ValueError(f"Invalid object key (path traversal): {object_key}")
+
         return p
 
     async def put_file(self, local_path: str, object_key: str, content_type: Optional[str] = None) -> str:

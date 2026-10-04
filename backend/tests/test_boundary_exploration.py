@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
+r"""
 SUDARSHAN - Boundary Exploration Regression Tests
 ==================================================
 Tests for the safe interactive boundary fixes.

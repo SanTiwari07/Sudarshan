@@ -1,4 +1,4 @@
-"""
+r"""
 SUDARSHAN — Deep Exploration Regression Tests
 ==============================================
 Tests that target the exact failure chain that caused the explorer to stop

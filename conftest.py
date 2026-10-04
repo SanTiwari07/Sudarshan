@@ -21,6 +21,9 @@ os.environ["SUDARSHAN_DB_PATH"] = os.getenv(
 # The Compose default points at Postgres; unit tests exercise the SQLite path.
 os.environ.pop("DATABASE_URL", None)
 os.environ.setdefault("JWT_SECRET_KEY", "pytest-only-secret-key-not-for-production")
+# Keep the default dynamic analysis window aligned with source default (130s)
+# so a developer's local .env does not mutate unit test invariants.
+os.environ["FRIDA_ANALYSIS_DURATION"] = "130"
 
 # Keep the developer's real provider keys out of the suite. Several modules
 # fill unset variables from the repo .env, which made unit tests issue live

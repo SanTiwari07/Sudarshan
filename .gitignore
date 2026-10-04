@@ -205,3 +205,14 @@ uploads/
 
 # Video demo recordings and studio assets
 video_recording/
+
+# Hackathon submission media (generated, not tracked)
+submission_images/
+twibbon_out/
+
+# Video thumbnail drafts & root scratch exports
+/Sudarshan.pptx
+/scratch_*.png
+/scratch_card.png
+/sudarshan_*thumbnail*.png
+/test_thumb_bg.png

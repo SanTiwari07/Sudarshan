@@ -42,7 +42,10 @@ async def run_batch(apk_dir: str):
     for i, apk in enumerate(apks):
         logger.info(f"\n{'='*50}\n[{i+1}/{len(apks)}] Processing {apk.name}\n{'='*50}")
         try:
-            engine = MultiStageEngine(device_serial, str(apk))
+            # Keyword arguments: this call used to pass (device_serial, apk),
+            # the reverse of the signature, so every batch run tried to install
+            # the device serial as an APK.
+            engine = MultiStageEngine(apk_path=str(apk), device_serial=device_serial)
             result = await engine.run_all_stages()
             
             if "error" in result:

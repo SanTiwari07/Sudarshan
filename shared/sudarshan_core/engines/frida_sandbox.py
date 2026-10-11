@@ -5898,6 +5898,7 @@ async def run_frida_analysis(
     package_name: Optional[str] = None,
     *,
     static_findings: Optional[Dict[str, Any]] = None,
+    stage_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Full Frida dynamic analysis pipeline:
@@ -6079,6 +6080,7 @@ async def run_frida_analysis(
                 device_serial=device_serial,
                 base_result=base_result,
                 static_findings=static_findings,
+                stage_name=stage_name,
             )
     finally:
         deadline.log_state("dynamic_analysis_end")
@@ -6310,6 +6312,7 @@ async def _run_device_session(
     device_serial: str,
     base_result: Dict[str, Any],
     static_findings: Optional[Dict[str, Any]] = None,
+    stage_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Install, instrument and close one sample. Caller holds the device lock."""
     loop = asyncio.get_event_loop()
@@ -6399,6 +6402,10 @@ async def _run_device_session(
         case_id=content_sha256,
         static_findings=static_findings,
     )
+    if stage_name and session.evidence_store is not None:
+        # Multi-stage runs: every evidence record says which device-state
+        # stage observed it.
+        session.evidence_store.set_stage(stage_name)
 
     # ── Step 3: Install APK ────────────────────────────────────────────────────
     log_pipeline_lifecycle(2, "APK installed", "starting adb install")

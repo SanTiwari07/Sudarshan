@@ -308,7 +308,8 @@ def build_investigation_index(sha256: str, report: Dict[str, Any]) -> None:
 
         multi_stage = dyn.get("multi_stage_summary", {})
         if multi_stage:
-            idx["runtime_events"].append(f"Multi-stage Analysis: {json.dumps(multi_stage)[:300]}")
+            _ms = {k: multi_stage.get(k) for k in ("stage_statuses", "stage_scores", "highest_bfci_stage")}
+            idx["runtime_events"].append(f"Multi-stage Analysis: {json.dumps(_ms, default=str)[:300]}")
     else:
         idx["timeline"] = ["Dynamic analysis was not performed for this APK."]
         idx["runtime_events"] = ["Dynamic analysis was not performed for this APK."]

@@ -114,9 +114,10 @@ class GenymotionProvider(SandboxProvider):
             )
         if profile == "banking_apps":
             packages = ["com.boi.mobile", "com.sbi.lotusintouch", "com.icici.mobile"]
-            for pkg in packages:
-                shell("su", "-c", f"mkdir -p /data/data/{pkg}")
-            return True
+            # Report what actually happened: without root every mkdir fails,
+            # and claiming the profile applied would label the stage falsely.
+            results = [shell("su", "-c", f"mkdir -p /data/data/{pkg}") for pkg in packages]
+            return any(results)
         if profile == "reboot":
             return shell("am", "broadcast", "-a", "android.intent.action.BOOT_COMPLETED")
 

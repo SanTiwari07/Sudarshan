@@ -225,7 +225,9 @@ def test_app_label_defaults_to_empty_for_existing_construction_sites():
 def test_the_service_call_sites_supply_the_app_label(relative):
     source = (_ROOT / relative).read_text(encoding="utf-8", errors="replace")
     start = source.index("run_frida_analysis(")
-    assert "app_label" in source[start:start + 900]
+    # The findings dict may be built just above the call (upload.py builds it
+    # once and shares it with the multi-stage engine), so look on both sides.
+    assert "app_label" in source[max(0, start - 1500):start + 900]
 
 
 def test_a_disguised_label_is_judged_against_what_it_claims_to_be():

@@ -791,28 +791,32 @@ async def _run_analysis_pipeline(
         logger.info("Frida sandbox ready - running dynamic behavioral analysis")
         timer.stage_started("AGENTIC_EXPLORER", "Frida sandbox and Agentic Explorer")
         try:
+            # Hand the static pass's findings to the dynamic engine. Without
+            # this the explorer cannot tell a permission the manifest
+            # declared from one it never asked for, so expected-vs-observed
+            # permission analysis is impossible.
+            _static_findings = {
+                "permissions": all_permissions,
+                "flags": flags_dict,
+                # The identity the sample claims. Attacker-controlled,
+                # which is exactly why it is useful: permissions are
+                # judged against what the app says it is.
+                "app_label": getattr(androguard_output, "app_label", "") or "",
+            }
             use_multistage = os.getenv("SUDARSHAN_MULTISTAGE", "false").lower() == "true"
             if use_multistage:
                 from sudarshan_core.engines.multi_stage_engine import MultiStageEngine
-                engine = MultiStageEngine(apk_path=temp_path, package_name=package_name)
+                engine = MultiStageEngine(
+                    apk_path=temp_path, package_name=package_name,
+                    static_findings=_static_findings,
+                )
                 dynamic_result = await engine.run_all_stages()
             else:
                 from sudarshan_core.engines.frida_sandbox import run_frida_analysis
-                # Hand the static pass's findings to the dynamic engine. Without
-                # this the explorer cannot tell a permission the manifest
-                # declared from one it never asked for, so expected-vs-observed
-                # permission analysis is impossible.
                 dynamic_result = await run_frida_analysis(
                     temp_path,
                     package_name=package_name,
-                    static_findings={
-                        "permissions": all_permissions,
-                        "flags": flags_dict,
-                        # The identity the sample claims. Attacker-controlled,
-                        # which is exactly why it is useful: permissions are
-                        # judged against what the app says it is.
-                        "app_label": getattr(androguard_output, "app_label", "") or "",
-                    },
+                    static_findings=_static_findings,
                 )
             if dynamic_result.get("available"):
                 logger.info(f"Frida BFCI={dynamic_result.get('bfci', 0):.1f}")
@@ -821,8 +825,11 @@ async def _run_analysis_pipeline(
             timer.stage_completed("AGENTIC_EXPLORER")
         except Exception as e:
             timer.stage_failed("AGENTIC_EXPLORER", str(e))
-            logger.warning(f"Frida analysis failed: {e}")
-            dynamic_result = None
+            logger.warning(f"Frida analysis failed: {e}", exc_info=True)
+            # A structured failure, not None. None read downstream as "dynamic
+            # analysis was never requested", which hid that it was attempted
+            # and crashed - and the reason it crashed.
+            dynamic_result = _dynamic_failure_result(e)
     else:
         logger.info(f"Frida sandbox not ready ({frida_status['message']})")
         dynamic_result = {
@@ -1097,6 +1104,53 @@ _UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024
 _ZIP_MAGIC = (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08")
 
 
+def _dynamic_failure_result(exc: BaseException) -> Dict[str, Any]:
+    """Result for a dynamic stage that raised: attempted, failed, and why."""
+    return {
+        "available": False,
+        "runtime_requested": True,
+        "runtime_attempted": True,
+        "engine": "frida",
+        "dynamic_status": "FAILED",
+        "error": f"{type(exc).__name__}: {str(exc)[:300]}",
+        "error_type": type(exc).__name__,
+    }
+
+
+async def _release_reserved_job(job_id: str, reason: str) -> None:
+    """
+    Mark a reserved job FAILED when its upload is rejected.
+
+    reserve_job_slot_atomically inserts the row as UPLOADING, and UPLOADING
+    counts toward MAX_QUEUE_DEPTH. A rejected upload (wrong type, bad magic,
+    too large) used to leave that row UPLOADING forever, so every bad upload
+    permanently consumed one queue slot until the service refused all work.
+    """
+    try:
+        from app.db.database import _connect
+        async with _connect() as db:
+            await db.execute(
+                "UPDATE analysis_jobs SET status = 'FAILED', error = ? "
+                "WHERE job_id = ? AND status = 'UPLOADING'",
+                (reason[:300], job_id),
+            )
+            await db.commit()
+    except Exception as exc:                              # noqa: BLE001
+        logger.error("[Upload] Could not release reserved job %s: %s", job_id, exc)
+
+
+async def _receive_apk_for_job(file: UploadFile, job_id: str) -> tuple[str, str]:
+    """_receive_apk, releasing the reserved job slot if the upload is rejected."""
+    try:
+        return await _receive_apk(file)
+    except HTTPException as exc:
+        await _release_reserved_job(job_id, f"upload rejected: {exc.detail}")
+        raise
+    except Exception as exc:
+        await _release_reserved_job(job_id, f"upload failed: {type(exc).__name__}")
+        raise
+
+
 async def _receive_apk(file: UploadFile) -> tuple[str, str]:
     """
     Stream an uploaded APK to the shared volume and return (temp_path, sha256).
@@ -1343,17 +1397,18 @@ async def analyze_upload(
     elif reserve_res == "QUOTA_EXCEEDED":
         raise HTTPException(status_code=429, detail=f"Daily quota of {user_quota} analyses exceeded.")
 
-    object_key, sha256_hash = await _receive_apk(file)
-    
+    object_key, sha256_hash = await _receive_apk_for_job(file, job_id)
+
     from app.db.database import _connect
     async with _connect() as db:
         await db.execute("UPDATE analysis_jobs SET sha256 = ? WHERE job_id = ?", (sha256_hash, job_id))
         await db.commit()
     
-    import tempfile
-    import os
+    # `os` and `tempfile` are module imports. A function-local `import os`
+    # here made `os` local to the WHOLE function, so the os.getenv() on the
+    # first line raised UnboundLocalError and this endpoint failed every call.
     from sudarshan_core.storage.artifact_storage import get_storage
-    
+
     storage = get_storage()
     fd, temp_path = tempfile.mkstemp(suffix=".apk", prefix="sudarshan_sync_")
     os.close(fd)
@@ -1434,7 +1489,7 @@ async def analyze_upload_async(
         elif reserve_res == "QUOTA_EXCEEDED":
             raise HTTPException(status_code=429, detail=f"Daily quota of {user_quota} analyses exceeded.")
 
-        object_key, sha256_hash = await _receive_apk(file)
+        object_key, sha256_hash = await _receive_apk_for_job(file, job_id)
         # Use the job_id we atomically reserved
         await enqueue(
             job_id,

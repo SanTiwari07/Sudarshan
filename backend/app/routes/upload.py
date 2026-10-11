@@ -167,6 +167,13 @@ def _build_dynamic_analysis_model(dynamic_result: Optional[Dict]) -> Optional[Dy
         screenshot_status=dynamic_result.get("screenshot_status"),
         dynamic_coverage=dynamic_result.get("dynamic_coverage", {}),
         crashes=dynamic_result.get("crashes", []),
+        runtime_attempted=bool(dynamic_result.get("runtime_attempted", False)),
+        error=(str(dynamic_result["error"])[:500] if dynamic_result.get("error") else None),
+        telemetry_diagnostics=dynamic_result.get("telemetry_diagnostics") or {},
+        bfci_explanation=dynamic_result.get("bfci_explanation") or {},
+        network_flows=[f for f in (dynamic_result.get("network_flows") or []) if isinstance(f, dict)][:200],
+        network_collection=dynamic_result.get("network_collection") or {},
+        network_logs_total=dynamic_result.get("network_logs_total"),
     )
 
 

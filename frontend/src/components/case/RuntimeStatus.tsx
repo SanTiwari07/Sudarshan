@@ -2,6 +2,7 @@ import { Activity, HelpCircle, Camera, Network, ShieldCheck, ChevronRight } from
 import CardTitle from '../ui/CardTitle';
 import type { FraudCardData } from '../../types/case';
 import { useNavigate } from 'react-router-dom';
+import { ABSENCE_IS_NOT_BENIGN, describeTelemetry } from '../../lib/telemetryStatus';
 
 export default function RuntimeStatus({ data }: { data: FraudCardData }) {
   const navigate = useNavigate();
@@ -51,9 +52,10 @@ export default function RuntimeStatus({ data }: { data: FraudCardData }) {
     assertions?.threat_events_observed ??
     ((dynamic.api_calls?.length || 0) + (dynamic.network_logs?.length || 0));
 
-  const hookCount =
-    (dynamic.api_calls?.length || 0) +
-    (dynamic.files_accessed?.length || 0);
+  const telemetry = describeTelemetry(dynamic);
+  // Hooks INSTALLED, as the agent reported it. This tile used to show
+  // api_calls + files_accessed - a count of events - under the label "Hooks".
+  const hookCount = telemetry.hooksInstalled;
 
   const screenshotCount = dynamic.screenshots?.length || 0;
   const networkCount = dynamic.network_logs?.length || 0;
@@ -66,7 +68,7 @@ export default function RuntimeStatus({ data }: { data: FraudCardData }) {
   if (!ran) {
     badgeColor = 'bg-red-50 text-red-700 border-red-200';
     badgeText = 'FAILED';
-    reasonText = exclusionReason || 'Sandbox instrumentation or launch failed.';
+    reasonText = telemetry.error || exclusionReason || 'Sandbox instrumentation or launch failed.';
   } else if (!conclusive) {
     badgeColor = 'bg-amber-50 text-amber-700 border-amber-200';
     badgeText = 'INCONCLUSIVE';
@@ -78,7 +80,14 @@ export default function RuntimeStatus({ data }: { data: FraudCardData }) {
   } else if (eventsObserved === 0) {
     badgeColor = 'bg-slate-100 text-slate-700 border-slate-200';
     badgeText = '0 EVENTS';
-    reasonText = 'Sandbox ran to completion; no hostile behavioural actions triggered.';
+    // Previously "no hostile behavioural actions triggered" - a benign
+    // conclusion drawn from an absence of data.
+    reasonText = ABSENCE_IS_NOT_BENIGN;
+  }
+  if (telemetry.classification && telemetry.tone !== 'ok') {
+    reasonText = `${telemetry.label}: ${telemetry.explanation}${
+      telemetry.detachReason ? ` (session ended: ${telemetry.detachReason})` : ''
+    }`;
   }
 
   return (
@@ -114,9 +123,11 @@ export default function RuntimeStatus({ data }: { data: FraudCardData }) {
           <div className="p-3 rounded-xl bg-slate-50 flex flex-col gap-1.5 min-w-0">
             <span className="text-slate-500 text-xs font-medium flex items-center gap-1.5 truncate">
               <Activity className="h-3 w-3 text-slate-400" />
-              Hooks
+              Hooks installed
             </span>
-            <span className="text-lg font-semibold tabular-nums text-slate-900 leading-none">{hookCount}</span>
+            <span className="text-lg font-semibold tabular-nums text-slate-900 leading-none">
+              {hookCount ?? 'N/A'}
+            </span>
           </div>
 
           <div className="p-3 rounded-xl bg-slate-50 flex flex-col gap-1.5 min-w-0">
@@ -148,7 +159,12 @@ export default function RuntimeStatus({ data }: { data: FraudCardData }) {
       </div>
 
       <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
-        <span className="text-slate-400 font-medium">Events: {eventsObserved}</span>
+        <span className="text-slate-400 font-medium">
+          Events: {eventsObserved}
+          {telemetry.encryptedTrafficInspected === false && (
+            <span title={telemetry.limitations.join(' ')}> · TLS not inspected</span>
+          )}
+        </span>
         <span className="inline-flex items-center gap-1 font-semibold text-blue-600 group-hover:text-blue-700 transition-colors">
           <span>Runtime tab</span>
           <ChevronRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />

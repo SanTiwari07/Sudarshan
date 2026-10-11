@@ -114,3 +114,16 @@ def test_a_missing_slot_is_reported_and_not_fatal(monkeypatch):
 
     monkeypatch.setenv("SUDARSHAN_DEOPT_BOOT_IMAGE", "1")
     assert _apply_agent_config("// no slot here\n") == "// no slot here\n"
+
+
+def test_hostile_package_name_cannot_break_or_escape_the_agent_source():
+    """The package name is attacker-controlled (it comes from the manifest)."""
+    from sudarshan_core.engines.frida_sandbox import _apply_agent_config, _select_hooks_script
+
+    bundle = _select_hooks_script().read_text(encoding="utf-8")
+    out = _apply_agent_config(bundle, 'com.evil"\n;send("pwn")// x')
+    assert 'var TARGET_PACKAGE_NAME = "com.evilsendpwnx";' in out
+    assert 'send("pwn")' not in out.split("var TARGET_PACKAGE_NAME", 1)[1][:80]
+    # The frida package header must still describe the body exactly.
+    header, body = out.split("✄\n", 1)
+    assert int(header.strip().split("\n")[1].split(" ", 1)[0]) == len(body.encode("utf-8"))

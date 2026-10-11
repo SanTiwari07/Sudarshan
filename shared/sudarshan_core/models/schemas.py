@@ -216,6 +216,21 @@ class DynamicAnalysisResult(BaseModel):
     screenshot_status: Optional[str] = None
     dynamic_coverage: Dict[str, Any] = Field(default_factory=dict)
     crashes: List[Any] = Field(default_factory=list)
+    # ── Additive reliability fields. All optional, so existing clients and
+    # stored payloads are unaffected. Before these existed the API response
+    # dropped `error` and `runtime_attempted`, so the dashboard could show THAT
+    # dynamic analysis failed but never WHY.
+    runtime_attempted: bool = False
+    error: Optional[str] = None
+    #: Stage-level telemetry classification (attach / agent / hooks / events /
+    #: processing) - see sudarshan_core.engines.telemetry_diagnostics.
+    telemetry_diagnostics: Dict[str, Any] = Field(default_factory=dict)
+    #: Per-axis BFCI contributions with the evidence keys behind each.
+    bfci_explanation: Dict[str, Any] = Field(default_factory=dict)
+    network_flows: List[Dict[str, Any]] = Field(default_factory=list)
+    #: What network collection covered and did not (e.g. no TLS inspection).
+    network_collection: Dict[str, Any] = Field(default_factory=dict)
+    network_logs_total: Optional[int] = None
 
 
 # ─── Fraud Workflow Reconstruction ───────────────────────────────────────────────────────────────────

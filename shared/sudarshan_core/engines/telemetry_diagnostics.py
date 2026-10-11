@@ -113,6 +113,10 @@ class TelemetryDiagnostics:
         self.canary_received = False
         self.java_bridge_failed = False
         self.agent_errors: List[str] = []
+        #: Distinct `diag` milestones the agent reported, in arrival order
+        #: (java_bridge_ready, deoptimizeEverything_skipped_api34_plus, ...).
+        #: Reports state these instead of assuming them.
+        self.agent_diagnostics: List[str] = []
 
         self.hooks_installed = 0
         self.hook_errors = 0
@@ -193,6 +197,12 @@ class TelemetryDiagnostics:
             if java_bridge_failed:
                 self.java_bridge_failed = True
             self._keep(self.agent_errors, description)
+
+    def record_diag(self, name: str) -> None:
+        with self._lock:
+            name = str(name or "")[:80]
+            if name and name not in self.agent_diagnostics and len(self.agent_diagnostics) < 40:
+                self.agent_diagnostics.append(name)
 
     def record_hook_installed(self, total: Optional[int] = None) -> None:
         with self._lock:
@@ -363,6 +373,7 @@ class TelemetryDiagnostics:
                     "java_bridge_failed": self.java_bridge_failed,
                     "errors": list(self.agent_errors),
                     "script_errors": list(self.script_errors),
+                    "diagnostics": list(self.agent_diagnostics),
                 },
                 "hooks": {
                     "installed": self.hooks_installed,

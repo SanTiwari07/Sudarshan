@@ -148,6 +148,16 @@ export type DynamicAnalysis = {
   bfci_evidence?: string[];
   artifact_dir?: string;
   evidence_record_count?: number;
+  /** Why dynamic analysis failed, when it did. */
+  error?: string | null;
+  runtime_attempted?: boolean;
+  /** Recorded telemetry-pipeline stages; see backend telemetry_diagnostics. */
+  telemetry_diagnostics?: Record<string, any>;
+  /** What network collection covered (e.g. whether TLS was inspected). */
+  network_collection?: Record<string, any>;
+  network_flows?: Record<string, any>[];
+  network_logs_total?: number | null;
+  bfci_explanation?: Record<string, any>;
 };
 
 export type WorkflowStage = {

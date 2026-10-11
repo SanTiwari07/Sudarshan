@@ -215,3 +215,25 @@ def test_process_death_is_recorded_as_lost_instrumentation(tmp_path):
         if child.poll() is None:
             child.kill()
         fs.event_bus.close(2.0)
+
+
+def test_agent_with_hostile_package_name_still_loads(tmp_path):
+    child = _spawn_child(tmp_path, _SLEEPER)
+    fs = _session(tmp_path)
+    try:
+        fs._session = _attach_or_skip(child.pid)
+        src = _apply_agent_config(
+            _select_hooks_script().read_text(encoding="utf-8"), 'com.evil"\n;bad()//',
+        )
+        fs._load_primary_agent(src, child.pid)
+        assert _wait_until(lambda: fs.canary_received)
+        assert not fs.telemetry.agent_load_error
+        assert not fs.telemetry.script_errors
+    finally:
+        child.kill()
+        child.wait(5)
+        try:
+            fs._session.detach()
+        except Exception:
+            pass
+        fs.event_bus.close(2.0)

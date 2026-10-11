@@ -635,7 +635,11 @@ def _apply_agent_config(script_source: str, package_name: str = "") -> str:
             _AGENT_DEOPT_TOKEN, "var DEOPT_BOOT_IMAGE_FORCED = true;", 1,
         )
     if package_name and _AGENT_TARGET_PACKAGE_TOKEN in script_source:
-        clean_pkg = package_name.replace('"', '').replace('\\', '')
+        # The package name comes from the sample's manifest, i.e. the attacker.
+        # Only characters legal in an Android package name may reach the
+        # agent's source: stripping quotes alone still let a newline through,
+        # which broke the script and silently cost the run its instrumentation.
+        clean_pkg = re.sub(r"[^A-Za-z0-9._]", "", package_name)[:255]
         script_source = script_source.replace(
             _AGENT_TARGET_PACKAGE_TOKEN, f'var TARGET_PACKAGE_NAME = "{clean_pkg}";', 1,
         )
@@ -3336,6 +3340,8 @@ class FridaSession:
                     elif ptype == "hook_installed":
                         total = payload.get("total")
                         telemetry.record_hook_installed(total if isinstance(total, int) else None)
+                    elif ptype == "diag":
+                        telemetry.record_diag(str(payload.get("msg") or ""))
                     elif ptype == "hook_error":
                         telemetry.record_hook_error(
                             str(payload.get("hook", "?")), str(payload.get("error", "")),
@@ -6628,7 +6634,9 @@ async def _run_device_session(
 
     # ── Wave 4: Initialize Intelligence Depth ──────────────────────────────────
     if NetworkCapture is not None:
-        session.network_capture = NetworkCapture(event_bus=session.event_bus)
+        session.network_capture = NetworkCapture(
+            event_bus=session.event_bus, session_started_at=time.time(),
+        )
     try:
         from sudarshan_core.services.threat_correlator import ThreatCorrelatorListener
 
@@ -6988,23 +6996,25 @@ async def _run_device_session(
     # that is excluded from BFCI (a device-identity read, say) is still real
     # observed behaviour and must not vanish from the analyst's view.
     api_calls = [
-        e.get("data", {}).get("hook", "") or e.get("hook", "")
+        (e.get("data") or {}).get("hook", "") or e.get("hook", "")
         for category in ["accessibility", "sms", "overlay", "banking",
                          "persistence", "dangerous_apis", "smoke",
                          "device_fingerprint", "app_telemetry", "notification"]
         for e in session.collected_events.get(category, [])
     ]
 
+    # `e.get("data", {})` returns None for an explicit null and would crash
+    # result assembly for an otherwise successful run.
     network_logs = [
         e["data"].get("url", "")
         for e in session.collected_events.get("network", [])
-        if e.get("data", {}).get("url")
+        if isinstance(e.get("data"), dict) and e["data"].get("url")
     ]
 
     files_accessed = [
         e["data"].get("path", "")
         for e in session.collected_events.get("files_accessed", [])
-        if e.get("data", {}).get("path")
+        if isinstance(e.get("data"), dict) and e["data"].get("path")
     ]
 
     # DAEPipelineTracker seeds its metrics dict with a full set of counters and
@@ -7121,6 +7131,8 @@ async def _run_device_session(
         # Maps Frida events → string signals the existing engine checks
         "api_calls": list(set(api_calls))[:30],
         "network_logs": network_logs[:20],
+        # network_logs is truncated for display; the total says by how much.
+        "network_logs_total": len(network_logs),
         "files_accessed": list(set(files_accessed))[:20],
         # Screenshots WERE being captured - the ScreenshotManager subscribes to
         # the event bus and fires on CRITICAL/overlay/anti_analysis events - but
@@ -7460,6 +7472,7 @@ async def _run_device_session(
         try:
             session.network_capture.flush(apk_dir / "network.json")
             result["network_flows"] = list(session.network_capture.flows)
+            result["network_collection"] = session.network_capture.collection_report()
         except Exception as e:
             logger.error(f"[Frida] Failed to write network.json: {e}")
             

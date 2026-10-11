@@ -218,6 +218,12 @@ class ReportData:
     vide_tier: str = ""
     vide_forensics: Dict[str, Any] = field(default_factory=dict)
 
+    # Recorded telemetry-pipeline facts and network-collection coverage.
+    # Defaulted: cases stored before these existed render "Not recorded"
+    # rather than an assumed value.
+    telemetry_diagnostics: Dict[str, Any] = field(default_factory=dict)
+    network_collection: Dict[str, Any] = field(default_factory=dict)
+
 # ---------------------------------------------------------------------------
 # Data Resolution & Normalization
 # ---------------------------------------------------------------------------
@@ -826,7 +832,79 @@ def build_report_data(case_data: Dict[str, Any], apk_dir: Optional[Path] = None)
         verdict=verdict_val,
         execution_assertions=assertions_dict,
         remedial_suggestions=suggestions_list,
+        telemetry_diagnostics=(
+            get_val(dynamic_res, "telemetry_diagnostics")
+            if isinstance(get_val(dynamic_res, "telemetry_diagnostics"), dict) else {}
+        ),
+        network_collection=(
+            get_val(dynamic_res, "network_collection")
+            if isinstance(get_val(dynamic_res, "network_collection"), dict) else {}
+        ),
     )
+
+# ---------------------------------------------------------------------------
+# Recorded telemetry -> report rows
+# ---------------------------------------------------------------------------
+
+def _xml_escape(text: str) -> str:
+    return (str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+
+
+_DEOPT_LABELS = {
+    "deoptimizeEverything_success": "Executed",
+    "deoptimizeEverything_skipped_api34_plus": "Skipped by the agent (API 34+; avoids ANR stall)",
+    "deoptimizeEverything_failed": "Attempted and failed",
+}
+
+
+def telemetry_metadata_rows(
+    telemetry: Optional[Dict[str, Any]],
+    network: Optional[Dict[str, Any]] = None,
+) -> List[Tuple[str, str]]:
+    """
+    Report rows for the sandbox-metadata table, from RECORDED values only.
+
+    A value that was not recorded is printed as "Not recorded" - never a
+    plausible default.
+    """
+    t = telemetry if isinstance(telemetry, dict) else {}
+    nr = "Not recorded"
+    if not t:
+        rows = [("Telemetry diagnostics", "Not recorded for this case (predates telemetry diagnostics)")]
+    else:
+        agent = t.get("agent") or {}
+        hooks = t.get("hooks") or {}
+        events = t.get("events") or {}
+        session = t.get("session") or {}
+        store = t.get("evidence_store") or {}
+        diags = agent.get("diagnostics") or []
+        deopt = next((_DEOPT_LABELS[d] for d in diags if d in _DEOPT_LABELS), nr)
+        rows = [
+            ("Telemetry classification", f"{t.get('classification', nr)} - {t.get('explanation', '')}".strip(" -")),
+            ("Agent load canary", "Received" if agent.get("canary_received") else "Not received"),
+            ("Java bridge", "FAILED - Java hooks could not install" if agent.get("java_bridge_failed") else (
+                "Available" if "java_bridge_ready" in diags else nr)),
+            ("Java.deoptimizeEverything()", deopt),
+            ("Hooks installed / exercised", f"{hooks.get('installed', 0)} installed, "
+                                            f"{hooks.get('exercised', 0)} fired, {hooks.get('errors', 0)} errors"),
+            ("Runtime events", f"{events.get('received', 0)} received, {events.get('published', 0)} published, "
+                               f"{store.get('accepted', nr)} persisted as evidence, "
+                               f"{store.get('duplicates', 0)} duplicates ignored"),
+            ("Session end", (
+                f"Detached early: {session.get('detach_reason')}" if session.get("attached_at_window_end") is False
+                else "Attached for the full window" if session.get("attached_at_window_end") else nr)),
+        ]
+    n = network if isinstance(network, dict) else {}
+    if n:
+        rows.append((
+            "Encrypted traffic inspected",
+            "Yes (mitmproxy HAR, proxy-trusting connections only)" if n.get("encrypted_traffic_inspected")
+            else "No - endpoints observed at hook/syscall layer only",
+        ))
+    else:
+        rows.append(("Encrypted traffic inspected", "Not recorded"))
+    return rows
+
 
 # ---------------------------------------------------------------------------
 # Report Consistency Gate
@@ -2305,10 +2383,16 @@ class ReportLabPDFGenerator:
                 "Dynamic execution and workflow reconstruction — "
                 f"{self.data.dynamic_status.value}"))
 
+            _tele = self.data.telemetry_diagnostics or {}
+            _why = ""
+            if _tele.get("classification"):
+                _why = (f"<br/>Telemetry pipeline: <b>{_xml_escape(str(_tele['classification']))}</b> - "
+                        f"{_xml_escape(str(_tele.get('explanation', '')))}")
             banner_p = Paragraph(
                 f"<b>[DYNAMIC-STATUS: {self.data.dynamic_status.value}]</b><br/>"
                 "No live runtime telemetry was captured during this sandbox run. "
-                "Dynamic score is excluded from final FRS calculation without penalty.",
+                "Dynamic score is excluded from final FRS calculation without penalty. "
+                "Missing telemetry is not evidence of benign behaviour." + _why,
                 self.body_style
             )
             banner_table = Table([[banner_p]], colWidths=[523.0], repeatRows=1)
@@ -2325,14 +2409,24 @@ class ReportLabPDFGenerator:
             self.body_style))
 
         # Sandbox Metadata Table
+        # Every row below is READ from the recorded run. This table used to
+        # print "Canary received at T+0.4s", "deoptimizeEverything executed
+        # successfully" and "0 loop detections" for every run - fixed strings,
+        # not observations (the agent SKIPS deoptimization on API 34+).
         dyn_meta_data = [
             [Paragraph("Field", self.table_header), Paragraph("Value", self.table_header)],
             [Paragraph("dynamic_status", self.table_cell_bold), Paragraph(self.data.dynamic_status.value, self.table_cell_mono)],
-            [Paragraph("Canary event", self.table_cell_bold), Paragraph("Received at T+0.4s (script load confirmed)", self.table_cell)],
-            [Paragraph("Java.deoptimizeEverything()", self.table_cell_bold), Paragraph("Executed successfully (ART interpreter mode forced)", self.table_cell)],
+        ]
+        for _label, _value in telemetry_metadata_rows(
+            self.data.telemetry_diagnostics, self.data.network_collection,
+        ):
+            dyn_meta_data.append([
+                Paragraph(_xml_escape(_label), self.table_cell_bold),
+                Paragraph(_xml_escape(_value), self.table_cell),
+            ])
+        dyn_meta_data += [
             [Paragraph("Sandbox provider", self.table_cell_bold), Paragraph(self.data.sandbox_provider.value, self.table_cell)],
             [Paragraph("Total runtime", self.table_cell_bold), Paragraph(f"{self.data.analysis_duration.value}s fixed capture window", self.table_cell)],
-            [Paragraph("Screen-hash loop detections", self.table_cell_bold), Paragraph("0 (no redundant navigation loops)", self.table_cell)],
         ]
         dyn_meta_table = Table(dyn_meta_data, colWidths=[164.6, 358.4], repeatRows=1)
         dyn_meta_table.setStyle(TableStyle([

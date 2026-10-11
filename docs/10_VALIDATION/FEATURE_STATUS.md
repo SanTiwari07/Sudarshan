@@ -30,7 +30,8 @@ Test paths are relative to the repository root. **2,860 tests collected** (2,833
 
 | Feature | Status | Implementation | Evidence | Notes |
 | :--- | :--- | :--- | :--- | :--- |
-| Synchronous APK upload | Implemented | `backend/app/routes/upload.py` | `backend/tests/test_analysis_client.py` | ZIP magic and extension validation, size cap, server-side SHA-256 |
+| Synchronous APK upload | Implemented | `backend/app/routes/upload.py` | `backend/tests/test_e2e_upload_no_sandbox.py`, `backend/tests/test_upload_slot_release.py` | ZIP magic and extension validation, size cap, server-side SHA-256. Until 2026-10-11 this endpoint raised `UnboundLocalError` on every call (shadowed `os` import) and rejected uploads leaked their reserved queue slot; see `docs/IMPLEMENTATION_REPORT.md`. |
+| Runtime telemetry diagnostics | Implemented | `shared/sudarshan_core/engines/telemetry_diagnostics.py` | `tests/unit/test_telemetry_diagnostics.py`, `tests/integration/test_frida_local_agent.py` | Classifies attach / agent / hooks / events / processing per run. Verified with real Frida on a local Linux process; **not yet verified on an Android device**. |
 | Asynchronous queued analysis | Implemented | `backend/app/routes/upload.py`, `backend/app/workers/analysis_queue.py` | `backend/tests/test_batch.py` | Returns `job_id`; poll `GET /api/v1/status/{job_id}` |
 | Job cancellation | Implemented | `backend/app/routes/upload.py` | `backend/tests/test_batch.py` | `POST /api/v1/analyze/cancel/{job_id}` |
 | Enterprise batch scan | Implemented | `backend/app/routes/batch.py`, `backend/app/workers/batch_worker.py` | `backend/tests/test_batch.py` | 2–50 APKs, FIFO, pause/resume/cancel/retry, role-scoped |

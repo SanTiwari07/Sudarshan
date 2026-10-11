@@ -1794,7 +1794,15 @@ def calculate_risk_score(
             "static_floor_reason": static_floor_reason,
             # Why the dynamic axis could not be scored. The UI must distinguish
             # "nothing bad happened" from "we never got to look".
-            "dynamic_exclusion_reason": evasion_reason,
+            # Reported for EVERY excluded run, not only when the sandbox ran:
+            # this was `evasion_reason`, which is None whenever dynamic was
+            # unavailable, so a run excluded for EMULATOR_UNAVAILABLE reached
+            # the UI and report with no reason at all. Score unaffected - the
+            # evasion floor above still uses the gated value.
+            "dynamic_exclusion_reason": (
+                evasion_reason if dynamic_available
+                else dynamic_exclusion_reason(dynamic_result)
+            ),
             "dynamic_available": dynamic_available,
             # 5-axis STEI breakdown
             "stei_axes": {

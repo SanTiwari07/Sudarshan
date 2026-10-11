@@ -299,7 +299,17 @@ def build_report_data(case_data: Dict[str, Any], apk_dir: Optional[Path] = None)
     if not isinstance(dynamic_res, dict):
         dynamic_res = {}
 
-    dynamic_ran_bool = bool(get_val(frs_breakdown, "dynamic_ran") or get_val(case_data, "dynamic_available") or (dynamic_res and bool(dynamic_res)))
+    # Whether an instrumented run happened. The risk engine's explicit flag
+    # wins; otherwise the sandbox's own `available`. This used to fall back to
+    # `bool(dynamic_res)` - but an EMULATOR_UNAVAILABLE or SKIPPED result is a
+    # non-empty dict too, so a case that never touched a device printed
+    # "An instrumented run was performed."
+    if isinstance(frs_breakdown, dict) and isinstance(frs_breakdown.get("dynamic_ran"), bool):
+        dynamic_ran_bool = frs_breakdown["dynamic_ran"]
+    elif isinstance(get_val(case_data, "dynamic_available"), bool):
+        dynamic_ran_bool = get_val(case_data, "dynamic_available")
+    else:
+        dynamic_ran_bool = dynamic_res.get("available") is True
     dynamic_conclusive_bool = bool(get_val(frs_breakdown, "dynamic_conclusive"))
 
     # ── Dynamic status ────────────────────────────────────────────────────────

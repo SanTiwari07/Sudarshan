@@ -37,6 +37,8 @@ answers "what did the agent say, and where did it come from".
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
@@ -45,6 +47,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "HARNESS_EVENT_CATEGORIES",
+    "event_fingerprint",
     "NormalizedEvent",
     "normalize_event",
     "normalize_events",
@@ -329,3 +332,48 @@ def normalize_collected_events(
     unstamped = [e for e in out if e.timestamp_ms is None]
     stamped.sort(key=lambda e: e.timestamp_ms or 0)
     return stamped + unstamped
+
+
+# ─── Identity ──────────────────────────────────────────────────────────────────
+
+#: Fields that identify an observation. Anything the HOST adds on delivery is
+#: excluded (`event_type`/`type` rewrites, `evidence_record_id`, provenance
+#: stamps), so the raw event in collected_events and its copy on the event bus
+#: fingerprint alike - which is what lets a BFCI contribution cite the exact
+#: EvidenceStore record it came from.
+_IDENTITY_KEYS = (
+    "event_id", "category", "original_category", "hook", "method", "class",
+    "timestamp", "pid", "process_id", "thread", "thread_id", "arguments",
+    "ioc", "url", "path", "evidence", "description", "source_package",
+    "ip", "port", "command",
+)
+
+#: Bus-only event types whose content lives under `payload`, not `data`.
+_PAYLOAD_EVENT_TYPES = frozenset({"NETWORK_EVENT", "THREAT_DETECTED", "SCREENSHOT_CAPTURED"})
+
+
+def event_fingerprint(raw: Mapping[str, Any]) -> str:
+    """
+    Deterministic content key for one runtime observation (32 hex chars).
+
+    The agent's `event_id` alone is not an identity: the native hooks stamp
+    `native_ev_<ms>`, so two distinct native events in one millisecond share
+    it. The key therefore covers the observation's content. Two events
+    identical in every identifying field cannot be told apart from one event
+    delivered twice, and are treated as one - the conservative choice for a
+    score that must not be inflated by re-delivery.
+    """
+    if not isinstance(raw, Mapping):
+        return ""
+    etype = str(raw.get("event_type") or "")
+    ident: Dict[str, Any] = {}
+    for key in _IDENTITY_KEYS:
+        if key in raw:
+            ident[key] = raw.get(key)
+    if etype in _PAYLOAD_EVENT_TYPES:
+        ident["__event_type"] = etype
+        ident["payload"] = raw.get("payload")
+    else:
+        ident["data"] = raw.get("data") if isinstance(raw.get("data"), dict) else None
+    blob = json.dumps(ident, sort_keys=True, default=str, ensure_ascii=False)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:32]

@@ -43,6 +43,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from sudarshan_core.engines.event_bus import RuntimeEventBus
+from sudarshan_core.engines.runtime_event import event_fingerprint, normalize_event
 
 import logging
 logger = logging.getLogger(__name__)
@@ -128,6 +129,16 @@ class EvidenceRecord:
     # Extra fields present on some hooks
     extra:                dict = field(default_factory=dict)
 
+    #: Content fingerprint of the observation. Stable across re-delivery and
+    #: across runs: the same normalized event always yields the same key, so
+    #: a duplicate delivery is recognised instead of becoming a second record.
+    evidence_key:         str = ""
+    #: Where this record came from - collector, analysis kind (always
+    #: "dynamic" here; static findings never enter this store), the agent's
+    #: own event id, case and stage. A record without provenance cannot be
+    #: cited as evidence.
+    provenance:           dict = field(default_factory=dict)
+
 
 def _parse_hook_name(hook: str) -> tuple:
     """Split 'ClassName.methodName' into (class_name, method)."""
@@ -160,12 +171,20 @@ def _build_record(
     finding_id: str,
 ) -> "EvidenceRecord":
     """Construct an EvidenceRecord from a raw Frida event dict."""
-    data       = event.get("data", {})
-    hook       = data.get("hook", "unknown")
+    data       = event.get("data") if isinstance(event.get("data"), dict) else {}
+    hook       = data.get("hook") or ""
+    if not hook or hook == "unknown":
+        # Some emitters put the hook only at the top level. Reading data.hook
+        # alone filed those as "unknown" and lost their MITRE mapping.
+        parsed = normalize_event(event)
+        hook = (parsed.hook if parsed is not None else "") or "unknown"
     class_name, method = _parse_hook_name(hook)
 
     # Timestamp: prefer Frida's ms timestamp, fall back to now
     ts_ms = event.get("timestamp", 0) or 0
+    if not isinstance(ts_ms, (int, float)) or isinstance(ts_ms, bool):
+        ts_ms = 0
+    ts_ms = int(ts_ms)
     if ts_ms:
         dt = datetime.fromtimestamp(ts_ms / 1000.0, tz=timezone.utc)
     else:
@@ -189,14 +208,14 @@ def _build_record(
         timestamp            = iso_ts,
         timestamp_ms         = ts_ms,
         category             = event.get("category", "unknown"),
-        severity             = data.get("severity", event.get("severity", "MED")).upper(),
+        severity             = str(data.get("severity") or event.get("severity") or "MED").upper(),
         api                  = hook,
         class_name           = class_name,
         method               = method,
-        args                 = data.get("args", []),
+        args                 = data.get("args") or event.get("arguments") or [],
         return_value         = str(data.get("return_value", "")),
-        thread_id            = event.get("thread_id", 0),
-        stack_trace          = event.get("stack_trace", []),
+        thread_id            = event.get("thread_id") or 0,
+        stack_trace          = event.get("stack_trace") or [],
         description          = raw_desc,
         human_description    = human_desc,
         mitre_technique_id   = mitre_id,
@@ -206,6 +225,49 @@ def _build_record(
         runtime_context      = runtime_context.copy(),
         extra                = {k: v for k, v in data.items() if k not in _reserved},
     )
+
+
+# ─── Identity & provenance ─────────────────────────────────────────────────────
+
+def _is_synthetic(event: Dict[str, Any]) -> bool:
+    data = event.get("data") if isinstance(event.get("data"), dict) else {}
+    payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+    return bool(event.get("synthetic") or data.get("synthetic") or payload.get("synthetic"))
+
+
+def evidence_fingerprint(event: Dict[str, Any]) -> str:
+    """Content key for a bus event - see runtime_event.event_fingerprint."""
+    return event_fingerprint(event)
+
+
+def _provenance(event: Dict[str, Any], etype: str, context: Dict[str, Any]) -> Dict[str, Any]:
+    data = event.get("data") if isinstance(event.get("data"), dict) else {}
+    if etype == "SCREENSHOT_CAPTURED":
+        source = "screenshot_manager"
+    elif etype == "NETWORK_EVENT":
+        source = "network_capture"
+    elif etype == "THREAT_DETECTED":
+        source = "threat_correlator"
+    else:
+        parsed = normalize_event(event)
+        if parsed is not None and parsed.harness_attributed:
+            source = "harness"
+        elif str(event.get("source") or "") == "native":
+            source = "frida_native"
+        elif str(event.get("source") or "") == "frida":
+            source = "frida_java"
+        else:
+            source = str(event.get("source") or data.get("source") or "runtime")
+    return {
+        "source": source,
+        "analysis_kind": "dynamic",
+        "observed": True,
+        "source_event_id": str(event.get("event_id") or ""),
+        "source_package": str(event.get("source_package") or context.get("package_name") or ""),
+        "case_id": context.get("case_id", ""),
+        "analysis_stage": context.get("analysis_stage", ""),
+        "synthetic": _is_synthetic(event),
+    }
 
 
 # ─── Evidence Store ────────────────────────────────────────────────────────────
@@ -235,10 +297,24 @@ class EvidenceStore:
         *,
         persist: bool = True,
         db_path: Optional[Path] = None,
+        allow_synthetic: bool = False,
     ):
         self._records: List[EvidenceRecord] = []
         self._lock    = threading.Lock()
         self._evid_counter = 0          # drives EVID-NNN sequence
+        #: evidence_key -> record id, for de-duplication of re-delivered events.
+        self._by_key: Dict[str, str] = {}
+        #: Synthetic (test-generated) events are refused unless the store was
+        #: built for a test. They must never sit beside real APK evidence.
+        self._allow_synthetic = bool(allow_synthetic)
+        self._metrics: Dict[str, int] = {
+            "received": 0,
+            "accepted": 0,
+            "duplicates": 0,
+            "rejected_synthetic": 0,
+            "failed": 0,
+            "persist_failures": 0,
+        }
         self._runtime_context = {
             "package_name":   package_name,
             "case_id":        case_id,
@@ -334,6 +410,8 @@ class EvidenceStore:
             # One bad record must not stop the run or spam the log on every
             # subsequent event.
             self._db_failed = True
+            with self._lock:
+                self._metrics["persist_failures"] += 1
             logger.warning("[EvidenceStore] Durable write failed, disabling: %s", exc)
 
     @property
@@ -378,8 +456,12 @@ class EvidenceStore:
                     )
                 except TypeError:
                     continue
+                if record.evidence_key and record.evidence_key in self._by_key:
+                    continue
                 self._records.append(record)
                 existing.add(record.id)
+                if record.evidence_key:
+                    self._by_key[record.evidence_key] = record.id
                 added += 1
             # Keep the EVID-NNN sequence ahead of anything recovered so a
             # resumed run cannot reissue an identifier already cited in a
@@ -405,11 +487,39 @@ class EvidenceStore:
         if etype == "EVIDENCE_CREATED":
             return  # Prevent recursive loop
 
-        try:
+        with self._lock:
+            self._metrics["received"] += 1
+
+        if _is_synthetic(event) and not self._allow_synthetic:
             with self._lock:
-                finding_id = self._next_evid()
+                self._metrics["rejected_synthetic"] += 1
+            logger.error(
+                "[EvidenceStore] Refused a SYNTHETIC event (%s) - synthetic events "
+                "are for isolated tests and must never enter real analysis evidence.",
+                etype,
+            )
+            return
+
+        try:
+            evidence_key = evidence_fingerprint(event)
+            with self._lock:
+                existing_id = self._by_key.get(evidence_key)
+                if existing_id is not None:
+                    self._metrics["duplicates"] += 1
+            if existing_id is not None:
+                # Same observation delivered again. Point the event at the
+                # record that already holds it, so causal links still resolve.
+                event["evidence_record_id"] = existing_id
+                return
+
+            # Placeholder; the real EVID number is allocated at append time so
+            # a record that fails to build does not burn a number and leave a
+            # gap in the sequence a report cites.
+            finding_id = "EVID-PENDING"
 
             payload = event.get("payload", event.get("data", {}))
+            if not isinstance(payload, dict):
+                payload = {}
             if etype == "SCREENSHOT_CAPTURED":
                 ts_ms = int(event.get("timestamp", time.time()) * 1000)
                 record = EvidenceRecord(
@@ -490,8 +600,18 @@ class EvidenceStore:
             else:
                 record = _build_record(event, self._runtime_context, finding_id)
 
+            record.evidence_key = evidence_key
+            record.provenance = _provenance(event, etype, self._runtime_context)
             with self._lock:
+                if evidence_key in self._by_key:
+                    # Lost a race with a concurrent delivery of the same event.
+                    self._metrics["duplicates"] += 1
+                    event["evidence_record_id"] = self._by_key[evidence_key]
+                    return
+                record.finding_id = self._next_evid()
                 self._records.append(record)
+                self._by_key[evidence_key] = record.id
+                self._metrics["accepted"] += 1
             # Durable write happens outside the lock: SQLite has its own, and
             # holding both would serialise the Frida callback thread behind
             # disk I/O.
@@ -516,7 +636,14 @@ class EvidenceStore:
                     f" - {record.description[:80]}"
                 )
         except Exception as exc:
+            with self._lock:
+                self._metrics["failed"] += 1
             logger.error(f"[EvidenceStore] Failed to build record: {exc}")
+
+    def metrics(self) -> Dict[str, int]:
+        """Ingestion counters: received, accepted, duplicates, rejected, failed."""
+        with self._lock:
+            return dict(self._metrics)
 
     # ── ScreenshotManager integration ──────────────────────────────────────────
 
@@ -609,6 +736,7 @@ class EvidenceStore:
             "by_category": by_category,
             "critical":    by_severity.get("CRITICAL", 0),
             "high":        by_severity.get("HIGH", 0),
+            "ingestion":   self.metrics(),
         }
 
     # ── Persistence ────────────────────────────────────────────────────────────

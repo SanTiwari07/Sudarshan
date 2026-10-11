@@ -249,7 +249,9 @@ def test_companion_events_are_stamped_with_their_source_package(session):
     attributing it to the loader would be a fabrication.
     """
     seen = {}
-    session._on_message = lambda message, data: seen.update(message)  # type: ignore[method-assign]
+    # Companion messages are dispatched as NON-primary (so a companion's canary
+    # cannot be mistaken for the target agent's) and reach the same handler.
+    session._handle_message = lambda message, data: seen.update(message)  # type: ignore[method-assign]
     handler = session._companion_message_handler(PAYLOAD)
     handler(
         {"type": "send", "payload": {"type": "event", "category": "sms",

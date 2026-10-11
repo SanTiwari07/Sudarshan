@@ -47,7 +47,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from sudarshan_core.engines.event_bus import EventType, RuntimeEvent, RuntimeEventBus
-from sudarshan_core.engines.bfci_scorer import calculate_bfci_v2, BFCI_WEIGHTS
+from sudarshan_core.engines.bfci_scorer import calculate_bfci_v2, explain_bfci, BFCI_WEIGHTS
 from sudarshan_core.engines.dae_pipeline import DAEPipelineTracker, DAEStage
 from sudarshan_core.engines.apk_repair import compute_sha256
 from sudarshan_core.engines.dynamic_budget import (
@@ -59,6 +59,7 @@ from sudarshan_core.engines.dynamic_budget import (
     set_active_deadline,
 )
 from sudarshan_core.engines.runtime_event import normalize_collected_events
+from sudarshan_core.engines.telemetry_diagnostics import TelemetryDiagnostics
 from sudarshan_core.engines.dynamic_coverage import (
     DynamicCoverageStatus,
     build_dynamic_coverage,
@@ -2483,6 +2484,12 @@ class FridaSession:
         self.artifact_dir: Path = Path(artifact_dir) if artifact_dir else Path(".")
         self.dae = DAEPipelineTracker(package_name=package_name)
         self.event_bus = RuntimeEventBus()
+        # Stage-level record of the telemetry pipeline (attach -> agent ->
+        # hooks -> events -> processing). See telemetry_diagnostics for why a
+        # zero-event run needs this to be interpretable at all.
+        self.telemetry = TelemetryDiagnostics(
+            analysis_id=case_id or package_name, package_name=package_name,
+        )
         # Keys MUST mirror the `events` object in frida_hooks/banking_trojan.js.
         # An unrecognised category is remapped to "dangerous_apis" by
         # _on_message, so a category present in the agent but missing here is
@@ -2867,7 +2874,7 @@ class FridaSession:
             except Exception:
                 # Provenance is a nicety; losing it must never lose the event.
                 pass
-            self._on_message(message, data)
+            self._dispatch_message(message, data, primary=False)
         return _handler
 
     @staticmethod
@@ -3304,6 +3311,97 @@ class FridaSession:
         return summary
 
     def _on_message(self, message: Dict, data: Any) -> None:
+        """Frida `message` callback for the PRIMARY (target) agent."""
+        self._dispatch_message(message, data, primary=True)
+
+    def _dispatch_message(self, message: Any, data: Any, *, primary: bool) -> None:
+        """
+        Count, then handle, one Frida message. Never raises.
+
+        frida-python runs this on its own thread and, if it raises, prints the
+        traceback to stderr and moves on - the event is gone and nothing in the
+        result says so. Every message is therefore counted before it is
+        handled, and a handler exception is recorded as a processing failure
+        in the telemetry diagnostics instead of disappearing.
+        """
+        telemetry = getattr(self, "telemetry", None)
+        ptype = None
+        if telemetry is not None:
+            ptype = telemetry.record_message(message)
+            if primary and isinstance(message, dict) and message.get("type") == "send":
+                payload = message.get("payload")
+                if isinstance(payload, dict):
+                    if ptype == "canary":
+                        telemetry.record_canary()
+                    elif ptype == "hook_installed":
+                        total = payload.get("total")
+                        telemetry.record_hook_installed(total if isinstance(total, int) else None)
+                    elif ptype == "hook_error":
+                        telemetry.record_hook_error(
+                            str(payload.get("hook", "?")), str(payload.get("error", "")),
+                        )
+                    elif ptype == "error":
+                        telemetry.record_agent_error(
+                            str(payload.get("description") or payload)[:300],
+                            java_bridge_failed=bool(
+                                payload.get("java_bridge_failed")
+                                or payload.get("java_bridge_source")
+                            ),
+                        )
+        if not isinstance(message, dict):
+            return
+        if message.get("type") == "send" and not isinstance(message.get("payload"), dict):
+            return
+        try:
+            self._handle_message(message, data)
+        except Exception as exc:                      # noqa: BLE001
+            if telemetry is not None:
+                telemetry.record_handler_exception(exc)
+            logger.error(
+                "[Frida] Message handler raised %s: %s - message type=%s",
+                type(exc).__name__, exc, ptype, exc_info=True,
+            )
+
+    def _on_detached(self, reason: Any, crash: Any = None) -> None:
+        """Frida `detached` callback. Records why instrumentation was lost."""
+        try:
+            self.telemetry.record_detached(reason, crash)
+            logger.warning(
+                "[Frida] Session DETACHED from %s: reason=%s%s",
+                self.package_name, reason,
+                f" crash={getattr(crash, 'summary', crash)}" if crash is not None else "",
+            )
+        except Exception:                             # noqa: BLE001
+            pass
+
+    def _load_primary_agent(self, script_source: str, pid: Optional[int] = None) -> None:
+        """
+        Load the agent into ``self._session``; record every outcome.
+
+        Raises whatever create_script/load raised, after recording it, so the
+        callers' existing fallback logic is unchanged. Before this the
+        ladder path logged a load failure as a warning and moved on, and the
+        result carried no trace of the compile/load error.
+        """
+        session = self._session
+        self.telemetry.record_attach(pid)
+        try:
+            session.on("detached", self._on_detached)
+        except Exception as exc:                      # noqa: BLE001
+            logger.debug("[Frida] Could not register detached handler: %s", exc)
+        self.telemetry.record_agent_load_attempt()
+        try:
+            script = session.create_script(script_source)
+            script.on("message", self._on_message)
+            script.load()
+        except Exception as exc:
+            self.telemetry.record_agent_load_failed(f"{type(exc).__name__}: {exc}")
+            self.hook_errors.append(f"Agent load failed: {type(exc).__name__}: {exc}")
+            raise
+        self._script = script
+        self.telemetry.record_agent_loaded()
+
+    def _handle_message(self, message: Dict, data: Any) -> None:
         """Handle messages sent from the Frida JS script."""
         if message.get("type") == "send":
             payload = message.get("payload", {})
@@ -3316,7 +3414,7 @@ class FridaSession:
                 event = payload.get("payload", payload) if "payload" in payload else payload
                 # If the emit wrapper itself IS the event (no inner payload key)
                 # fall back gracefully:
-                if not event.get("category"):
+                if not isinstance(event, dict) or not event.get("category"):
                     event = payload
 
                 category = event.get("category", "dangerous_apis")
@@ -3332,6 +3430,7 @@ class FridaSession:
                             or any(_p in _path for _p in ("/oat/", "/data/user/", "/data/data/"))
                         ):
                             logger.debug("[Frida] Filtered internal Frida runtime open event: %s", _path)
+                            self.telemetry.record_event_filtered()
                             return
 
                 # FIX Bug #5: unrecognized categories fall through to dangerous_apis
@@ -3344,8 +3443,10 @@ class FridaSession:
                     event["category"] = "dangerous_apis"
 
                 self.collected_events[category].append(event)
-                severity = event.get("severity", (event.get("data") or {}).get("severity", "MED"))
-                hook_name = (event.get("data") or {}).get("hook") or event.get("hook", "?")
+                _evdata = event.get("data") if isinstance(event.get("data"), dict) else {}
+                severity = event.get("severity", _evdata.get("severity", "MED"))
+                hook_name = _evdata.get("hook") or event.get("hook", "?")
+                self.telemetry.record_event_accepted(str(hook_name))
                 logger.debug(f"[Frida] [{severity}] {category}: {hook_name}")
 
                 # Update pipeline tracker event counters
@@ -3371,7 +3472,8 @@ class FridaSession:
                 bus_event = dict(event)
                 bus_event["event_type"] = EventType.FRIDA_EVENT
                 bus_event["type"] = EventType.FRIDA_EVENT
-                self.event_bus.publish(bus_event)
+                if self.event_bus.publish(bus_event) is not False:
+                    self.telemetry.record_event_published()
                 log_pipeline_lifecycle(
                     10,
                     "RuntimeEvent emitted",
@@ -3383,6 +3485,8 @@ class FridaSession:
                     url = net_data.get("url") or net_data.get("ioc")
                     if url:
                         ts_raw = event.get("timestamp", 0) or 0
+                        if not isinstance(ts_raw, (int, float)):
+                            ts_raw = 0
                         ts_sec = (
                             ts_raw / 1000.0
                             if ts_raw > 1e12
@@ -4188,9 +4292,7 @@ class FridaSession:
         self.dae.transition(DAEStage.ATTACH_FRIDA, "attaching to spawned (suspended) process")
 
         try:
-            self._script = self._session.create_script(script_source)
-            self._script.on("message", self._on_message)
-            self._script.load()
+            self._load_primary_agent(script_source, pid)
         except Exception as exc:                       # noqa: BLE001
             logger.warning(
                 "[Frida] Agent load into spawned %s failed (%s: %s) - killing "
@@ -5289,9 +5391,7 @@ class FridaSession:
             # twice and double-count every event the sample produces.
             if self._script is None and self._session is not None:
                 try:
-                    self._script = self._session.create_script(script_source)
-                    self._script.on("message", self._on_message)
-                    self._script.load()
+                    self._load_primary_agent(script_source, self._stable_pid)
                     self.liveness_checkpoints["5s"] = True
                 except Exception as script_load_err:
                     logger.warning(f"[Frida] Script loading failed: {script_load_err}")
@@ -5598,9 +5698,15 @@ class FridaSession:
             # component on every failure.
             self.last_error = f"{type(e).__name__}: {e}"
             logger.error(f"[Frida] Session failed: {self.last_error}")
+            if not self.telemetry.attached:
+                self.telemetry.record_attach_failed(self.last_error)
             return False
 
         finally:
+            # The observation window is over. Recorded BEFORE our own teardown
+            # detaches the session, so a detach we cause is never mistaken for
+            # instrumentation lost mid-run.
+            self.telemetry.mark_window_end()
             # No fuzzer to reap any more.
             if 'explorer' in locals() and explorer:
                 try:
@@ -5984,6 +6090,36 @@ async def run_frida_analysis(
 #: `harness_action` is where the agent files its own Build-field spoofing, which
 #: fires once on every emulator run for benign apps and trojans alike.
 _HARNESS_EVENT_BUCKETS = frozenset({"harness_action"})
+
+
+def _finalize_session_telemetry(session: "FridaSession") -> Dict[str, Any]:
+    """
+    Drain and close the session's event bus, then return its telemetry report.
+
+    Closing matters: every FridaSession owns a RuntimeEventBus whose worker
+    thread used to live for the rest of the process. Never raises - a
+    diagnostics failure must not cost the run its result.
+    """
+    try:
+        bus = getattr(session, "event_bus", None)
+        bus_metrics = None
+        if bus is not None:
+            bus.drain(5.0)
+            bus.close(2.0)
+            bus_metrics = bus.metrics()
+        store = getattr(session, "evidence_store", None)
+        store_metrics = store.metrics() if store is not None and hasattr(store, "metrics") else None
+        report = session.telemetry.to_dict(bus_metrics, store_metrics)
+        log_pipeline_lifecycle(
+            12, "Telemetry classification",
+            f"{report['classification']} received={report['events']['received']} "
+            f"published={report['events']['published']} hooks={report['hooks']['installed']} "
+            f"detach={report['session']['detach_reason'] or '-'}",
+        )
+        return report
+    except Exception as exc:                          # noqa: BLE001
+        logger.error("[Frida] Telemetry diagnostics unavailable: %s", exc, exc_info=True)
+        return {"classification": "UNKNOWN", "error": f"{type(exc).__name__}: {exc}"}
 
 
 def _no_sample_behaviour_observed(session: "FridaSession") -> bool:
@@ -6576,6 +6712,7 @@ async def _run_device_session(
             base_result["bfci"] = bfci
             base_result["bfci_components"] = components
             base_result["bfci_evidence"] = bfci_evidence
+            base_result["bfci_explanation"] = explain_bfci(session.collected_events)
             base_result["frida_events"] = session.collected_events
             base_result["raw_event_counts"] = {
                 k: len(v or []) for k, v in session.collected_events.items()
@@ -6717,6 +6854,7 @@ async def _run_device_session(
             )
         else:
             base_result["screenshot_status"] = session.screenshot_status or "CAPTURED"
+        base_result["telemetry_diagnostics"] = _finalize_session_telemetry(session)
         if tracker:
             tracker.write_json(apk_dir)
         set_active_tracker(None)
@@ -6968,6 +7106,9 @@ async def _run_device_session(
         "bfci": bfci,
         "bfci_components": components,
         "bfci_evidence": evidence,
+        # Per-axis contributions with the fingerprints of the events behind
+        # them (the same keys EvidenceStore records as `evidence_key`).
+        "bfci_explanation": explain_bfci(session.collected_events),
 
         # Legacy fields expected by risk_engine._calculate_dynamic_score()
         # Maps Frida events → string signals the existing engine checks
@@ -7171,19 +7312,11 @@ async def _run_device_session(
             session.event_bus.drain(8.0)
             if session.screenshot_manager is not None:
                 session.screenshot_manager.wait_pending(30.0)
-            # Drain the queue with a bounded timeout so we never block indefinitely.
-            _drain_timeout = 5.0
-            try:
-                session.event_bus._queue.join()
-            except Exception:
-                # join() with timeout requires get_nowait loop; use wait instead
-                try:
-                    import queue as _q
-                    deadline = time.time() + _drain_timeout
-                    while not session.event_bus._queue.empty() and time.time() < deadline:
-                        time.sleep(0.1)
-                except Exception:
-                    pass
+            # Second bounded drain: screenshot completions publish follow-up
+            # events. This used to be `_queue.join()`, which has NO timeout -
+            # one stuck subscriber (or a skipped task_done) wedged the whole
+            # analysis while it held the device lock.
+            session.event_bus.drain(5.0)
             session.dae.transition(DAEStage.COLLECT_EVIDENCE, "flushing evidence store")
             n = session.evidence_store.flush(apk_dir / "evidence.json")
             result["evidence_record_count"] = n
@@ -7337,8 +7470,13 @@ async def _run_device_session(
         except Exception as e:
             logger.error(f"[Frida] Failed to write yara_results.json: {e}")
 
+    # ── Telemetry pipeline diagnostics ─────────────────────────────────────────
+    # Computed after the evidence flush so the bus and store counters are
+    # final, and before the report so the report can disclose them.
+    result["telemetry_diagnostics"] = _finalize_session_telemetry(session)
+
     # ── Wave 5: Aggregation & Reporting ────────────────────────────────────────
-            
+
     if ReportGenerator is not None:
         try:
             rg = ReportGenerator(result, apk_dir)

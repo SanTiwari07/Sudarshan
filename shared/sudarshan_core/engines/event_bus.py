@@ -18,6 +18,7 @@ Supported Event Types:
 from __future__ import annotations
 
 import logging
+import os
 import queue
 import threading
 import time
@@ -88,19 +89,71 @@ class RuntimeEvent:
         }
 
 
+#: Upper bound on undelivered events. A hostile sample can call a hooked API
+#: in a tight loop; an unbounded queue turned that into unbounded host memory.
+DEFAULT_MAX_QUEUE = int(os.getenv("SUDARSHAN_EVENT_BUS_MAX_QUEUE", "20000") or 20000)
+#: How long a publisher waits for room before the event is dropped (and
+#: counted). Blocking the publisher is the backpressure: it slows Frida's
+#: message delivery instead of growing the queue.
+DEFAULT_PUBLISH_TIMEOUT_S = float(os.getenv("SUDARSHAN_EVENT_BUS_PUBLISH_TIMEOUT", "2.0") or 2.0)
+
+_STOP = object()
+
+
 class RuntimeEventBus:
     """
     Thread-safe asynchronous event bus.
     Uses an internal queue and background worker to decouple publishers from subscribers.
+
+    Delivery guarantees, all observable through :meth:`metrics`:
+      * a subscriber that raises never affects other subscribers or later events;
+      * the queue is bounded - a publisher blocks up to ``publish_timeout`` for
+        room, then the event is dropped and counted in ``dropped`` rather than
+        lost silently;
+      * :meth:`close` stops the worker thread. Each bus used to own a daemon
+        thread for the life of the process, one per analysed sample.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        max_queue: Optional[int] = None,
+        publish_timeout: Optional[float] = None,
+    ) -> None:
         self._subscribers: List[Callable[[Dict[str, Any]], None]] = []
         self._typed_subscribers: Dict[str, List[Callable[[Dict[str, Any]], None]]] = {}
-        self._queue: queue.Queue = queue.Queue()
+        size = DEFAULT_MAX_QUEUE if max_queue is None else max(1, int(max_queue))
+        self._queue: queue.Queue = queue.Queue(maxsize=size)
+        self._publish_timeout = (
+            DEFAULT_PUBLISH_TIMEOUT_S if publish_timeout is None else max(0.0, float(publish_timeout))
+        )
         self._lock = threading.Lock()
-        self._worker = threading.Thread(target=self._process_events, daemon=True)
+        self._metrics_lock = threading.Lock()
+        self._metrics: Dict[str, int] = {
+            "published": 0,
+            "delivered": 0,
+            "dropped": 0,
+            "rejected_after_close": 0,
+            "subscriber_errors": 0,
+            "sink_errors": 0,
+            "max_depth": 0,
+        }
+        self._closed = False
+        self._worker = threading.Thread(
+            target=self._process_events, name="runtime-event-bus", daemon=True
+        )
         self._worker.start()
+
+    def _bump(self, key: str, n: int = 1) -> None:
+        with self._metrics_lock:
+            self._metrics[key] = self._metrics.get(key, 0) + n
+
+    def metrics(self) -> Dict[str, int]:
+        """Snapshot of delivery counters, plus the current queue depth."""
+        with self._metrics_lock:
+            out = dict(self._metrics)
+        out["pending"] = self._queue.qsize()
+        out["capacity"] = self._queue.maxsize
+        return out
 
     def subscribe(
         self,
@@ -131,10 +184,13 @@ class RuntimeEventBus:
             elif callback in self._subscribers:
                 self._subscribers.remove(callback)
 
-    def publish(self, event: Union[RuntimeEvent, Dict[str, Any]]) -> None:
+    def publish(self, event: Union[RuntimeEvent, Dict[str, Any]]) -> bool:
         """
         Publish an event to all subscribers.
         Accepts either a RuntimeEvent instance or a raw Dict.
+
+        Returns True when the event was queued, False when it was rejected
+        (bus closed, unsupported type, or the queue stayed full).
         """
         if isinstance(event, RuntimeEvent):
             event_dict = event.to_dict()
@@ -144,15 +200,43 @@ class RuntimeEventBus:
                 event_dict["event_type"] = event_dict.get("type", EventType.FRIDA_EVENT)
         else:
             logger.warning("[EventBus] Unsupported event object type: %s", type(event))
-            return
+            return False
 
-        self._queue.put(event_dict)
+        if self._closed:
+            self._bump("rejected_after_close")
+            return False
+
+        try:
+            if threading.current_thread() is self._worker:
+                # A subscriber publishing a follow-up event (EvidenceStore's
+                # EVIDENCE_CREATED). Blocking here would wait on the very
+                # thread that drains the queue, so never block.
+                self._queue.put_nowait(event_dict)
+            else:
+                self._queue.put(event_dict, timeout=self._publish_timeout)
+        except queue.Full:
+            self._bump("dropped")
+            logger.error(
+                "[EventBus] Queue full (%d) - dropped %s event. Runtime telemetry "
+                "is being lost; see event_bus metrics in the result.",
+                self._queue.maxsize, event_dict.get("event_type"),
+            )
+            return False
+
+        self._bump("published")
+        depth = self._queue.qsize()
+        with self._metrics_lock:
+            if depth > self._metrics["max_depth"]:
+                self._metrics["max_depth"] = depth
+        return True
 
     def _process_events(self) -> None:
         """Background thread pulling events from queue and notifying subscribers."""
         while True:
+            event = self._queue.get()
             try:
-                event = self._queue.get()
+                if event is _STOP:
+                    return
                 etype = event.get("event_type", "")
 
                 with self._lock:
@@ -177,6 +261,7 @@ class RuntimeEventBus:
                     try:
                         sink(event)
                     except Exception as e:
+                        self._bump("sink_errors")
                         logger.error("[EventBus] Telemetry sink error: %s", e)
 
                 # Notify general subscribers
@@ -184,6 +269,7 @@ class RuntimeEventBus:
                     try:
                         cb(event)
                     except Exception as e:
+                        self._bump("subscriber_errors")
                         logger.error("[EventBus] General subscriber error: %s", e)
 
                 # Notify typed subscribers
@@ -191,11 +277,38 @@ class RuntimeEventBus:
                     try:
                         cb(event)
                     except Exception as e:
+                        self._bump("subscriber_errors")
                         logger.error("[EventBus] Typed subscriber (%s) error: %s", etype, e)
 
-                self._queue.task_done()
+                self._bump("delivered")
             except Exception as e:
                 logger.error("[EventBus] Worker loop error: %s", e)
+            finally:
+                # Always. A task_done() skipped on the error path left
+                # unfinished_tasks permanently above zero, so every later
+                # drain() waited out its full timeout and reported failure.
+                self._queue.task_done()
+
+    def close(self, timeout_seconds: float = 5.0) -> bool:
+        """
+        Deliver what is queued, then stop the worker thread.
+
+        Idempotent. Returns True when the worker exited within the timeout.
+        """
+        if self._closed:
+            return not self._worker.is_alive()
+        self._closed = True
+        try:
+            self._queue.put(_STOP, timeout=max(0.1, timeout_seconds))
+        except queue.Full:
+            logger.warning("[EventBus] close(): queue still full, worker not signalled")
+            return False
+        self._worker.join(timeout=max(0.1, timeout_seconds))
+        return not self._worker.is_alive()
+
+    @property
+    def closed(self) -> bool:
+        return self._closed
 
     def pending_count(self) -> int:
         """Approximate number of events not yet delivered to subscribers."""

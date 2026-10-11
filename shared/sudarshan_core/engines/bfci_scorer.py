@@ -29,7 +29,9 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
+from sudarshan_core.engines.runtime_event import event_fingerprint
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +143,65 @@ FRAUD_SEQUENCES: List[Tuple[str, List[str]]] = [
 ]
 
 
+#: Version of the rules above. Bump it whenever a weight, cap, window,
+#: multiplier or sequence changes, so a stored score can always be traced to
+#: the ruleset that produced it.
+BFCI_RULESET_VERSION: str = "bfci-v2.1"
+
+#: Human labels for every scored axis. Every key of BFCI_WEIGHTS must be here:
+#: a contribution with no explanation is a score nobody can check.
+_AXIS_LABELS: Dict[str, Tuple[str, str]] = {
+    "accessibility":  ("A", "Accessibility abuse"),
+    "sms":            ("S", "SMS/OTP interception"),
+    "overlay":        ("O", "Overlay window attack"),
+    "banking":        ("B", "Banking app targeting"),
+    "network":        ("N", "C2 network communication"),
+    "persistence":    ("P", "Persistence mechanism"),
+    "code_execution": ("X", "Code execution / payload deployment"),
+}
+assert set(_AXIS_LABELS) == set(BFCI_WEIGHTS), "every scored axis needs a label"
+
+
+# ─── Evidence identity ─────────────────────────────────────────────────────────
+
+def dedupe_events(events: Optional[List[Dict]]) -> Tuple[List[Dict], List[str], int]:
+    """
+    Distinct observations in `events`, in order, with their fingerprints.
+
+    Returns (unique_events, fingerprints, duplicates_dropped). Scoring counts
+    OBSERVATIONS; the same event delivered twice (a re-delivered message, a
+    merged stage result, a recovered evidence log) is one observation and
+    must not raise the score.
+    """
+    unique: List[Dict] = []
+    keys: List[str] = []
+    seen = set()
+    dropped = 0
+    for ev in events or []:
+        if not isinstance(ev, dict):
+            continue
+        key = event_fingerprint(ev)
+        if key in seen:
+            dropped += 1
+            continue
+        seen.add(key)
+        unique.append(ev)
+        keys.append(key)
+    return unique, keys, dropped
+
+
+def _event_time_ms(ev: Dict) -> Optional[float]:
+    """The agent's millisecond timestamp, or None when the event has none."""
+    ts = ev.get("timestamp")
+    if ts is None or isinstance(ts, bool):
+        return None
+    try:
+        value = float(ts)
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None
+
+
 # ─── Core scoring functions ────────────────────────────────────────────────────
 
 def score_component(
@@ -196,23 +257,37 @@ def detect_fraud_sequences(
     Returns:
         List of detected sequence labels (e.g. ["OTP_THEFT_CHAIN"]).
     """
-    detected: List[str] = []
+    return [label for label, _ in _detect_sequences_with_support(events_by_category, window_s)]
 
-    # Build per-category sorted timestamp lists.
-    all_timestamps: Dict[str, List[float]] = {}
+
+def _detect_sequences_with_support(
+    events_by_category: Dict[str, List[Dict]],
+    window_s: float = SEQUENCE_WINDOW_SECONDS,
+) -> List[Tuple[str, List[str]]]:
+    """
+    Detected sequences, each with the fingerprints of the events in the
+    window that established it.
+
+    Events WITHOUT a timestamp are ignored. They used to be scored as t=0,
+    which put every unstamped event in every category inside the same
+    window, so three unstamped events in accessibility/sms/network earned the
+    x1.25 bonus with no temporal evidence at all. A correlation has to be
+    supported by evidence; the absence of a timestamp is not evidence of
+    co-occurrence.
+    """
+    detected: List[Tuple[str, List[str]]] = []
+
+    # Build per-category sorted (timestamp, fingerprint) lists.
+    all_timestamps: Dict[str, List[Tuple[float, str]]] = {}
     for cat, evts in events_by_category.items():
         if cat not in BFCI_WEIGHTS:
             continue
+        unique, keys, _ = dedupe_events(evts)
         times = []
-        for ev in evts:
-            ts = ev.get("timestamp")
+        for ev, key in zip(unique, keys):
+            ts = _event_time_ms(ev)
             if ts is not None:
-                try:
-                    times.append(float(ts))
-                except (TypeError, ValueError):
-                    times.append(0.0)
-            else:
-                times.append(0.0)
+                times.append((ts, key))
         if times:
             all_timestamps[cat] = sorted(times)
 
@@ -224,24 +299,29 @@ def detect_fraud_sequences(
         # Anchor on each event in the first category; check whether all
         # other categories have an event within window_s.
         anchor_cat = required_cats[0]
-        found_window = False
-        for anchor_ts in all_timestamps[anchor_cat]:
+        support: Optional[List[str]] = None
+        for anchor_ts, anchor_key in all_timestamps[anchor_cat]:
             window_end_ms   = anchor_ts + window_s * 1000
             window_start_ms = anchor_ts - window_s * 1000
 
-            all_in_window = True
+            refs = [anchor_key]
             for other_cat in required_cats[1:]:
-                cat_times = all_timestamps.get(other_cat, [])
-                if not any(window_start_ms <= t <= window_end_ms for t in cat_times):
-                    all_in_window = False
+                match = next(
+                    (k for t, k in all_timestamps.get(other_cat, [])
+                     if window_start_ms <= t <= window_end_ms),
+                    None,
+                )
+                if match is None:
+                    refs = []
                     break
+                refs.append(match)
 
-            if all_in_window:
-                found_window = True
+            if refs:
+                support = refs
                 break
 
-        if found_window:
-            detected.append(seq_label)
+        if support is not None:
+            detected.append((seq_label, support))
             logger.info(
                 f"[BFCI] Fraud sequence detected: {seq_label} "
                 f"(categories: {required_cats}, window={window_s}s)"
@@ -269,8 +349,12 @@ def calculate_bfci_v2(
     assert isinstance(collected_events, dict), "collected_events must be a dict"
 
     # ── Component scores (volume-aware) ────────────────────────────────────────
+    # Counted over DISTINCT observations - see dedupe_events.
+    distinct: Dict[str, List[Dict]] = {
+        cat: dedupe_events(collected_events.get(cat, []))[0] for cat in BFCI_WEIGHTS
+    }
     components: Dict[str, float] = {
-        cat: score_component(collected_events.get(cat, []), cat)
+        cat: score_component(distinct[cat], cat)
         for cat in BFCI_WEIGHTS
     }
 
@@ -293,21 +377,15 @@ def calculate_bfci_v2(
     bfci = round(min(bfci, 100.0), 2)
 
     # ── Evidence strings ────────────────────────────────────────────────────────
-    weight_labels = {
-        "accessibility": ("A", "Accessibility abuse"),
-        "sms":           ("S", "SMS/OTP interception"),
-        "overlay":       ("O", "Overlay window attack"),
-        "banking":       ("B", "Banking app targeting"),
-        "network":       ("N", "C2 network communication"),
-        "persistence":   ("P", "Persistence mechanism"),
-    }
+    # code_execution was missing from this table, so its contribution (up to
+    # 10 points) reached the score with no stated reason.
     evidence: List[str] = []
-    for key, (symbol, label) in weight_labels.items():
+    for key, (symbol, label) in _AXIS_LABELS.items():
         score = components[key]
         weight = BFCI_WEIGHTS[key]
         if score > 0:
             contribution = round(weight * score, 2)
-            event_count = len(collected_events.get(key, []))
+            event_count = len(distinct[key])
             evidence.append(
                 f"[{symbol}] {label}: {event_count} event(s) - "
                 f"component score {score:.1f}/100 x weight {weight} = +{contribution:.1f} to BFCI"
@@ -319,3 +397,58 @@ def calculate_bfci_v2(
         )
 
     return bfci, components, evidence, detected_sequences
+
+
+def explain_bfci(collected_events: Optional[Dict[str, List[Dict]]]) -> Dict[str, Any]:
+    """
+    The BFCI score with every contribution traced to the events behind it.
+
+    Same arithmetic as calculate_bfci_v2 (the score is taken from it, not
+    recomputed), plus, per scored axis: weight, distinct event count,
+    duplicates ignored, contribution, a reason, and the fingerprints of the
+    supporting events (the same keys EvidenceStore stores as `evidence_key`).
+    Deterministic: the same normalized evidence and ruleset always produce
+    the same output.
+    """
+    events = collected_events or {}
+    bfci, components, evidence, sequences = calculate_bfci_v2(events)
+    contributions: Dict[str, Any] = {}
+    for cat, weight in BFCI_WEIGHTS.items():
+        unique, keys, dropped = dedupe_events(events.get(cat, []))
+        symbol, label = _AXIS_LABELS[cat]
+        hooks = sorted({
+            str((ev.get("data") or {}).get("hook") or ev.get("hook") or "")
+            for ev in unique if isinstance(ev.get("data"), dict) or ev.get("hook")
+        } - {""})
+        contributions[cat] = {
+            "symbol": symbol,
+            "label": label,
+            "weight": weight,
+            "cap": _CATEGORY_CAPS.get(cat, 5),
+            "event_count": len(unique),
+            "duplicates_ignored": dropped,
+            "component_score": components[cat],
+            "contribution": round(weight * components[cat], 2),
+            "reason": (
+                f"{len(unique)} distinct {label.lower()} event(s); "
+                f"component {components[cat]:.1f}/100 x weight {weight}"
+                if unique else "no events observed for this axis"
+            ),
+            "hooks": hooks,
+            "evidence_refs": keys,
+        }
+    raw = round(sum(c["contribution"] for c in contributions.values()), 2)
+    seq_support = _detect_sequences_with_support(
+        {k: v for k, v in events.items() if k in BFCI_WEIGHTS}
+    )
+    return {
+        "ruleset_version": BFCI_RULESET_VERSION,
+        "bfci": bfci,
+        "raw_bfci": raw,
+        "sequence_multiplier": SEQUENCE_MULTIPLIER if sequences else 1.0,
+        "sequences": [
+            {"label": label, "evidence_refs": refs} for label, refs in seq_support
+        ],
+        "contributions": contributions,
+        "evidence": evidence,
+    }

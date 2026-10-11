@@ -185,3 +185,31 @@ def test_api_model_carries_error_and_diagnostics():
     assert m["telemetry_diagnostics"]["classification"] == "FRIDA_ATTACH_FAILED"
     assert m["network_flows"] == [{"url": "10.0.0.1:443"}]
     assert m["network_collection"]["encrypted_traffic_inspected"] is False
+
+
+def test_analysis_engine_does_not_reingest_the_shared_har_unbounded():
+    """The engine re-read the whole shared HAR and reported every entry as this sample's."""
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[2] / "analysis-engine" / "app" / "main.py").read_text(
+        encoding="utf-8")
+    assert "NetworkCapture()" not in src
+    assert 'dynamic_result["mitmproxy_flows_added"] = int(' in src
+    assert "har_entries_in_window" in src
+
+
+def test_analysis_engine_contains_dynamic_stage_failures():
+    """A dynamic exception must become a structured FAILED result, not a 500."""
+    import ast
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[2] / "analysis-engine" / "app" / "main.py").read_text(
+        encoding="utf-8")
+    tree = ast.parse(src)
+    guarded = False
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Try):
+            body_src = ast.get_source_segment(src, node) or ""
+            if "run_frida_analysis(" in body_src and '"dynamic_status": "FAILED"' in body_src:
+                guarded = True
+    assert guarded

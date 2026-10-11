@@ -35,7 +35,6 @@ from sudarshan_core.engines.apktool_engine import ApktoolEngine
 from sudarshan_core.engines.jadx_engine import JadxEngine
 from sudarshan_core.engines.frida_sandbox import run_frida_analysis
 from sudarshan_core.engines.dynamic_budget import DYNAMIC_MAX_WALL_TIME_SECONDS
-from sudarshan_core.engines.network_capture import NetworkCapture
 from sudarshan_core.engines.risk_engine import calculate_risk_score as compute_fraud_risk_score
 from sudarshan_core.engines.classification_engine import classify_family
 from sudarshan_core.engines.vide import run_vide_analysis
@@ -456,31 +455,50 @@ async def _execute_analysis_pipeline(
             }
         else:
             timer.stage_started("AGENTIC_EXPLORER")
-            async with _dynamic_slots:
-                dynamic_result = await run_frida_analysis(
-                    apk_path=apk_path,
-                    package_name=package_name,
-                    # Static->dynamic bridge: the explorer needs the declared permission
-                    # set to tell expected capability from unexpected at runtime.
-                    static_findings={
-                        "permissions": permissions,
-                        "flags": flags_dict,
-                        "app_label": getattr(androguard_output, "app_label", "") or "",
-                    },
-                )
-            timer.stage_completed("AGENTIC_EXPLORER")
-
-        # 5. mitmproxy HAR Net Ingest
-        har_path = os.getenv("MITMPROXY_HAR_PATH")
-        if har_path and await asyncio.to_thread(os.path.exists, har_path):
             try:
-                nc = NetworkCapture()
-                # Parses a HAR file off disk - size is attacker-influenced.
-                added = await asyncio.to_thread(nc.ingest_mitmproxy_har, har_path)
-                if dynamic_result and isinstance(dynamic_result, dict):
-                    dynamic_result["mitmproxy_flows_added"] = added
-            except Exception as e:
-                logger.warning(f"[Engine] mitmproxy HAR ingest notice: {e}")
+                async with _dynamic_slots:
+                    dynamic_result = await run_frida_analysis(
+                        apk_path=apk_path,
+                        package_name=package_name,
+                        # Static->dynamic bridge: the explorer needs the declared permission
+                        # set to tell expected capability from unexpected at runtime.
+                        static_findings={
+                            "permissions": permissions,
+                            "flags": flags_dict,
+                            "app_label": getattr(androguard_output, "app_label", "") or "",
+                        },
+                    )
+                timer.stage_completed("AGENTIC_EXPLORER")
+            except Exception as dyn_exc:
+                # One failed stage must not invalidate the analysis. An
+                # exception here used to propagate out of the pipeline, the
+                # endpoint returned 500, and the gateway failed closed - the
+                # completed static analysis was thrown away with it.
+                logger.error("[Engine] Dynamic stage raised: %s", dyn_exc, exc_info=True)
+                timer.stage_failed("AGENTIC_EXPLORER", str(dyn_exc))
+                dynamic_result = {
+                    "available": False,
+                    "runtime_requested": True,
+                    "runtime_attempted": True,
+                    "engine": "frida",
+                    "dynamic_status": "FAILED",
+                    "error": f"{type(dyn_exc).__name__}: {str(dyn_exc)[:300]}",
+                    "error_type": type(dyn_exc).__name__,
+                }
+
+        # 5. mitmproxy HAR attribution
+        #
+        # The dynamic session already ingests the HAR, bounded to its own
+        # analysis window (NetworkCapture(session_started_at=...)). This block
+        # used to re-read the WHOLE shared HAR with an unbounded capture and
+        # report every entry - including other samples' traffic - as this
+        # sample's `mitmproxy_flows_added`. Report the session's attributed
+        # count instead, and attribute nothing when no dynamic session ran.
+        if dynamic_result and isinstance(dynamic_result, dict):
+            _net = dynamic_result.get("network_collection") or {}
+            dynamic_result["mitmproxy_flows_added"] = int(
+                _net.get("har_entries_in_window", 0) or 0
+            )
 
         # 6. Threat Correlation & Risk Scoring
         timer.stage_started("THREAT_CORRELATION")

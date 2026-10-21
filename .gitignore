@@ -157,7 +157,6 @@ audit/
 banking-baseline-corpus/
 apk_details/
 
-.claude/
 
 # ─── Local agent / editor tooling ─────────────────────────────────────────────
 # Personal assistant configuration. Useful on one machine, noise in the repo

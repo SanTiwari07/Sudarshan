@@ -83,7 +83,7 @@ docs/
 │   └── RUNTIME_API.md           # Real-time Frida telemetry and resilience triggers
 │
 ├── 08_DEVELOPMENT/              # Contribution standards, testing, and guidelines
-│   ├── CONTRIBUTING.md          # Architecture rules from AGENTS.md
+│   ├── CONTRIBUTING.md          # Architecture boundaries and mandatory rules
 │   ├── TESTING.md               # Pytest suite, fixtures, and execution guide
 │   ├── DEVELOPMENT_GUIDE.md     # Setting up local developer environment
 │   └── CODE_STANDARDS.md        # Python/TypeScript coding standards

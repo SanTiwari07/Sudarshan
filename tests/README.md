@@ -37,7 +37,7 @@ Select a subset with `-k` against the full invocation rather than passing a bare
 | `tests/integration` | 12 |
 | `backend/tests` | 797 |
 
-There is **no CI workflow in this repository** — no `.github/` directory exists — so the suite is developer-run. The only automated git-side gate is `.githooks/pre-push`.
+There is **no CI workflow in this repository** — no `.github/` directory exists — so the suite is developer-run.
 
 ---
 

@@ -227,5 +227,5 @@ Test paths are relative to the repository root. **2,622 tests collected** across
 | Demo user seeding | Implemented | `backend/app/demo_seed.py` | `backend/tests/test_demo_seed.py` | Credentials come from `.env`; none are committed |
 | Labelled corpus validation | Implemented | `scripts/validate_corpus.py`, `shared/sudarshan_core/validation/` | `docs/evaluation/corpus_static_validation.json`, `tests/unit/test_labelled_corpus.py` | Regenerable artifact; corpus is gitignored so it never runs in CI |
 | Pipeline performance measurement | Implemented | `shared/sudarshan_core/engines/pipeline_timing.py` | `backend/tests/test_pipeline_performance.py` | Per-stage timings on every run |
-| Continuous integration | Not implemented | — | — | No `.github/` directory exists. The only automated git-side gate is `.githooks/pre-push` |
+| Continuous integration | Not implemented | — | — | No `.github/` directory exists |
 | Horizontal scaling | Planned | — | — | Single SQLite file and an in-process queue; needs Postgres and an external broker |

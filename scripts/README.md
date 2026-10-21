@@ -111,9 +111,6 @@ Only the `.bundle.js` files are loadable by Frida 17 — the plain `.js` sources
 
 | Script | Purpose |
 | :--- | :--- |
-| `enable-githooks.ps1` | Points `core.hooksPath` at `.githooks/` |
-| `strip-cursor-from-git-history.ps1`, `git-filter-repo-strip-cursor.py`, `verify-no-cursor-git.ps1` | Remove and verify absence of Cursor Agent attribution in history. The `.githooks/pre-push` hook blocks pushes that would reintroduce it |
-| `refresh-github-contributors.ps1` | Refreshes the contributor list |
 | `migrate-to-new-github-repo.ps1` | Repository migration helper |
 
 ---

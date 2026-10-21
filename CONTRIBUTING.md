@@ -74,14 +74,6 @@ cd frontend && npm ci && npm run dev
 
 Full setup guide, including the sandbox: [`HOW_TO_RUN.md`](docs/06_OPERATIONS/HOW_TO_RUN.md).
 
-### Git hooks
-
-```bash
-powershell -File scripts/enable-githooks.ps1     # or: git config core.hooksPath .githooks
-```
-
-`.githooks/pre-push` blocks pushes that would reintroduce Cursor Agent attribution into history. It does **not** run tests.
-
 ---
 
 ## 3. Code standards

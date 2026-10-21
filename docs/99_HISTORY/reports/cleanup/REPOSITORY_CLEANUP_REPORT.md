@@ -8,10 +8,10 @@ This report summarizes the comprehensive cleanup and reorganization of the SUDAR
 - The `docs/` folder contained over 30 files in a flat structure, mixing current architecture, duplicate/historical references, reporting templates, and audits.
 - Output artifacts like `.json` and `.html` were committed into the `scripts/` directory.
 - GitHub automation structure was missing.
-- Security-reporting guidelines (`SECURITY.md`) and agent instructions (`AGENTS.md`) were missing.
+- Security-reporting guidelines (`SECURITY.md`) were missing.
 
 ## After
-- The root directory is clean, retaining essential configurations (`.env.example`, `.gitignore`, `docker-compose.yml`, `start.ps1`, etc.) and root markdown (`README.md`, `SECURITY.md`, `AGENTS.md`, `CONTRIBUTING.md`, `CHANGELOG.md`).
+- The root directory is clean, retaining essential configurations (`.env.example`, `.gitignore`, `docker-compose.yml`, `start.ps1`, etc.) and root markdown (`README.md`, `SECURITY.md`, `CONTRIBUTING.md`, `CHANGELOG.md`).
 - The `docs/` directory is logically separated into `getting-started/`, `architecture/`, `operations/`, `reference/`, `features/`, `future/`, and `archive/`.
 - Utility python scripts at the root were moved into `scripts/`.
 - CI governance structure `.github/` was created with a basic `static_ci.yml` that excludes Android sandbox tests.

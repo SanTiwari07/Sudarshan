@@ -14,7 +14,7 @@ For the maintained view of what exists and what does not, use [FEATURE_STATUS.md
 
 **Status: superseded, and the CI half was already wrong.** Measured 2026-08-27 with `pytest tests/ backend/tests --collect-only`: **2,622 tests collected**, no collection errors — 1,813 in `tests/unit`, 12 in `tests/integration`, 797 in `backend/tests`.
 
-The more important correction is that **no CI workflow exists in this repository**. There is no `.github/` directory. Successive revisions of this and other documents described a `ci.yml` gating first 202 and later 525 tests; that file is not present and is not in the git history for this repository. The only automated git-side gate is `.githooks/pre-push`, which checks commit attribution, not tests.
+The more important correction is that **no CI workflow exists in this repository**. There is no `.github/` directory. Successive revisions of this and other documents described a `ci.yml` gating first 202 and later 525 tests; that file is not present and is not in the git history for this repository.
 
 ## 2. Threat intelligence caching and 404 responses
 

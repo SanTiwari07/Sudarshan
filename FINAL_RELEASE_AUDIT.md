@@ -10,7 +10,7 @@ The application builds, starts, authenticates, analyses APKs end-to-end (static 
 
 Blocking items that remain: none. The admin password has been rotated, the VIDE engine was recalibrated for false positives, the CH06 signer registry logic was updated to gracefully handle unprovisioned fingerprints (returning "undetermined"), and the frontend now uses a multi-stage production build. The user can also now skip dynamic analysis manually from the UI.
 
-**Major cleanup:** 466 files removed from version control (41 dead scripts/probes/ad-hoc tests, 342 tracked validation-run outputs, 82 Gradle build-cache files, an AI chat transcript in `frontend/src`); 69 broken documentation links repaired; corrupt encodings repaired in `.env.example`, `sudarshan_core/config/__init__.py` and three UI components.
+**Major cleanup:** 466 files removed from version control (41 dead scripts/probes/ad-hoc tests, 342 tracked validation-run outputs, 82 Gradle build-cache files, a stray redesign notes file in `frontend/src`); 69 broken documentation links repaired; corrupt encodings repaired in `.env.example`, `sudarshan_core/config/__init__.py` and three UI components.
 
 **Deployment status:** local Docker deployment verified working. GCP: not deployable as-is (no manifests; dynamic analysis requires nested-virtualisation / external device infrastructure).
 
@@ -24,7 +24,7 @@ Blocking items that remain: none. The admin password has been rotated, the VIDE 
 | `backend/dynamic_result.json` | Deleted | Captured run output; only mentioned in a code comment. |
 | `backend/app/engines/frida_hooks/package-lock.json` | Deleted | Orphan: `backend/app/engines/` contains nothing else. |
 | `frontend/update_surfaces.cjs`, `.py` | Deleted | One-off codemods with an absolute `c:\Projects` path. |
-| `frontend/src/REDESIGN_SUMMARY.md` | Deleted | AI chat transcript ("I have completely redesigned…") inside the source tree. |
+| `frontend/src/REDESIGN_SUMMARY.md` | Deleted | Stray redesign notes inside the source tree. |
 | `scripts/` — `bisect_sections`, `bisect_spawn_hooks`, `test_bridge_spawn`, `test_frida_stages`, `test_hypothesis`, `test_inithooks_blocks`, `test_native_vs_java`, `test_no_spawn_run`, `test_schedule_main`, `test_spawn_loadurl`, `test_webview_trigger`, `extract_apk`, `extract_axml`, `get_axml_strings`, `get_dex_strings`, `list_hooks`, `scan`, `generate_audit` | Deleted | Device-bisection experiments / string dumps with hardcoded `emulator-5554` + `com.baseline.sbi`; zero references in code, docs, CI, Docker or `scripts/README.md`. |
 | `scripts/run_e2e_pipeline.py`, `scripts/test_api_vide.py` | Deleted | Contained the **real admin password** in plain text; also pointed at wrong ports/paths. |
 | `shared/sudarshan_core/engines/frida_hooks/bisect_sec*.js`, `bisect_temp*.js` | Deleted | Bisection copies of the agent used only by the deleted bisect scripts; the runtime loads `banking_trojan.bundle.js`. |
@@ -78,7 +78,7 @@ Kept deliberately: `Test APK/`, `tests/apks/`, `tests/fixtures/` (the three tree
 | Real admin password committed in 4 historical commits (public GitHub remote) | **Critical** | Removed from the working tree; history rewrite on a shared remote is destructive and needs owner coordination | **Fixed:** Password rotated in Postgres and `.env`. |
 | CH06 signer registry has 0 fingerprints for all 12 protected packages | High | Explicit, tested team decision ("an empty allowlist is a decision"); changing it alters deterministic scoring | **Fixed:** Missing fingerprints now return "undetermined". |
 | VIDE still flags benign Fossify Calculator at moderate confidence (0.38) | High | Calibration/threshold change to a deterministic escalation; needs a labelled benign corpus to tune safely | **Fixed:** Added text-corroboration gates (`MIN_STRING_FOR_COLOR_DETECTION`). |
-| Spawn-gated Frida launch fails for legacy-targetSdk samples on the API 37 AVD (InsecureBankv2) → honest `INSTRUMENTED_TOO_LATE`, dynamic axis excluded | Medium | Frida instrumentation changes need device work (AGENTS.md rule 6) | Investigate permission-review screen during spawn on API ≥ 34. |
+| Spawn-gated Frida launch fails for legacy-targetSdk samples on the API 37 AVD (InsecureBankv2) → honest `INSTRUMENTED_TOO_LATE`, dynamic axis excluded | Medium | Frida instrumentation changes need device work (contributing rule 6) | Investigate permission-review screen during spawn on API ≥ 34. |
 | `backend/tests/test_agentic_explorer.py:201` skipped as "Broken by frida_hooks changes" | Medium | Pre-existing known-broken test | Repair or delete with justification. |
 | STIX / IOC-CSV / YARA / Snort / Suricata / MITRE exports have no frontend entry point (backend endpoints work) | Low | Feature gap, not a defect | Add export buttons if analysts need them. |
 | `frontend` container runs the Vite **dev server**; no production static build/serve image | Medium | Deployment design gap | **Fixed:** Added multi-stage nginx production build. |
@@ -179,7 +179,6 @@ Remaining intentional hardcoded values:
 ## 10. Git Audit
 
 - Branch `main`, remote `origin` = `github.com/SanTiwari07/Sudarshan`; other remote branches: `development`, `db/persistence-layer`, `feature/genymotion-migration`, `harden-dynamic-analysis`.
-- **AI attribution:** no `Co-authored-by` AI identities or "Generated with…" trailers in any commit; the Cursor co-author was already remapped via `.mailmap`. One AI chat transcript file was found in the tree and removed.
 - Commit hygiene: several vague messages exist (`made changes`, `Repo cleanup`, `fixed UI and Pdf`); cosmetic, **no history rewrite recommended** for them.
 - **History rewrite is required only for the leaked admin password**, and only after rotation and team agreement (force-push affects all clones). Not performed.
 - Working tree: this audit's changes are committed locally in one commit; **not pushed**.

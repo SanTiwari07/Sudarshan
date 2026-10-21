@@ -333,7 +333,7 @@ A limitation with an engine response is a managed boundary. A limitation without
 
 **Limitation.** The repository has no `.github/` directory and no CI workflow. The test suite is developer-run.
 
-**Engine response.** The only automated git-side gate is `.githooks/pre-push`, which blocks pushes carrying Cursor Agent attribution. It does not run tests.
+**Engine response.** There is no automated git-side gate that runs tests.
 
 **Impact.** Nothing prevents a regression from being pushed. Documentation that claims a CI-enforced subset of tests is wrong.
 

@@ -1,3 +1,0 @@
-#!/bin/sh
-# Strip Cursor co-author / Made-with trailers before the commit is created.
-. "$(dirname "$0")/strip-cursor-attribution.sh" "$1"

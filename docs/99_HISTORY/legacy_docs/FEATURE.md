@@ -773,8 +773,7 @@ The platform maintains a large but entirely developer-run testing footprint:
     `pytest tests/ backend/tests --collect-only`, no collection errors): 1,813 in `tests/unit`,
     12 in `tests/integration` and 797 in `backend/tests`.
 *   **Enforced automatically**: **none**. There is no `.github/` directory and no CI workflow in
-    this repository. The only git-side gate is `.githooks/pre-push`, which checks commit
-    attribution rather than running tests. Earlier revisions of this document described a
+    this repository. Earlier revisions of this document described a
     `ci.yml` gating 525 tests; that file does not exist.
 *   **Collection prerequisites**: `PYTHONPATH` must include both `backend` and `shared`, and the
     interpreter needs `requests` and a working `bcrypt` backend for `passlib`. A single import

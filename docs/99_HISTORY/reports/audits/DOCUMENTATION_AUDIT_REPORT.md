@@ -22,7 +22,7 @@ Method:                  Route decorators, engine constants, Compose definitions
 | Area | Was | Is |
 | :--- | :--- | :--- |
 | Test count | 920 collected, 525 enforced by CI | 2,622 collected, none enforced — there is no CI workflow |
-| CI pipeline | `.github/workflows/ci.yml` gating `backend/tests` | No `.github/` directory exists. Only `.githooks/pre-push`, which checks commit attribution |
+| CI pipeline | `.github/workflows/ci.yml` gating `backend/tests` | No `.github/` directory exists and no git hook runs tests |
 | Backend route count | 51 routes, 18 undocumented | 81 route decorators, all documented |
 | Report export paths | `/api/v1/report/{sha256}/pdf` | `/api/v1/report/pdf/{sha256}` — format precedes the hash |
 | Threat intelligence routes | `/api/v1/intel/correlate`, `/cache/stats`, `/cache/clear`, `/live-threats` | None of these exist. One route: `GET /api/v1/intelligence/{sha256}` |

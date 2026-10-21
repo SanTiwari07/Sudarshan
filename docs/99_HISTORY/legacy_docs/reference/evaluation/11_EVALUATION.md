@@ -197,7 +197,7 @@ $env:PYTHONPATH="backend;shared"; $env:JWT_SECRET_KEY="test_secret_key_for_pytes
 
 | Evaluation Category | Status | Details |
 | :--- | :--- | :--- |
-| **Total Test Suite** | **Implemented** | **2,622** pytest cases across `tests/` and `backend/tests/`, measured 2026-08-27 with no collection errors. **Nothing enforces them automatically** - there is no `.github/` directory and no CI workflow. The only git-side gate is `.githooks/pre-push`, which checks commit attribution, not tests. |
+| **Total Test Suite** | **Implemented** | **2,622** pytest cases across `tests/` and `backend/tests/`, measured 2026-08-27 with no collection errors. **Nothing enforces them automatically** - there is no `.github/` directory and no CI workflow. |
 | **Sandbox Containment Tests** | **Implemented** | `tests/unit/test_sandbox_containment.py`, `test_adb_policy_bypass.py`, `test_blocker_fixes.py`; `backend/tests/test_gateway_dynamic_blocker.py`. |
 | **Determinism Baselines** | **Implemented** | Pinned benchmark cases passing in `test_determinism_replay.py`. |
 | **Sanitizer Tests** | **Implemented** | Prompt injection tests passing in `test_prompt_injection.py`. |

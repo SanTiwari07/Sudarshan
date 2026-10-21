@@ -43,7 +43,7 @@ This audit identifies legacy, deprecated, or abandoned code components within th
 
 ## 4. Git Repo Migration Script (Migration Leftover)
 - **PATH:** `scripts/migrate-to-new-github-repo.ps1`
-- **PURPOSE:** PowerShell script created to clone the main branch, strip specific author metadata (Cursor co-author lines) using `git-filter-repo`, and push to a new clean GitHub repository.
+- **PURPOSE:** PowerShell script created to clone the main branch, strip specific author metadata using `git-filter-repo`, and push to a new clean GitHub repository.
 - **CURRENT REFERENCES:** None.
 - **RUNTIME USAGE:** None.
 - **TEST USAGE:** None.

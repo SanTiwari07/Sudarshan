@@ -69,7 +69,7 @@ Maintained views: [docs/features/FEATURE_STATUS.md](docs/features/FEATURE_STATUS
 
 **Documented.** Several documents described `.github/workflows/ci.yml` running a subset of the suite (variously 202 or 525 tests) and treated that subset as an enforced quality gate.
 
-**Actual.** There is no `.github/` directory in this repository and no CI workflow. The only automated git-side gate is `.githooks/pre-push`, which checks commit attribution rather than running tests. The suite — **2,622 tests collected** on 2026-08-27 — is entirely developer-run.
+**Actual.** There is no `.github/` directory in this repository and no CI workflow. The suite — **2,622 tests collected** on 2026-08-27 — is entirely developer-run.
 
 **Status: documentation corrected 2026-08-27.**
 

@@ -12,7 +12,7 @@ adb -s 192.168.56.101:5555 forward tcp:27042 tcp:27042
 
 - Non-privileged test app (Settings cannot host WebView). This repo uses **InsecureBankv2** lab APK: `backend/test_sample.apk` → `com.android.insecurebankv2`
 
-## Frida client on Windows (Cursor / non-TTY)
+## Frida client on Windows (non-TTY)
 
 `frida-ps -H 127.0.0.1:27042` may hang without a console. Use the **Python Frida API**:
 

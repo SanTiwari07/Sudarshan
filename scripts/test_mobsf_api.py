@@ -5,12 +5,16 @@ Tests the complete MobSF pipeline: upload → scan → report → parse
 """
 
 import json
+import os
 import sys
 import time
-import requests`nfrom pathlib import Path
+from pathlib import Path
 
-HOST = "http://localhost:8008"
-API_KEY = "sudarshan_mobsf_api_key_2026"
+import requests
+
+# Same configuration and local-dev defaults as scripts/health_check.py
+HOST = os.getenv("MOBSF_HOST_EXTERNAL", "http://localhost:8008")
+API_KEY = os.getenv("MOBSF_API_KEY", "sudarshan_mobsf_api_key_2026")
 HEADERS = {"Authorization": API_KEY}
 APK_PATH = Path(__file__).parent.parent / "tests" / "fixtures" / "Vulnerable" / "InsecureBankv2.apk"
 

@@ -182,7 +182,7 @@ async def test_token_without_a_session_is_rejected(db):
 async def test_revoke_all_can_spare_the_current_session(db):
     from app.auth.auth import issue_session_token
     from app.db.security import list_active_sessions, revoke_all_sessions_for_user
-    from jose import jwt
+    import jwt
 
     user = await _make_user()
     keep = await issue_session_token(user)
@@ -190,7 +190,7 @@ async def test_revoke_all_can_spare_the_current_session(db):
     await issue_session_token(user)
     assert len(await list_active_sessions(user["id"])) == 3
 
-    keep_jti = jwt.get_unverified_claims(keep)["jti"]
+    keep_jti = jwt.decode(keep, options={"verify_signature": False})["jti"]
     revoked = await revoke_all_sessions_for_user(user["id"], except_jti=keep_jti)
 
     assert revoked == 2

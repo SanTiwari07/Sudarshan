@@ -11,7 +11,7 @@ Roles:
   admin - full access + user management
 
 Dependencies:
-  pip install python-jose[cryptography] passlib[bcrypt]
+  pip install PyJWT passlib[bcrypt]
 
 JWT secret is read from JWT_SECRET_KEY env var (required in production).
 """
@@ -24,7 +24,8 @@ from typing import List, Optional
 
 from fastapi import Depends, HTTPException, APIRouter, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import JWTError, jwt
+import jwt
+from jwt import PyJWTError as JWTError
 from passlib.context import CryptContext
 from pydantic import BaseModel
 

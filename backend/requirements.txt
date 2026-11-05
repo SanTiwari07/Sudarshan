@@ -43,7 +43,7 @@ uiautomator2==3.7.0
 aiosqlite
 databases
 # Auth
-python-jose[cryptography]
+PyJWT>=2.15.0
 passlib[bcrypt]
 bcrypt==3.2.2
 # Async extras

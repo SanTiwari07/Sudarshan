@@ -17,7 +17,7 @@ from app.auth.auth import issue_session_token
 from app.db.security import revoke_session
 from app.routes import resilience
 from auth_helpers import ensure_user
-from jose import jwt
+import jwt
 
 
 def _app() -> FastAPI:
@@ -40,7 +40,7 @@ def test_ws_accepts_live_session():
 
 def test_ws_rejects_revoked_session():
     token = asyncio.run(_token("ws_revoked_user"))
-    jti = jwt.get_unverified_claims(token)["jti"]
+    jti = jwt.decode(token, options={"verify_signature": False})["jti"]
     asyncio.run(revoke_session(jti, revoked_by=None, reason="test"))
     with TestClient(_app()) as client:
         with pytest.raises(WebSocketDisconnect) as exc:
